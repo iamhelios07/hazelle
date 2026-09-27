@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { api } from '../api';
+import { api } from '../../runtime/api';
 import { Brand, Button, Callout, Intro, Screen, Stack, Steps, Text, TextField } from '../ui';
 import { describeFailure } from './failure';
 

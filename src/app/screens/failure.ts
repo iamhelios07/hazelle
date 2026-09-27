@@ -1,4 +1,4 @@
-import type { ApiFailure } from '../api';
+import type { ApiFailure } from '../../runtime/api';
 
 const MESSAGES: Record<string, string> = {
   'wrong-login': '아이디나 비밀번호가 맞지 않아요.',

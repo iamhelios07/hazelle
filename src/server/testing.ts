@@ -26,10 +26,11 @@ export async function testApp() {
   return {
     env,
     dispose: () => proxy.dispose(),
-    reset: () => env.DB.batch(['vaults', 'sessions', 'accounts'].map((table) => env.DB.prepare(`DELETE FROM ${table}`))),
+    reset: () => env.DB.batch(['objects', 'vaults', 'sessions', 'accounts'].map((table) => env.DB.prepare(`DELETE FROM ${table}`))),
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),
     post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),
     put: (path: string, body?: unknown, cookie?: string) => send('PUT', path, body, cookie),
+    delete: (path: string, body?: unknown, cookie?: string) => send('DELETE', path, body, cookie),
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env),
   };
 }

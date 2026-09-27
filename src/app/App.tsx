@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createVault, openWithPassphrase, openWithRecoveryKey, wrapWithPassphrase, type VaultKey, type VaultRecord } from '../vault/keys';
 import { forgetVault, recallVault, rememberVault } from '../vault/device';
-import { api } from './api';
+import { api } from '../runtime/api';
 import { AccountScreen } from './screens/AccountScreen';
 import { describeFailure } from './screens/failure';
 import { HomeScreen } from './screens/HomeScreen';

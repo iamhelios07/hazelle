@@ -23,18 +23,22 @@ export default defineConfig([
   {
     files: ['src/engine/**', 'src/connectors/**'],
     rules: restrictImports(
-      folders(['app', 'vault', 'server'], 'The engine and connectors stay free of UI, storage and server code (tech-spec §3).'),
+      folders(['app', 'runtime', 'vault', 'server'], 'The engine and connectors stay free of UI, network, storage and server code (tech-spec §3).'),
     ),
   },
   {
     files: ['src/server/**'],
     rules: restrictImports(
-      folders(['app', 'vault', 'engine', 'connectors'], 'The server knows nothing about the client or providers (tech-spec §3).'),
+      folders(['app', 'runtime', 'vault', 'engine', 'connectors'], 'The server knows nothing about the client or providers (tech-spec §3).'),
     ),
   },
   {
     files: ['src/vault/**'],
-    rules: restrictImports(folders(['app', 'server'], 'The vault is below the UI and reaches the server only through it (tech-spec §3).')),
+    rules: restrictImports(folders(['app', 'runtime', 'server'], 'The vault is crypto and device storage only; it never reaches the network (tech-spec §3).')),
+  },
+  {
+    files: ['src/runtime/**'],
+    rules: restrictImports(folders(['app', 'server'], 'The runtime is below the UI and reaches the server over HTTP only (tech-spec §3).')),
   },
   {
     files: ['src/app/**'],
