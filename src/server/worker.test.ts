@@ -1,48 +1,22 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { getPlatformProxy } from 'wrangler';
-import app from './worker';
+import { sessionCookie, testApp } from './testing';
 
-const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
-
-let proxy: Awaited<ReturnType<typeof getPlatformProxy<Env>>>;
-let env: Env;
-
+let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
-  proxy = await getPlatformProxy<Env>({ persist: false, remoteBindings: false });
-  env = proxy.env;
-  for (const name of Object.keys(migrations).sort()) {
-    const statements = migrations[name]!.split(';').filter((s) => s.trim());
-    await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
-  }
+  t = await testApp();
 });
+afterAll(() => t.dispose());
+beforeEach(() => t.reset());
 
-afterAll(() => proxy.dispose());
-
-beforeEach(async () => {
-  await env.DB.batch([env.DB.prepare('DELETE FROM sessions'), env.DB.prepare('DELETE FROM accounts')]);
-});
-
-const post = (path: string, body?: unknown, cookie?: string) =>
-  app.request(
-    `/api/${path}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    },
-    env,
-  );
-
-const get = (path: string, cookie?: string) => app.request(`/api/${path}`, { headers: cookie ? { cookie } : {} }, env);
-
-const sessionCookie = (response: Response) => response.headers.get('set-cookie')!.split(';')[0]!;
+const get = (path: string, cookie?: string) => t.get(path, cookie);
+const post = (path: string, body?: unknown, cookie?: string) => t.post(path, body, cookie);
 
 describe('accounts', () => {
   it('signs up the first account, keeps its session, then closes signup', async () => {
     expect(await (await get('signup')).json()).toEqual({ open: true });
     const signup = await post('signup', { username: 'Jin', password: 'correct horse' });
     expect(signup.status).toBe(201);
-    expect(await signup.json()).toEqual({ username: 'jin' });
+    expect(await signup.json()).toEqual({ accountId: expect.any(String), username: 'jin' });
     const cookie = signup.headers.get('set-cookie')!;
     expect(cookie).toMatch(/^__Host-session=[0-9a-f]{64};/);
     expect(cookie).toContain('HttpOnly');
@@ -50,7 +24,7 @@ describe('accounts', () => {
     expect(cookie).toContain('SameSite=Strict');
 
     const session = await get('session', sessionCookie(signup));
-    expect(await session.json()).toEqual({ username: 'jin' });
+    expect(await session.json()).toEqual({ accountId: expect.any(String), username: 'jin' });
 
     expect(await (await get('signup')).json()).toEqual({ open: false });
     const second = await post('signup', { username: 'other', password: 'correct horse' });
@@ -92,7 +66,7 @@ describe('accounts', () => {
 
   it('ends a session once its expiry passes', async () => {
     const cookie = sessionCookie(await post('signup', { username: 'jin', password: 'correct horse' }));
-    await env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
+    await t.env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
     expect((await get('session', cookie)).status).toBe(401);
   });
 });
@@ -106,7 +80,7 @@ describe('guards', () => {
   });
 
   it('refuses a state-changing request without a JSON content type', async () => {
-    const response = await app.request('/api/login', { method: 'POST', body: 'username=jin' }, env);
+    const response = await t.raw('login', { method: 'POST', body: 'username=jin' });
     expect(response.status).toBe(415);
   });
 });
