@@ -8,15 +8,22 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "types": "wrangler types",
+    "build": "wrangler types && tsc -b && vite build",
     "test": "vitest run",
-    "check": "tsc --noEmit && eslint . && vitest run"
+    "check": "wrangler types && tsc -b && eslint . && vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply risu-alpha --local",
+    "db:migrate:remote": "wrangler d1 migrations apply risu-alpha --remote",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "hono": "4.13.9",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "1.60.2",
     "@eslint/js": "10.0.1",
     "@types/node": "24.19.0",
     "@types/react": "19.3.0",

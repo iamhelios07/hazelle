@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "risu-alpha",
+  "main": "src/server/worker.ts",
+  "compatibility_date": "2026-09-25",
+  "send_metrics": false,
+  // Without this flag request.signal never fires on client disconnect, so 멈추기 would not end
+  // the upstream call (tech-spec §6).
+  "compatibility_flags": ["enable_request_signal"],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "risu-alpha",
+      "database_id": "abe6fd8a-7c52-4d19-aa8a-b18065dfee1e",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

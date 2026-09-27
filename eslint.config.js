@@ -7,7 +7,7 @@ const restrict = (folders, message) => ({
 });
 
 export default defineConfig([
-  globalIgnores(['dist/']),
+  globalIgnores(['dist/', '.wrangler/', 'worker-configuration.d.ts']),
   js.configs.recommended,
   tseslint.configs.recommended,
   {
