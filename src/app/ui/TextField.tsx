@@ -5,6 +5,7 @@ import styles from './TextField.module.css';
 const KINDS = {
   text: { type: 'text' },
   username: { type: 'text', autoComplete: 'username', autoCapitalize: 'none', spellCheck: false },
+  code: { type: 'text', autoComplete: 'off', autoCapitalize: 'characters', spellCheck: false },
   'new-password': { type: 'password', autoComplete: 'new-password' },
   'current-password': { type: 'password', autoComplete: 'current-password' },
 } as const;

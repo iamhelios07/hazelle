@@ -3,14 +3,17 @@ import styles from './Screen.module.css';
 
 type Props = {
   top?: ReactNode;
+  align?: 'start' | 'center';
   actions?: ReactNode;
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   children: ReactNode;
 };
 
 // The page frame: a top row, the body, and actions that sit at the bottom on phones. With onSubmit,
-// body and actions become one form, so a submit button can live in the actions slot.
-export function Screen({ top, actions, onSubmit, children }: Props) {
+// body and actions become one form, so a submit button can live in the actions slot. align="center"
+// centers the body vertically, for screens without actions such as the empty home.
+export function Screen({ top, align = 'start', actions, onSubmit, children }: Props) {
+  const content = align === 'center' ? `${styles.content} ${styles.center}` : styles.content;
   const inner = (
     <>
       <div className={styles.body}>{children}</div>
@@ -21,11 +24,11 @@ export function Screen({ top, actions, onSubmit, children }: Props) {
     <main className={styles.screen}>
       {top && <header className={styles.top}>{top}</header>}
       {onSubmit ? (
-        <form className={styles.content} onSubmit={onSubmit} noValidate>
+        <form className={content} onSubmit={onSubmit} noValidate>
           {inner}
         </form>
       ) : (
-        <div className={styles.content}>{inner}</div>
+        <div className={content}>{inner}</div>
       )}
     </main>
   );

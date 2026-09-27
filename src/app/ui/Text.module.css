@@ -1,0 +1,15 @@
+.sm {
+  font-size: var(--text-sm);
+}
+
+.md {
+  font-size: var(--text-md);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.center {
+  text-align: center;
+}

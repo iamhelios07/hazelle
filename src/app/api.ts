@@ -3,12 +3,12 @@ export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
 
 // 'offline' means the request never reached the server; 'server-error' means it answered without
 // the JSON error shape every API route uses.
-export async function api<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<ApiResult<T>> {
+export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<ApiResult<T>> {
   let response: Response;
   try {
     response = await fetch(`/api/${path}`, {
       method,
-      headers: method === 'POST' ? { 'content-type': 'application/json' } : {},
+      headers: method === 'GET' ? {} : { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {

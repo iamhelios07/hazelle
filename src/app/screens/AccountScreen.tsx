@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../api';
-import { Brand, Button, Callout, Intro, Screen, Stack, TextField } from '../ui';
+import { Brand, Button, Callout, Intro, Screen, Stack, Steps, Text, TextField } from '../ui';
 import { describeFailure } from './failure';
 
-export function AccountScreen({ mode, onSignedIn }: { mode: 'signup' | 'login'; onSignedIn: (username: string) => void }) {
+// onSignedIn receives the login password so the vault step can refuse the same text as a passphrase.
+export function AccountScreen({ mode, onSignedIn }: { mode: 'signup' | 'login'; onSignedIn: (password: string) => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
@@ -19,15 +20,24 @@ export function AccountScreen({ mode, onSignedIn }: { mode: 'signup' | 'login'; 
     }
     setBusy(true);
     setMessage(null);
-    const result = await api<{ username: string }>('POST', mode, { username: username.trim(), password });
+    const result = await api('POST', mode, { username: username.trim(), password });
     setBusy(false);
-    if (result.ok) onSignedIn(result.data.username);
+    if (result.ok) onSignedIn(password);
     else setMessage(describeFailure(result));
   }
 
   return (
     <Screen
-      top={<Brand />}
+      top={
+        <>
+          <Brand />
+          {signup && (
+            <Text size="sm" tone="muted">
+              1 / 3
+            </Text>
+          )}
+        </>
+      }
       onSubmit={submit}
       actions={
         <Button type="submit" busy={busy}>
@@ -35,6 +45,7 @@ export function AccountScreen({ mode, onSignedIn }: { mode: 'signup' | 'login'; 
         </Button>
       }
     >
+      {signup && <Steps current={1} total={3} />}
       <Intro title={signup ? '계정 만들기' : '로그인'}>
         {signup && '어느 기기에서든 같은 채팅을 이어가기 위한 로그인이에요.'}
       </Intro>

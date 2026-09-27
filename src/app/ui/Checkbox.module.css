@@ -1,0 +1,15 @@
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: var(--control-md);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.input {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  margin: 0;
+  accent-color: var(--color-accent);
+}

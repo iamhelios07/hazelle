@@ -69,6 +69,8 @@
   --leading-normal: 1.5;
   --leading-relaxed: 1.6;
 
+  --tracking-wide: 0.06em;
+
   --space-2: 2px;
   --space-4: 4px;
   --space-6: 6px;
@@ -91,11 +93,13 @@
   --radius-2xl: 18px;
   --radius-full: 999px;
 
+  --control-sm: 20px;
   --control-md: 44px;
   --control-lg: 50px;
   --control-xl: 54px;
   --icon-md: 22px;
   --icon-stroke: 1.8;
+  --bar-height: 4px;
   --screen-narrow: 440px;
   --screen-offset-top: 10vh;
 
@@ -103,4 +107,5 @@
   --focus-ring-offset: 2px;
   --duration-fast: 120ms;
   --duration-spin: 800ms;
+  --opacity-disabled: 0.55;
 }

@@ -1,0 +1,15 @@
+.steps {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.step {
+  flex-grow: 1;
+  height: var(--bar-height);
+  border-radius: var(--radius-xs);
+  background: var(--color-border);
+}
+
+.done {
+  background: var(--color-accent);
+}
