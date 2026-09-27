@@ -11,7 +11,8 @@ export const chatCompletions: Codec = {
 
   // The standard list names models and nothing else, so every capability stays unknown.
   parseModels(payload) {
-    return list(isRecord(payload) ? payload.data : null)
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
+    return payload.data
       .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
       .map((raw) => ({
         id: raw.id as string,

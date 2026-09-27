@@ -1,5 +1,5 @@
 import type { ConnectionType, Modality } from './types';
-import { count, isRecord, list } from './values';
+import { count, isRecord } from './values';
 
 const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']);
 
@@ -15,7 +15,8 @@ export const openRouter: ConnectionType = {
 
   // Names read "Anthropic: Claude Opus 5.5"; the id already carries the maker, so the prefix is dropped.
   parseModels(payload) {
-    return list(isRecord(payload) ? payload.data : null)
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
+    return payload.data
       .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
       .map((raw) => {
         const architecture = isRecord(raw.architecture) ? raw.architecture : {};

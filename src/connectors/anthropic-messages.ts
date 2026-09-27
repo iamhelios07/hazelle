@@ -1,5 +1,5 @@
 import { ConnectorError, type ChatMessage, type Codec, type Modality } from './types';
-import { count, isRecord, list } from './values';
+import { count, isRecord } from './values';
 
 const headers = (secret: string): Record<string, string> => ({ 'x-api-key': secret, 'anthropic-version': '2023-06-01' });
 
@@ -11,7 +11,8 @@ export const anthropicMessages: Codec = {
   // The Models API reports limits and image, PDF and thinking support. It does not report tool support.
   // A limit of 0 is read as unknown, as the API's own example shows 0 for real models.
   parseModels(payload) {
-    return list(isRecord(payload) ? payload.data : null)
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
+    return payload.data
       .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
       .map((raw) => {
         const capabilities = isRecord(raw.capabilities) ? raw.capabilities : null;

@@ -10,14 +10,15 @@ export class ConnectorError extends Error {
 export type Endpoint = { baseUrl: string; protocol: Protocol };
 
 // The stored `connection` object (tech-spec §5). A built-in connection type fixes the endpoint, so
-// baseUrl and protocol are set only on a connection of the generic type.
+// baseUrl and protocol are set only on a connection of the generic type. Starred models are kept as
+// catalog snapshots, so pickers and requests need no catalog fetch first.
 export type Connection = {
   type: string;
   label: string;
   baseUrl: string | null;
   protocol: Protocol | null;
   secret: string;
-  starred: string[];
+  starred: Model[];
 };
 
 export type HttpRequest = { url: string; method: 'GET' | 'POST'; headers: Record<string, string>; body: string | null };
@@ -61,7 +62,8 @@ export type Terminal = { state: 'completed' } | { state: 'failed'; error: string
 export type Codec = {
   authHeaders(secret: string): Record<string, string>;
   listModels(endpoint: Endpoint, secret: string): HttpRequest;
-  parseModels(payload: unknown): Model[];
+  // null when the payload is not a model list at all, which is not the same as an empty one.
+  parseModels(payload: unknown): Model[] | null;
   chat(endpoint: Endpoint, secret: string, request: ChatRequest): HttpRequest;
   // Reads one decoded SSE event. Text goes through append; usage and the finish reason go to facts.
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
@@ -78,6 +80,6 @@ export type ConnectionType = {
   label: string;
   endpoint: Endpoint;
   detect: { key: RegExp | null; host: string };
-  parseModels?: (payload: unknown) => Model[];
+  parseModels?: (payload: unknown) => Model[] | null;
   cost?: (facts: StreamFacts) => Cost | null;
 };

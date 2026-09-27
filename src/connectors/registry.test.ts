@@ -86,6 +86,7 @@ describe('catalogs', () => {
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
     expect(catalogRequest(generic, 'k')).toEqual({ url: 'https://api.example.com/v1/models', method: 'GET', headers: { authorization: 'Bearer k' }, body: null });
     expect(parseCatalog(generic, { data: [{ id: 'deepseek-chat' }, { id: '' }, 'junk'] })).toEqual([model({ id: 'deepseek-chat', name: 'deepseek-chat' })]);
+    expect(parseCatalog(generic, { models: [] })).toBeNull();
   });
 
   it('knows nothing of a type from a newer version, or a generic connection without its address', () => {

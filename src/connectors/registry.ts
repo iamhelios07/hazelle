@@ -29,7 +29,7 @@ export function catalogRequest({ codec, endpoint }: Resolved, secret: string): H
   return codec.listModels(endpoint, secret);
 }
 
-export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model[] {
+export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model[] | null {
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
 
