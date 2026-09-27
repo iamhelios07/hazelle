@@ -9,16 +9,21 @@
   "scripts": {
     "dev": "vite",
     "types": "wrangler types",
-    "build": "wrangler types && tsc -b && vite build",
+    "css-types": "tcm -s -a -p \"src/app/**/*.module.css\"",
+    "build": "wrangler types && npm run css-types && tsc -b && vite build",
     "test": "vitest run",
-    "check": "wrangler types && tsc -b && eslint . && vitest run",
+    "check": "wrangler types && npm run css-types && tsc -b && eslint . && stylelint \"src/**/*.css\" && vitest run",
     "db:migrate:local": "wrangler d1 migrations apply risu-alpha --local",
     "db:migrate:remote": "wrangler d1 migrations apply risu-alpha --remote",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@fontsource/gowun-batang": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans-kr": "5.3.0",
     "@noble/hashes": "2.4.0",
     "hono": "4.13.9",
+    "lucide-react": "1.48.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -30,6 +35,9 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",
     "eslint": "10.11.0",
+    "stylelint": "17.15.0",
+    "stylelint-declaration-strict-value": "1.12.1",
+    "typed-css-modules": "0.9.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
     "vite": "8.3.1",

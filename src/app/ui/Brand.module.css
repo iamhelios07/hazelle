@@ -1,0 +1,5 @@
+.brand {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+}

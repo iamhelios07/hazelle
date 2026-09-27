@@ -7,3 +7,4 @@ dist/
 .dev.vars
 worker-configuration.d.ts
 .vitest/
+*.module.d.css.ts

@@ -1,0 +1,48 @@
+.screen {
+  min-height: 100dvh;
+  max-width: var(--screen-narrow);
+  margin: 0 auto;
+  padding: var(--space-28) var(--space-24) var(--space-32);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.top {
+  min-height: var(--control-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+/* 600px matches no token: media queries cannot read custom properties. */
+@media (min-width: 600px) {
+  .screen {
+    min-height: auto;
+    padding-top: var(--screen-offset-top);
+  }
+
+  .actions {
+    margin-top: var(--space-8);
+  }
+}
