@@ -33,7 +33,11 @@ export default defineConfig([
     ),
   },
   {
-    files: ['src/app/**', 'src/vault/**'],
+    files: ['src/vault/**'],
+    rules: restrictImports(folders(['app', 'server'], 'The vault is below the UI and reaches the server only through it (tech-spec §3).')),
+  },
+  {
+    files: ['src/app/**'],
     rules: { ...restrictImports(CLIENT_TO_SERVER), 'no-restricted-syntax': ['error', HEX_COLOR] },
   },
   {

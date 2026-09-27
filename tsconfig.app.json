@@ -14,6 +14,7 @@
     "allowArbitraryExtensions": true
   },
   "include": [
-    "src/app"
+    "src/app",
+    "src/vault"
   ]
 }
