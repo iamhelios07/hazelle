@@ -36,6 +36,8 @@ const DROPPED_REQUEST_PREFIXES = ['x-forwarded-', 'cf-'];
 
 // fetch decodes the body, so content-encoding and content-length would describe bytes the client
 // never receives. www-authenticate is dropped so a provider 401 cannot open the browser's login prompt.
+// The last group is applied by the browser to this app's origin, not the provider's: a connection
+// could otherwise wipe the session and vault cache (clear-site-data) or redirect error reports.
 const DROPPED_RESPONSE_HEADERS = new Set([
   'connection',
   'keep-alive',
@@ -47,6 +49,12 @@ const DROPPED_RESPONSE_HEADERS = new Set([
   'content-encoding',
   'content-length',
   'www-authenticate',
+  'clear-site-data',
+  'nel',
+  'report-to',
+  'reporting-endpoints',
+  'strict-transport-security',
+  'alt-svc',
 ]);
 
 export function createRelay(upstream: Upstream): (request: Request) => Promise<Response> {

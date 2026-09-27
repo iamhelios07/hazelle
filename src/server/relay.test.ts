@@ -69,6 +69,8 @@ describe('relay', () => {
             'set-cookie': 'track=1',
             'content-encoding': 'gzip',
             'www-authenticate': 'Basic',
+            'clear-site-data': '"cookies", "storage"',
+            nel: '{"report_to":"cf-nel"}',
             'x-relay': 'spoofed',
           },
         }),
@@ -83,6 +85,8 @@ describe('relay', () => {
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(response.headers.get('content-encoding')).toBeNull();
     expect(response.headers.get('www-authenticate')).toBeNull();
+    expect(response.headers.get('clear-site-data')).toBeNull();
+    expect(response.headers.get('nel')).toBeNull();
     expect(await response.text()).toBe('{"error":"rate"}');
   });
 
