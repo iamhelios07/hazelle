@@ -11,6 +11,7 @@ import { UnreachableScreen } from './screens/UnreachableScreen';
 import { VaultPassphraseScreen } from './screens/VaultPassphraseScreen';
 
 type Session = { accountId: string; username: string };
+type Boot = { session: null; signupOpen: boolean } | { session: Session; vault: VaultRecord | null };
 type Draft = { record: VaultRecord; vaultKey: VaultKey; recoveryKey: string };
 
 type State =
@@ -23,21 +24,15 @@ type State =
   | { kind: 'unlocked'; session: Session; vaultKey: VaultKey; message: string | null };
 
 async function loadState(): Promise<State> {
-  const session = await api<Session>('GET', 'session');
-  if (!session.ok) {
-    if (session.error !== 'no-session') return { kind: 'unreachable', message: describeFailure(session) };
-    const signup = await api<{ open: boolean }>('GET', 'signup');
-    if (!signup.ok) return { kind: 'unreachable', message: describeFailure(signup) };
-    return { kind: 'signed-out', signupOpen: signup.data.open };
-  }
-  const vault = await api<VaultRecord>('GET', 'vault');
-  if (!vault.ok) {
-    if (vault.error === 'no-vault') return { kind: 'vault-setup', session: session.data, step: 'passphrase', draft: null };
-    return { kind: 'unreachable', message: describeFailure(vault) };
-  }
-  const vaultKey = await recallVault(session.data.accountId);
-  if (vaultKey) return { kind: 'unlocked', session: session.data, vaultKey, message: null };
-  return { kind: 'locked', session: session.data, record: vault.data };
+  const result = await api<Boot>('GET', 'session');
+  if (!result.ok) return { kind: 'unreachable', message: describeFailure(result) };
+  const boot = result.data;
+  if (boot.session === null) return { kind: 'signed-out', signupOpen: boot.signupOpen };
+  const { session, vault } = boot;
+  if (!vault) return { kind: 'vault-setup', session, step: 'passphrase', draft: null };
+  const vaultKey = await recallVault(session.accountId);
+  if (vaultKey) return { kind: 'unlocked', session, vaultKey, message: null };
+  return { kind: 'locked', session, record: vault };
 }
 
 export function App() {

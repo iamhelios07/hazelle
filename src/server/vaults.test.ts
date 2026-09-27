@@ -18,13 +18,17 @@ async function signedIn() {
   return sessionCookie(await t.post('signup', { username: 'jin', password: 'correct horse' }));
 }
 
+async function storedVault(cookie: string) {
+  return ((await (await t.get('session', cookie)).json()) as { vault: unknown }).vault;
+}
+
 describe('vault', () => {
   it('stores the record once and returns it as given', async () => {
     const cookie = await signedIn();
-    expect(await (await t.get('vault', cookie)).json()).toEqual({ error: 'no-vault' });
+    expect(await storedVault(cookie)).toBeNull();
 
     expect((await t.post('vault', record, cookie)).status).toBe(201);
-    expect(await (await t.get('vault', cookie)).json()).toEqual(record);
+    expect(await storedVault(cookie)).toEqual(record);
 
     const again = await t.post('vault', record, cookie);
     expect(again.status).toBe(409);
@@ -37,13 +41,13 @@ describe('vault', () => {
     const kdf = { ...record.kdf, salt: 'bmV3IHNhbHQ=' };
 
     expect((await t.put('vault/passphrase', { kdf, passphraseWrap: 'bmV3' }, cookie)).status).toBe(204);
-    expect(await (await t.get('vault', cookie)).json()).toEqual({ kdf, passphraseWrap: 'bmV3', recoveryWrap: record.recoveryWrap });
+    expect(await storedVault(cookie)).toEqual({ kdf, passphraseWrap: 'bmV3', recoveryWrap: record.recoveryWrap });
   });
 
   it('refuses a malformed record and a missing session', async () => {
     const cookie = await signedIn();
     expect((await t.post('vault', { ...record, recoveryWrap: 42 }, cookie)).status).toBe(400);
     expect((await t.post('vault', { ...record, kdf: 'argon2id' }, cookie)).status).toBe(400);
-    expect((await t.get('vault')).status).toBe(401);
+    expect((await t.post('vault', record)).status).toBe(401);
   });
 });

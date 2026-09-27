@@ -6,9 +6,13 @@ import { fail, type Account, type AppEnv } from './http';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIFETIME_MS = 30 * DAY_MS;
 
-export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
+export async function currentAccount(c: Context<AppEnv>): Promise<Account | null> {
   const token = getCookie(c, 'session', 'host');
-  const account = token ? await readSession(c.env.DB, token) : null;
+  return token ? readSession(c.env.DB, token) : null;
+}
+
+export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
+  const account = await currentAccount(c);
   // Carries no x-relay header: that header is how the client tells this 401 from a provider's (tech-spec §6).
   if (!account) return fail(c, 401, 'no-session');
   c.set('account', account);

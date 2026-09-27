@@ -1,7 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { fail, readObject, type Account, type AppEnv } from './http';
 import { hashPassword, verifyPassword } from './password';
-import { endSession, requireSession, setSessionCookie, startSession } from './session';
+import { currentAccount, endSession, setSessionCookie, startSession } from './session';
+import { readVault } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
 const MIN_PASSWORD_LENGTH = 8;
@@ -9,8 +10,6 @@ const FREE_FAILURES = 5;
 const MAX_LOCK_MINUTES = 60;
 
 export const accounts = new Hono<AppEnv>();
-
-accounts.get('/signup', async (c) => c.json({ open: await signupOpen(c.env.DB) }));
 
 accounts.post('/signup', async (c) => {
   const input = await readCredentials(c);
@@ -75,7 +74,12 @@ accounts.post('/logout', async (c) => {
   return c.body(null, 204);
 });
 
-accounts.get('/session', requireSession, (c) => c.json(describe(c.get('account'))));
+// Everything a page load needs, in one request: from Korea each round trip can take seconds (tech-spec §1).
+accounts.get('/session', async (c) => {
+  const account = await currentAccount(c);
+  if (!account) return c.json({ session: null, signupOpen: await signupOpen(c.env.DB) });
+  return c.json({ session: describe(account), vault: await readVault(c.env.DB, account.id) });
+});
 
 // The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account.
 function describe(account: Account) {

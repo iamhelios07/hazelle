@@ -10,13 +10,14 @@ export const vaults = new Hono<AppEnv>();
 
 vaults.use(requireSession);
 
-vaults.get('/', async (c) => {
-  const row = await c.env.DB.prepare('SELECT kdf, passphrase_wrap, recovery_wrap FROM vaults WHERE account_id = ?')
-    .bind(c.get('account').id)
+// No GET route here: GET /api/session carries the record, so a page load is one request (tech-spec §4).
+export async function readVault(db: D1Database, accountId: string) {
+  const row = await db
+    .prepare('SELECT kdf, passphrase_wrap, recovery_wrap FROM vaults WHERE account_id = ?')
+    .bind(accountId)
     .first<{ kdf: string; passphrase_wrap: string; recovery_wrap: string }>();
-  if (!row) return fail(c, 404, 'no-vault');
-  return c.json({ kdf: JSON.parse(row.kdf), passphraseWrap: row.passphrase_wrap, recoveryWrap: row.recovery_wrap });
-});
+  return row && { kdf: JSON.parse(row.kdf) as unknown, passphraseWrap: row.passphrase_wrap, recoveryWrap: row.recovery_wrap };
+}
 
 vaults.post('/', async (c) => {
   const body = await readObject(c);

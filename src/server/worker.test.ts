@@ -13,7 +13,7 @@ const post = (path: string, body?: unknown, cookie?: string) => t.post(path, bod
 
 describe('accounts', () => {
   it('signs up the first account, keeps its session, then closes signup', async () => {
-    expect(await (await get('signup')).json()).toEqual({ open: true });
+    expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: true });
     const signup = await post('signup', { username: 'Jin', password: 'correct horse' });
     expect(signup.status).toBe(201);
     expect(await signup.json()).toEqual({ accountId: expect.any(String), username: 'jin' });
@@ -24,9 +24,9 @@ describe('accounts', () => {
     expect(cookie).toContain('SameSite=Strict');
 
     const session = await get('session', sessionCookie(signup));
-    expect(await session.json()).toEqual({ accountId: expect.any(String), username: 'jin' });
+    expect(await session.json()).toEqual({ session: { accountId: expect.any(String), username: 'jin' }, vault: null });
 
-    expect(await (await get('signup')).json()).toEqual({ open: false });
+    expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: false });
     const second = await post('signup', { username: 'other', password: 'correct horse' });
     expect(second.status).toBe(403);
     expect(await second.json()).toEqual({ error: 'signup-closed' });
@@ -61,13 +61,13 @@ describe('accounts', () => {
     const logout = await post('logout', undefined, cookie);
     expect(logout.status).toBe(204);
     expect(logout.headers.get('set-cookie')).toMatch(/^__Host-session=;.*Max-Age=0/);
-    expect((await get('session', cookie)).status).toBe(401);
+    expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
   });
 
   it('ends a session once its expiry passes', async () => {
     const cookie = sessionCookie(await post('signup', { username: 'jin', password: 'correct horse' }));
     await t.env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
-    expect((await get('session', cookie)).status).toBe(401);
+    expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
   });
 });
 
