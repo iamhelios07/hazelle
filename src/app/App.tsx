@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AccountScreen, describeFailure } from './AccountScreen';
 import { api } from './api';
+import { AccountScreen } from './screens/AccountScreen';
+import { describeFailure } from './screens/failure';
+import { SignedInScreen } from './screens/SignedInScreen';
+import { UnreachableScreen } from './screens/UnreachableScreen';
 
 type State =
   | { kind: 'loading' }
@@ -33,18 +36,7 @@ export function App() {
     case 'loading':
       return null;
     case 'unreachable':
-      return (
-        <main className="screen">
-          <header className="brand">risu-alpha</header>
-          <div className="intro">
-            <h1>연결할 수 없어요</h1>
-            <p>{state.message}</p>
-          </div>
-          <button className="primary" onClick={reload}>
-            다시 시도
-          </button>
-        </main>
-      );
+      return <UnreachableScreen message={state.message} onRetry={reload} />;
     case 'signed-out':
       return (
         <AccountScreen
@@ -53,35 +45,6 @@ export function App() {
         />
       );
     case 'signed-in':
-      return <SignedIn username={state.username} onSignedOut={() => setState({ kind: 'signed-out', signupOpen: false })} />;
+      return <SignedInScreen username={state.username} onSignedOut={() => setState({ kind: 'signed-out', signupOpen: false })} />;
   }
-}
-
-// Stands in for the home screen until the vault slice adds F1 steps 2–4 (design §2).
-function SignedIn({ username, onSignedOut }: { username: string; onSignedOut: () => void }) {
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function logout() {
-    const result = await api('POST', 'logout');
-    if (result.ok) onSignedOut();
-    else setMessage(describeFailure(result));
-  }
-
-  return (
-    <main className="screen">
-      <header className="brand">risu-alpha</header>
-      <div className="intro">
-        <h1>{username}</h1>
-        <p>로그인되어 있어요. 금고 만들기와 채팅은 아직 준비 중이에요.</p>
-      </div>
-      {message && (
-        <p className="message" role="alert">
-          {message}
-        </p>
-      )}
-      <button className="secondary" onClick={logout}>
-        로그아웃
-      </button>
-    </main>
-  );
 }
