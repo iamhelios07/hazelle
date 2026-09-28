@@ -1,4 +1,5 @@
 import { copilotCost } from './copilot-prices';
+import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
 import { count, isRecord } from './values';
 
@@ -40,6 +41,21 @@ function reasoning(supports: Record<string, unknown>): boolean | null {
   const effort = Array.isArray(supports.reasoning_effort) ? supports.reasoning_effort.length > 0 : null;
   const signals = [flag(supports.thinking), flag(supports.adaptive_thinking), effort].filter((signal) => signal !== null);
   return signals.length ? signals.includes(true) : null;
+}
+
+// Copilot lists no sampling parameters, only reasoning ones. thinking is budgeted thinking, bounded by
+// min_thinking_budget and max_thinking_budget.
+function reasoningTakes(supports: Record<string, unknown>): ReasoningTakes {
+  const efforts = effortLevels(supports.reasoning_effort);
+  const min = count(supports.min_thinking_budget);
+  const max = count(supports.max_thinking_budget);
+  const budgeted = flag(supports.thinking) ?? (min !== null || max !== null ? true : null);
+  return {
+    off: efforts?.none ? true : null,
+    levels: efforts?.levels ?? null,
+    budget: budgeted === null ? null : budgeted && { min, max },
+    adaptive: flag(supports.adaptive_thinking),
+  };
 }
 
 // The allowance model use draws on: AI credits on token billing, premium requests before it. An
@@ -136,6 +152,7 @@ export const copilot: ConnectionType = {
           reasoning: reasoning(supports),
           tools: flag(supports.tool_calls),
           protocol: protocol(raw),
+          takes: { settings: null, reasoning: reasoningTakes(supports) },
         };
       });
   },

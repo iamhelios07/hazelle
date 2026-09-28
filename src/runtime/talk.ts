@@ -125,7 +125,6 @@ export class Talk {
       connection: route.connection.value,
       model: route.model,
       messages: prompt,
-      maxTokens: null,
       signal: abort.signal,
       onText: (phase, chunk) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk }),
     });

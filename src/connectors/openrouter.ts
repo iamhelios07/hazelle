@@ -1,3 +1,5 @@
+import { listedSettings } from './chat-completions';
+import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, Meter, MeterReset, Modality } from './types';
 import { amount, count, isRecord } from './values';
 
@@ -5,6 +7,17 @@ const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']
 
 function modalities(value: unknown): Modality[] | null {
   return Array.isArray(value) ? value.filter((item): item is Modality => MODALITIES.has(item as Modality)) : null;
+}
+
+// mandatory: reasoning cannot be turned off. supports_max_tokens: a token budget can be asked for.
+function reasoningTakes(raw: Record<string, unknown>): ReasoningTakes {
+  const efforts = effortLevels(raw.supported_efforts);
+  return {
+    off: raw.mandatory === true ? false : raw.mandatory === false || efforts?.none ? true : null,
+    levels: efforts?.levels ?? null,
+    budget: typeof raw.supports_max_tokens === 'boolean' ? raw.supports_max_tokens && { min: null, max: null } : null,
+    adaptive: null,
+  };
 }
 
 const RESETS: Partial<Record<string, MeterReset>> = { daily: 'daily', weekly: 'weekly', monthly: 'monthly' };
@@ -61,9 +74,12 @@ export const openRouter: ConnectionType = {
           reasoning: parameters ? parameters.includes('reasoning') : null,
           tools: parameters ? parameters.includes('tools') : null,
           protocol: null,
+          takes: { settings: parameters && listedSettings(parameters), reasoning: isRecord(raw.reasoning) ? reasoningTakes(raw.reasoning) : null },
         };
       });
   },
+
+  reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 
   // OpenRouter reports what the call cost, in US dollars, with the final usage.
   cost: ({ facts }) => (typeof facts.rawUsage.cost === 'number' && Number.isFinite(facts.rawUsage.cost) ? { unit: 'usd', amount: facts.rawUsage.cost, source: 'reported' } : null),

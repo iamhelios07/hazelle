@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Connection, Model } from '../connectors/types';
+import type { Connection, Model, Starred } from '../connectors/types';
 import { Credentials } from './credential';
 import { generate } from './generate';
 import { stubRelay, upstream } from './testing';
@@ -9,14 +9,13 @@ const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUr
 
 const answer = (status: number, body: string, headers: Record<string, string>) => stubRelay(() => new Response(body, { status, headers }));
 
-async function run(connection = openRouter, target = model, credentials = new Credentials()) {
+async function run(connection = openRouter, target: Starred = model, credentials = new Credentials()) {
   const texts: string[] = [];
   const reply = await generate({
     credentials,
     connection,
     model: target,
     messages: [{ role: 'user', content: '안녕' }],
-    maxTokens: null,
     signal: new AbortController().signal,
     onText: (_, text) => texts.push(text),
   });
@@ -50,6 +49,15 @@ describe('generate', () => {
     expect((await run(anthropic)).reply).toMatchObject({ state: 'failed', error: { kind: 'refused', code: 'max-tokens-unknown' } });
     expect((await run({ ...openRouter, type: 'someday' })).reply).toMatchObject({ error: { kind: 'refused', code: 'unknown-connection-type' } });
     expect(log).toEqual([]);
+  });
+
+  it('sends the starred model’s settings, and refuses one its catalog says it does not take', async () => {
+    const log = answer(200, 'data: {"choices":[{"delta":{"content":"네"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
+    const listed: Starred = { ...model, takes: { settings: ['temperature'], reasoning: null } };
+    await run(openRouter, { ...listed, settings: { temperature: 0.7 } });
+    expect(JSON.parse(log[0]!.sent.body!)).toMatchObject({ temperature: 0.7 });
+    expect((await run(openRouter, { ...listed, settings: { topP: 0.9 } })).reply).toMatchObject({ state: 'failed', error: { kind: 'refused', code: 'setting-refused' } });
+    expect(log).toHaveLength(1);
   });
 });
 

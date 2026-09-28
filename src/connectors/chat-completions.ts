@@ -1,5 +1,36 @@
+import type { NumberSetting, Reasoning, Setting } from './settings';
 import type { Codec } from './types';
 import { count, isRecord, list } from './values';
+
+// This format's field for each setting it carries. OpenRouter's and Vercel's catalogs name the same
+// fields in supported_parameters. max_tokens rather than max_completion_tokens: OpenAI's reasoning
+// models refuse the first in favor of the second, which many compatible servers do not know.
+const FIELDS: Record<NumberSetting | 'stop', string> = {
+  maxOutput: 'max_tokens',
+  temperature: 'temperature',
+  topP: 'top_p',
+  topK: 'top_k',
+  frequencyPenalty: 'frequency_penalty',
+  presencePenalty: 'presence_penalty',
+  repetitionPenalty: 'repetition_penalty',
+  minP: 'min_p',
+  seed: 'seed',
+  stop: 'stop',
+};
+const CARRIED = Object.keys(FIELDS) as (keyof typeof FIELDS)[];
+
+// A catalog's supported_parameters, read as settings.
+export function listedSettings(names: unknown[]): Setting[] {
+  const settings: Setting[] = CARRIED.filter((setting) => names.includes(FIELDS[setting]));
+  return names.includes('reasoning') || names.includes('reasoning_effort') ? [...settings, 'reasoning'] : settings;
+}
+
+// OpenAI's reasoning_effort, which OpenRouter and Vercel take too; 'none' turns reasoning off.
+function effort(reasoning: Reasoning | undefined) {
+  if (reasoning?.kind === 'level') return { reasoning_effort: reasoning.level };
+  if (reasoning?.kind === 'off') return { reasoning_effort: 'none' };
+  return {};
+}
 
 // The OpenAI-compatible wire format, the generic base of design §4.
 export const chatCompletions: Codec = {
@@ -25,9 +56,23 @@ export const chatCompletions: Codec = {
       }));
   },
 
-  // max_tokens is sent only when asked for: OpenAI's reasoning models refuse it in favor of
-  // max_completion_tokens, which many compatible servers do not know.
-  chat: (endpoint, { model, messages, maxTokens }) => ({
+  // top_k, min_p and repetition_penalty are not OpenAI's, but vLLM and OpenRouter take them.
+  carries: {
+    numbers: {
+      maxOutput: { min: 1, max: null },
+      temperature: { min: 0, max: 2 },
+      topP: { min: 0, max: 1 },
+      topK: { min: 0, max: null },
+      frequencyPenalty: { min: -2, max: 2 },
+      presencePenalty: { min: -2, max: 2 },
+      repetitionPenalty: { min: 0, max: 2 },
+      minP: { min: 0, max: 1 },
+      seed: { min: null, max: null },
+    },
+    reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'], budget: null, adaptive: false },
+  },
+
+  chat: (endpoint, { model, messages, settings }, fields) => ({
     url: `${endpoint.baseUrl}/chat/completions`,
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -36,7 +81,9 @@ export const chatCompletions: Codec = {
       messages,
       stream: true,
       stream_options: { include_usage: true },
-      ...(maxTokens === null ? {} : { max_tokens: maxTokens }),
+      ...Object.fromEntries(CARRIED.filter((setting) => settings[setting] !== undefined).map((setting) => [FIELDS[setting], settings[setting]])),
+      ...effort(settings.reasoning),
+      ...fields,
     }),
   }),
 

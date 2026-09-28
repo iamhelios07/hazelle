@@ -1,28 +1,52 @@
+import type { Reasoning } from './settings';
 import { ConnectorError, type ChatMessage, type Codec, type Modality } from './types';
 import { count, isRecord } from './values';
 
 const VERSION = { 'anthropic-version': '2023-06-01' };
+
+// output_config.effort's levels, which the Models API reports one by one.
+const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+const supported = (entry: unknown) => (isRecord(entry) && typeof entry.supported === 'boolean' ? entry.supported : null);
+
+// A level alone sets effort and leaves thinking to the model's default, which is off on some models
+// (Opus 4.7, 4.8) and adaptive on others (Opus 5 on); adaptive asks for thinking outright.
+function reasoningFields(reasoning: Reasoning | undefined) {
+  switch (reasoning?.kind) {
+    case undefined:
+      return {};
+    case 'off':
+      return { thinking: { type: 'disabled' } };
+    case 'budget':
+      return { thinking: { type: 'enabled', budget_tokens: reasoning.tokens } };
+    case 'level':
+      return { output_config: { effort: reasoning.level } };
+    case 'adaptive':
+      return { thinking: { type: 'adaptive' }, ...(reasoning.level === null ? {} : { output_config: { effort: reasoning.level } }) };
+  }
+}
 
 export const anthropicMessages: Codec = {
   authHeaders: (secret) => ({ 'x-api-key': secret }),
 
   listModels: (endpoint) => ({ url: `${endpoint.baseUrl}/models?limit=1000`, method: 'GET', headers: VERSION, body: null }),
 
-  // The Models API reports limits and image, PDF and thinking support. It does not report tool support.
-  // A limit of 0 is read as unknown, as the API's own example shows 0 for real models.
+  // The Models API reports limits, image, PDF and thinking support and effort levels. It does not report
+  // tool support, sampling, or whether thinking can be turned off. A limit of 0 is read as unknown, as
+  // the API's own example shows 0 for real models.
   parseModels(payload) {
     if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
     return payload.data
       .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
       .map((raw) => {
         const capabilities = isRecord(raw.capabilities) ? raw.capabilities : null;
-        const supported = (name: string) => {
-          const entry = capabilities?.[name];
-          return isRecord(entry) && typeof entry.supported === 'boolean' ? entry.supported : null;
-        };
         const input: Modality[] | null = capabilities
-          ? ['text', ...(supported('image_input') ? (['image'] as const) : []), ...(supported('pdf_input') ? (['file'] as const) : [])]
+          ? ['text', ...(supported(capabilities.image_input) ? (['image'] as const) : []), ...(supported(capabilities.pdf_input) ? (['file'] as const) : [])]
           : null;
+        const thinking = isRecord(capabilities?.thinking) ? capabilities.thinking : null;
+        const types = isRecord(thinking?.types) ? thinking.types : {};
+        const effort = isRecord(capabilities?.effort) ? capabilities.effort : null;
+        const budget = supported(types.enabled);
         return {
           id: raw.id as string,
           name: typeof raw.display_name === 'string' && raw.display_name ? raw.display_name : (raw.id as string),
@@ -30,17 +54,33 @@ export const anthropicMessages: Codec = {
           output: ['text'],
           contextLength: count(raw.max_input_tokens) || null,
           maxOutput: count(raw.max_tokens) || null,
-          reasoning: supported('thinking'),
+          reasoning: supported(thinking),
           tools: null,
           protocol: null,
+          ...(capabilities && {
+            takes: {
+              settings: null,
+              reasoning: {
+                off: null,
+                levels: effort && (effort.supported === false ? [] : LEVELS.filter((level) => supported(effort[level]))),
+                budget: budget === null ? null : budget && { min: null, max: null },
+                adaptive: supported(types.adaptive),
+              },
+            },
+          }),
         };
       });
   },
 
-  // The Messages API requires max_tokens. With no request value and no catalog limit there is no
-  // truthful number to send, so the request is refused instead of guessed.
-  chat(endpoint, { model, messages, maxTokens }) {
-    const limit = maxTokens ?? model.maxOutput;
+  carries: {
+    numbers: { maxOutput: { min: 1, max: null, always: true }, temperature: { min: 0, max: 1 }, topP: { min: 0, max: 1 }, topK: { min: 0, max: null } },
+    reasoning: { off: true, levels: LEVELS, budget: { min: 1024, max: null }, adaptive: true },
+  },
+
+  // The Messages API requires max_tokens. With no setting and no catalog limit there is no truthful
+  // number to send, so the request is refused instead of guessed.
+  chat(endpoint, { model, messages, settings }, fields) {
+    const limit = settings.maxOutput ?? model.maxOutput;
     if (limit === null) throw new ConnectorError('max-tokens-unknown');
     const system = messages.filter((message) => message.role === 'system').map((message) => message.content);
     return {
@@ -52,6 +92,12 @@ export const anthropicMessages: Codec = {
         max_tokens: limit,
         ...(system.length ? { system: system.join('\n\n') } : {}),
         messages: messages.filter((message): message is ChatMessage & { role: 'user' | 'assistant' } => message.role !== 'system'),
+        ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
+        ...(settings.topP === undefined ? {} : { top_p: settings.topP }),
+        ...(settings.topK === undefined ? {} : { top_k: settings.topK }),
+        ...(settings.stop === undefined ? {} : { stop_sequences: settings.stop }),
+        ...reasoningFields(settings.reasoning),
+        ...fields,
         stream: true,
       }),
     };

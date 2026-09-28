@@ -1,6 +1,6 @@
 import { chatRequest, resolveConnection, resolveModel, withCredential, type Resolved } from '../connectors/registry';
 import { decodeStream, type Outcome } from '../connectors/stream';
-import { ConnectorError, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase } from '../connectors/types';
+import { ConnectorError, type ChatMessage, type Connection, type HttpRequest, type Phase, type Starred } from '../connectors/types';
 import type { CredentialFailure, Credentials } from './credential';
 import { relay } from './relay';
 
@@ -20,14 +20,13 @@ export type Reply = Omit<Outcome, 'error'> & {
 export type GenerateInput = {
   credentials: Credentials;
   connection: Connection;
-  model: Model;
+  model: Starred;
   messages: ChatMessage[];
-  maxTokens: number | null;
   signal: AbortSignal;
   onText: (phase: Phase, text: string) => void;
 };
 
-export async function generate({ credentials, connection, model, messages, maxTokens, signal, onText }: GenerateInput): Promise<Reply> {
+export async function generate({ credentials, connection, model, messages, signal, onText }: GenerateInput): Promise<Reply> {
   const started = performance.now();
   let firstText: number | null = null;
   const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
@@ -45,7 +44,7 @@ export async function generate({ credentials, connection, model, messages, maxTo
   let request: HttpRequest;
   try {
     route = resolveModel(resolved, model);
-    request = chatRequest(route, { model, messages, maxTokens });
+    request = chatRequest(route, { model, messages, settings: model.settings ?? {} });
   } catch (error) {
     if (error instanceof ConnectorError) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: error.code });
     throw error;
