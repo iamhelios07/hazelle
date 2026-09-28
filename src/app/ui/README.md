@@ -23,7 +23,6 @@ and only this folder styles elements.**
 - Screens (the feature folders beside this one) and the app shell compose these components, imported from `src/app/ui`. They
   import no CSS and pass no `className` or `style`.
 - Only give a palette value a semantic name when its role is visible in an approved mockup.
-- The kit is one folder deep (see ESLint below).
 
 ## Components
 
@@ -90,7 +89,7 @@ and only this folder styles elements.**
   also be a percentage or `100dvh`. Hex colors, named colors and `rgb()`/`hsl()` are refused.
 - Vitest: `foundation/media.test.ts` fails on a media query that `MEDIA` does not list.
 - ESLint: no `className` or `style` props and no CSS imports outside this folder and `main.tsx`,
-  and no hex color strings anywhere in `src/app`. Nothing here imports the rest of `src/app`; the
-  rule counts `../` levels, so any file more than one folder deep fails lint outright.
+  and no hex color strings anywhere in `src/app`. Nothing here imports anything outside this folder
+  (the `ui` area in `eslint/boundaries.js`).
 - `typed-css-modules` generates a type for each `.module.css`, so a misspelled class name fails
   the type check. The generated `*.module.d.css.ts` files are not committed.
