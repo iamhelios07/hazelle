@@ -8,6 +8,7 @@ import { Catalogs } from './catalog';
 import { purgeExpired } from './characters';
 import { Credentials } from './credential';
 import { Files } from './files';
+import { addFirstPersona } from './personas';
 import { addStarter } from './prompts';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
@@ -48,8 +49,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const pulled = await store.pull();
   if (pulled) return pulled;
   const files = await Files.open(accountId, vaultKey, api);
-  // Awaited rather than started, so the first screen and every turn already see the default prompt.
-  await addStarter(store);
+  // Awaited rather than started, so the first screen and every turn already see the default prompt and persona.
+  await Promise.all([addStarter(store), addFirstPersona(store, username)]);
   if (signal.aborted) return { ok: false, error: 'stopped' };
 
   const credentials = new Credentials();
@@ -63,7 +64,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const displayed = new Map<string, Displayed>();
   const views = () => {
     const version = store.snapshot();
-    if (cached?.version !== version) cached = { version, views: derive(store, username, displayed) };
+    if (cached?.version !== version) cached = { version, views: derive(store, displayed) };
     return cached.views;
   };
   const close = () => {
@@ -87,7 +88,7 @@ const written = (objects: Stored<Kind>[]) => `${objects.length}:${objects.reduce
 
 // A chat is rendered again only when it, its entries or what every chat reads changed, so a new message
 // renders its own chat alone.
-function derive(store: ObjectStore, username: string, displayed: Map<string, Displayed>): Views {
+function derive(store: ObjectStore, displayed: Map<string, Displayed>): Views {
   const shared = SHARED.map((kind) => written(store.list(kind))).join('|');
   const chats = chatItems(
     store.list('chat'),
@@ -96,7 +97,7 @@ function derive(store: ObjectStore, username: string, displayed: Map<string, Dis
       const key = `${shared}|${chat.rev}|${written(store.children('entry', chat.id))}`;
       const held = displayed.get(chat.id);
       if (held?.key === key) return held.texts;
-      const texts = displayChat({ store, username }, chat.id, chat.value, messages);
+      const texts = displayChat({ store }, chat.id, chat.value, messages);
       displayed.set(chat.id, { key, texts });
       return texts;
     },

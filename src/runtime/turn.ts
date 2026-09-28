@@ -33,11 +33,11 @@ export type TurnFailure = TalkFailure | Blocked | TooLong | { kind: 'tokenizer' 
 // user's new message last in its messages), the message Talk saves with the reply, and where the reply goes.
 export type TurnContext = { route: Route } & Pick<PromptInput, 'scope' | 'budget'> & Pick<Ask, 'said' | 'reply'>;
 
-type Reader = Pick<Session, 'store' | 'username'>;
+type Reader = Pick<Session, 'store'>;
 
 // What a chat's text is rendered with, on screen and in a turn: its character's card, lore and toggle values,
 // its prompt, persona and note, and the model it talks to. id is null for a chat not saved yet.
-export function scopeOf({ store, username }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {
+export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
   const card = character?.card ?? null;
   const prompt = chatPrompt(store, chat);
@@ -46,7 +46,7 @@ export function scopeOf({ store, username }: Reader, id: string | null, chat: Ch
   const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], card ? readToggles(card.toggles).toggles : []);
   return {
     card,
-    persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : persona.kind === 'none' ? { name: username, description: '' } : null,
+    persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : null,
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
     lore: chat.character === null ? [] : store.children('lore', chat.character),
