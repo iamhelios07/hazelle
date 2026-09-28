@@ -10,4 +10,5 @@ export { Link } from './Link';
 export { Pill } from './Pill';
 export { SearchField } from './SearchField';
 export { SendButton } from './SendButton';
+export { Switch } from './Switch';
 export { TextField } from './TextField';

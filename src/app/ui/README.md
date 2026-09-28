@@ -64,6 +64,7 @@ and only this folder styles elements.**
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
+| controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
 | collections | `AccountRow` | `AccountRow.module.css` | Who is signed in |
