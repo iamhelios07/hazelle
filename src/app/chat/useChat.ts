@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem } from '../../model/chat';
@@ -21,10 +21,10 @@ import {
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
-import { blocked, displayChat, takeTurn, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, displayChat, takeTurn, togglesOf, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
-import { useSession, useSettings, useTurn } from '../session';
+import { useSession, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle } from '../ui';
@@ -60,8 +60,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const route = chatModel(store, chat);
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
-  const settings = useSettings();
-  const toggles = toggleRows(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], shelf?.character ?? null, settings.toggles);
+  const toggles = toggleRows(togglesOf(store, chat, prompt), prompt.kind === 'prompt' ? prompt.prompt.value.toggles.length : 0);
   const card = shelf?.character.card ?? null;
   const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
@@ -122,6 +121,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   async function send() {
     const text = draft.text.trim();
     if (!text || busy) return;
+    await Promise.all(writes.current);
     if (blocked(session, chat)) return setStopped(true);
     setStopped(false);
     draft.set('');
@@ -199,12 +199,22 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     );
   }
 
+  // A send waits for these, so a model, note or toggle changed just before it reaches that turn: the turn reads the
+  // store, which takes a write only once the server has it.
+  const writes = useRef(new Set<Promise<unknown>>());
+  function track<T>(write: Promise<T>): Promise<T> {
+    const done = () => writes.current.delete(write);
+    writes.current.add(write);
+    write.then(done, done);
+    return write;
+  }
+
   function pickModel(ref: ModelRef) {
     if (!id) {
       setUnsaved({ ...unsaved, models: { ...unsaved.models, main: ref } });
       return;
     }
-    void setChatModel(store, id, ref).then((saved) => saved.ok || toast.failed(saved));
+    void track(setChatModel(store, id, ref)).then((saved) => saved.ok || toast.failed(saved));
   }
 
   // null: follow the default again (design §4.2, §4.3). A new chat holds it until its first send.
@@ -218,19 +228,19 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       });
       return;
     }
-    const saved = await WRITE_OWN[field](store, id, value);
+    const saved = await track(WRITE_OWN[field](store, id, value));
     if (!saved.ok) toast.failed(saved);
   }
 
   // design §4.2: a value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat. The next
   // turn reads it from the store (runtime/turn scopeOf).
   function flip(key: string, value: string) {
-    void setToggle(store, chat.character, key, value).then((saved) => saved.ok || toast.failed(saved));
+    void track(setToggle(store, chat.character, key, value)).then((saved) => saved.ok || toast.failed(saved));
   }
 
   async function reset() {
     const count = toggles.changed;
-    const saved = await resetToggles(store, chat.character);
+    const saved = await track(resetToggles(store, chat.character));
     if (!saved.ok) return toast.failed(saved);
     toast.show(`토글 ${count}개를 처음 값으로 되돌렸어요`);
   }
