@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react';
 import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import { useSession } from '../session';
-import { Avatar, Button, EditBox, Failure, Marker, Message as Row, Prose, Switcher, Tool, ToolDivider, Waiting } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, Marker, Prose, StoryMessage, Switcher, Tool, Waiting } from '../ui';
 import { describeReplyError } from './failure';
 import { timeOfDay } from './time';
 
@@ -144,13 +144,13 @@ export function ChatMessage(props: Props) {
       {!failed && <Tool icon={Pencil} label="수정" onClick={() => onEdit(version.text)} />}
       {!empty && <Tool icon={Copy} label="복사" onClick={props.onCopy} />}
       {!mine && <Tool icon={Info} label="답장 정보" onClick={props.onInfo} />}
-      <ToolDivider />
+      <Divider variant="tools" />
       <Tool icon={Trash2} label="삭제 · 되돌릴 수 있어요" onClick={props.onDelete} />
     </>
   );
 
   return (
-    <Row
+    <StoryMessage
       avatar={mine ? <Avatar face={username} tone="you" /> : character ? <Avatar face={character.name} image={character.image} /> : <Avatar face={Bot} />}
       name={mine ? username : (character?.name ?? receipt?.modelName ?? modelName ?? '모델')}
       time={timeOfDay(version.at)}
@@ -161,6 +161,6 @@ export function ChatMessage(props: Props) {
       onTap={onTap}
     >
       {body}
-    </Row>
+    </StoryMessage>
   );
 }

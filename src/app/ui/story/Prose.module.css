@@ -1,0 +1,34 @@
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.paragraph {
+  font-family: var(--font-serif);
+  font-size: var(--prose-size);
+  line-height: var(--prose-leading);
+  text-wrap: pretty;
+}
+
+.narration {
+  color: var(--color-prose-narration);
+}
+
+.dialogue {
+  color: var(--color-prose-dialogue);
+}
+
+.action {
+  color: var(--color-prose-action);
+}
+
+.cursor {
+  composes: blink from '../foundation/motion.module.css';
+  display: inline-block;
+  width: var(--caret-width);
+  height: var(--caret-height);
+  margin-left: var(--space-2);
+  vertical-align: -0.16em;
+  background: var(--color-accent);
+}

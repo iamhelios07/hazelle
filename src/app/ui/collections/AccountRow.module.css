@@ -1,0 +1,17 @@
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  margin-top: var(--space-6);
+  padding: var(--space-8) 0 0 var(--space-8);
+  border-top: var(--border-thin) solid var(--color-divider);
+}
+
+.name {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+}

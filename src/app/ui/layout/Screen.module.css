@@ -1,0 +1,80 @@
+.screen {
+  min-height: 100dvh;
+  max-width: var(--screen-narrow);
+  margin: 0 auto;
+  padding: var(--space-28) var(--space-24) var(--space-32);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.top {
+  min-height: var(--control-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.center {
+  justify-content: center;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.sticky {
+  position: sticky;
+  bottom: 0;
+  margin-bottom: calc(var(--space-32) * -1);
+  padding: var(--space-14) 0 var(--space-24);
+  border-top: var(--border-thin) solid var(--color-surface-raised);
+  background: var(--color-bg);
+}
+
+.wide {
+  max-width: var(--gallery-max-width);
+}
+
+@media (min-width: 600px) {
+  .screen {
+    min-height: auto;
+    padding-top: var(--screen-offset-top);
+  }
+
+  .screen.wide {
+    padding-top: var(--space-28);
+  }
+
+  .actions {
+    margin-top: var(--space-8);
+  }
+
+  .sticky {
+    margin-bottom: calc(var(--space-32) * -1);
+  }
+}
+
+/* Inside a ListDetail pane: from the top, and no wider than a form reads well. */
+.screen.pane {
+  min-height: 100%;
+  max-width: var(--pane-max-width);
+  margin: 0;
+  padding-top: var(--space-28);
+}

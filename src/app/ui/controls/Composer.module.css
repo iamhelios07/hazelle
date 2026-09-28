@@ -1,0 +1,49 @@
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-12) var(--space-10) var(--space-10) var(--space-16);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  background: var(--color-surface);
+  transition: border-color var(--duration-fast);
+}
+
+.composer:focus-within {
+  border-color: var(--color-border-strong);
+}
+
+.label {
+  composes: srOnly from '../foundation/a11y.module.css';
+}
+
+.input {
+  min-height: var(--control-lg);
+  max-height: var(--composer-max-height);
+  padding: 0 var(--space-6) 0 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  resize: none;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.hint {
+  composes: ellipsis from '../foundation/a11y.module.css';
+  flex-grow: 1;
+  min-width: 0;
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}

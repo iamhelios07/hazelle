@@ -1,0 +1,82 @@
+/* Every animation in the kit. Keyframe names are local to this file, so a component takes one by composing its class. */
+.fadeIn {
+  animation: fade var(--duration-fast) var(--ease-enter);
+}
+
+.riseIn {
+  animation: rise var(--duration-fast) var(--ease-enter);
+}
+
+.riseInSlow {
+  animation: rise var(--duration-slow) var(--ease-enter);
+}
+
+.dropIn {
+  animation: drop var(--duration-fast) var(--ease-enter);
+}
+
+.spin {
+  animation: spin var(--duration-spin) linear infinite;
+}
+
+.pulse {
+  animation: pulse var(--duration-pulse) var(--ease-loop) infinite;
+}
+
+.blink {
+  animation: blink var(--duration-blink) steps(1) infinite;
+}
+
+.dot {
+  animation: dot var(--duration-dot) var(--ease-loop) infinite;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}

@@ -1,4 +1,4 @@
-// Every raw design value lives in src/app/ui/tokens.css. Elsewhere, these properties must use its
+// Every raw design value lives in src/app/ui/foundation/tokens.css. Elsewhere, these properties must use its
 // custom properties, so a style change is made once (src/app/ui/README.md).
 const TOKEN_PROPERTIES = [
   '/color$/',
@@ -16,7 +16,14 @@ const TOKEN_PROPERTIES = [
   'column-gap',
   '/^padding/',
   '/^margin/',
+  '/^border(-(top|right|bottom|left))?-width$/',
+  'outline-width',
+  'z-index',
+  '/^(transition|animation)-(duration|delay)$/',
+  '/^(min-|max-)?(width|height)$/',
 ];
+
+const KEYWORDS = ['0', 'auto', 'inherit', 'transparent', 'currentColor', 'none'];
 
 export default {
   plugins: ['stylelint-declaration-strict-value'],
@@ -28,13 +35,17 @@ export default {
       TOKEN_PROPERTIES,
       {
         expandShorthand: true,
-        ignoreValues: ['0', 'auto', 'inherit', 'transparent', 'currentColor', 'none'],
+        ignoreValues: {
+          '': KEYWORDS,
+          // A share of the parent or the whole screen is layout, not a size from the design.
+          '/^(min-|max-)?(width|height)$/': [...KEYWORDS, '/%$/', '100dvh'],
+        },
       },
     ],
   },
   overrides: [
     {
-      files: ['src/app/ui/tokens.css'],
+      files: ['src/app/ui/foundation/tokens.css'],
       rules: {
         'color-no-hex': null,
         'function-disallowed-list': null,

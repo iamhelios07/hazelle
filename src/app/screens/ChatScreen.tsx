@@ -22,7 +22,6 @@ import {
   Dialog,
   Divider,
   IconButton,
-  MenuDivider,
   MenuItem,
   Pill,
   Popover,
@@ -384,7 +383,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
               <MenuItem label="단축키" onClick={() => openDialog('keys')} />
               {item && (
                 <>
-                  <MenuDivider />
+                  <Divider variant="menu" />
                   <MenuItem
                     label="이 채팅 삭제"
                     tone="warn"

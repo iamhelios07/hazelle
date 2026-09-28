@@ -11,9 +11,9 @@ import {
   Button,
   CardGrid,
   Dialog,
+  Divider,
   FaceCard,
   IconButton,
-  MenuDivider,
   MenuItem,
   NavBar,
   Popover,
@@ -297,7 +297,7 @@ export function GalleryScreen() {
                 <MenuItem key={child.id} label={`${candidate.value.name} › ${child.value.name}`} onClick={() => void movePicked(child.id)} />
               )),
             ])}
-            <MenuDivider />
+            <Divider variant="menu" />
             <MenuItem label="폴더에서 빼기" onClick={() => void movePicked(null)} />
           </Popover>
         </SelectionBar>

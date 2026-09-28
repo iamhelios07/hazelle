@@ -1,0 +1,26 @@
+.send {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-compact);
+  height: var(--control-compact);
+  border: var(--border-medium) solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  transition: background-color var(--duration-fast);
+}
+
+.send:disabled {
+  background: var(--color-surface-raised);
+  color: var(--color-text-faint);
+  cursor: default;
+}
+
+.stop {
+  border-color: var(--color-accent);
+  background: transparent;
+  color: var(--color-accent);
+}
