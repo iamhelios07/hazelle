@@ -1,11 +1,13 @@
 import type { Card, LoreEntry } from '../engine/import/types';
 import type { ApiResult } from './api';
-import { getBlob, putBlob, type OpenVault } from './blobs';
+import { getBlob, putBlob, removeBlob, type OpenVault } from './blobs';
+import type { Chat } from './chat';
 import type { ObjectStore, Stored } from './store';
 
 // folder is the library folder it sits in (design F6); loreFolders only group its lorebook on screen.
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
-export type Character = { card: Card; folder: string | null; loreFolders: LoreFolder[]; origin?: { id: string; name: string } };
+// deleted is when it went to 지운 캐릭터; it and its chats are removed for good KEEP_DELETED later.
+export type Character = { card: Card; folder: string | null; loreFolders: LoreFolder[]; origin?: { id: string; name: string }; deleted?: number };
 export type LoreFolder = { id: string; name: string };
 
 // Kind `lore`, whose parent is the character. folder is the id of one of its loreFolders.
@@ -27,8 +29,12 @@ export type CharacterShelf<C> = Shelf<C> & { id: string; character: Character };
 type ChatLike = { chat: { character: string | null }; order: number };
 
 // chats come newest first. A character is as recent as its latest chat, or, with none yet, as its own
-// last change.
-export function shelve<C extends ChatLike>(characters: Stored<Character>[], avatars: Stored<Avatar>[], chats: C[]): { characters: CharacterShelf<C>[]; none: Shelf<C> } {
+// last change. Deleted characters and their chats are kept apart, most recently deleted first.
+export function shelve<C extends ChatLike>(
+  characters: Stored<Character>[],
+  avatars: Stored<Avatar>[],
+  chats: C[],
+): { characters: CharacterShelf<C>[]; none: Shelf<C>; deleted: CharacterShelf<C>[] } {
   const faces = new Map(avatars.map((avatar) => [avatar.parent, avatar.value.thumb]));
   const grouped = new Map<string | null, C[]>();
   for (const item of chats) {
@@ -42,8 +48,9 @@ export function shelve<C extends ChatLike>(characters: Stored<Character>[], avat
   });
   const loose = grouped.get(null) ?? [];
   return {
-    characters: shelves.sort((a, b) => b.order - a.order),
+    characters: shelves.filter((shelf) => shelf.character.deleted === undefined).sort((a, b) => b.order - a.order),
     none: { id: null, character: null, face: null, chats: loose, order: loose[0]?.order ?? 0 },
+    deleted: shelves.filter((shelf) => shelf.character.deleted !== undefined).sort((a, b) => b.character.deleted! - a.character.deleted!),
   };
 }
 
@@ -110,4 +117,47 @@ export async function copyCharacter(store: ObjectStore, vault: OpenVault, id: st
     .filter((entry) => entry.parent === id)
     .map((entry) => entry.value);
   return addCharacter(store, vault, { ...original, card: { ...original.card, name }, origin: { id, name: original.card.name } }, lore, picture, progress);
+}
+
+// How long a deleted character waits in 지운 캐릭터 before it is removed for good.
+export const KEEP_DELETED = 7 * 24 * 60 * 60 * 1000;
+
+// Removes a character for good: its picture, lorebook, chats and their entries, and the character
+// last, so a removal cut short is picked up again while the character is still there.
+export async function purgeCharacter(store: ObjectStore, vault: OpenVault, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
+  const chats = new Set(
+    store
+      .list<Chat>('chat')
+      .filter((chat) => chat.value.character === id)
+      .map((chat) => chat.id),
+  );
+  const avatars = store.list<Avatar>('avatar').filter((avatar) => avatar.parent === id);
+  for (const avatar of avatars) {
+    const removed = await removeBlob(vault, avatar.id);
+    if (!removed.ok) return removed;
+  }
+  const entries = store.list<unknown>('entry').filter((entry) => entry.parent !== null && chats.has(entry.parent));
+  const lore = store.list<unknown>('lore').filter((entry) => entry.parent === id);
+  // The chats go only after every entry, so a removal cut short still reaches the entries left.
+  const rounds = [[...entries, ...lore, ...avatars].map((object) => object.id), [...chats]];
+  const total = rounds[0]!.length + rounds[1]!.length;
+  let done = 0;
+  for (const ids of rounds) {
+    for (let start = 0; start < ids.length; start += PARALLEL) {
+      progress(done, total);
+      const batch = ids.slice(start, start + PARALLEL);
+      const removed = await Promise.all(batch.map((object) => store.remove(object)));
+      const failure = removed.find((result) => !result.ok);
+      if (failure && !failure.ok) return failure;
+      done += batch.length;
+    }
+  }
+  return store.remove(id);
+}
+
+// Runs when the app opens, on whichever device opens first. One that fails is tried again next time.
+export async function purgeExpired(store: ObjectStore, vault: OpenVault, now: number): Promise<void> {
+  for (const { id, value } of store.list<Character>('character')) {
+    if (value.deleted !== undefined && now - value.deleted >= KEEP_DELETED) await purgeCharacter(store, vault, id, () => {});
+  }
 }

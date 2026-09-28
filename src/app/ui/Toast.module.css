@@ -30,7 +30,9 @@
 }
 
 .action {
+  flex-shrink: 0;
   min-height: var(--control-md);
+  white-space: nowrap;
   padding: 0 var(--space-12);
   border: 0;
   border-radius: var(--radius-md);

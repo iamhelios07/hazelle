@@ -302,10 +302,14 @@ export function ChatScreen({ id, character, username }: { id: string | null; cha
     if (bottom) setUnread(false);
   }
 
-  if (id !== null && !item) {
+  // The character is in 지운 캐릭터, or gone for good.
+  const orphaned = chat.character !== null && !shelf;
+  if ((id !== null && !item) || orphaned) {
     return (
       <ChatFrame title={<ChatTitle avatar={<Avatar face={MessageSquare} />} title="채팅" typing={false} />} actions={null} above={null} footer={null} scrollRef={scroller} onScroll={() => {}} onBack={wide ? undefined : () => navigate('/')}>
-        <Text tone="muted">이 채팅이 없어요. 지워졌거나 주소가 잘못됐어요.</Text>
+        <Text tone="muted">
+          {orphaned ? '지운 캐릭터의 채팅이에요. 7일 안에는 캐릭터 둘러보기의 ‘지운 캐릭터’에서 되살릴 수 있어요.' : '이 채팅이 없어요. 지워졌거나 주소가 잘못됐어요.'}
+        </Text>
       </ChatFrame>
     );
   }

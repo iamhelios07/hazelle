@@ -4,6 +4,7 @@ import { api } from '../runtime/api';
 import type { OpenVault } from '../runtime/blobs';
 import { forgetCatalogs } from '../runtime/catalog';
 import { forgetCredentials } from '../runtime/credential';
+import { purgeExpired } from '../runtime/library';
 import { keepSynced, ObjectStore } from '../runtime/store';
 import { Talk } from '../runtime/talk';
 import type { VaultKey } from '../vault/keys';
@@ -55,7 +56,9 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
         stopSync();
         talk.close();
       };
-      setOpen({ store: opened, talk, vault: { accountId, vaultKey, request: api } });
+      const vault = { accountId, vaultKey, request: api };
+      setOpen({ store: opened, talk, vault });
+      void purgeExpired(opened, vault, Date.now());
     })();
     return () => {
       current = false;

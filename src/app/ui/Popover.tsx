@@ -1,7 +1,9 @@
 import { Check, ChevronDown, type LucideIcon } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Icon } from './Icon';
 import styles from './Popover.module.css';
+
+const EDGE = 16;
 
 type Props = {
   open: boolean;
@@ -39,6 +41,16 @@ export function Popover({ open, onClose, trigger, place = 'below-start', size = 
       document.removeEventListener('pointerdown', press);
       document.removeEventListener('keydown', key);
     };
+  }, [open]);
+
+  // A panel that would cross the screen's side moves back inside it, whichever corner it opens from,
+  // before it is painted. EDGE matches the phone gutter.
+  useLayoutEffect(() => {
+    const box = panel.current?.getBoundingClientRect();
+    if (!box) return;
+    const room = document.documentElement.clientWidth;
+    const shift = box.left < EDGE ? EDGE - box.left : box.right > room - EDGE ? room - EDGE - box.right : 0;
+    panel.current!.style.setProperty('--nudge', `${shift}px`);
   }, [open]);
 
   return (

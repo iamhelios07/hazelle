@@ -19,18 +19,23 @@ type CardProps = {
   // null while the grid is not picking characters.
   selected: boolean | null;
   onClick: () => void;
+  // A menu button over the picture's corner, beside the card rather than inside its button.
+  menu?: ReactNode;
 };
 
-export function FaceCard({ image, name, note, selected, onClick }: CardProps) {
+export function FaceCard({ image, name, note, selected, onClick, menu }: CardProps) {
   return (
-    <button type="button" className={selected ? `${styles.card} ${styles.selected}` : styles.card} aria-pressed={selected ?? undefined} onClick={onClick}>
-      <span className={styles.picture}>
-        {image ? <img className={styles.image} src={image} alt="" /> : <span className={styles.letter}>{name.slice(0, 1)}</span>}
-        {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="xs" />}</span>}
-      </span>
-      <span className={styles.name}>{name}</span>
-      <span className={styles.note}>{note}</span>
-    </button>
+    <div className={styles.cardBox}>
+      <button type="button" className={selected ? `${styles.card} ${styles.selected}` : styles.card} aria-pressed={selected ?? undefined} onClick={onClick}>
+        <span className={styles.picture}>
+          {image ? <img className={styles.image} src={image} alt="" /> : <span className={styles.letter}>{name.slice(0, 1)}</span>}
+          {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="xs" />}</span>}
+        </span>
+        <span className={styles.name}>{name}</span>
+        <span className={styles.note}>{note}</span>
+      </button>
+      {menu && <div className={styles.menu}>{menu}</div>}
+    </div>
   );
 }
 

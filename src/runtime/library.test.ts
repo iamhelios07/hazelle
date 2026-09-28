@@ -3,7 +3,8 @@ import type { Card } from '../engine/import/types';
 import { randomBytes } from '../vault/aead';
 import { getBlob } from './blobs';
 import { fakeServer } from './fake-server';
-import { addCharacter, copyCharacter, holds, nest, shelve, shownFolders, type Avatar, type Character, type Folder, type Lore } from './library';
+import type { Chat } from './chat';
+import { addCharacter, copyCharacter, holds, KEEP_DELETED, nest, purgeExpired, shelve, shownFolders, type Avatar, type Character, type Folder, type Lore } from './library';
 import { ObjectStore, type Stored } from './store';
 
 const character = (id: string, rev: number): Stored<Character> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: null, loreFolders: [] } });
@@ -22,6 +23,14 @@ describe('shelve', () => {
     ]);
     expect(characters.find((shelf) => shelf.id === 'b')!.face).toBe('data:thumb');
     expect(none.chats.map((item) => item.id)).toEqual(['c3']);
+  });
+
+  it('keeps deleted characters and their chats apart', () => {
+    const gone = character('d', 4);
+    gone.value.deleted = 1;
+    const { characters, deleted } = shelve([character('a', 1), gone], [], [chat('c1', 'd', 5)]);
+    expect(characters.map((shelf) => shelf.id)).toEqual(['a']);
+    expect(deleted.map((shelf) => [shelf.id, shelf.chats.map((item) => item.id)])).toEqual([['d', ['c1']]]);
   });
 });
 
@@ -61,5 +70,26 @@ describe('copyCharacter', () => {
     expect(after!.id).not.toBe(before!.id);
     expect(after!.value).toEqual(before!.value);
     expect(await getBlob(vault, after!.id)).toEqual({ ok: true, data: image });
+  });
+});
+
+describe('purgeExpired', () => {
+  it('removes a character deleted a week ago with everything it owns, and keeps one deleted since', async () => {
+    const server = fakeServer();
+    const vault = { accountId: 'account-1', vaultKey: randomBytes(32), request: server.request };
+    const store = await ObjectStore.open(vault.accountId, vault.vaultKey, server.request);
+    const now = Date.now();
+    const deleted = (name: string, at: number): Character => ({ card: { name } as Card, folder: null, loreFolders: [], deleted: at });
+    const picture = { bytes: randomBytes(8), type: 'image/png', thumb: 'data:thumb' };
+    const expired = await addCharacter(store, vault, deleted('old', now - KEEP_DELETED), [{ name: 'lore' } as Lore], picture, () => {});
+    await addCharacter(store, vault, deleted('recent', now - 1000), [], null, () => {});
+    await store.save<Chat>('chat', 'chat-1', () => ({ title: null, character: expired.ok ? expired.data : '', models: {} }));
+    await store.save('entry', 'entry-1', () => ({ type: 'message', role: 'user', at: now, text: '안녕', receipt: null }), 'chat-1');
+    const blob = store.list<Avatar>('avatar')[0]!.id;
+
+    await purgeExpired(store, vault, now);
+    expect(store.list<Character>('character').map((kept) => kept.value.card.name)).toEqual(['recent']);
+    expect(['chat', 'entry', 'lore', 'avatar'].map((kind) => store.list(kind).length)).toEqual([0, 0, 0, 0]);
+    expect(server.blobs.has(blob)).toBe(false);
   });
 });

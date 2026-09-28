@@ -16,6 +16,7 @@
   border-radius: var(--radius-xl);
   background: var(--color-surface);
   box-shadow: var(--shadow-popover);
+  translate: var(--nudge, 0) 0;
   animation: drop var(--duration-fast) ease-out;
 }
 

@@ -1,13 +1,14 @@
-import { FolderInput, FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Copy, FolderInput, FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiFailure } from '../../runtime/api';
-import { holds, shownFolders, type Character, type Folder, type FolderTree } from '../../runtime/library';
+import { holds, KEEP_DELETED, shownFolders, type Character, type CharacterShelf, type Folder, type FolderTree } from '../../runtime/library';
 import { navigate } from '../router';
-import { useLibrary, useStore } from '../store';
+import { useLibrary, useStore, type ChatItem } from '../store';
 import { useToast } from '../toast';
 import {
   Button,
   CardGrid,
+  Dialog,
   FaceCard,
   IconButton,
   MenuDivider,
@@ -24,20 +25,24 @@ import {
   Text,
   useWide,
 } from '../ui';
+import { useCharacterActions } from './characterActions';
 import { describeFailure } from './failure';
 import { NameDialog } from './NameDialog';
 import { shelfTarget } from './shelves';
 import { ago } from './time';
 
-// 'all', 'loose' (in no folder), or a folder's id.
+// 'all', 'loose' (in no folder), 'deleted' (지운 캐릭터), or a folder's id.
 type Filter = string;
+type Menu = 'move' | 'folder' | `card-${string}`;
+const DAY = 24 * 60 * 60 * 1000;
 type Naming = { id: string | null; name: string; parent?: FolderTree };
 type Placement = { id: string; folder: string | null };
 
 // 캐릭터 둘러보기 (design F6): every character as a face, filtered by folder, and where folders are
 // made, renamed, emptied and filled.
 export function GalleryScreen() {
-  const { characters, folders } = useLibrary();
+  const { characters, folders, deleted } = useLibrary();
+  const { busy, copy, remove, restore, purge } = useCharacterActions();
   const store = useStore();
   const toast = useToast();
   const wide = useWide();
@@ -47,7 +52,9 @@ export function GalleryScreen() {
   // The characters picked to move, or null while not picking.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
-  const [menu, setMenu] = useState<'move' | 'folder' | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
+  // The character 지금 지우기 asks about before it goes for good.
+  const [purging, setPurging] = useState<CharacterShelf<ChatItem> | null>(null);
 
   const everyFolder = folders.flatMap((top) => [top, ...top.children]);
   const filed = shownFolders(folders);
@@ -55,8 +62,9 @@ export function GalleryScreen() {
   // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
   const top = folder && (folders.find((candidate) => candidate === folder || candidate.children.includes(folder)) ?? null);
   const words = query.trim().toLowerCase();
-  const shown = characters
-    .filter(({ character }) => filter === 'all' || (filter === 'loose' ? character.folder === null || !filed.has(character.folder) : folder !== null && holds(folder, character)))
+  const binned = filter === 'deleted';
+  const shown = (binned ? deleted : characters)
+    .filter(({ character }) => binned || filter === 'all' || (filter === 'loose' ? character.folder === null || !filed.has(character.folder) : folder !== null && holds(folder, character)))
     .filter(({ character }) => `${character.card.name} ${character.card.nickname ?? ''}`.toLowerCase().includes(words));
   if (byName) shown.sort((a, b) => a.character.card.name.localeCompare(b.character.card.name, 'ko'));
 
@@ -102,11 +110,11 @@ export function GalleryScreen() {
     const inside = target.children.length ? `와 안의 폴더 ${target.children.length}개` : '';
     toast({
       message: `‘${target.value.name}’ 폴더${inside}를 지웠어요. 캐릭터는 ${up ? `‘${up.value.name}’ 폴더로` : '폴더 밖으로'} 옮겼어요.`,
-      action: { label: '되돌리기', onClick: () => void restore([target, ...target.children], members) },
+      action: { label: '되돌리기', onClick: () => void restoreFolders([target, ...target.children], members) },
     });
   }
 
-  async function restore(gone: FolderTree[], members: Placement[]) {
+  async function restoreFolders(gone: FolderTree[], members: Placement[]) {
     for (const { id, value } of gone) {
       const saved = await store.save<Folder>('folder', id, () => value);
       if (!saved.ok) return saveFailed(saved);
@@ -139,9 +147,11 @@ export function GalleryScreen() {
           <Button variant="secondary" size="sm" onClick={() => setByName(!byName)}>
             {byName ? '이름 순' : '최근 대화 순'}
           </Button>
-          <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
-            {picked ? '고르기 끝' : '골라서 옮기기'}
-          </Button>
+          {!binned && (
+            <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
+              {picked ? '고르기 끝' : '골라서 옮기기'}
+            </Button>
+          )}
         </Row>
         <Stack gap={12}>
           <Row>
@@ -157,8 +167,19 @@ export function GalleryScreen() {
                 />
               ))}
               {folders.length > 0 && <Tab label="폴더 없음" current={filter === 'loose'} onClick={() => setFilter('loose')} />}
+              {(deleted.length > 0 || binned) && (
+                <Tab
+                  label="지운 캐릭터"
+                  count={deleted.length}
+                  current={binned}
+                  onClick={() => {
+                    setPicked(null);
+                    setFilter('deleted');
+                  }}
+                />
+              )}
             </Tabs>
-            <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => setNaming({ id: null, name: '' })} />
+            {!binned && <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => setNaming({ id: null, name: '' })} />}
             {folder && (
               <Popover
                 open={menu === 'folder'}
@@ -204,24 +225,81 @@ export function GalleryScreen() {
             </Tabs>
           )}
         </Stack>
+        {binned && <Text tone="muted">지운 캐릭터는 7일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.</Text>}
         {shown.length > 0 ? (
           <CardGrid label="캐릭터">
             {shown.map((shelf) => {
-              const latest = shelf.chats[0];
+              const { name } = shelf.character.card;
+              const own: Menu = `card-${shelf.id}`;
+              const close = () => setMenu(null);
+              const cardMenu = (
+                <Popover
+                  open={menu === own}
+                  onClose={close}
+                  place="below-end"
+                  label={`${name} 메뉴`}
+                  trigger={<IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" expanded={menu === own} onClick={() => setMenu(menu === own ? null : own)} />}
+                >
+                  {binned ? (
+                    <>
+                      <MenuItem
+                        icon={RotateCcw}
+                        label="되살리기"
+                        onClick={() => {
+                          close();
+                          void restore(shelf);
+                        }}
+                      />
+                      <MenuItem
+                        icon={Trash2}
+                        label="지금 지우기"
+                        tone="warn"
+                        onClick={() => {
+                          close();
+                          setPurging(shelf);
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <MenuItem
+                        icon={Copy}
+                        label="사본 만들기"
+                        onClick={() => {
+                          close();
+                          void copy(shelf);
+                        }}
+                      />
+                      <MenuItem
+                        icon={Trash2}
+                        label="지우기"
+                        tone="warn"
+                        onClick={() => {
+                          close();
+                          void remove(shelf);
+                        }}
+                      />
+                    </>
+                  )}
+                </Popover>
+              );
               return (
                 <FaceCard
                   key={shelf.id}
                   image={shelf.face}
-                  name={shelf.character.card.name}
-                  note={latest?.at ? `${ago(latest.at)} · 채팅 ${shelf.chats.length}개` : '아직 채팅이 없어요'}
+                  name={name}
+                  note={busy?.id === shelf.id ? busy.label : binned ? leftFor(shelf) : note(shelf)}
                   selected={picked ? picked.has(shelf.id) : null}
-                  onClick={() => (picked ? toggle(shelf.id) : navigate(shelfTarget(shelf, wide)))}
+                  onClick={() => (picked ? toggle(shelf.id) : binned ? setMenu(own) : navigate(shelfTarget(shelf, wide)))}
+                  menu={picked || busy?.id === shelf.id ? undefined : cardMenu}
                 />
               );
             })}
           </CardGrid>
         ) : (
-          <Text tone="muted">{words ? `“${query.trim()}” 검색 결과가 없어요.` : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Text>
+          <Text tone="muted">
+            {words ? `“${query.trim()}” 검색 결과가 없어요.` : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}
+          </Text>
         )}
       </Stack>
       {picked && (
@@ -252,9 +330,44 @@ export function GalleryScreen() {
           </Popover>
         </SelectionBar>
       )}
+      {purging && (
+        <Dialog title="완전히 지울까요?" onClose={() => setPurging(null)}>
+          <Stack gap={16}>
+            <Text>
+              ‘{purging.character.card.name}’ {purging.chats.length ? `캐릭터와 채팅 ${purging.chats.length}개를` : '캐릭터를'} 지금 완전히 지워요. 되돌릴 수 없어요.
+            </Text>
+            <Row>
+              <Button variant="secondary" onClick={() => setPurging(null)}>
+                취소
+              </Button>
+              <Button
+                icon={Trash2}
+                onClick={() => {
+                  setPurging(null);
+                  void purge(purging);
+                }}
+              >
+                완전히 지우기
+              </Button>
+            </Row>
+          </Stack>
+        </Dialog>
+      )}
       {naming && (
         <NameDialog title={naming.id ? '폴더 이름 바꾸기' : naming.parent ? `‘${naming.parent.value.name}’ 안에 새 폴더` : '새 폴더'} value={naming.name} onSave={(name) => void saveFolder({ ...naming, name })} onClose={() => setNaming(null)} />
       )}
     </Screen>
   );
+}
+
+function note(shelf: CharacterShelf<ChatItem>): string {
+  const latest = shelf.chats[0];
+  return latest?.at ? `${ago(latest.at)} · 채팅 ${shelf.chats.length}개` : '아직 채팅이 없어요';
+}
+
+// How long a character in 지운 캐릭터 has left. Past its time it goes when the app next opens.
+function leftFor(shelf: CharacterShelf<ChatItem>): string {
+  const days = Math.ceil((shelf.character.deleted! + KEEP_DELETED - Date.now()) / DAY);
+  const chats = shelf.chats.length ? ` · 채팅 ${shelf.chats.length}개` : '';
+  return (days > 0 ? `${days}일 남음` : '곧 지워져요') + chats;
 }

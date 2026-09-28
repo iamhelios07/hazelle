@@ -4,6 +4,21 @@
   gap: var(--space-16);
 }
 
+.cardBox {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.menu {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+}
+
 .card {
   display: flex;
   flex-direction: column;
