@@ -1,4 +1,4 @@
-import type { Shelf } from '../../runtime/library';
+import type { Shelf } from '../../model/library';
 
 const CHAT = /^\/chats\/([0-9a-f-]{36})$/;
 const SHELF = /^\/characters\/([0-9a-f-]{36}|none)(?:\/new|\/about|\/edit)?$/;

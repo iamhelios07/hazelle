@@ -10,8 +10,9 @@ export type ReplyError =
   | NonNullable<Outcome['error']>;
 
 // The facts a receipt keeps (tech-spec §5): the outcome, and times measured from the moment of sending.
+// A stop is a cut, never an error.
 export type Reply = Omit<Outcome, 'error'> & {
-  error: ReplyError | null;
+  error: Exclude<ReplyError, { kind: 'stopped' }> | null;
   firstTextMs: number | null;
   totalMs: number;
 };
@@ -28,7 +29,7 @@ export type GenerateInput = {
 export async function generate({ connection, model, messages, maxTokens, signal, onText }: GenerateInput): Promise<Reply> {
   const started = performance.now();
   let firstText: number | null = null;
-  const reply = (outcome: Omit<Outcome, 'error'>, error: ReplyError | null): Reply => ({
+  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
     ...outcome,
     error,
     firstTextMs: firstText === null ? null : Math.round(firstText - started),

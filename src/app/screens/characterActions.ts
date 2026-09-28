@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { copyCharacter, purgeCharacter, type Character, type CharacterShelf } from '../../runtime/library';
+import type { CharacterShelf } from '../../model/library';
+import { copyCharacter, purgeCharacter } from '../../runtime/library';
 import { navigate } from '../router';
 import { useStore, useVault, type ChatItem } from '../store';
 import { useToast } from '../toast';
@@ -19,8 +20,8 @@ export function useCharacterActions() {
 
   // deleted undefined brings it back from 지운 캐릭터.
   async function mark(id: string, deleted: number | undefined): Promise<boolean> {
-    const saved = await store.save<Character>('character', id, (current) => {
-      const next = { ...current! };
+    const saved = await store.update('character', id, (current) => {
+      const next = { ...current };
       if (deleted === undefined) delete next.deleted;
       else next.deleted = deleted;
       return next;

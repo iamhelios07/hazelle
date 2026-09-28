@@ -1,6 +1,6 @@
 import { ChevronLeft, Import, LayoutGrid, Lock, LogOut, MessageSquare, Plug, Plus, Settings } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { holds, shownFolders, type FolderTree, type Shelf } from '../../runtime/library';
+import { holds, shownFolders, type FolderTree, type Shelf } from '../../model/library';
 import { navigate, usePath } from '../router';
 import { useLibrary, useTurn, type ChatItem } from '../store';
 import { useToast } from '../toast';

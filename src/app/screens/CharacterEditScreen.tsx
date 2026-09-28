@@ -1,7 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Card } from '../../engine/import/types';
-import type { Character } from '../../runtime/library';
 import { navigate } from '../router';
 import { useLibrary, useStore } from '../store';
 import { useToast } from '../toast';
@@ -47,7 +46,7 @@ function Editor({ id, initial, onBack }: { id: string; initial: Card; onBack: ()
     if (Object.keys(patch).length === 0) return;
     waiting.current = {};
     setStatus('saving');
-    const saved = await store.save<Character>('character', id, (current) => ({ ...current!, card: { ...current!.card, ...patch } }));
+    const saved = await store.update('character', id, (current) => ({ ...current, card: { ...current.card, ...patch } }));
     if (saved.ok) return setStatus('saved');
     // Kept for the next change to try again, under anything typed since.
     waiting.current = { ...patch, ...waiting.current };

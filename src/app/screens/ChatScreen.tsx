@@ -1,7 +1,7 @@
 import { MessageSquare, MoreHorizontal, PanelRight } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { Assignment, ModelRef } from '../../connectors/assignment';
-import { shown, type Chat, type Message } from '../../runtime/chat';
+import { shown, type Chat, type Message } from '../../model/chat';
 import { fillNames, unused } from '../../engine/prompt';
 import { addEntry, addGreeting, chatModel, editMessage, withTurn, type TalkFailure } from '../../runtime/talk';
 import { navigate } from '../router';
@@ -153,7 +153,7 @@ export function ChatScreen({ id, character, username }: { id: string | null; cha
     let chatId = id;
     if (chatId === null) {
       chatId = crypto.randomUUID();
-      const created = await store.save<Chat>('chat', chatId, () => chat);
+      const created = await store.create('chat', chat, { id: chatId });
       if (!created.ok) {
         setDraft(text);
         toast({ message: `채팅을 만들지 못했어요. ${describeFailure(created)}` });
@@ -225,18 +225,18 @@ export function ChatScreen({ id, character, username }: { id: string | null; cha
   }
 
   async function removeChat() {
-    if (!item) return;
-    const { id: chatId, chat: value } = item;
+    const stored = item && store.get('chat', item.id);
+    if (!stored) return;
     if (streaming) talk.stop();
-    const removed = await store.remove(chatId);
+    const removed = await store.remove(stored.id);
     if (!removed.ok) {
       toast({ message: describeFailure(removed) });
       return;
     }
-    navigate(shelfPath(value.character));
+    navigate(shelfPath(stored.value.character));
     toast({
       message: '채팅을 지웠어요',
-      action: { label: '되돌리기', onClick: () => void store.save<Chat>('chat', chatId, () => value).then((saved) => saved.ok && navigate(`/chats/${chatId}`)) },
+      action: { label: '되돌리기', onClick: () => void store.restore(stored).then((saved) => saved.ok && navigate(`/chats/${stored.id}`)) },
     });
   }
 
@@ -253,12 +253,12 @@ export function ChatScreen({ id, character, username }: { id: string | null; cha
       setDraftModels({ ...draftModels, main: ref });
       return;
     }
-    void store.save<Chat>('chat', id, (current) => ({ ...current!, models: { ...current!.models, main: ref } })).then((saved) => saved.ok || toast({ message: describeFailure(saved) }));
+    void store.update('chat', id, (current) => ({ ...current, models: { ...current.models, main: ref } })).then((saved) => saved.ok || toast({ message: describeFailure(saved) }));
   }
 
   async function rename(name: string) {
     if (!id) return;
-    const saved = await store.save<Chat>('chat', id, (current) => ({ ...current!, title: name.trim() || null }));
+    const saved = await store.update('chat', id, (current) => ({ ...current, title: name.trim() || null }));
     if (!saved.ok) toast({ message: describeFailure(saved) });
     else setDialog(null);
   }

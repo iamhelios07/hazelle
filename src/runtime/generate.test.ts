@@ -2,15 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Connection, Model } from '../connectors/types';
 import { forgetCredentials } from './credential';
 import { generate } from './generate';
+import { stubRelay, upstream } from './testing';
 
 const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
 const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] };
 
-function answer(status: number, body: string, headers: Record<string, string>) {
-  const fetch = vi.fn(async () => new Response(body, { status, headers }));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+const answer = (status: number, body: string, headers: Record<string, string>) => stubRelay(() => new Response(body, { status, headers }));
 
 async function run(connection = openRouter, target = model) {
   const texts: string[] = [];
@@ -29,14 +26,12 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('generate', () => {
   it('sends the built request through the relay and streams the reply', async () => {
-    const fetch = answer(200, 'data: {"choices":[{"delta":{"content":"반가워요"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
+    const log = answer(200, 'data: {"choices":[{"delta":{"content":"반가워요"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
     const { reply, text } = await run();
     expect(text).toBe('반가워요');
     expect(reply).toMatchObject({ state: 'done', error: null, finishReason: 'stop' });
     expect(reply.firstTextMs).toBeGreaterThanOrEqual(0);
-    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe('/api/relay');
-    expect(JSON.parse(init.body as string)).toMatchObject({ url: 'https://openrouter.ai/api/v1/chat/completions', method: 'POST', headers: { authorization: 'Bearer sk-or-x' } });
+    expect(log[0]!.sent).toMatchObject({ url: 'https://openrouter.ai/api/v1/chat/completions', method: 'POST', headers: { authorization: 'Bearer sk-or-x' } });
   });
 
   it("tells the provider's refusal, the relay's and the app's apart", async () => {
@@ -49,11 +44,11 @@ describe('generate', () => {
   });
 
   it('refuses before sending when the request cannot be built', async () => {
-    const fetch = answer(200, '', { 'x-relay': 'upstream' });
+    const log = answer(200, '', { 'x-relay': 'upstream' });
     const anthropic: Connection = { ...openRouter, type: 'anthropic', secret: 'sk-ant-x' };
     expect((await run(anthropic)).reply).toMatchObject({ state: 'failed', error: { kind: 'refused', code: 'max-tokens-unknown' } });
     expect((await run({ ...openRouter, type: 'someday' })).reply).toMatchObject({ error: { kind: 'refused', code: 'unknown-connection-type' } });
-    expect(fetch).not.toHaveBeenCalled();
+    expect(log).toEqual([]);
   });
 });
 
@@ -65,14 +60,12 @@ describe('a connection that trades its key for a token', () => {
 
   // Answers the exchange with a token that lasts the given seconds, and a chat with a one-word reply.
   function copilotApi(lasts: number) {
-    const fetch = vi.fn(async (_url: string, init: RequestInit) => {
-      const { url } = JSON.parse(init.body as string) as { url: string };
-      const headers = { 'x-relay': 'upstream' };
-      if (url === EXCHANGE) return Response.json({ token: 'tid', expires_at: Math.floor(Date.now() / 1000) + lasts }, { headers });
-      return new Response('data: {"choices":[{"delta":{"content":"네"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers });
-    });
-    vi.stubGlobal('fetch', fetch);
-    return () => fetch.mock.calls.map(([, init]) => JSON.parse(init.body as string) as { url: string; headers: Record<string, string> });
+    const log = stubRelay(({ url }) =>
+      url === EXCHANGE
+        ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + lasts })
+        : new Response('data: {"choices":[{"delta":{"content":"네"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { 'x-relay': 'upstream' } }),
+    );
+    return () => log.map((call) => call.sent);
   }
 
   afterEach(() => forgetCredentials());
@@ -93,14 +86,14 @@ describe('a connection that trades its key for a token', () => {
   });
 
   it('stops before the chat when the trade is refused', async () => {
-    const fetch = answer(401, '{"message":"Bad credentials"}', { 'x-relay': 'upstream' });
+    const log = answer(401, '{"message":"Bad credentials"}', { 'x-relay': 'upstream' });
     expect((await run(copilot, gpt)).reply).toMatchObject({ state: 'failed', error: { kind: 'provider', status: 401, detail: 'Bad credentials' } });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(log).toHaveLength(1);
   });
 
   it('refuses a model it cannot call before trading for a token', async () => {
-    const fetch = answer(200, '', { 'x-relay': 'upstream' });
+    const log = answer(200, '', { 'x-relay': 'upstream' });
     expect((await run(copilot, { ...gpt, protocol: 'unsupported' })).reply).toMatchObject({ error: { kind: 'refused', code: 'unsupported-protocol' } });
-    expect(fetch).not.toHaveBeenCalled();
+    expect(log).toEqual([]);
   });
 });

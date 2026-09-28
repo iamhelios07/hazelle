@@ -61,6 +61,22 @@ describe('objects', () => {
     expect((await sync(cookie, 2)).changes).toEqual([{ id: A, kind: 'connection', parent: null, rev: 3, body: 'a2V5' }]);
   });
 
+  it('refuses an update that moves an object to another parent, and restores a child under its own', async () => {
+    const cookie = await signedIn();
+    const C = '33333333-3333-4333-8333-333333333333';
+    await write(cookie, A, { kind: 'chat', body: 'YQ==' });
+    await write(cookie, B, { kind: 'chat', body: 'Yg==' });
+    expect(await write(cookie, C, { kind: 'entry', parent: A, body: 'Yw==' })).toEqual({ status: 200, json: { rev: 3 } });
+    expect(await write(cookie, C, { kind: 'entry', parent: B, body: 'ZA==', baseRev: 3 })).toEqual({ status: 400, json: { error: 'bad-input' } });
+    expect(await write(cookie, C, { kind: 'entry', body: 'ZA==', baseRev: 3 })).toEqual({ status: 400, json: { error: 'bad-input' } });
+
+    const deleted = await t.delete(`objects/${C}`, { kind: 'entry', baseRev: 3 }, cookie);
+    expect(await deleted.json()).toEqual({ rev: 4 });
+    expect(await write(cookie, C, { kind: 'entry', parent: B, body: 'Yw==', baseRev: 4 })).toEqual({ status: 400, json: { error: 'bad-input' } });
+    expect(await write(cookie, C, { kind: 'entry', parent: A, body: 'Yw==', baseRev: 4 })).toEqual({ status: 200, json: { rev: 5 } });
+    expect((await sync(cookie, 4)).changes).toEqual([{ id: C, kind: 'entry', parent: A, rev: 5, body: 'Yw==' }]);
+  });
+
   it('pages a large sync by body size and never shows another account', async () => {
     const cookie = await signedIn();
     const big = 'x'.repeat(1_400_000);

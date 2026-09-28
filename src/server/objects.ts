@@ -42,7 +42,9 @@ objects.get('/', async (c) => {
 });
 
 // Every write takes the account's next rev in the same batch, which D1 runs as one transaction. The
-// rev is bumped only when the write will succeed, so a refused write leaves no gap.
+// rev is bumped only when the write will succeed, so a refused write leaves no gap. An update keeps
+// the object's parent: one naming another parent is bad input, not a conflict, since pulling and
+// trying again could never make it fit.
 objects.put('/:id', async (c) => {
   const input = readWrite(c.req.param('id'), await readObject(c));
   if (!input) return fail(c, 400, 'bad-input');
@@ -66,19 +68,23 @@ objects.put('/:id', async (c) => {
       : [
           db
             .prepare(
-              'UPDATE accounts SET rev = rev + 1 WHERE id = ?1 AND EXISTS (SELECT 1 FROM objects WHERE account_id = ?1 AND id = ?2 AND kind = ?3 AND rev = ?4)',
+              'UPDATE accounts SET rev = rev + 1 WHERE id = ?1 AND EXISTS (SELECT 1 FROM objects WHERE account_id = ?1 AND id = ?2 AND kind = ?3 AND rev = ?4 AND parent_id IS ?5)',
             )
-            .bind(account, id, kind, baseRev),
+            .bind(account, id, kind, baseRev, parent),
           db
             .prepare(
-              'UPDATE objects SET parent_id = ?5, body = ?6, deleted_at = NULL, rev = (SELECT rev FROM accounts WHERE id = ?1) WHERE account_id = ?1 AND id = ?2 AND kind = ?3 AND rev = ?4 RETURNING rev',
+              'UPDATE objects SET body = ?6, deleted_at = NULL, rev = (SELECT rev FROM accounts WHERE id = ?1) WHERE account_id = ?1 AND id = ?2 AND kind = ?3 AND rev = ?4 AND parent_id IS ?5 RETURNING rev',
             )
             .bind(account, id, kind, baseRev, parent, body),
         ],
   );
   const rev = written!.results[0]?.rev;
-  if (rev === undefined) return fail(c, 409, 'conflict');
-  return c.json({ rev });
+  if (rev !== undefined) return c.json({ rev });
+  if (baseRev !== null) {
+    const stored = await db.prepare('SELECT parent_id FROM objects WHERE account_id = ?1 AND id = ?2').bind(account, id).first<{ parent_id: string | null }>();
+    if (stored && stored.parent_id !== parent) return fail(c, 400, 'bad-input');
+  }
+  return fail(c, 409, 'conflict');
 });
 
 // A deleted object stays as a row without a body, so other devices learn of the deletion by sync.

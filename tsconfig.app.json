@@ -17,7 +17,9 @@
     "src/app",
     "src/connectors",
     "src/engine",
+    "src/model",
     "src/runtime",
     "src/vault"
-  ]
+  ],
+  "exclude": ["src/runtime/testing.ts", "src/runtime/**/*.test.ts"]
 }

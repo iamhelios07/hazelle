@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { chatTitle, fold, history, recentModels, shown, type Entry, type Receipt } from './chat';
-import type { Stored } from './store';
+import type { Stored } from './kinds';
 
 let rev = 0;
-const entry = (id: string, value: Entry): Stored<Entry> => ({ id, kind: 'entry', parent: 'chat', rev: ++rev, value });
+const entry = (id: string, value: Entry): Stored<'entry'> => ({ id, kind: 'entry', parent: 'chat', rev: ++rev, value });
 const user = (id: string, text: string) => entry(id, { type: 'message', role: 'user', at: rev, text, receipt: null });
 const receipt = (over: Partial<Receipt> = {}): Receipt => ({
   connection: 'c1',

@@ -1,7 +1,7 @@
 import { Copy, FolderInput, FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiFailure } from '../../runtime/api';
-import { holds, KEEP_DELETED, shownFolders, type Character, type CharacterShelf, type Folder, type FolderTree } from '../../runtime/library';
+import { holds, KEEP_DELETED, shownFolders, type CharacterShelf, type FolderTree } from '../../model/library';
 import { navigate } from '../router';
 import { useLibrary, useStore, type ChatItem } from '../store';
 import { useToast } from '../toast';
@@ -75,7 +75,7 @@ export function GalleryScreen() {
   // Whether every character moved; a failure is shown and stops the rest.
   async function place(moves: Placement[]): Promise<boolean> {
     for (const { id, folder: to } of moves) {
-      const saved = await store.save<Character>('character', id, (current) => ({ ...current!, folder: to }));
+      const saved = await store.update('character', id, (current) => ({ ...current, folder: to }));
       if (!saved.ok) {
         saveFailed(saved);
         return false;
@@ -88,9 +88,10 @@ export function GalleryScreen() {
     const trimmed = name.trim();
     if (!trimmed) return;
     setNaming(null);
-    const saved = await store.save<Folder>('folder', id ?? crypto.randomUUID(), (current) =>
-      current ? { ...current, name: trimmed } : parent ? { name: trimmed, parent: parent.id } : { name: trimmed },
-    );
+    const saved =
+      id === null
+        ? await store.create('folder', parent ? { name: trimmed, parent: parent.id } : { name: trimmed })
+        : await store.update('folder', id, (current) => ({ ...current, name: trimmed }));
     if (!saved.ok) saveFailed(saved);
   }
 
@@ -115,8 +116,8 @@ export function GalleryScreen() {
   }
 
   async function restoreFolders(gone: FolderTree[], members: Placement[]) {
-    for (const { id, value } of gone) {
-      const saved = await store.save<Folder>('folder', id, () => value);
+    for (const folder of gone) {
+      const saved = await store.restore(folder);
       if (!saved.ok) return saveFailed(saved);
     }
     await place(members);

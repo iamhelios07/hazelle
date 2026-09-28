@@ -1,8 +1,6 @@
 import type { Assignment, ModelRef } from '../connectors/assignment';
-import type { Outcome } from '../connectors/stream';
 import type { ChatMessage, Cost, Usage } from '../connectors/types';
-import type { ReplyError } from './generate';
-import type { Stored } from './store';
+import type { Stored } from './kinds';
 
 // The stored `chat` object (tech-spec §5). Its messages are `entry` objects whose parent is the chat.
 export type Chat = {
@@ -21,9 +19,9 @@ export type Receipt = {
   source: string;
   model: string;
   modelName: string;
-  state: Outcome['state'];
-  cut: Outcome['cut'];
-  error: ReplyError | null;
+  state: 'done' | 'cut' | 'failed';
+  cut: 'length' | 'no-terminal' | 'stopped' | null;
+  error: ReceiptError | null;
   finishReason: string | null;
   usage: Usage | null;
   // pending until a `cost` entry for replyId arrives.
@@ -32,6 +30,20 @@ export type Receipt = {
   firstTextMs: number | null;
   totalMs: number;
 };
+
+// A receipt's own copy of runtime/generate ReplyError, converted where the receipt is written, so a
+// change to the network's failure types never changes what saved chats hold. A stop is a cut, never
+// an error. status is there when the provider refused the request, and absent when its stream failed.
+export type ReceiptError =
+  | { kind: 'refused'; code: string }
+  | { kind: 'relay'; code: string }
+  | { kind: 'app'; code: string }
+  | { kind: 'provider'; status: number; detail: string }
+  | { kind: 'provider'; detail: string }
+  | { kind: 'bad-event'; detail: string }
+  | { kind: 'network'; detail: string }
+  | { kind: 'offline' }
+  | { kind: 'no-token' };
 
 // Chat entries are created and never changed (design §3): an edit, a swipe or a deletion is a new
 // entry. at is the writer's clock, for showing times only; order is the server's rev.
@@ -53,7 +65,7 @@ export type Message = { id: string; role: 'user' | 'assistant'; at: number; vers
 
 // A chat's entries, read in rev order into the messages on screen. Entries naming a message or version
 // that is not there (yet) are skipped.
-export function fold(entries: Stored<Entry>[]): Message[] {
+export function fold(entries: Stored<'entry'>[]): Message[] {
   const messages = new Map<string, Message>();
   const deleted = new Set<string>();
   // A replaced version's id keeps leading to the version that took its place.

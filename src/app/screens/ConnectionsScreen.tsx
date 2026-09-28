@@ -2,7 +2,6 @@ import { Check, ChevronRight, MessageSquarePlus, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { fitsRole, resolveRole, type ModelRef } from '../../connectors/assignment';
 import { resolveConnection } from '../../connectors/registry';
-import { SETTINGS_ID, type Settings } from '../../runtime/docs';
 import { navigate, usePath } from '../router';
 import { useConnections, useSettings, useStore, useUnreadable } from '../store';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, Section, Text } from '../ui';
@@ -24,7 +23,7 @@ export function ConnectionsScreen() {
 
   async function choose(ref: ModelRef) {
     setMessage(null);
-    const result = await store.save<Settings>('settings', SETTINGS_ID, (current) => ({ ...current, models: { ...current?.models, main: ref } }));
+    const result = await store.upsert('settings', (current) => ({ ...current, models: { ...current?.models, main: ref } }));
     if (!result.ok) setMessage(describeFailure(result));
   }
 

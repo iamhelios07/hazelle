@@ -15,9 +15,8 @@ export async function connect(store: ObjectStore, connection: Connection, signal
   if (signal?.aborted) return null;
   if (!catalog.ok) return describeCatalogFailure(catalog.failure);
   if (meters && !meters.ok && meters.failure.kind === 'provider' && meters.failure.status === 401) return describeMetersFailure(meters.failure);
-  const id = crypto.randomUUID();
-  const saved = await store.save<Connection>('connection', id, () => connection);
+  const saved = await store.create('connection', connection);
   if (!saved.ok) return describeFailure(saved);
-  navigate(`/connections/${id}`, { replace: true });
+  navigate(`/connections/${saved.data.id}`, { replace: true });
   return null;
 }

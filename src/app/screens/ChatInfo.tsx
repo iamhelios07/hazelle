@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect } from 'react';
-import { shown, type Message, type Receipt } from '../../runtime/chat';
+import { shown, type Message, type Receipt } from '../../model/chat';
 import { useTalk } from '../store';
 import { Breakdown, Callout, Facts, IconButton, PanelSection, SidePanel, Text } from '../ui';
 import { describeReplyError } from './failure';

@@ -1,6 +1,6 @@
 import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Connection, Model } from '../../connectors/types';
+import type { Model } from '../../connectors/types';
 import { loadCatalog, type CatalogResult } from '../../runtime/catalog';
 import { reportsMeters } from '../../runtime/meters';
 import { navigate } from '../router';
@@ -89,8 +89,8 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
     const state = saving.current;
     state.count++;
     state.queue = state.queue.then(async () => {
-      const result = store.get<Connection>(id)
-        ? await store.save<Connection>('connection', id, (current) => ({ ...current!, starred: on ? without(current!.starred) : [...without(current!.starred), model] }))
+      const result = store.get('connection', id)
+        ? await store.update('connection', id, (current) => ({ ...current, starred: on ? without(current.starred) : [...without(current.starred), model] }))
         : null;
       state.count--;
       if (result && !result.ok) {
@@ -103,7 +103,7 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
   }
 
   async function remove() {
-    const value = connection!;
+    const snapshot = stored!;
     const result = await store.remove(id);
     if (!result.ok) {
       setMessage(describeFailure(result));
@@ -111,8 +111,8 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
     }
     navigate('/connections');
     toast({
-      message: `${value.label} 연결을 지웠어요.`,
-      action: { label: '되돌리기', onClick: () => void store.save<Connection>('connection', id, () => value) },
+      message: `${snapshot.value.label} 연결을 지웠어요.`,
+      action: { label: '되돌리기', onClick: () => void store.restore(snapshot) },
     });
   }
 

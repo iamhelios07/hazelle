@@ -4,9 +4,16 @@ import tseslint from 'typescript-eslint';
 
 const folders = (names, message) => ({ regex: `(^|/)(${names.join('|')})(/|$)`, message });
 const restrictImports = (...patterns) => ({ 'no-restricted-imports': ['error', { patterns }] });
+// The typed rule, for patterns that let `import type` through (allowTypeImports).
+const restrictValueImports = (...patterns) => ({ '@typescript-eslint/no-restricted-imports': ['error', { patterns }] });
 
 const CLIENT_TO_SERVER = folders(['server'], 'Client code reaches the server over HTTP only (tech-spec §3).');
 const CSS_IMPORT = { regex: '\\.css$', message: 'Only src/app/ui imports CSS (src/app/ui/README.md).' };
+// Matches the flat src/app/ui only: one level up from a file there is src/app.
+const APP_OUTSIDE_UI = {
+  regex: '^\\.\\./(?!\\.\\.)',
+  message: 'src/app/ui imports nothing else from src/app, so a component never reaches the store, router, toasts or a screen (tech-spec §3).',
+};
 const HEX_COLOR = {
   selector: 'Literal[value=/^#(?:[0-9a-fA-F]{3,4}){1,2}$/]',
   message: 'Colors live in src/app/ui/tokens.css.',
@@ -21,28 +28,54 @@ export default defineConfig([
   js.configs.recommended,
   tseslint.configs.recommended,
   {
-    files: ['src/engine/**', 'src/connectors/**'],
+    files: ['src/model/**'],
+    rules: restrictValueImports(
+      folders(['app', 'runtime', 'vault', 'server'], 'The model is pure domain: saved values and what is computed from them, with no I/O (tech-spec §3).'),
+      { ...folders(['connectors', 'engine'], 'The model takes only types from connectors and the engine (tech-spec §3).'), allowTypeImports: true },
+    ),
+  },
+  {
+    files: ['src/engine/**'],
+    rules: {
+      ...restrictImports(folders(['app', 'runtime', 'vault', 'server'], 'The engine and connectors stay free of UI, network, storage and server code (tech-spec §3).')),
+      ...restrictValueImports({ ...folders(['model'], 'The engine takes only types from the model (tech-spec §3).'), allowTypeImports: true }),
+    },
+  },
+  {
+    files: ['src/connectors/**'],
     rules: restrictImports(
       folders(['app', 'runtime', 'vault', 'server'], 'The engine and connectors stay free of UI, network, storage and server code (tech-spec §3).'),
+      folders(['model'], 'Connectors are the provider contract the model builds on, so they import nothing from it (tech-spec §3).'),
     ),
   },
   {
     files: ['src/server/**'],
     rules: restrictImports(
-      folders(['app', 'runtime', 'vault', 'engine', 'connectors'], 'The server knows nothing about the client or providers (tech-spec §3).'),
+      folders(['app', 'model', 'runtime', 'vault', 'engine', 'connectors'], 'The server knows nothing about the client or providers (tech-spec §3).'),
     ),
   },
   {
     files: ['src/vault/**'],
-    rules: restrictImports(folders(['app', 'runtime', 'server'], 'The vault is crypto and device storage only; it never reaches the network (tech-spec §3).')),
+    rules: restrictImports(
+      folders(['app', 'model', 'runtime', 'server'], 'The vault is crypto and device storage only; it never reaches the network (tech-spec §3).'),
+    ),
   },
   {
     files: ['src/runtime/**'],
+    ignores: ['src/runtime/testing.ts'],
     rules: restrictImports(folders(['app', 'server'], 'The runtime is below the UI and reaches the server over HTTP only (tech-spec §3).')),
+  },
+  {
+    files: ['src/runtime/testing.ts'],
+    rules: restrictImports(folders(['app'], 'The runtime is below the UI; only its test harness runs the real server in process (tech-spec §3).')),
   },
   {
     files: ['src/app/**'],
     rules: { ...restrictImports(CLIENT_TO_SERVER), 'no-restricted-syntax': ['error', HEX_COLOR] },
+  },
+  {
+    files: ['src/app/ui/**'],
+    rules: restrictImports(CLIENT_TO_SERVER, APP_OUTSIDE_UI),
   },
   {
     files: ['src/app/**'],

@@ -1,13 +1,13 @@
 import { resolveRole } from '../connectors/assignment';
-import type { Connection, Model } from '../connectors/types';
+import type { Model } from '../connectors/types';
+import { fold, history, shown, type Chat, type Entry, type Message, type Receipt, type ReceiptError } from '../model/chat';
+import type { Stored } from '../model/kinds';
+import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure } from './api';
-import { fold, history, shown, type Chat, type Entry, type Message, type Receipt } from './chat';
 import { settleCost } from './cost';
-import { SETTINGS_ID, type Settings } from './docs';
-import { generate } from './generate';
-import type { Character } from './library';
+import { generate, type Reply } from './generate';
 import { cardPrompt } from '../engine/prompt';
-import type { ObjectStore, Stored } from './store';
+import type { ObjectStore } from './store';
 
 // The reply being written. user is the message sent with it, shown until the store has it; reply says
 // where the answer goes: a new message, or a new version of one (in place of a failed one on 다시 시도).
@@ -26,21 +26,19 @@ export type TalkFailure =
   | { kind: 'unsent'; failure: ApiFailure }
   | { kind: 'unsaved'; failure: ApiFailure };
 
-export type Route = { connection: Stored<Connection>; model: Model };
+export type Route = { connection: Stored<'connection'>; model: Model };
 
 // The 본 대화 model for a chat: its own layer, then 전체 기본값 (design §4.1).
 export function chatModel(store: ObjectStore, chat: Chat): Route | TalkFailure {
-  const ref = resolveRole('main', [chat.models, store.get<Settings>(SETTINGS_ID)?.value.models ?? {}]);
+  const ref = resolveRole('main', [chat.models, store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
   if (!ref) return { kind: 'no-model' };
-  const connection = store.get<Connection>(ref.connection);
+  const connection = store.get('connection', ref.connection);
   const model = connection?.value.starred.find((starred) => starred.id === ref.model);
   return connection && model ? { connection, model } : { kind: 'model-gone' };
 }
 
-export const chatEntries = (store: ObjectStore, chat: string) => store.list<Entry>('entry').filter((entry) => entry.parent === chat);
-
 export function addEntry(store: ObjectStore, chat: string, entry: Entry) {
-  return store.save<Entry>('entry', crypto.randomUUID(), () => entry, chat);
+  return store.create('entry', entry, { parent: chat });
 }
 
 // A character's chat opens on its greeting, and the other greetings are versions of it (design F3).
@@ -55,7 +53,7 @@ export async function addGreeting(store: ObjectStore, chat: string, greetings: s
   // Adding a version selects it, so without a select the chat would open on the last greeting.
   if (selected !== greetings.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
   for (const [id, entry] of entries) {
-    const saved = await store.save<Entry>('entry', id, () => entry, chat);
+    const saved = await store.create('entry', entry, { id, parent: chat });
     if (!saved.ok) return saved;
   }
   return null;
@@ -137,7 +135,7 @@ export class Talk {
   async saveAgain(): Promise<TalkFailure | null> {
     const unsaved = this.unsaved;
     if (!unsaved) return null;
-    const saved = await this.store.save<Entry>('entry', unsaved.id, () => unsaved.entry, unsaved.chat);
+    const saved = await this.store.create('entry', unsaved.entry, { id: unsaved.id, parent: unsaved.chat });
     if (!saved.ok) return { kind: 'unsaved', failure: saved };
     this.unsaved = null;
     this.settleFrom(unsaved.chat, unsaved.entry);
@@ -147,7 +145,7 @@ export class Talk {
   // Looks up a cost the provider books after the reply. Asked again when a reply shows 확인 중 after a
   // reload, since the page that wrote it may have closed before the cost came.
   settle(chat: string, receipt: Receipt) {
-    const connection = this.store.get<Connection>(receipt.connection);
+    const connection = this.store.get('connection', receipt.connection);
     if (receipt.cost !== 'pending' || !receipt.replyId || !connection || this.settling.has(receipt.replyId)) return;
     const replyId = receipt.replyId;
     this.settling.add(replyId);
@@ -168,12 +166,12 @@ export class Talk {
   }
 
   private async run(chat: string, target: { message: string | null; replaces: string | null }, text: string | null): Promise<TalkFailure | null> {
-    const stored = this.store.get<Chat>(chat);
+    const stored = this.store.get('chat', chat);
     if (this.turn || !stored) return null;
     const route = chatModel(this.store, stored.value);
     if ('kind' in route) return route;
 
-    const messages = fold(chatEntries(this.store, chat));
+    const messages = fold(this.store.children('entry', chat));
     const at = target.message === null ? messages.length : messages.findIndex((message) => message.id === target.message);
     if (at === -1) return null;
     const before = messages.slice(0, at);
@@ -183,9 +181,9 @@ export class Talk {
     const abort = new AbortController();
     this.abort = abort;
 
-    const sending = user && this.store.save<Entry>('entry', user.id, () => ({ type: 'message', role: 'user', at: Date.now(), text: user.text, receipt: null }), chat);
+    const sending = user && this.store.create('entry', { type: 'message', role: 'user', at: Date.now(), text: user.text, receipt: null }, { id: user.id, parent: chat });
     const said = [...history(before), ...(user ? [{ role: 'user' as const, content: user.text }] : [])];
-    const character = stored.value.character === null ? null : this.store.get<Character>(stored.value.character);
+    const character = stored.value.character === null ? null : this.store.get('character', stored.value.character);
     const replying = generate({
       connection: route.connection.value,
       model: route.model,
@@ -210,7 +208,7 @@ export class Talk {
       modelName: route.model.name,
       state: reply.state,
       cut: reply.cut,
-      error: reply.error,
+      error: reply.error && receiptError(reply.error),
       finishReason: reply.finishReason,
       usage: reply.usage,
       cost: reply.cost,
@@ -223,7 +221,7 @@ export class Talk {
       target.message === null
         ? { type: 'message', role: 'assistant', at: Date.now(), text: written, receipt }
         : { type: 'version', message: target.message, replaces: target.replaces, edit: false, at: Date.now(), text: written, receipt };
-    const saved = await this.store.save<Entry>('entry', turn.reply.id, () => entry, chat);
+    const saved = await this.store.create('entry', entry, { id: turn.reply.id, parent: chat });
     this.set(null);
     if (!saved.ok) {
       this.unsaved = { chat, id: turn.reply.id, entry };
@@ -234,8 +232,26 @@ export class Talk {
   }
 }
 
-// An edit is a new version in the place of the one shown, keeping its receipt (chat.ts Entry).
+// An edit is a new version in the place of the one shown, keeping its receipt (model/chat Entry).
 export function editMessage(store: ObjectStore, chat: string, message: Message, text: string) {
   const current = shown(message);
   return addEntry(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at: Date.now(), text, receipt: current.receipt });
+}
+
+// Field by field, never the error itself: whatever a network error gains must not reach saved chats.
+function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
+  switch (error.kind) {
+    case 'refused':
+    case 'relay':
+    case 'app':
+      return { kind: error.kind, code: error.code };
+    case 'provider':
+      return 'status' in error ? { kind: 'provider', status: error.status, detail: error.detail } : { kind: 'provider', detail: error.detail };
+    case 'bad-event':
+    case 'network':
+      return { kind: error.kind, detail: error.detail };
+    case 'offline':
+    case 'no-token':
+      return { kind: error.kind };
+  }
 }

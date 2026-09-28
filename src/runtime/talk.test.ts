@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { randomBytes } from '../vault/aead';
-import { fold, shown, type Entry } from './chat';
-import { fakeServer } from './fake-server';
-import { ObjectStore } from './store';
+import { fold, shown } from '../model/chat';
 import { addGreeting } from './talk';
+import { testServer } from './testing';
+
+const server = testServer();
 
 describe('addGreeting', () => {
   it('opens the chat on the greeting that was shown, first and last included', async () => {
-    const server = fakeServer();
-    const store = await ObjectStore.open('account-1', randomBytes(32), server.request);
-    const opened = async (chat: string, selected: number) => {
-      await addGreeting(store, chat, ['하나', '둘', '셋'], selected);
-      const [message] = fold(store.list<Entry>('entry').filter((entry) => entry.parent === chat));
+    const { store } = await server.account();
+    const opened = async (selected: number) => {
+      const chat = await store.create('chat', { title: null, character: null, models: {} });
+      const id = chat.ok ? chat.data.id : '';
+      await addGreeting(store, id, ['하나', '둘', '셋'], selected);
+      const [message] = fold(store.children('entry', id));
       return [shown(message!).text, message!.versions.length];
     };
-    expect(await opened('c1', 0)).toEqual(['하나', 3]);
-    expect(await opened('c2', 2)).toEqual(['셋', 3]);
+    expect(await opened(0)).toEqual(['하나', 3]);
+    expect(await opened(2)).toEqual(['셋', 3]);
   });
 });
