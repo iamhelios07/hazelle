@@ -39,6 +39,15 @@
   gap: var(--space-12);
 }
 
+.sticky {
+  position: sticky;
+  bottom: 0;
+  margin-bottom: calc(var(--space-32) * -1);
+  padding: var(--space-14) 0 var(--space-24);
+  border-top: 1px solid var(--color-surface-raised);
+  background: var(--color-bg);
+}
+
 /* 600px matches no token: media queries cannot read custom properties. */
 @media (min-width: 600px) {
   .screen {
@@ -48,5 +57,9 @@
 
   .actions {
     margin-top: var(--space-8);
+  }
+
+  .sticky {
+    margin-bottom: calc(var(--space-32) * -1);
   }
 }

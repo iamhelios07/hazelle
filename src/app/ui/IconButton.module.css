@@ -16,3 +16,11 @@
   background: var(--color-surface-hover);
   color: var(--color-text);
 }
+
+.button[aria-pressed='true'] {
+  color: var(--color-accent);
+}
+
+.button[aria-pressed='true'] svg {
+  fill: currentColor;
+}

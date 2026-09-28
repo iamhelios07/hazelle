@@ -94,10 +94,13 @@
   --radius-full: 999px;
 
   --control-sm: 20px;
+  --control-chip: 34px;
   --control-md: 44px;
   --control-lg: 50px;
   --control-xl: 54px;
+  --icon-sm: 18px;
   --icon-md: 22px;
+  --row-min-height: 64px;
   --icon-stroke: 1.8;
   --bar-height: 4px;
   --screen-narrow: 440px;

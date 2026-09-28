@@ -29,3 +29,8 @@ async function fetchCatalog(connection: Connection): Promise<CatalogResult> {
   const models = parseCatalog(resolved, response.data);
   return models ? { ok: true, models } : { ok: false, failure: { kind: 'not-a-catalog' } };
 }
+
+// Cache keys hold API keys, so nothing is left behind once the vault closes.
+export function forgetCatalogs() {
+  cache.clear();
+}

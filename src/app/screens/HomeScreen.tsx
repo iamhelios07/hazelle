@@ -1,10 +1,10 @@
 import { Import, Lock, LogOut, Plug } from 'lucide-react';
 import { ActionCard, Brand, Callout, IconButton, Intro, Row, Screen, Stack } from '../ui';
 
-type Props = { onLock: () => void; onLogout: () => void; message: string | null };
+type Props = { connectionCount: number; onConnections: () => void; onLock: () => void; onLogout: () => void; message: string | null };
 
-// F1 step 4 (design §2). Import and connections do not exist yet, so both cards say so.
-export function HomeScreen({ onLock, onLogout, message }: Props) {
+// F1 step 4 (design §2). Import does not exist yet, so its card says so.
+export function HomeScreen({ connectionCount, onConnections, onLock, onLogout, message }: Props) {
   return (
     <Screen
       align="center"
@@ -27,7 +27,11 @@ export function HomeScreen({ onLock, onLogout, message }: Props) {
           description="PNG · charx · JSON · risum 파일을 끌어다 놓거나 눌러서 고르기"
           pending="준비 중"
         />
-        <ActionCard icon={Plug} title="연결 추가" description="API 키나 주소를 붙여 넣으면 어디인지 알아서 알아봐요" pending="준비 중" />
+        {connectionCount === 0 ? (
+          <ActionCard icon={Plug} title="연결 추가" description="API 키나 주소를 붙여 넣으면 어디인지 알아서 알아봐요" onClick={onConnections} />
+        ) : (
+          <ActionCard icon={Plug} title="연결" description={`연결 ${connectionCount}개 · 모델 별표와 기본 모델, 시험해 보기`} onClick={onConnections} />
+        )}
       </Stack>
       {message && (
         <Callout tone="warn" alert>

@@ -4,11 +4,11 @@ import { forgetVault, recallVault, rememberVault } from '../vault/device';
 import { api } from '../runtime/api';
 import { AccountScreen } from './screens/AccountScreen';
 import { describeFailure } from './screens/failure';
-import { HomeScreen } from './screens/HomeScreen';
 import { RecoveryKeyScreen } from './screens/RecoveryKeyScreen';
 import { UnlockScreen } from './screens/UnlockScreen';
 import { UnreachableScreen } from './screens/UnreachableScreen';
 import { VaultPassphraseScreen } from './screens/VaultPassphraseScreen';
+import { Workspace } from './Workspace';
 
 type Session = { accountId: string; username: string };
 type Boot = { session: null; signupOpen: boolean } | { session: Session; vault: VaultRecord | null };
@@ -148,7 +148,9 @@ export function App() {
     }
     case 'unlocked':
       return (
-        <HomeScreen
+        <Workspace
+          accountId={state.session.accountId}
+          vaultKey={state.vaultKey}
           message={state.message}
           onLock={() => void forgetVault().then(reload)}
           onLogout={() => void logout().then((failure) => failure && setState({ ...state, message: failure }))}

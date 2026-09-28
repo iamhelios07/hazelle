@@ -18,6 +18,18 @@
   font-size: var(--text-base);
 }
 
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+}
+
+.area {
+  height: auto;
+  padding: var(--space-12) var(--space-14);
+  line-height: var(--leading-relaxed);
+  resize: vertical;
+}
+
 .input[aria-invalid='true'] {
   border-color: var(--color-warn-border);
 }
