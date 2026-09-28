@@ -6,7 +6,7 @@ import { describeUnused } from '../common/unused';
 import { useCharacter, useLoreCount } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME, type Back } from '../shell/routes';
-import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Stack, Tag, Text, useWide } from '../ui';
+import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Tag, Text, useWide } from '../ui';
 import { useCharacterActions } from './useCharacterActions';
 
 // A character's own page beside its chats (design F6), or with shelf null, 캐릭터 없이.
@@ -38,47 +38,45 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatIte
 
   return (
     <Screen top={back && <NavBar title={card.name} onBack={() => navigate(back.to)} backLabel={back.label} />}>
-      <Stack gap={24}>
-        <Portrait image={shelf.face} name={card.name} />
-        <Intro title={card.name}>{card.creator ? `만든 사람 ${card.creator}` : undefined}</Intro>
-        {origin && (
-          <Row>
-            <Text tone="muted">
-              ‘{origin.name}’에서 만든 사본{originHere ? '' : ' · 원본은 지워졌어요'}
-            </Text>
-            {originHere && (
-              <Button variant="ghost" size="sm" onClick={() => navigate(characterPage(origin.id, wide))}>
-                원본 보기
-              </Button>
-            )}
-          </Row>
-        )}
-        {card.tags.length > 0 && (
-          <Row>
-            {card.tags.map((tag) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
-          </Row>
-        )}
-        {notUsed && <Callout tone="warn">{notUsed}</Callout>}
-        <Row>
-          {start}
-          <Button variant="secondary" icon={Pencil} onClick={() => navigate({ kind: 'edit', character: shelf.id })}>
-            편집
-          </Button>
-          <Button variant="secondary" icon={Copy} busy={copying !== null} disabled={busy !== null} onClick={() => void copy(shelf)}>
-            {copying ?? '사본 만들기'}
-          </Button>
-          <Button variant="ghost" icon={Trash2} disabled={busy !== null} onClick={() => void remove(shelf).then((removed) => removed && navigate(HOME))}>
-            지우기
-          </Button>
+      <Portrait image={shelf.face} name={card.name} />
+      <Intro title={card.name}>{card.creator ? `만든 사람 ${card.creator}` : undefined}</Intro>
+      {origin && (
+        <Row kind="actions">
+          <Text tone="muted">
+            ‘{origin.name}’에서 만든 사본{originHere ? '' : ' · 원본은 지워졌어요'}
+          </Text>
+          {originHere && (
+            <Button variant="ghost" size="sm" onClick={() => navigate(characterPage(origin.id, wide))}>
+              원본 보기
+            </Button>
+          )}
         </Row>
-        {card.creatorNotes.trim() && (
-          <Section title="만든 사람의 말">
-            <Prose text={card.creatorNotes} />
-          </Section>
-        )}
-      </Stack>
+      )}
+      {card.tags.length > 0 && (
+        <Row kind="tags">
+          {card.tags.map((tag) => (
+            <Tag key={tag}>{tag}</Tag>
+          ))}
+        </Row>
+      )}
+      {notUsed && <Callout tone="warn">{notUsed}</Callout>}
+      <Row kind="actions">
+        {start}
+        <Button variant="secondary" icon={Pencil} onClick={() => navigate({ kind: 'edit', character: shelf.id })}>
+          편집
+        </Button>
+        <Button variant="secondary" icon={Copy} busy={copying !== null} disabled={busy !== null} onClick={() => void copy(shelf)}>
+          {copying ?? '사본 만들기'}
+        </Button>
+        <Button variant="ghost" icon={Trash2} disabled={busy !== null} onClick={() => void remove(shelf).then((removed) => removed && navigate(HOME))}>
+          지우기
+        </Button>
+      </Row>
+      {card.creatorNotes.trim() && (
+        <Section title="만든 사람의 말">
+          <Prose text={card.creatorNotes} />
+        </Section>
+      )}
     </Screen>
   );
 }

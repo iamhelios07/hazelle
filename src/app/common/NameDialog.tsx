@@ -14,7 +14,7 @@ export function NameDialog({ title, value, hint, onSave, onClose }: Props) {
           onSave(name);
         }}
       >
-        <Stack gap={12}>
+        <Stack gap="related">
           <TextField label="이름" value={name} onChange={setName} hint={hint} />
           <Button type="submit" size="md">
             저장

@@ -11,7 +11,7 @@ export function Welcome() {
   const chats = useChats();
   const { pick } = useImport();
   return (
-    <Stack gap={24}>
+    <Stack gap="section">
       {chats.length ? (
         <Intro title="어디서 이어 갈까요?">채팅을 고르거나 새 채팅을 시작해요.</Intro>
       ) : (

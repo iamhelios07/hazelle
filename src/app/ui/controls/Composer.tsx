@@ -1,12 +1,6 @@
-import { useId, useLayoutEffect, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useId, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import styles from './Composer.module.css';
-
-// Grows with its text up to a cap, then scrolls.
-function fit(area: HTMLTextAreaElement | null) {
-  if (!area) return;
-  area.style.height = 'auto';
-  area.style.height = `${area.scrollHeight}px`;
-}
+import { useAutosize } from './useAutosize';
 
 type Props = {
   value: string;
@@ -22,7 +16,7 @@ type Props = {
 
 export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placeholder, hint, actions, inputRef }: Props) {
   const id = useId();
-  useLayoutEffect(() => fit(inputRef.current), [value, inputRef]);
+  useAutosize(inputRef, value);
   return (
     <div className={styles.composer}>
       <label className={styles.label} htmlFor={id}>

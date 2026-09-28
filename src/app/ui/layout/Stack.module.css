@@ -3,18 +3,14 @@
   flex-direction: column;
 }
 
-.gap8 {
-  gap: var(--space-8);
-}
-
-.gap12 {
+.related {
   gap: var(--space-12);
 }
 
-.gap16 {
+.group {
   gap: var(--space-16);
 }
 
-.gap24 {
+.section {
   gap: var(--space-24);
 }

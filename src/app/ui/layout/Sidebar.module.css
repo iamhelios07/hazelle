@@ -94,11 +94,8 @@
   width: var(--control-md);
   height: var(--control-md);
   flex-shrink: 0;
-  border: 0;
   border-radius: var(--radius-lg);
-  background: transparent;
   color: var(--color-text-muted);
-  cursor: pointer;
 }
 
 .faceButton:hover {

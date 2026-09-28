@@ -117,7 +117,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       }
       stickyActions
       actions={
-        <Stack gap={12}>
+        <Stack gap="related">
           <Text size="sm" tone="muted">
             별표 {starred.length}개 · 기본 모델로 고를 수 있어요
           </Text>
@@ -126,17 +126,14 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       }
     >
       {reportsMeters(connection) && <ConnectionMeters connection={connection} />}
-      <Stack gap={12}>
+      <Stack gap="related">
         <SearchField label="모델 검색" value={query} onChange={setQuery} />
         <ChoiceGroup label="모델 거르기" options={filters} value={filter} onChange={setFilter} />
       </Stack>
       {catalog && !catalog.ok && (
-        <Stack gap={12}>
-          <Callout tone="warn">{describeCatalogFailure(catalog.failure)}</Callout>
-          <Button variant="secondary" size="md" onClick={() => setAttempt((count) => count + 1)}>
-            다시 불러오기
-          </Button>
-        </Stack>
+        <Callout tone="warn" action={{ label: '다시 불러오기', onClick: () => setAttempt((count) => count + 1) }}>
+          {describeCatalogFailure(catalog.failure)}
+        </Callout>
       )}
       {message && (
         <Callout tone="warn" alert>

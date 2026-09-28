@@ -7,7 +7,7 @@ import { noResults } from '../../common/search';
 import { useLibrary } from '../../session';
 import { navigate } from '../../shell/router';
 import type { Back } from '../../shell/routes';
-import { Button, CardGrid, NavBar, Row, Screen, SearchField, Stack, Text } from '../../ui';
+import { Button, CardGrid, NavBar, Row, Screen, SearchField, Text } from '../../ui';
 import { useCharacterActions } from '../useCharacterActions';
 import { useFolderActions } from '../useFolderActions';
 import { CharacterCard } from './CharacterCard';
@@ -73,41 +73,39 @@ export function GalleryScreen({ back }: { back: Back | null }) {
 
   return (
     <Screen width="wide" top={back && <NavBar title="캐릭터" onBack={() => navigate(back.to)} backLabel={back.label} />}>
-      <Stack gap={24}>
-        <Row>
-          <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />
-          <Button variant="secondary" size="sm" onClick={() => setByName(!byName)}>
-            {byName ? '이름 순' : '최근 대화 순'}
+      <Row kind="toolbar">
+        <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />
+        <Button variant="secondary" size="sm" onClick={() => setByName(!byName)}>
+          {byName ? '이름 순' : '최근 대화 순'}
+        </Button>
+        {!binned && (
+          <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
+            {picked ? '고르기 끝' : '골라서 옮기기'}
           </Button>
-          {!binned && (
-            <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
-              {picked ? '고르기 끝' : '골라서 옮기기'}
-            </Button>
-          )}
-        </Row>
-        <FolderTabs filter={filter} onFilter={choose} folder={folder} menuOpen={menu === 'folder'} onMenu={opener('folder')} onName={setNaming} />
-        {binned && <Text tone="muted">{`지운 캐릭터는 ${KEEP_DAYS}일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
-        {shown.length > 0 ? (
-          <CardGrid label="캐릭터">
-            {shown.map((shelf) => (
-              <CharacterCard
-                key={shelf.id}
-                shelf={shelf}
-                binned={binned}
-                busy={characterActions.busy?.id === shelf.id ? characterActions.busy.label : null}
-                picked={picked && picked.has(shelf.id)}
-                onPick={() => toggle(shelf.id)}
-                menuOpen={menu === `card-${shelf.id}`}
-                onMenu={opener(`card-${shelf.id}`)}
-                actions={characterActions}
-                onPurge={() => setPurging(shelf)}
-              />
-            ))}
-          </CardGrid>
-        ) : (
-          <Text tone="muted">{words ? noResults(words) : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Text>
         )}
-      </Stack>
+      </Row>
+      <FolderTabs filter={filter} onFilter={choose} folder={folder} menuOpen={menu === 'folder'} onMenu={opener('folder')} onName={setNaming} />
+      {binned && <Text tone="muted">{`지운 캐릭터는 ${KEEP_DAYS}일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
+      {shown.length > 0 ? (
+        <CardGrid label="캐릭터">
+          {shown.map((shelf) => (
+            <CharacterCard
+              key={shelf.id}
+              shelf={shelf}
+              binned={binned}
+              busy={characterActions.busy?.id === shelf.id ? characterActions.busy.label : null}
+              picked={picked && picked.has(shelf.id)}
+              onPick={() => toggle(shelf.id)}
+              menuOpen={menu === `card-${shelf.id}`}
+              onMenu={opener(`card-${shelf.id}`)}
+              actions={characterActions}
+              onPurge={() => setPurging(shelf)}
+            />
+          ))}
+        </CardGrid>
+      ) : (
+        <Text tone="muted">{words ? noResults(words) : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Text>
+      )}
       {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={(to) => void movePicked(to)} menuOpen={menu === 'move'} onMenu={opener('move')} />}
       {purging && (
         <PurgeDialog

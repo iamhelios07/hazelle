@@ -68,7 +68,7 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
       onCollapse={onCollapse}
       actions={
         <>
-          <Row>
+          <Row kind="toolbar">
             <Button variant="secondary" size="sm" icon={Import} onClick={pick}>
               봇 가져오기
             </Button>

@@ -29,7 +29,7 @@ and only this folder styles elements.**
 
 | Folder | Component (other exports) | Stylesheet | What it styles |
 | --- | --- | --- | --- |
-| foundation | — | `tokens.css`, `global.css` | Every raw value; element defaults and reduced motion |
+| foundation | — | `tokens.css`, `global.css` | Every raw value; element defaults, a bare button among them, and reduced motion |
 | foundation | — | `motion.module.css` | Every animation: fade, rise, drop, spin, pulse, blink, waiting dots |
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
 | foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`) | — | Every breakpoint and media query |
@@ -42,26 +42,27 @@ and only this folder styles elements.**
 | layout | `ChatFrame` (`ChatTitle`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` | `NavBar.module.css` | A screen's top row: back, title, actions |
-| layout | `Row` | `Row.module.css` | Items side by side, wrapping |
+| layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions or tags |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane |
-| layout | `Section` | `Section.module.css` | A titled group on a screen |
+| layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
-| layout | `SidePanel` (`PanelSection`) | `SidePanel.module.css` | A panel beside the page, covering it where narrow |
+| layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow |
 | layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`) | `Sidebar.module.css` | The sidebar, its rail, faces |
-| layout | `Stack` | `Stack.module.css` | A column with a gap |
-| controls | `Button` | `Button.module.css` | Variants, sizes, the busy spinner |
+| layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
+| controls | `Button` | `Button.module.css` | Variants (a link among them), sizes, the busy spinner |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice |
 | controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips or equal buttons for one choice |
 | controls | `Composer` | `Composer.module.css` | The message box |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` | — | A `Button` that opens a file picker |
-| controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles |
+| controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools |
 | controls | `Link` | `Link.module.css` | A link to another site |
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
+| controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
 | collections | `AccountRow` | `AccountRow.module.css` | Who is signed in |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
@@ -73,15 +74,16 @@ and only this folder styles elements.**
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page; key caps |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
+| overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped |
 | overlays | `Popover` (`MenuItem`, `MenuHeading`, `MenuNote`) | `Popover.module.css` | Menus and small panels opened from a button |
 | overlays | `Toast` | `Toast.module.css` | A short notice, above dialogs |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
-| feedback | `Callout` | `Callout.module.css` | A warning or success note |
+| feedback | `Callout` | `Callout.module.css` | A warning or success note, with an optional action under it |
 | feedback | `CodeCard` | `CodeCard.module.css` | A code to copy, such as the recovery key |
 | feedback | `Intro` | `Intro.module.css` | A screen's large title and lead |
 | feedback | `Steps` | `Steps.module.css` | Progress through steps |
 | story | `Prose` (`prose.ts`) | `Prose.module.css` | Story text: narration, dialogue, actions, the streaming caret |
-| story | `StoryMessage` (`Tool`, `Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its tools and markers |
+| story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its tools bar and markers |
 
 ## Enforced by `npm run check`
 

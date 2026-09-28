@@ -10,7 +10,6 @@
   background: var(--color-surface);
   color: var(--color-text-muted);
   text-align: start;
-  cursor: pointer;
 }
 
 .accent {

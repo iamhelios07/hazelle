@@ -33,7 +33,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
     <Screen top={<NavBar title="연결 추가" onBack={() => navigate(back.to)} backLabel={back.label} />}>
       <SearchField label="이름 검색, 또는 키·주소 붙여 넣기" value={query} onChange={setQuery} />
       {search.kind === 'key' && (
-        <Stack gap={12}>
+        <Stack gap="related">
           <Callout tone="success">{search.type.label} 키로 알아봤어요.</Callout>
           <Button busy={busy} onClick={() => void connectKey(search.type, search.secret)}>
             이 키로 연결하고 모델 고르기

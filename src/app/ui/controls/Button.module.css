@@ -8,7 +8,6 @@
   border: var(--border-thin) solid transparent;
   border-radius: var(--radius-xl);
   font-weight: var(--weight-semibold);
-  cursor: pointer;
   transition: background-color var(--duration-fast), color var(--duration-fast);
 }
 
@@ -40,7 +39,6 @@
 }
 
 .secondary {
-  background: transparent;
   border-color: var(--color-border);
   color: var(--color-text);
 }
@@ -50,7 +48,6 @@
 }
 
 .outline {
-  background: transparent;
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
@@ -61,7 +58,6 @@
 }
 
 .ghost {
-  background: transparent;
   color: var(--color-text-muted);
 }
 
@@ -70,11 +66,35 @@
   color: var(--color-text);
 }
 
+/* Accent text with no border, and a fill only on hover, such as 되돌리기. It takes the size of the text around it. */
+.link {
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+.link:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+/* After .link, so a link this small keeps this padding. */
+.xs {
+  height: var(--space-28);
+  padding: 0 var(--space-4);
+}
+
 .button:disabled:not(.busy) {
   background: var(--color-surface-raised);
   border-color: transparent;
   color: var(--color-text-faint);
   cursor: default;
+}
+
+.link:disabled:not(.busy) {
+  background: transparent;
 }
 
 .busy {

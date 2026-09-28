@@ -5,11 +5,8 @@
   align-items: center;
   width: 100%;
   flex-shrink: 0;
-  border: 0;
-  background: transparent;
   color: var(--color-text-muted);
   text-align: left;
-  cursor: pointer;
 }
 
 .item {

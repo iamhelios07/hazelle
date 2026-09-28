@@ -21,16 +21,3 @@ export function SidePanel({ title, subtitle, actions, onClose, children }: Props
     </aside>
   );
 }
-
-// One titled part of a panel.
-export function PanelSection({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
-  return (
-    <section className={styles.section}>
-      <div className={styles.sectionHead}>
-        <h3 className={styles.sectionTitle}>{title}</h3>
-        {note && <span className={styles.note}>{note}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}

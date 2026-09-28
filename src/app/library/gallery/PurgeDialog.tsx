@@ -7,11 +7,11 @@ import { Button, Dialog, Row, Stack, Text } from '../../ui';
 export function PurgeDialog({ shelf, onPurge, onClose }: { shelf: CharacterShelf<ChatItem>; onPurge: () => void; onClose: () => void }) {
   return (
     <Dialog title="완전히 지울까요?" onClose={onClose}>
-      <Stack gap={16}>
+      <Stack>
         <Text>
           ‘{shelf.character.card.name}’ {shelf.chats.length ? `캐릭터와 채팅 ${shelf.chats.length}개를` : '캐릭터를'} 지금 완전히 지워요. 되돌릴 수 없어요.
         </Text>
-        <Row>
+        <Row kind="actions">
           <Button variant="secondary" onClick={onClose}>
             취소
           </Button>
