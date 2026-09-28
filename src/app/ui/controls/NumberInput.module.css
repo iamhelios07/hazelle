@@ -1,0 +1,26 @@
+.box {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.input {
+  width: var(--number-input-width);
+  height: var(--control-chip);
+  padding: 0 var(--space-12);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  text-align: end;
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-warn-border);
+}
+
+.unit {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

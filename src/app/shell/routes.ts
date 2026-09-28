@@ -22,10 +22,18 @@ export type Route =
   // 직접 연결, with the address pasted into 연결 추가's search; '' when there was none.
   | { kind: 'connect-direct'; address: string }
   | { kind: 'connection'; id: string }
+  // A starred model's settings, under its connection. The model id is one path segment, encoded, since ids hold slashes.
+  | { kind: 'model-settings'; connection: string; model: string }
   // 설정's 프롬프트: the list, and one prompt's editor. pane opens the editor on its 토글 pane, which the
   // chat's toggle panel links to.
   | { kind: 'prompts' }
-  | { kind: 'prompt'; id: string; pane: 'toggles' | null };
+  | { kind: 'prompt'; id: string; pane: 'toggles' | null }
+  | { kind: 'personas' }
+  | { kind: 'persona'; id: string }
+  | { kind: 'defaults' }
+  | { kind: 'account' }
+  // 설정's own list of its pages, which phones open from the library.
+  | { kind: 'settings' };
 
 export const HOME: Route = { kind: 'home' };
 
@@ -63,7 +71,12 @@ export function parseRoute(at: string): Route {
   }
   if (top === 'connections') {
     if (id === undefined) return { kind: 'connections' };
-    if (id !== 'new') return ID.test(id) && sub === undefined ? { kind: 'connection', id } : HOME;
+    if (id !== 'new') {
+      if (!ID.test(id)) return HOME;
+      if (sub === undefined) return { kind: 'connection', id };
+      const model = decoded(sub);
+      return model ? { kind: 'model-settings', connection: id, model } : HOME;
+    }
     if (sub === undefined) return { kind: 'add-connection' };
     if (sub === DIRECT) return { kind: 'connect-direct', address: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('address') ?? '' };
     const type = CONNECTION_TYPES.find((candidate) => candidate.id === sub);
@@ -74,7 +87,25 @@ export function parseRoute(at: string): Route {
     if (!ID.test(id) || sub !== undefined) return HOME;
     return { kind: 'prompt', id, pane: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('pane') === 'toggles' ? 'toggles' : null };
   }
+  if (top === 'personas' && sub === undefined) {
+    if (id === undefined) return { kind: 'personas' };
+    return ID.test(id) ? { kind: 'persona', id } : HOME;
+  }
+  if (id === undefined) {
+    if (top === 'settings') return { kind: 'settings' };
+    if (top === 'defaults') return { kind: 'defaults' };
+    if (top === 'account') return { kind: 'account' };
+  }
   return HOME;
+}
+
+// A malformed escape (a stray %) names no model.
+function decoded(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment) || null;
+  } catch {
+    return null;
+  }
 }
 
 export function href(route: Route): string {
@@ -103,28 +134,66 @@ export function href(route: Route): string {
       return `/connections/new/${DIRECT}${route.address ? `?address=${encodeURIComponent(route.address)}` : ''}`;
     case 'connection':
       return `/connections/${route.id}`;
+    case 'model-settings':
+      return `/connections/${route.connection}/${encodeURIComponent(route.model)}`;
     case 'prompts':
       return '/prompts';
     case 'prompt':
       return `/prompts/${route.id}${route.pane ? `?pane=${route.pane}` : ''}`;
+    case 'personas':
+      return '/personas';
+    case 'persona':
+      return `/personas/${route.id}`;
+    case 'defaults':
+      return '/defaults';
+    case 'account':
+      return '/account';
+    case 'settings':
+      return '/settings';
   }
 }
 
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
-// The connection list a route sits in (design F5): its screen is the list itself, or the item beside it
-// where there is room (ListDetail). null outside the connection screens.
-export function connectionList(route: Route): Kind<'connections' | 'add-connection'> | null {
+// The list a route sits in (design F5): its screen is the list itself, or the item beside it where there
+// is room (ListDetail). null outside the connection and persona screens.
+export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas'> | null {
   switch (route.kind) {
     case 'connections':
     case 'connection':
+    case 'model-settings':
       return { kind: 'connections' };
+    case 'personas':
+    case 'persona':
+      return { kind: 'personas' };
     case 'add-connection':
     case 'connect':
     case 'connect-direct':
       return { kind: 'add-connection' };
     default:
       return null;
+  }
+}
+
+export type SettingsPage = 'prompts' | 'personas' | 'connections' | 'defaults' | 'account';
+
+// Which page of 설정 a route is on (design: Secondary screens), 'list' for 설정's own list, or null outside
+// 설정. While it is not null, the settings layer stands in for the library.
+export function settingsPage(route: Route): SettingsPage | 'list' | null {
+  switch (route.kind) {
+    case 'prompts':
+    case 'prompt':
+      return 'prompts';
+    case 'personas':
+    case 'persona':
+      return 'personas';
+    case 'defaults':
+    case 'account':
+      return route.kind;
+    case 'settings':
+      return 'list';
+    default:
+      return listOf(route) ? 'connections' : null;
   }
 }
 
@@ -170,24 +239,32 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     }
     case 'edit':
       return characterPage(route.character, wide);
-    case 'connections':
+    case 'settings':
       return HOME;
+    case 'connections':
+    case 'prompts':
+    case 'personas':
+    case 'defaults':
+    case 'account':
+      return { kind: 'settings' };
     case 'add-connection':
     case 'connection':
       return { kind: 'connections' };
+    case 'model-settings':
+      return { kind: 'connection', id: route.connection };
     case 'connect':
     case 'connect-direct':
       return { kind: 'add-connection' };
-    case 'prompts':
-      return HOME;
     case 'prompt':
       return { kind: 'prompts' };
+    case 'persona':
+      return { kind: 'personas' };
   }
 }
 
 // Where 뒤로 goes from a route whose chat, character or connection is not there: the list it would be
 // in, past every route that names it.
-export const upFromMissing = (route: Route): Route => (route.kind === 'prompt' ? { kind: 'prompts' } : (connectionList(route) ?? HOME));
+export const upFromMissing = (route: Route): Route => (route.kind === 'prompt' ? { kind: 'prompts' } : (listOf(route) ?? HOME));
 
 export type Back = { to: Route; label: string };
 

@@ -52,13 +52,18 @@
   max-width: var(--gallery-max-width);
 }
 
+.form {
+  max-width: var(--form-max-width);
+}
+
 @media (min-width: 600px) {
   .screen {
     min-height: auto;
     padding-top: var(--screen-offset-top);
   }
 
-  .screen.wide {
+  .screen.wide,
+  .screen.form {
     padding-top: var(--space-28);
   }
 
@@ -77,4 +82,8 @@
   max-width: var(--pane-max-width);
   margin: 0;
   padding-top: var(--space-28);
+}
+
+.screen.pane.form {
+  max-width: var(--form-max-width);
 }

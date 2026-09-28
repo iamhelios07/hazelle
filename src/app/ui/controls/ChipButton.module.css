@@ -18,6 +18,15 @@
   background: var(--color-surface-hover);
 }
 
+.field {
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-width: var(--field-choice-width);
+  height: var(--control-compact);
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-regular);
+}
+
 .chip svg {
   color: var(--color-text-muted);
 }
@@ -30,5 +39,9 @@
 @media (max-width: 959px) {
   .chip {
     max-width: var(--chip-max-width-narrow);
+  }
+
+  .field {
+    max-width: 100%;
   }
 }

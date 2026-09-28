@@ -35,9 +35,12 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: '모델 고르기', exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_MODEL} 별표 찍기` }).click();
     await page.getByRole('button', { name: '완료', exact: true }).click();
-    const main = page.getByRole('list', { name: '본 대화 모델', exact: true }).getByRole('button', { name: FAKE_MODEL });
+    await page.getByRole('button', { name: '기본값', exact: true }).click();
+    const main = page.getByRole('button', { name: /^본 대화 모델 · / });
     await main.click();
-    await expect(main).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();
+    await expect(main).toContainText(FAKE_MODEL);
+    await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   });
 
   await test.step('import the card and see its report', async () => {

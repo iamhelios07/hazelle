@@ -1,10 +1,12 @@
 export { ChatFrame, ChatTitle } from './ChatFrame';
+export { Disclosure } from './Disclosure';
 export { ListDetail, usePane } from './ListDetail';
 export { NavBar } from './NavBar';
+export { PageHead } from './PageHead';
 export { Row } from './Row';
 export { Screen } from './Screen';
 export { Section } from './Section';
 export { Shell } from './Shell';
 export { SidePanel } from './SidePanel';
-export { FaceButton, FaceStrip, Rail, Sidebar } from './Sidebar';
+export { FaceButton, FaceStrip, LayerSidebar, Rail, Sidebar } from './Sidebar';
 export { Stack } from './Stack';

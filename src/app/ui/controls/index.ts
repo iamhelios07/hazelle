@@ -7,6 +7,8 @@ export { EditBox } from './EditBox';
 export { FileButton } from './FileButton';
 export { IconButton } from './IconButton';
 export { Link } from './Link';
+export { NumberInput } from './NumberInput';
+export { PhraseField } from './PhraseField';
 export { Pill } from './Pill';
 export { SearchField } from './SearchField';
 export { SendButton } from './SendButton';
