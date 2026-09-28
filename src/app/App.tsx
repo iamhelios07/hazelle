@@ -34,7 +34,7 @@ type State =
   | { kind: 'login' }
   | { kind: 'locked'; signedIn: SignedIn }
   | { kind: 'recovered'; session: Session; vaultKey: VaultKey; current: Credential }
-  | { kind: 'unlocked'; session: Session; vaultKey: VaultKey; message: string | null };
+  | { kind: 'unlocked'; session: Session; vaultKey: VaultKey };
 
 async function loadState(): Promise<State> {
   const result = await api<Boot>('GET', 'session');
@@ -42,7 +42,7 @@ async function loadState(): Promise<State> {
   const boot = result.data;
   if (boot.session === null) return boot.signupOpen ? { kind: 'signup', step: 'password', draft: null } : { kind: 'login' };
   const vaultKey = await recallVault(boot.session.accountId);
-  if (vaultKey) return { kind: 'unlocked', session: boot.session, vaultKey, message: null };
+  if (vaultKey) return { kind: 'unlocked', session: boot.session, vaultKey };
   return { kind: 'locked', signedIn: boot };
 }
 
@@ -63,7 +63,7 @@ export function App() {
 
   async function unlocked(session: Session, vaultKey: VaultKey) {
     await rememberVault(session.accountId, vaultKey);
-    setState({ kind: 'unlocked', session, vaultKey, message: null });
+    setState({ kind: 'unlocked', session, vaultKey });
   }
 
   // A recovery key opens the vault but then asks for a new password, since the old one is lost.
@@ -169,10 +169,10 @@ export function App() {
       return (
         <Workspace
           accountId={state.session.accountId}
+          username={state.session.username}
           vaultKey={state.vaultKey}
-          message={state.message}
           onLock={() => void forgetVault().then(reload)}
-          onLogout={() => void logout().then((failure) => failure && setState({ ...state, message: failure }))}
+          onLogout={logout}
         />
       );
   }

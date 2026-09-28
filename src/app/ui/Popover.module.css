@@ -1,0 +1,176 @@
+.anchor {
+  position: relative;
+  display: flex;
+}
+
+.popover {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 70vh;
+  padding: var(--space-6);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+  animation: drop var(--duration-fast) ease-out;
+}
+
+.md {
+  width: var(--popover-width);
+}
+
+.lg {
+  width: calc(var(--popover-width) + var(--space-20));
+}
+
+.below-start {
+  top: calc(100% + var(--space-8));
+  left: 0;
+}
+
+.below-end {
+  top: calc(100% + var(--space-8));
+  right: 0;
+}
+
+.above-start {
+  bottom: calc(100% + var(--space-12));
+  left: 0;
+}
+
+.beside {
+  top: 0;
+  left: calc(100% + var(--space-8));
+}
+
+/* A popover never runs off a phone screen. */
+@media (max-width: 959px) {
+  .md,
+  .lg {
+    width: min(var(--popover-width), calc(100vw - var(--space-32)));
+  }
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-height: var(--control-compact);
+  padding: var(--space-6) var(--space-10);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.item:disabled {
+  color: var(--color-text-faint);
+  cursor: default;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.warn {
+  color: var(--color-warn);
+}
+
+.text {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub,
+.hint {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.check {
+  display: flex;
+  color: var(--color-accent);
+}
+
+.heading {
+  padding: var(--space-8) var(--space-10) var(--space-2);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.divider {
+  height: 1px;
+  margin: var(--space-4) var(--space-6);
+  background: var(--color-border);
+}
+
+.note {
+  padding: var(--space-12) var(--space-10);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 240px;
+  height: var(--control-chip);
+  padding: 0 var(--space-8) 0 var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.chip:hover,
+.chip[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+}
+
+.chip svg {
+  color: var(--color-text-muted);
+}
+
+.chipLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* On a phone the chip leaves room for the title beside it. */
+@media (max-width: 959px) {
+  .chip {
+    max-width: 132px;
+  }
+}

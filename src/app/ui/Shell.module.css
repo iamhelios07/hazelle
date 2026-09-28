@@ -1,0 +1,9 @@
+.shell {
+  display: flex;
+  min-height: 100dvh;
+}
+
+.main {
+  flex-grow: 1;
+  min-width: 0;
+}

@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 
 type Props = {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
   type?: 'button' | 'submit';
   icon?: LucideIcon;
   busy?: boolean;

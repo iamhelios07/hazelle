@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import styles from './Icon.module.css';
 
-export function Icon({ icon: Glyph }: { icon: LucideIcon }) {
-  return <Glyph className={styles.icon} aria-hidden />;
+export function Icon({ icon: Glyph, size = 'md' }: { icon: LucideIcon; size?: 'xs' | 'sm' | 'md' }) {
+  return <Glyph className={`${styles.icon} ${styles[size]}`} aria-hidden />;
 }

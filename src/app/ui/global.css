@@ -24,6 +24,7 @@ body {
   /* keep-all stops Korean words from splitting mid-word; anywhere still breaks long names and URLs. */
   word-break: keep-all;
   overflow-wrap: anywhere;
+  -webkit-tap-highlight-color: transparent;
 }
 
 h1,

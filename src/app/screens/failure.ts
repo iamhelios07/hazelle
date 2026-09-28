@@ -1,9 +1,9 @@
-import type { Outcome } from '../../connectors/stream';
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
 import type { ReplyError } from '../../runtime/generate';
 import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
+import type { TalkFailure } from '../../runtime/talk';
 
 const MESSAGES: Record<string, string> = {
   'bad-username': '아이디는 2–32자의 글자, 숫자, _ . - 로만 만들 수 있어요.',
@@ -104,8 +104,15 @@ export function describeMetersFailure(failure: MetersFailure): string {
   return describeReplyError(failure);
 }
 
-export const CUT: Record<NonNullable<Outcome['cut']>, string> = {
-  length: '최대 길이에 닿아서 잘렸어요.',
-  'no-terminal': '끝났다는 표시 없이 끊겼어요.',
-  stopped: '멈췄어요.',
-};
+export function describeTalkFailure(failure: TalkFailure): string {
+  switch (failure.kind) {
+    case 'no-model':
+      return '본 대화 모델이 정해지지 않았어요. 모델 버튼에서 골라 주세요.';
+    case 'model-gone':
+      return '고른 모델이 별표 목록에 없어요. 모델 버튼에서 다시 골라 주세요.';
+    case 'unsent':
+      return `보낸 말을 저장하지 못해서 답장을 멈췄어요. ${describeFailure(failure.failure)}`;
+    case 'unsaved':
+      return `답장을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+  }
+}

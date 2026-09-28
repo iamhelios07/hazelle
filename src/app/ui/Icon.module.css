@@ -1,6 +1,19 @@
 .icon {
   flex-shrink: 0;
+  stroke-width: var(--icon-stroke);
+}
+
+.xs {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.md {
   width: var(--icon-md);
   height: var(--icon-md);
-  stroke-width: var(--icon-stroke);
 }

@@ -4,6 +4,8 @@
  */
 :root {
   --palette-ink-900: #131216;
+  --palette-ink-850: #17161b;
+  --palette-ink-820: #211f27;
   --palette-ink-800: #1d1b22;
   --palette-ink-750: #26232d;
   --palette-ink-700: #2a2731;
@@ -17,6 +19,13 @@
   --palette-gold-950: #1b1407;
   --palette-coral-400: #f0a07a;
   --palette-mint-400: #8fd1b0;
+  --palette-mint-800: #2b3a33;
+  --palette-mint-100: #cfe8da;
+  --palette-sand-200: #cfc8bc;
+  --palette-sand-50: #f7f1e7;
+  --palette-lilac-350: #a39cb0;
+  --palette-shadow: rgb(0 0 0 / 45%);
+  --palette-scrim: rgb(8 8 10 / 55%);
 
   color-scheme: dark;
 
@@ -35,6 +44,18 @@
   --color-warn: var(--palette-coral-400);
   --color-success: var(--palette-mint-400);
   --color-focus: var(--color-accent);
+  --color-sidebar: var(--palette-ink-850);
+  --color-divider: var(--palette-ink-820);
+  --color-scrim: var(--palette-scrim);
+  --color-you-bg: var(--palette-mint-800);
+  --color-you-text: var(--palette-mint-100);
+
+  /* Story text (desktop chat mockup): narration, "dialogue" and *actions* read in three tones. */
+  --color-prose-narration: var(--palette-sand-200);
+  --color-prose-dialogue: var(--palette-sand-50);
+  --color-prose-action: var(--palette-lilac-350);
+
+  --shadow-popover: 0 12px 32px var(--palette-shadow);
 
   /* Tints derive from the tone colors, so changing a tone recolors its backgrounds and borders too. */
   --color-accent-bg: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
@@ -71,6 +92,10 @@
 
   --tracking-wide: 0.06em;
 
+  /* Story text at the reading settings' defaults (design F3): 명조, 17, line spacing 보통. */
+  --prose-size: 17px;
+  --prose-leading: 1.9;
+
   --space-2: 2px;
   --space-4: 4px;
   --space-6: 6px;
@@ -98,6 +123,7 @@
   --control-md: 44px;
   --control-lg: 50px;
   --control-xl: 54px;
+  --icon-xs: 16px;
   --icon-sm: 18px;
   --icon-md: 22px;
   --row-min-height: 64px;
@@ -105,6 +131,23 @@
   --bar-height: 4px;
   --screen-narrow: 440px;
   --screen-offset-top: 10vh;
+  --sidebar-width: 272px;
+  --rail-width: 64px;
+  --panel-width: 360px;
+  --header-height: 60px;
+  --control-compact: 38px;
+  --control-tool: 32px;
+  --avatar-sm: 22px;
+  --avatar-md: 32px;
+  --avatar-lg: 72px;
+  --popover-width: 300px;
+  --dialog-width: 440px;
+  --composer-max-height: 240px;
+  /* Reading width (design F3, 읽기 설정): the story column, message gutters included. */
+  --read-narrow: 700px;
+  --read-normal: 800px;
+  --read-wide: 960px;
+  --read-gutter: 40px;
 
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;

@@ -4,6 +4,7 @@
   justify-content: center;
   width: var(--control-md);
   height: var(--control-md);
+  flex-shrink: 0;
   border: 0;
   border-radius: var(--radius-lg);
   background: transparent;
@@ -12,9 +13,21 @@
   transition: background-color var(--duration-fast), color var(--duration-fast);
 }
 
-.button:hover {
+.sm {
+  width: var(--control-chip);
+  height: var(--control-chip);
+  border-radius: var(--radius-sm);
+}
+
+.button:hover:not(:disabled),
+.button[aria-expanded='true'] {
   background: var(--color-surface-hover);
   color: var(--color-text);
+}
+
+.button:disabled {
+  color: var(--color-border-strong);
+  cursor: default;
 }
 
 .button[aria-pressed='true'] {

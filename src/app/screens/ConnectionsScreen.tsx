@@ -1,4 +1,4 @@
-import { Check, ChevronRight, FlaskConical, Plus } from 'lucide-react';
+import { Check, ChevronRight, MessageSquarePlus, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { fitsRole, resolveRole, type ModelRef } from '../../connectors/assignment';
 import { resolveConnection } from '../../connectors/registry';
@@ -31,8 +31,8 @@ export function ConnectionsScreen() {
     <Screen
       top={<NavBar title="연결" onBack={() => navigate('/')} backLabel="홈으로" />}
       actions={
-        <Button variant="secondary" icon={FlaskConical} disabled={!mainChoice} onClick={() => navigate('/try')}>
-          본 대화 모델 시험해 보기
+        <Button variant="secondary" icon={MessageSquarePlus} disabled={!mainChoice} onClick={() => navigate('/chats/new')}>
+          새 채팅에서 써 보기
         </Button>
       }
     >
