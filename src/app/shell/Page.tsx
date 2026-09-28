@@ -14,7 +14,7 @@ import { CharacterScreen } from '../library/CharacterScreen';
 import { GalleryScreen } from '../library/gallery/GalleryScreen';
 import { HomeScreen } from '../library/HomeScreen';
 import { useViews } from '../session';
-import { ListDetail, Screen, Text, useSplit, useWide } from '../ui';
+import { Empty, ListDetail, useSplit, useWide } from '../ui';
 import { backTo, connectionList, up, upFromMissing, type Below, type Route } from './routes';
 
 // What the item's side of a connection list says before anything is picked from it.
@@ -88,16 +88,6 @@ export function Page({ route }: { route: Route }) {
   const list = connectionList(route);
   if (!list) return screen(route);
   const detail = route.kind === list.kind ? null : screen(route);
-  if (split) return <ListDetail list={screen(list)} detail={detail ?? <Placeholder text={EMPTY[list.kind]} />} />;
+  if (split) return <ListDetail list={screen(list)} detail={detail ?? <Empty variant="pane">{EMPTY[list.kind]}</Empty>} />;
   return detail ?? screen(list);
-}
-
-function Placeholder({ text }: { text: string }) {
-  return (
-    <Screen align="center">
-      <Text tone="muted" align="center">
-        {text}
-      </Text>
-    </Screen>
-  );
 }

@@ -3,7 +3,7 @@ import type { Connection, Meter, MeterReset, MeterUnit } from '../../connectors/
 import { loadMeters, type MetersResult } from '../../runtime/meters';
 import { describeMetersFailure } from '../common/failure';
 import { creditAmount, credits, usd } from '../common/money';
-import { Callout, Facts, Section, Text } from '../ui';
+import { Callout, Empty, Facts, Section, Text } from '../ui';
 
 const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 
@@ -50,9 +50,7 @@ export function ConnectionMeters({ connection }: { connection: Connection }) {
       ) : result.meters.length ? (
         <Facts items={result.meters.map(fact)} />
       ) : (
-        <Text size="sm" tone="muted">
-          이 연결은 사용량을 알려 주지 않았어요.
-        </Text>
+        <Empty variant="section">이 연결은 사용량을 알려 주지 않았어요.</Empty>
       )}
     </Section>
   );

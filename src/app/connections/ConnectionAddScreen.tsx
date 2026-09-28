@@ -6,7 +6,7 @@ import { useAttempt } from '../common/useAttempt';
 import { useConnections, useSession } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
+import { Button, Callout, Empty, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack } from '../ui';
 import { connect } from './connect';
 
 const GROUPS: Record<ConnectionType['group'], string> = {
@@ -40,8 +40,8 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
           </Button>
         </Stack>
       )}
-      {search.kind === 'address' && <Text tone="muted">목록에 없는 주소예요. 아래 직접 연결로 이어서 연결할 수 있어요.</Text>}
-      {search.kind === 'none' && <Text tone="muted">목록에 맞는 곳이 없어요. 직접 연결로 연결할 수 있어요.</Text>}
+      {search.kind === 'address' && <Empty>목록에 없는 주소예요. 아래 직접 연결로 이어서 연결할 수 있어요.</Empty>}
+      {search.kind === 'none' && <Empty>목록에 맞는 곳이 없어요. 직접 연결로 연결할 수 있어요.</Empty>}
       {failure && (
         <Callout tone="warn" alert>
           {failure}

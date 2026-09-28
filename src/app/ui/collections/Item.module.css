@@ -1,0 +1,176 @@
+.item {
+  align-items: center;
+}
+
+.compact,
+.regular,
+.tall {
+  display: flex;
+  width: 100%;
+  text-align: start;
+}
+
+.chip {
+  display: inline-flex;
+  gap: var(--space-6);
+  height: var(--control-tool);
+  padding: 0 var(--space-12);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+}
+
+.compact {
+  gap: var(--space-10);
+  min-height: var(--control-compact);
+  padding: var(--space-6) var(--space-10);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.regular {
+  gap: var(--space-10);
+  padding: var(--space-8) var(--space-10);
+  border-radius: var(--radius-md);
+}
+
+/* Only a list's rows fade their fill in; whether every row does is the user's design call. */
+.tall {
+  gap: var(--space-10);
+  min-height: var(--row-min-height);
+  padding: var(--space-8) var(--space-6);
+  border-radius: var(--radius-lg);
+  transition: background-color var(--duration-fast);
+}
+
+.branch {
+  gap: var(--space-6);
+  font-weight: var(--weight-medium);
+}
+
+.text {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tall .text {
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.regular .head {
+  align-items: baseline;
+}
+
+.tall .head {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.title {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.regular .title {
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.tall .title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+/* A menu's label still wraps, but its box cuts the first letter's overhang, as menus always did. */
+.compact.list .title {
+  overflow: hidden;
+}
+
+.meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+.preview {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.compact .preview {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.clip {
+  composes: ellipsis from '../foundation/a11y.module.css';
+}
+
+/* The fills read the two tokens; the sidebar and the tabs set them to their own below. Hover comes first so the current
+   fill stays under the pointer. */
+.pressable:hover {
+  background: var(--color-item-hover);
+}
+
+.item[aria-current],
+.item[aria-pressed='true'] {
+  background: var(--color-item-current);
+}
+
+.side {
+  --color-item-hover: var(--color-surface);
+  --color-item-current: var(--color-surface-hover);
+
+  color: var(--color-text-muted);
+}
+
+.side:hover {
+  color: var(--color-text);
+}
+
+.list {
+  color: var(--color-text);
+}
+
+.tab {
+  --color-item-hover: var(--color-surface);
+  --color-item-current: var(--color-accent-bg);
+
+  color: var(--color-text-muted);
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab[aria-pressed='true'] {
+  border-color: var(--color-accent-border);
+  color: var(--color-accent);
+}
+
+.tab[aria-pressed='true'] .meta {
+  color: inherit;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.warn {
+  color: var(--color-warn);
+}

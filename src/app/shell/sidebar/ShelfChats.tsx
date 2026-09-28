@@ -4,7 +4,7 @@ import type { Shelf } from '../../../model/library';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary, useTurn } from '../../session';
-import { FaceButton, FaceStrip, IconButton, ItemRow, NavRow, SideNote, SideTitle, Sidebar } from '../../ui';
+import { Empty, FaceButton, FaceStrip, IconButton, ItemRow, NavRow, SideTitle, Sidebar } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { characterPage, type Route } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
@@ -63,7 +63,7 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
           onClick={() => navigate({ kind: 'chat', id: item.id })}
         />
       ))}
-      {shelf.chats.length === 0 && <SideNote>{`${NO_CHATS}.`}</SideNote>}
+      {shelf.chats.length === 0 && <Empty variant="side">{`${NO_CHATS}.`}</Empty>}
     </Sidebar>
   );
 }

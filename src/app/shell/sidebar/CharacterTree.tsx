@@ -8,7 +8,7 @@ import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../library/ImportFlow';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary } from '../../session';
-import { Button, FolderRow, IconButton, ItemRow, Row, SearchField, SideNote, Sidebar, useWide } from '../../ui';
+import { Button, Empty, FolderRow, IconButton, ItemRow, Row, SearchField, Sidebar, useWide } from '../../ui';
 import { navigate } from '../router';
 import { HOME } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
@@ -79,9 +79,9 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
       }
       footer={<SidebarFooter />}
     >
-      {empty && (page ? <Welcome /> : <SideNote>아직 캐릭터가 없어요. 봇을 가져와 보세요.</SideNote>)}
+      {empty && (page ? <Welcome /> : <Empty variant="side">아직 캐릭터가 없어요. 봇을 가져와 보세요.</Empty>)}
       {!empty && words && found.map(row)}
-      {!empty && words && found.length === 0 && <SideNote>{noResults(words)}</SideNote>}
+      {!empty && words && found.length === 0 && <Empty variant="side">{noResults(words)}</Empty>}
       {!empty && !words && (
         <>
           {folders.map(folderRow)}

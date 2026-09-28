@@ -5,7 +5,7 @@ import type { Shown } from '../../runtime/talk';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useTalk } from '../session';
-import { Breakdown, Callout, Facts, IconButton, Section, SidePanel, Text } from '../ui';
+import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Text } from '../ui';
 import { cost, seconds, speed, tokens, UNKNOWN } from './receipt';
 
 type Props = {
@@ -48,9 +48,9 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
   );
 
   let body;
-  if (!version) body = <Text tone="muted">이 채팅에는 아직 답장이 없어요.</Text>;
+  if (!version) body = <Empty>이 채팅에는 아직 답장이 없어요.</Empty>;
   else if (live) body = <Text tone="muted">답장을 쓰는 중이에요. 끝나면 토큰과 비용이 채워져요.</Text>;
-  else if (!receipt) body = <Text tone="muted">모델이 만든 답장이 아니라서 토큰이나 비용 정보가 없어요.</Text>;
+  else if (!receipt) body = <Empty>모델이 만든 답장이 아니라서 토큰이나 비용 정보가 없어요.</Empty>;
   else {
     const usage = receipt.usage;
     const cached = usage?.cachedInputTokens ?? null;
@@ -91,9 +91,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
             />
           </Section>
         ) : (
-          <Text size="sm" tone="muted">
-            제공자가 사용량을 알려 주지 않았어요. 모르는 값은 0으로 적지 않아요.
-          </Text>
+          <Empty variant="section">제공자가 사용량을 알려 주지 않았어요. 모르는 값은 0으로 적지 않아요.</Empty>
         )}
         <Facts
           variant="tiles"

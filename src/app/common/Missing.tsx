@@ -1,7 +1,7 @@
 import { KEEP_DAYS } from '../../model/library';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { NavBar, Screen, Text } from '../ui';
+import { Empty, NavBar, Screen } from '../ui';
 
 // A character in 지운 캐릭터, and a chat whose character is not there, say how to get them back.
 const RESTORE = '캐릭터 둘러보기의 ‘지운 캐릭터’에서 되살릴 수 있어요.';
@@ -20,7 +20,7 @@ export function Missing({ what, back }: { what: Absent; back: Back }) {
   const { title, message } = COPY[what];
   return (
     <Screen top={<NavBar title={title} onBack={() => navigate(back.to)} backLabel={back.label} />}>
-      <Text tone="muted">{message}</Text>
+      <Empty>{message}</Empty>
     </Screen>
   );
 }

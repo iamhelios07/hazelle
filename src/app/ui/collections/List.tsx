@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Tag } from '../foundation/Tag';
+import { Item } from './Item';
 import styles from './List.module.css';
 
 export function List({ label, children }: { label: string; children: ReactNode }) {
@@ -26,32 +27,18 @@ type ItemProps = {
 };
 
 export function ListItem({ title, code, description, tags = [], trailing, onClick, selected, current }: ItemProps) {
-  const content = (
-    <>
-      <span className={styles.text}>
-        <span className={styles.title}>{title}</span>
-        {(code || tags.length > 0) && (
-          <span className={styles.meta}>
-            {code && <code className={styles.code}>{code}</code>}
-            {tags.map((tag) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
-          </span>
-        )}
-        {description && <span className={styles.description}>{description}</span>}
-      </span>
-      {trailing}
-    </>
-  );
+  const meta =
+    code || tags.length > 0 ? (
+      <>
+        {code && <code className={styles.code}>{code}</code>}
+        {tags.map((tag) => (
+          <Tag key={tag}>{tag}</Tag>
+        ))}
+      </>
+    ) : undefined;
   return (
     <li className={styles.item}>
-      {onClick ? (
-        <button type="button" className={`${styles.row} ${styles.button}`} aria-pressed={selected} aria-current={current ? 'page' : undefined} onClick={onClick}>
-          {content}
-        </button>
-      ) : (
-        <div className={styles.row}>{content}</div>
-      )}
+      <Item density="tall" scheme="list" title={title} meta={meta} preview={description} trailing={trailing} pressed={selected} current={current && 'page'} onClick={onClick} />
     </li>
   );
 }

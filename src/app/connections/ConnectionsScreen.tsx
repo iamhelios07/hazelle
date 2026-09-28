@@ -7,7 +7,7 @@ import { describeFailure } from '../common/failure';
 import { useConnections, useSettings, useStore, useUnreadable } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, Icon, List, ListItem, NavBar, Screen, Section, Text } from '../ui';
+import { Button, Callout, Empty, Icon, List, ListItem, NavBar, Screen, Section } from '../ui';
 
 export function ConnectionsScreen({ back }: { back: Back }) {
   const store = useStore();
@@ -61,9 +61,7 @@ export function ConnectionsScreen({ back }: { back: Back }) {
       </Section>
       <Section title="기본 모델 · 본 대화">
         {choices.length === 0 ? (
-          <Text size="sm" tone="muted">
-            연결에서 모델에 별표를 찍으면 여기서 고를 수 있어요.
-          </Text>
+          <Empty variant="section">연결에서 모델에 별표를 찍으면 여기서 고를 수 있어요.</Empty>
         ) : (
           <List label="본 대화 모델">
             {choices.map(({ connection, model }) => {

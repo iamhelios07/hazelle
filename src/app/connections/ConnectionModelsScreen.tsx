@@ -10,7 +10,7 @@ import { useSession } from '../session';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, IconButton, List, ListItem, NavBar, Screen, SearchField, Stack, Text } from '../ui';
+import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, NavBar, Screen, SearchField, Stack, Text } from '../ui';
 import { ConnectionMeters } from './ConnectionMeters';
 
 type Filter = 'all' | 'starred' | 'reasoning' | 'vision' | 'tools';
@@ -157,7 +157,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           })}
         </List>
       ) : (
-        catalog?.ok && <Text tone="muted">{needle || filter !== 'all' ? '맞는 모델이 없어요.' : '이 연결은 모델을 하나도 알려 주지 않았어요.'}</Text>
+        catalog?.ok && <Empty>{needle || filter !== 'all' ? '맞는 모델이 없어요.' : '이 연결은 모델을 하나도 알려 주지 않았어요.'}</Empty>
       )}
     </Screen>
   );

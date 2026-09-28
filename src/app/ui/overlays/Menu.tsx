@@ -1,5 +1,6 @@
 import { Check, type LucideIcon } from 'lucide-react';
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
+import { Item } from '../collections/Item';
 import { Icon } from '../foundation/Icon';
 import { useLayer } from './layers';
 import styles from './Menu.module.css';
@@ -119,51 +120,42 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', handl
 type ItemProps = {
   label: string;
   sub?: string;
-  hint?: string;
   icon?: LucideIcon;
   // Makes the item one of a set of choices, checked when it is the current one.
   checked?: boolean;
   tone?: 'default' | 'muted' | 'warn';
-  disabled?: boolean;
   onClick: () => void;
 };
 
 // The menu closes before onClick runs, so a dialog it opens takes the button that opened the menu as the place to
 // give the focus back to.
-export function MenuItem({ label, sub, hint, icon, checked, tone = 'default', disabled = false, onClick }: ItemProps) {
+export function MenuItem({ label, sub, icon, checked, tone, onClick }: ItemProps) {
   const close = useContext(CloseMenu);
   return (
-    <button
-      type="button"
+    <Item
+      density="compact"
+      scheme="list"
       role={checked === undefined ? 'menuitem' : 'menuitemradio'}
-      aria-checked={checked}
-      className={tone === 'default' ? styles.item : `${styles.item} ${styles[tone]}`}
-      disabled={disabled}
+      checked={checked}
+      tone={tone}
+      leading={icon && <Icon icon={icon} size="xs" />}
+      title={label}
+      preview={sub}
+      trailing={
+        checked && (
+          <span className={styles.check}>
+            <Icon icon={Check} size="xs" />
+          </span>
+        )
+      }
       onClick={() => {
         close();
         onClick();
       }}
-    >
-      {icon && <Icon icon={icon} size="xs" />}
-      <span className={styles.text}>
-        <span className={styles.label}>{label}</span>
-        {sub && <span className={styles.sub}>{sub}</span>}
-      </span>
-      {hint && <span className={styles.hint}>{hint}</span>}
-      {checked && (
-        <span className={styles.check}>
-          <Icon icon={Check} size="xs" />
-        </span>
-      )}
-    </button>
+    />
   );
 }
 
 export function MenuHeading({ children }: { children: ReactNode }) {
   return <span className={styles.heading}>{children}</span>;
-}
-
-// A line of text inside a menu, such as an empty search.
-export function MenuNote({ children }: { children: ReactNode }) {
-  return <p className={styles.note}>{children}</p>;
 }

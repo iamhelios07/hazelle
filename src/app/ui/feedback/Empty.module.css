@@ -1,0 +1,27 @@
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}
+
+.section {
+  font-size: var(--text-sm);
+}
+
+.story,
+.pane {
+  text-align: center;
+}
+
+.side,
+.menu {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.side {
+  padding: var(--space-8) var(--space-10);
+}
+
+.menu {
+  padding: var(--space-12) var(--space-10);
+}

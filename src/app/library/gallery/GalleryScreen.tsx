@@ -7,7 +7,7 @@ import { noResults } from '../../common/search';
 import { useLibrary } from '../../session';
 import { navigate } from '../../shell/router';
 import type { Back } from '../../shell/routes';
-import { Button, CardGrid, NavBar, Row, Screen, SearchField, Text } from '../../ui';
+import { Button, CardGrid, Empty, NavBar, Row, Screen, SearchField, Text } from '../../ui';
 import { useCharacterActions } from '../useCharacterActions';
 import { useFolderActions } from '../useFolderActions';
 import { CharacterCard } from './CharacterCard';
@@ -96,7 +96,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
           ))}
         </CardGrid>
       ) : (
-        <Text tone="muted">{words ? noResults(words) : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Text>
+        <Empty>{words ? noResults(words) : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Empty>
       )}
       {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={(to) => void movePicked(to)} />}
       {purging && (

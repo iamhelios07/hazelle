@@ -6,6 +6,5 @@ export { FolderRow } from './FolderRow';
 export { ItemRow } from './ItemRow';
 export { List, ListItem } from './List';
 export { NavRow } from './NavRow';
-export { SideNote } from './SideNote';
 export { SideTitle } from './SideTitle';
 export { Tab, Tabs } from './Tabs';

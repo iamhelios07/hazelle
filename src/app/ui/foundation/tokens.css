@@ -51,6 +51,11 @@
   --color-you-bg: var(--palette-mint-800);
   --color-you-text: var(--palette-mint-100);
 
+  /* A row's fill under the pointer and while it is the current one (collections/Item). Lists and menus use these; the
+     sidebar and the filter tabs still set their own, and whether every row fills alike is the user's design call. */
+  --color-item-hover: var(--color-surface-hover);
+  --color-item-current: var(--color-surface-raised);
+
   /* Story text (desktop chat mockup): narration, "dialogue" and *actions* read in three tones. */
   --color-prose-narration: var(--palette-sand-200);
   --color-prose-dialogue: var(--palette-sand-50);

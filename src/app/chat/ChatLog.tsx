@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { render } from '../../engine/render';
 import { shown } from '../../model/chat';
 import { day } from '../common/time';
-import { Divider, Text } from '../ui';
+import { Divider, Empty, Text } from '../ui';
 import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
@@ -18,9 +18,9 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   }
   if (messages.length === 0) {
     rows.push(
-      <Text key="intro" tone="muted" align="center">
+      <Empty key="intro" variant="story">
         {card ? '첫인사가 없는 캐릭터예요. 먼저 말을 걸어 보세요.' : '캐릭터 없이 모델과 바로 이야기하는 채팅이에요. 모델은 오른쪽 위 버튼에서 이 채팅만 바꿀 수 있어요.'}
-      </Text>,
+      </Empty>,
     );
   }
   let lastDay = '';

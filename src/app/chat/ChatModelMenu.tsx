@@ -4,7 +4,7 @@ import { recentModels } from '../../model/chat';
 import { noResults } from '../common/search';
 import { useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
-import { ChipButton, Divider, Menu, MenuHeading, MenuItem, MenuNote, SearchField, type MenuHandle } from '../ui';
+import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, SearchField, type MenuHandle } from '../ui';
 
 type Props = {
   // The model now in use, and its name for the button; null when no layer names one.
@@ -50,7 +50,7 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
     <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={choice.source} checked={same(choice.ref, current)} onClick={() => onPick(choice.ref)} />
   );
 
-  if (starred.length === 0) return <MenuNote>별표 찍은 모델이 없어요. 연결에서 모델에 별표를 찍으면 여기서 고를 수 있어요.</MenuNote>;
+  if (starred.length === 0) return <Empty variant="menu">별표 찍은 모델이 없어요. 연결에서 모델에 별표를 찍으면 여기서 고를 수 있어요.</Empty>;
   return (
     <>
       <SearchField size="sm" label="별표 모델 검색" value={query} onChange={setQuery} />
@@ -61,7 +61,7 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
             {found.map(item)}
           </>
         ) : (
-          <MenuNote>{`${noResults(query.trim())} 별표 찍은 모델만 찾아요.`}</MenuNote>
+          <Empty variant="menu">{`${noResults(query.trim())} 별표 찍은 모델만 찾아요.`}</Empty>
         )
       ) : (
         <>
