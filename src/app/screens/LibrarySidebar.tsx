@@ -26,7 +26,7 @@ import {
 } from '../ui';
 import { Welcome } from './HomeScreen';
 import { useImport } from './ImportFlow';
-import { aboutPath, newChatPath, shelfAt, shelfPath, shelfTarget } from './shelves';
+import { newChatPath, pagePath, shelfAt, shelfPath, shelfTarget } from './shelves';
 import { ago } from './time';
 
 const OPEN_CHAT = /^\/chats\/([0-9a-f-]{36})$/;
@@ -159,7 +159,8 @@ export function LibrarySidebar({ page, collapsed, onCollapse, username, onLock, 
 
   if (current && upAt !== path) {
     const others = characters.filter((shelf) => shelf !== current && shelf.chats.length > 0).slice(0, STRIP);
-    const about = !page ? shelfPath(current.id) : current.id === null ? null : aboutPath(current.id);
+    // 캐릭터 없이 has a page only beside its chats.
+    const about = current.id !== null ? pagePath(current.id, !page) : page ? null : shelfPath(null);
     return (
       <Sidebar
         page={page}

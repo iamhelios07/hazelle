@@ -1,12 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { CONNECTION_TYPES } from '../connectors/registry';
 import { api } from '../runtime/api';
+import type { OpenVault } from '../runtime/blobs';
 import { forgetCatalogs } from '../runtime/catalog';
 import { forgetCredentials } from '../runtime/credential';
 import { keepSynced, ObjectStore } from '../runtime/store';
 import { Talk } from '../runtime/talk';
 import type { VaultKey } from '../vault/keys';
 import { usePath } from './router';
+import { CharacterEditScreen } from './screens/CharacterEditScreen';
 import { CharacterScreen } from './screens/CharacterScreen';
 import { ChatScreen } from './screens/ChatScreen';
 import { ConnectionAddScreen } from './screens/ConnectionAddScreen';
@@ -21,7 +23,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { ImportProvider } from './screens/ImportFlow';
 import { LibrarySidebar } from './screens/LibrarySidebar';
 import { UnreachableScreen } from './screens/UnreachableScreen';
-import { StoreProvider, TalkProvider, useLibrary } from './store';
+import { StoreProvider, TalkProvider, VaultProvider, useLibrary } from './store';
 import { ToastProvider } from './toast';
 import { ListDetail, Screen, Shell, Text, useSplit, useWide } from './ui';
 
@@ -31,7 +33,7 @@ type Props = Account & { accountId: string; vaultKey: VaultKey };
 // Everything behind an open vault: the account's objects, pulled once before the first screen and
 // kept in sync while the vault stays open, and the reply being written, which stops with it.
 export function Workspace({ accountId, vaultKey, ...account }: Props) {
-  const [open, setOpen] = useState<{ store: ObjectStore; talk: Talk } | null>(null);
+  const [open, setOpen] = useState<{ store: ObjectStore; talk: Talk; vault: OpenVault } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -53,7 +55,7 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
         stopSync();
         talk.close();
       };
-      setOpen({ store: opened, talk });
+      setOpen({ store: opened, talk, vault: { accountId, vaultKey, request: api } });
     })();
     return () => {
       current = false;
@@ -67,13 +69,15 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
   if (!open) return null;
   return (
     <StoreProvider value={open.store}>
-      <TalkProvider value={open.talk}>
-        <ToastProvider>
-          <ImportProvider vault={{ accountId, vaultKey, request: api }}>
-            <Layout {...account} />
-          </ImportProvider>
-        </ToastProvider>
-      </TalkProvider>
+      <VaultProvider value={open.vault}>
+        <TalkProvider value={open.talk}>
+          <ToastProvider>
+            <ImportProvider>
+              <Layout {...account} />
+            </ImportProvider>
+          </ToastProvider>
+        </TalkProvider>
+      </VaultProvider>
     </StoreProvider>
   );
 }
@@ -120,6 +124,7 @@ const CHAT = /^\/chats\/([0-9a-f-]{36})$/;
 const SHELF = /^\/characters\/([0-9a-f-]{36}|none)$/;
 const NEW_CHAT = /^\/characters\/([0-9a-f-]{36})\/new$/;
 const ABOUT = /^\/characters\/([0-9a-f-]{36})\/about$/;
+const EDIT = /^\/characters\/([0-9a-f-]{36})\/edit$/;
 const CONNECTION = /^\/connections\/([0-9a-f-]{36})$/;
 
 function Page({ path, username }: { path: string; username: string }) {
@@ -134,6 +139,8 @@ function Page({ path, username }: { path: string; username: string }) {
   if (shelf) return <CharacterScreen key={shelf} id={shelf === 'none' ? null : shelf} />;
   const about = ABOUT.exec(path)?.[1];
   if (about) return <CharacterScreen key={about} id={about} />;
+  const edit = EDIT.exec(path)?.[1];
+  if (edit) return <CharacterEditScreen key={edit} id={edit} />;
   const panes = connectionPanes(path);
   if (!panes) return <Home />;
   if (split) return <ListDetail list={panes.list} detail={panes.detail ?? <Placeholder text={panes.empty} />} />;

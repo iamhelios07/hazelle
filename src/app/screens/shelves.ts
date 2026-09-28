@@ -1,12 +1,15 @@
 import type { Shelf } from '../../runtime/library';
 
 const CHAT = /^\/chats\/([0-9a-f-]{36})$/;
-const SHELF = /^\/characters\/([0-9a-f-]{36}|none)(?:\/new|\/about)?$/;
+const SHELF = /^\/characters\/([0-9a-f-]{36}|none)(?:\/new|\/about|\/edit)?$/;
 
 export const shelfPath = (id: string | null) => `/characters/${id ?? 'none'}`;
 export const newChatPath = (id: string | null) => (id ? `/characters/${id}/new` : '/chats/new');
 // A character's own page on phones, where its shelf path is the list of its chats.
 export const aboutPath = (id: string) => `/characters/${id}/about`;
+// A character's own page: beside its chats where the sidebar shows them, on its own path on phones.
+export const pagePath = (id: string, wide: boolean) => (wide ? shelfPath(id) : aboutPath(id));
+export const editPath = (id: string) => `/characters/${id}/edit`;
 
 // Which shelf a path is in: a character's id, null for 캐릭터 없이, or undefined outside every shelf.
 export function shelfAt(path: string, chats: { id: string; chat: { character: string | null } }[]): string | null | undefined {

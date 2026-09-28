@@ -69,13 +69,15 @@ export function ChatScreen({ id, character, username }: { id: string | null; cha
   const lore = useLoreCount(chat.character);
   const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
+  // A blank greeting keeps its place in the card, but a chat never opens on nothing.
+  const greetings = card?.greetings.filter((text) => text.trim()) ?? [];
   const opening: Shown | null =
-    item === null && card && card.greetings.length > 0
+    item === null && card && greetings.length > 0
       ? {
           id: 'opening',
           role: 'assistant',
           at: openedAt,
-          versions: card.greetings.map((text, index) => ({ id: `opening-${index}`, text: fillNames(text, card, username), receipt: null, edited: false, at: openedAt })),
+          versions: greetings.map((text, index) => ({ id: `opening-${index}`, text: fillNames(text, card, username), receipt: null, edited: false, at: openedAt })),
           selected: greeting,
           live: null,
         }

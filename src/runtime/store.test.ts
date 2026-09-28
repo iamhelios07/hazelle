@@ -1,31 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomBytes } from '../vault/aead';
-import type { ApiResult } from './api';
+import { fakeServer } from './fake-server';
 import { ObjectStore } from './store';
-
-type Row = { id: string; kind: string; parent: string | null; rev: number; body: string | null };
-
-// The server's object routes in memory: the same version checks, without D1.
-function fakeServer() {
-  const rows = new Map<string, Row>();
-  let rev = 0;
-  async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
-    const ok = (data: unknown) => ({ ok: true, data }) as ApiResult<T>;
-    if (method === 'GET') {
-      const since = Number(path.split('since=')[1]);
-      const changes = [...rows.values()].filter((row) => row.rev > since).sort((a, b) => a.rev - b.rev);
-      return ok({ changes, cursor: changes.at(-1)?.rev ?? since, more: false });
-    }
-    const id = path.split('/')[1]!;
-    const input = body as { kind: string; parent?: string | null; body?: string; baseRev: number | null };
-    const row = rows.get(id);
-    const matches = input.baseRev === null ? !row : row?.rev === input.baseRev && row.kind === input.kind && (method === 'PUT' || row.body !== null);
-    if (!matches) return { ok: false, error: 'conflict' };
-    rows.set(id, { id, kind: input.kind, parent: input.parent ?? null, rev: ++rev, body: method === 'PUT' ? input.body! : null });
-    return ok({ rev });
-  }
-  return { request, rows };
-}
 
 const ACCOUNT = 'account-1';
 

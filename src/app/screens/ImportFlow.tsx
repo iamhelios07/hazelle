@@ -2,22 +2,19 @@ import { MessageSquarePlus } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { importCard } from '../../engine/import/card';
 import type { Imported, ImportFailure, UnsupportedKind } from '../../engine/import/types';
-import type { ApiFailure } from '../../runtime/api';
-import { putBlob, type OpenVault } from '../../runtime/blobs';
-import type { Avatar, Character, Lore } from '../../runtime/library';
+import { addCharacter } from '../../runtime/library';
 import { unused } from '../../engine/prompt';
 import { navigate } from '../router';
-import { useStore } from '../store';
+import { useStore, useVault } from '../store';
 import { Button, Callout, Dialog, DropOverlay, Section, Stack, Text } from '../ui';
 import { describeFailure } from './failure';
+import { describeStep } from './saving';
 import { newChatPath } from './shelves';
 import { describeUnused } from './unused';
 
 const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum';
 // The longest side of the thumbnail that lists and 캐릭터 둘러보기 show; the original stays in its blob.
 const THUMB = 400;
-// Lorebook entries are saved this many at a time: one request each, and bots carry hundreds.
-const PARALLEL = 8;
 
 type Done = { file: string; id: string; imported: Imported; faceless: boolean; lore: number };
 type Result = Done | { file: string; failure: string };
@@ -72,8 +69,9 @@ async function thumbnail({ bytes, type }: { bytes: Uint8Array<ArrayBuffer>; type
 
 // Bot import (design F2): pick or drop files anywhere, each is saved as a character, and a summary
 // says what came in, what did not, and what its chats do not use yet.
-export function ImportProvider({ vault, children }: { vault: OpenVault; children: ReactNode }) {
+export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
+  const vault = useVault();
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -82,38 +80,14 @@ export function ImportProvider({ vault, children }: { vault: OpenVault; children
   async function save(file: File, progress: (busy: string) => void): Promise<Result> {
     const parsed = importCard(file.name, new Uint8Array(await file.arrayBuffer()));
     if (!parsed.ok) return { file: file.name, failure: FAILURE[parsed.failure.kind] };
-    const { card, lore, avatar } = parsed.card;
-    const id = crypto.randomUUID();
+    const { card, avatar } = parsed.card;
     const loreFolders = parsed.card.loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
-    const failed = (failure: ApiFailure) => ({ file: file.name, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
-
-    // The character is saved last, so it shows up only once its picture and lorebook are in.
-    let faceless = false;
-    if (avatar) {
-      const thumb = await thumbnail(avatar).catch(() => null);
-      if (thumb === null) faceless = true;
-      else {
-        progress('그림 올리는 중');
-        const blob = crypto.randomUUID();
-        const put = await putBlob(vault, blob, avatar.bytes);
-        if (!put.ok) return failed(put);
-        const saved = await store.save<Avatar>('avatar', blob, () => ({ type: avatar.type, size: avatar.bytes.length, thumb }), id);
-        if (!saved.ok) return failed(saved);
-      }
-    }
-    for (let start = 0; start < lore.length; start += PARALLEL) {
-      progress(`로어북 저장 중 · ${start} / ${lore.length}`);
-      const saved = await Promise.all(
-        lore
-          .slice(start, start + PARALLEL)
-          .map((entry) => store.save<Lore>('lore', crypto.randomUUID(), () => ({ ...entry, folder: entry.folder === null ? null : loreFolders[entry.folder]!.id }), id)),
-      );
-      const failure = saved.find((result) => !result.ok);
-      if (failure && !failure.ok) return failed(failure);
-    }
-    const saved = await store.save<Character>('character', id, () => ({ card, folder: null, loreFolders }));
-    if (!saved.ok) return failed(saved);
-    return { file: file.name, id, imported: parsed.card, faceless, lore: lore.length };
+    const lore = parsed.card.lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : loreFolders[entry.folder]!.id }));
+    const thumb = avatar ? await thumbnail(avatar).catch(() => null) : null;
+    const picture = avatar && thumb !== null ? { ...avatar, thumb } : null;
+    const saved = await addCharacter(store, vault, { card, folder: null, loreFolders }, lore, picture, (step) => progress(describeStep(step)));
+    if (!saved.ok) return { file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
+    return { file: file.name, id: saved.data, imported: parsed.card, faceless: avatar !== null && thumb === null, lore: lore.length };
   }
 
   async function take(files: File[]) {

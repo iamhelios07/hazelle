@@ -3,19 +3,29 @@ import type { Connection } from '../connectors/types';
 import { chatTitle, fold, preview, type Chat, type Entry, type Message } from '../runtime/chat';
 import { SETTINGS_ID, type Settings } from '../runtime/docs';
 import { nest, shelve, type Avatar, type Character, type Folder } from '../runtime/library';
+import type { OpenVault } from '../runtime/blobs';
 import type { ObjectStore, Stored } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 
 const StoreContext = createContext<ObjectStore | null>(null);
 const TalkContext = createContext<Talk | null>(null);
+const VaultContext = createContext<OpenVault | null>(null);
 
 export const StoreProvider = StoreContext.Provider;
 export const TalkProvider = TalkContext.Provider;
+export const VaultProvider = VaultContext.Provider;
 
 export function useStore(): ObjectStore {
   const store = useContext(StoreContext);
   if (!store) throw new Error('useStore outside StoreProvider');
   return store;
+}
+
+// What reads and writes sealed files, such as a character's picture.
+export function useVault(): OpenVault {
+  const vault = useContext(VaultContext);
+  if (!vault) throw new Error('useVault outside VaultProvider');
+  return vault;
 }
 
 // The store's version is the snapshot, and lists are rebuilt only when it changes: a selector that

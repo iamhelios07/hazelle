@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
-import { holds, nest, shelve, shownFolders, type Avatar, type Character, type Folder } from './library';
-import type { Stored } from './store';
+import { randomBytes } from '../vault/aead';
+import { getBlob } from './blobs';
+import { fakeServer } from './fake-server';
+import { addCharacter, copyCharacter, holds, nest, shelve, shownFolders, type Avatar, type Character, type Folder, type Lore } from './library';
+import { ObjectStore, type Stored } from './store';
 
 const character = (id: string, rev: number): Stored<Character> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: null, loreFolders: [] } });
 const chat = (id: string, character: string | null, order: number) => ({ id, chat: { character }, order });
@@ -36,5 +39,27 @@ describe('nest', () => {
     inKnights.folder = 'k';
     expect(holds(tree[2]!, inKnights)).toBe(true);
     expect(holds(tree[2]!.children[1]!, inKnights)).toBe(false);
+  });
+});
+
+describe('copyCharacter', () => {
+  it('copies the card under its new name with the lorebook and the picture, and remembers the origin', async () => {
+    const server = fakeServer();
+    const vault = { accountId: 'account-1', vaultKey: randomBytes(32), request: server.request };
+    const store = await ObjectStore.open(vault.accountId, vault.vaultKey, server.request);
+    const luna: Character = { card: { name: '루나' } as Card, folder: 'f', loreFolders: [{ id: 'town', name: '마을' }] };
+    const entry = { name: '등대', content: '폭풍 치는 밤의 등대', folder: 'town' } as Lore;
+    const image = randomBytes(64);
+    const original = await addCharacter(store, vault, luna, [entry], { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
+    const id = original.ok ? original.data : '';
+
+    const copied = await copyCharacter(store, vault, id, '루나 (사본)', () => {});
+    const copy = copied.ok ? copied.data : '';
+    expect(store.get<Character>(copy)?.value).toEqual({ ...luna, card: { name: '루나 (사본)' }, origin: { id, name: '루나' } });
+    expect(store.list<Lore>('lore').filter((lore) => lore.parent === copy).map((lore) => lore.value)).toEqual([entry]);
+    const [before, after] = [id, copy].map((parent) => store.list<Avatar>('avatar').find((avatar) => avatar.parent === parent)!);
+    expect(after!.id).not.toBe(before!.id);
+    expect(after!.value).toEqual(before!.value);
+    expect(await getBlob(vault, after!.id)).toEqual({ ok: true, data: image });
   });
 });

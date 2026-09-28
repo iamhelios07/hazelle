@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import styles from './TextField.module.css';
 
 // Each kind carries the input attributes that belong together, so screens cannot mix them up.
@@ -22,17 +22,22 @@ type Props = {
   error?: string;
   // Makes the field a text area of this many lines.
   lines?: number;
+  // A small button on the label's line, such as 지우기 for one of several fields.
+  action?: ReactNode;
 };
 
-export function TextField({ label, kind = 'text', value, onChange, placeholder, hint, error, lines }: Props) {
+export function TextField({ label, kind = 'text', value, onChange, placeholder, hint, error, lines, action }: Props) {
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={id}>
-        {label}
-      </label>
+      <div className={styles.head}>
+        <label className={styles.label} htmlFor={id}>
+          {label}
+        </label>
+        {action}
+      </div>
       {lines ? (
         <textarea
           id={id}

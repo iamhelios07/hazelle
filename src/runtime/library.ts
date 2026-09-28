@@ -1,8 +1,11 @@
 import type { Card, LoreEntry } from '../engine/import/types';
-import type { Stored } from './store';
+import type { ApiResult } from './api';
+import { getBlob, putBlob, type OpenVault } from './blobs';
+import type { ObjectStore, Stored } from './store';
 
 // folder is the library folder it sits in (design F6); loreFolders only group its lorebook on screen.
-export type Character = { card: Card; folder: string | null; loreFolders: LoreFolder[] };
+// origin is the character it was copied from, named as it was then, so a gone origin can still be named.
+export type Character = { card: Card; folder: string | null; loreFolders: LoreFolder[]; origin?: { id: string; name: string } };
 export type LoreFolder = { id: string; name: string };
 
 // Kind `lore`, whose parent is the character. folder is the id of one of its loreFolders.
@@ -59,3 +62,52 @@ export const shownFolders = (tree: FolderTree[]) => new Set(tree.flatMap((top) =
 
 // A folder holds the characters in it and in its subfolders.
 export const holds = (folder: FolderTree, character: Character) => character.folder === folder.id || folder.children.some((child) => child.id === character.folder);
+
+// The picture of a new character: the original goes to its sealed blob, the thumbnail into the avatar
+// object beside it.
+export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string; thumb: string };
+export type Progress = (step: { kind: 'picture' } | { kind: 'lore'; saved: number; total: number }) => void;
+
+// Lorebook entries are saved this many at a time: one request each, and bots carry hundreds.
+const PARALLEL = 8;
+
+// The character is saved last, so it shows up only once its picture and lorebook are in. A failure
+// midway leaves pieces nothing points at, never a character missing some of its own.
+export async function addCharacter(store: ObjectStore, vault: OpenVault, character: Character, lore: Lore[], picture: Picture | null, progress: Progress): Promise<ApiResult<string>> {
+  const id = crypto.randomUUID();
+  if (picture) {
+    progress({ kind: 'picture' });
+    const blob = crypto.randomUUID();
+    const put = await putBlob(vault, blob, picture.bytes);
+    if (!put.ok) return put;
+    const saved = await store.save<Avatar>('avatar', blob, () => ({ type: picture.type, size: picture.bytes.length, thumb: picture.thumb }), id);
+    if (!saved.ok) return saved;
+  }
+  for (let start = 0; start < lore.length; start += PARALLEL) {
+    progress({ kind: 'lore', saved: start, total: lore.length });
+    const saved = await Promise.all(lore.slice(start, start + PARALLEL).map((entry) => store.save<Lore>('lore', crypto.randomUUID(), () => entry, id)));
+    const failure = saved.find((result) => !result.ok);
+    if (failure && !failure.ok) return failure;
+  }
+  const saved = await store.save<Character>('character', id, () => character);
+  return saved.ok ? { ok: true, data: id } : saved;
+}
+
+// A copy that goes its own way (사본 만들기): the card under a new name, the lorebook and the picture,
+// in the original's folder. Chats stay with the original. The picture is copied, not shared, because a
+// blob is sealed to its own id.
+export async function copyCharacter(store: ObjectStore, vault: OpenVault, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
+  const original = store.get<Character>(id)!.value;
+  const avatar = store.list<Avatar>('avatar').find((candidate) => candidate.parent === id);
+  let picture: Picture | null = null;
+  if (avatar) {
+    const bytes = await getBlob(vault, avatar.id);
+    if (!bytes.ok) return bytes;
+    picture = { bytes: bytes.data, type: avatar.value.type, thumb: avatar.value.thumb };
+  }
+  const lore = store
+    .list<Lore>('lore')
+    .filter((entry) => entry.parent === id)
+    .map((entry) => entry.value);
+  return addCharacter(store, vault, { ...original, card: { ...original.card, name }, origin: { id, name: original.card.name } }, lore, picture, progress);
+}
