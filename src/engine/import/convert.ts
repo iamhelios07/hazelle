@@ -1,5 +1,6 @@
 import { count, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
+import { parseDecorators } from '../lorebook/decorators';
 import type { Card, ImportReport, LoreEntry, RegexScript, UnsupportedKind } from './types';
 
 type Json = Record<string, unknown>;
@@ -269,12 +270,5 @@ function countInText(card: Card, lore: LoreEntry[], tally: Tally) {
       if (isUnsupportedTag(name!)) add(tally, 'cbs-tag');
     }
   }
-  for (const entry of lore) add(tally, 'disable-ui-prompt', decorators(entry.content).filter((line) => /^@@disable_ui_prompt\b/.test(line)).length);
-}
-
-// The leading block of @@ lines, which alone holds decorators (@risuai/ccardlib).
-function decorators(content: string): string[] {
-  const lines = content.trim().split('\n');
-  const end = lines.findIndex((line) => !line.startsWith('@@'));
-  return end === -1 ? lines : lines.slice(0, end);
+  for (const entry of lore) add(tally, 'disable-ui-prompt', parseDecorators(entry.content).decorators.filter(({ name }) => name === 'disable_ui_prompt').length);
 }
