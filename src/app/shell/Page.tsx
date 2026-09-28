@@ -13,6 +13,8 @@ import { CharacterEditScreen } from '../library/CharacterEditScreen';
 import { CharacterScreen } from '../library/CharacterScreen';
 import { GalleryScreen } from '../library/gallery/GalleryScreen';
 import { HomeScreen } from '../library/HomeScreen';
+import { PromptScreen } from '../prompts/PromptScreen';
+import { PromptsScreen } from '../prompts/PromptsScreen';
 import { useViews } from '../session';
 import { Empty, ListDetail, useSplit, useWide } from '../ui';
 import { backTo, connectionList, up, upFromMissing, type Below, type Route } from './routes';
@@ -26,7 +28,7 @@ const EMPTY = {
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
 export function Page({ route }: { route: Route }) {
-  const { chatById, characterById, library, connections } = useViews();
+  const { chatById, characterById, library, connections, prompts } = useViews();
   const wide = useWide();
   const split = useSplit();
 
@@ -79,6 +81,12 @@ export function Page({ route }: { route: Route }) {
       case 'connection': {
         const stored = connections.find((connection) => connection.id === at.id);
         return stored ? <ConnectionModelsScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'connection');
+      }
+      case 'prompts':
+        return <PromptsScreen back={back(at)} />;
+      case 'prompt': {
+        const stored = prompts.find((prompt) => prompt.id === at.id);
+        return stored ? <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} /> : missing(at, 'prompt');
       }
     }
   }

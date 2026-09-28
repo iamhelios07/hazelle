@@ -21,7 +21,11 @@ export type Route =
   | { kind: 'connect'; type: ConnectionType }
   // 직접 연결, with the address pasted into 연결 추가's search; '' when there was none.
   | { kind: 'connect-direct'; address: string }
-  | { kind: 'connection'; id: string };
+  | { kind: 'connection'; id: string }
+  // 설정's 프롬프트: the list, and one prompt's editor. pane opens the editor on its 토글 pane, which the
+  // chat's toggle panel links to.
+  | { kind: 'prompts' }
+  | { kind: 'prompt'; id: string; pane: 'toggles' | null };
 
 export const HOME: Route = { kind: 'home' };
 
@@ -65,6 +69,11 @@ export function parseRoute(at: string): Route {
     const type = CONNECTION_TYPES.find((candidate) => candidate.id === sub);
     return type ? { kind: 'connect', type } : HOME;
   }
+  if (top === 'prompts') {
+    if (id === undefined) return { kind: 'prompts' };
+    if (!ID.test(id) || sub !== undefined) return HOME;
+    return { kind: 'prompt', id, pane: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('pane') === 'toggles' ? 'toggles' : null };
+  }
   return HOME;
 }
 
@@ -94,6 +103,10 @@ export function href(route: Route): string {
       return `/connections/new/${DIRECT}${route.address ? `?address=${encodeURIComponent(route.address)}` : ''}`;
     case 'connection':
       return `/connections/${route.id}`;
+    case 'prompts':
+      return '/prompts';
+    case 'prompt':
+      return `/prompts/${route.id}${route.pane ? `?pane=${route.pane}` : ''}`;
   }
 }
 
@@ -165,12 +178,16 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     case 'connect':
     case 'connect-direct':
       return { kind: 'add-connection' };
+    case 'prompts':
+      return HOME;
+    case 'prompt':
+      return { kind: 'prompts' };
   }
 }
 
 // Where 뒤로 goes from a route whose chat, character or connection is not there: the list it would be
 // in, past every route that names it.
-export const upFromMissing = (route: Route): Route => connectionList(route) ?? HOME;
+export const upFromMissing = (route: Route): Route => (route.kind === 'prompt' ? { kind: 'prompts' } : (connectionList(route) ?? HOME));
 
 export type Back = { to: Route; label: string };
 

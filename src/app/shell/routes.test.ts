@@ -28,6 +28,11 @@ const EXAMPLES = {
     { kind: 'connect-direct', address: 'https://llm.example.com/v1?key=a b&x=1+2#top' },
   ],
   connection: [{ kind: 'connection', id: CHAT }],
+  prompts: [{ kind: 'prompts' }],
+  prompt: [
+    { kind: 'prompt', id: CHAT, pane: null },
+    { kind: 'prompt', id: CHAT, pane: 'toggles' },
+  ],
 } satisfies { [K in Route['kind']]: Extract<Route, { kind: K }>[] };
 
 describe('routes', () => {
@@ -42,7 +47,7 @@ describe('routes', () => {
     expect(href({ kind: 'connect-direct', address: 'https://a.example/v1' })).toBe('/connections/new/direct?address=https%3A%2F%2Fa.example%2Fv1');
   });
 
-  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', `/connections/${CHAT}/x`])(
+  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', `/connections/${CHAT}/x`, '/prompts/abc', `/prompts/${CHAT}/x`])(
     '%s is home',
     (at) => {
       expect(parseRoute(at)).toEqual(HOME);
