@@ -19,6 +19,9 @@ const RPACK = Uint8Array.from(
   (pair) => parseInt(pair, 16),
 );
 
+// Risu's RPack byte substitution, which .risum modules and .risup presets are written through.
+export const unpack = (bytes: Uint8Array) => bytes.map((byte) => RPACK[byte]!);
+
 const MAGIC = 111;
 const VERSION = 0;
 const HEADER = 6;
@@ -30,7 +33,7 @@ export function readRisum(bytes: Uint8Array): Record<string, unknown> | null {
   if (bytes.length < HEADER || bytes[0] !== MAGIC || bytes[1] !== VERSION) return null;
   const length = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(2, true);
   if (HEADER + length > bytes.length) return null;
-  const json = new TextDecoder().decode(bytes.subarray(HEADER, HEADER + length).map((byte) => RPACK[byte]!));
+  const json = new TextDecoder().decode(unpack(bytes.subarray(HEADER, HEADER + length)));
   let main: unknown;
   try {
     main = JSON.parse(json);

@@ -26,6 +26,13 @@ describe('session', () => {
       expect(log.map((call) => call.sent.url)).toEqual([EXCHANGE, MODELS, EXCHANGE]);
     }));
 
+  it('opens with the starter prompt as the default', () =>
+    server.withSession(async (session) => {
+      const { prompts, settings } = session.views();
+      expect(prompts.map((prompt) => prompt.value.name)).toEqual(['🏓 핑퐁 간소화']);
+      expect(settings.prompt).toBe(prompts[0]!.id);
+    }));
+
   it('gives the same views until the store changes', () =>
     server.withSession(async (session) => {
       const first = session.views();

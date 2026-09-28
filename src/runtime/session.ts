@@ -9,6 +9,7 @@ import { Catalogs } from './catalog';
 import { purgeExpired } from './characters';
 import { Credentials } from './credential';
 import { Files } from './files';
+import { addStarter } from './prompts';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
 import { scopeOf } from './turn';
@@ -21,6 +22,8 @@ export type Views = {
   // The characters not in 지운 캐릭터.
   characterById: ReadonlyMap<string, CharacterShelf<ChatItem>>;
   connections: Stored<'connection'>[];
+  prompts: Stored<'prompt'>[];
+  personas: Stored<'persona'>[];
   settings: Settings;
   unreadable: number;
 };
@@ -46,6 +49,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const pulled = await store.pull();
   if (pulled) return pulled;
   const files = await Files.open(accountId, vaultKey, api);
+  // Awaited rather than started, so the first screen and every turn already see the default prompt.
+  await addStarter(store);
   if (signal.aborted) return { ok: false, error: 'stopped' };
 
   const credentials = new Credentials();
@@ -84,6 +89,8 @@ function derive(store: ObjectStore, username: string): Views {
     library: { ...shelves, folders: nest(store.list('folder')) },
     characterById: new Map(shelves.characters.map((shelf) => [shelf.id, shelf])),
     connections: store.list('connection'),
+    prompts: store.list('prompt'),
+    personas: store.list('persona'),
     // Until something is saved, nothing is assigned: an empty layer, not a guessed default.
     settings: store.get('settings', SETTINGS_ID)?.value ?? { models: {} },
     unreadable: store.unreadable(),

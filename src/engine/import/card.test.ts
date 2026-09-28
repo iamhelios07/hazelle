@@ -206,6 +206,7 @@ describe('importCard', () => {
             backgroundHTML: '<div>{{getvar::hp}}</div>',
             additionalText: 'extra',
             prebuiltAssetCommand: true,
+            toggles: 'sims=시뮬레이터 모드\n모드 고르기',
             triggerscript: [{ effect: [{ type: 'triggerlua', code: '' }] }, { effect: [{ type: 'setvar' }] }],
             customScripts: [
               { comment: 't', in: 'a', out: 'b', type: 'edittrans' },
@@ -229,6 +230,7 @@ describe('importCard', () => {
       { kind: 'disable-ui-prompt', count: 1 },
       { kind: 'cbs-tag', count: 3 },
       { kind: 'regex-stage', count: 2 },
+      { kind: 'toggle-line', count: 1 },
     ]);
   });
 

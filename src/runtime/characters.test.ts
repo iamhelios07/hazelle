@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, type Character, type Lore } from '../model/library';
+import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
-import { addCharacter, copyCharacter, importCharacter, purgeCharacter, purgeExpired } from './characters';
+import { addCharacter, copyCharacter, importCharacter, purgeCharacter, purgeExpired, resetToggles, setToggle } from './characters';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -56,6 +57,20 @@ describe('purgeExpired', () => {
     expect(store.list('character').map((kept) => kept.value.card.name)).toEqual(['recent']);
     expect([store.list('chat'), store.list('entry'), store.list('lore'), store.list('avatar')].map((left) => left.length)).toEqual([0, 0, 0, 0]);
     expect(await blobs.get(blob)).toBeNull();
+  });
+});
+
+describe('setToggle', () => {
+  it('keeps values per character and for 캐릭터 없이, and resetToggles drops a character’s', async () => {
+    const { store, files } = await server.account();
+    const added = await addCharacter(store, files, { card: { name: '루나' } as Card, folder: null, loreFolders: [] }, [], null, () => {});
+    const id = added.ok ? added.data : '';
+    await setToggle(store, id, 'sims', '1');
+    await setToggle(store, id, 'mode', '2');
+    await setToggle(store, null, 'sims', '0');
+    expect([store.get('character', id)?.value.toggles, store.get('settings', SETTINGS_ID)?.value.toggles]).toEqual([{ sims: '1', mode: '2' }, { sims: '0' }]);
+    await resetToggles(store, id);
+    expect(store.get('character', id)?.value.toggles).toBeUndefined();
   });
 });
 

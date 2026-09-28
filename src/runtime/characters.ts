@@ -1,6 +1,7 @@
 import type { Card, Imported } from '../engine/import/types';
 import type { Stored } from '../model/kinds';
 import { daysLeft, holds, nest, type Character, type Lore } from '../model/library';
+import type { ToggleValues } from '../model/prompt';
 import type { ApiResult } from './api';
 import type { Files } from './files';
 import { planRemoval } from './removal';
@@ -106,6 +107,23 @@ export async function purgeExpired(store: ObjectStore, files: Files, now: number
 // survives.
 export function editCard(store: ObjectStore, id: string, patch: Partial<Card>): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => ({ ...current, card: { ...current.card, ...patch } }));
+}
+
+// A toggle's value for a character's chats, or with character null for 캐릭터 없이's (design §4.2).
+export function setToggle(store: ObjectStore, character: string | null, key: string, value: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
+  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, toggles: { ...current?.toggles, [key]: value } }));
+  return store.update('character', character, (current) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
+}
+
+// 기본값으로 되돌리기: the chats go back to the toggles' declared defaults.
+export function resetToggles(store: ObjectStore, character: string | null): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
+  const drop = <T extends { toggles?: ToggleValues }>(current: T) => {
+    const next = { ...current };
+    delete next.toggles;
+    return next;
+  };
+  if (character === null) return store.upsert('settings', (current) => drop({ models: {}, ...current }));
+  return store.update('character', character, drop);
 }
 
 type Placement = { id: string; folder: string | null };

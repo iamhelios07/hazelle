@@ -56,6 +56,23 @@ export async function removeChat(store: ObjectStore, id: string): Promise<ApiRes
 
 export const restoreChat = (store: ObjectStore, removed: Stored<'chat'>) => store.restore(removed);
 
+// A chat's own prompt, persona or 작가의 노트; null clears it, and the chat follows the default again
+// (design §4.2, §4.3).
+function setOwn(store: ObjectStore, chat: string, field: 'prompt' | 'persona' | 'note', value: string | null): Promise<ApiResult<Stored<'chat'>>> {
+  return store.update('chat', chat, (current) => {
+    const next = { ...current };
+    if (value === null) delete next[field];
+    else next[field] = value;
+    return next;
+  });
+}
+
+export const setChatPrompt = (store: ObjectStore, chat: string, prompt: string | null) => setOwn(store, chat, 'prompt', prompt);
+
+export const setChatPersona = (store: ObjectStore, chat: string, persona: string | null) => setOwn(store, chat, 'persona', persona);
+
+export const setChatNote = (store: ObjectStore, chat: string, note: string | null) => setOwn(store, chat, 'note', note);
+
 const append = (store: ObjectStore, chat: string, entry: Entry, id?: string) => store.create('entry', entry, { id, parent: chat });
 
 export const appendUserMessage = (store: ObjectStore, chat: string, { id, text }: { id: string; text: string }) =>

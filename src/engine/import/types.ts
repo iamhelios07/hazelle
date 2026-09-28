@@ -63,6 +63,7 @@ export const UNSUPPORTED_KINDS = [
   'cbs-tag',
   'regex-stage',
   'module',
+  'toggle-line',
 ] as const;
 export type UnsupportedKind = (typeof UNSUPPORTED_KINDS)[number];
 

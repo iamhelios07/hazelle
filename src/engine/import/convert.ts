@@ -1,6 +1,7 @@
 import { count, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
 import { parseDecorators } from '../lorebook/decorators';
+import { readToggles } from './toggles';
 import type { Card, ImportReport, LoreEntry, RegexScript, UnsupportedKind } from './types';
 
 type Json = Record<string, unknown>;
@@ -69,6 +70,7 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
   if (text(risu.additionalText).trim()) add(tally, 'additional-text');
   if (risu.prebuiltAssetCommand === true) add(tally, 'prebuilt-asset-command');
   if (text(record(extensions.depth_prompt).prompt).trim()) add(tally, 'depth-prompt');
+  add(tally, 'toggle-line', readToggles(text(risu.toggles)).unread);
 
   const greetings = [data.first_mes, ...list(data.alternate_greetings)].map(text);
   while (greetings.at(-1) === '') greetings.pop();
