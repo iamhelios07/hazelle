@@ -20,10 +20,12 @@ type ItemProps = {
   trailing?: ReactNode;
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
+  // pressed: one of a set of choices. current: the item open beside the list (ListDetail).
   selected?: boolean;
+  current?: boolean;
 };
 
-export function ListItem({ title, code, description, tags = [], trailing, onClick, selected }: ItemProps) {
+export function ListItem({ title, code, description, tags = [], trailing, onClick, selected, current }: ItemProps) {
   const content = (
     <>
       <span className={styles.text}>
@@ -44,7 +46,7 @@ export function ListItem({ title, code, description, tags = [], trailing, onClic
   return (
     <li className={styles.item}>
       {onClick ? (
-        <button type="button" className={`${styles.row} ${styles.button}`} aria-pressed={selected} onClick={onClick}>
+        <button type="button" className={`${styles.row} ${styles.button}`} aria-pressed={selected} aria-current={current ? 'page' : undefined} onClick={onClick}>
           {content}
         </button>
       ) : (

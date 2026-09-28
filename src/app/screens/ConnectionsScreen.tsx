@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { fitsRole, resolveRole, type ModelRef } from '../../connectors/assignment';
 import { resolveConnection } from '../../connectors/registry';
 import { SETTINGS_ID, type Settings } from '../../runtime/docs';
-import { navigate } from '../router';
+import { navigate, usePath } from '../router';
 import { useConnections, useSettings, useStore, useUnreadable } from '../store';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, Section, Text } from '../ui';
 import { describeFailure } from './failure';
@@ -13,6 +13,7 @@ export function ConnectionsScreen() {
   const connections = useConnections();
   const settings = useSettings();
   const unreadable = useUnreadable();
+  const path = usePath();
   const [message, setMessage] = useState<string | null>(null);
 
   const main = resolveRole('main', [settings.models]);
@@ -47,6 +48,7 @@ export function ConnectionsScreen() {
                 description={connection.value.starred.length ? `별표 ${connection.value.starred.length}개` : '별표 없음'}
                 tags={resolveConnection(connection.value) ? [] : ['이 버전이 모르는 연결']}
                 trailing={<Icon icon={ChevronRight} />}
+                current={path === `/connections/${connection.id}`}
                 onClick={() => navigate(`/connections/${connection.id}`)}
               />
             ))}

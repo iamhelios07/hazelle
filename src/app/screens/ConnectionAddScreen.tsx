@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
-import { navigate } from '../router';
+import { navigate, usePath } from '../router';
 import { useConnections, useStore } from '../store';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
 import { connect } from './connect';
@@ -18,6 +18,7 @@ const GROUPS: Record<ConnectionType['group'], string> = {
 export function ConnectionAddScreen() {
   const store = useStore();
   const connections = useConnections();
+  const path = usePath();
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export function ConnectionAddScreen() {
                     description={type.description}
                     tags={[type.signIn ? `${type.signIn.site} 로그인` : 'API 키', ...(count ? [`연결됨 ${count}`] : [])]}
                     trailing={<Icon icon={ChevronRight} />}
+                    current={path === `/connections/new/${type.id}`}
                     onClick={() => navigate(`/connections/new/${type.id}`)}
                   />
                 );
@@ -82,6 +84,7 @@ export function ConnectionAddScreen() {
             title="직접 연결"
             description="OpenAI 호환이나 Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 알 수 없어요."
             trailing={<Icon icon={ChevronRight} />}
+            current={path === '/connections/new/direct'}
             onClick={() => navigate(direct)}
           />
         </List>

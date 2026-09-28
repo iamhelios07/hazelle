@@ -1,0 +1,19 @@
+.split {
+  display: flex;
+  height: 100dvh;
+}
+
+.list {
+  width: var(--list-pane-width);
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-divider);
+  scrollbar-width: thin;
+}
+
+.detail {
+  flex-grow: 1;
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}

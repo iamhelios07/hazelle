@@ -134,6 +134,8 @@
   --sidebar-width: 272px;
   --rail-width: 64px;
   --panel-width: 360px;
+  --list-pane-width: 400px;
+  --pane-max-width: 560px;
   --header-height: 60px;
   --control-compact: 38px;
   --control-tool: 32px;

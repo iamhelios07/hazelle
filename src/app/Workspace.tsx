@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { CONNECTION_TYPES } from '../connectors/registry';
 import { api } from '../runtime/api';
 import { forgetCatalogs } from '../runtime/catalog';
@@ -20,7 +20,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { UnreachableScreen } from './screens/UnreachableScreen';
 import { StoreProvider, TalkProvider } from './store';
 import { ToastProvider } from './toast';
-import { Shell, useWide } from './ui';
+import { ListDetail, Screen, Shell, Text, useSplit, useWide } from './ui';
 
 type Account = { username: string; onLock: () => void; onLogout: () => Promise<string | null> };
 type Props = Account & { accountId: string; vaultKey: VaultKey };
@@ -114,16 +114,38 @@ const CHAT = /^\/chats\/([0-9a-f-]{36})$/;
 const CONNECTION = /^\/connections\/([0-9a-f-]{36})$/;
 
 function Page({ path, username }: { path: string; username: string }) {
+  const split = useSplit();
   if (path === '/chats/new') return <ChatScreen key="new" id={null} username={username} />;
   const chat = CHAT.exec(path)?.[1];
   if (chat) return <ChatScreen key={chat} id={chat} username={username} />;
-  if (path === '/connections') return <ConnectionsScreen />;
-  if (path === '/connections/new') return <ConnectionAddScreen />;
-  if (path === '/connections/new/direct') return <ConnectionDirectScreen />;
+  const panes = connectionPanes(path);
+  if (!panes) return <HomeScreen />;
+  if (split) return <ListDetail list={panes.list} detail={panes.detail ?? <Placeholder text={panes.empty} />} />;
+  return panes.detail ?? panes.list;
+}
+
+// The connection screens as a list and the item picked from it, which sit side by side when there is
+// room (design F5, desktop). empty is what the detail says before anything is picked.
+function connectionPanes(path: string): { list: ReactNode; detail: ReactNode | null; empty: string } | null {
+  const connections = { list: <ConnectionsScreen />, empty: '연결을 고르면 모델 목록과 사용량이 여기에 보여요.' };
+  const add = { list: <ConnectionAddScreen />, empty: '왼쪽에서 연결할 곳을 고르면 여기서 이어서 연결해요.' };
+  if (path === '/connections') return { ...connections, detail: null };
+  if (path === '/connections/new') return { ...add, detail: null };
+  if (path === '/connections/new/direct') return { ...add, detail: <ConnectionDirectScreen /> };
   const type = CONNECTION_TYPES.find((candidate) => path === `/connections/new/${candidate.id}`);
-  if (type?.signIn) return <ConnectionSignInScreen key={type.id} type={type} signIn={type.signIn} />;
-  if (type) return <ConnectionKeyScreen key={type.id} type={type} />;
-  const connection = CONNECTION.exec(path)?.[1];
-  if (connection) return <ConnectionModelsScreen key={connection} id={connection} />;
-  return <HomeScreen />;
+  if (type?.signIn) return { ...add, detail: <ConnectionSignInScreen key={type.id} type={type} signIn={type.signIn} /> };
+  if (type) return { ...add, detail: <ConnectionKeyScreen key={type.id} type={type} /> };
+  const id = CONNECTION.exec(path)?.[1];
+  if (id) return { ...connections, detail: <ConnectionModelsScreen key={id} id={id} /> };
+  return null;
+}
+
+function Placeholder({ text }: { text: string }) {
+  return (
+    <Screen align="center">
+      <Text tone="muted" align="center">
+        {text}
+      </Text>
+    </Screen>
+  );
 }

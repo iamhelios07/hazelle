@@ -32,7 +32,8 @@
   background: var(--color-surface-hover);
 }
 
-.button[aria-pressed='true'] {
+.button[aria-pressed='true'],
+.button[aria-current='page'] {
   background: var(--color-surface-raised);
 }
 
