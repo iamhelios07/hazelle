@@ -49,7 +49,7 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('boundaries
     fails('only runtime tests use the harness', 'src/runtime/talk.ts', "import { testSession } from './testing';", /^runtime may not import harness:/),
     fails('a lazy import is an edge', 'src/app/library/HomeScreen.tsx', "const chat = import('../chat/ChatScreen');", /^library may not import chat:/),
     fails('a re-export is an edge', 'src/app/ui/index.ts', "export * from '../chat/useChat';", /^ui may not import chat:/),
-    fails('a module in no area', 'src/app/settings/SettingsScreen.tsx', "import { Screen } from '../ui';", /^src\/app\/settings\/SettingsScreen is in no area/),
-    fails('an import of a module in no area', 'src/app/chat/ChatHeader.tsx', "import { x } from '../settings/x';", /^src\/app\/settings\/x is in no area/),
+    fails('a module in no area', 'src/app/usage/UsageScreen.tsx', "import { Screen } from '../ui';", /^src\/app\/usage\/UsageScreen is in no area/),
+    fails('an import of a module in no area', 'src/app/chat/ChatHeader.tsx', "import { x } from '../usage/x';", /^src\/app\/usage\/x is in no area/),
   ],
 });

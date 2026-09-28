@@ -2,7 +2,7 @@ import { Ellipsis, Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { NameDialog } from '../common/NameDialog';
-import { Button, ChoiceGroup, Dialog, Empty, IconButton, List, ListItem, Menu, MenuItem, Row, Section, Switch, Text, TextField } from '../ui';
+import { Button, ChoiceGroup, Dialog, Empty, IconButton, Menu, MenuItem, Row, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
 import { keyProblem } from './edits';
 
 type Props = {
@@ -39,14 +39,13 @@ export function TogglePane({ toggles, uses, onChange, onRekey, onRemove, adding,
       {toggles.length === 0 ? (
         <Empty variant="section">아직 토글이 없어요.</Empty>
       ) : (
-        <List label="토글">
+        <SettingGroup label="토글">
           {toggles.map((toggle) => (
-            <ListItem
+            <SettingRow
               key={toggle.key}
-              title={toggle.label}
-              code={toggle.key}
-              tags={[KIND_WORDS[toggle.kind]]}
-              trailing={
+              label={toggle.label}
+              help={`${toggle.key} · ${KIND_WORDS[toggle.kind]}`}
+              control={
                 <Row kind="toolbar">
                   {toggle.kind === 'check' ? (
                     <Switch label={`${toggle.label} 처음 값`} checked={toggle.default === '1'} onChange={(on) => set(toggle.key, () => ({ ...toggle, default: on ? '1' : '0' }))} />
@@ -68,7 +67,7 @@ export function TogglePane({ toggles, uses, onChange, onRekey, onRemove, adding,
               }
             />
           ))}
-        </List>
+        </SettingGroup>
       )}
       {target && renaming.field === 'label' && (
         <NameDialog

@@ -1,12 +1,13 @@
-export { AccountRow } from './AccountRow';
 export { Breakdown } from './Breakdown';
 export { CardGrid, FaceCard, Portrait, SelectionBar } from './CardGrid';
 export { Facts } from './Facts';
 export { FolderRow } from './FolderRow';
 export { ItemRow } from './ItemRow';
 export { List, ListItem } from './List';
+export { NavGroup } from './NavGroup';
 export { NavRow } from './NavRow';
 export { Outline, type OutlineKind, type OutlineStop } from './Outline';
+export { SettingGroup, SettingRow } from './SettingGroup';
 export { SideTitle } from './SideTitle';
 export { Tab, Tabs } from './Tabs';
 export { Tile, Tiles } from './Tiles';

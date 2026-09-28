@@ -12,6 +12,8 @@ const COPY = {
   'deleted-character': { title: '캐릭터', message: `지운 캐릭터예요. ${RESTORE}` },
   connection: { title: '연결', message: '이 연결이 없어요. 지워졌거나 주소가 잘못됐어요.' },
   prompt: { title: '프롬프트', message: '이 프롬프트가 없어요. 지워졌거나 주소가 잘못됐어요.' },
+  persona: { title: '페르소나', message: '이 페르소나가 없어요. 지워졌거나 주소가 잘못됐어요.' },
+  model: { title: '모델 설정', message: '이 모델은 별표 목록에 없어요. 별표를 뺐거나 주소가 잘못됐어요.' },
 };
 
 export type Absent = keyof typeof COPY;

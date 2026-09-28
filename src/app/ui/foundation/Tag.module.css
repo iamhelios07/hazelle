@@ -8,8 +8,6 @@
 }
 
 .accent {
-  border-radius: var(--radius-full);
   background: var(--color-accent-bg);
   color: var(--color-accent);
-  font-weight: var(--weight-semibold);
 }

@@ -18,8 +18,42 @@
   background: var(--color-surface-hover);
 }
 
-.chip svg {
+.field {
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-width: var(--field-choice-width);
+  height: var(--control-compact);
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-regular);
+}
+
+.ghost {
+  gap: var(--space-6);
+  padding: 0 var(--space-8) 0 var(--space-4);
+  border-color: transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.ghost:hover,
+.ghost[aria-expanded='true'] {
+  color: var(--color-text);
+}
+
+.chip svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.warn,
+.warn svg {
+  color: var(--color-warn-text);
+}
+
+.warn:not(.ghost) {
+  border-color: var(--color-warn-border);
 }
 
 .label {
@@ -30,5 +64,13 @@
 @media (max-width: 959px) {
   .chip {
     max-width: var(--chip-max-width-narrow);
+  }
+
+  .field {
+    max-width: 100%;
+  }
+
+  .phoneIcon .label {
+    display: none;
   }
 }

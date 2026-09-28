@@ -54,7 +54,7 @@ describe('session', () => {
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '{{user}}, hello' });
       expect(session.views().chatById.get(chat)?.preview).toBe('jin, hello');
       const persona = await addPersona(store, { name: 'Mina', description: '', picture: null });
-      await setDefaultPersona(store, persona.ok ? persona.data.id : null);
+      await setDefaultPersona(store, persona.ok ? persona.data.id : '');
       expect(session.views().chatById.get(chat)?.preview).toBe('Mina, hello');
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: 'bye, {{user}}' });
       expect(session.views().chatById.get(chat)?.preview).toBe('bye, Mina');

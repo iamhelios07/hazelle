@@ -8,9 +8,9 @@ type Props<T extends string> = {
   options: { value: T; label: string; sub?: string }[];
   value: T | null;
   onChange: (value: T) => void;
-  // chips: a row of small filters. buttons: equal-width buttons for a choice the form needs. segmented: one small box of
-  // options that sets something at once, such as a block's role. list: a column of options with a line under each,
-  // such as a model.
+  // chips: a row of small filters. buttons: equal-width buttons for a choice the form needs. segmented: one
+  // bordered strip of short choices for a setting, such as a reasoning level or a block's role. list: a column of
+  // options with a line under each, such as a model.
   layout?: 'chips' | 'buttons' | 'segmented' | 'list';
 };
 

@@ -10,3 +10,12 @@
 .tags {
   gap: var(--space-4);
 }
+
+.spread {
+  gap: var(--space-8);
+}
+
+.spread > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}

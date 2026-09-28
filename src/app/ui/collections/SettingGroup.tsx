@@ -1,0 +1,44 @@
+import { useId, type ReactNode } from 'react';
+import styles from './SettingGroup.module.css';
+
+// Settings in one rounded box, a line between each.
+export function SettingGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className={styles.group} role="group" aria-label={label}>
+      {children}
+    </div>
+  );
+}
+
+type RowProps = {
+  label: string;
+  // panel: one of a side panel's list, such as a chat's toggles, with no box and its control beside it on phones too.
+  place?: 'group' | 'panel';
+  // Differs from its default, marked by a dot before the label; help says what the default is.
+  changed?: boolean;
+  help?: ReactNode;
+  // What sets it: a field, a menu, a button, or a fact in words. Beside the words where there is room, under them on phones.
+  control: ReactNode;
+  error?: string;
+};
+
+export function SettingRow({ label, place = 'group', changed = false, help, control, error }: RowProps) {
+  const id = useId();
+  return (
+    <div className={place === 'group' ? styles.row : `${styles.row} ${styles.panel}`} role="group" aria-labelledby={id}>
+      <div className={styles.words}>
+        <span id={id} className={styles.label}>
+          {changed && <span className={styles.changed} aria-hidden />}
+          {label}
+        </span>
+        {help && <span className={styles.help}>{help}</span>}
+      </div>
+      <div className={styles.control}>{control}</div>
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}

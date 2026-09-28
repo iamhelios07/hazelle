@@ -12,6 +12,8 @@ export function List({ label, children }: { label: string; children: ReactNode }
 }
 
 type ItemProps = {
+  // Before the title, such as a face.
+  leading?: ReactNode;
   title: string;
   // A gold mark beside the title, such as 기본.
   badge?: string;
@@ -19,12 +21,14 @@ type ItemProps = {
   code?: string;
   description?: string;
   tags?: string[];
+  // A short figure at the end of the row, before trailing, such as a count.
+  aside?: string;
   // Something at the end of the row: an icon, a badge, or a control of its own.
   trailing?: ReactNode;
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
   // A control beside the row's button, such as 사본 2 that opens the rows under it.
-  aside?: ReactNode;
+  control?: ReactNode;
   // Rows under this one, set in from it, such as a prompt's copies.
   children?: ReactNode;
   // pressed: one of a set of choices. current: the item open beside the list (ListDetail).
@@ -32,7 +36,7 @@ type ItemProps = {
   current?: boolean;
 };
 
-export function ListItem({ title, badge, code, description, tags = [], trailing, onClick, aside, children, selected, current }: ItemProps) {
+export function ListItem({ leading, title, badge, code, description, tags = [], aside, trailing, onClick, control, children, selected, current }: ItemProps) {
   const meta =
     code || tags.length > 0 ? (
       <>
@@ -42,21 +46,44 @@ export function ListItem({ title, badge, code, description, tags = [], trailing,
         ))}
       </>
     ) : undefined;
-  const heading = badge ? (
-    <span className={styles.titled}>
-      {title}
-      <Tag tone="accent">{badge}</Tag>
-    </span>
-  ) : (
-    title
+  const row = (
+    <Item
+      density="tall"
+      scheme="list"
+      leading={leading}
+      title={
+        badge ? (
+          <span className={styles.titled}>
+            {title}
+            <Tag tone="accent">{badge}</Tag>
+          </span>
+        ) : (
+          title
+        )
+      }
+      meta={meta}
+      preview={description}
+      trailing={
+        aside ? (
+          <>
+            <span className={styles.aside}>{aside}</span>
+            {trailing}
+          </>
+        ) : (
+          trailing
+        )
+      }
+      pressed={selected}
+      current={current && 'page'}
+      onClick={onClick}
+    />
   );
-  const row = <Item density="tall" scheme="list" title={heading} meta={meta} preview={description} trailing={trailing} pressed={selected} current={current && 'page'} onClick={onClick} />;
   return (
     <li className={styles.item}>
-      {aside ? (
-        <div className={styles.withAside}>
+      {control ? (
+        <div className={styles.withControl}>
           {row}
-          <span className={styles.aside}>{aside}</span>
+          <span className={styles.control}>{control}</span>
         </div>
       ) : (
         row

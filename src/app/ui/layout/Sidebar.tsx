@@ -1,8 +1,9 @@
-import { PanelLeft } from 'lucide-react';
+import { PanelLeft, X } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { Brand } from '../foundation/Brand';
 import { Divider } from '../foundation/Divider';
+import { useLayer } from '../overlays/layers';
 import styles from './Sidebar.module.css';
 
 type Props = {
@@ -24,6 +25,23 @@ export function Sidebar({ page = false, onCollapse, actions, children, footer }:
       <div className={styles.actions}>{actions}</div>
       <div className={styles.list}>{children}</div>
       <div className={styles.footer}>{footer}</div>
+    </aside>
+  );
+}
+
+// A layer's own sidebar in the library's place, such as 설정's. × and Esc close it; Esc joins the layer
+// stack, so a menu open over the page closes first.
+export function LayerSidebar({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useLayer(true, { outside: () => false, close: onClose });
+  return (
+    <aside className={styles.sidebar} aria-label={title}>
+      <div className={styles.head}>
+        <h2 className={styles.title}>{title}</h2>
+        <IconButton icon={X} label={`${title} 닫기`} size="sm" onClick={onClose} />
+      </div>
+      <nav className={styles.list} aria-label={title}>
+        {children}
+      </nav>
     </aside>
   );
 }

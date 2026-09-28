@@ -1,0 +1,45 @@
+.tool {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-6);
+  height: var(--control-tool);
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  transition: background-color var(--duration-fast), color var(--duration-fast);
+}
+
+.tool:hover,
+.tool[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.dot {
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--icon-sm);
+  height: var(--icon-sm);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 959px) {
+  .phoneIcon .label {
+    display: none;
+  }
+}

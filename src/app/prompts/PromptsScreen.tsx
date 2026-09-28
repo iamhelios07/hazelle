@@ -5,7 +5,7 @@ import { addPrompt } from '../../runtime/prompts';
 import { noResults } from '../common/search';
 import { ago } from '../common/time';
 import { useStore, useViews } from '../session';
-import { navigate } from '../shell/router';
+import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Empty, FileButton, List, ListItem, NavBar, Row, Screen, SearchField, Section, Stack, Text, Tile, Tiles } from '../ui';
@@ -18,7 +18,7 @@ const useWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '�
 const used = (use: PromptUse) => (use.at === null ? useWords(use) : `${useWords(use)} · ${ago(use.at)} 씀`);
 
 // design §4.2: a list made for dozens. Search, the ones used last, and every prompt with its copies under it.
-export function PromptsScreen({ back }: { back: Back }) {
+export function PromptsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
   const { prompts, settings } = useViews();
@@ -61,7 +61,7 @@ export function PromptsScreen({ back }: { back: Back }) {
         badge={badge(prompt.id)}
         description={used(use(prompt.id))}
         onClick={() => openPrompt(prompt.id)}
-        aside={
+        control={
           copies.length > 0 && (
             <Button variant="ghost" size="sm" icon={expanded ? ChevronDown : ChevronRight} expanded={expanded} onClick={flip}>
               {`사본 ${copies.length}`}
@@ -83,8 +83,7 @@ export function PromptsScreen({ back }: { back: Back }) {
       top={
         <NavBar
           title="프롬프트"
-          onBack={() => navigate(back.to)}
-          backLabel={back.label}
+          {...backBar(back)}
           actions={
             <Row kind="actions">
               <FileButton accept=".risup" size="sm" icon={Import} onFile={(file) => preset.take([file])}>

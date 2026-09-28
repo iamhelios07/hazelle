@@ -8,6 +8,7 @@ import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
+import { ChatToggles } from './ChatToggles';
 import { useChat } from './useChat';
 
 type Props = {
@@ -35,7 +36,13 @@ export function ChatScreen({ item, shelf, back }: Props) {
           </>
         }
         footer={<ChatComposer chat={chat} />}
-        panel={panel.open && <ChatInfo chat={id} messages={messages} id={panel.id} onShow={actions.info} onClose={actions.closeInfo} />}
+        panel={
+          panel?.kind === 'info' ? (
+            <ChatInfo chat={id} messages={messages} id={panel.id} onShow={actions.info} onClose={actions.closePanel} />
+          ) : (
+            panel?.kind === 'toggles' && <ChatToggles chat={chat} />
+          )
+        }
         scrollRef={scroll.scrollRef}
         onScroll={scroll.onScroll}
       >

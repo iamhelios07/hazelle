@@ -6,11 +6,12 @@ import { assemble, type PromptInput, type TooLong } from '../engine/pipeline';
 import { renderChat, type ChatScope } from '../engine/render';
 import { fold, shown, type Chat, type Message } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import type { Toggle } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route, type RouteFailure } from './assignment';
 import { chatPersona } from './personas';
-import { chatPrompt } from './prompts';
+import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { Ask, TalkFailure } from './talk';
 
@@ -33,20 +34,19 @@ export type TurnFailure = TalkFailure | Blocked | TooLong | { kind: 'tokenizer' 
 // user's new message last in its messages), the message Talk saves with the reply, and where the reply goes.
 export type TurnContext = { route: Route } & Pick<PromptInput, 'scope' | 'budget'> & Pick<Ask, 'said' | 'reply'>;
 
-type Reader = Pick<Session, 'store' | 'username'>;
+type Reader = Pick<Session, 'store'>;
 
 // What a chat's text is rendered with, on screen and in a turn: its character's card, lore and toggle values,
 // its prompt, persona and note, and the model it talks to. id is null for a chat not saved yet.
-export function scopeOf({ store, username }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {
+export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
   const card = character?.card ?? null;
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
   const route = chatModel(store, chat);
-  const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], card ? readToggles(card.toggles).toggles : []);
   return {
     card,
-    persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : persona.kind === 'none' ? { name: username, description: '' } : null,
+    persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : null,
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
     lore: chat.character === null ? [] : store.children('lore', chat.character),
@@ -55,11 +55,20 @@ export function scopeOf({ store, username }: Reader, id: string | null, chat: Ch
       return { id: version.id, role: message.role, text: version.text, time: version.at };
     }),
     greeting: card && greetingOf(card, messages),
-    toggle: toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}),
+    toggle: togglesOf(store, chat, prompt).value,
     model: 'kind' in route ? null : botModel(route),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     pick: `${chat.character ?? ''}:${id ?? ''}`,
   };
+}
+
+export type ChatToggleSet = { declared: Toggle[]; value: (key: string) => string | null };
+
+// A chat's toggles and their values (design §4.2): what its turns send with, and what its toggle panel lists.
+export function togglesOf(store: Session['store'], chat: Chat, prompt: PromptChoice): ChatToggleSet {
+  const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
+  const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], character ? readToggles(character.card.toggles).toggles : []);
+  return { declared, value: toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
 }
 
 // A chat's greeting is its first message when that is an assistant message the model did not write (tech-spec

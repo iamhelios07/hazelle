@@ -14,19 +14,25 @@
   font-family: var(--font-mono);
 }
 
+.aside {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .titled {
   display: inline-flex;
   align-items: center;
   gap: var(--space-8);
 }
 
-.withAside {
+.withControl {
   display: flex;
   align-items: center;
   gap: var(--space-8);
 }
 
-.aside {
+.control {
   flex-shrink: 0;
 }
 

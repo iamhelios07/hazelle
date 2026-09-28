@@ -13,6 +13,7 @@
 
 .sm {
   height: var(--control-chip);
+  white-space: nowrap;
   padding: 0 var(--space-12);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -67,6 +68,14 @@
 }
 
 /* At a control's size (되돌리기) a link fills on hover; inside a line of text (xs, 다시 받기) it never fills. */
+.danger {
+  color: var(--color-warn);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--color-warn-bg);
+}
+
 .link {
   padding: 0 var(--space-12);
   border: 0;

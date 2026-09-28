@@ -10,11 +10,13 @@ type Props = {
   onBlur: () => void;
   placeholder: string;
   hint: string;
+  // Before the hint, such as the persona and 노트 of the chat.
+  tools?: ReactNode;
   actions: ReactNode;
   inputRef: RefObject<HTMLTextAreaElement | null>;
 };
 
-export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placeholder, hint, actions, inputRef }: Props) {
+export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placeholder, hint, tools, actions, inputRef }: Props) {
   const id = useId();
   useAutosize(inputRef, value);
   return (
@@ -35,6 +37,7 @@ export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placehol
         onBlur={onBlur}
       />
       <div className={styles.bar}>
+        {tools}
         <span className={styles.hint}>{hint}</span>
         {actions}
       </div>
