@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { Connection } from '../connectors/types';
 import { chatTitle, fold, preview, type Chat, type Entry, type Message } from '../runtime/chat';
 import { SETTINGS_ID, type Settings } from '../runtime/docs';
-import { shelve, type Avatar, type Character, type Folder } from '../runtime/library';
+import { nest, shelve, type Avatar, type Character, type Folder } from '../runtime/library';
 import type { ObjectStore, Stored } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 
@@ -91,7 +91,7 @@ export function useLibrary() {
   return useMemo(
     () => ({
       ...shelve(store.list<Character>('character'), store.list<Avatar>('avatar'), chats),
-      folders: store.list<Folder>('folder').sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko')),
+      folders: nest(store.list<Folder>('folder')),
     }),
     [store, version, chats],
   );

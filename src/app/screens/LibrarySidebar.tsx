@@ -1,6 +1,6 @@
 import { ChevronLeft, Import, LayoutGrid, Lock, LogOut, MessageSquare, Plug, Plus, Settings } from 'lucide-react';
-import { useState } from 'react';
-import type { Shelf } from '../../runtime/library';
+import { useState, type ReactNode } from 'react';
+import { holds, shownFolders, type FolderTree, type Shelf } from '../../runtime/library';
 import { navigate, usePath } from '../router';
 import { useLibrary, useTurn, type ChatItem } from '../store';
 import { useToast } from '../toast';
@@ -200,7 +200,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse, username, onLock, 
   }
 
   const words = query.trim().toLowerCase();
-  const filed = new Set(folders.map((folder) => folder.id));
+  const filed = shownFolders(folders);
   const row = (shelf: Shelf<ChatItem>) => {
     const latest = shelf.chats[0];
     return (
@@ -216,6 +216,18 @@ export function LibrarySidebar({ page, collapsed, onCollapse, username, onLock, 
       />
     );
   };
+  const folderRow = (folder: FolderTree): ReactNode => (
+    <FolderRow
+      key={folder.id}
+      name={folder.value.name}
+      count={characters.filter(({ character }) => holds(folder, character)).length}
+      open={openFolders.includes(folder.id)}
+      onToggle={() => toggleFolder(folder.id)}
+    >
+      {folder.children.map(folderRow)}
+      {characters.filter(({ character }) => character.folder === folder.id).map(row)}
+    </FolderRow>
+  );
   const found = characters.filter(({ character }) => `${character.card.name} ${character.card.nickname ?? ''}`.toLowerCase().includes(words));
 
   return (
@@ -240,14 +252,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse, username, onLock, 
       {!empty && words && found.length === 0 && <SideNote>“{query.trim()}” 검색 결과가 없어요.</SideNote>}
       {!empty && !words && (
         <>
-          {folders.map((folder) => {
-            const members = characters.filter(({ character }) => character.folder === folder.id);
-            return (
-              <FolderRow key={folder.id} name={folder.value.name} count={members.length} open={openFolders.includes(folder.id)} onToggle={() => toggleFolder(folder.id)}>
-                {members.map(row)}
-              </FolderRow>
-            );
-          })}
+          {folders.map(folderRow)}
           {characters.filter(({ character }) => !character.folder || !filed.has(character.folder)).map(row)}
           {row(none)}
         </>

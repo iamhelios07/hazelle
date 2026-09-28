@@ -8,8 +8,10 @@ export type LoreFolder = { id: string; name: string };
 // Kind `lore`, whose parent is the character. folder is the id of one of its loreFolders.
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 
-// One level deep (design F6).
-export type Folder = { name: string };
+// Two levels deep (design F6): a subfolder's parent is the top folder it sits in, and top folders have
+// none. It lives in the sealed body, not the object's parent, so the server never sees the tree.
+export type Folder = { name: string; parent?: string };
+export type FolderTree = Stored<Folder> & { children: FolderTree[] };
 
 // Kind `avatar`, whose parent is the character: the original picture is the sealed blob that has the
 // object's id, and thumb is a small copy that syncs with the objects, so lists need no blob fetch.
@@ -41,3 +43,19 @@ export function shelve<C extends ChatLike>(characters: Stored<Character>[], avat
     none: { id: null, character: null, face: null, chats: loose, order: loose[0]?.order ?? 0 },
   };
 }
+
+// Top folders with their subfolders, both by name. A subfolder whose top folder is gone (removed on
+// another device meanwhile) stands at the top instead of vanishing.
+export function nest(folders: Stored<Folder>[]): FolderTree[] {
+  const sorted = [...folders].sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
+  const ids = new Set(sorted.map((folder) => folder.id));
+  return sorted
+    .filter(({ value }) => value.parent === undefined || !ids.has(value.parent))
+    .map((top) => ({ ...top, children: sorted.filter(({ value }) => value.parent === top.id).map((child) => ({ ...child, children: [] })) }));
+}
+
+// Every folder id the tree shows. A character whose folder is not among them sits in no folder.
+export const shownFolders = (tree: FolderTree[]) => new Set(tree.flatMap((top) => [top.id, ...top.children.map((child) => child.id)]));
+
+// A folder holds the characters in it and in its subfolders.
+export const holds = (folder: FolderTree, character: Character) => character.folder === folder.id || folder.children.some((child) => child.id === character.folder);

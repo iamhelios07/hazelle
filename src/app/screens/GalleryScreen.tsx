@@ -1,8 +1,7 @@
-import { FolderInput, FolderPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { FolderInput, FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiFailure } from '../../runtime/api';
-import type { Character, Folder } from '../../runtime/library';
-import type { Stored } from '../../runtime/store';
+import { holds, shownFolders, type Character, type Folder, type FolderTree } from '../../runtime/library';
 import { navigate } from '../router';
 import { useLibrary, useStore } from '../store';
 import { useToast } from '../toast';
@@ -32,7 +31,8 @@ import { ago } from './time';
 
 // 'all', 'loose' (in no folder), or a folder's id.
 type Filter = string;
-type Naming = { id: string | null; name: string };
+type Naming = { id: string | null; name: string; parent?: FolderTree };
+type Placement = { id: string; folder: string | null };
 
 // 캐릭터 둘러보기 (design F6): every character as a face, filtered by folder, and where folders are
 // made, renamed, emptied and filled.
@@ -49,12 +49,14 @@ export function GalleryScreen() {
   const [naming, setNaming] = useState<Naming | null>(null);
   const [menu, setMenu] = useState<'move' | 'folder' | null>(null);
 
-  const filed = new Set(folders.map((folder) => folder.id));
-  const inFolder = (folder: string | null) => (folder && filed.has(folder) ? folder : null);
-  const folder = folders.find((candidate) => candidate.id === filter) ?? null;
+  const everyFolder = folders.flatMap((top) => [top, ...top.children]);
+  const filed = shownFolders(folders);
+  const folder = everyFolder.find((candidate) => candidate.id === filter) ?? null;
+  // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
+  const top = folder && (folders.find((candidate) => candidate === folder || candidate.children.includes(folder)) ?? null);
   const words = query.trim().toLowerCase();
   const shown = characters
-    .filter(({ character }) => filter === 'all' || (filter === 'loose' ? inFolder(character.folder) === null : character.folder === filter))
+    .filter(({ character }) => filter === 'all' || (filter === 'loose' ? character.folder === null || !filed.has(character.folder) : folder !== null && holds(folder, character)))
     .filter(({ character }) => `${character.card.name} ${character.card.nickname ?? ''}`.toLowerCase().includes(words));
   if (byName) shown.sort((a, b) => a.character.card.name.localeCompare(b.character.card.name, 'ko'));
 
@@ -63,8 +65,8 @@ export function GalleryScreen() {
   };
 
   // Whether every character moved; a failure is shown and stops the rest.
-  async function move(ids: string[], to: string | null): Promise<boolean> {
-    for (const id of ids) {
+  async function place(moves: Placement[]): Promise<boolean> {
+    for (const { id, folder: to } of moves) {
       const saved = await store.save<Character>('character', id, (current) => ({ ...current!, folder: to }));
       if (!saved.ok) {
         saveFailed(saved);
@@ -74,38 +76,49 @@ export function GalleryScreen() {
     return true;
   }
 
-  async function saveFolder({ id, name }: Naming) {
+  async function saveFolder({ id, name, parent }: Naming) {
     const trimmed = name.trim();
     if (!trimmed) return;
     setNaming(null);
-    const saved = await store.save<Folder>('folder', id ?? crypto.randomUUID(), () => ({ name: trimmed }));
+    const saved = await store.save<Folder>('folder', id ?? crypto.randomUUID(), (current) =>
+      current ? { ...current, name: trimmed } : parent ? { name: trimmed, parent: parent.id } : { name: trimmed },
+    );
     if (!saved.ok) saveFailed(saved);
   }
 
-  // Its characters leave it first, so no character points at a folder that is gone. 되돌리기 puts
-  // the folder back under its id and its characters back in it.
-  async function removeFolder(target: Stored<Folder>) {
+  // A folder goes with the folders inside it, and its characters first move up a level, so no
+  // character points at a folder that is gone. 되돌리기 puts the folders back under their ids and every
+  // character back where it was.
+  async function removeFolder(target: FolderTree) {
     setMenu(null);
-    const members = characters.filter(({ character }) => character.folder === target.id).map(({ id }) => id);
-    if (!(await move(members, null))) return;
-    const removed = await store.remove(target.id);
-    if (!removed.ok) return saveFailed(removed);
-    setFilter('all');
+    const up = folders.find((candidate) => candidate.children.includes(target)) ?? null;
+    const members = characters.filter(({ character }) => holds(target, character)).map(({ id, character }) => ({ id, folder: character.folder }));
+    if (!(await place(members.map(({ id }) => ({ id, folder: up?.id ?? null }))))) return;
+    for (const gone of [...target.children, target]) {
+      const removed = await store.remove(gone.id);
+      if (!removed.ok) return saveFailed(removed);
+    }
+    setFilter(up?.id ?? 'all');
+    const inside = target.children.length ? `와 안의 폴더 ${target.children.length}개` : '';
     toast({
-      message: `‘${target.value.name}’ 폴더를 지웠어요. 캐릭터는 그대로 있어요.`,
-      action: {
-        label: '되돌리기',
-        onClick: () =>
-          void store.save<Folder>('folder', target.id, () => target.value).then((saved) => (saved.ok ? void move(members, target.id) : saveFailed(saved))),
-      },
+      message: `‘${target.value.name}’ 폴더${inside}를 지웠어요. 캐릭터는 ${up ? `‘${up.value.name}’ 폴더로` : '폴더 밖으로'} 옮겼어요.`,
+      action: { label: '되돌리기', onClick: () => void restore([target, ...target.children], members) },
     });
+  }
+
+  async function restore(gone: FolderTree[], members: Placement[]) {
+    for (const { id, value } of gone) {
+      const saved = await store.save<Folder>('folder', id, () => value);
+      if (!saved.ok) return saveFailed(saved);
+    }
+    await place(members);
   }
 
   async function movePicked(to: string | null) {
     if (!picked) return;
     setMenu(null);
-    if (!(await move([...picked], to))) return;
-    const name = folders.find((candidate) => candidate.id === to)?.value.name;
+    if (!(await place([...picked].map((id) => ({ id, folder: to }))))) return;
+    const name = everyFolder.find((candidate) => candidate.id === to)?.value.name;
     toast({ message: to ? `${picked.size}명을 ‘${name}’ 폴더로 옮겼어요.` : `${picked.size}명을 폴더에서 뺐어요.` });
     setPicked(null);
   }
@@ -130,41 +143,67 @@ export function GalleryScreen() {
             {picked ? '고르기 끝' : '골라서 옮기기'}
           </Button>
         </Row>
-        <Row>
-          <Tabs label="폴더">
-            <Tab label="전체" count={characters.length} current={filter === 'all'} onClick={() => setFilter('all')} />
-            {folders.map((candidate) => (
-              <Tab
-                key={candidate.id}
-                label={candidate.value.name}
-                count={characters.filter(({ character }) => character.folder === candidate.id).length}
-                current={filter === candidate.id}
-                onClick={() => setFilter(candidate.id)}
-              />
-            ))}
-            {folders.length > 0 && <Tab label="폴더 없음" current={filter === 'loose'} onClick={() => setFilter('loose')} />}
-          </Tabs>
-          <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => setNaming({ id: null, name: '' })} />
-          {folder && (
-            <Popover
-              open={menu === 'folder'}
-              onClose={() => setMenu(null)}
-              place="below-end"
-              label={`${folder.value.name} 폴더`}
-              trigger={<IconButton icon={MoreHorizontal} label="폴더 관리" size="sm" expanded={menu === 'folder'} onClick={() => setMenu(menu === 'folder' ? null : 'folder')} />}
-            >
-              <MenuItem
-                icon={Pencil}
-                label="이름 바꾸기"
-                onClick={() => {
-                  setMenu(null);
-                  setNaming({ id: folder.id, name: folder.value.name });
-                }}
-              />
-              <MenuItem icon={Trash2} label="폴더 지우기" tone="warn" onClick={() => void removeFolder(folder)} />
-            </Popover>
+        <Stack gap={12}>
+          <Row>
+            <Tabs label="폴더">
+              <Tab label="전체" count={characters.length} current={filter === 'all'} onClick={() => setFilter('all')} />
+              {folders.map((candidate) => (
+                <Tab
+                  key={candidate.id}
+                  label={candidate.value.name}
+                  count={characters.filter(({ character }) => holds(candidate, character)).length}
+                  current={candidate === top}
+                  onClick={() => setFilter(candidate.id)}
+                />
+              ))}
+              {folders.length > 0 && <Tab label="폴더 없음" current={filter === 'loose'} onClick={() => setFilter('loose')} />}
+            </Tabs>
+            <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => setNaming({ id: null, name: '' })} />
+            {folder && (
+              <Popover
+                open={menu === 'folder'}
+                onClose={() => setMenu(null)}
+                place="below-end"
+                label={`${folder.value.name} 폴더`}
+                trigger={<IconButton icon={MoreHorizontal} label="폴더 관리" size="sm" expanded={menu === 'folder'} onClick={() => setMenu(menu === 'folder' ? null : 'folder')} />}
+              >
+                <MenuItem
+                  icon={Pencil}
+                  label="이름 바꾸기"
+                  onClick={() => {
+                    setMenu(null);
+                    setNaming({ id: folder.id, name: folder.value.name });
+                  }}
+                />
+                {folder === top && (
+                  <MenuItem
+                    icon={SubfolderIcon}
+                    label="안에 폴더 만들기"
+                    onClick={() => {
+                      setMenu(null);
+                      setNaming({ id: null, name: '', parent: folder });
+                    }}
+                  />
+                )}
+                <MenuItem icon={Trash2} label="폴더 지우기" tone="warn" onClick={() => void removeFolder(folder)} />
+              </Popover>
+            )}
+          </Row>
+          {top && top.children.length > 0 && (
+            <Tabs label={`${top.value.name} 안의 폴더`}>
+              <Tab label={`${top.value.name} 전체`} current={filter === top.id} onClick={() => setFilter(top.id)} />
+              {top.children.map((child) => (
+                <Tab
+                  key={child.id}
+                  label={child.value.name}
+                  count={characters.filter(({ character }) => holds(child, character)).length}
+                  current={filter === child.id}
+                  onClick={() => setFilter(child.id)}
+                />
+              ))}
+            </Tabs>
           )}
-        </Row>
+        </Stack>
         {shown.length > 0 ? (
           <CardGrid label="캐릭터">
             {shown.map((shelf) => {
@@ -202,16 +241,19 @@ export function GalleryScreen() {
               </Button>
             }
           >
-            {folders.map((candidate) => (
-              <MenuItem key={candidate.id} label={candidate.value.name} onClick={() => void movePicked(candidate.id)} />
-            ))}
+            {folders.flatMap((candidate) => [
+              <MenuItem key={candidate.id} label={candidate.value.name} onClick={() => void movePicked(candidate.id)} />,
+              ...candidate.children.map((child) => (
+                <MenuItem key={child.id} label={`${candidate.value.name} › ${child.value.name}`} onClick={() => void movePicked(child.id)} />
+              )),
+            ])}
             <MenuDivider />
             <MenuItem label="폴더에서 빼기" onClick={() => void movePicked(null)} />
           </Popover>
         </SelectionBar>
       )}
       {naming && (
-        <NameDialog title={naming.id ? '폴더 이름 바꾸기' : '새 폴더'} value={naming.name} onSave={(name) => void saveFolder({ ...naming, name })} onClose={() => setNaming(null)} />
+        <NameDialog title={naming.id ? '폴더 이름 바꾸기' : naming.parent ? `‘${naming.parent.value.name}’ 안에 새 폴더` : '새 폴더'} value={naming.name} onSave={(name) => void saveFolder({ ...naming, name })} onClose={() => setNaming(null)} />
       )}
     </Screen>
   );

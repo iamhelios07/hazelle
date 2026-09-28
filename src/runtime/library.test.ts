@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
-import { shelve, type Avatar, type Character } from './library';
+import { holds, nest, shelve, shownFolders, type Avatar, type Character, type Folder } from './library';
 import type { Stored } from './store';
 
 const character = (id: string, rev: number): Stored<Character> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: null, loreFolders: [] } });
@@ -19,5 +19,22 @@ describe('shelve', () => {
     ]);
     expect(characters.find((shelf) => shelf.id === 'b')!.face).toBe('data:thumb');
     expect(none.chats.map((item) => item.id)).toEqual(['c3']);
+  });
+});
+
+describe('nest', () => {
+  it('puts subfolders under their top folder by name, and lifts one whose top folder is gone', () => {
+    const folder = (id: string, name: string, parent?: string): Stored<Folder> => ({ id, kind: 'folder', parent: null, rev: 1, value: parent ? { name, parent } : { name } });
+    const tree = nest([folder('k', '기사단', 'f'), folder('f', '판타지'), folder('m', '마법사', 'f'), folder('o', '고아', 'gone'), folder('d', '데일리')]);
+    expect(tree.map((top) => [top.id, top.children.map((child) => child.id)])).toEqual([
+      ['o', []],
+      ['d', []],
+      ['f', ['k', 'm']],
+    ]);
+    expect([...shownFolders(tree)].sort()).toEqual(['d', 'f', 'k', 'm', 'o']);
+    const inKnights = character('a', 1).value;
+    inKnights.folder = 'k';
+    expect(holds(tree[2]!, inKnights)).toBe(true);
+    expect(holds(tree[2]!.children[1]!, inKnights)).toBe(false);
   });
 });
