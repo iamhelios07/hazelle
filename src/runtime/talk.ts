@@ -52,7 +52,8 @@ export async function addGreeting(store: ObjectStore, chat: string, greetings: s
     ids[index]!,
     index === 0 ? { type: 'message', role: 'assistant', at, text, receipt: null } : { type: 'version', message: first, replaces: null, edit: false, at, text, receipt: null },
   ]);
-  if (selected > 0) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
+  // Adding a version selects it, so without a select the chat would open on the last greeting.
+  if (selected !== greetings.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
   for (const [id, entry] of entries) {
     const saved = await store.save<Entry>('entry', id, () => entry, chat);
     if (!saved.ok) return saved;
