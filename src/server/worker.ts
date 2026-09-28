@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { accounts } from './accounts';
+import { blobs } from './blobs';
 import { fail, type AppEnv } from './http';
 import { objects } from './objects';
 import { createRelay } from './relay';
@@ -10,11 +11,14 @@ const relay = createRelay(fetch);
 
 const app = new Hono<AppEnv>().basePath('/api');
 
-// Another site cannot send a JSON content type here without a CORS preflight, which this API never
+// Another site cannot send either content type here without a CORS preflight, which this API never
 // answers. That makes this a second CSRF guard beside SameSite=Strict.
+const BODY_TYPES = ['application/json', 'application/octet-stream'];
+
 app.use(async (c, next) => {
-  if (c.req.method !== 'GET' && !c.req.header('content-type')?.startsWith('application/json')) {
-    return fail(c, 415, 'not-json');
+  const type = c.req.header('content-type');
+  if (c.req.method !== 'GET' && !BODY_TYPES.some((allowed) => type?.startsWith(allowed))) {
+    return fail(c, 415, 'bad-content-type');
   }
   await next();
 });
@@ -22,6 +26,7 @@ app.use(async (c, next) => {
 app.route('/', accounts);
 app.route('/vault', vaults);
 app.route('/objects', objects);
+app.route('/blobs', blobs);
 app.post('/relay', requireSession, (c) => relay(c.req.raw));
 app.notFound((c) => fail(c, 404, 'not-found'));
 

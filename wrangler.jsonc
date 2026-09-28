@@ -18,5 +18,11 @@
       "database_id": "abe6fd8a-7c52-4d19-aa8a-b18065dfee1e",
       "migrations_dir": "migrations"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BLOBS",
+      "bucket_name": "risu-alpha-blobs"
+    }
   ]
 }
