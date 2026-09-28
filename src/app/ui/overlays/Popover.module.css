@@ -1,0 +1,131 @@
+.anchor {
+  position: relative;
+  display: flex;
+}
+
+.popover {
+  composes: dropIn from '../foundation/motion.module.css';
+  position: absolute;
+  z-index: var(--layer-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: var(--popover-max-height);
+  padding: var(--space-6);
+  overflow-y: auto;
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+  translate: var(--nudge, 0) 0;
+}
+
+.md {
+  width: var(--popover-width);
+}
+
+.lg {
+  width: calc(var(--popover-width) + var(--space-20));
+}
+
+.below-start {
+  top: calc(100% + var(--space-8));
+  left: 0;
+}
+
+.below-end {
+  top: calc(100% + var(--space-8));
+  right: 0;
+}
+
+.above-start {
+  bottom: calc(100% + var(--space-12));
+  left: 0;
+}
+
+.above-end {
+  bottom: calc(100% + var(--space-12));
+  right: 0;
+}
+
+.beside {
+  top: 0;
+  left: calc(100% + var(--space-8));
+}
+
+/* A popover never runs off a phone screen. */
+@media (max-width: 959px) {
+  .md,
+  .lg {
+    width: min(var(--popover-width), calc(100vw - 2 * var(--popover-edge)));
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-height: var(--control-compact);
+  padding: var(--space-6) var(--space-10);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.item:disabled {
+  color: var(--color-text-faint);
+  cursor: default;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.warn {
+  color: var(--color-warn);
+}
+
+.text {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub,
+.hint {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.check {
+  display: flex;
+  color: var(--color-accent);
+}
+
+.heading {
+  padding: var(--space-8) var(--space-10) var(--space-2);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.note {
+  padding: var(--space-12) var(--space-10);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}

@@ -1,0 +1,79 @@
+.scrim {
+  composes: fadeIn from '../foundation/motion.module.css';
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+  background: var(--color-scrim);
+}
+
+.dialog {
+  width: var(--dialog-width);
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-14);
+  padding: var(--space-18) var(--space-20) var(--space-20) var(--space-20);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.note {
+  margin-top: calc(var(--space-8) * -1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.shortcuts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shortcut {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: var(--control-compact);
+  border-bottom: var(--border-thin) solid var(--color-surface-raised);
+}
+
+.action {
+  flex-grow: 1;
+  font-size: var(--text-sm);
+}
+
+.keys {
+  margin: 0;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.key {
+  min-width: var(--space-14);
+  padding: var(--space-2) var(--space-6);
+  border: var(--border-thin) solid var(--color-border);
+  border-bottom-width: var(--border-thick);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
+}

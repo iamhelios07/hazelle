@@ -1,0 +1,35 @@
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--chip-max-width);
+  height: var(--control-chip);
+  padding: 0 var(--space-8) 0 var(--space-12);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.chip:hover,
+.chip[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+}
+
+.chip svg {
+  color: var(--color-text-muted);
+}
+
+.label {
+  composes: ellipsis from '../foundation/a11y.module.css';
+}
+
+/* On a phone the chip leaves room for the title beside it. */
+@media (max-width: 959px) {
+  .chip {
+    max-width: var(--chip-max-width-narrow);
+  }
+}

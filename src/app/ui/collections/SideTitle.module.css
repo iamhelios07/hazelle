@@ -1,0 +1,36 @@
+.sideTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.titleBox {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-md);
+}
+
+.titleButton {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.titleButton:hover {
+  background: var(--color-surface);
+}
+
+.heading {
+  composes: ellipsis from '../foundation/a11y.module.css';
+  flex-grow: 1;
+  min-width: 0;
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}

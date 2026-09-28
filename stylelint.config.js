@@ -1,4 +1,4 @@
-// Every raw design value lives in src/app/ui/tokens.css. Elsewhere, these properties must use its
+// Every raw design value lives in src/app/ui/foundation/tokens.css. Elsewhere, these properties must use its
 // custom properties, so a style change is made once (src/app/ui/README.md).
 const TOKEN_PROPERTIES = [
   '/color$/',
@@ -16,7 +16,13 @@ const TOKEN_PROPERTIES = [
   'column-gap',
   '/^padding/',
   '/^margin/',
+  '/^border(-(top|right|bottom|left))?-width$/',
+  'outline-width',
+  'z-index',
+  '/^(min-|max-)?(width|height)$/',
 ];
+
+const KEYWORDS = ['0', 'auto', 'inherit', 'transparent', 'currentColor', 'none'];
 
 export default {
   plugins: ['stylelint-declaration-strict-value'],
@@ -24,17 +30,24 @@ export default {
     'color-no-hex': true,
     'color-named': 'never',
     'function-disallowed-list': ['rgb', 'rgba', 'hsl', 'hsla'],
+    // Timings are matched as text, not in TOKEN_PROPERTIES: the plugin's shorthand expansion misses a time written
+    // first (`1s spin`) or listed after a var (`opacity 120ms, color var(--duration-fast)`).
+    'declaration-property-value-disallowed-list': { '/^(transition|animation)/': ['/(^|[\\s,(])-?[\\d.]+m?s\\b/'] },
     'scale-unlimited/declaration-strict-value': [
       TOKEN_PROPERTIES,
       {
         expandShorthand: true,
-        ignoreValues: ['0', 'auto', 'inherit', 'transparent', 'currentColor', 'none'],
+        ignoreValues: {
+          '': KEYWORDS,
+          // A share of the parent or the whole screen is layout, not a size from the design.
+          '/^(min-|max-)?(width|height)$/': [...KEYWORDS, '/%$/', '100dvh'],
+        },
       },
     ],
   },
   overrides: [
     {
-      files: ['src/app/ui/tokens.css'],
+      files: ['src/app/ui/foundation/tokens.css'],
       rules: {
         'color-no-hex': null,
         'function-disallowed-list': null,

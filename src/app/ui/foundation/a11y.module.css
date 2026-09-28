@@ -1,0 +1,16 @@
+/* The 1px box is the visually hidden technique itself, not a size from the design. */
+.srOnly {
+  position: absolute;
+  /* stylelint-disable scale-unlimited/declaration-strict-value */
+  width: 1px;
+  height: 1px;
+  /* stylelint-enable scale-unlimited/declaration-strict-value */
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,29 @@
+.callout {
+  display: flex;
+  gap: var(--space-12);
+  padding: var(--space-14) var(--space-16);
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+
+.warn {
+  background: var(--color-warn-bg);
+  border-color: var(--color-warn-border);
+  color: var(--color-warn-text);
+}
+
+.warn .icon {
+  color: var(--color-warn);
+}
+
+.success {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success);
+}
+
+.icon {
+  display: flex;
+}

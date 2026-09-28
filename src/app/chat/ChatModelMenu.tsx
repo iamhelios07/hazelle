@@ -4,7 +4,7 @@ import { recentModels } from '../../model/chat';
 import { noResults } from '../common/search';
 import { useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
-import { ChipButton, MenuDivider, MenuHeading, MenuItem, MenuNote, Popover, SearchField } from '../ui';
+import { ChipButton, Divider, MenuHeading, MenuItem, MenuNote, Popover, SearchField } from '../ui';
 
 type Props = {
   open: boolean;
@@ -93,7 +93,7 @@ export function ChatModelMenu({ open, onOpen, current, label, onPick }: Props) {
           )}
         </>
       )}
-      <MenuDivider />
+      <Divider variant="menu" />
       <MenuItem tone="muted" label="연결에서 모델 더 별표하기" onClick={() => navigate({ kind: 'connections' })} />
     </Popover>
   );

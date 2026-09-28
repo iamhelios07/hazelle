@@ -6,7 +6,7 @@ import { describeReplyError } from '../common/failure';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, pressed, SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, EditBox, Failure, Marker, Message as Row, Prose, Switcher, Tool, ToolDivider, Waiting } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, Marker, Prose, StoryMessage, Switcher, Tool, Waiting } from '../ui';
 import type { ChatActions } from './useChat';
 
 type Props = {
@@ -141,13 +141,13 @@ export function ChatMessage(props: Props) {
       {!failed && <Tool icon={Pencil} label="수정" onClick={() => actions.edit(message, version.text)} />}
       {!empty && <Tool icon={Copy} label="복사" onClick={() => actions.copy(text)} />}
       {!mine && <Tool icon={Info} label="답장 정보" onClick={() => actions.info(message.id)} />}
-      <ToolDivider />
+      <Divider variant="tools" />
       <Tool icon={Trash2} label="삭제 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
     </>
   );
 
   return (
-    <Row
+    <StoryMessage
       avatar={mine ? <Avatar face={username} tone="you" /> : character ? <Avatar face={character.name} image={character.image} /> : <Avatar face={Bot} />}
       name={mine ? username : (character?.name ?? receipt?.modelName ?? modelName ?? '모델')}
       time={timeOfDay(version.at)}
@@ -158,6 +158,6 @@ export function ChatMessage(props: Props) {
       onTap={() => actions.pin(message)}
     >
       {body}
-    </Row>
+    </StoryMessage>
   );
 }

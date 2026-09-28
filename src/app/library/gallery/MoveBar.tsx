@@ -1,5 +1,5 @@
 import { useLibrary } from '../../session';
-import { Button, MenuDivider, MenuItem, Popover, SelectionBar } from '../../ui';
+import { Button, Divider, MenuItem, Popover, SelectionBar } from '../../ui';
 
 type Props = {
   count: number;
@@ -33,7 +33,7 @@ export function MoveBar({ count, onCancel, onMove, menuOpen, onMenu }: Props) {
           <MenuItem key={candidate.id} label={candidate.value.name} onClick={() => onMove(candidate.id)} />,
           ...candidate.children.map((child) => <MenuItem key={child.id} label={`${candidate.value.name} › ${child.value.name}`} onClick={() => onMove(child.id)} />),
         ])}
-        <MenuDivider />
+        <Divider variant="menu" />
         <MenuItem label="폴더에서 빼기" onClick={() => onMove(null)} />
       </Popover>
     </SelectionBar>

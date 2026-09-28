@@ -1,7 +1,7 @@
 import { MessageSquare, MoreHorizontal, PanelRight } from 'lucide-react';
 import { NameDialog } from '../common/NameDialog';
 import { SHORTCUT_LIST } from '../shortcuts';
-import { Avatar, ChatTitle, Dialog, IconButton, MenuDivider, MenuItem, Popover, Shortcuts } from '../ui';
+import { Avatar, ChatTitle, Dialog, Divider, IconButton, MenuItem, Popover, Shortcuts } from '../ui';
 import { ChatModelMenu } from './ChatModelMenu';
 import type { OpenChat } from './useChat';
 
@@ -31,7 +31,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <MenuItem label="단축키" onClick={() => actions.openDialog('keys')} />
         {item && (
           <>
-            <MenuDivider />
+            <Divider variant="menu" />
             <MenuItem
               label="이 채팅 삭제"
               tone="warn"
