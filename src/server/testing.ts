@@ -36,3 +36,15 @@ export async function testApp() {
 }
 
 export const sessionCookie = (response: Response) => response.headers.get('set-cookie')!.split(';')[0]!;
+
+// A proof as the client would send it: 32 bytes in base64. The server never learns how it was derived.
+export const proof = (seed: string) => btoa(seed.repeat(32).slice(0, 32));
+
+export const signupBody = (username = 'jin') => ({
+  accountId: crypto.randomUUID(),
+  username,
+  passwordProof: proof('password'),
+  recoveryProof: proof('recovery'),
+  passwordWrap: 'cGFzc3dvcmQgd3JhcA==',
+  recoveryWrap: 'cmVjb3Zlcnkgd3JhcA==',
+});

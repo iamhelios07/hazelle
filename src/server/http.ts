@@ -2,6 +2,9 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 export type Account = { id: string; username: string };
+// Account and object ids are UUIDs made by the client.
+export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 export type AppEnv = { Bindings: Env; Variables: { account: Account } };
 
 export function fail(c: Context, status: ContentfulStatusCode, error: string, detail: Record<string, unknown> = {}) {

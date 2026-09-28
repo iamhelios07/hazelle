@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { sessionCookie, testApp } from './testing';
+import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -14,7 +14,7 @@ const B = '22222222-2222-4222-8222-222222222222';
 type Page = { changes: { id: string; kind: string; parent: string | null; rev: number; body: string | null }[]; cursor: number; more: boolean };
 
 async function signedIn() {
-  return sessionCookie(await t.post('signup', { username: 'jin', password: 'correct horse' }));
+  return sessionCookie(await t.post('signup', signupBody()));
 }
 
 async function sync(cookie: string, since = 0): Promise<Page> {

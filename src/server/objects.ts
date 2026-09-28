@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
-import { fail, readObject, type AppEnv } from './http';
+import { fail, ID, readObject, type AppEnv } from './http';
 import { requireSession } from './session';
 
-const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const KIND = /^[a-z][a-z-]{0,31}$/;
 // D1 caps a row at 2 MB. Large things are split into objects before they get here (tech-spec §5).
 const MAX_BODY_LENGTH = 1_500_000;

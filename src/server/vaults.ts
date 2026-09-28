@@ -1,57 +1,52 @@
 import { Hono } from 'hono';
+import { checkProof, findAccount, hashProof, readMethod, readProof } from './credentials';
 import { fail, readObject, type AppEnv } from './http';
 import { requireSession } from './session';
 
 // The server stores the wrapped keys without understanding them (tech-spec §4). The cap only keeps
-// rows small: a real wrap is under 100 characters and the KDF parameters under 200.
-const MAX_FIELD_LENGTH = 1024;
+// rows small: a real wrap is 80 characters.
+const MAX_WRAP_LENGTH = 1024;
 
 export const vaults = new Hono<AppEnv>();
 
 vaults.use(requireSession);
 
-// No GET route here: GET /api/session carries the record, so a page load is one request (tech-spec §4).
+// No GET route here: GET /api/session and POST /api/login carry the record (tech-spec §4).
 export async function readVault(db: D1Database, accountId: string) {
   const row = await db
-    .prepare('SELECT kdf, passphrase_wrap, recovery_wrap FROM vaults WHERE account_id = ?')
+    .prepare('SELECT password_wrap, recovery_wrap FROM vaults WHERE account_id = ?')
     .bind(accountId)
-    .first<{ kdf: string; passphrase_wrap: string; recovery_wrap: string }>();
-  return row && { kdf: JSON.parse(row.kdf) as unknown, passphraseWrap: row.passphrase_wrap, recoveryWrap: row.recovery_wrap };
+    .first<{ password_wrap: string; recovery_wrap: string }>();
+  return row && { passwordWrap: row.password_wrap, recoveryWrap: row.recovery_wrap };
 }
 
-vaults.post('/', async (c) => {
-  const body = await readObject(c);
-  const kdf = readKdf(body?.kdf);
-  const passphraseWrap = readField(body?.passphraseWrap);
-  const recoveryWrap = readField(body?.recoveryWrap);
-  if (!kdf || !passphraseWrap || !recoveryWrap) return fail(c, 400, 'bad-input');
-  const now = Date.now();
-  const result = await c.env.DB.prepare(
-    'INSERT INTO vaults (account_id, kdf, passphrase_wrap, recovery_wrap, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (account_id) DO NOTHING',
-  )
-    .bind(c.get('account').id, kdf, passphraseWrap, recoveryWrap, now, now)
-    .run();
-  if (result.meta.changes === 0) return fail(c, 409, 'vault-exists');
-  return c.json({}, 201);
-});
+export function insertVault(db: D1Database, accountId: string, vault: { passwordWrap: string; recoveryWrap: string; recoveryHash: string }, now: number) {
+  return db
+    .prepare('INSERT INTO vaults (account_id, password_wrap, recovery_wrap, recovery_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(accountId, vault.passwordWrap, vault.recoveryWrap, vault.recoveryHash, now, now);
+}
 
-vaults.put('/passphrase', async (c) => {
+export function readWrap(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_WRAP_LENGTH ? value : null;
+}
+
+// A new password replaces the login hash and the password wrap together. It needs the current password
+// or the recovery key, so a stolen session alone cannot lock the owner out.
+vaults.put('/password', async (c) => {
   const body = await readObject(c);
-  const kdf = readKdf(body?.kdf);
-  const passphraseWrap = readField(body?.passphraseWrap);
-  if (!kdf || !passphraseWrap) return fail(c, 400, 'bad-input');
-  const result = await c.env.DB.prepare('UPDATE vaults SET kdf = ?, passphrase_wrap = ?, updated_at = ? WHERE account_id = ?')
-    .bind(kdf, passphraseWrap, Date.now(), c.get('account').id)
-    .run();
-  if (result.meta.changes === 0) return fail(c, 404, 'no-vault');
+  const method = readMethod(body?.method);
+  const proof = readProof(body?.proof);
+  const passwordProof = readProof(body?.passwordProof);
+  const passwordWrap = readWrap(body?.passwordWrap);
+  if (!method || !proof || !passwordProof || !passwordWrap) return fail(c, 400, 'bad-input');
+  const db = c.env.DB;
+  const id = c.get('account').id;
+  const refused = await checkProof(c, (await findAccount(db, 'id', id))!, method, proof);
+  if (refused) return refused;
+
+  await db.batch([
+    db.prepare('UPDATE accounts SET login_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?').bind(await hashProof(passwordProof), id),
+    db.prepare('UPDATE vaults SET password_wrap = ?, updated_at = ? WHERE account_id = ?').bind(passwordWrap, Date.now(), id),
+  ]);
   return c.body(null, 204);
 });
-
-function readKdf(value: unknown): string | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  return readField(JSON.stringify(value));
-}
-
-function readField(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_FIELD_LENGTH ? value : null;
-}

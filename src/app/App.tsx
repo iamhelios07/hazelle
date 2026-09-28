@@ -1,44 +1,56 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { createVault, openWithPassphrase, openWithRecoveryKey, wrapWithPassphrase, type VaultKey, type VaultRecord } from '../vault/keys';
-import { forgetVault, recallVault, rememberVault } from '../vault/device';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../runtime/api';
-import { AccountScreen } from './screens/AccountScreen';
-import { describeFailure } from './screens/failure';
+import { forgetVault, recallVault, rememberVault } from '../vault/device';
+import {
+  canonicalUsername,
+  createVault,
+  openVault,
+  passwordCredential,
+  recoveryCredential,
+  wrapWithPassword,
+  type Credential,
+  type Method,
+  type VaultKey,
+  type VaultRecord,
+} from '../vault/keys';
+import { describeFailure, wrongSecret } from './screens/failure';
+import { PasswordScreen } from './screens/PasswordScreen';
 import { RecoveryKeyScreen } from './screens/RecoveryKeyScreen';
-import { UnlockScreen } from './screens/UnlockScreen';
+import { SignInScreen } from './screens/SignInScreen';
 import { UnreachableScreen } from './screens/UnreachableScreen';
-import { VaultPassphraseScreen } from './screens/VaultPassphraseScreen';
 import { Workspace } from './Workspace';
 
 type Session = { accountId: string; username: string };
-type Boot = { session: null; signupOpen: boolean } | { session: Session; vault: VaultRecord | null };
-type Draft = { record: VaultRecord; vaultKey: VaultKey; recoveryKey: string };
+type SignedIn = { session: Session; vault: VaultRecord };
+type Boot = { session: null; signupOpen: boolean } | SignedIn;
+// Kept in memory until the recovery key is saved. Going back keeps the vault key and the recovery
+// key, so a file already downloaded stays valid.
+type Draft = { session: Session } & Awaited<ReturnType<typeof createVault>>;
 
 type State =
   | { kind: 'loading' }
   | { kind: 'unreachable'; message: string }
-  | { kind: 'signed-out'; signupOpen: boolean }
-  | { kind: 'vault-setup'; session: Session; step: 'passphrase' | 'recovery'; draft: Draft | null }
-  | { kind: 'locked'; session: Session; record: VaultRecord }
-  | { kind: 'recovered'; session: Session; vaultKey: VaultKey }
+  | { kind: 'signup'; step: 'password' | 'recovery'; draft: Draft | null }
+  | { kind: 'login' }
+  | { kind: 'locked'; signedIn: SignedIn }
+  | { kind: 'recovered'; session: Session; vaultKey: VaultKey; current: Credential }
   | { kind: 'unlocked'; session: Session; vaultKey: VaultKey; message: string | null };
 
 async function loadState(): Promise<State> {
   const result = await api<Boot>('GET', 'session');
   if (!result.ok) return { kind: 'unreachable', message: describeFailure(result) };
   const boot = result.data;
-  if (boot.session === null) return { kind: 'signed-out', signupOpen: boot.signupOpen };
-  const { session, vault } = boot;
-  if (!vault) return { kind: 'vault-setup', session, step: 'passphrase', draft: null };
-  const vaultKey = await recallVault(session.accountId);
-  if (vaultKey) return { kind: 'unlocked', session, vaultKey, message: null };
-  return { kind: 'locked', session, record: vault };
+  if (boot.session === null) return boot.signupOpen ? { kind: 'signup', step: 'password', draft: null } : { kind: 'login' };
+  const vaultKey = await recallVault(boot.session.accountId);
+  if (vaultKey) return { kind: 'unlocked', session: boot.session, vaultKey, message: null };
+  return { kind: 'locked', signedIn: boot };
 }
+
+const credentialFor = (username: string, method: Method, secret: string) =>
+  method === 'password' ? passwordCredential(username, secret) : recoveryCredential(secret);
 
 export function App() {
   const [state, setState] = useState<State>({ kind: 'loading' });
-  // Kept only between signing in and finishing the vault setup, to refuse it as the vault passphrase.
-  const loginPassword = useRef<string | null>(null);
 
   const reload = useCallback(() => {
     setState({ kind: 'loading' });
@@ -51,16 +63,23 @@ export function App() {
 
   async function unlocked(session: Session, vaultKey: VaultKey) {
     await rememberVault(session.accountId, vaultKey);
-    loginPassword.current = null;
     setState({ kind: 'unlocked', session, vaultKey, message: null });
+  }
+
+  // A recovery key opens the vault but then asks for a new password, since the old one is lost.
+  async function open(signedIn: SignedIn, credential: Credential): Promise<string | null> {
+    const vaultKey = await openVault(signedIn.session.accountId, signedIn.vault, credential);
+    if (!vaultKey) return wrongSecret(credential.method, false);
+    if (credential.method === 'recovery') setState({ kind: 'recovered', session: signedIn.session, vaultKey, current: credential });
+    else await unlocked(signedIn.session, vaultKey);
+    return null;
   }
 
   async function logout(): Promise<string | null> {
     const result = await api('POST', 'logout');
     if (!result.ok) return describeFailure(result);
     await forgetVault();
-    loginPassword.current = null;
-    setState({ kind: 'signed-out', signupOpen: false });
+    setState({ kind: 'login' });
     return null;
   }
 
@@ -69,76 +88,76 @@ export function App() {
       return null;
     case 'unreachable':
       return <UnreachableScreen message={state.message} onRetry={reload} />;
-    case 'signed-out':
-      return (
-        <AccountScreen
-          mode={state.signupOpen ? 'signup' : 'login'}
-          onSignedIn={(password) => {
-            loginPassword.current = password;
-            reload();
-          }}
-        />
-      );
-    case 'vault-setup': {
-      const { session, draft } = state;
+    case 'signup': {
+      const { draft } = state;
       if (state.step === 'recovery' && draft) {
         return (
           <RecoveryKeyScreen
-            username={session.username}
+            username={draft.session.username}
             recoveryKey={draft.recoveryKey}
-            onBack={() => setState({ ...state, step: 'passphrase' })}
+            onBack={() => setState({ kind: 'signup', step: 'password', draft })}
             onStart={async () => {
-              const result = await api('POST', 'vault', draft.record);
-              if (result.ok) await unlocked(session, draft.vaultKey);
-              else if (result.error === 'vault-exists') reload();
-              else return describeFailure(result);
+              const result = await api('POST', 'signup', { ...draft.session, ...draft.signup });
+              if (!result.ok) return describeFailure(result);
+              await unlocked(draft.session, draft.vaultKey);
               return null;
             }}
           />
         );
       }
       return (
-        <VaultPassphraseScreen
-          mode="setup"
-          loginPassword={loginPassword.current}
-          onDone={async (passphrase) => {
-            // Going back from the recovery step keeps the vault key and recovery key, so a file
-            // already downloaded stays valid; only the passphrase wrap is redone.
-            const next = draft
-              ? { ...draft, record: { ...draft.record, ...(await wrapWithPassphrase(session.accountId, draft.vaultKey, passphrase)) } }
-              : await createVault(session.accountId, passphrase);
-            setState({ kind: 'vault-setup', session, step: 'recovery', draft: next });
+        <PasswordScreen
+          mode="signup"
+          username={draft?.session.username ?? ''}
+          onDone={async (typed, password) => {
+            const username = canonicalUsername(typed);
+            const credential = await passwordCredential(username, password);
+            const accountId = draft?.session.accountId ?? crypto.randomUUID();
+            const vault = draft
+              ? { ...draft, signup: { ...draft.signup, ...(await wrapWithPassword(accountId, draft.vaultKey, credential)) } }
+              : await createVault(accountId, credential);
+            setState({ kind: 'signup', step: 'recovery', draft: { ...vault, session: { accountId, username } } });
             return null;
           }}
         />
       );
     }
-    case 'locked': {
-      const { session, record } = state;
+    case 'login':
       return (
-        <UnlockScreen
-          onPassphrase={async (passphrase) => {
-            const vaultKey = await openWithPassphrase(session.accountId, record, passphrase);
-            if (vaultKey) await unlocked(session, vaultKey);
-            return vaultKey !== null;
+        <SignInScreen
+          account={null}
+          onSubmit={async (typed, method, secret) => {
+            const username = canonicalUsername(typed);
+            const credential = await credentialFor(username, method, secret);
+            if (!credential) return wrongSecret(method, true);
+            const result = await api<SignedIn>('POST', 'login', { username, method, proof: credential.proof });
+            if (!result.ok) return result.error === 'wrong-login' ? wrongSecret(method, true) : describeFailure(result);
+            return open(result.data, credential);
           }}
-          onRecoveryKey={async (text) => {
-            const vaultKey = await openWithRecoveryKey(session.accountId, record, text);
-            if (vaultKey) setState({ kind: 'recovered', session, vaultKey });
-            return vaultKey !== null;
+        />
+      );
+    case 'locked': {
+      const { signedIn } = state;
+      return (
+        <SignInScreen
+          account={signedIn.session.username}
+          onSubmit={async (username, method, secret) => {
+            const credential = await credentialFor(username, method, secret);
+            return credential ? open(signedIn, credential) : wrongSecret(method, false);
           }}
           onLogout={() => void logout().then((failure) => failure && setState({ kind: 'unreachable', message: failure }))}
         />
       );
     }
     case 'recovered': {
-      const { session, vaultKey } = state;
+      const { session, vaultKey, current } = state;
       return (
-        <VaultPassphraseScreen
+        <PasswordScreen
           mode="reset"
-          loginPassword={loginPassword.current}
-          onDone={async (passphrase) => {
-            const result = await api('PUT', 'vault/passphrase', await wrapWithPassphrase(session.accountId, vaultKey, passphrase));
+          username={session.username}
+          onDone={async (username, password) => {
+            const next = await wrapWithPassword(session.accountId, vaultKey, await passwordCredential(username, password));
+            const result = await api('PUT', 'vault/password', { method: current.method, proof: current.proof, ...next });
             if (!result.ok) return describeFailure(result);
             await unlocked(session, vaultKey);
             return null;

@@ -1,62 +1,63 @@
 import { argon2id } from 'hash-wasm';
-import { encodeText, open, randomBytes, seal, fromBase64, toBase64 } from './aead';
+import { encodeText, open, randomBytes, seal, toBase64 } from './aead';
 import { formatRecoveryKey, parseRecoveryKey } from './recovery-key';
 
-export type KdfParams = { algorithm: 'argon2id'; memoryKiB: number; iterations: number; parallelism: number; salt: string };
-export type VaultRecord = { kdf: KdfParams; passphraseWrap: string; recoveryWrap: string };
+export type VaultRecord = { passwordWrap: string; recoveryWrap: string };
 export type VaultKey = Uint8Array<ArrayBuffer>;
+export type Method = 'password' | 'recovery';
+// What the password or the recovery key yields: a proof, which is all the server sees, and the key
+// that unwraps the vault. HKDF keeps the two unrelated, so the proof reveals nothing about the key.
+export type Credential = { method: Method; proof: string; kek: CryptoKey };
 
-// tech-spec §4. Each record stores its own parameters, so raising these later keeps old records openable.
-const KDF = { algorithm: 'argon2id', memoryKiB: 64 * 1024, iterations: 3, parallelism: 1 } as const;
+// Fixed in code rather than stored with the account: login derives the proof before the server has
+// said anything. Raising them needs a new scheme version that login can ask for.
+const KDF = { memorySize: 64 * 1024, iterations: 3, parallelism: 1 };
 
-const wrapAad = (accountId: string, method: 'passphrase' | 'recovery') => `risu-alpha/vault-key/v1/${accountId}/${method}`;
+const wrapAad = (accountId: string, method: Method) => `risu-alpha/vault-key/v2/${accountId}/${method}`;
 
-export async function createVault(accountId: string, passphrase: string) {
+// The only place a username is normalized. The password salt comes from this form, so the server
+// refuses any other instead of normalizing it differently.
+export function canonicalUsername(text: string): string {
+  return text.trim().normalize('NFC').toLowerCase();
+}
+
+// NFC because the same Korean text can arrive composed or decomposed, depending on the OS and IME.
+export async function passwordCredential(username: string, password: string): Promise<Credential> {
+  const salt = new Uint8Array(await crypto.subtle.digest('SHA-256', encodeText(`risu-alpha/password-salt/v1/${username}`)));
+  const stretched = await argon2id({ password: password.normalize('NFC'), salt, ...KDF, hashLength: 32, outputType: 'binary' });
+  return derive('password', new Uint8Array(stretched));
+}
+
+export async function recoveryCredential(text: string): Promise<Credential | null> {
+  const recovery = parseRecoveryKey(text);
+  return recovery && derive('recovery', recovery);
+}
+
+export async function createVault(accountId: string, password: Credential) {
   const vaultKey = randomBytes(32);
-  const recovery = randomBytes(32);
-  const { kdf, passphraseWrap } = await wrapWithPassphrase(accountId, vaultKey, passphrase);
-  const recoveryWrap = await seal(await recoveryKek(recovery), vaultKey, wrapAad(accountId, 'recovery'));
-  const record: VaultRecord = { kdf, passphraseWrap, recoveryWrap };
-  return { record, vaultKey, recoveryKey: formatRecoveryKey(recovery) };
+  const recoveryBytes = randomBytes(32);
+  const recovery = await derive('recovery', recoveryBytes);
+  const signup = {
+    ...(await wrapWithPassword(accountId, vaultKey, password)),
+    recoveryProof: recovery.proof,
+    recoveryWrap: await seal(recovery.kek, vaultKey, wrapAad(accountId, 'recovery')),
+  };
+  return { vaultKey, recoveryKey: formatRecoveryKey(recoveryBytes), signup };
 }
 
-export async function wrapWithPassphrase(accountId: string, vaultKey: VaultKey, passphrase: string) {
-  const kdf: KdfParams = { ...KDF, salt: toBase64(randomBytes(16)) };
-  const passphraseWrap = await seal(await passphraseKek(passphrase, kdf), vaultKey, wrapAad(accountId, 'passphrase'));
-  return { kdf, passphraseWrap };
+export async function wrapWithPassword(accountId: string, vaultKey: VaultKey, password: Credential) {
+  return { passwordProof: password.proof, passwordWrap: await seal(password.kek, vaultKey, wrapAad(accountId, 'password')) };
 }
 
-export async function openWithPassphrase(accountId: string, record: VaultRecord, passphrase: string): Promise<VaultKey | null> {
-  return open(await passphraseKek(passphrase, record.kdf), record.passphraseWrap, wrapAad(accountId, 'passphrase'));
+export async function openVault(accountId: string, record: VaultRecord, credential: Credential): Promise<VaultKey | null> {
+  const wrap = credential.method === 'password' ? record.passwordWrap : record.recoveryWrap;
+  return open(credential.kek, wrap, wrapAad(accountId, credential.method));
 }
 
-export async function openWithRecoveryKey(accountId: string, record: VaultRecord, input: string): Promise<VaultKey | null> {
-  const recovery = parseRecoveryKey(input);
-  if (!recovery) return null;
-  return open(await recoveryKek(recovery), record.recoveryWrap, wrapAad(accountId, 'recovery'));
-}
-
-// NFC for the same reason as the login password: Korean text can arrive composed or decomposed.
-async function passphraseKek(passphrase: string, kdf: KdfParams): Promise<CryptoKey> {
-  const bytes = await argon2id({
-    password: passphrase.normalize('NFC'),
-    salt: fromBase64(kdf.salt),
-    memorySize: kdf.memoryKiB,
-    iterations: kdf.iterations,
-    parallelism: kdf.parallelism,
-    hashLength: 32,
-    outputType: 'binary',
-  });
-  return crypto.subtle.importKey('raw', new Uint8Array(bytes), 'AES-GCM', false, ['encrypt', 'decrypt']);
-}
-
-async function recoveryKek(recovery: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
-  const base = await crypto.subtle.importKey('raw', recovery, 'HKDF', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(), info: encodeText('risu-alpha vault recovery v1') },
-    base,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
+async function derive(method: Method, secret: Uint8Array<ArrayBuffer>): Promise<Credential> {
+  const base = await crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveBits', 'deriveKey']);
+  const hkdf = (use: string) => ({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(), info: encodeText(`risu-alpha ${method} ${use} v1`) });
+  const proof = toBase64(new Uint8Array(await crypto.subtle.deriveBits(hkdf('proof'), base, 256)));
+  const kek = await crypto.subtle.deriveKey(hkdf('vault'), base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  return { method, proof, kek };
 }
