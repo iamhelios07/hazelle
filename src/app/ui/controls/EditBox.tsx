@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import styles from './EditBox.module.css';
+import { useAutosize } from './useAutosize';
 
 type Props = { value: string; onChange: (value: string) => void; onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void; hint: string; actions: ReactNode };
 
@@ -12,12 +13,7 @@ export function EditBox({ value, onChange, onKeyDown, hint, actions }: Props) {
     element?.focus();
     element?.setSelectionRange(element.value.length, element.value.length);
   }, []);
-  useEffect(() => {
-    const element = area.current;
-    if (!element) return;
-    element.style.height = 'auto';
-    element.style.height = `${element.scrollHeight + 2}px`;
-  }, [value]);
+  useAutosize(area, value);
   return (
     <div className={styles.box}>
       <label className={styles.label} htmlFor={id}>

@@ -6,7 +6,7 @@ import { describeReplyError } from '../common/failure';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, Marker, pressed, Prose, StoryMessage, Switcher, Tool, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, pressed, Prose, StoryMessage, Switcher, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
 
 type Props = {
@@ -136,16 +136,16 @@ export function ChatMessage(props: Props) {
   );
 
   const tools = live || editing !== null ? undefined : opening ? (
-    <Tool icon={Copy} label="복사" onClick={() => actions.copy(text)} />
+    <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />
   ) : (
     <>
-      {!mine && isLast && !failed && !busy && <Tool icon={RotateCcw} label="다시 생성" onClick={() => actions.regenerate(message)} />}
-      {!mine && failed && !busy && <Tool icon={RotateCcw} label="다시 시도" onClick={() => actions.retry(message)} />}
-      {!failed && <Tool icon={Pencil} label="수정" onClick={() => actions.edit(message, version.text)} />}
-      {!empty && <Tool icon={Copy} label="복사" onClick={() => actions.copy(text)} />}
-      {!mine && <Tool icon={Info} label="답장 정보" onClick={() => actions.info(message.id)} />}
+      {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 생성" onClick={() => actions.regenerate(message)} />}
+      {!mine && failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 시도" onClick={() => actions.retry(message)} />}
+      {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message, version.text)} />}
+      {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
+      {!mine && <IconButton icon={Info} size="xs" label="답장 정보" onClick={() => actions.info(message.id)} />}
       <Divider variant="tools" />
-      <Tool icon={Trash2} label="삭제 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
+      <IconButton icon={Trash2} size="xs" label="삭제 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
     </>
   );
 

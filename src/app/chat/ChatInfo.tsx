@@ -5,7 +5,7 @@ import type { Shown } from '../../runtime/talk';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useTalk } from '../session';
-import { Breakdown, Callout, Facts, IconButton, PanelSection, SidePanel, Text } from '../ui';
+import { Breakdown, Callout, Facts, IconButton, Section, SidePanel, Text } from '../ui';
 import { cost, seconds, speed, tokens, UNKNOWN } from './receipt';
 
 type Props = {
@@ -59,21 +59,21 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
     body = (
       <>
         {version.edited && <Text tone="muted">직접 고친 답장이에요. 아래는 고치기 전 답장을 받았을 때의 정보예요.</Text>}
-        <PanelSection title="모델">
+        <Section level={3} title="모델">
           <Text>{receipt.modelName}</Text>
           <Text size="sm" tone="muted">
             {receipt.source}
           </Text>
-        </PanelSection>
+        </Section>
         {receipt.state === 'failed' && (
-          <PanelSection title="결과">
+          <Section level={3} title="결과">
             <Callout tone="warn">
               {receipt.error ? describeReplyError(receipt.error) : UNKNOWN} 보낸 뒤 {seconds(receipt.totalMs)} 만에 돌아왔어요.
             </Callout>
-          </PanelSection>
+          </Section>
         )}
         {usage ? (
-          <PanelSection title="토큰" note={input && cached !== null ? `캐시 적중 ${Math.round((cached / input) * 100)}%` : undefined}>
+          <Section level={3} title="토큰" note={input && cached !== null ? `캐시 적중 ${Math.round((cached / input) * 100)}%` : undefined}>
             <Breakdown
               shares={input && fresh !== null ? [cached! / input, fresh / input] : null}
               parts={
@@ -89,7 +89,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
                     ]
               }
             />
-          </PanelSection>
+          </Section>
         ) : (
           <Text size="sm" tone="muted">
             제공자가 사용량을 알려 주지 않았어요. 모르는 값은 0으로 적지 않아요.

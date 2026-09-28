@@ -27,3 +27,9 @@
 .icon {
   display: flex;
 }
+
+.withAction {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}

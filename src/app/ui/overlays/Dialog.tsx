@@ -29,9 +29,9 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
   useLayer(true, { outside: (target) => target === scrim.current, close: onClose });
   const trap = useFocusTrap(box);
   const body = actions ? (
-    <Stack gap={actionsLayout === 'full' ? 12 : 16}>
+    <Stack gap={actionsLayout === 'full' ? 'related' : 'group'}>
       {children}
-      {actionsLayout === 'full' ? actions : <Row>{actions}</Row>}
+      {actionsLayout === 'full' ? actions : <Row kind="actions">{actions}</Row>}
     </Stack>
   ) : (
     children

@@ -11,7 +11,6 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  cursor: pointer;
 }
 
 .chip:hover,

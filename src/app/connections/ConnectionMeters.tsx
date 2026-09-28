@@ -3,7 +3,7 @@ import type { Connection, Meter, MeterReset, MeterUnit } from '../../connectors/
 import { loadMeters, type MetersResult } from '../../runtime/meters';
 import { describeMetersFailure } from '../common/failure';
 import { creditAmount, credits, usd } from '../common/money';
-import { Button, Callout, Facts, Section, Stack, Text } from '../ui';
+import { Callout, Facts, Section, Text } from '../ui';
 
 const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 
@@ -44,12 +44,9 @@ export function ConnectionMeters({ connection }: { connection: Connection }) {
           불러오는 중…
         </Text>
       ) : !result.ok ? (
-        <Stack gap={12}>
-          <Callout tone="warn">{describeMetersFailure(result.failure)}</Callout>
-          <Button variant="secondary" size="md" onClick={() => setAttempt((count) => count + 1)}>
-            사용량 다시 불러오기
-          </Button>
-        </Stack>
+        <Callout tone="warn" action={{ label: '사용량 다시 불러오기', onClick: () => setAttempt((count) => count + 1) }}>
+          {describeMetersFailure(result.failure)}
+        </Callout>
       ) : result.meters.length ? (
         <Facts items={result.meters.map(fact)} />
       ) : (

@@ -12,10 +12,8 @@
   padding: 0 var(--space-12);
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-full);
-  background: transparent;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-  cursor: pointer;
 }
 
 .tab:hover {

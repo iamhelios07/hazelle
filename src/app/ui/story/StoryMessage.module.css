@@ -96,31 +96,6 @@
   }
 }
 
-.tool,
-.step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-tool);
-  height: var(--control-tool);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.tool:hover,
-.step:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
-
-.step:disabled {
-  color: var(--color-border-strong);
-  cursor: default;
-}
-
 .waiting {
   display: flex;
   align-items: center;
@@ -169,22 +144,6 @@
 
 .stopped svg {
   fill: currentColor;
-}
-
-.link {
-  min-height: var(--space-28);
-  padding: 0 var(--space-4);
-  border: 0;
-  background: transparent;
-  color: var(--color-accent);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-}
-
-.link:disabled {
-  color: var(--color-text-faint);
-  cursor: default;
 }
 
 .failure {

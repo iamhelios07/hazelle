@@ -1,5 +1,7 @@
-import { ChevronLeft, ChevronRight, Scissors, Square, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Scissors, Square, TriangleAlert } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
+import { Button } from '../controls/Button';
+import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import { useHover } from '../foundation/media';
 import styles from './StoryMessage.module.css';
@@ -42,14 +44,6 @@ export function StoryMessage({ avatar, name, time, mine, children, after, tools,
   );
 }
 
-export function Tool({ icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
-  return (
-    <button type="button" className={styles.tool} aria-label={label} title={label} onClick={onClick}>
-      <Icon icon={icon} size="xs" />
-    </button>
-  );
-}
-
 // The reply is on its way and no text has come yet.
 export function Waiting() {
   return (
@@ -78,13 +72,9 @@ type SwitcherProps = {
 export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, nextLabel, prevTitle, nextTitle }: SwitcherProps) {
   return (
     <div className={styles.switcher}>
-      <button type="button" className={styles.step} aria-label="이전" title={prevTitle} disabled={prevDisabled} onClick={onPrev}>
-        <Icon icon={ChevronLeft} size="xs" />
-      </button>
+      <IconButton icon={ChevronLeft} label="이전" title={prevTitle} size="xs" disabled={prevDisabled} onClick={onPrev} />
       <span className={styles.count}>{label}</span>
-      <button type="button" className={styles.step} aria-label={nextLabel} title={nextTitle} disabled={nextDisabled} onClick={onNext}>
-        <Icon icon={ChevronRight} size="xs" />
-      </button>
+      <IconButton icon={ChevronRight} label={nextLabel} title={nextTitle} size="xs" disabled={nextDisabled} onClick={onNext} />
     </div>
   );
 }
@@ -98,9 +88,9 @@ export function Marker({ reason, label, action }: MarkerProps) {
       <Icon icon={reason === 'length' ? Scissors : Square} size="xs" />
       <span>{action ? `${label} ·` : label}</span>
       {action && (
-        <button type="button" className={styles.link} disabled={action.disabled} onClick={action.onClick}>
+        <Button variant="link" size="xs" disabled={action.disabled} onClick={action.onClick}>
           {action.label}
-        </button>
+        </Button>
       )}
     </div>
   );

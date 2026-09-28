@@ -1,3 +1,4 @@
+import { Button } from '../controls/Button';
 import styles from './Toast.module.css';
 
 type Props = { message: string; action?: { label: string; onClick: () => void }; floating: boolean };
@@ -9,9 +10,9 @@ export function Toast({ message, action, floating }: Props) {
     <div className={floating ? `${styles.toast} ${styles.floating}` : styles.toast} role="status">
       <span className={styles.message}>{message}</span>
       {action && (
-        <button type="button" className={styles.action} onClick={action.onClick}>
+        <Button variant="link" size="md" onClick={action.onClick}>
           {action.label}
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { MessageSquarePlus } from 'lucide-react';
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import { importCard } from '../../engine/import/card';
 import type { Imported, ImportFailure, UnsupportedKind } from '../../engine/import/types';
 import { unused } from '../../engine/pipeline';
@@ -9,7 +9,7 @@ import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
-import { Button, Callout, Dialog, DropOverlay, Section, Stack, Text } from '../ui';
+import { Button, Callout, Dialog, DropOverlay, Section, Stack, Text, useFileDrop } from '../ui';
 import { describeStep } from './saving';
 
 const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum';
@@ -54,8 +54,6 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const files = useFiles();
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const depth = useRef(0);
 
   async function save(file: File, progress: (busy: string) => void): Promise<Result> {
     const parsed = importCard(file.name, new Uint8Array(await file.arrayBuffer()));
@@ -78,41 +76,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     setState({ busy: null, results });
   }
 
-  // Files dropped anywhere in the app. dragenter and dragleave fire for every element crossed, so
-  // the overlay counts them instead of trusting either one.
-  useEffect(() => {
-    const carriesFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
-    const enter = (event: DragEvent) => {
-      if (!carriesFiles(event)) return;
-      depth.current += 1;
-      setDragging(true);
-    };
-    const leave = (event: DragEvent) => {
-      if (!carriesFiles(event)) return;
-      depth.current = Math.max(0, depth.current - 1);
-      if (depth.current === 0) setDragging(false);
-    };
-    const over = (event: DragEvent) => {
-      if (carriesFiles(event)) event.preventDefault();
-    };
-    const drop = (event: DragEvent) => {
-      if (!carriesFiles(event)) return;
-      event.preventDefault();
-      depth.current = 0;
-      setDragging(false);
-      void take([...(event.dataTransfer?.files ?? [])]);
-    };
-    window.addEventListener('dragenter', enter);
-    window.addEventListener('dragleave', leave);
-    window.addEventListener('dragover', over);
-    window.addEventListener('drop', drop);
-    return () => {
-      window.removeEventListener('dragenter', enter);
-      window.removeEventListener('dragleave', leave);
-      window.removeEventListener('dragover', over);
-      window.removeEventListener('drop', drop);
-    };
-  });
+  const dragging = useFileDrop((dropped) => void take(dropped));
 
   const done = state?.results.filter((result): result is Done => 'id' in result) ?? [];
   return (
@@ -133,7 +97,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       {dragging && <DropOverlay>여기에 놓으면 봇을 가져와요</DropOverlay>}
       {state && (
         <Dialog title={state.busy ? '가져오는 중' : done.length ? '가져왔어요' : '가져오지 못했어요'} onClose={() => state.busy || setState(null)}>
-          <Stack gap={16}>
+          <Stack>
             {state.results.map((result, index) => ('id' in result ? <Summary key={index} result={result} /> : <Failed key={index} file={result.file} failure={result.failure} />))}
             {state.busy && <Text tone="muted">{state.busy}</Text>}
             {!state.busy && done.length === 1 && (

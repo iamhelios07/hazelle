@@ -31,8 +31,8 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
   }
 
   return (
-    <Stack gap={12}>
-      <Row>
+    <Stack gap="related">
+      <Row kind="toolbar">
         <Tabs label="폴더">
           <Tab label="전체" count={characters.length} current={filter === 'all'} onClick={() => onFilter('all')} />
           {folders.map((candidate) => (

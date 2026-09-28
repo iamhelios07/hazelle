@@ -25,11 +25,8 @@
   gap: var(--space-4);
   min-width: 0;
   padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--color-text-muted);
   text-align: left;
-  cursor: pointer;
 }
 
 .portrait {

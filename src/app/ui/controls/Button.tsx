@@ -4,8 +4,9 @@ import { Icon } from '../foundation/Icon';
 import styles from './Button.module.css';
 
 type Props = {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'link';
+  // xs: a link inside a line of small text.
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   type?: 'button' | 'submit';
   icon?: LucideIcon;
   busy?: boolean;
