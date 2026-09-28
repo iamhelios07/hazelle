@@ -1,15 +1,16 @@
 import { Bot, Copy, Info, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
-import { shown, type Message } from '../../model/chat';
-import { useAccount } from '../session';
+import { shown } from '../../model/chat';
+import type { Shown } from '../../runtime/talk';
+import { useSession } from '../session';
 import { Avatar, Button, EditBox, Failure, Marker, Message as Row, Prose, Switcher, Tool, ToolDivider, Waiting } from '../ui';
 import { describeReplyError } from './failure';
 import { timeOfDay } from './time';
 
-type Shown = Message & { live: string | null };
-
 type Props = {
   message: Shown;
+  // The shown version's text as it is displayed (engine/render). Editing starts from the stored text.
+  text: string;
   isLast: boolean;
   // The user's message right before the last reply, which 저장하고 답장 다시 받기 answers again.
   beforeLastReply: boolean;
@@ -41,14 +42,14 @@ const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼
 
 // One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
-  const { message, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, onTap, onEdit, onSaveEdit, onSwipe } = props;
-  const { username } = useAccount();
+  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, onTap, onEdit, onSaveEdit, onSwipe } = props;
+  const { username } = useSession();
   const version = shown(message);
   const receipt = version.receipt;
   const mine = message.role === 'user';
   const live = message.live === version.id;
   const failed = receipt?.state === 'failed';
-  const empty = version.text === '';
+  const empty = text === '';
   // An edited reply is the user's text now; its cut no longer applies.
   const cut = !live && !version.edited && receipt?.state === 'cut' ? receipt.cut : null;
 
@@ -108,7 +109,7 @@ export function ChatMessage(props: Props) {
       </Failure>
     );
   } else if (!empty || live) {
-    body = <Prose text={version.text} cursor={live} />;
+    body = <Prose text={text} cursor={live} />;
   }
 
   const count = message.versions.length;

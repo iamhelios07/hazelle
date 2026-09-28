@@ -2,7 +2,7 @@ import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Model } from '../../connectors/types';
 import type { CatalogResult } from '../../runtime/catalog';
-import { setStarred } from '../../runtime/connections';
+import { removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { reportsMeters } from '../../runtime/meters';
 import { navigate } from '../router';
 import { useConnection, useSession } from '../session';
@@ -101,16 +101,15 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
   }
 
   async function remove() {
-    const snapshot = stored!;
-    const result = await store.remove(id);
+    const result = await removeConnection(store, id);
     if (!result.ok) {
       setMessage(describeFailure(result));
       return;
     }
     navigate('/connections');
     toast({
-      message: `${snapshot.value.label} 연결을 지웠어요.`,
-      action: { label: '되돌리기', onClick: () => void store.restore(snapshot) },
+      message: `${result.data.value.label} 연결을 지웠어요.`,
+      action: { label: '되돌리기', onClick: () => void restoreConnection(store, result.data) },
     });
   }
 

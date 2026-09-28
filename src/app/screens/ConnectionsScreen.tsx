@@ -1,7 +1,8 @@
 import { Check, ChevronRight, MessageSquarePlus, Plus } from 'lucide-react';
 import { useState } from 'react';
-import { fitsRole, resolveRole, type ModelRef } from '../../connectors/assignment';
+import { fitsRole, type ModelRef } from '../../connectors/assignment';
 import { resolveConnection } from '../../connectors/registry';
+import { defaultModel, setDefaultModel } from '../../runtime/assignment';
 import { navigate, usePath } from '../router';
 import { useConnections, useSettings, useStore, useUnreadable } from '../session';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, Section, Text } from '../ui';
@@ -15,7 +16,7 @@ export function ConnectionsScreen() {
   const path = usePath();
   const [message, setMessage] = useState<string | null>(null);
 
-  const main = resolveRole('main', [settings.models]);
+  const main = defaultModel(settings);
   const choices = connections.flatMap((connection) =>
     connection.value.starred.filter((model) => fitsRole(model, 'main')).map((model) => ({ connection, model })),
   );
@@ -23,7 +24,7 @@ export function ConnectionsScreen() {
 
   async function choose(ref: ModelRef) {
     setMessage(null);
-    const result = await store.upsert('settings', (current) => ({ ...current, models: { ...current?.models, main: ref } }));
+    const result = await setDefaultModel(store, ref);
     if (!result.ok) setMessage(describeFailure(result));
   }
 

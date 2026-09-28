@@ -8,11 +8,11 @@ import { UnreachableScreen } from './screens/UnreachableScreen';
 import { SessionProvider, type Account } from './session';
 import { ToastProvider } from './toast';
 
-type Props = Account & { accountId: string; vaultKey: VaultKey };
+type Props = Account & { accountId: string; vaultKey: VaultKey; username: string };
 
 // Everything behind an open vault is one session (runtime/session), opened before the first screen and
 // closed when this unmounts. 잠그기 and 로그아웃 both leave App's unlocked state, which unmounts this.
-export function Workspace({ accountId, vaultKey, ...account }: Props) {
+export function Workspace({ accountId, vaultKey, username, ...account }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -21,7 +21,7 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
     const abandon = new AbortController();
     let opened: Session | null = null;
     setFailure(null);
-    void openSession(accountId, vaultKey, account.username, abandon.signal).then((result) => {
+    void openSession(accountId, vaultKey, username, abandon.signal).then((result) => {
       if (abandon.signal.aborted) return;
       if (!result.ok) return setFailure(describeFailure(result));
       opened = result.data;
@@ -31,7 +31,7 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
       abandon.abort();
       opened?.close();
     };
-  }, [accountId, vaultKey, account.username, attempt]);
+  }, [accountId, vaultKey, username, attempt]);
 
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
   if (!session) return null;

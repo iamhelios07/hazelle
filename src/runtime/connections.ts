@@ -34,3 +34,13 @@ export function setStarred(store: ObjectStore, id: string, model: Model, starred
     return { ...current, starred: starred ? [...others, model] : others };
   });
 }
+
+// Answers the removed connection, which restoreConnection (되돌리기) writes back.
+export async function removeConnection(store: ObjectStore, id: string): Promise<ApiResult<Stored<'connection'>>> {
+  const connection = store.get('connection', id);
+  if (!connection) return { ok: false, error: 'gone' };
+  const removed = await store.remove(id);
+  return removed.ok ? { ok: true, data: connection } : removed;
+}
+
+export const restoreConnection = (store: ObjectStore, removed: Stored<'connection'>) => store.restore(removed);

@@ -8,7 +8,7 @@ import type { Session, Views } from '../runtime/session';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 
-export type Account = { username: string; onLock: () => void; onLogout: () => Promise<string | null> };
+export type Account = { onLock: () => void; onLogout: () => Promise<string | null> };
 
 const SessionContext = createContext<{ session: Session; account: Account } | null>(null);
 
@@ -56,7 +56,7 @@ export function useConnection(id: string): Stored<'connection'> | null {
   return useSyncExternalStore(store.subscribe, () => store.get('connection', id));
 }
 
-// How many lorebook entries a character holds, which its chats do not use yet (engine/prompt).
+// How many lorebook entries a character holds, which its chats do not use yet (engine/pipeline).
 export function useLoreCount(character: string | null): number {
   const store = useStore();
   return useSyncExternalStore(store.subscribe, () => (character === null ? 0 : store.children('lore', character).length));

@@ -1,3 +1,4 @@
+import { render } from '../engine/render';
 import { chatItems, type ChatItem } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
@@ -10,6 +11,7 @@ import { Credentials } from './credential';
 import { Files } from './files';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
+import { scopeOf } from './turn';
 
 export type Views = {
   chats: ChatItem[];
@@ -24,6 +26,7 @@ export type Views = {
 };
 
 export type Session = {
+  username: string;
   store: ObjectStore;
   files: Files;
   talk: Talk;
@@ -47,7 +50,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
 
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
-  const talk = new Talk(store, username, credentials);
+  const talk = new Talk(store, credentials);
   const stopSync = keepSynced(store);
   const closing = new AbortController();
   void purgeExpired(store, files, Date.now(), closing.signal);
@@ -55,7 +58,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   let cached: { version: number; views: Views } | null = null;
   const views = () => {
     const version = store.snapshot();
-    if (cached?.version !== version) cached = { version, views: derive(store) };
+    if (cached?.version !== version) cached = { version, views: derive(store, username) };
     return cached.views;
   };
   const close = () => {
@@ -65,11 +68,15 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     catalogs.close();
     credentials.close();
   };
-  return { ok: true, data: { store, files, talk, credentials, catalogs, views, close } };
+  return { ok: true, data: { username, store, files, talk, credentials, catalogs, views, close } };
 }
 
-function derive(store: ObjectStore): Views {
-  const chats = chatItems(store.list('chat'), (chat) => store.children('entry', chat));
+function derive(store: ObjectStore, username: string): Views {
+  const chats = chatItems(
+    store.list('chat'),
+    (chat) => store.children('entry', chat),
+    (chat, text) => render('display', text, scopeOf({ store, username }, chat)),
+  );
   const shelves = shelve(store.list('character'), store.list('avatar'), chats);
   return {
     chats,

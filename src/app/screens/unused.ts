@@ -1,4 +1,4 @@
-import type { Unused } from '../../engine/prompt';
+import type { Unused } from '../../engine/pipeline';
 
 const LABEL: Record<Unused['kind'], (count: number) => string> = {
   lorebook: (count) => `로어북 ${count}개`,
@@ -10,7 +10,7 @@ const LABEL: Record<Unused['kind'], (count: number) => string> = {
   utility: () => '유틸리티 봇 설정',
 };
 
-// What a character brought that its chats do not use yet (runtime/prompt unused), or null.
+// What a character brought that its chats do not use yet (engine/pipeline unused), or null.
 export function describeUnused(items: Unused[]): string | null {
   if (items.length === 0) return null;
   return `${items.map((item) => LABEL[item.kind](item.count)).join(' · ')}는 아직 대화에 쓰이지 않아요.`;

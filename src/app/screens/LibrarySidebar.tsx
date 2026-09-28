@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import type { ChatItem } from '../../model/chat';
 import { holds, matches, shownFolders, type FolderTree, type Shelf } from '../../model/library';
 import { navigate, usePath } from '../router';
-import { useAccount, useLibrary, useTurn } from '../session';
+import { useAccount, useLibrary, useSession, useTurn } from '../session';
 import { useToast } from '../toast';
 import {
   AccountRow,
@@ -62,7 +62,8 @@ type Props = {
 // up without leaving the open chat.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { characters, none, folders } = useLibrary();
-  const { username, onLock, onLogout } = useAccount();
+  const { onLock, onLogout } = useAccount();
+  const { username } = useSession();
   const turn = useTurn();
   const path = usePath();
   const wide = useWide();

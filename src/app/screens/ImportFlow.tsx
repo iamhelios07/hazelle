@@ -2,7 +2,7 @@ import { MessageSquarePlus } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { importCard } from '../../engine/import/card';
 import type { Imported, ImportFailure, UnsupportedKind } from '../../engine/import/types';
-import { unused } from '../../engine/prompt';
+import { unused } from '../../engine/pipeline';
 import { importCharacter } from '../../runtime/characters';
 import { thumbnail } from '../../runtime/picture';
 import { navigate } from '../router';

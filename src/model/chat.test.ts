@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatItems, chatTitle, fold, history, recentModels, shown, type Entry, type Receipt } from './chat';
+import { chatItems, chatTitle, fold, recentModels, shown, type Entry, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -64,22 +64,14 @@ describe('fold', () => {
   });
 });
 
-describe('history', () => {
-  it('sends each shown text and leaves a failed reply out', () => {
-    const messages = fold([user('u1', '안녕'), bot('b1', '', { state: 'failed' }), user('u2', '다시')]);
-    expect(history(messages)).toEqual([
-      { role: 'user', content: '안녕' },
-      { role: 'user', content: '다시' },
-    ]);
-  });
-});
+const asStored = (text: string) => text;
 
 describe('chatTitle', () => {
   it('uses the given title, then the first line of the first message', () => {
     const messages = fold([user('u1', '  기숙사 첫날\n둘째 줄')]);
-    expect(chatTitle({ title: null, character: null, models: {} }, messages)).toBe('기숙사 첫날');
-    expect(chatTitle({ title: '이름', character: null, models: {} }, messages)).toBe('이름');
-    expect(chatTitle({ title: null, character: null, models: {} }, [])).toBe('새 채팅');
+    expect(chatTitle({ title: null, character: null, models: {} }, messages, asStored)).toBe('기숙사 첫날');
+    expect(chatTitle({ title: '이름', character: null, models: {} }, messages, asStored)).toBe('이름');
+    expect(chatTitle({ title: null, character: null, models: {} }, [], asStored)).toBe('새 채팅');
   });
 });
 
@@ -88,7 +80,7 @@ describe('chatItems', () => {
     const chat = (id: string, at: number, title: string | null = null): Stored<'chat'> => ({ id, kind: 'chat', parent: null, rev: at, value: { title, character: null, models: {} } });
     const written = (at: number): Stored<'entry'> => ({ ...user(`u${at}`, '안녕'), rev: at });
     const entries: Record<string, Stored<'entry'>[]> = { a: [written(5)], renamed: [written(3)], empty: [] };
-    const items = chatItems([chat('a', 1), chat('renamed', 10, '새 이름'), chat('empty', 7)], (id) => entries[id]!);
+    const items = chatItems([chat('a', 1), chat('renamed', 10, '새 이름'), chat('empty', 7)], (id) => entries[id]!, (_, text) => text);
     expect(items.map((item) => [item.id, item.order])).toEqual([
       ['empty', 7],
       ['a', 5],

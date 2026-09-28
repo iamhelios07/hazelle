@@ -4,6 +4,7 @@ import { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
 import { api } from './api';
+import { setDefaultModel } from './assignment';
 import { Files } from './files';
 import { openSession, type Session } from './session';
 import { ObjectStore } from './store';
@@ -49,6 +50,18 @@ export function stubRelay(answer: Relay): { at: number; sent: HttpRequest }[] {
 export const upstream = (status: number, body: unknown) => Response.json(body, { status, headers: { 'x-relay': 'upstream' } });
 
 export const inTurn = (answers: (Response | null)[]): Relay => () => answers.shift() ?? null;
+
+// A chat-completions stream that says text and ends.
+export const saying = (text: string) =>
+  new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { headers: { 'x-relay': 'upstream' } });
+
+// An OpenRouter connection whose one starred model is 전체 기본값's 본 대화 model, so chats can be answered.
+export async function answerable(session: Session): Promise<void> {
+  const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
+  const connection = await session.store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [model] });
+  if (!connection.ok) throw new Error(connection.error);
+  await setDefaultModel(session.store, { connection: connection.data.id, model: model.id });
+}
 
 // Gives each test in the file a server with no accounts. account() signs one up; each open() is one
 // more device of it, and another vault key stands for a device that cannot read what it wrote.

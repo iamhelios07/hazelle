@@ -1,12 +1,16 @@
 import { MessageSquare, MoreHorizontal, PanelRight } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { Assignment, ModelRef } from '../../connectors/assignment';
-import { shown, type Chat, type Message } from '../../model/chat';
+import { unused } from '../../engine/pipeline';
+import { render } from '../../engine/render';
+import { shown, type Chat } from '../../model/chat';
 import { KEEP_DAYS } from '../../model/library';
-import { fillNames, unused } from '../../engine/prompt';
-import { addEntry, addGreeting, chatModel, editMessage, withTurn, type TalkFailure } from '../../runtime/talk';
+import { chatModel, setChatModel } from '../../runtime/assignment';
+import { editMessage, removeChat, removeMessage, renameChat, restoreChat, restoreMessage, selectVersion, startChat } from '../../runtime/chat-log';
+import { withTurn, type Shown, type TalkFailure } from '../../runtime/talk';
+import { scopeOf, takeTurn, type Target } from '../../runtime/turn';
 import { navigate } from '../router';
-import { useAccount, useCharacter, useChat, useLoreCount, useStore, useTalk, useTurn } from '../session';
+import { useCharacter, useChat, useLoreCount, useSession, useTurn } from '../session';
 import { ToastSlot, useToast } from '../toast';
 import {
   Avatar,
@@ -50,20 +54,18 @@ const SHORTCUTS = [
   { label: '수정 취소', keys: ['Esc'] },
 ];
 
-type Shown = Message & { live: string | null };
-
 // design F3. id is null for a new chat, which is saved with its first message.
 export function ChatScreen({ id, character }: { id: string | null; character: string | null }) {
-  const store = useStore();
-  const talk = useTalk();
+  const session = useSession();
+  const { store, talk } = session;
   const turn = useTurn();
-  const { username } = useAccount();
   const wide = useWide();
   const toast = useToast();
   const item = useChat(id);
   const [draftModels, setDraftModels] = useState<Assignment>({});
   const chat: Chat = item?.chat ?? { title: null, character, models: draftModels };
   const route = chatModel(store, chat);
+  const scope = scopeOf(session, chat);
   const shelf = useCharacter(chat.character);
   const card = shelf?.character.card ?? null;
   const lore = useLoreCount(chat.character);
@@ -77,7 +79,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
           id: 'opening',
           role: 'assistant',
           at: openedAt,
-          versions: greetings.map((text, index) => ({ id: `opening-${index}`, text: fillNames(text, card, username), receipt: null, edited: false, at: openedAt })),
+          versions: greetings.map((text, index) => ({ id: `opening-${index}`, text, receipt: null, edited: false, at: openedAt })),
           selected: greeting,
           live: null,
         }
@@ -152,40 +154,30 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
     follow();
     let chatId = id;
     if (chatId === null) {
-      chatId = crypto.randomUUID();
-      const created = await store.create('chat', chat, { id: chatId });
-      if (!created.ok) {
+      const started = await startChat(store, chat, opening && { texts: opening.versions.map((version) => version.text), selected: opening.selected });
+      if (!started.ok) {
         setDraft(text);
-        toast({ message: `채팅을 만들지 못했어요. ${describeFailure(created)}` });
+        toast({ message: `${started.step === 'chat' ? '채팅을 만들지 못했어요.' : '첫인사를 저장하지 못했어요.'} ${describeFailure(started.failure)}` });
         return;
       }
-      if (opening) {
-        const opened = await addGreeting(store, chatId, opening.versions.map((version) => version.text), opening.selected);
-        if (opened) {
-          setDraft(text);
-          toast({ message: `첫인사를 저장하지 못했어요. ${describeFailure(opened)}` });
-          return;
-        }
-      }
+      chatId = started.id;
       navigate(`/chats/${chatId}`, { replace: true });
     }
-    const failure = await talk.send(chatId, text);
+    const failure = await takeTurn(session, chatId, { kind: 'send', text });
     if (failure?.kind === 'unsent') drafts.set(chatId, text);
     if (failure?.kind === 'unsent' && chatId === id) setDraftState(text);
     report(failure);
   }
 
-  function ask(run: (chat: string) => Promise<TalkFailure | null>) {
+  function ask(target: Target) {
     if (!id || busy) return;
     follow();
-    void run(id).then(report);
+    void takeTurn(session, id, target).then(report);
   }
 
   function select(message: Shown, index: number) {
     if (!id) return;
-    void addEntry(store, id, { type: 'select', message: message.id, version: message.versions[index]!.id, at: Date.now() }).then(
-      (saved) => saved.ok || toast({ message: describeFailure(saved) }),
-    );
+    void selectVersion(store, id, message.id, message.versions[index]!.id).then((saved) => saved.ok || toast({ message: describeFailure(saved) }));
   }
 
   function swipe(message: Shown, step: -1 | 1) {
@@ -196,7 +188,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
       return;
     }
     if (next >= 0 && next < message.versions.length) select(message, next);
-    else if (step === 1 && message === last) ask((chat) => talk.regenerate(chat, message.id));
+    else if (step === 1 && message === last) ask({ kind: 'regenerate', message: message.id });
   }
 
   async function saveEdit(message: Shown, andReply: boolean) {
@@ -207,36 +199,36 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
       return;
     }
     setEditing(null);
-    if (andReply && last && last.role === 'assistant') ask((chat) => talk.regenerate(chat, last.id));
+    if (andReply && last && last.role === 'assistant') ask({ kind: 'regenerate', message: last.id });
   }
 
   async function remove(message: Shown) {
     if (!id) return;
     const chatId = id;
-    const saved = await addEntry(store, chatId, { type: 'delete', message: message.id, at: Date.now() });
+    const saved = await removeMessage(store, chatId, message.id);
     if (!saved.ok) {
       toast({ message: describeFailure(saved) });
       return;
     }
     toast({
       message: '메시지를 지웠어요',
-      action: { label: '되돌리기', onClick: () => void addEntry(store, chatId, { type: 'restore', message: message.id, at: Date.now() }) },
+      action: { label: '되돌리기', onClick: () => void restoreMessage(store, chatId, message.id) },
     });
   }
 
-  async function removeChat() {
-    const stored = item && store.get('chat', item.id);
-    if (!stored) return;
+  async function dropChat() {
+    if (!item) return;
     if (streaming) talk.stop();
-    const removed = await store.remove(stored.id);
+    const removed = await removeChat(store, item.id);
     if (!removed.ok) {
       toast({ message: describeFailure(removed) });
       return;
     }
+    const stored = removed.data;
     navigate(shelfPath(stored.value.character));
     toast({
       message: '채팅을 지웠어요',
-      action: { label: '되돌리기', onClick: () => void store.restore(stored).then((saved) => saved.ok && navigate(`/chats/${stored.id}`)) },
+      action: { label: '되돌리기', onClick: () => void restoreChat(store, stored).then((saved) => saved.ok && navigate(`/chats/${stored.id}`)) },
     });
   }
 
@@ -253,12 +245,12 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
       setDraftModels({ ...draftModels, main: ref });
       return;
     }
-    void store.update('chat', id, (current) => ({ ...current, models: { ...current.models, main: ref } })).then((saved) => saved.ok || toast({ message: describeFailure(saved) }));
+    void setChatModel(store, id, ref).then((saved) => saved.ok || toast({ message: describeFailure(saved) }));
   }
 
   async function rename(name: string) {
     if (!id) return;
-    const saved = await store.update('chat', id, (current) => ({ ...current, title: name.trim() || null }));
+    const saved = await renameChat(store, id, name);
     if (!saved.ok) toast({ message: describeFailure(saved) });
     else setDialog(null);
   }
@@ -339,6 +331,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
   }
   let lastDay = '';
   messages.forEach((message, index) => {
+    const text = render('display', shown(message).text, scope);
     const label = day(message.at);
     if (label !== lastDay) {
       rows.push(<Divider key={`day-${message.at}`} label={label} />);
@@ -348,6 +341,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
       <ChatMessage
         key={message.id}
         message={message}
+        text={text}
         isLast={index === messages.length - 1}
         beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
         character={card && { name: card.nickname || card.name, image: shelf!.face }}
@@ -360,10 +354,10 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
         onEdit={(text) => setEditing(text === null ? null : { id: message.id, text })}
         onSaveEdit={(andReply) => void saveEdit(message, andReply)}
         onSwipe={(step) => swipe(message, step)}
-        onRegenerate={() => ask((chat) => talk.regenerate(chat, message.id))}
-        onRetry={() => ask((chat) => talk.retry(chat, message.id, shown(message).id))}
+        onRegenerate={() => ask({ kind: 'regenerate', message: message.id })}
+        onRetry={() => ask({ kind: 'retry', message: message.id, version: shown(message).id })}
         onOtherModel={() => setPop('model')}
-        onCopy={() => copy(shown(message).text)}
+        onCopy={() => copy(text)}
         onInfo={() => setPanel({ open: true, id: message.id })}
         onDelete={() => void remove(message)}
       />,
@@ -396,7 +390,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
                     tone="warn"
                     onClick={() => {
                       setPop(null);
-                      void removeChat();
+                      void dropChat();
                     }}
                   />
                 </>
@@ -425,7 +419,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
               actions={
                 <>
                   {!busy && !draft.trim() && last?.role === 'user' && (
-                    <Button variant="ghost" size="sm" onClick={() => ask((chat) => talk.answer(chat))}>
+                    <Button variant="ghost" size="sm" onClick={() => ask({ kind: 'answer' })}>
                       답장 받기
                     </Button>
                   )}

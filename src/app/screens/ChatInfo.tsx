@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect } from 'react';
-import { shown, type Message, type Receipt } from '../../model/chat';
+import { shown, type Receipt } from '../../model/chat';
+import type { Shown } from '../../runtime/talk';
 import { useTalk } from '../session';
 import { Breakdown, Callout, Facts, IconButton, PanelSection, SidePanel, Text } from '../ui';
 import { describeReplyError } from './failure';
@@ -9,7 +10,7 @@ import { ago } from './time';
 
 type Props = {
   chat: string | null;
-  messages: (Message & { live: string | null })[];
+  messages: Shown[];
   // The reply shown; the latest when it is gone.
   id: string | null;
   onShow: (id: string) => void;

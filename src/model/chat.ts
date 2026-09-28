@@ -1,5 +1,5 @@
 import type { Assignment, ModelRef } from '../connectors/assignment';
-import type { ChatMessage, Cost, Usage } from '../connectors/types';
+import type { Cost, Usage } from '../connectors/types';
 import type { Stored } from './kinds';
 
 // The stored `chat` object (tech-spec §5). Its messages are `entry` objects whose parent is the chat.
@@ -119,40 +119,39 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
 
 export const shown = (message: Message): Version => message.versions[message.selected]!;
 
-// What the model is sent: each message as it is shown. A failed reply has no text and is left out.
-export function history(messages: Message[]): ChatMessage[] {
-  return messages.map((message) => ({ role: message.role, content: shown(message).text })).filter((message) => message.content !== '');
-}
-
 const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 
-export function chatTitle(chat: Chat, messages: Message[]): string {
+// display turns a message's stored text into the text shown (engine/render, which the model cannot call).
+type Display = (text: string) => string;
+
+export function chatTitle(chat: Chat, messages: Message[], display: Display): string {
   if (chat.title) return chat.title;
   const first = messages.find((message) => message.role === 'user');
-  return (first && firstLine(shown(first).text)) || '새 채팅';
+  return (first && firstLine(display(shown(first).text))) || '새 채팅';
 }
 
-export function preview(messages: Message[]): string {
+export function preview(messages: Message[], display: Display): string {
   const last = messages.at(-1);
-  return last ? firstLine(shown(last).text) : '';
+  return last ? firstLine(display(shown(last).text)) : '';
 }
 
 export type ChatItem = { id: string; chat: Chat; messages: Message[]; title: string; preview: string; at: number | null; order: number };
 
 // Every chat with its messages, the one written to last first. Renaming a chat or changing its model
 // does not move it.
-export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => Stored<'entry'>[]): ChatItem[] {
+export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => Stored<'entry'>[], display: (chat: Chat, text: string) => string): ChatItem[] {
   return chats
     .map((chat) => {
       const own = entriesOf(chat.id);
       const messages = fold(own);
       const latest = own.reduce<Stored<'entry'> | null>((last, entry) => (last && last.rev > entry.rev ? last : entry), null);
+      const show = (text: string) => display(chat.value, text);
       return {
         id: chat.id,
         chat: chat.value,
         messages,
-        title: chatTitle(chat.value, messages),
-        preview: preview(messages),
+        title: chatTitle(chat.value, messages, show),
+        preview: preview(messages, show),
         at: latest?.value.at ?? null,
         order: latest?.rev ?? chat.rev,
       };

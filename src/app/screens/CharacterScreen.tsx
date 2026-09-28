@@ -1,5 +1,5 @@
 import { Copy, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
-import { unused } from '../../engine/prompt';
+import { unused } from '../../engine/pipeline';
 import { navigate } from '../router';
 import { useCharacter, useLibrary, useLoreCount } from '../session';
 import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Stack, Tag, Text, useWide } from '../ui';
