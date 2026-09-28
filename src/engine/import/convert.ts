@@ -1,4 +1,5 @@
 import { count, isRecord, list } from '../../connectors/values';
+import { isUnsupportedTag } from '../cbs/tags';
 import type { Card, ImportReport, LoreEntry, RegexScript, UnsupportedKind } from './types';
 
 type Json = Record<string, unknown>;
@@ -32,51 +33,6 @@ const STAGES = new Map<unknown, RegexScript['stage']>([
 const ROLES = ['system', 'user', 'assistant'];
 // Risu's order for a new entry. CCv3 requires insertion_order, so only a malformed file goes without one.
 const DEFAULT_ORDER = 100;
-
-// CBS tags the spec marks X (risu-compat-spec §d), with their aliases in src/ts/cbs.ts at ca1345fc, spelled as
-// Risu's matcher compares names: lowercased, without whitespace, '_' or '-'. The internal-only `__` is left out,
-// since that spelling makes its name empty.
-const UNSUPPORTED_TAGS = new Set([
-  'button',
-  'triggerid',
-  'emotionlist',
-  'assetlist',
-  'chardisplayasset',
-  'moduleenabled',
-  'moduleassetlist',
-  'file',
-  'risu',
-  'bkspc',
-  'erase',
-  'xor',
-  'xorencrypt',
-  'xorencode',
-  'xore',
-  'xordecrypt',
-  'xordecode',
-  'xord',
-  'crypt',
-  'crypto',
-  'caesar',
-  'encrypt',
-  'decrypt',
-  'raw',
-  'path',
-  'img',
-  'image',
-  'video',
-  'audio',
-  'bgm',
-  'bg',
-  'emotion',
-  'asset',
-  'videoimg',
-  'source',
-  'inlay',
-  'inlayed',
-  'inlayeddata',
-  'assetprompt',
-]);
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const flag = (value: unknown) => (typeof value === 'boolean' ? value : null);
@@ -310,7 +266,7 @@ function countInText(card: Card, lore: LoreEntry[], tally: Tally) {
   ];
   for (const value of texts) {
     for (const [, name] of value.matchAll(/\{\{([^{}:]*)/g)) {
-      if (UNSUPPORTED_TAGS.has(name!.toLowerCase().replace(/[\s_-]/g, ''))) add(tally, 'cbs-tag');
+      if (isUnsupportedTag(name!)) add(tally, 'cbs-tag');
     }
   }
   for (const entry of lore) add(tally, 'disable-ui-prompt', decorators(entry.content).filter((line) => /^@@disable_ui_prompt\b/.test(line)).length);
