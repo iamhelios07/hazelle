@@ -5,7 +5,9 @@ import type { Shown } from '../../runtime/talk';
 import { describeReplyError } from '../common/failure';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
+import { hints, pressed, SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, EditBox, Failure, Marker, Message as Row, Prose, Switcher, Tool, ToolDivider, Waiting } from '../ui';
+import type { ChatActions } from './useChat';
 
 type Props = {
   message: Shown;
@@ -26,23 +28,14 @@ type Props = {
   // The text in the edit box, while this message is being edited.
   editing: string | null;
   pinned: boolean;
-  onTap: () => void;
-  onEdit: (text: string | null) => void;
-  onSaveEdit: (andReply: boolean) => void;
-  onSwipe: (step: -1 | 1) => void;
-  onRegenerate: () => void;
-  onRetry: () => void;
-  onOtherModel: () => void;
-  onCopy: () => void;
-  onInfo: () => void;
-  onDelete: () => void;
+  actions: ChatActions;
 };
 
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 // One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
-  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, onTap, onEdit, onSaveEdit, onSwipe } = props;
+  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, actions } = props;
   const { username } = useSession();
   const version = shown(message);
   const receipt = version.receipt;
@@ -54,12 +47,12 @@ export function ChatMessage(props: Props) {
   const cut = !live && !version.edited && receipt?.state === 'cut' ? receipt.cut : null;
 
   const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Escape') {
+    if (pressed(event, SHORTCUTS.cancelEdit)) {
       event.preventDefault();
-      onEdit(null);
-    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      actions.edit(message, null);
+    } else if (pressed(event, SHORTCUTS.saveEdit)) {
       event.preventDefault();
-      onSaveEdit(false);
+      void actions.saveEdit(message, false);
     }
   };
 
@@ -68,20 +61,20 @@ export function ChatMessage(props: Props) {
     body = (
       <EditBox
         value={editing}
-        onChange={onEdit}
+        onChange={(text) => actions.edit(message, text)}
         onKeyDown={editKeys}
-        hint="Esc 취소 · Ctrl+Enter 저장"
+        hint={hints(SHORTCUTS.cancelEdit, SHORTCUTS.saveEdit)}
         actions={
           <>
-            <Button variant="ghost" size="sm" onClick={() => onEdit(null)}>
+            <Button variant="ghost" size="sm" onClick={() => actions.edit(message, null)}>
               취소
             </Button>
             {beforeLastReply && (
-              <Button variant="secondary" size="sm" disabled={busy} onClick={() => onSaveEdit(true)}>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={() => void actions.saveEdit(message, true)}>
                 저장하고 답장 다시 받기
               </Button>
             )}
-            <Button size="sm" onClick={() => onSaveEdit(false)}>
+            <Button size="sm" onClick={() => void actions.saveEdit(message, false)}>
               저장
             </Button>
           </>
@@ -96,10 +89,10 @@ export function ChatMessage(props: Props) {
         title="답장을 받지 못했어요"
         actions={
           <>
-            <Button size="sm" disabled={busy} onClick={props.onRetry}>
+            <Button size="sm" disabled={busy} onClick={() => actions.retry(message)}>
               다시 시도
             </Button>
-            <Button variant="secondary" size="sm" onClick={props.onOtherModel}>
+            <Button variant="secondary" size="sm" onClick={() => actions.menu('model')}>
               다른 모델로
             </Button>
           </>
@@ -113,13 +106,15 @@ export function ChatMessage(props: Props) {
   }
 
   const count = message.versions.length;
+  const nextLabel = message.selected === count - 1 && !opening ? '새 답장 받기' : '다음';
+  const [back, forward] = SHORTCUTS.swipe.keys;
   const after = (
     <>
       {cut && (
         <Marker
           reason={cut === 'stopped' ? 'stopped' : 'length'}
           label={cut === 'stopped' && empty ? '답장을 받기 전에 멈췄어요' : CUT[cut]}
-          action={cut === 'stopped' && empty ? { label: '다시 받기', disabled: busy, onClick: props.onRetry } : undefined}
+          action={cut === 'stopped' && empty ? { label: '다시 받기', disabled: busy, onClick: () => actions.retry(message) } : undefined}
         />
       )}
       {!mine && isLast && count > 1 && editing === null && (
@@ -127,25 +122,27 @@ export function ChatMessage(props: Props) {
           label={`${message.selected + 1} / ${count}`}
           prevDisabled={busy || message.selected === 0}
           nextDisabled={busy || (opening && message.selected === count - 1)}
-          nextLabel={message.selected === count - 1 && !opening ? '새 답장 받기' : '다음'}
-          onPrev={() => onSwipe(-1)}
-          onNext={() => onSwipe(1)}
+          nextLabel={nextLabel}
+          prevTitle={titled('이전', [back])}
+          nextTitle={titled(nextLabel, [forward])}
+          onPrev={() => actions.swipe(message, -1)}
+          onNext={() => actions.swipe(message, 1)}
         />
       )}
     </>
   );
 
   const tools = live || editing !== null ? undefined : opening ? (
-    <Tool icon={Copy} label="복사" onClick={props.onCopy} />
+    <Tool icon={Copy} label="복사" onClick={() => actions.copy(text)} />
   ) : (
     <>
-      {!mine && isLast && !failed && !busy && <Tool icon={RotateCcw} label="다시 생성" onClick={props.onRegenerate} />}
-      {!mine && failed && !busy && <Tool icon={RotateCcw} label="다시 시도" onClick={props.onRetry} />}
-      {!failed && <Tool icon={Pencil} label="수정" onClick={() => onEdit(version.text)} />}
-      {!empty && <Tool icon={Copy} label="복사" onClick={props.onCopy} />}
-      {!mine && <Tool icon={Info} label="답장 정보" onClick={props.onInfo} />}
+      {!mine && isLast && !failed && !busy && <Tool icon={RotateCcw} label="다시 생성" onClick={() => actions.regenerate(message)} />}
+      {!mine && failed && !busy && <Tool icon={RotateCcw} label="다시 시도" onClick={() => actions.retry(message)} />}
+      {!failed && <Tool icon={Pencil} label="수정" onClick={() => actions.edit(message, version.text)} />}
+      {!empty && <Tool icon={Copy} label="복사" onClick={() => actions.copy(text)} />}
+      {!mine && <Tool icon={Info} label="답장 정보" onClick={() => actions.info(message.id)} />}
       <ToolDivider />
-      <Tool icon={Trash2} label="삭제 · 되돌릴 수 있어요" onClick={props.onDelete} />
+      <Tool icon={Trash2} label="삭제 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
     </>
   );
 
@@ -158,7 +155,7 @@ export function ChatMessage(props: Props) {
       after={after}
       tools={tools}
       pinned={pinned}
-      onTap={onTap}
+      onTap={() => actions.pin(message)}
     >
       {body}
     </Row>

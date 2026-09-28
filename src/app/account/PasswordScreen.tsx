@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useAttempt } from '../common/useAttempt';
 import { Brand, Button, Callout, Intro, Screen, Stack, Steps, Text, TextField } from '../ui';
 
 const MIN_LENGTH = 8;
@@ -15,19 +16,14 @@ export function PasswordScreen({ mode, username: initialUsername, onDone }: Prop
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, failure, run, setFailure } = useAttempt();
   const signup = mode === 'signup';
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if ([...password].length < MIN_LENGTH) return setMessage(`비밀번호는 ${MIN_LENGTH}자 이상이어야 해요.`);
-    if (password !== again) return setMessage('두 비밀번호가 달라요.');
-    setBusy(true);
-    setMessage(null);
-    const failure = await onDone(username, password);
-    setBusy(false);
-    setMessage(failure);
+    if ([...password].length < MIN_LENGTH) return setFailure(`비밀번호는 ${MIN_LENGTH}자 이상이어야 해요.`);
+    if (password !== again) return setFailure('두 비밀번호가 달라요.');
+    await run(() => onDone(username, password));
   }
 
   return (
@@ -60,9 +56,9 @@ export function PasswordScreen({ mode, username: initialUsername, onDone }: Prop
         <TextField label="비밀번호" kind="new-password" value={password} onChange={setPassword} placeholder="8자 이상" />
         <TextField label="한 번 더" kind="new-password" value={again} onChange={setAgain} placeholder="같은 비밀번호" />
       </Stack>
-      {message && (
+      {failure && (
         <Callout tone="warn" alert>
-          {message}
+          {failure}
         </Callout>
       )}
     </Screen>

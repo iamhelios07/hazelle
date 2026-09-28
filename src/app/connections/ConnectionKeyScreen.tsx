@@ -1,19 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import { detect } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
-import { addConnection } from '../../runtime/connections';
-import { describeAddFailure } from '../common/failure';
+import { useAttempt } from '../common/useAttempt';
 import { useSession } from '../session';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, Intro, Link, NavBar, Screen, Stack, Text, TextField } from '../ui';
+import { connect } from './connect';
 
 // F5 for a provider picked from the list: its address is known, so only the key is asked.
 export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back: Back }) {
   const session = useSession();
   const [key, setKey] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, failure, run } = useAttempt();
   const secret = key.trim();
   const other = detect(secret);
   const elsewhere = other?.kind === 'key' && other.type !== type ? other.type : null;
@@ -21,12 +20,7 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!secret) return;
-    setBusy(true);
-    setMessage(null);
-    const added = await addConnection(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
-    setBusy(false);
-    if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
-    else setMessage(describeAddFailure(added.failure));
+    await run(() => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }));
   }
 
   return (
@@ -50,9 +44,9 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
         {type.keyPage && <Link href={type.keyPage}>{new URL(type.keyPage).host}에서 키 만들기</Link>}
         {elsewhere && <Callout tone="warn">{elsewhere.label} 키 같아요. 연결 추가 목록에서 다시 골라 주세요.</Callout>}
       </Stack>
-      {message && (
+      {failure && (
         <Callout tone="warn" alert>
-          {message}
+          {failure}
         </Callout>
       )}
     </Screen>

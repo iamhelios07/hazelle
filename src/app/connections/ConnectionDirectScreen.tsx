@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { detect, GENERIC } from '../../connectors/registry';
 import type { Connection, Protocol } from '../../connectors/types';
-import { addConnection } from '../../runtime/connections';
-import { describeAddFailure } from '../common/failure';
+import { HTTPS_ONLY } from '../common/failure';
+import { useAttempt } from '../common/useAttempt';
 import { useSession } from '../session';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, ChoiceGroup, Intro, NavBar, Screen, Stack, Text, TextField } from '../ui';
+import { connect } from './connect';
 
 const PROTOCOLS: { value: Protocol; label: string }[] = [
   { value: 'chat-completions', label: 'OpenAI 호환' },
@@ -14,7 +15,7 @@ const PROTOCOLS: { value: Protocol; label: string }[] = [
 ];
 
 const PROBLEMS = {
-  'not-https': 'https 주소만 연결할 수 있어요.',
+  'not-https': HTTPS_ONLY,
   local: '내 컴퓨터나 집 안 네트워크의 주소는 서버에서 닿을 수 없어서 연결할 수 없어요.',
 };
 
@@ -25,8 +26,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
   const [address, setAddress] = useState(pasted);
   const [protocol, setProtocol] = useState<Protocol | null>(null);
   const [key, setKey] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, failure, run } = useAttempt();
 
   const place = detect(address);
   const secret = key.trim();
@@ -40,12 +40,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!draft) return;
-    setBusy(true);
-    setMessage(null);
-    const added = await addConnection(session, draft);
-    setBusy(false);
-    if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
-    else setMessage(describeAddFailure(added.failure));
+    await run(() => connect(session, draft));
   }
 
   return (
@@ -79,9 +74,9 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
           />
         )}
       </Stack>
-      {message && (
+      {failure && (
         <Callout tone="warn" alert>
-          {message}
+          {failure}
         </Callout>
       )}
     </Screen>

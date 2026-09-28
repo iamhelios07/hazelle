@@ -2,14 +2,14 @@ import { ExternalLink, RotateCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DeviceCode } from '../../connectors/device-code';
 import type { Connection, ConnectionType, SignIn } from '../../connectors/types';
-import { addConnection } from '../../runtime/connections';
 import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
-import { describeAddFailure, describeSignInFailure } from '../common/failure';
+import { describeSignInFailure } from '../common/failure';
 import { useSession } from '../session';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, CodeCard, Intro, NavBar, Screen, Text } from '../ui';
+import { connect } from './connect';
 
 type Stage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
 
@@ -43,9 +43,8 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
         secret: approved.secret,
         starred: [],
       };
-      const added = await addConnection(session, connection, signal);
-      if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
-      else fail(describeAddFailure(added.failure));
+      const failure = await connect(session, connection, signal);
+      if (failure) fail(failure);
     })();
     return () => abort.abort();
   }, [type, signIn, session, attempt]);
@@ -53,7 +52,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
   // The copy starts before the new tab takes focus, which the clipboard needs.
   function openSite(code: DeviceCode) {
     navigator.clipboard.writeText(code.userCode).then(
-      () => toast({ message: '코드를 복사했어요.' }),
+      () => toast.show('코드를 복사했어요.'),
       () => {},
     );
     window.open(code.verificationUri, '_blank', 'noopener');

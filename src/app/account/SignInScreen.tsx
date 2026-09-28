@@ -1,5 +1,6 @@
 import { FileText, LogOut } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { useAttempt } from '../common/useAttempt';
 import { Brand, Button, Callout, FileButton, IconButton, Intro, Screen, Stack, TextField } from '../ui';
 
 type Method = 'password' | 'recovery';
@@ -16,23 +17,16 @@ export function SignInScreen({ account, onSubmit, onLogout }: Props) {
   const [method, setMethod] = useState<Method>('password');
   const [username, setUsername] = useState('');
   const [secret, setSecret] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, failure, run, setFailure } = useAttempt();
   const recovery = method === 'recovery';
   const verb = account ? '열기' : '로그인';
 
-  async function attempt(text: string) {
-    setBusy(true);
-    setMessage(null);
-    const failure = await onSubmit(account ?? username, method, text);
-    setBusy(false);
-    setMessage(failure);
-  }
+  const attempt = (text: string) => run(() => onSubmit(account ?? username, method, text));
 
   function switchMethod() {
     setMethod(recovery ? 'password' : 'recovery');
     setSecret('');
-    setMessage(null);
+    setFailure(null);
   }
 
   return (
@@ -76,9 +70,9 @@ export function SignInScreen({ account, onSubmit, onLogout }: Props) {
           <TextField label="비밀번호" kind="current-password" value={secret} onChange={setSecret} />
         )}
       </Stack>
-      {message && (
+      {failure && (
         <Callout tone="warn" alert>
-          {message}
+          {failure}
         </Callout>
       )}
     </Screen>

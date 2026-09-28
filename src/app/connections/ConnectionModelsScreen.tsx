@@ -99,10 +99,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       return;
     }
     navigate({ kind: 'connections' });
-    toast({
-      message: `${result.data.value.label} 연결을 지웠어요.`,
-      action: { label: '되돌리기', onClick: () => void restoreConnection(store, result.data) },
-    });
+    toast.undoable(`${result.data.value.label} 연결을 지웠어요.`, () => void restoreConnection(store, result.data));
   }
 
   const subtitle = !catalog ? '모델 목록을 불러오는 중…' : catalog.ok ? `모델 ${catalog.models.length}개` : '모델 목록을 불러오지 못했어요';

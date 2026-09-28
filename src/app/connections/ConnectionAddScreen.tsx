@@ -2,12 +2,12 @@ import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
-import { addConnection } from '../../runtime/connections';
-import { describeAddFailure } from '../common/failure';
+import { useAttempt } from '../common/useAttempt';
 import { useConnections, useSession } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
+import { connect } from './connect';
 
 const GROUPS: Record<ConnectionType['group'], string> = {
   gateway: '여러 회사 모델을 한 키로',
@@ -22,21 +22,12 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
   const connections = useConnections();
   const route = useRoute();
   const [query, setQuery] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const { busy, failure, run } = useAttempt();
 
   const search = searchTypes(query);
   const shown = search.kind === 'types' ? search.types : search.kind === 'key' ? [search.type] : [];
   const connected = (type: ConnectionType) => connections.filter((entry) => resolveConnection(entry.value)?.type === type).length;
-
-  async function connectKey(type: ConnectionType, secret: string) {
-    setBusy(true);
-    setMessage(null);
-    const added = await addConnection(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
-    setBusy(false);
-    if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
-    else setMessage(describeAddFailure(added.failure));
-  }
+  const connectKey = (type: ConnectionType, secret: string) => run(() => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }));
 
   return (
     <Screen top={<NavBar title="연결 추가" onBack={() => navigate(back.to)} backLabel={back.label} />}>
@@ -51,9 +42,9 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
       )}
       {search.kind === 'address' && <Text tone="muted">목록에 없는 주소예요. 아래 직접 연결로 이어서 연결할 수 있어요.</Text>}
       {search.kind === 'none' && <Text tone="muted">목록에 맞는 곳이 없어요. 직접 연결로 연결할 수 있어요.</Text>}
-      {message && (
+      {failure && (
         <Callout tone="warn" alert>
-          {message}
+          {failure}
         </Callout>
       )}
       {(Object.keys(GROUPS) as ConnectionType['group'][]).map((group) => {

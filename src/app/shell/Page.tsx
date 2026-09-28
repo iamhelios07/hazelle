@@ -11,7 +11,7 @@ import { ConnectionSignInScreen } from '../connections/ConnectionSignInScreen';
 import { ConnectionsScreen } from '../connections/ConnectionsScreen';
 import { CharacterEditScreen } from '../library/CharacterEditScreen';
 import { CharacterScreen } from '../library/CharacterScreen';
-import { GalleryScreen } from '../library/GalleryScreen';
+import { GalleryScreen } from '../library/gallery/GalleryScreen';
 import { HomeScreen } from '../library/HomeScreen';
 import { useViews } from '../session';
 import { ListDetail, Screen, Text, useSplit, useWide } from '../ui';

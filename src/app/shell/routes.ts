@@ -97,7 +97,6 @@ export function href(route: Route): string {
   }
 }
 
-// Phones show the character list as the page for these, and the page itself for every other route.
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
 // The connection list a route sits in (design F5): its screen is the list itself, or the item beside it

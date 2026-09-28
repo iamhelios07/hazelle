@@ -7,7 +7,7 @@ import { useCharacter, useLoreCount } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME, type Back } from '../shell/routes';
 import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Stack, Tag, Text, useWide } from '../ui';
-import { useCharacterActions } from './characterActions';
+import { useCharacterActions } from './useCharacterActions';
 
 // A character's own page beside its chats (design F6), or with shelf null, 캐릭터 없이.
 export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatItem> | null; back: Back | null }) {

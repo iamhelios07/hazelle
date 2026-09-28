@@ -2,7 +2,6 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Card } from '../../engine/import/types';
 import { editCard } from '../../runtime/characters';
-import { describeFailure } from '../common/failure';
 import { useStore } from '../session';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -37,7 +36,7 @@ export function CharacterEditScreen({ id, initial, back }: { id: string; initial
     // Kept for the next change to try again, under anything typed since.
     waiting.current = { ...patch, ...waiting.current };
     setStatus('failed');
-    toast({ message: `저장하지 못했어요. ${describeFailure(saved)}` });
+    toast.failed(saved, '저장하지 못했어요.');
   }
 
   const leave = useRef(flush);
@@ -69,7 +68,7 @@ export function CharacterEditScreen({ id, initial, back }: { id: string; initial
       'greetings',
       before.filter((_, at) => at !== index),
     );
-    toast({ message: `${index + 1}번째 첫인사를 지웠어요.`, action: { label: '되돌리기', onClick: () => change('greetings', before) } });
+    toast.undoable(`${index + 1}번째 첫인사를 지웠어요.`, () => change('greetings', before));
   }
 
   return (

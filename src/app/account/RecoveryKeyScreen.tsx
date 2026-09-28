@@ -1,5 +1,6 @@
 import { ChevronLeft, Download } from 'lucide-react';
 import { useState } from 'react';
+import { useAttempt } from '../common/useAttempt';
 import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Screen, Steps, Text } from '../ui';
 import { downloadText } from './download';
 
@@ -16,8 +17,7 @@ type Props = {
 export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Props) {
   const [downloaded, setDownloaded] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, failure, run } = useAttempt();
 
   function download() {
     const created = new Date().toISOString().slice(0, 10);
@@ -38,14 +38,6 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
     setDownloaded(true);
   }
 
-  async function start() {
-    setBusy(true);
-    setMessage(null);
-    const failure = await onStart();
-    setBusy(false);
-    setMessage(failure);
-  }
-
   return (
     <Screen
       top={
@@ -58,7 +50,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
       }
       actions={
         <>
-          <Button disabled={!downloaded || !saved} busy={busy} onClick={start}>
+          <Button disabled={!downloaded || !saved} busy={busy} onClick={() => void run(onStart)}>
             시작하기
           </Button>
           <Text size="sm" tone="muted" align="center">
@@ -79,9 +71,9 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
         </Button>
       )}
       <Checkbox label="안전한 곳에 따로 저장했어요" checked={saved} onChange={setSaved} />
-      {message && (
+      {failure && (
         <Callout tone="warn" alert>
-          {message}
+          {failure}
         </Callout>
       )}
     </Screen>

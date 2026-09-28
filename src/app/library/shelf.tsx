@@ -6,13 +6,15 @@ import { Avatar } from '../ui';
 
 export const shelfName = (shelf: Shelf<ChatItem>) => shelf.character?.card.name ?? '캐릭터 없이';
 
+export const NO_CHATS = '아직 채팅이 없어요';
+
 export function ShelfFace({ shelf, size }: { shelf: Shelf<ChatItem>; size?: 'sm' | 'md' | 'lg' }) {
   return shelf.character ? <Avatar face={shelf.character.card.name} image={shelf.face} size={size} /> : <Avatar face={MessageSquare} size={size} />;
 }
 
 export function cardNote(shelf: CharacterShelf<ChatItem>): string {
   const latest = shelf.chats[0];
-  return latest?.at ? `${ago(latest.at)} · 채팅 ${shelf.chats.length}개` : '아직 채팅이 없어요';
+  return latest?.at ? `${ago(latest.at)} · 채팅 ${shelf.chats.length}개` : NO_CHATS;
 }
 
 // How long a character in 지운 캐릭터 has left. Past its time it goes when the app next opens.

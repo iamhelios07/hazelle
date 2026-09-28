@@ -71,17 +71,20 @@ type SwitcherProps = {
   nextDisabled: boolean;
   // On the last version, → asks for a new one.
   nextLabel: string;
+  // With the keys that press them (src/app/shortcuts.ts).
+  prevTitle: string;
+  nextTitle: string;
 };
 
 // ← n / m → between a message's versions.
-export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, nextLabel }: SwitcherProps) {
+export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, nextLabel, prevTitle, nextTitle }: SwitcherProps) {
   return (
     <div className={styles.switcher}>
-      <button type="button" className={styles.step} aria-label="이전" title="이전 · ←" disabled={prevDisabled} onClick={onPrev}>
+      <button type="button" className={styles.step} aria-label="이전" title={prevTitle} disabled={prevDisabled} onClick={onPrev}>
         <Icon icon={ChevronLeft} size="xs" />
       </button>
       <span className={styles.count}>{label}</span>
-      <button type="button" className={styles.step} aria-label={nextLabel} title={`${nextLabel} · →`} disabled={nextDisabled} onClick={onNext}>
+      <button type="button" className={styles.step} aria-label={nextLabel} title={nextTitle} disabled={nextDisabled} onClick={onNext}>
         <Icon icon={ChevronRight} size="xs" />
       </button>
     </div>

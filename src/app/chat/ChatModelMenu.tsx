@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { fitsRole, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
+import { noResults } from '../common/search';
 import { useChats, useConnections } from '../session';
 import { navigate } from '../shell/router';
 import { ChipButton, MenuDivider, MenuHeading, MenuItem, MenuNote, Popover, SearchField } from '../ui';
@@ -72,7 +73,7 @@ export function ChatModelMenu({ open, onOpen, current, label, onPick }: Props) {
                 {found.map(item)}
               </>
             ) : (
-              <MenuNote>“{query.trim()}” 검색 결과가 없어요. 별표 찍은 모델만 찾아요.</MenuNote>
+              <MenuNote>{`${noResults(query.trim())} 별표 찍은 모델만 찾아요.`}</MenuNote>
             )
           ) : (
             <>

@@ -14,17 +14,19 @@ const APP_OUTSIDE_UI = {
   regex: '^\\.\\./(?!\\.\\.)',
   message: 'src/app/ui imports nothing else from src/app, so a component never reaches the session, router, toasts or a screen (tech-spec §3).',
 };
-// The feature folders are flat, so one level up from a file in one is src/app, and another feature's
-// file is ../<feature>/…; ../../model/library is not the library feature.
+// A pattern sees the import as written, so it counts the steps up to src/app: from a file depth folders
+// below it, another feature's file is ../ × depth, then <feature>/…; ../../model/library from a feature's
+// top folder is not the library feature.
 const FEATURES = ['account', 'library', 'chat', 'connections'];
-const OTHER_FEATURE = {
-  regex: `^\\.\\./(${FEATURES.join('|')})(/|$)`,
+const toApp = (depth) => '\\.\\./'.repeat(depth);
+const OTHER_FEATURE = (depth) => ({
+  regex: `^${toApp(depth)}(${FEATURES.join('|')})(/|$)`,
   message: 'A feature folder imports no other feature folder; only the shell and main.tsx compose them (tech-spec §3).',
-};
-const SHELL_INSIDE = {
-  regex: '^\\.\\./shell(/(?!(routes|router)$)|$)',
+});
+const SHELL_INSIDE = (depth) => ({
+  regex: `^${toApp(depth)}shell(/(?!(routes|router)$)|$)`,
   message: 'Feature folders take only routes and router from the shell (tech-spec §3).',
-};
+});
 const HEX_COLOR = {
   selector: 'Literal[value=/^#(?:[0-9a-fA-F]{3,4}){1,2}$/]',
   message: 'Colors live in src/app/ui/tokens.css.',
@@ -93,8 +95,9 @@ export default defineConfig([
     ignores: ['src/app/ui/**', 'src/app/main.tsx'],
     rules: { ...restrictImports(CLIENT_TO_SERVER, CSS_IMPORT), 'no-restricted-syntax': ['error', HEX_COLOR, STYLE_PROPS] },
   },
-  {
-    files: [`src/app/{${FEATURES.join(',')},common}/**`],
-    rules: restrictImports(CLIENT_TO_SERVER, CSS_IMPORT, OTHER_FEATURE, SHELL_INSIDE),
-  },
+  // Depth 2 is a feature's own folder, such as library/gallery. A folder nested deeper needs its depth here.
+  ...[1, 2].map((depth) => ({
+    files: [`src/app/{${FEATURES.join(',')},common}/${'*/'.repeat(depth - 1)}*`],
+    rules: restrictImports(CLIENT_TO_SERVER, CSS_IMPORT, OTHER_FEATURE(depth), SHELL_INSIDE(depth)),
+  })),
 ]);

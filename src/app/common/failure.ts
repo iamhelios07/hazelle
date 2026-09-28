@@ -38,8 +38,11 @@ const REFUSED: Record<string, string> = {
   'unsupported-protocol': '이 모델이 받는 요청 방식을 이 앱이 아직 몰라요.',
 };
 
+// The relay refuses these, and 직접 연결 says so before it tries.
+export const HTTPS_ONLY = 'https 주소만 연결할 수 있어요.';
+
 const RELAY: Record<string, string> = {
-  'not-https': 'https 주소만 연결할 수 있어요.',
+  'not-https': HTTPS_ONLY,
   'not-public': '서버에서 닿을 수 없는 주소예요. 내 컴퓨터나 집 안 네트워크의 주소는 연결할 수 없어요.',
   'upstream-unreachable': '프로바이더 서버에 닿지 못했어요. 주소를 확인하거나 잠시 뒤 다시 해 주세요.',
   'upstream-redirect': '주소가 다른 곳으로 옮겨졌다고 해요. 주소를 확인해 주세요.',
