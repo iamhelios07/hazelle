@@ -1,4 +1,5 @@
-import type { ConnectionType, HttpRequest, Modality, Model, Protocol } from './types';
+import { copilotCost } from './copilot-prices';
+import type { ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
 import { count, isRecord } from './values';
 
 // Copilot serves only clients it knows, so every request names VS Code's Copilot Chat, as provider-hub
@@ -41,6 +42,31 @@ function reasoning(supports: Record<string, unknown>): boolean | null {
   return signals.length ? signals.includes(true) : null;
 }
 
+// The allowance model use draws on: AI credits on token billing, premium requests before it. An
+// unlimited plan, or an organization's shared pool, reports no figure for one account.
+function quota(payload: unknown): Meter[] | null {
+  if (!isRecord(payload) || !isRecord(payload.quota_snapshots)) return null;
+  const premium = payload.quota_snapshots.premium_interactions;
+  if (!isRecord(premium) || premium.unlimited === true) return [];
+  const limit = typeof premium.entitlement === 'number' && premium.entitlement > 0 ? premium.entitlement : null;
+  const left = premium.quota_remaining ?? premium.remaining;
+  if (limit === null || typeof left !== 'number' || !Number.isFinite(left)) return [];
+  const credits = payload.token_based_billing === true;
+  const date = payload.quota_reset_date_utc ?? payload.quota_reset_date;
+  const at = typeof date === 'string' ? Date.parse(date) : NaN;
+  return [
+    {
+      kind: 'left',
+      label: credits ? 'AI 크레딧' : '프리미엄 요청',
+      unit: credits ? 'credit' : 'requests',
+      // Past the allowance, overage is billed separately; what is left of the allowance is none.
+      amount: Math.max(left, 0),
+      limit,
+      resets: Number.isFinite(at) ? { at } : null,
+    },
+  ];
+}
+
 export const copilot: ConnectionType = {
   id: 'copilot',
   label: 'Copilot',
@@ -80,6 +106,13 @@ export const copilot: ConnectionType = {
     'editor-plugin-version': `copilot-chat/${CHAT_VERSION}`,
     ...USER_AGENT,
   }),
+
+  meters: {
+    request: (secret) => github('https://api.github.com/copilot_internal/user', secret),
+    parse: quota,
+  },
+
+  cost: ({ usage, model }) => copilotCost(model.id, usage),
 
   // The list also holds embedding models, and models that VS Code's model picker does not offer.
   parseModels(payload) {

@@ -36,7 +36,7 @@ describe('settling a cost', () => {
 
   it('asks again while the cost is not booked, then reads it', async () => {
     const at = vercel([notYet, notYet, [200, { data: { total_cost: 0.00123 } }]]);
-    expect(await settle()).toEqual({ ok: true, cost: { unit: 'usd', amount: 0.00123 } });
+    expect(await settle()).toEqual({ ok: true, cost: { unit: 'usd', amount: 0.00123, source: 'reported' } });
     expect(at).toEqual([0, 1, 3]);
   });
 

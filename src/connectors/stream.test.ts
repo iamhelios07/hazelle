@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { resolveConnection, type Resolved } from './registry';
 import { decodeStream } from './stream';
-import type { Connection, Phase } from './types';
+import type { Connection, Model, Phase } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Resolved =>
   resolveConnection({ type, label: type, baseUrl: null, protocol: null, secret: 'key', starred: [], ...extra })!;
 
 const openRouter = connection('openrouter');
 const anthropic = connection('anthropic');
+const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
 
 // Chunks are cut at awkward places on purpose: inside a line and inside a multi-byte character.
 function body(text: string, cuts = 7): ReadableStream<Uint8Array> {
@@ -23,7 +24,7 @@ function body(text: string, cuts = 7): ReadableStream<Uint8Array> {
 
 async function decode(resolved: Resolved, stream: ReadableStream<Uint8Array>, controller = new AbortController()) {
   const parts: [Phase, string][] = [];
-  const outcome = await decodeStream(resolved, stream, controller.signal, (phase, text) => parts.push([phase, text]));
+  const outcome = await decodeStream(resolved, model, stream, controller.signal, (phase, text) => parts.push([phase, text]));
   const joined = (phase: Phase) => parts.filter(([p]) => p === phase).map(([, text]) => text).join('');
   return { outcome, text: joined('text'), reasoning: joined('reasoning') };
 }
@@ -56,7 +57,7 @@ describe('chat completions stream', () => {
         error: null,
         finishReason: 'stop',
         usage: { inputTokens: 12, cachedInputTokens: 0, cacheWriteInputTokens: null, outputTokens: 20, reasoningTokens: 8 },
-        cost: { unit: 'usd', amount: 0.00042 },
+        cost: { unit: 'usd', amount: 0.00042, source: 'reported' },
         replyId: null,
       },
     });

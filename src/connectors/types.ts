@@ -53,7 +53,9 @@ export type Usage = {
   reasoningTokens: number | null;
 };
 
-export type Cost = { unit: 'usd' | 'credit'; amount: number };
+// reported: the provider said what the reply cost. price-list: worked out from a price table the app
+// carries, which can fall behind the provider's, so it is shown as an estimate.
+export type Cost = { unit: 'usd' | 'credit'; amount: number; source: 'reported' | 'price-list' };
 
 // One figure a provider reports about a credential's spending (design §4, Meters row): what is left,
 // out of a cap when there is one, or what was spent. A cap that starts over each period names the
@@ -62,8 +64,9 @@ export type Meter =
   | { kind: 'left'; label: string; unit: MeterUnit; amount: number; limit: number | null; resets: MeterReset | null }
   | { kind: 'spent'; label: string; unit: MeterUnit; amount: number };
 
-export type MeterUnit = 'usd' | 'requests';
-export type MeterReset = 'daily' | 'weekly' | 'monthly';
+export type MeterUnit = 'usd' | 'credit' | 'requests';
+// A period, or the moment of the next reset when the provider names one.
+export type MeterReset = 'daily' | 'weekly' | 'monthly' | { at: number };
 
 export type Phase = 'text' | 'reasoning';
 
@@ -113,7 +116,8 @@ export type ConnectionType = {
   // Presents the credential with the provider's own headers, in place of the codec's.
   headers?: (credential: string) => Record<string, string>;
   parseModels?: (payload: unknown) => Model[] | null;
-  cost?: (facts: StreamFacts) => Cost | null;
+  // usage is the codec's reading of the stream's counts, for a type that prices tokens itself.
+  cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
   // Asked with the stored credential. It is also the check that a pasted key works, where the model
   // list is public (OpenRouter's is).
   meters?: { request(secret: string): HttpRequest; parse(payload: unknown): Meter[] | null };

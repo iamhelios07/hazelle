@@ -67,7 +67,7 @@ export const vercel: ConnectionType = {
     request: (secret, id) => ({ url: `${API}/generation?id=${encodeURIComponent(id)}`, method: 'GET', headers: bearer(secret), body: null }),
     parse(payload) {
       const cost = isRecord(payload) && isRecord(payload.data) ? amount(payload.data.total_cost) : null;
-      return cost === null ? null : { unit: 'usd', amount: cost };
+      return cost === null ? null : { unit: 'usd', amount: cost, source: 'reported' };
     },
   },
 };

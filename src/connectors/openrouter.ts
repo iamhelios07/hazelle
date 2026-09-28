@@ -66,7 +66,7 @@ export const openRouter: ConnectionType = {
   },
 
   // OpenRouter reports what the call cost, in US dollars, with the final usage.
-  cost: (facts) => (typeof facts.rawUsage.cost === 'number' && Number.isFinite(facts.rawUsage.cost) ? { unit: 'usd', amount: facts.rawUsage.cost } : null),
+  cost: ({ facts }) => (typeof facts.rawUsage.cost === 'number' && Number.isFinite(facts.rawUsage.cost) ? { unit: 'usd', amount: facts.rawUsage.cost, source: 'reported' } : null),
 
   meters: {
     request: (secret) => ({ url: 'https://openrouter.ai/api/v1/key', method: 'GET', headers: { authorization: `Bearer ${secret}` }, body: null }),

@@ -1,6 +1,6 @@
 import type { Resolved } from './registry';
 import { SseParser } from './sse';
-import type { Cost, Phase, StreamFacts, Terminal, Usage } from './types';
+import type { Cost, Model, Phase, StreamFacts, Terminal, Usage } from './types';
 
 // design F3: a reply is done, cut or failed, and a cut or failed reply is never shown as a clean success.
 // cut says why: the token limit, a stream that ended without its end marker, or the user's 멈추기.
@@ -18,6 +18,7 @@ export type Outcome = {
 
 export async function decodeStream(
   { type, codec }: Resolved,
+  model: Model,
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
   onText: (phase: Phase, text: string) => void,
@@ -41,15 +42,18 @@ export async function decodeStream(
     terminal = codec.terminal(event);
   };
 
-  const finish = (state: Outcome['state'], cut: Outcome['cut'], error: Outcome['error']): Outcome => ({
-    state,
-    cut,
-    error,
-    finishReason: facts.finishReason,
-    usage: Object.keys(facts.rawUsage).length ? codec.usage(facts.rawUsage) : null,
-    cost: type?.cost?.(facts) ?? (type?.settle && facts.id ? 'pending' : null),
-    replyId: facts.id,
-  });
+  const finish = (state: Outcome['state'], cut: Outcome['cut'], error: Outcome['error']): Outcome => {
+    const usage = Object.keys(facts.rawUsage).length ? codec.usage(facts.rawUsage) : null;
+    return {
+      state,
+      cut,
+      error,
+      finishReason: facts.finishReason,
+      usage,
+      cost: type?.cost?.({ facts, usage, model }) ?? (type?.settle && facts.id ? 'pending' : null),
+      replyId: facts.id,
+    };
+  };
 
   try {
     while (!terminal) {

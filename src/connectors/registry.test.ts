@@ -194,7 +194,7 @@ describe('vercel', () => {
     ]);
     expect(meters!.parse({ balance: '', total_used: 'lots' })).toEqual([]);
     expect(settle!.request('vck_x', 'gen_01K').url).toBe('https://ai-gateway.vercel.sh/v1/generation?id=gen_01K');
-    expect(settle!.parse({ data: { id: 'gen_01K', total_cost: 0.00123 } })).toEqual({ unit: 'usd', amount: 0.00123 });
+    expect(settle!.parse({ data: { id: 'gen_01K', total_cost: 0.00123 } })).toEqual({ unit: 'usd', amount: 0.00123, source: 'reported' });
     expect(settle!.parse({ data: { id: 'gen_01K' } })).toBeNull();
   });
 });
@@ -265,6 +265,20 @@ describe('copilot', () => {
     expect(() => resolveModel(resolved, find('gpt-5.1-codex'))).toThrow(new ConnectorError('unsupported-protocol'));
     const newer = { ...find('gpt-4.1'), protocol: 'responses' } as unknown as Model;
     expect(() => resolveModel(resolved, newer)).toThrow(new ConnectorError('unsupported-protocol'));
+  });
+
+  it('reads the allowance model use draws on, and no figure for an unlimited plan', () => {
+    const { meters } = copilot;
+    expect(meters!.request('gho_x')).toMatchObject({ url: 'https://api.github.com/copilot_internal/user', headers: { authorization: 'Bearer gho_x' } });
+    const snapshot = { entitlement: 1500, quota_remaining: 1287.5, remaining: 1287, unlimited: false };
+    expect(meters!.parse({ token_based_billing: true, quota_reset_date: '2026-10-01', quota_snapshots: { premium_interactions: snapshot } })).toEqual([
+      { kind: 'left', label: 'AI 크레딧', unit: 'credit', amount: 1287.5, limit: 1500, resets: { at: Date.UTC(2026, 9, 1) } },
+    ]);
+    expect(meters!.parse({ quota_snapshots: { premium_interactions: { entitlement: 300, remaining: -4, unlimited: false } } })).toEqual([
+      { kind: 'left', label: '프리미엄 요청', unit: 'requests', amount: 0, limit: 300, resets: null },
+    ]);
+    expect(meters!.parse({ quota_snapshots: { premium_interactions: { unlimited: true, has_quota: true } } })).toEqual([]);
+    expect(meters!.parse({ message: 'Not Found' })).toBeNull();
   });
 
   it('trades the GitHub token for a Copilot token and names the account', () => {

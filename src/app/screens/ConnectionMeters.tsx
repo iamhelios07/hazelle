@@ -3,17 +3,24 @@ import type { Connection, Meter, MeterReset, MeterUnit } from '../../connectors/
 import { loadMeters, type MetersResult } from '../../runtime/meters';
 import { Button, Callout, Facts, Section, Stack, Text } from '../ui';
 import { describeMetersFailure } from './failure';
-import { usd } from './money';
+import { creditAmount, credits, usd } from './money';
 
-const RESETS: Record<MeterReset, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
+const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 
-const figure = (unit: MeterUnit, value: number) => (unit === 'usd' ? usd(value) : `${value.toLocaleString('ko-KR')}회`);
+const number = (unit: MeterUnit, value: number) => (unit === 'credit' ? creditAmount(value) : value.toLocaleString('ko-KR'));
+const figure = (unit: MeterUnit, value: number) =>
+  unit === 'usd' ? usd(value) : unit === 'credit' ? credits(value) : `${number(unit, value)}회`;
+
+const day = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' });
+const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${day.format(resets.at)} 초기화`);
 
 // Out of a cap, what is left reads as "남음"; a balance with no cap needs no such word.
 function fact(meter: Meter) {
   if (meter.kind === 'spent' || meter.limit === null) return { label: meter.label, value: figure(meter.unit, meter.amount) };
-  const label = meter.resets ? `${meter.label} · ${RESETS[meter.resets]}` : meter.label;
-  return { label, value: `${figure(meter.unit, meter.amount)} 남음 / ${figure(meter.unit, meter.limit)}` };
+  const label = meter.resets ? `${meter.label} · ${reset(meter.resets)}` : meter.label;
+  // A unit written after the number is said once, after the cap: "38 남음 / 50회".
+  const amount = meter.unit === 'usd' ? usd(meter.amount) : number(meter.unit, meter.amount);
+  return { label, value: `${amount} 남음 / ${figure(meter.unit, meter.limit)}` };
 }
 
 // For a connection whose type reports meters (runtime reportsMeters).

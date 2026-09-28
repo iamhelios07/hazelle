@@ -55,7 +55,7 @@ export async function generate({ connection, model, messages, maxTokens, signal,
   if (!credential.ok) return failed(credential.failure);
   const response = await relay(withCredential(route, request, credential.credential), signal);
   if (!(response instanceof Response)) return failed(response);
-  const outcome = await decodeStream(route, response.body!, signal, (phase, text) => {
+  const outcome = await decodeStream(route, model, response.body!, signal, (phase, text) => {
     firstText ??= performance.now();
     onText(phase, text);
   });

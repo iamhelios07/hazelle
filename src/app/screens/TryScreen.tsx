@@ -8,20 +8,19 @@ import { navigate } from '../router';
 import { useConnections, useSettings } from '../store';
 import { Button, Callout, Facts, NavBar, Reply, Screen, Stack, Tag, Text, TextField } from '../ui';
 import { CUT, describeReplyError } from './failure';
-import { usd } from './money';
+import { credits, usd } from './money';
 
 const UNKNOWN = '알 수 없음';
 
 const seconds = (ms: number | null) => (ms === null ? UNKNOWN : `${(ms / 1000).toFixed(1)}초`);
 const tokens = (count: number | null) => (count === null ? UNKNOWN : count.toLocaleString('ko-KR'));
-const cost = (value: Cost | 'pending' | null) =>
-  value === null
-    ? UNKNOWN
-    : value === 'pending'
-      ? '확인 중…'
-      : value.unit === 'usd'
-      ? usd(value.amount)
-      : `${value.amount} 크레딧`;
+// A cost the app worked out from a price table is an estimate, and says so.
+const cost = (value: Cost | 'pending' | null) => {
+  if (value === null) return UNKNOWN;
+  if (value === 'pending') return '확인 중…';
+  const amount = value.unit === 'usd' ? usd(value.amount) : credits(value.amount);
+  return value.source === 'price-list' ? `약 ${amount}` : amount;
+};
 
 // One message to the 본 대화 model and its streamed answer, with the receipt's facts: a way to see
 // that a connection works end to end before any chat exists.
