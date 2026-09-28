@@ -3,7 +3,9 @@ import { copilot } from './copilot';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterKey from './fixtures/openrouter-key.json';
 import openRouterModels from './fixtures/openrouter-models.json';
+import vercelModels from './fixtures/vercel-models.json';
 import { openRouter } from './openrouter';
+import { vercel } from './vercel';
 import {
   catalogRequest,
   chatRequest,
@@ -105,6 +107,27 @@ describe('catalogs', () => {
     ]);
   });
 
+  it('reads Vercel language models only, with PDF input as a file and capabilities from tags', () => {
+    expect(parseCatalog(connection('vercel'), vercelModels)).toEqual([
+      {
+        id: 'anthropic/claude-fable-5',
+        name: 'Claude Fable 5',
+        input: ['text', 'image', 'file'],
+        output: ['text'],
+        contextLength: 1_000_000,
+        maxOutput: 128_000,
+        reasoning: true,
+        tools: true,
+        protocol: null,
+      },
+      expect.objectContaining({ id: 'alibaba/qwen3-coder', input: ['text'], reasoning: false, tools: true }),
+    ]);
+    const [, bare] = vercelModels.data;
+    expect(parseCatalog(connection('vercel'), { data: [{ ...bare, tags: undefined, modalities: undefined }] })).toEqual([
+      expect.objectContaining({ input: null, output: null, reasoning: null, tools: null }),
+    ]);
+  });
+
   it('reads Anthropic capabilities, with a zero limit as unknown', () => {
     const payload = {
       data: [
@@ -145,19 +168,34 @@ describe('meters', () => {
   it('reads an OpenRouter key: its cap, what it spent, and the free model requests', () => {
     expect(meters.request('sk-or-v1-x')).toMatchObject({ url: 'https://openrouter.ai/api/v1/key', method: 'GET', headers: { authorization: 'Bearer sk-or-v1-x' } });
     expect(meters.parse(openRouterKey)).toEqual([
-      { label: '이 키 한도', unit: 'usd', used: 25.5, limit: 100, resets: 'monthly' },
-      { label: '이번 달 쓴 돈', unit: 'usd', used: 25.5, limit: null, resets: null },
-      { label: '지금까지 쓴 돈', unit: 'usd', used: 25.5, limit: null, resets: null },
-      { label: '무료 모델 요청', unit: 'requests', used: 12, limit: 50, resets: 'daily' },
+      { kind: 'left', label: '이 키 한도', unit: 'usd', amount: 74.5, limit: 100, resets: 'monthly' },
+      { kind: 'spent', label: '이번 달 쓴 돈', unit: 'usd', amount: 25.5 },
+      { kind: 'spent', label: '지금까지 쓴 돈', unit: 'usd', amount: 25.5 },
+      { kind: 'left', label: '무료 모델 요청', unit: 'requests', amount: 38, limit: 50, resets: 'daily' },
     ]);
   });
 
   it('shows no cap for a key without one, and leaves out what the answer does not carry', () => {
     const data = { ...openRouterKey.data, limit: null, limit_remaining: null, limit_reset: null, usage_monthly: 'n/a', free_model_daily_requests: undefined };
     expect(meters.parse({ data })).toEqual([
-      { label: '지금까지 쓴 돈', unit: 'usd', used: 25.5, limit: null, resets: null },
+      { kind: 'spent', label: '지금까지 쓴 돈', unit: 'usd', amount: 25.5 },
     ]);
     expect(meters.parse({ error: { message: 'User not found.', code: 401 } })).toBeNull();
+  });
+});
+
+describe('vercel', () => {
+  it('reads the team balance from decimal strings, and a booked cost by generation id', () => {
+    const { meters, settle } = vercel;
+    expect(meters!.request('vck_x')).toMatchObject({ url: 'https://ai-gateway.vercel.sh/v1/credits', headers: { authorization: 'Bearer vck_x' } });
+    expect(meters!.parse({ balance: '95.50', total_used: '4.50' })).toEqual([
+      { kind: 'left', label: '잔액', unit: 'usd', amount: 95.5, limit: null, resets: null },
+      { kind: 'spent', label: '지금까지 쓴 돈', unit: 'usd', amount: 4.5 },
+    ]);
+    expect(meters!.parse({ balance: '', total_used: 'lots' })).toEqual([]);
+    expect(settle!.request('vck_x', 'gen_01K').url).toBe('https://ai-gateway.vercel.sh/v1/generation?id=gen_01K');
+    expect(settle!.parse({ data: { id: 'gen_01K', total_cost: 0.00123 } })).toEqual({ unit: 'usd', amount: 0.00123 });
+    expect(settle!.parse({ data: { id: 'gen_01K' } })).toBeNull();
   });
 });
 

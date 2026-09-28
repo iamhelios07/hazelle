@@ -55,20 +55,20 @@ export type Usage = {
 
 export type Cost = { unit: 'usd' | 'credit'; amount: number };
 
-// One figure a provider reports about a credential's spending (design §4, Meters row): what was used,
-// in the meter's unit, and the cap it counts against when there is one. A cap that starts over each
-// period names the period. Units are never summed together.
-export type Meter = {
-  label: string;
-  unit: 'usd' | 'requests';
-  used: number;
-  limit: number | null;
-  resets: 'daily' | 'weekly' | 'monthly' | null;
-};
+// One figure a provider reports about a credential's spending (design §4, Meters row): what is left,
+// out of a cap when there is one, or what was spent. A cap that starts over each period names the
+// period. Units are never summed together.
+export type Meter =
+  | { kind: 'left'; label: string; unit: MeterUnit; amount: number; limit: number | null; resets: MeterReset | null }
+  | { kind: 'spent'; label: string; unit: MeterUnit; amount: number };
+
+export type MeterUnit = 'usd' | 'requests';
+export type MeterReset = 'daily' | 'weekly' | 'monthly';
 
 export type Phase = 'text' | 'reasoning';
 
-export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: string | null };
+// id is the provider's id for the reply, when its events carry one.
+export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: string | null; id: string | null };
 
 export type Terminal = { state: 'completed' } | { state: 'failed'; error: string };
 
@@ -117,6 +117,9 @@ export type ConnectionType = {
   // Asked with the stored credential. It is also the check that a pasted key works, where the model
   // list is public (OpenRouter's is).
   meters?: { request(secret: string): HttpRequest; parse(payload: unknown): Meter[] | null };
+  // A cost the provider books only after the reply, looked up by the reply's id. Until it is booked
+  // the lookup answers 404.
+  settle?: { request(secret: string, id: string): HttpRequest; parse(payload: unknown): Cost | null };
 };
 
 export type Token = { value: string; expiresAt: number };

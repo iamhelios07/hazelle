@@ -1,0 +1,249 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "anthropic/claude-fable-5",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1782864000,
+      "owned_by": "anthropic",
+      "name": "Claude Fable 5",
+      "description": "Claude Fable 5 is a Mythos-class model with robust safeguards. It can handle long-running, complex, and asynchronous tasks where previous models would have needed more frequent check-ins.",
+      "context_window": 1000000,
+      "max_tokens": 128000,
+      "type": "language",
+      "zdr": "none",
+      "no_training": "all",
+      "tags": [
+        "reasoning",
+        "tool-use",
+        "explicit-caching",
+        "file-input",
+        "vision",
+        "structured-output"
+      ],
+      "regions": [
+        "us"
+      ],
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": false,
+      "reasoning_options": [
+        {
+          "type": "toggle"
+        },
+        {
+          "type": "effort",
+          "values": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        {
+          "type": "budget_tokens"
+        }
+      ],
+      "knowledge": "2026-01-31",
+      "pricing": {
+        "input": "0.00001",
+        "output": "0.00005",
+        "input_cache_read": "0.000001",
+        "input_cache_write": "0.0000125",
+        "web_search": "10",
+        "regional": {
+          "us": {
+            "input": "0.000011",
+            "output": "0.000055",
+            "input_cache_read": "0.0000011",
+            "input_cache_write": "0.00001375"
+          }
+        }
+      }
+    },
+    {
+      "id": "alibaba/qwen3-coder",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1753142400,
+      "owned_by": "alibaba",
+      "name": "Qwen3 Coder 480B A35B Instruct",
+      "description": "Qwen3-Coder-480B-A35B-Instruct is a cutting-edge open coding model from Qwen, matching Claude Sonnet’s performance in agentic programming, browser automation, and core development tasks.",
+      "context_window": 262144,
+      "max_tokens": 65536,
+      "type": "language",
+      "zdr": "some",
+      "no_training": "some",
+      "tags": [
+        "tool-use",
+        "structured-output",
+        "implicit-caching"
+      ],
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice",
+        "response_format",
+        "structured_outputs"
+      ],
+      "temperature": true,
+      "knowledge": "2025-04",
+      "pricing": {
+        "input": "0.0000015",
+        "input_tiers": [
+          {
+            "cost": "0.0000015",
+            "min": 0,
+            "max": 32001
+          },
+          {
+            "cost": "0.0000027",
+            "min": 32001,
+            "max": 128001
+          },
+          {
+            "cost": "0.0000045",
+            "min": 128001
+          }
+        ],
+        "output": "0.0000075",
+        "output_tiers": [
+          {
+            "cost": "0.0000075",
+            "min": 0,
+            "max": 32001
+          },
+          {
+            "cost": "0.0000135",
+            "min": 32001,
+            "max": 128001
+          },
+          {
+            "cost": "0.0000225",
+            "min": 128001
+          }
+        ],
+        "input_cache_read": "0.0000003",
+        "input_cache_read_tiers": [
+          {
+            "cost": "0.0000003",
+            "min": 0,
+            "max": 32001
+          },
+          {
+            "cost": "0.00000054",
+            "min": 32001,
+            "max": 128001
+          },
+          {
+            "cost": "0.0000009",
+            "min": 128001
+          }
+        ],
+        "varies_by_provider": true
+      }
+    },
+    {
+      "id": "alibaba/qwen3-embedding-0.6b",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1763078400,
+      "owned_by": "alibaba",
+      "name": "Qwen3 Embedding 0.6B",
+      "description": "The Qwen3 Embedding model series is the latest proprietary model of the Qwen family, specifically designed for text embedding and ranking tasks. Building upon the dense foundational models of the Qwen3 series, it provides a comprehensive range of text embeddings and reranking models in various sizes (0.6B, 4B, and 8B).",
+      "context_window": 32768,
+      "max_tokens": 32768,
+      "type": "embedding",
+      "zdr": "all",
+      "no_training": "all",
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "pricing": {
+        "input": "0.00000001"
+      }
+    },
+    {
+      "id": "bfl/flux-2-flex",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1764028800,
+      "owned_by": "bfl",
+      "name": "FLUX.2 [flex]",
+      "description": "FLUX.2 is a completely new base model trained for visual intelligence, not just pixel generation, setting a new standard for both image generation and image editing. With FLUX.2 models you can expect the highest quality, higher resolutions (up to 4MP), and new capabilities like multi-ref images. FLUX.2 [flex] supports customizable image generation and editing with adjustable steps and guidance. It's better at typography and text rendering. It supports up to 10 reference images (up to 14 MP total input).\nThis provider gives the option to change the moderation level for inputs and outputs. The control is under safety tolerance and is by default 2 on a range from 0 (more strict) through 6 (more permissive).",
+      "context_window": 0,
+      "max_tokens": 0,
+      "type": "image",
+      "zdr": "none",
+      "no_training": "none",
+      "tags": [
+        "image-generation"
+      ],
+      "supported_specifications": [
+        "v2",
+        "v3",
+        "v4"
+      ],
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "pricing": {}
+    }
+  ]
+}

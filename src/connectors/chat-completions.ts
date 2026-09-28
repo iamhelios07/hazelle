@@ -44,6 +44,7 @@ export const chatCompletions: Codec = {
   // reasoning text in compatible streams. A server that sends neither is unaffected.
   read(event, facts, append) {
     if (!isRecord(event)) return;
+    if (typeof event.id === 'string' && event.id) facts.id ??= event.id;
     for (const choice of list(event.choices)) {
       if (!isRecord(choice)) continue;
       const delta = isRecord(choice.delta) ? choice.delta : {};

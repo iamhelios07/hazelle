@@ -34,7 +34,7 @@ export async function generate({ connection, model, messages, maxTokens, signal,
     firstTextMs: firstText === null ? null : Math.round(firstText - started),
     totalMs: Math.round(performance.now() - started),
   });
-  const empty = { finishReason: null, usage: null, cost: null };
+  const empty = { finishReason: null, usage: null, cost: null, replyId: null };
 
   // Refusals the connector can see coming are made here, before anything is sent (design §4).
   const resolved = resolveConnection(connection);

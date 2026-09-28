@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
-import type { Connection, Meter } from '../../connectors/types';
+import type { Connection, Meter, MeterReset, MeterUnit } from '../../connectors/types';
 import { loadMeters, type MetersResult } from '../../runtime/meters';
 import { Button, Callout, Facts, Section, Stack, Text } from '../ui';
 import { describeMetersFailure } from './failure';
 import { usd } from './money';
 
-const RESETS: Record<NonNullable<Meter['resets']>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
+const RESETS: Record<MeterReset, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 
-const figure = (unit: Meter['unit'], value: number) => (unit === 'usd' ? usd(value) : `${value.toLocaleString('ko-KR')}회`);
+const figure = (unit: MeterUnit, value: number) => (unit === 'usd' ? usd(value) : `${value.toLocaleString('ko-KR')}회`);
 
-// A capped meter reads as what is left of the cap.
+// Out of a cap, what is left reads as "남음"; a balance with no cap needs no such word.
 function fact(meter: Meter) {
-  const value =
-    meter.limit === null ? figure(meter.unit, meter.used) : `${figure(meter.unit, Math.max(meter.limit - meter.used, 0))} 남음 / ${figure(meter.unit, meter.limit)}`;
-  return { label: meter.resets ? `${meter.label} · ${RESETS[meter.resets]}` : meter.label, value };
+  if (meter.kind === 'spent' || meter.limit === null) return { label: meter.label, value: figure(meter.unit, meter.amount) };
+  const label = meter.resets ? `${meter.label} · ${RESETS[meter.resets]}` : meter.label;
+  return { label, value: `${figure(meter.unit, meter.amount)} 남음 / ${figure(meter.unit, meter.limit)}` };
 }
 
 // For a connection whose type reports meters (runtime reportsMeters).

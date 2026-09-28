@@ -11,7 +11,9 @@ export type Outcome = {
   error: { kind: 'provider' | 'bad-event' | 'network'; detail: string } | null;
   finishReason: string | null;
   usage: Usage | null;
-  cost: Cost | null;
+  // pending: the type books the cost after the reply, to be looked up by replyId (runtime settleCost).
+  cost: Cost | 'pending' | null;
+  replyId: string | null;
 };
 
 export async function decodeStream(
@@ -20,7 +22,7 @@ export async function decodeStream(
   signal: AbortSignal,
   onText: (phase: Phase, text: string) => void,
 ): Promise<Outcome> {
-  const facts: StreamFacts = { rawUsage: {}, finishReason: null };
+  const facts: StreamFacts = { rawUsage: {}, finishReason: null, id: null };
   const parser = new SseParser();
   const decoder = new TextDecoder();
   const reader = body.getReader();
@@ -45,7 +47,8 @@ export async function decodeStream(
     error,
     finishReason: facts.finishReason,
     usage: Object.keys(facts.rawUsage).length ? codec.usage(facts.rawUsage) : null,
-    cost: type?.cost?.(facts) ?? null,
+    cost: type?.cost?.(facts) ?? (type?.settle && facts.id ? 'pending' : null),
+    replyId: facts.id,
   });
 
   try {

@@ -57,8 +57,15 @@ describe('chat completions stream', () => {
         finishReason: 'stop',
         usage: { inputTokens: 12, cachedInputTokens: 0, cacheWriteInputTokens: null, outputTokens: 20, reasoningTokens: 8 },
         cost: { unit: 'usd', amount: 0.00042 },
+        replyId: null,
       },
     });
+  });
+
+  it('leaves a cost the provider books later pending, with the id to look it up by', async () => {
+    const stream = sse({ id: 'gen_01K', ...chunk({ content: '안녕' }) }, { id: 'gen_01K', ...chunk({}, 'stop') }, '[DONE]');
+    const { outcome } = await decode(connection('vercel'), body(stream));
+    expect(outcome).toMatchObject({ state: 'done', cost: 'pending', replyId: 'gen_01K' });
   });
 
   it('marks a reply that hit the token limit as cut', async () => {
@@ -122,6 +129,7 @@ describe('anthropic messages stream', () => {
         finishReason: 'end_turn',
         usage: { inputTokens: 125, cachedInputTokens: 100, cacheWriteInputTokens: 20, outputTokens: 15, reasoningTokens: null },
         cost: null,
+        replyId: null,
       },
     });
   });

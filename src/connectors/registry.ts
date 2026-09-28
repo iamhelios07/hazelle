@@ -3,10 +3,11 @@ import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
 import { copilot } from './copilot';
 import { openRouter } from './openrouter';
+import { vercel } from './vercel';
 import { ConnectorError, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
 // Adding a provider means adding its connection type here (design §4). Nothing else names one.
-export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, anthropic, copilot];
+export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, anthropic, copilot];
 
 // The type of a connection the user described by address and protocol.
 export const GENERIC = 'generic';

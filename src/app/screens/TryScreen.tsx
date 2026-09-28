@@ -2,6 +2,7 @@ import { Send, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { resolveRole } from '../../connectors/assignment';
 import type { Cost } from '../../connectors/types';
+import { settleCost } from '../../runtime/cost';
 import { generate, type Reply as ReplyFacts } from '../../runtime/generate';
 import { navigate } from '../router';
 import { useConnections, useSettings } from '../store';
@@ -13,10 +14,12 @@ const UNKNOWN = '알 수 없음';
 
 const seconds = (ms: number | null) => (ms === null ? UNKNOWN : `${(ms / 1000).toFixed(1)}초`);
 const tokens = (count: number | null) => (count === null ? UNKNOWN : count.toLocaleString('ko-KR'));
-const cost = (value: Cost | null) =>
+const cost = (value: Cost | 'pending' | null) =>
   value === null
     ? UNKNOWN
-    : value.unit === 'usd'
+    : value === 'pending'
+      ? '확인 중…'
+      : value.unit === 'usd'
       ? usd(value.amount)
       : `${value.amount} 크레딧`;
 
@@ -31,8 +34,15 @@ export function TryScreen() {
   const [reply, setReply] = useState<ReplyFacts | null>(null);
   const [running, setRunning] = useState(false);
   const controller = useRef<AbortController | null>(null);
+  const lookup = useRef<AbortController | null>(null);
 
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(
+    () => () => {
+      controller.current?.abort();
+      lookup.current?.abort();
+    },
+    [],
+  );
 
   const main = resolveRole('main', [settings.models]);
   const connection = main && connections.find((entry) => entry.id === main.connection);
@@ -45,6 +55,8 @@ export function TryScreen() {
       return;
     }
     if (!connection || !model || !prompt.trim()) return;
+    // A cost lookup for the previous reply may still be waiting.
+    lookup.current?.abort();
     const abort = new AbortController();
     controller.current = abort;
     setText('');
@@ -61,6 +73,12 @@ export function TryScreen() {
     });
     setRunning(false);
     setReply(result);
+    // A stopped reply may still be billed, so its cost is looked up under a signal of its own.
+    if (result.cost !== 'pending' || !result.replyId) return;
+    const settling = new AbortController();
+    lookup.current = settling;
+    const settled = await settleCost(connection.value, result.replyId, settling.signal);
+    if (!settling.signal.aborted) setReply({ ...result, cost: settled.ok ? settled.cost : null });
   }
 
   if (!connection || !model) {

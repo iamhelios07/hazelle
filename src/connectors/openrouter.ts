@@ -1,4 +1,4 @@
-import type { ConnectionType, Meter, Modality } from './types';
+import type { ConnectionType, Meter, MeterReset, Modality } from './types';
 import { amount, count, isRecord } from './values';
 
 const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']);
@@ -7,7 +7,7 @@ function modalities(value: unknown): Modality[] | null {
   return Array.isArray(value) ? value.filter((item): item is Modality => MODALITIES.has(item as Modality)) : null;
 }
 
-const RESETS: Record<string, Meter['resets']> = { daily: 'daily', weekly: 'weekly', monthly: 'monthly' };
+const RESETS: Partial<Record<string, MeterReset>> = { daily: 'daily', weekly: 'weekly', monthly: 'monthly' };
 
 // GET /key describes the key, not the account: the account's credits need a management key, which
 // cannot call models, so they are not read. Days and months are UTC ones.
@@ -19,16 +19,16 @@ function meters(payload: unknown): Meter[] | null {
   const remaining = amount(data.limit_remaining);
   if (limit !== null && remaining !== null) {
     const resets = typeof data.limit_reset === 'string' ? (RESETS[data.limit_reset] ?? null) : null;
-    found.push({ label: '이 키 한도', unit: 'usd', used: Math.max(limit - remaining, 0), limit, resets });
+    found.push({ kind: 'left', label: '이 키 한도', unit: 'usd', amount: remaining, limit, resets });
   }
   for (const [field, label] of [['usage_monthly', '이번 달 쓴 돈'], ['usage', '지금까지 쓴 돈']] as const) {
-    const used = amount(data[field]);
-    if (used !== null) found.push({ label, unit: 'usd', used, limit: null, resets: null });
+    const spent = amount(data[field]);
+    if (spent !== null) found.push({ kind: 'spent', label, unit: 'usd', amount: spent });
   }
   const free = isRecord(data.free_model_daily_requests) ? data.free_model_daily_requests : {};
-  const freeUsed = count(free.used);
+  const freeLeft = count(free.remaining);
   const freeLimit = count(free.limit);
-  if (freeUsed !== null && freeLimit !== null) found.push({ label: '무료 모델 요청', unit: 'requests', used: freeUsed, limit: freeLimit, resets: 'daily' });
+  if (freeLeft !== null && freeLimit !== null) found.push({ kind: 'left', label: '무료 모델 요청', unit: 'requests', amount: freeLeft, limit: freeLimit, resets: 'daily' });
   return found;
 }
 

@@ -1,5 +1,6 @@
 import { codeRequest, parseCode, parsePoll, pollRequest, type DeviceCode } from '../connectors/device-code';
 import type { SignIn } from '../connectors/types';
+import { pause } from './pause';
 import { relayJson, relayOAuth, type RelayFailure } from './relay';
 
 // refused carries the provider's OAuth error code, such as expired_token or access_denied.
@@ -39,20 +40,4 @@ export async function accountName(signIn: SignIn, secret: string, signal: AbortS
   if (!answer.ok) return answer;
   const name = signIn.account.parse(answer.data);
   return name ? { ok: true, name } : { ok: false, failure: { kind: 'bad-answer' } };
-}
-
-// false when stopped before the time was up.
-function pause(ms: number, signal: AbortSignal): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (signal.aborted) return resolve(false);
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', stop);
-      resolve(true);
-    }, ms);
-    const stop = () => {
-      clearTimeout(timer);
-      resolve(false);
-    };
-    signal.addEventListener('abort', stop, { once: true });
-  });
 }
