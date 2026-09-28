@@ -12,3 +12,4 @@ export { SearchField } from './SearchField';
 export { SendButton } from './SendButton';
 export { Switch } from './Switch';
 export { TextField } from './TextField';
+export { ToolButton } from './ToolButton';

@@ -6,3 +6,8 @@
   color: var(--color-text-muted);
   white-space: nowrap;
 }
+
+.accent {
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+}

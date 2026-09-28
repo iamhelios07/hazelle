@@ -28,6 +28,11 @@
   width: calc(var(--menu-width) + var(--space-20));
 }
 
+.form {
+  width: var(--dialog-width);
+  padding: var(--space-14) var(--space-16);
+}
+
 .below-start {
   top: calc(100% + var(--space-8));
   left: 0;
@@ -58,6 +63,10 @@
   .md,
   .lg {
     width: min(var(--menu-width), calc(100vw - 2 * var(--menu-edge)));
+  }
+
+  .form {
+    width: calc(100vw - 2 * var(--menu-edge));
   }
 }
 

@@ -12,7 +12,7 @@ type Props = {
   busy?: boolean;
   disabled?: boolean;
   // A button that opens a menu takes these from Menu.
-  popup?: 'menu';
+  popup?: 'menu' | 'dialog';
   expanded?: boolean;
   ref?: Ref<HTMLButtonElement>;
   onClick?: () => void;

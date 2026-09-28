@@ -40,23 +40,23 @@ and only this folder styles elements.**
 | foundation | `Divider` | `Divider.module.css` | Lines between groups: the story's labeled line, and the menu, tools and rail lines |
 | foundation | `Icon` | `Icon.module.css` | Icon sizes and stroke |
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
-| foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag |
+| foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
 | layout | `ChatFrame` (`ChatTitle`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` | `NavBar.module.css` | A screen's top row: back, title, actions |
-| layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions or tags |
+| layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
-| layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow |
+| layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
 | layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`) | `Sidebar.module.css` | The sidebar, its rail, faces |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | controls | `Button` | `Button.module.css` | Variants (a link among them), sizes, the busy spinner |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox |
-| controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice |
-| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips or equal buttons for one choice |
-| controls | `Composer` | `Composer.module.css` | The message box |
+| controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, outlined in a header or plain in the composer, with a leading icon or face |
+| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons or joined segments for one choice |
+| controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` | — | A `Button` that opens a file picker |
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools |
@@ -66,6 +66,7 @@ and only this folder styles elements.**
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
 | controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
+| controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
 | collections | `AccountRow` | `AccountRow.module.css` | Who is signed in |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
@@ -76,6 +77,7 @@ and only this folder styles elements.**
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
 | collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them; a model id |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot |
+| collections | `SettingRow` | `SettingRow.module.css` | One setting in a side panel's list, its control beside it, marked when it differs from its default |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
 | overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap |
@@ -83,7 +85,7 @@ and only this folder styles elements.**
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped |
-| overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark |
+| overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark; a small form opened the same way (kind dialog) |
 | overlays | `Toast` | `Toast.module.css` | A short notice, above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
 | feedback | `Callout` | `Callout.module.css` | A warning or success note, with an optional action under it |

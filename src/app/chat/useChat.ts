@@ -1,20 +1,43 @@
 import { useEffect, useState } from 'react';
-import type { Assignment, ModelRef } from '../../connectors/assignment';
+import type { ModelRef } from '../../connectors/assignment';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { editMessage, removeChat, removeMessage, renameChat, restoreChat, restoreMessage, selectVersion, startChat } from '../../runtime/chat-log';
+import { resetToggles, setToggle } from '../../runtime/characters';
+import {
+  editMessage,
+  removeChat,
+  removeMessage,
+  renameChat,
+  restoreChat,
+  restoreMessage,
+  selectVersion,
+  setChatNote,
+  setChatPersona,
+  setChatPrompt,
+  startChat,
+} from '../../runtime/chat-log';
+import { chatPersona } from '../../runtime/personas';
+import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
-import { blocked, displayChat, takeTurn, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, displayChat, takeTurn, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
-import { useSession, useTurn } from '../session';
+import { useSession, useSettings, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle } from '../ui';
 import { useDraft } from './useDraft';
+import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
+
+type Own = 'prompt' | 'persona' | 'note';
+const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
+
+// The failures a chip fixes, shown by the composer for as long as they hold rather than as a toast.
+const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'prompt-missing', 'persona-missing']);
+const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failure.kind);
 
 export type OpenChat = ReturnType<typeof useChat>;
 // Every part of the chat screen acts through this one object, so a new message action (이어 쓰기,
@@ -31,9 +54,14 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const id = item?.id ?? null;
   // The id a new chat is shown under and then saved under, so its greeting's pick and rollp tags keep their rolls.
   const [newId] = useState(() => crypto.randomUUID());
-  const [draftModels, setDraftModels] = useState<Assignment>({});
-  const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, models: draftModels };
+  // A new chat's own model, prompt, persona and note, saved with it on the first send.
+  const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
+  const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, ...unsaved };
   const route = chatModel(store, chat);
+  const prompt = chatPrompt(store, chat);
+  const persona = chatPersona(store, chat);
+  const settings = useSettings();
+  const toggles = toggleRows(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], shelf?.character ?? null, settings.toggles);
   const card = shelf?.character.card ?? null;
   const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
@@ -62,19 +90,26 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const { follow: toBottom, ...scroll } = useFollow(messages.length, streaming);
   const [dialog, setDialog] = useState<'keys' | 'rename' | null>(null);
   const modelMenu = useMenuHandle();
-  const [panel, setPanel] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const promptMenu = useMenuHandle();
+  const personaMenu = useMenuHandle();
+  // 정보 and 토글 take the same place beside the story, so one closes the other.
+  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | null>(null);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
+  // so a fix made anywhere clears it.
+  const [stopped, setStopped] = useState(false);
+  const problem = stopped ? blocked(session, chat) : null;
 
   // A reply starting here while 정보 is open shows its own information.
   const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
   useEffect(() => {
-    if (replyTarget) setPanel((current) => (current.open ? { open: true, id: replyTarget } : current));
+    if (replyTarget) setPanel((current) => (current?.kind === 'info' ? { kind: 'info', id: replyTarget } : current));
   }, [replyTarget]);
 
   function report(failure: TurnFailure | null) {
     if (!failure) return;
+    if (blocks(failure)) return setStopped(true);
     toast.show(describeTurnFailure(failure), failure.kind === 'unsaved' ? { label: '다시 저장', onClick: () => void talk.saveAgain().then(report) } : undefined);
   }
 
@@ -87,12 +122,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   async function send() {
     const text = draft.text.trim();
     if (!text || busy) return;
-    const stop = blocked(session, chat);
-    if (stop) {
-      setProblem(describeTurnFailure(stop));
-      return;
-    }
-    setProblem(null);
+    if (blocked(session, chat)) return setStopped(true);
+    setStopped(false);
     draft.set('');
     follow();
     let chatId = id;
@@ -169,12 +200,39 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   }
 
   function pickModel(ref: ModelRef) {
-    setProblem(null);
     if (!id) {
-      setDraftModels({ ...draftModels, main: ref });
+      setUnsaved({ ...unsaved, models: { ...unsaved.models, main: ref } });
       return;
     }
     void setChatModel(store, id, ref).then((saved) => saved.ok || toast.failed(saved));
+  }
+
+  // null: follow the default again (design §4.2, §4.3). A new chat holds it until its first send.
+  async function setOwn(field: Own, value: string | null): Promise<void> {
+    if (!id) {
+      setUnsaved((current) => {
+        const next = { ...current };
+        if (value === null) delete next[field];
+        else next[field] = value;
+        return next;
+      });
+      return;
+    }
+    const saved = await WRITE_OWN[field](store, id, value);
+    if (!saved.ok) toast.failed(saved);
+  }
+
+  // design §4.2: a value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat. The next
+  // turn reads it from the store (runtime/turn scopeOf).
+  function flip(key: string, value: string) {
+    void setToggle(store, chat.character, key, value).then((saved) => saved.ok || toast.failed(saved));
+  }
+
+  async function reset() {
+    const count = toggles.changed;
+    const saved = await resetToggles(store, chat.character);
+    if (!saved.ok) return toast.failed(saved);
+    toast.show(`토글 ${count}개를 처음 값으로 되돌렸어요`);
   }
 
   async function rename(name: string) {
@@ -190,6 +248,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     shelf,
     card,
     route,
+    prompt,
+    persona,
+    note: chat.note,
+    toggles,
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
@@ -203,6 +265,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     panel,
     dialog,
     modelMenu,
+    promptMenu,
+    personaMenu,
     draft,
     scroll,
     actions: {
@@ -218,11 +282,15 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       copy,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
-      info: (reply: string | null) => setPanel({ open: true, id: reply }),
-      closeInfo: () => setPanel({ open: false, id: null }),
+      info: (reply: string | null) => setPanel({ kind: 'info', id: reply }),
+      showToggles: () => setPanel({ kind: 'toggles' }),
+      closePanel: () => setPanel(null),
       openDialog: (which: 'keys' | 'rename') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
+      setOwn,
+      flip,
+      resetToggles: reset,
       rename,
       drop,
     },

@@ -5,8 +5,8 @@ import { Icon } from '../foundation/Icon';
 import { useLayer } from './layers';
 import styles from './Menu.module.css';
 
-// What a menu hands a button that opens it, spread onto an IconButton, Button, ChipButton or FaceCard.
-export type MenuOpener = { ref: RefObject<HTMLButtonElement | null>; popup: 'menu'; expanded: boolean; onClick: () => void };
+// What a menu hands a button that opens it, spread onto an IconButton, Button, ChipButton, ToolButton or FaceCard.
+export type MenuOpener = { ref: RefObject<HTMLButtonElement | null>; popup: 'menu' | 'dialog'; expanded: boolean; onClick: () => void };
 
 type State = { open: boolean; from: HTMLElement | null };
 const CLOSED: State = { open: false, from: null };
@@ -46,7 +46,10 @@ type Props = {
   trigger: (opener: MenuOpener) => ReactNode;
   // Which corner of the trigger it opens from, and which way.
   place?: 'below-start' | 'below-end' | 'above-start' | 'above-end' | 'beside';
-  size?: 'md' | 'lg';
+  // form: a dialog's width, for kind dialog.
+  size?: 'md' | 'lg' | 'form';
+  // dialog: a small form opened and closed like a menu, such as the chat's 작가의 노트; useMenuClose closes it.
+  kind?: 'menu' | 'dialog';
   // For a menu that other buttons open too; without one it keeps its own.
   handle?: MenuHandle;
   children: ReactNode;
@@ -60,7 +63,7 @@ let shown: (() => void) | null = null;
 
 // Every menu opened from a button. An item closes it. Esc and an item give the focus back to the button that opened
 // it, or to the menu's own button when that one has gone.
-export function Menu({ label, trigger, place = 'below-start', size = 'md', handle, children }: Props) {
+export function Menu({ label, trigger, place = 'below-start', size = 'md', kind = 'menu', handle, children }: Props) {
   const own = useMenuHandle();
   const menu = handle ?? own;
   const { open, from } = useSyncExternalStore(menu.subscribe, menu.read);
@@ -79,7 +82,7 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', handl
   useEffect(() => () => menu.set(CLOSED), [menu]);
 
   useEffect(() => {
-    if (open) panel.current?.querySelector<HTMLElement>('input, [role^="menuitem"], button')?.focus();
+    if (open) panel.current?.querySelector<HTMLElement>('input, textarea, [role^="menuitem"], button')?.focus();
   }, [open]);
 
   // Before paint, so two menus are never drawn at once.
@@ -107,9 +110,9 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', handl
 
   return (
     <div className={styles.anchor} ref={anchor}>
-      {trigger(opener)}
+      {trigger({ ...opener, popup: kind })}
       {open && (
-        <div ref={panel} className={`${styles.menu} ${styles[place]} ${styles[size]}`} role="menu" aria-label={label}>
+        <div ref={panel} className={`${styles.menu} ${styles[place]} ${styles[size]}`} role={kind} aria-label={label}>
           <CloseMenu.Provider value={() => close(true)}>{children}</CloseMenu.Provider>
         </div>
       )}
@@ -121,6 +124,10 @@ type ItemProps = {
   label: string;
   sub?: string;
   icon?: LucideIcon;
+  // A face in the icon's place, such as a persona's.
+  avatar?: ReactNode;
+  // Beside the label, such as 기본 on the default.
+  tag?: ReactNode;
   // Makes the item one of a set of choices, checked when it is the current one.
   checked?: boolean;
   tone?: 'default' | 'muted' | 'warn';
@@ -129,7 +136,7 @@ type ItemProps = {
 
 // The menu closes before onClick runs, so a dialog it opens takes the button that opened the menu as the place to
 // give the focus back to.
-export function MenuItem({ label, sub, icon, checked, tone, onClick }: ItemProps) {
+export function MenuItem({ label, sub, icon, avatar, tag, checked, tone, onClick }: ItemProps) {
   const close = useContext(CloseMenu);
   return (
     <Item
@@ -138,8 +145,9 @@ export function MenuItem({ label, sub, icon, checked, tone, onClick }: ItemProps
       role={checked === undefined ? 'menuitem' : 'menuitemradio'}
       checked={checked}
       tone={tone}
-      leading={icon && <Icon icon={icon} size="xs" />}
+      leading={avatar ?? (icon && <Icon icon={icon} size="xs" />)}
       title={label}
+      meta={tag}
       preview={sub}
       trailing={
         checked && (
@@ -155,6 +163,8 @@ export function MenuItem({ label, sub, icon, checked, tone, onClick }: ItemProps
     />
   );
 }
+
+export const useMenuClose = () => useContext(CloseMenu);
 
 export function MenuHeading({ children }: { children: ReactNode }) {
   return <span className={styles.heading}>{children}</span>;

@@ -55,6 +55,18 @@
   font-size: var(--text-xs);
 }
 
+.footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-20);
+  border-top: var(--border-thin) solid var(--color-divider);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
 .body {
   flex-grow: 1;
   min-height: 0;

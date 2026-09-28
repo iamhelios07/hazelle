@@ -20,7 +20,7 @@ type CardProps = {
   selected: boolean | null;
   onClick: () => void;
   // A card that opens a menu takes these from Menu.
-  popup?: 'menu';
+  popup?: 'menu' | 'dialog';
   expanded?: boolean;
   ref?: Ref<HTMLButtonElement>;
   // A menu button over the picture's corner, beside the card rather than inside its button.

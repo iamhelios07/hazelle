@@ -5,8 +5,9 @@ type Props<T extends string> = {
   options: { value: T; label: string }[];
   value: T | null;
   onChange: (value: T) => void;
-  // chips: a row of small filters. buttons: equal-width buttons for a choice the form needs.
-  layout?: 'chips' | 'buttons';
+  // chips: a row of small filters. buttons: equal-width buttons for a choice the form needs. segments: a compact
+  // joined row beside a label, such as a choice toggle.
+  layout?: 'chips' | 'buttons' | 'segments';
 };
 
 export function ChoiceGroup<T extends string>({ label, options, value, onChange, layout = 'chips' }: Props<T>) {

@@ -1,11 +1,25 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { shown } from '../../model/chat';
+import type { Blocked } from '../../runtime/turn';
+import { describeTurnFailure } from '../common/failure';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
-import { Button, Callout, Composer, pressed, pressedKey, SendButton, useWide } from '../ui';
+import { Button, Callout, Composer, pressed, pressedKey, SendButton, useMenuOpener, useWide } from '../ui';
+import { ChatNote } from './ChatNote';
+import { ChatPersonaMenu } from './ChatPersonaMenu';
 import type { OpenChat } from './useChat';
 
+type Chip = 'model' | 'prompt' | 'persona';
+// The chip whose menu fixes each failure that stops a chat before sending.
+const FIX = {
+  'no-model': { label: '모델 고르기', chip: 'model' },
+  'model-gone': { label: '모델 고르기', chip: 'model' },
+  'prompt-missing': { label: '프롬프트 고르기', chip: 'prompt' },
+  'persona-missing': { label: '페르소나 고르기', chip: 'persona' },
+} as const satisfies Record<Blocked['kind'], { label: string; chip: Chip }>;
+
 export function ChatComposer({ chat }: { chat: OpenChat }) {
-  const { draft, messages, last, busy, streaming, problem, actions } = chat;
+  const { draft, messages, last, busy, streaming, problem, modelMenu, promptMenu, personaMenu, actions } = chat;
+  const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: useMenuOpener(personaMenu) };
   const wide = useWide();
   const [focused, setFocused] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -40,7 +54,11 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
 
   return (
     <>
-      {problem && <Callout tone="warn">{problem}</Callout>}
+      {problem && (
+        <Callout tone="warn" action={{ label: FIX[problem.kind].label, onClick: chips[FIX[problem.kind].chip].onClick }}>
+          {describeTurnFailure(problem)}
+        </Callout>
+      )}
       <Composer
         inputRef={input}
         value={draft.text}
@@ -50,6 +68,12 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
         onBlur={() => setFocused(false)}
         placeholder="메시지 · *행동*은 별표로 감싸요"
         hint={hint}
+        tools={
+          <>
+            <ChatPersonaMenu chat={chat} />
+            <ChatNote chat={chat} />
+          </>
+        }
         actions={
           <>
             {!busy && !draft.text.trim() && last?.role === 'user' && (
