@@ -11,17 +11,18 @@ import type { ObjectStore } from './store';
 // A new chat is saved in this order: the chat, then its greetings with the one shown selected, then
 // the user's first message (runtime/turn, sent with its reply). Messages stand in the order they were
 // saved (model/chat fold), so the greeting leads only when it is saved before the message; and a chat
-// that failed to save leaves no entries behind.
+// that failed to save leaves no entries behind. id is the one the chat was shown under before it was saved,
+// which seeds its greeting's pick and rollp tags.
 export async function startChat(
   store: ObjectStore,
+  id: string,
   chat: Chat,
   greetings: { ids: string[]; texts: string[]; selected: number } | null,
-): Promise<{ ok: true; id: string } | { ok: false; step: 'chat' | 'greetings'; failure: ApiFailure }> {
-  const created = await store.create('chat', chat);
+): Promise<{ ok: true } | { ok: false; step: 'chat' | 'greetings'; failure: ApiFailure }> {
+  const created = await store.create('chat', chat, { id });
   if (!created.ok) return { ok: false, step: 'chat', failure: created };
-  const id = created.data.id;
   const greeted = greetings && (await addGreetings(store, id, greetings));
-  return greeted ? { ok: false, step: 'greetings', failure: greeted } : { ok: true, id };
+  return greeted ? { ok: false, step: 'greetings', failure: greeted } : { ok: true };
 }
 
 // A character's chat opens on its greeting, and the other greetings are versions of it (design F3).

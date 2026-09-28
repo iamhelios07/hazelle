@@ -14,27 +14,26 @@ export type PromptInput = {
   // probabilities, as each earlier reply's id rolled its own.
   seed: string;
   countTokens: (text: string) => number;
+  // The tokens the prompt may take: the model's context less its reply length. null when the context is unknown,
+  // and then nothing is dropped.
+  budget: number | null;
 };
+
+// Even the last message alone leaves the prompt over its budget.
+export type TooLong = { kind: 'too-long'; tokens: number; budget: number };
 
 type Lore = { id: string; role: Role; body: string };
 
 // A prompt's blocks, in order, as the messages sent (design §4.2, §5 Prompt template). Messages left empty are
 // dropped.
-export function assemble({ scope, seed, countTokens }: PromptInput): ChatMessage[] {
+export function assemble({ scope, seed, countTokens, budget }: PromptInput): ChatMessage[] | TooLong {
   const { card, prompt } = scope;
   const chat = renderChat('prompt', scope);
   const context = contexts(scope, 'prompt');
+  const tokens = remembered(countTokens);
   // An entry costs what its body sends, so its CBS is evaluated before it is counted. The replays below count the
   // same bodies again.
-  const counted = new Map<string, number>();
-  const count = (body: string) => {
-    let tokens = counted.get(body);
-    if (tokens === undefined) {
-      tokens = countTokens(evaluate(body, context({ seed }, new Map(chat.variables))));
-      counted.set(body, tokens);
-    }
-    return tokens;
-  };
+  const count = remembered((body) => tokens(evaluate(body, context({ seed }, new Map(chat.variables)))));
   const placed = card ? activate(loreInput(card, scope, scope.messages, afterMatch(card, scope, count), seed, count)).placed : [];
 
   const lorebook: Lore[] = [];
@@ -66,30 +65,18 @@ export function assemble({ scope, seed, countTokens }: PromptInput): ChatMessage
 
   // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
   // text (design §5 row 11), and reads the variables as the chat's messages left them.
-  const render = (text: string, place: string) => unescapeCbs(evaluate(atPositions(text, positions), context({ seed: `${seed}:${place}` }, new Map(chat.variables))));
+  const render = (text: string, place: string) => unescapeCbs(evaluate(atPositions(text, positions), context({ seed: `${seed}:${place}` }, new Map(chat.variables)))).trim();
   const loreMessage = ({ id, role, body }: Lore): ChatMessage => ({ role, content: render(body, id) });
 
-  const sent = chat.texts.flatMap((content, index) => (content.trim() ? [{ role: scope.messages[index]!.role, content }] : []));
-  // An entry at @@depth N goes before the message N from the end (design §5 row 3), and wherever that message is.
-  const before = new Map<number, ChatMessage[]>();
-  for (const entry of depths) {
-    const at = Math.max(sent.length - entry.depth, 0);
-    before.set(at, [...(before.get(at) ?? []), loreMessage(entry)]);
-  }
-  const range = ({ from, to }: ChatRange) => {
-    const at = (n: number) => (n < 0 ? Math.max(sent.length + n, 0) : Math.min(n, sent.length));
-    const out: ChatMessage[] = [];
-    for (let index = at(from); index < (to === null ? sent.length : at(to)); index++) out.push(...(before.get(index) ?? []), sent[index]!);
-    return out;
-  };
-
-  const out: ChatMessage[] = [];
+  // The template with its chat slots left open, every other block rendered once.
+  const template: (ChatMessage | ChatRange)[] = [];
+  const out = (...messages: ChatMessage[]) => template.push(...messages.filter(({ content }) => content !== ''));
   const wrapped = (role: Role, wrapper: string | null, content: string, place: string) => {
-    if (content.trim()) out.push({ role, content: render(wrapper === null ? content : wrapper.replace('{{slot}}', () => content), place) });
+    if (content.trim()) out({ role, content: render(wrapper === null ? content : wrapper.replace('{{slot}}', () => content), place) });
   };
   for (const block of prompt.blocks) {
     if (block.kind === 'text') {
-      out.push({ role: block.role, content: render(injected(ownText(block, card), block.mark === null ? [] : (injections.get(block.mark) ?? [])), block.id) });
+      out({ role: block.role, content: render(injected(ownText(block, card), block.mark === null ? [] : (injections.get(block.mark) ?? [])), block.id) });
       continue;
     }
     switch (block.slot) {
@@ -103,19 +90,59 @@ export function assemble({ scope, seed, countTokens }: PromptInput): ChatMessage
         wrapped(block.role, block.wrapper, authorNote(scope.note, prompt), block.id);
         break;
       case 'lorebook':
-        out.push(...lorebook.map(loreMessage));
+        out(...lorebook.map(loreMessage));
         break;
       // 최종 삽입 (design §4.2): where it stands, and at the very end when the prompt has none (below).
       case 'postEverything':
-        out.push(...last.map(loreMessage));
+        out(...last.map(loreMessage));
         break;
       case 'chat':
-        out.push(...range(block.range));
+        template.push(block.range);
         break;
     }
   }
-  if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out.push(...last.map(loreMessage));
-  return out.map(({ role, content }) => ({ role, content: content.trim() })).filter(({ content }) => content !== '');
+  if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...last.map(loreMessage));
+
+  const messages = chat.texts.map((text, index) => ({ role: scope.messages[index]!.role, content: text.trim() })).filter(({ content }) => content !== '');
+  const atDepth = depths.map((entry) => ({ depth: entry.depth, message: loreMessage(entry) })).filter(({ message }) => message.content !== '');
+  const fill = (kept: ChatMessage[]) => {
+    // An entry at @@depth N goes before the message N from the end (design §5 row 3), and wherever that message is.
+    const before = new Map<number, ChatMessage[]>();
+    for (const { depth, message } of atDepth) {
+      const at = Math.max(kept.length - depth, 0);
+      before.set(at, [...(before.get(at) ?? []), message]);
+    }
+    return template.flatMap((part) => ('role' in part ? [part] : range(kept, before, part)));
+  };
+  const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
+
+  // The context budget (decided 2026-09-28) drops the oldest chat messages first and never the last one; the rest
+  // of the template stays whole. What does not fit even then is not sent.
+  let from = 0;
+  let sent = fill(messages);
+  if (budget === null) return sent;
+  while (size(sent) > budget && from < messages.length - 1) sent = fill(messages.slice(++from));
+  const used = size(sent);
+  return used > budget ? { kind: 'too-long', tokens: used, budget } : sent;
+}
+
+function range(kept: ChatMessage[], before: Map<number, ChatMessage[]>, { from, to }: ChatRange): ChatMessage[] {
+  const at = (n: number) => (n < 0 ? Math.max(kept.length + n, 0) : Math.min(n, kept.length));
+  const out: ChatMessage[] = [];
+  for (let index = at(from); index < (to === null ? kept.length : at(to)); index++) out.push(...(before.get(index) ?? []), kept[index]!);
+  return out;
+}
+
+function remembered(measure: (text: string) => number): (text: string) => number {
+  const held = new Map<string, number>();
+  return (text) => {
+    let value = held.get(text);
+    if (value === undefined) {
+      value = measure(text);
+      held.set(text, value);
+    }
+    return value;
+  };
 }
 
 function loreInput(card: Card, scope: ChatScope, history: HistoryMessage[], afterMatch: string[], seed: string, countTokens: (text: string) => number): LoreInput {

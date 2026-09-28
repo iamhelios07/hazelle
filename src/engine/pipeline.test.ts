@@ -1,8 +1,10 @@
+import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { describe, expect, it } from 'vitest';
+import type { ChatMessage } from '../connectors/types';
 import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, unused, type PromptInput } from './pipeline';
+import { assemble, unused, type PromptInput, type TooLong } from './pipeline';
 import { renderChat } from './render';
 
 // The user's own Risu preset "🏓 핑퐁 간소화" (design §4.2), block for block: its wrappers and marks as written,
@@ -91,7 +93,11 @@ const scope = (over: Partial<PromptInput['scope']> = {}): PromptInput['scope'] =
   ...over,
 });
 
-const build = (over: Partial<PromptInput['scope']> = {}) => assemble({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length });
+const sentOf = (result: ChatMessage[] | TooLong) => {
+  if ('kind' in result) throw new Error(`over budget: ${result.tokens} of ${result.budget}`);
+  return result;
+};
+const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null }));
 
 describe('assemble', () => {
   it("builds the user's own prompt with a card's lorebook, regex, toggle and variables", () => {
@@ -153,6 +159,23 @@ describe('assemble', () => {
     const sent = build({ card: card({ loreSettings: { scanDepth: 1, tokenBudget: null, recursive: null, fullWordMatching: null } }), lore: entries, messages, greeting: null });
     const lorebook = sent.filter(({ content }) => content === 'kept' || content === 'once');
     expect(lorebook).toEqual([{ role: 'system', content: 'kept' }]);
+  });
+
+  it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
+    const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
+    const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));
+    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens };
+    const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
+    const inChat = ({ content }: ChatMessage) => content.startsWith('Message ');
+    const whole = sentOf(assemble({ ...input, budget: null }));
+    const budget = Math.floor(size(whole) / 2);
+    const sent = sentOf(assemble({ ...input, budget }));
+    expect(size(sent)).toBeLessThanOrEqual(budget);
+    expect(sent.filter((each) => !inChat(each))).toEqual(whole.filter((each) => !inChat(each)));
+    const kept = sent.filter(inChat);
+    expect(kept.length).toBeLessThan(messages.length);
+    expect(kept).toEqual(whole.filter(inChat).slice(-kept.length));
+    expect(assemble({ ...input, budget: 100 })).toMatchObject({ kind: 'too-long', budget: 100 });
   });
 });
 

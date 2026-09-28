@@ -1,5 +1,5 @@
 import { chatItems, type ChatItem } from '../model/chat';
-import type { Stored } from '../model/kinds';
+import type { Kind, Stored } from '../model/kinds';
 import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import type { VaultKey } from '../vault/keys';
@@ -60,9 +60,10 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   void purgeExpired(store, files, Date.now(), closing.signal);
 
   let cached: { version: number; views: Views } | null = null;
+  const displayed = new Map<string, Displayed>();
   const views = () => {
     const version = store.snapshot();
-    if (cached?.version !== version) cached = { version, views: derive(store, username) };
+    if (cached?.version !== version) cached = { version, views: derive(store, username, displayed) };
     return cached.views;
   };
   const close = () => {
@@ -75,12 +76,32 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   return { ok: true, data: { username, store, files, talk, credentials, catalogs, views, close } };
 }
 
-function derive(store: ObjectStore, username: string): Views {
+// A chat's shown texts as last rendered, and the key of what they were rendered from.
+type Displayed = { key: string; texts: string[] };
+
+// What any chat's display reads besides the chat itself and its entries.
+const SHARED: readonly Kind[] = ['character', 'lore', 'prompt', 'persona', 'settings', 'connection'];
+// Every write takes the account's next rev (tech-spec §5), so the count and highest rev of a set of objects
+// change with any write to it, a deletion included.
+const written = (objects: Stored<Kind>[]) => `${objects.length}:${objects.reduce((max, { rev }) => Math.max(max, rev), 0)}`;
+
+// A chat is rendered again only when it, its entries or what every chat reads changed, so a new message
+// renders its own chat alone.
+function derive(store: ObjectStore, username: string, displayed: Map<string, Displayed>): Views {
+  const shared = SHARED.map((kind) => written(store.list(kind))).join('|');
   const chats = chatItems(
     store.list('chat'),
     (chat) => store.children('entry', chat),
-    (chat, messages) => displayChat({ store, username }, chat.id, chat.value, messages),
+    (chat, messages) => {
+      const key = `${shared}|${chat.rev}|${written(store.children('entry', chat.id))}`;
+      const held = displayed.get(chat.id);
+      if (held?.key === key) return held.texts;
+      const texts = displayChat({ store, username }, chat.id, chat.value, messages);
+      displayed.set(chat.id, { key, texts });
+      return texts;
+    },
   );
+  for (const id of displayed.keys()) if (!store.get('chat', id)) displayed.delete(id);
   const shelves = shelve(store.list('character'), store.list('avatar'), chats);
   return {
     chats,

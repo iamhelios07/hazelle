@@ -36,8 +36,8 @@ describe('a new chat', () => {
       const character = await store.create('character', { card: luna, folder: null, loreFolders: [] });
       const log = stubRelay(() => saying('왔구나.'));
 
-      const started = await startChat(store, { title: null, character: character.ok ? character.data.id : null, models: {} }, { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0 });
-      const chat = started.ok ? started.id : '';
+      const chat = crypto.randomUUID();
+      await startChat(store, chat, { title: null, character: character.ok ? character.data.id : null, models: {} }, { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0 });
       expect(session.views().chatById.get(chat)?.preview).toBe('어서 와, jin.');
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
 

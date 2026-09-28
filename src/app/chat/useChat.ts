@@ -29,6 +29,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const turn = useTurn();
   const toast = useToast();
   const id = item?.id ?? null;
+  // The id a new chat is shown under and then saved under, so its greeting's pick and rollp tags keep their rolls.
+  const [newId] = useState(() => crypto.randomUUID());
   const [draftModels, setDraftModels] = useState<Assignment>({});
   const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, models: draftModels };
   const route = chatModel(store, chat);
@@ -51,7 +53,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
         }
       : null;
   const messages: Shown[] = opening ? [opening] : withTurn(item?.messages ?? [], turn, id ?? '');
-  const texts = displayChat(session, id, chat, messages);
+  const texts = displayChat(session, id ?? newId, chat, messages);
   const busy = turn !== null;
   const streaming = busy && turn.chat === id;
   const last = messages.at(-1);
@@ -95,13 +97,13 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     follow();
     let chatId = id;
     if (chatId === null) {
-      const started = await startChat(store, chat, opening && { ids: opening.versions.map((version) => version.id), texts: opening.versions.map((version) => version.text), selected: opening.selected });
+      const started = await startChat(store, newId, chat, opening && { ids: opening.versions.map((version) => version.id), texts: opening.versions.map((version) => version.text), selected: opening.selected });
       if (!started.ok) {
         draft.set(text);
         toast.failed(started.failure, started.step === 'chat' ? '채팅을 만들지 못했어요.' : '첫인사를 저장하지 못했어요.');
         return;
       }
-      chatId = started.id;
+      chatId = newId;
       navigate({ kind: 'chat', id: chatId }, { replace: true });
     }
     const failure = await takeTurn(session, chatId, { kind: 'send', text });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { resolveConnection } from '../connectors/registry';
 import type { Connection } from '../connectors/types';
+import { appendUserMessage, startChat } from './chat-log';
+import { addPersona, setDefaultPersona } from './personas';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
@@ -42,5 +44,19 @@ describe('session', () => {
       expect(next).not.toBe(first);
       expect(next.chats.map((item) => item.id)).toEqual([chat.ok && chat.data.id]);
       expect(session.views()).toBe(next);
+    }));
+
+  it("renders a chat's texts again when its messages change, and when what every chat reads changes", () =>
+    server.withSession(async (session) => {
+      const { store } = session;
+      const chat = crypto.randomUUID();
+      await startChat(store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '{{user}}, hello' });
+      expect(session.views().chatById.get(chat)?.preview).toBe('jin, hello');
+      const persona = await addPersona(store, { name: 'Mina', description: '', picture: null });
+      await setDefaultPersona(store, persona.ok ? persona.data.id : null);
+      expect(session.views().chatById.get(chat)?.preview).toBe('Mina, hello');
+      await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: 'bye, {{user}}' });
+      expect(session.views().chatById.get(chat)?.preview).toBe('bye, Mina');
     }));
 });

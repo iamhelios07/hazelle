@@ -10,8 +10,8 @@ describe('Talk', () => {
   it('keeps a reply whose save failed, and saveAgain saves it', () =>
     server.withSession(async (session) => {
       await answerable(session);
-      const started = await startChat(session.store, { title: null, character: null, models: {} }, null);
-      const chat = started.ok ? started.id : '';
+      const chat = crypto.randomUUID();
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
 
       let offline = false;
