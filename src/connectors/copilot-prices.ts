@@ -2,10 +2,10 @@ import type { Cost, Usage } from './types';
 
 // Copilot bills tokens in AI credits (1 credit = $0.01) and reports no cost, so a reply's cost is
 // worked out here from GitHub's price table. Copied from
-// https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing on 2026-09-28; GitHub
-// changes it (GPT-5.6 prices moved within a week), so a cost from it is an estimate.
-// Keyed by the ids Copilot's model list uses. A model priced on the page whose id has not been seen in
-// a real list is left out, and its replies cost 알 수 없음.
+// https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing on 2026-09-28. The
+// page can change (provider-hub's copy from five days earlier differs on GPT-5.6), so a cost from it is
+// an estimate. Keyed by the ids provider-hub saw in real Copilot model lists; a model priced on the page
+// under a name whose id has not been seen is left out, and its replies cost 알 수 없음.
 
 // Dollars per million tokens. A tier applies up to maxInput input tokens; the last has no bound.
 type Rate = { maxInput?: number; input: number; cached: number; cacheWrite?: number; output: number };
