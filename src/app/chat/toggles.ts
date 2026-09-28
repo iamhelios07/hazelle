@@ -1,22 +1,17 @@
-import { readToggles } from '../../engine/import/toggles';
-import type { Character } from '../../model/library';
-import type { Toggle, ToggleValues } from '../../model/prompt';
-import { chatToggles, toggleValue } from '../../model/toggles';
+import type { Toggle } from '../../model/prompt';
+import type { ChatToggleSet } from '../../runtime/turn';
 
 export type ToggleRow = { toggle: Toggle; value: string; changed: boolean };
 export type ToggleRows = { prompt: ToggleRow[]; card: ToggleRow[]; changed: number };
 
-// The chat's toggles as the panel lists them: the prompt's, then the card's that the prompt does not declare, in
-// chatToggles' order, each with its value (the character's, or 캐릭터 없이's) and whether that differs from its
-// default. The same declarations and values runtime/turn scopeOf sends with.
-export function toggleRows(prompt: readonly Toggle[], character: Character | null, none: ToggleValues | undefined): ToggleRows {
-  const declared = chatToggles(prompt, character ? readToggles(character.card.toggles).toggles : []);
-  const value = toggleValue(declared, (character ? character.toggles : none) ?? {});
+// The chat's toggles as the panel lists them: the first fromPrompt are the prompt's (runtime/turn togglesOf puts
+// them first), each with its value and whether that differs from its default.
+export function toggleRows({ declared, value }: ChatToggleSet, fromPrompt: number): ToggleRows {
   const rows = declared.map((toggle) => {
     const current = value(toggle.key)!;
     return { toggle, value: current, changed: current !== toggle.default };
   });
-  return { prompt: rows.slice(0, prompt.length), card: rows.slice(prompt.length), changed: rows.filter((row) => row.changed).length };
+  return { prompt: rows.slice(0, fromPrompt), card: rows.slice(fromPrompt), changed: rows.filter((row) => row.changed).length };
 }
 
 // What the panel shows of a group: the rows the search and the 바꾼 것 filter keep, those that differed when the
