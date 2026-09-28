@@ -10,14 +10,18 @@ const restrictValueImports = (...patterns) => ({ '@typescript-eslint/no-restrict
 const CLIENT_TO_SERVER = folders(['server'], 'Client code reaches the server over HTTP only (tech-spec §3).');
 const CSS_IMPORT = { regex: '\\.css$', message: 'Only src/app/ui imports CSS (src/app/ui/README.md).' };
 // Relative paths only know depth: src/app is one level up from src/app/ui and two from a file in one of its
-// folders. The kit is kept one folder deep, so a deeper file fails here rather than slipping through.
+// folders. A deeper file would slip past this, so KIT_DEPTH fails any file there outright.
 const appOutsideUi = (levels) => ({
   regex: `^(\\.\\./){${levels}}(?!\\.\\.)`,
   message: 'src/app/ui imports nothing else from src/app, so a component never reaches the session, router, toasts or a screen (tech-spec §3).',
 });
+const KIT_DEPTH = {
+  selector: 'Program',
+  message: 'The kit is one folder deep (src/app/ui/<group>/); the ../-counting boundary rule cannot see deeper files.',
+};
 const HEX_COLOR = {
   selector: 'Literal[value=/^#(?:[0-9a-fA-F]{3,4}){1,2}$/]',
-  message: 'Colors live in src/app/ui/tokens.css.',
+  message: 'Colors live in src/app/ui/foundation/tokens.css.',
 };
 const STYLE_PROPS = {
   selector: 'JSXAttribute[name.name=/^(className|style)$/]',
@@ -81,6 +85,10 @@ export default defineConfig([
   {
     files: ['src/app/ui/*/**'],
     rules: restrictImports(CLIENT_TO_SERVER, appOutsideUi(2)),
+  },
+  {
+    files: ['src/app/ui/*/*/**'],
+    rules: { 'no-restricted-syntax': ['error', KIT_DEPTH] },
   },
   {
     files: ['src/app/**'],

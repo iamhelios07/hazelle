@@ -64,9 +64,9 @@ and only this folder styles elements.**
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
 | collections | `AccountRow` | `AccountRow.module.css` | Who is signed in |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
+| collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `ItemRow`, `FolderRow`, `NavRow` | `SideRow.module.css` | The sidebar's button rows, which share one base, hover and current state |
-| collections | `Gallery` (`CardGrid`, `FaceCard`, `Portrait`, `SelectionBar`) | `Gallery.module.css` | Characters as faces |
 | collections | `List` (`ListItem`) | `List.module.css` | Rows of a list |
 | collections | `SideNote` | `SideNote.module.css` | A line where the sidebar's rows would be |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
@@ -91,6 +91,6 @@ and only this folder styles elements.**
 - Vitest: `foundation/media.test.ts` fails on a media query that `MEDIA` does not list.
 - ESLint: no `className` or `style` props and no CSS imports outside this folder and `main.tsx`,
   and no hex color strings anywhere in `src/app`. Nothing here imports the rest of `src/app`; the
-  rule counts `../` levels, which is why the kit stays one folder deep.
+  rule counts `../` levels, so any file more than one folder deep fails lint outright.
 - `typed-css-modules` generates a type for each `.module.css`, so a misspelled class name fails
   the type check. The generated `*.module.d.css.ts` files are not committed.

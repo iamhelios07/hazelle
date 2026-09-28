@@ -19,7 +19,6 @@ const TOKEN_PROPERTIES = [
   '/^border(-(top|right|bottom|left))?-width$/',
   'outline-width',
   'z-index',
-  '/^(transition|animation)-(duration|delay)$/',
   '/^(min-|max-)?(width|height)$/',
 ];
 
@@ -31,6 +30,9 @@ export default {
     'color-no-hex': true,
     'color-named': 'never',
     'function-disallowed-list': ['rgb', 'rgba', 'hsl', 'hsla'],
+    // Timings are matched as text, not in TOKEN_PROPERTIES: the plugin's shorthand expansion misses a time written
+    // first (`1s spin`) or listed after a var (`opacity 120ms, color var(--duration-fast)`).
+    'declaration-property-value-disallowed-list': { '/^(transition|animation)/': ['/(^|[\\s,(])-?[\\d.]+m?s\\b/'] },
     'scale-unlimited/declaration-strict-value': [
       TOKEN_PROPERTIES,
       {

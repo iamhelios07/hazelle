@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Icon } from '../foundation/Icon';
-import styles from './Gallery.module.css';
+import styles from './CardGrid.module.css';
 
 // 캐릭터 둘러보기 (design F6): characters as large faces, since they are found by face more than by name.
 export function CardGrid({ label, children }: { label: string; children: ReactNode }) {

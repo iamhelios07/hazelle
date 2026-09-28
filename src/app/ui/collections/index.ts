@@ -1,8 +1,8 @@
 export { AccountRow } from './AccountRow';
 export { Breakdown } from './Breakdown';
+export { CardGrid, FaceCard, Portrait, SelectionBar } from './CardGrid';
 export { Facts } from './Facts';
 export { FolderRow } from './FolderRow';
-export { CardGrid, FaceCard, Portrait, SelectionBar } from './Gallery';
 export { ItemRow } from './ItemRow';
 export { List, ListItem } from './List';
 export { NavRow } from './NavRow';
