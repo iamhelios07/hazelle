@@ -1,0 +1,112 @@
+import { add, convert, type Converted, type Tally } from './convert';
+import { UNSUPPORTED_KINDS, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
+import { readPng } from './png';
+import { readRisum } from './risum';
+import { openZip, type Zip } from './zip';
+
+const utf8 = new TextDecoder();
+// The same one-liner as vault/aead.ts; importers belong to the engine, which may not import the vault (tech-spec §3).
+const base64 = (text: string) => Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
+const fail = (kind: ImportFailure['kind'], detail?: string): ImportResult => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
+
+// Dispatch goes by extension only, as in Risu; nothing is sniffed.
+export function importCard(fileName: string, bytes: Uint8Array): ImportResult {
+  const extension = fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase();
+  try {
+    switch (extension) {
+      case 'png':
+        return fromPng(bytes);
+      case 'charx':
+      case 'jpg':
+      case 'jpeg':
+        return fromCharx(bytes);
+      case 'json':
+        return fromJson(bytes);
+      case 'risum':
+        return fail('module-file');
+      default:
+        return fail('unknown-format');
+    }
+  } catch (error) {
+    return fail('unreadable', error instanceof Error ? error.message : String(error));
+  }
+}
+
+function fromPng(bytes: Uint8Array): ImportResult {
+  const png = readPng(bytes);
+  if (!png) return fail('unreadable', 'not a PNG');
+  if (!png.card) return fail('unreadable', 'the PNG holds no card');
+  if (png.card.startsWith('rcc||')) return fail('encrypted');
+  const tally: Tally = new Map();
+  const converted = convert(JSON.parse(utf8.decode(base64(png.card))), null, tally);
+  return converted ? done('png', converted, { bytes: png.image, type: 'image/png' }, tally) : fail('unreadable', 'not a character card');
+}
+
+function fromCharx(bytes: Uint8Array): ImportResult {
+  const zip = openZip(bytes);
+  const card = zip?.read('card.json');
+  if (!zip || !card) return fail('unreadable', 'no card.json');
+  const tally: Tally = new Map();
+  const moduleBytes = zip.read('module.risum');
+  const module = moduleBytes ? readRisum(moduleBytes) : null;
+  if (moduleBytes && !module) add(tally, 'module');
+  const converted = convert(JSON.parse(utf8.decode(card)), module, tally);
+  return converted ? done('charx', converted, avatar(converted.icon, zip.prefix, zip, tally), tally) : fail('unreadable', 'not a character card');
+}
+
+function fromJson(bytes: Uint8Array): ImportResult {
+  const tally: Tally = new Map();
+  const converted = convert(JSON.parse(utf8.decode(bytes)), null, tally);
+  return converted ? done('json', converted, avatar(converted.icon, null, null, tally), tally) : fail('unreadable', 'not a character card');
+}
+
+function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], tally: Tally): ImportResult {
+  const { card, lore, loreFolders, spec } = converted;
+  const unsupported = UNSUPPORTED_KINDS.flatMap((kind) => {
+    const count = tally.get(kind) ?? 0;
+    return count > 0 ? [{ kind, count }] : [];
+  });
+  return { ok: true, card: { card, lore, loreFolders, avatar, report: { format, spec, unsupported } } };
+}
+
+// CCv3's icon resolution: no icon or ccdefault: is the file's own image (the JPEG in front of a charx's zip),
+// embeded:// (the spec's spelling) a file in the charx, data: an inline image, as Risu's JSON export writes it.
+// An icon that cannot be read is counted as an asset.
+function avatar(uri: string | null, own: Uint8Array<ArrayBuffer> | null, zip: Zip | null, tally: Tally): Imported['avatar'] {
+  if (uri === null || uri === 'ccdefault:') return own?.length ? image(own, tally) : null;
+  const bytes = uri.startsWith('embeded://') ? zip?.read(uri.slice('embeded://'.length)) : uri.startsWith('data:') ? dataUri(uri) : null;
+  if (!bytes) {
+    add(tally, 'asset');
+    return null;
+  }
+  return image(bytes, tally);
+}
+
+function dataUri(uri: string): Uint8Array<ArrayBuffer> | null {
+  const comma = uri.indexOf(',');
+  if (comma === -1 || !uri.slice(0, comma).endsWith(';base64')) return null;
+  try {
+    return base64(uri.slice(comma + 1));
+  } catch {
+    return null;
+  }
+}
+
+function image(bytes: Uint8Array<ArrayBuffer>, tally: Tally): Imported['avatar'] {
+  const type = imageType(bytes);
+  if (!type) {
+    add(tally, 'asset');
+    return null;
+  }
+  return { bytes, type };
+}
+
+function imageType(bytes: Uint8Array): string | null {
+  const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  if (ascii(0, 8) === '\x89PNG\r\n\x1a\n') return 'image/png';
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (ascii(0, 4) === 'GIF8') return 'image/gif';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
+  if (ascii(4, 12) === 'ftypavif' || ascii(4, 12) === 'ftypavis') return 'image/avif';
+  return null;
+}

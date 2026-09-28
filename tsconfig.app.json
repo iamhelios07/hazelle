@@ -16,6 +16,7 @@
   "include": [
     "src/app",
     "src/connectors",
+    "src/engine",
     "src/runtime",
     "src/vault"
   ]
