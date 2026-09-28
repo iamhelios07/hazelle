@@ -1,11 +1,12 @@
-import { chatRequest, resolveConnection } from '../connectors/registry';
+import { chatRequest, resolveConnection, resolveModel, withCredential, type Resolved } from '../connectors/registry';
 import { decodeStream, type Outcome } from '../connectors/stream';
 import { ConnectorError, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase } from '../connectors/types';
-import { relay, type RelayFailure } from './relay';
+import { credentialFor, type CredentialFailure } from './credential';
+import { relay } from './relay';
 
 export type ReplyError =
   | { kind: 'refused'; code: string }
-  | RelayFailure
+  | CredentialFailure
   | NonNullable<Outcome['error']>;
 
 // The facts a receipt keeps (tech-spec §5): the outcome, and times measured from the moment of sending.
@@ -38,20 +39,23 @@ export async function generate({ connection, model, messages, maxTokens, signal,
   // Refusals the connector can see coming are made here, before anything is sent (design §4).
   const resolved = resolveConnection(connection);
   if (!resolved) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'unknown-connection-type' });
+  let route: Resolved;
   let request: HttpRequest;
   try {
-    request = chatRequest(resolved, connection.secret, { model, messages, maxTokens });
+    route = resolveModel(resolved, model);
+    request = chatRequest(route, { model, messages, maxTokens });
   } catch (error) {
     if (error instanceof ConnectorError) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: error.code });
     throw error;
   }
 
-  const response = await relay(request, signal);
-  if (!(response instanceof Response)) {
-    if (response.kind === 'stopped') return reply({ state: 'cut', cut: 'stopped', ...empty }, null);
-    return reply({ state: 'failed', cut: null, ...empty }, response);
-  }
-  const outcome = await decodeStream(resolved, response.body!, signal, (phase, text) => {
+  const failed = (failure: CredentialFailure) =>
+    failure.kind === 'stopped' ? reply({ state: 'cut', cut: 'stopped', ...empty }, null) : reply({ state: 'failed', cut: null, ...empty }, failure);
+  const credential = await credentialFor(resolved, connection.secret, signal);
+  if (!credential.ok) return failed(credential.failure);
+  const response = await relay(withCredential(route, request, credential.credential), signal);
+  if (!(response instanceof Response)) return failed(response);
+  const outcome = await decodeStream(route, response.body!, signal, (phase, text) => {
     firstText ??= performance.now();
     onText(phase, text);
   });

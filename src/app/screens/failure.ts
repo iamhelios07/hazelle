@@ -2,6 +2,7 @@ import type { Outcome } from '../../connectors/stream';
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
 import type { ReplyError } from '../../runtime/generate';
+import type { SignInFailure } from '../../runtime/sign-in';
 
 const MESSAGES: Record<string, string> = {
   'bad-username': '아이디는 2–32자의 글자, 숫자, _ . - 로만 만들 수 있어요.',
@@ -31,6 +32,7 @@ export function describeFailure(failure: ApiFailure): string {
 const REFUSED: Record<string, string> = {
   'max-tokens-unknown': '이 모델의 최대 출력 길이를 몰라서 보낼 수 없어요.',
   'unknown-connection-type': '이 버전이 모르는 연결 종류예요. 새로고침해 보세요.',
+  'unsupported-protocol': '이 모델이 받는 요청 방식을 이 앱이 아직 몰라요.',
 };
 
 const RELAY: Record<string, string> = {
@@ -75,7 +77,20 @@ export function describeReplyError(error: ReplyError): string {
       return `응답을 읽지 못했어요. ${error.detail}`;
     case 'network':
       return '응답을 받다가 연결이 끊겼어요.';
+    case 'no-token':
+      return '로그인한 계정으로 쓸 토큰을 받지 못했어요. 연결을 지우고 다시 로그인해 주세요.';
   }
+}
+
+const SIGN_IN_REFUSED: Record<string, string> = {
+  expired_token: '코드를 쓸 수 있는 시간이 지났어요. 다시 해 주세요.',
+  access_denied: '로그인을 취소했어요.',
+};
+
+export function describeSignInFailure(failure: SignInFailure, site: string): string {
+  if (failure.kind === 'bad-answer') return `${site}의 답을 읽지 못했어요. 다시 해 주세요.`;
+  if (failure.kind === 'refused') return SIGN_IN_REFUSED[failure.code] ?? `${site}가 로그인을 거절했어요 (${failure.code}).`;
+  return describeReplyError(failure);
 }
 
 export function describeCatalogFailure(failure: CatalogFailure): string {

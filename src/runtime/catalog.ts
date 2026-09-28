@@ -1,8 +1,9 @@
-import { catalogRequest, parseCatalog, resolveConnection } from '../connectors/registry';
+import { catalogRequest, parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
 import type { Connection, Model } from '../connectors/types';
-import { relayJson, type RelayFailure } from './relay';
+import { credentialFor, type CredentialFailure } from './credential';
+import { relayJson } from './relay';
 
-export type CatalogFailure = RelayFailure | { kind: 'refused'; code: string } | { kind: 'not-a-catalog' };
+export type CatalogFailure = CredentialFailure | { kind: 'refused'; code: string } | { kind: 'not-a-catalog' };
 export type CatalogResult = { ok: true; models: Model[] } | { ok: false; failure: CatalogFailure };
 
 // A model list stays in memory for five minutes per connection and key, so moving between screens
@@ -24,7 +25,9 @@ export function loadCatalog(connection: Connection, { fresh = false } = {}): Pro
 async function fetchCatalog(connection: Connection): Promise<CatalogResult> {
   const resolved = resolveConnection(connection);
   if (!resolved) return { ok: false, failure: { kind: 'refused', code: 'unknown-connection-type' } };
-  const response = await relayJson(catalogRequest(resolved, connection.secret));
+  const credential = await credentialFor(resolved, connection.secret);
+  if (!credential.ok) return credential;
+  const response = await relayJson(withCredential(resolved, catalogRequest(resolved), credential.credential));
   if (!response.ok) return response;
   const models = parseCatalog(resolved, response.data);
   return models ? { ok: true, models } : { ok: false, failure: { kind: 'not-a-catalog' } };

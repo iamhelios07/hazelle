@@ -1,0 +1,83 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "claude-opus-4.6",
+      "name": "Claude Opus 4.6",
+      "vendor": "Anthropic",
+      "version": "claude-opus-4.6",
+      "object": "model",
+      "preview": false,
+      "model_picker_enabled": true,
+      "capabilities": {
+        "family": "claude-opus-4.6",
+        "type": "chat",
+        "object": "model_capabilities",
+        "tokenizer": "o200k_base",
+        "limits": { "max_context_window_tokens": 200000, "max_prompt_tokens": 128000, "max_output_tokens": 64000, "vision": { "max_prompt_images": 5 } },
+        "supports": { "streaming": true, "tool_calls": true, "parallel_tool_calls": true, "vision": true, "adaptive_thinking": true, "min_thinking_budget": 1024, "max_thinking_budget": 32000 }
+      },
+      "policy": { "state": "enabled" },
+      "billing": { "is_premium": true, "multiplier": 3 },
+      "supported_endpoints": ["/v1/messages"]
+    },
+    {
+      "id": "gpt-5-mini",
+      "name": "GPT-5 mini",
+      "vendor": "Azure OpenAI",
+      "object": "model",
+      "model_picker_enabled": true,
+      "capabilities": {
+        "family": "gpt-5-mini",
+        "type": "chat",
+        "limits": { "max_context_window_tokens": 264000, "max_prompt_tokens": 128000, "max_output_tokens": 64000 },
+        "supports": { "streaming": true, "tool_calls": true, "vision": true, "reasoning_effort": ["low", "medium", "high"] }
+      },
+      "policy": { "state": "enabled" },
+      "supported_endpoints": ["/chat/completions", "/responses"]
+    },
+    {
+      "id": "gpt-5.1-codex",
+      "name": "GPT-5.1-Codex",
+      "vendor": "OpenAI",
+      "object": "model",
+      "model_picker_enabled": true,
+      "capabilities": {
+        "family": "gpt-5.1-codex",
+        "type": "chat",
+        "limits": { "max_context_window_tokens": 400000, "max_output_tokens": 128000 },
+        "supports": { "streaming": true, "tool_calls": true, "vision": true, "reasoning_effort": ["low", "medium", "high"] }
+      },
+      "supported_endpoints": ["/responses"]
+    },
+    {
+      "id": "gpt-4.1",
+      "name": "GPT-4.1",
+      "vendor": "Azure OpenAI",
+      "object": "model",
+      "model_picker_enabled": true,
+      "capabilities": {
+        "family": "gpt-4.1",
+        "type": "chat",
+        "limits": { "max_context_window_tokens": 128000, "max_output_tokens": 16384 },
+        "supports": { "streaming": true, "tool_calls": true, "vision": false }
+      }
+    },
+    {
+      "id": "gpt-4o-mini-2024-07-18",
+      "name": "GPT-4o mini",
+      "vendor": "Azure OpenAI",
+      "object": "model",
+      "model_picker_enabled": false,
+      "capabilities": { "family": "gpt-4o-mini", "type": "chat", "limits": { "max_output_tokens": 4096 }, "supports": { "streaming": true } },
+      "supported_endpoints": ["/chat/completions"]
+    },
+    {
+      "id": "text-embedding-3-small",
+      "name": "Embedding V3 small",
+      "vendor": "Azure OpenAI",
+      "object": "model",
+      "capabilities": { "family": "text-embedding-3-small", "type": "embeddings", "limits": { "max_inputs": 512 } }
+    }
+  ]
+}

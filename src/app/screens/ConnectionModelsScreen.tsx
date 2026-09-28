@@ -163,7 +163,7 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
                 key={model.id}
                 title={model.name}
                 code={model.id}
-                tags={listed ? tags(model) : ['목록에 없음']}
+                tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['아직 못 씀', ...tags(model)] : tags(model)}
                 trailing={<IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표 찍기`} pressed={on} onClick={() => toggle(model)} />}
               />
             );

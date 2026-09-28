@@ -32,6 +32,7 @@ export const openRouter: ConnectionType = {
           maxOutput: count(topProvider.max_completion_tokens),
           reasoning: parameters ? parameters.includes('reasoning') : null,
           tools: parameters ? parameters.includes('tools') : null,
+          protocol: null,
         };
       });
   },

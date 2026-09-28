@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
+import { SIGN_IN_TYPES } from '../connectors/registry';
 import { api } from '../runtime/api';
 import { forgetCatalogs } from '../runtime/catalog';
+import { forgetCredentials } from '../runtime/credential';
 import { keepSynced, ObjectStore } from '../runtime/store';
 import type { VaultKey } from '../vault/keys';
 import { navigate, usePath } from './router';
 import { ConnectionAddScreen } from './screens/ConnectionAddScreen';
 import { ConnectionModelsScreen } from './screens/ConnectionModelsScreen';
+import { ConnectionSignInScreen } from './screens/ConnectionSignInScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { describeFailure } from './screens/failure';
 import { HomeScreen } from './screens/HomeScreen';
@@ -42,6 +45,7 @@ export function Workspace({ accountId, vaultKey, ...home }: Props) {
       current = false;
       stopSync();
       forgetCatalogs();
+      forgetCredentials();
     };
   }, [accountId, vaultKey, attempt]);
 
@@ -63,6 +67,8 @@ function Routes({ message, onLock, onLogout }: Omit<Props, 'accountId' | 'vaultK
   const connections = useConnections();
   if (path === '/connections') return <ConnectionsScreen />;
   if (path === '/connections/new') return <ConnectionAddScreen />;
+  const signIn = SIGN_IN_TYPES.find((type) => path === `/connections/new/${type.id}`);
+  if (signIn) return <ConnectionSignInScreen key={signIn.id} type={signIn} />;
   if (path === '/try') return <TryScreen />;
   const id = CONNECTION.exec(path)?.[1];
   if (id) return <ConnectionModelsScreen key={id} id={id} />;

@@ -1,12 +1,12 @@
 import { ConnectorError, type ChatMessage, type Codec, type Modality } from './types';
 import { count, isRecord } from './values';
 
-const headers = (secret: string): Record<string, string> => ({ 'x-api-key': secret, 'anthropic-version': '2023-06-01' });
+const VERSION = { 'anthropic-version': '2023-06-01' };
 
 export const anthropicMessages: Codec = {
-  authHeaders: headers,
+  authHeaders: (secret) => ({ 'x-api-key': secret }),
 
-  listModels: (endpoint, secret) => ({ url: `${endpoint.baseUrl}/models?limit=1000`, method: 'GET', headers: headers(secret), body: null }),
+  listModels: (endpoint) => ({ url: `${endpoint.baseUrl}/models?limit=1000`, method: 'GET', headers: VERSION, body: null }),
 
   // The Models API reports limits and image, PDF and thinking support. It does not report tool support.
   // A limit of 0 is read as unknown, as the API's own example shows 0 for real models.
@@ -32,20 +32,21 @@ export const anthropicMessages: Codec = {
           maxOutput: count(raw.max_tokens) || null,
           reasoning: supported('thinking'),
           tools: null,
+          protocol: null,
         };
       });
   },
 
   // The Messages API requires max_tokens. With no request value and no catalog limit there is no
   // truthful number to send, so the request is refused instead of guessed.
-  chat(endpoint, secret, { model, messages, maxTokens }) {
+  chat(endpoint, { model, messages, maxTokens }) {
     const limit = maxTokens ?? model.maxOutput;
     if (limit === null) throw new ConnectorError('max-tokens-unknown');
     const system = messages.filter((message) => message.role === 'system').map((message) => message.content);
     return {
       url: `${endpoint.baseUrl}/messages`,
       method: 'POST',
-      headers: { ...headers(secret), 'content-type': 'application/json' },
+      headers: { ...VERSION, 'content-type': 'application/json' },
       body: JSON.stringify({
         model: model.id,
         max_tokens: limit,

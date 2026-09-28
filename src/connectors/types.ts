@@ -35,6 +35,10 @@ export type Model = {
   maxOutput: number | null;
   reasoning: boolean | null;
   tools: boolean | null;
+  // The wire format this model is called with, for a connection that serves models in more than one
+  // (Copilot). null means the connection's own. 'unsupported' means only formats this app does not
+  // speak yet, so a request is refused before sending.
+  protocol: Protocol | 'unsupported' | null;
 };
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -60,11 +64,14 @@ export type Terminal = { state: 'completed' } | { state: 'failed'; error: string
 // One of the shared wire formats (design §4, Protocol row). A connection type never re-implements
 // one; it adds to it through its own hooks.
 export type Codec = {
+  // How a plain API key is presented. A connection type may present its credential its own way.
   authHeaders(secret: string): Record<string, string>;
-  listModels(endpoint: Endpoint, secret: string): HttpRequest;
+  // Requests are built without the credential, which is added last (registry withCredential), so a
+  // request that cannot be built is refused before a credential is fetched.
+  listModels(endpoint: Endpoint): HttpRequest;
   // null when the payload is not a model list at all, which is not the same as an empty one.
   parseModels(payload: unknown): Model[] | null;
-  chat(endpoint: Endpoint, secret: string, request: ChatRequest): HttpRequest;
+  chat(endpoint: Endpoint, request: ChatRequest): HttpRequest;
   // Reads one decoded SSE event. Text goes through append; usage and the finish reason go to facts.
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
   terminal(event: unknown): Terminal | null;
@@ -78,8 +85,32 @@ export type Codec = {
 export type ConnectionType = {
   id: string;
   label: string;
+  // Where the model list is, and how a model that names no protocol of its own is called.
   endpoint: Endpoint;
-  detect: { key: RegExp | null; host: string };
+  // The base address of each other protocol its models may name.
+  routes?: Partial<Record<Protocol, string>>;
+  // Absent for a type the user connects by signing in: there is no key to paste.
+  detect?: { key: RegExp | null; host: string };
+  signIn?: SignIn;
+  // Trades the stored credential for the short-lived one that requests carry.
+  exchange?: { request(secret: string): HttpRequest; parse(payload: unknown): Token | null };
+  // Presents the credential with the provider's own headers, in place of the codec's.
+  headers?: (credential: string) => Record<string, string>;
   parseModels?: (payload: unknown) => Model[] | null;
   cost?: (facts: StreamFacts) => Cost | null;
+};
+
+export type Token = { value: string; expiresAt: number };
+
+// OAuth device authorization (RFC 8628): the user enters a short code on the provider's own site, and
+// the token that comes back is the connection's secret. account names who signed in, so two
+// connections of one type can be told apart.
+export type SignIn = {
+  site: string;
+  codeUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  scope: string;
+  headers: Record<string, string>;
+  account: { request(secret: string): HttpRequest; parse(payload: unknown): string | null };
 };

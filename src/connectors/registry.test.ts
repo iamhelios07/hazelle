@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { copilot } from './copilot';
+import copilotModels from './fixtures/copilot-models.json';
 import openRouterModels from './fixtures/openrouter-models.json';
-import { catalogRequest, chatRequest, detect, normalizeBaseUrl, parseCatalog, resolveConnection } from './registry';
+import { catalogRequest, chatRequest, detect, normalizeBaseUrl, parseCatalog, resolveConnection, resolveModel, withCredential } from './registry';
 import { ConnectorError, type Connection, type Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}) =>
@@ -15,6 +17,7 @@ const model = (extra: Partial<Model> = {}): Model => ({
   maxOutput: null,
   reasoning: null,
   tools: null,
+  protocol: null,
   ...extra,
 });
 
@@ -58,6 +61,7 @@ describe('catalogs', () => {
         maxOutput: 128_000,
         reasoning: true,
         tools: true,
+        protocol: null,
       },
       expect.objectContaining({ id: 'openrouter/auto-beta', name: 'Auto Router (Beta)', output: ['text', 'image'] }),
     ]);
@@ -78,13 +82,13 @@ describe('catalogs', () => {
       has_more: false,
     };
     expect(parseCatalog(connection('anthropic'), payload)).toEqual([
-      { id: 'claude-opus-5', name: 'Claude Opus 5', input: ['text', 'image'], output: ['text'], contextLength: null, maxOutput: 128000, reasoning: true, tools: null },
+      { id: 'claude-opus-5', name: 'Claude Opus 5', input: ['text', 'image'], output: ['text'], contextLength: null, maxOutput: 128000, reasoning: true, tools: null, protocol: null },
     ]);
   });
 
   it('reads a generic list as ids with every capability unknown', () => {
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
-    expect(catalogRequest(generic, 'k')).toEqual({ url: 'https://api.example.com/v1/models', method: 'GET', headers: { authorization: 'Bearer k' }, body: null });
+    expect(withCredential(generic, catalogRequest(generic), 'k')).toEqual({ url: 'https://api.example.com/v1/models', method: 'GET', headers: { authorization: 'Bearer k' }, body: null });
     expect(parseCatalog(generic, { data: [{ id: 'deepseek-chat' }, { id: '' }, 'junk'] })).toEqual([model({ id: 'deepseek-chat', name: 'deepseek-chat' })]);
     expect(parseCatalog(generic, { models: [] })).toBeNull();
   });
@@ -92,6 +96,8 @@ describe('catalogs', () => {
   it('knows nothing of a type from a newer version, or a generic connection without its address', () => {
     expect(resolveConnection({ type: 'someday', label: '', baseUrl: null, protocol: null, secret: '', starred: [] })).toBeNull();
     expect(resolveConnection({ type: 'generic', label: '', baseUrl: null, protocol: 'chat-completions', secret: '', starred: [] })).toBeNull();
+    const newer = { type: 'generic', label: '', baseUrl: 'https://api.example.com/v1', protocol: 'responses', secret: '', starred: [] };
+    expect(resolveConnection(newer as unknown as Connection)).toBeNull();
   });
 });
 
@@ -103,16 +109,74 @@ describe('chat requests', () => {
 
   it('sends max_tokens to a compatible server only when asked', () => {
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
-    const request = chatRequest(generic, '', { model: model(), messages, maxTokens: null });
+    const request = withCredential(generic, chatRequest(generic, { model: model(), messages, maxTokens: null }), '');
     expect(request).toMatchObject({ url: 'https://api.example.com/v1/chat/completions', headers: { 'content-type': 'application/json' } });
     expect(request.headers).not.toHaveProperty('authorization');
     expect(JSON.parse(request.body!)).toEqual({ model: 'm', messages, stream: true, stream_options: { include_usage: true } });
   });
 
   it('moves system text to Anthropic’s system field and needs a known output limit', () => {
-    const request = chatRequest(connection('anthropic'), 'sk-ant', { model: model({ maxOutput: 64000 }), messages, maxTokens: null });
+    const anthropic = connection('anthropic');
+    const request = withCredential(anthropic, chatRequest(anthropic, { model: model({ maxOutput: 64000 }), messages, maxTokens: null }), 'sk-ant');
     expect(request.headers).toEqual({ 'x-api-key': 'sk-ant', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
     expect(JSON.parse(request.body!)).toEqual({ model: 'm', max_tokens: 64000, system: '짧게 답해.', messages: [messages[1]], stream: true });
-    expect(() => chatRequest(connection('anthropic'), 'sk-ant', { model: model(), messages, maxTokens: null })).toThrow(ConnectorError);
+    expect(() => chatRequest(anthropic, { model: model(), messages, maxTokens: null })).toThrow(ConnectorError);
+  });
+});
+
+// The fixture is assembled from the field shapes provider-hub and copilot-manager read, not captured
+// from a live account.
+describe('copilot', () => {
+  const resolved = connection('copilot', { secret: 'gho_x' });
+  const models = parseCatalog(resolved, copilotModels)!;
+  const find = (id: string) => models.find((entry) => entry.id === id)!;
+  const messages = [{ role: 'user' as const, content: '안녕' }];
+  const identity = {
+    authorization: 'Bearer tid',
+    'copilot-integration-id': 'vscode-chat',
+    'editor-version': 'vscode/1.109.2',
+    'editor-plugin-version': 'copilot-chat/0.37.4',
+    'user-agent': 'GitHubCopilotChat/0.37.4',
+  };
+
+  it('lists the chat models the model picker offers, each with the protocol it declares', () => {
+    expect(models).toEqual([
+      { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', input: ['text', 'image'], output: ['text'], contextLength: 200000, maxOutput: 64000, reasoning: true, tools: true, protocol: 'anthropic-messages' },
+      { id: 'gpt-5-mini', name: 'GPT-5 mini', input: ['text', 'image'], output: ['text'], contextLength: 264000, maxOutput: 64000, reasoning: true, tools: true, protocol: 'chat-completions' },
+      { id: 'gpt-5.1-codex', name: 'GPT-5.1-Codex', input: ['text', 'image'], output: ['text'], contextLength: 400000, maxOutput: 128000, reasoning: true, tools: true, protocol: 'unsupported' },
+      { id: 'gpt-4.1', name: 'GPT-4.1', input: ['text'], output: ['text'], contextLength: 128000, maxOutput: 16384, reasoning: null, tools: true, protocol: null },
+    ]);
+  });
+
+  it('sends each model to its own endpoint with the editor identity and the exchanged token only', () => {
+    expect(withCredential(resolved, catalogRequest(resolved), 'tid')).toEqual({ url: 'https://api.githubcopilot.com/models', method: 'GET', headers: identity, body: null });
+
+    const claude = resolveModel(resolved, find('claude-opus-4.6'));
+    const request = withCredential(claude, chatRequest(claude, { model: find('claude-opus-4.6'), messages, maxTokens: null }), 'tid');
+    expect(request.url).toBe('https://api.githubcopilot.com/v1/messages');
+    expect(request.headers).toEqual({ ...identity, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
+    expect(JSON.parse(request.body!)).toMatchObject({ model: 'claude-opus-4.6', max_tokens: 64000 });
+
+    for (const id of ['gpt-5-mini', 'gpt-4.1']) {
+      const route = resolveModel(resolved, find(id));
+      expect(chatRequest(route, { model: find(id), messages, maxTokens: null }).url).toBe('https://api.githubcopilot.com/chat/completions');
+    }
+  });
+
+  it('refuses a model it has no codec for, including a protocol a newer version stored', () => {
+    expect(() => resolveModel(resolved, find('gpt-5.1-codex'))).toThrow(new ConnectorError('unsupported-protocol'));
+    const newer = { ...find('gpt-4.1'), protocol: 'responses' } as unknown as Model;
+    expect(() => resolveModel(resolved, newer)).toThrow(new ConnectorError('unsupported-protocol'));
+  });
+
+  it('trades the GitHub token for a Copilot token and names the account', () => {
+    expect(copilot.exchange!.request('gho_x')).toMatchObject({
+      url: 'https://api.github.com/copilot_internal/v2/token',
+      headers: { authorization: 'Bearer gho_x', 'user-agent': 'GitHubCopilotChat/0.37.4' },
+    });
+    expect(copilot.exchange!.parse({ token: 'tid', expires_at: 1_790_000_000, refresh_in: 1500 })).toEqual({ value: 'tid', expiresAt: 1_790_000_000_000 });
+    expect(copilot.exchange!.parse({ message: 'Not Found' })).toBeNull();
+    expect(copilot.signIn!.account.parse({ login: 'jiniill', id: 1 })).toBe('jiniill');
+    expect(copilot.signIn!.account.parse({ login: '' })).toBeNull();
   });
 });

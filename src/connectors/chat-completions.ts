@@ -1,13 +1,11 @@
 import type { Codec } from './types';
 import { count, isRecord, list } from './values';
 
-const bearer = (secret: string): Record<string, string> => (secret ? { authorization: `Bearer ${secret}` } : {});
-
 // The OpenAI-compatible wire format, the generic base of design §4.
 export const chatCompletions: Codec = {
-  authHeaders: bearer,
+  authHeaders: (secret): Record<string, string> => (secret ? { authorization: `Bearer ${secret}` } : {}),
 
-  listModels: (endpoint, secret) => ({ url: `${endpoint.baseUrl}/models`, method: 'GET', headers: bearer(secret), body: null }),
+  listModels: (endpoint) => ({ url: `${endpoint.baseUrl}/models`, method: 'GET', headers: {}, body: null }),
 
   // The standard list names models and nothing else, so every capability stays unknown.
   parseModels(payload) {
@@ -23,15 +21,16 @@ export const chatCompletions: Codec = {
         maxOutput: null,
         reasoning: null,
         tools: null,
+        protocol: null,
       }));
   },
 
   // max_tokens is sent only when asked for: OpenAI's reasoning models refuse it in favor of
   // max_completion_tokens, which many compatible servers do not know.
-  chat: (endpoint, secret, { model, messages, maxTokens }) => ({
+  chat: (endpoint, { model, messages, maxTokens }) => ({
     url: `${endpoint.baseUrl}/chat/completions`,
     method: 'POST',
-    headers: { ...bearer(secret), 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       model: model.id,
       messages,

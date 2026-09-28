@@ -1,10 +1,11 @@
+import { LogIn } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { detect, GENERIC, type Detection } from '../../connectors/registry';
+import { detect, GENERIC, SIGN_IN_TYPES, type Detection } from '../../connectors/registry';
 import type { Connection, Protocol } from '../../connectors/types';
 import { loadCatalog } from '../../runtime/catalog';
 import { navigate } from '../router';
 import { useStore } from '../store';
-import { Button, Callout, ChoiceGroup, Intro, NavBar, Screen, Stack, Text, TextField } from '../ui';
+import { Button, Callout, ChoiceGroup, Intro, NavBar, Screen, Section, Stack, Text, TextField } from '../ui';
 import { describeCatalogFailure, describeFailure } from './failure';
 
 const PROTOCOLS: { value: Protocol; label: string }[] = [
@@ -131,6 +132,13 @@ export function ConnectionAddScreen() {
           {message}
         </Callout>
       )}
+      <Section title="키 없이 로그인으로">
+        {SIGN_IN_TYPES.map((type) => (
+          <Button key={type.id} variant="outline" size="md" icon={LogIn} onClick={() => navigate(`/connections/new/${type.id}`)}>
+            {type.signIn.site} 로그인으로 {type.label} 연결
+          </Button>
+        ))}
+      </Section>
     </Screen>
   );
 }

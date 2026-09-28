@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Connection, Model } from '../connectors/types';
+import { forgetCredentials } from './credential';
 import { generate } from './generate';
 
-const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null };
+const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
 const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] };
 
 function answer(status: number, body: string, headers: Record<string, string>) {
@@ -52,6 +53,54 @@ describe('generate', () => {
     const anthropic: Connection = { ...openRouter, type: 'anthropic', secret: 'sk-ant-x' };
     expect((await run(anthropic)).reply).toMatchObject({ state: 'failed', error: { kind: 'refused', code: 'max-tokens-unknown' } });
     expect((await run({ ...openRouter, type: 'someday' })).reply).toMatchObject({ error: { kind: 'refused', code: 'unknown-connection-type' } });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('a connection that trades its key for a token', () => {
+  const copilot: Connection = { type: 'copilot', label: 'Copilot · jin', baseUrl: null, protocol: null, secret: 'gho_x', starred: [] };
+  const gpt: Model = { ...model, id: 'gpt-4.1' };
+  const EXCHANGE = 'https://api.github.com/copilot_internal/v2/token';
+  const CHAT = 'https://api.githubcopilot.com/chat/completions';
+
+  // Answers the exchange with a token that lasts the given seconds, and a chat with a one-word reply.
+  function copilotApi(lasts: number) {
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => {
+      const { url } = JSON.parse(init.body as string) as { url: string };
+      const headers = { 'x-relay': 'upstream' };
+      if (url === EXCHANGE) return Response.json({ token: 'tid', expires_at: Math.floor(Date.now() / 1000) + lasts }, { headers });
+      return new Response('data: {"choices":[{"delta":{"content":"네"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers });
+    });
+    vi.stubGlobal('fetch', fetch);
+    return () => fetch.mock.calls.map(([, init]) => JSON.parse(init.body as string) as { url: string; headers: Record<string, string> });
+  }
+
+  afterEach(() => forgetCredentials());
+
+  it('sends the traded token, and trades again only when it nears its end', async () => {
+    const sent = copilotApi(1800);
+    expect((await run(copilot, gpt)).text).toBe('네');
+    await run(copilot, gpt);
+    expect(sent().map((call) => call.url)).toEqual([EXCHANGE, CHAT, CHAT]);
+    expect(sent()[0]!.headers.authorization).toBe('Bearer gho_x');
+    expect(sent()[1]!.headers.authorization).toBe('Bearer tid');
+
+    forgetCredentials();
+    const shortLived = copilotApi(30);
+    await run(copilot, gpt);
+    await run(copilot, gpt);
+    expect(shortLived().map((call) => call.url)).toEqual([EXCHANGE, CHAT, EXCHANGE, CHAT]);
+  });
+
+  it('stops before the chat when the trade is refused', async () => {
+    const fetch = answer(401, '{"message":"Bad credentials"}', { 'x-relay': 'upstream' });
+    expect((await run(copilot, gpt)).reply).toMatchObject({ state: 'failed', error: { kind: 'provider', status: 401, detail: 'Bad credentials' } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a model it cannot call before trading for a token', async () => {
+    const fetch = answer(200, '', { 'x-relay': 'upstream' });
+    expect((await run(copilot, { ...gpt, protocol: 'unsupported' })).reply).toMatchObject({ error: { kind: 'refused', code: 'unsupported-protocol' } });
     expect(fetch).not.toHaveBeenCalled();
   });
 });
