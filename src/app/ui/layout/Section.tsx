@@ -7,16 +7,25 @@ type Props = {
   level?: 2 | 3;
   // A short figure beside the title, such as a cache hit rate.
   note?: string;
+  // A small button at the end of the title's line, such as 순서 바꾸기.
+  action?: ReactNode;
   children: ReactNode;
 };
 
-export function Section({ title, level = 2, note, children }: Props) {
+export function Section({ title, level = 2, note, action, children }: Props) {
   const Heading = level === 2 ? 'h2' : 'h3';
   return (
     <section className={`${styles.section} ${styles[`level${level}`]}`}>
       <div className={styles.head}>
         <Heading className={styles.title}>{title}</Heading>
-        {note && <span className={styles.note}>{note}</span>}
+        {action ? (
+          <span className={styles.end}>
+            {note && <span className={styles.note}>{note}</span>}
+            {action}
+          </span>
+        ) : (
+          note && <span className={styles.note}>{note}</span>
+        )}
       </div>
       {children}
     </section>

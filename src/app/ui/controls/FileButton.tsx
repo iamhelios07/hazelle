@@ -2,14 +2,14 @@ import type { LucideIcon } from 'lucide-react';
 import { useRef, type ReactNode } from 'react';
 import { Button } from './Button';
 
-type Props = { accept: string; icon?: LucideIcon; onFile: (file: File) => void; children: ReactNode };
+type Props = { accept: string; icon?: LucideIcon; size?: 'sm' | 'md' | 'lg'; onFile: (file: File) => void; children: ReactNode };
 
 // A real button opens the hidden file input, so the picker is reachable by keyboard.
-export function FileButton({ accept, icon, onFile, children }: Props) {
+export function FileButton({ accept, icon, size, onFile, children }: Props) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <Button variant="secondary" icon={icon} onClick={() => input.current?.click()}>
+      <Button variant="secondary" size={size} icon={icon} onClick={() => input.current?.click()}>
         {children}
       </Button>
       <input

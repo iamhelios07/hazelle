@@ -1,0 +1,45 @@
+.outcome {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-10);
+}
+
+.icon {
+  display: flex;
+  padding-top: var(--space-2);
+}
+
+.done .icon {
+  color: var(--color-success);
+}
+
+.missed .icon {
+  color: var(--color-warn);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+
+.note {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}

@@ -25,6 +25,21 @@
   --palette-sand-200: #cfc8bc;
   --palette-sand-50: #f7f1e7;
   --palette-lilac-350: #a39cb0;
+  --palette-lilac-250: #c9c2d4;
+  --palette-lilac-450: #6e6879;
+  --palette-violet-300: #a993f0;
+  --palette-violet-900: #2c2545;
+  --palette-sky-400: #6ba8d6;
+  --palette-sky-900: #1c2b38;
+  --palette-jade-400: #7acba0;
+  --palette-jade-900: #1d3329;
+  --palette-rose-400: #e08fb0;
+  --palette-rose-900: #3a2230;
+  --palette-ink-880: #1b1a20;
+  --palette-sand-100: #dcd6cd;
+  --palette-sand-10: #fff8ec;
+  --palette-gold-500: #d6b47a;
+  --palette-blue-300: #9fb0d6;
   --palette-shadow: rgb(0 0 0 / 45%);
   --palette-scrim: rgb(8 8 10 / 55%);
 
@@ -61,6 +76,31 @@
   --color-prose-dialogue: var(--palette-sand-50);
   --color-prose-action: var(--palette-lilac-350);
 
+  /* A prompt's blocks by kind (design §4.2, the outline's rail): the line and ring, and the node's fill. */
+  --color-kind-text: var(--palette-lilac-450);
+  --color-kind-text-line: var(--palette-lilac-400);
+  --color-kind-text-bg: var(--palette-ink-880);
+  --color-kind-char: var(--palette-violet-300);
+  --color-kind-char-bg: var(--palette-violet-900);
+  --color-kind-lore: var(--palette-sky-400);
+  --color-kind-lore-bg: var(--palette-sky-900);
+  --color-kind-chat: var(--palette-jade-400);
+  --color-kind-chat-bg: var(--palette-jade-900);
+  --color-kind-note: var(--palette-rose-400);
+  --color-kind-note-bg: var(--palette-rose-900);
+
+  /* Prompt text (the editor's highlight layer): the body, heading lines, CBS tags and <tags>. */
+  --color-markup-body: var(--palette-sand-100);
+  --color-markup-heading: var(--palette-sand-10);
+  --color-markup-rule: var(--palette-lilac-400);
+  --color-markup-cbs: var(--palette-gold-500);
+  --color-markup-slot: var(--palette-gold-300);
+  --color-markup-slot-bg: color-mix(in srgb, var(--palette-gold-400) 18%, transparent);
+  --color-markup-angle: var(--palette-blue-300);
+  --color-text-soft: var(--palette-lilac-250);
+  /* A faux weight: a real one would widen the letters and move the caret off them. */
+  --markup-heading-shadow: 0.35px 0 0 var(--color-markup-heading), -0.35px 0 0 var(--color-markup-heading);
+
   --shadow-popover: 0 12px 32px var(--palette-shadow);
 
   /* Tints derive from the tone colors, so changing a tone recolors its backgrounds and borders too. */
@@ -85,6 +125,7 @@
   --text-lg: 16px;
   --text-xl: 18px;
   --text-2xl: 20px;
+  --text-display-sm: 22px;
   --text-display: 30px;
 
   --weight-regular: 400;
@@ -155,6 +196,31 @@
   --menu-width: 300px;
   --dialog-width: 440px;
   --composer-max-height: 240px;
+  /* Prompt text in the editor (MarkupArea) and the outline beside it. */
+  --markup-size: 15.5px;
+  --markup-leading: 1.72;
+  --markup-max-width: 680px;
+  --markup-page-min: 320px;
+  --markup-field-min: 72px;
+  --outline-width: 340px;
+  --outline-row: 38px;
+  --outline-node: 24px;
+  --outline-node-chat: 26px;
+  --outline-number: 24px;
+  --outline-meta: 70px;
+  --outline-cap: 10px;
+  --outline-cap-row: 24px;
+  --outline-row-sm: 28px;
+  --outline-glyph: 13px;
+  --outline-glyph-sm: 10px;
+  --outline-plus: 18px;
+  --outline-dot: 9px;
+  --outline-gap: 4px;
+  --outline-gap-kind: 14px;
+  --editor-max-width: 760px;
+  --editor-header: 68px;
+  --editor-foot: 140px;
+  --tile-min-width: 260px;
   /* Reading width (design F3, 읽기 설정): the story column, message gutters included. */
   --read-narrow: 700px;
   --read-normal: 800px;

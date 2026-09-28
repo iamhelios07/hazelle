@@ -1,4 +1,5 @@
 export { ChatFrame, ChatTitle } from './ChatFrame';
+export { EditorFrame } from './EditorFrame';
 export { ListDetail, usePane } from './ListDetail';
 export { NavBar } from './NavBar';
 export { Row } from './Row';

@@ -13,3 +13,26 @@
 .code {
   font-family: var(--font-mono);
 }
+
+.titled {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.withAside {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.aside {
+  flex-shrink: 0;
+}
+
+.nested {
+  margin: 0 0 var(--space-8) var(--space-20);
+  padding: 0 0 0 var(--space-12);
+  list-style: none;
+  border-left: var(--border-thin) solid var(--color-surface-raised);
+}

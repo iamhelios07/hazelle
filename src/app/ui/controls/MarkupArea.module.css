@@ -1,0 +1,83 @@
+.label {
+  composes: srOnly from '../foundation/a11y.module.css';
+}
+
+.field {
+  padding: var(--space-14) var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-sidebar);
+}
+
+.frame {
+  position: relative;
+  max-width: var(--markup-max-width);
+}
+
+/* Every line of type below is shared by the layer and the textarea; keep them one rule. */
+.layer,
+.input {
+  margin: 0;
+  padding: 0;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: var(--markup-size);
+  font-weight: var(--weight-regular);
+  line-height: var(--markup-leading);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  tab-size: 4;
+}
+
+.layer {
+  min-height: var(--markup-page-min);
+  color: var(--color-markup-body);
+}
+
+.field .layer {
+  min-height: var(--markup-field-min);
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--color-text);
+}
+
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.input::selection {
+  background: var(--color-selection);
+}
+
+.heading {
+  color: var(--color-markup-heading);
+  text-shadow: var(--markup-heading-shadow);
+}
+
+.rule {
+  color: var(--color-markup-rule);
+}
+
+.cbs {
+  color: var(--color-markup-cbs);
+}
+
+.angle {
+  color: var(--color-markup-angle);
+}
+
+.slot {
+  border-radius: var(--radius-xs);
+  background: var(--color-markup-slot-bg);
+  color: var(--color-markup-slot);
+}

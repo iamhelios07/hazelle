@@ -6,5 +6,7 @@ export { FolderRow } from './FolderRow';
 export { ItemRow } from './ItemRow';
 export { List, ListItem } from './List';
 export { NavRow } from './NavRow';
+export { Outline, type OutlineKind, type OutlineStop } from './Outline';
 export { SideTitle } from './SideTitle';
 export { Tab, Tabs } from './Tabs';
+export { Tile, Tiles } from './Tiles';

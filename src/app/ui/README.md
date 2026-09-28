@@ -40,14 +40,15 @@ and only this folder styles elements.**
 | foundation | `Divider` | `Divider.module.css` | Lines between groups: the story's labeled line, and the menu, tools and rail lines |
 | foundation | `Icon` | `Icon.module.css` | Icon sizes and stroke |
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
-| foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag |
+| foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag; a gold one, such as 기본 |
 | foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
 | layout | `ChatFrame` (`ChatTitle`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title |
+| layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
-| layout | `NavBar` | `NavBar.module.css` | A screen's top row: back, title, actions |
+| layout | `NavBar` | `NavBar.module.css` | A screen's top row: back, title (or a title that renames), a line under it, save state, actions |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions or tags |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane |
-| layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note by its title |
+| layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow |
 | layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`) | `Sidebar.module.css` | The sidebar, its rail, faces |
@@ -55,17 +56,19 @@ and only this folder styles elements.**
 | controls | `Button` | `Button.module.css` | Variants (a link among them), sizes, the busy spinner |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice |
-| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips or equal buttons for one choice |
+| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented box or a list with a line under each, for one choice |
 | controls | `Composer` | `Composer.module.css` | The message box |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` | — | A `Button` that opens a file picker |
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools |
 | controls | `Link` | `Link.module.css` | A link to another site |
+| controls | `MarkupArea` (`markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea |
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
 | controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
+| controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
 | collections | `AccountRow` | `AccountRow.module.css` | Who is signed in |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
@@ -74,15 +77,17 @@ and only this folder styles elements.**
 | collections | `FolderRow` | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: its leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), the sidebar's, lists' and menus', and tabs' colours, and the hover and current fills (`--color-item-hover`, `--color-item-current`) |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
-| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them; a model id |
-| collections | `NavRow` | — | A place in the app, at the sidebar's foot |
+| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them; a model id; a control beside a row and rows set in under it |
+| collections | `NavRow` | — | A place in the app, at the sidebar's foot, with what it holds at its end |
+| collections | `Outline` | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
+| collections | `Tiles` (`Tile`) | `Tiles.module.css` | A few items to pick again, two to a row |
 | overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap |
 | overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
-| overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped |
+| overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark |
 | overlays | `Toast` | `Toast.module.css` | A short notice, above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
@@ -90,6 +95,7 @@ and only this folder styles elements.**
 | feedback | `CodeCard` | `CodeCard.module.css` | A code to copy, such as the recovery key |
 | feedback | `Empty` | `Empty.module.css` | What stands where a list, grid, pane or panel has nothing to show, in the look of where it stands: a body, a section, the story, the pane beside a list, the sidebar or a menu |
 | feedback | `Intro` | `Intro.module.css` | A screen's large title and lead |
+| feedback | `Outcome` | `Outcome.module.css` | What an import brought and did not, a line each with why under it |
 | feedback | `Steps` | `Steps.module.css` | Progress through steps |
 | story | `Prose` (`prose.ts`) | `Prose.module.css` | Story text: narration, dialogue, actions, the streaming caret |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its tools bar and markers |

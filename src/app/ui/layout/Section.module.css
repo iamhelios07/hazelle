@@ -34,3 +34,10 @@
   color: var(--color-text-muted);
   font-size: var(--text-xs);
 }
+
+.end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-sm);
+}
