@@ -1,5 +1,6 @@
 import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { modelSettings } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import type { CatalogResult } from '../../runtime/catalog';
@@ -10,7 +11,7 @@ import { useSession } from '../session';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, NavBar, Screen, SearchField, Stack, Text } from '../ui';
+import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, NavBar, Row, Screen, SearchField, Stack, Text } from '../ui';
 import { ConnectionMeters } from './ConnectionMeters';
 
 type Filter = 'all' | 'starred' | 'reasoning' | 'vision' | 'tools';
@@ -119,7 +120,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       actions={
         <Stack gap="related">
           <Text size="sm" tone="muted">
-            별표 {starred.length}개 · 기본 모델로 고를 수 있어요
+            별표 {starred.length}개 · 별표한 모델은 프롬프트와 기본값에서 고를 수 있어요
           </Text>
           <Button onClick={() => navigate({ kind: 'connections' })}>완료</Button>
         </Stack>
@@ -145,13 +146,27 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           {shown.map((model) => {
             const on = starred.some((entry) => entry.id === model.id);
             const listed = !catalog?.ok || catalog.models.some((entry) => entry.id === model.id);
+            // Only a star already saved has settings to open; one still saving has none yet.
+            const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
+            const set = saved?.settings ? Object.keys(saved.settings).length : 0;
+            const opens = set ? `설정 · ${set}개 정함` : '설정';
+            const settings = saved && modelSettings(connection, saved) && (
+              <Button variant="ghost" size="sm" label={`${opens} · ${model.name}`} onClick={() => navigate({ kind: 'model-settings', connection: id, model: model.id })}>
+                {opens}
+              </Button>
+            );
             return (
               <ListItem
                 key={model.id}
                 title={model.name}
                 code={model.id}
                 tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['아직 못 씀', ...tags(model)] : tags(model)}
-                trailing={<IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표 찍기`} pressed={on} onClick={() => toggle(model)} />}
+                trailing={
+                  <Row kind="actions">
+                    {settings}
+                    <IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표 찍기`} pressed={on} onClick={() => toggle(model)} />
+                  </Row>
+                }
               />
             );
           })}

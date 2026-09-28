@@ -12,11 +12,15 @@ export function List({ label, children }: { label: string; children: ReactNode }
 }
 
 type ItemProps = {
+  // Before the title, such as a face.
+  leading?: ReactNode;
   title: string;
   // A machine name under the title, such as a model id, set in the mono face.
   code?: string;
   description?: string;
   tags?: string[];
+  // A short figure at the end of the row, before trailing, such as a count.
+  aside?: string;
   // Something at the end of the row: an icon, a badge, or a control of its own.
   trailing?: ReactNode;
   // With onClick the whole row is one button, so trailing must not hold a control then.
@@ -26,7 +30,7 @@ type ItemProps = {
   current?: boolean;
 };
 
-export function ListItem({ title, code, description, tags = [], trailing, onClick, selected, current }: ItemProps) {
+export function ListItem({ leading, title, code, description, tags = [], aside, trailing, onClick, selected, current }: ItemProps) {
   const meta =
     code || tags.length > 0 ? (
       <>
@@ -38,7 +42,27 @@ export function ListItem({ title, code, description, tags = [], trailing, onClic
     ) : undefined;
   return (
     <li className={styles.item}>
-      <Item density="tall" scheme="list" title={title} meta={meta} preview={description} trailing={trailing} pressed={selected} current={current && 'page'} onClick={onClick} />
+      <Item
+        density="tall"
+        scheme="list"
+        leading={leading}
+        title={title}
+        meta={meta}
+        preview={description}
+        trailing={
+          aside ? (
+            <>
+              <span className={styles.aside}>{aside}</span>
+              {trailing}
+            </>
+          ) : (
+            trailing
+          )
+        }
+        pressed={selected}
+        current={current && 'page'}
+        onClick={onClick}
+      />
     </li>
   );
 }

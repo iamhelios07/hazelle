@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { href, parseRoute, type Route } from './routes';
+import { href, parseRoute, type Back, type Route } from './routes';
 
 // Paths in the address bar, so the browser's back button and a reload keep the place. A router
 // library would add nothing for a handful of fixed paths.
@@ -28,3 +28,6 @@ export function navigate(route: Route, { replace = false } = {}) {
   window.scrollTo(0, 0);
   window.dispatchEvent(new Event(NAVIGATED));
 }
+
+// NavBar's back for a screen whose back is null where a sidebar beside it is the way back.
+export const backBar = (back: Back | null) => (back ? { onBack: () => navigate(back.to), backLabel: back.label } : {});

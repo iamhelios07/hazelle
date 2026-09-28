@@ -142,6 +142,7 @@
   --panel-width: 360px;
   --list-pane-width: 400px;
   --pane-max-width: 560px;
+  --form-max-width: 688px;
   /* 캐릭터 둘러보기 (design F6): the narrowest face card, and the widest the grid grows. */
   --card-min-width: 152px;
   --gallery-max-width: 1120px;
@@ -165,7 +166,10 @@
   --menu-edge: var(--space-16);
   --menu-max-height: 70vh;
   --chip-max-width: 240px;
+  --field-choice-width: 220px;
   --chip-max-width-narrow: 132px;
+  --number-input-width: 110px;
+  --phrase-input-width: 160px;
   --edit-min-height: 96px;
   --edit-max-height: 360px;
   --caret-width: 2px;

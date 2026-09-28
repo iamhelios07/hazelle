@@ -5,8 +5,9 @@ import styles from './Screen.module.css';
 type Props = {
   top?: ReactNode;
   align?: 'start' | 'center';
-  // wide: a grid of cards, such as 캐릭터 둘러보기, instead of a phone-width column.
-  width?: 'narrow' | 'wide';
+  // wide: a grid of cards, such as 캐릭터 둘러보기, instead of a phone-width column. form: rows of settings,
+  // each a name beside its control.
+  width?: 'narrow' | 'form' | 'wide';
   actions?: ReactNode;
   // Keeps the actions in view at the bottom while a long body scrolls, such as a model list.
   stickyActions?: boolean;
@@ -30,7 +31,7 @@ export function Screen({ top, align = 'start', width = 'narrow', actions, sticky
     </>
   );
   return (
-    <Root className={[styles.screen, pane && styles.pane, width === 'wide' && styles.wide].filter(Boolean).join(' ')}>
+    <Root className={[styles.screen, pane && styles.pane, width !== 'narrow' && styles[width]].filter(Boolean).join(' ')}>
       {top && <header className={styles.top}>{top}</header>}
       {onSubmit ? (
         <form className={content} onSubmit={onSubmit} noValidate>

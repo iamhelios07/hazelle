@@ -43,24 +43,28 @@ and only this folder styles elements.**
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
 | layout | `ChatFrame` (`ChatTitle`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title |
+| layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
-| layout | `NavBar` | `NavBar.module.css` | A screen's top row: back, title, actions |
+| layout | `NavBar` | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title, actions |
+| layout | `PageHead` | `PageHead.module.css` | The head of a page's body: the name of what it shows, its id and a lead |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
-| layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane |
+| layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
-| layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`) | `Sidebar.module.css` | The sidebar, its rail, faces |
+| layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, its rail, faces; a layer's own sidebar with its title and ×, which Esc closes too |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
-| controls | `Button` | `Button.module.css` | Variants (a link among them), sizes, the busy spinner |
+| controls | `Button` | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox |
-| controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, outlined in a header or plain in the composer, with a leading icon or face |
-| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons or joined segments for one choice |
+| controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, shaped like a field for a setting, or borderless in the composer; with a leading icon or face |
+| controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons or a segmented strip for one choice |
 | controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` | — | A `Button` that opens a file picker |
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools |
 | controls | `Link` | `Link.module.css` | A link to another site |
+| controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |
+| controls | `PhraseField` | `PhraseField.module.css` | Phrases as removable chips and a field that adds one on Enter, such as stop phrases |
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
@@ -68,16 +72,16 @@ and only this folder styles elements.**
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
-| collections | `AccountRow` | `AccountRow.module.css` | Who is signed in |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
 | collections | `FolderRow` | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: its leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), the sidebar's, lists' and menus', and tabs' colours, and the hover and current fills (`--color-item-hover`, `--color-item-current`) |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
-| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them; a model id |
-| collections | `NavRow` | — | A place in the app, at the sidebar's foot |
-| collections | `SettingRow` | `SettingRow.module.css` | One setting in a side panel's list, its control beside it, marked when it differs from its default |
+| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them; a model id; a count at the row's end |
+| collections | `NavGroup` | `NavGroup.module.css` | Places in the app under a small caption, such as 설정's groups |
+| collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar |
+| collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name and what it does beside its control, which goes under them on phones; a row alone in a side panel's list, marked when it differs from its default |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
 | overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap |

@@ -10,69 +10,50 @@
   gap: var(--space-8);
 }
 
-.segments {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-sm);
-}
-
 .choice {
   border: var(--border-thin) solid var(--color-border);
   color: var(--color-text-muted);
   transition: border-color var(--duration-fast), color var(--duration-fast);
 }
 
-.chips .segments {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-sm);
-}
-
-.choice {
+.chips .choice {
   min-height: var(--control-chip);
   padding: 0 var(--space-12);
   border-radius: var(--radius-full);
   font-size: var(--text-sm);
 }
 
-.buttons .segments {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-sm);
-}
-
-.choice {
+.buttons .choice {
   min-height: var(--control-md);
   border-radius: var(--radius-md);
   font-size: var(--text-md);
   color: var(--color-text);
 }
 
-.segments .choice {
-  min-height: var(--control-tool);
-  padding: 0 var(--space-10);
-  border: 0;
-  border-radius: var(--radius-xs);
-  font-size: var(--text-xs);
-}
-
-.segments .choice[aria-pressed='true'] {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-}
-
-.chips .choice[aria-pressed='true'],
-.buttons .choice[aria-pressed='true'] {
+.choice[aria-pressed='true'] {
   border-color: var(--color-accent);
   background: var(--color-accent-bg);
   color: var(--color-accent);
+}
+
+.segmented {
+  display: inline-flex;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.segmented .choice {
+  min-height: var(--control-tool);
+  padding: 0 var(--space-10);
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.segmented .choice[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
 }

@@ -8,8 +8,9 @@ type Props = {
   title: string;
   // An icon or a face before the label, such as a prompt's page or a persona's face.
   leading?: ReactNode;
-  // outline: in the chat's header. ghost: in the composer's bar.
-  variant?: 'outline' | 'ghost';
+  // field: shaped like a form's field, for a setting's choice, such as 기본값's default prompt. ghost: borderless, in
+  // the composer's bar.
+  variant?: 'chip' | 'field' | 'ghost';
   // The way its menu opens, which the chevron points.
   opens?: 'down' | 'up';
   // warn: the current choice is missing.
@@ -23,8 +24,8 @@ type Props = {
 };
 
 // A rounded button that opens a menu and names its current choice, such as the chat's model.
-export function ChipButton({ label, title, leading, variant = 'outline', opens = 'down', tone = 'default', phone = 'full', popup, expanded, ref, onClick }: Props) {
-  const classes = [styles.chip, styles[variant], tone === 'warn' && styles.warn, phone === 'icon' && styles.phoneIcon].filter(Boolean).join(' ');
+export function ChipButton({ label, title, leading, variant = 'chip', opens = 'down', tone = 'default', phone = 'full', popup, expanded, ref, onClick }: Props) {
+  const classes = [styles.chip, variant !== 'chip' && styles[variant], tone === 'warn' && styles.warn, phone === 'icon' && styles.phoneIcon].filter(Boolean).join(' ');
   return (
     <button ref={ref} type="button" className={classes} title={title} aria-label={`${title} · ${label}`} aria-haspopup={popup} aria-expanded={expanded} onClick={onClick}>
       {leading}

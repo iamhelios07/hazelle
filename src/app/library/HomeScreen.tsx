@@ -31,7 +31,7 @@ export function Welcome() {
         {connections.length === 0 ? (
           <ActionCard icon={Plug} title="연결 추가" description="쓰는 곳을 고르고 API 키만 넣으면 돼요" onClick={() => navigate({ kind: 'add-connection' })} />
         ) : (
-          <ActionCard icon={Plug} title="연결" description={`연결 ${connections.length}개 · 모델 별표와 기본 모델`} onClick={() => navigate({ kind: 'connections' })} />
+          <ActionCard icon={Plug} title="연결" description={`연결 ${connections.length}개 · 모델 별표`} onClick={() => navigate({ kind: 'connections' })} />
         )}
       </Stack>
     </Stack>

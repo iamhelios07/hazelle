@@ -31,16 +31,17 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
   const row = ({ toggle, value, changed }: ToggleRow) => (
     <SettingRow
       key={toggle.key}
+      place="panel"
       label={toggle.label}
       changed={changed}
-      note={changed ? defaultOf(toggle) : undefined}
+      help={changed ? defaultOf(toggle) : undefined}
       control={
         toggle.kind === 'check' ? (
           <Switch label={toggle.label} checked={value === '1'} onChange={(on) => actions.flip(toggle.key, on ? '1' : '0')} />
         ) : (
           <ChoiceGroup
             label={toggle.label}
-            layout="segments"
+            layout="segmented"
             options={toggle.options.map((label, index) => ({ value: String(index), label }))}
             value={value}
             onChange={(next) => actions.flip(toggle.key, next)}

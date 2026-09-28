@@ -13,3 +13,9 @@
 .code {
   font-family: var(--font-mono);
 }
+
+.aside {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
