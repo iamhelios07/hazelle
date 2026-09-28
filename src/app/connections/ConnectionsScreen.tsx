@@ -3,17 +3,18 @@ import { useState } from 'react';
 import { fitsRole, type ModelRef } from '../../connectors/assignment';
 import { resolveConnection } from '../../connectors/registry';
 import { defaultModel, setDefaultModel } from '../../runtime/assignment';
-import { navigate, usePath } from '../router';
+import { describeFailure } from '../common/failure';
 import { useConnections, useSettings, useStore, useUnreadable } from '../session';
+import { navigate, useRoute } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, Section, Text } from '../ui';
-import { describeFailure } from './failure';
 
-export function ConnectionsScreen() {
+export function ConnectionsScreen({ back }: { back: Back }) {
   const store = useStore();
   const connections = useConnections();
   const settings = useSettings();
   const unreadable = useUnreadable();
-  const path = usePath();
+  const route = useRoute();
   const [message, setMessage] = useState<string | null>(null);
 
   const main = defaultModel(settings);
@@ -30,9 +31,9 @@ export function ConnectionsScreen() {
 
   return (
     <Screen
-      top={<NavBar title="연결" onBack={() => navigate('/')} backLabel="홈으로" />}
+      top={<NavBar title="연결" onBack={() => navigate(back.to)} backLabel={back.label} />}
       actions={
-        <Button variant="secondary" icon={MessageSquarePlus} disabled={!mainChoice} onClick={() => navigate('/chats/new')}>
+        <Button variant="secondary" icon={MessageSquarePlus} disabled={!mainChoice} onClick={() => navigate({ kind: 'new-chat', character: null })}>
           새 채팅에서 써 보기
         </Button>
       }
@@ -48,13 +49,13 @@ export function ConnectionsScreen() {
                 description={connection.value.starred.length ? `별표 ${connection.value.starred.length}개` : '별표 없음'}
                 tags={resolveConnection(connection.value) ? [] : ['이 버전이 모르는 연결']}
                 trailing={<Icon icon={ChevronRight} />}
-                current={path === `/connections/${connection.id}`}
-                onClick={() => navigate(`/connections/${connection.id}`)}
+                current={route.kind === 'connection' && route.id === connection.id}
+                onClick={() => navigate({ kind: 'connection', id: connection.id })}
               />
             ))}
           </List>
         )}
-        <Button variant="secondary" size="md" icon={Plus} onClick={() => navigate('/connections/new')}>
+        <Button variant="secondary" size="md" icon={Plus} onClick={() => navigate({ kind: 'add-connection' })}>
           연결 추가
         </Button>
       </Section>

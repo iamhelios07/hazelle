@@ -4,17 +4,18 @@ import type { DeviceCode } from '../../connectors/device-code';
 import type { Connection, ConnectionType, SignIn } from '../../connectors/types';
 import { addConnection } from '../../runtime/connections';
 import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
-import { navigate } from '../router';
+import { describeAddFailure, describeSignInFailure } from '../common/failure';
 import { useSession } from '../session';
+import { navigate } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, CodeCard, Intro, NavBar, Screen, Text } from '../ui';
-import { describeAddFailure, describeSignInFailure } from './failure';
 
 type Stage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
 
 // F5 for a type connected by signing in: the provider's own site takes a short code, and this screen
 // waits for the approval, then checks the model list and saves the connection, as a pasted key does.
-export function ConnectionSignInScreen({ type, signIn }: { type: ConnectionType; signIn: SignIn }) {
+export function ConnectionSignInScreen({ type, signIn, back }: { type: ConnectionType; signIn: SignIn; back: Back }) {
   const session = useSession();
   const toast = useToast();
   const [stage, setStage] = useState<Stage>({ step: 'starting' });
@@ -43,7 +44,7 @@ export function ConnectionSignInScreen({ type, signIn }: { type: ConnectionType;
         starred: [],
       };
       const added = await addConnection(session, connection, signal);
-      if (added.ok) navigate(`/connections/${added.id}`, { replace: true });
+      if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
       else fail(describeAddFailure(added.failure));
     })();
     return () => abort.abort();
@@ -58,7 +59,7 @@ export function ConnectionSignInScreen({ type, signIn }: { type: ConnectionType;
     window.open(code.verificationUri, '_blank', 'noopener');
   }
 
-  const top = <NavBar title={`${type.label} 연결`} onBack={() => navigate('/connections/new')} />;
+  const top = <NavBar title={`${type.label} 연결`} onBack={() => navigate(back.to)} backLabel={back.label} />;
 
   if (stage.step === 'failed') {
     return (

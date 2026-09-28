@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { addConnection } from '../../runtime/connections';
-import { navigate, usePath } from '../router';
+import { describeAddFailure } from '../common/failure';
 import { useConnections, useSession } from '../session';
+import { navigate, useRoute } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
-import { describeAddFailure } from './failure';
 
 const GROUPS: Record<ConnectionType['group'], string> = {
   gateway: '여러 회사 모델을 한 키로',
@@ -16,10 +17,10 @@ const GROUPS: Record<ConnectionType['group'], string> = {
 
 // F5: pick a provider from the list, or paste its key or address into the one field on top. What the
 // list does not hold goes through 직접 연결.
-export function ConnectionAddScreen() {
+export function ConnectionAddScreen({ back }: { back: Back }) {
   const session = useSession();
   const connections = useConnections();
-  const path = usePath();
+  const route = useRoute();
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -27,19 +28,18 @@ export function ConnectionAddScreen() {
   const search = searchTypes(query);
   const shown = search.kind === 'types' ? search.types : search.kind === 'key' ? [search.type] : [];
   const connected = (type: ConnectionType) => connections.filter((entry) => resolveConnection(entry.value)?.type === type).length;
-  const direct = search.kind === 'address' ? `/connections/new/direct?address=${encodeURIComponent(search.baseUrl)}` : '/connections/new/direct';
 
   async function connectKey(type: ConnectionType, secret: string) {
     setBusy(true);
     setMessage(null);
     const added = await addConnection(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
     setBusy(false);
-    if (added.ok) navigate(`/connections/${added.id}`, { replace: true });
+    if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
     else setMessage(describeAddFailure(added.failure));
   }
 
   return (
-    <Screen top={<NavBar title="연결 추가" onBack={() => navigate('/connections')} />}>
+    <Screen top={<NavBar title="연결 추가" onBack={() => navigate(back.to)} backLabel={back.label} />}>
       <SearchField label="이름 검색, 또는 키·주소 붙여 넣기" value={query} onChange={setQuery} />
       {search.kind === 'key' && (
         <Stack gap={12}>
@@ -71,8 +71,8 @@ export function ConnectionAddScreen() {
                     description={type.description}
                     tags={[type.signIn ? `${type.signIn.site} 로그인` : 'API 키', ...(count ? [`연결됨 ${count}`] : [])]}
                     trailing={<Icon icon={ChevronRight} />}
-                    current={path === `/connections/new/${type.id}`}
-                    onClick={() => navigate(`/connections/new/${type.id}`)}
+                    current={route.kind === 'connect' && route.type === type}
+                    onClick={() => navigate({ kind: 'connect', type })}
                   />
                 );
               })}
@@ -86,8 +86,8 @@ export function ConnectionAddScreen() {
             title="직접 연결"
             description="OpenAI 호환이나 Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 알 수 없어요."
             trailing={<Icon icon={ChevronRight} />}
-            current={path === '/connections/new/direct'}
-            onClick={() => navigate(direct)}
+            current={route.kind === 'connect-direct'}
+            onClick={() => navigate({ kind: 'connect-direct', address: search.kind === 'address' ? search.baseUrl : '' })}
           />
         </List>
       </Section>

@@ -1,9 +1,12 @@
-import { ChevronLeft, Import, LayoutGrid, Lock, LogOut, MessageSquare, Plug, Plus, Settings } from 'lucide-react';
+import { ChevronLeft, Import, LayoutGrid, Lock, LogOut, Plug, Plus, Settings } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { ChatItem } from '../../model/chat';
 import { holds, matches, shownFolders, type FolderTree, type Shelf } from '../../model/library';
-import { navigate, usePath } from '../router';
-import { useAccount, useLibrary, useSession, useTurn } from '../session';
+import { ago } from '../common/time';
+import { Welcome } from '../library/HomeScreen';
+import { useImport } from '../library/ImportFlow';
+import { ShelfFace, shelfName } from '../library/shelf';
+import { useAccount, useLibrary, useSession, useTurn, useViews } from '../session';
 import { useToast } from '../toast';
 import {
   AccountRow,
@@ -25,12 +28,9 @@ import {
   Sidebar,
   useWide,
 } from '../ui';
-import { Welcome } from './HomeScreen';
-import { useImport } from './ImportFlow';
-import { newChatPath, pagePath, shelfAt, shelfPath, shelfTarget } from './shelves';
-import { ago } from './time';
+import { navigate, useRoute } from './router';
+import { characterPage, connectionList, enterShelf, HOME, href, shelfOf, type Route } from './routes';
 
-const OPEN_CHAT = /^\/chats\/([0-9a-f-]{36})$/;
 // The recent-characters strip fits five faces beside each other in the sidebar's width.
 const STRIP = 5;
 const OPEN_FOLDERS = 'risu-alpha:open-folders';
@@ -45,12 +45,6 @@ function rememberedFolders(): string[] {
   }
 }
 
-export const shelfName = (shelf: Shelf<ChatItem>) => shelf.character?.card.name ?? '캐릭터 없이';
-
-export function ShelfFace({ shelf, size }: { shelf: Shelf<ChatItem>; size?: 'sm' | 'md' | 'lg' }) {
-  return shelf.character ? <Avatar face={shelf.character.card.name} image={shelf.face} size={size} /> : <Avatar face={MessageSquare} size={size} />;
-}
-
 type Props = {
   // Phones: the list is the home screen.
   page: boolean;
@@ -62,10 +56,12 @@ type Props = {
 // up without leaving the open chat.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { characters, none, folders } = useLibrary();
+  const { chatById } = useViews();
   const { onLock, onLogout } = useAccount();
   const { username } = useSession();
   const turn = useTurn();
-  const path = usePath();
+  const route = useRoute();
+  const at = href(route);
   const wide = useWide();
   const toast = useToast();
   const { pick } = useImport();
@@ -73,23 +69,20 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const [account, setAccount] = useState(false);
   // The path at which the user went up to every character. Moving to another page comes back down.
   const [upAt, setUpAt] = useState<string | null>(null);
-  if (upAt !== null && upAt !== path) setUpAt(null);
+  if (upAt !== null && upAt !== at) setUpAt(null);
   const [openFolders, setOpenFolders] = useState(rememberedFolders);
 
   const shelves = [...characters, none];
-  const here = shelfAt(
-    path,
-    shelves.flatMap((shelf) => shelf.chats),
-  );
+  const here = shelfOf(route, chatById);
   const current = here === undefined ? undefined : shelves.find((shelf) => shelf.id === here);
-  const openChat = OPEN_CHAT.exec(path)?.[1];
+  const openChat = route.kind === 'chat' ? route.id : undefined;
   const typing = (shelf: Shelf<ChatItem>) => shelf.chats.some((item) => item.id === turn?.chat);
   const empty = characters.length === 0 && none.chats.length === 0;
 
   // Picking a character goes inside it, even when its latest chat is the page already open.
   const enter = (shelf: Shelf<ChatItem>) => {
     setUpAt(null);
-    navigate(shelfTarget(shelf, wide));
+    navigate(enterShelf(shelf, wide));
   };
 
   const toggleFolder = (id: string) => {
@@ -129,12 +122,12 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
         actions={
           <>
             <IconButton icon={Import} label="봇 가져오기" onClick={pick} />
-            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" onClick={() => navigate('/')} />
+            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" onClick={() => navigate(HOME)} />
           </>
         }
         footer={
           <>
-            <IconButton icon={Plug} label="연결" onClick={() => navigate('/connections')} />
+            <IconButton icon={Plug} label="연결" onClick={() => navigate({ kind: 'connections' })} />
             {accountMenu}
           </>
         }
@@ -150,24 +143,24 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
 
   const footer = (
     <>
-      <NavRow icon={Plug} label="연결" current={path.startsWith('/connections')} onClick={() => navigate('/connections')} />
+      <NavRow icon={Plug} label="연결" current={connectionList(route) !== null} onClick={() => navigate({ kind: 'connections' })} />
       <AccountRow avatar={<Avatar face={username} size="sm" tone="you" />} name={username}>
         {accountMenu}
       </AccountRow>
     </>
   );
 
-  if (current && upAt !== path) {
+  if (current && upAt !== at) {
     const others = characters.filter((shelf) => shelf !== current && shelf.chats.length > 0).slice(0, STRIP);
     // 캐릭터 없이 has a page only beside its chats.
-    const about = current.id !== null ? pagePath(current.id, !page) : page ? null : shelfPath(null);
+    const about: Route | null = current.id !== null ? characterPage(current.id, !page) : page ? null : { kind: 'shelf', character: null };
     return (
       <Sidebar
         page={page}
         onCollapse={page ? undefined : () => onCollapse(true)}
         actions={
           <>
-            <NavRow icon={ChevronLeft} label="모든 캐릭터" onClick={() => (page ? navigate('/') : setUpAt(path))} />
+            <NavRow icon={ChevronLeft} label="모든 캐릭터" onClick={() => (page ? navigate(HOME) : setUpAt(at))} />
             {others.length > 0 && (
               <FaceStrip label="최근 캐릭터">
                 {others.map((shelf) => (
@@ -178,7 +171,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
               </FaceStrip>
             )}
             <SideTitle avatar={<ShelfFace shelf={current} />} name={shelfName(current)} onOpen={about === null ? undefined : () => navigate(about)}>
-              <IconButton icon={Plus} label="새 채팅" size="sm" onClick={() => navigate(newChatPath(current.id))} />
+              <IconButton icon={Plus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: current.id })} />
             </SideTitle>
           </>
         }
@@ -192,7 +185,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
             typing={turn?.chat === item.id}
             preview={item.preview}
             current={item.id === openChat}
-            onClick={() => navigate(`/chats/${item.id}`)}
+            onClick={() => navigate({ kind: 'chat', id: item.id })}
           />
         ))}
         {current.chats.length === 0 && <SideNote>아직 채팅이 없어요.</SideNote>}
@@ -241,7 +234,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
             <Button variant="secondary" size="sm" icon={Import} onClick={pick}>
               봇 가져오기
             </Button>
-            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate(wide ? '/' : '/characters')} />
+            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate(wide ? HOME : { kind: 'gallery' })} />
           </Row>
           {characters.length > 0 && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />}
         </>

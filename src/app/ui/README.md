@@ -12,7 +12,7 @@ this folder styles elements.**
 
 - Components take variants (`variant`, `size`, `tone`, `kind`, `gap`), never `className` or `style`.
   A screen that needs a new look extends a component or adds one here.
-- Screens (`src/app/screens/`) and the app shell compose these components. They import no CSS and
+- Screens (the feature folders beside this one) and the app shell compose these components. They import no CSS and
   pass no `className` or `style`.
 - Only give a palette value a semantic name when its role is visible in an approved mockup.
 

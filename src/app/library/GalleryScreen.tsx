@@ -2,10 +2,13 @@ import { Copy, FolderInput, FolderPlus, FolderTree as SubfolderIcon, MoreHorizon
 import { useState } from 'react';
 import type { ApiFailure } from '../../runtime/api';
 import type { ChatItem } from '../../model/chat';
-import { daysLeft, holds, KEEP_DAYS, matches, shownFolders, type CharacterShelf, type FolderTree } from '../../model/library';
+import { holds, KEEP_DAYS, matches, shownFolders, type CharacterShelf, type FolderTree } from '../../model/library';
 import { createFolder, moveCharacters, removeFolder, renameFolder, restoreFolder } from '../../runtime/characters';
-import { navigate } from '../router';
+import { describeFailure } from '../common/failure';
+import { NameDialog } from '../common/NameDialog';
 import { useLibrary, useStore } from '../session';
+import { navigate } from '../shell/router';
+import { enterShelf, type Back } from '../shell/routes';
 import { useToast } from '../toast';
 import {
   Button,
@@ -28,10 +31,7 @@ import {
   useWide,
 } from '../ui';
 import { useCharacterActions } from './characterActions';
-import { describeFailure } from './failure';
-import { NameDialog } from './NameDialog';
-import { shelfTarget } from './shelves';
-import { ago } from './time';
+import { binCardNote, cardNote } from './shelf';
 
 // 'all', 'loose' (in no folder), 'deleted' (지운 캐릭터), or a folder's id.
 type Filter = string;
@@ -40,7 +40,7 @@ type Naming = { id: string | null; name: string; parent?: FolderTree };
 
 // 캐릭터 둘러보기 (design F6): every character as a face, filtered by folder, and where folders are
 // made, renamed, emptied and filled.
-export function GalleryScreen() {
+export function GalleryScreen({ back }: { back: Back | null }) {
   const { characters, folders, deleted } = useLibrary();
   const { busy, copy, remove, restore, purge } = useCharacterActions();
   const store = useStore();
@@ -112,7 +112,7 @@ export function GalleryScreen() {
   };
 
   return (
-    <Screen width="wide" top={wide ? undefined : <NavBar title="캐릭터" onBack={() => navigate('/')} backLabel="목록으로" />}>
+    <Screen width="wide" top={back && <NavBar title="캐릭터" onBack={() => navigate(back.to)} backLabel={back.label} />}>
       <Stack gap={24}>
         <Row>
           <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />
@@ -260,9 +260,9 @@ export function GalleryScreen() {
                   key={shelf.id}
                   image={shelf.face}
                   name={name}
-                  note={busy?.id === shelf.id ? busy.label : binned ? leftFor(shelf) : note(shelf)}
+                  note={busy?.id === shelf.id ? busy.label : binned ? binCardNote(shelf) : cardNote(shelf)}
                   selected={picked ? picked.has(shelf.id) : null}
-                  onClick={() => (picked ? toggle(shelf.id) : binned ? setMenu(own) : navigate(shelfTarget(shelf, wide)))}
+                  onClick={() => (picked ? toggle(shelf.id) : binned ? setMenu(own) : navigate(enterShelf(shelf, wide)))}
                   menu={picked || busy?.id === shelf.id ? undefined : cardMenu}
                 />
               );
@@ -330,16 +330,4 @@ export function GalleryScreen() {
       )}
     </Screen>
   );
-}
-
-function note(shelf: CharacterShelf<ChatItem>): string {
-  const latest = shelf.chats[0];
-  return latest?.at ? `${ago(latest.at)} · 채팅 ${shelf.chats.length}개` : '아직 채팅이 없어요';
-}
-
-// How long a character in 지운 캐릭터 has left. Past its time it goes when the app next opens.
-function leftFor(shelf: CharacterShelf<ChatItem>): string {
-  const days = daysLeft(shelf.character, Date.now());
-  const chats = shelf.chats.length ? ` · 채팅 ${shelf.chats.length}개` : '';
-  return (days > 0 ? `${days}일 남음` : '곧 지워져요') + chats;
 }

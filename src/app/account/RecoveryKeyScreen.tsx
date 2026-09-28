@@ -1,7 +1,7 @@
 import { ChevronLeft, Download } from 'lucide-react';
 import { useState } from 'react';
-import { downloadText } from '../download';
 import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Screen, Steps, Text } from '../ui';
+import { downloadText } from './download';
 
 const FILENAME = 'risu-alpha-recovery.txt';
 

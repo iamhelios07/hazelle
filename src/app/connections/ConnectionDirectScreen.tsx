@@ -2,10 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { detect, GENERIC } from '../../connectors/registry';
 import type { Connection, Protocol } from '../../connectors/types';
 import { addConnection } from '../../runtime/connections';
-import { navigate } from '../router';
+import { describeAddFailure } from '../common/failure';
 import { useSession } from '../session';
+import { navigate } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { Button, Callout, ChoiceGroup, Intro, NavBar, Screen, Stack, Text, TextField } from '../ui';
-import { describeAddFailure } from './failure';
 
 const PROTOCOLS: { value: Protocol; label: string }[] = [
   { value: 'chat-completions', label: 'OpenAI 호환' },
@@ -18,10 +19,10 @@ const PROBLEMS = {
 };
 
 // F5 for what the list does not hold. An address the list does know becomes that provider, so it
-// gets the provider's balance and costs however it was entered.
-export function ConnectionDirectScreen() {
+// gets the provider's balance and costs however it was entered. address is only where the field starts.
+export function ConnectionDirectScreen({ address: pasted, back }: { address: string; back: Back }) {
   const session = useSession();
-  const [address, setAddress] = useState(() => new URLSearchParams(location.search).get('address') ?? '');
+  const [address, setAddress] = useState(pasted);
   const [protocol, setProtocol] = useState<Protocol | null>(null);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,13 +44,13 @@ export function ConnectionDirectScreen() {
     setMessage(null);
     const added = await addConnection(session, draft);
     setBusy(false);
-    if (added.ok) navigate(`/connections/${added.id}`, { replace: true });
+    if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
     else setMessage(describeAddFailure(added.failure));
   }
 
   return (
     <Screen
-      top={<NavBar title="직접 연결" onBack={() => navigate('/connections/new')} />}
+      top={<NavBar title="직접 연결" onBack={() => navigate(back.to)} backLabel={back.label} />}
       onSubmit={submit}
       actions={
         <Button type="submit" busy={busy} disabled={!draft}>

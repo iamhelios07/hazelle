@@ -5,13 +5,12 @@ import type { Imported, ImportFailure, UnsupportedKind } from '../../engine/impo
 import { unused } from '../../engine/pipeline';
 import { importCharacter } from '../../runtime/characters';
 import { thumbnail } from '../../runtime/picture';
-import { navigate } from '../router';
+import { describeFailure } from '../common/failure';
+import { describeUnused } from '../common/unused';
 import { useFiles, useStore } from '../session';
+import { navigate } from '../shell/router';
 import { Button, Callout, Dialog, DropOverlay, Section, Stack, Text } from '../ui';
-import { describeFailure } from './failure';
 import { describeStep } from './saving';
-import { newChatPath } from './shelves';
-import { describeUnused } from './unused';
 
 const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum';
 
@@ -142,7 +141,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
                 icon={MessageSquarePlus}
                 onClick={() => {
                   setState(null);
-                  navigate(newChatPath(done[0]!.id));
+                  navigate({ kind: 'new-chat', character: done[0]!.id });
                 }}
               >
                 채팅 시작

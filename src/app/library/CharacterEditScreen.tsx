@@ -2,12 +2,12 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Card } from '../../engine/import/types';
 import { editCard } from '../../runtime/characters';
-import { navigate } from '../router';
-import { useCharacter, useStore } from '../session';
+import { describeFailure } from '../common/failure';
+import { useStore } from '../session';
+import { navigate } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, IconButton, NavBar, Screen, Section, Stack, Text, TextField, useWide } from '../ui';
-import { describeFailure } from './failure';
-import { pagePath } from './shelves';
+import { Button, IconButton, NavBar, Screen, Section, Stack, Text, TextField } from '../ui';
 
 // How long typing pauses before a change is saved.
 const PAUSE = 600;
@@ -16,23 +16,9 @@ type Status = 'saving' | 'saved' | 'failed';
 const STATUS: Record<Status, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
 
 // 캐릭터 편집 (design F6): the card's text, which its chats' prompt uses. Lorebook and regex scripts
-// are not edited here yet.
-export function CharacterEditScreen({ id }: { id: string }) {
-  const shelf = useCharacter(id);
-  const wide = useWide();
-  if (!shelf) {
-    return (
-      <Screen top={<NavBar title="캐릭터 편집" onBack={() => navigate('/')} backLabel="목록으로" />}>
-        <Text tone="muted">이 캐릭터가 없어요. 지워졌거나 주소가 잘못됐어요.</Text>
-      </Screen>
-    );
-  }
-  return <Editor id={id} initial={shelf.character.card} onBack={() => navigate(pagePath(id, wide))} />;
-}
-
-// Each change saves on its own after a pause, and only the fields changed here go to editCard. Leaving
-// the screen saves what is still waiting.
-function Editor({ id, initial, onBack }: { id: string; initial: Card; onBack: () => void }) {
+// are not edited here yet. Each change saves on its own after a pause, and only the fields changed here
+// go to editCard. Leaving the screen saves what is still waiting.
+export function CharacterEditScreen({ id, initial, back }: { id: string; initial: Card; back: Back }) {
   const store = useStore();
   const toast = useToast();
   const [card, setCard] = useState(initial);
@@ -87,7 +73,7 @@ function Editor({ id, initial, onBack }: { id: string; initial: Card; onBack: ()
   }
 
   return (
-    <Screen top={<NavBar title="캐릭터 편집" subtitle={card.name} onBack={onBack} backLabel="캐릭터" actions={status && <Text tone="muted">{STATUS[status]}</Text>} />}>
+    <Screen top={<NavBar title="캐릭터 편집" subtitle={card.name} onBack={() => navigate(back.to)} backLabel={back.label} actions={status && <Text tone="muted">{STATUS[status]}</Text>} />}>
       <Stack gap={24}>
         <Text tone="muted">고친 내용은 바로 저장돼요. 로어북과 정규식은 아직 여기서 고칠 수 없어요.</Text>
         <Section title="기본">

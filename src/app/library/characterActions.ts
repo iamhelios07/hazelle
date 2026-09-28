@@ -2,12 +2,11 @@ import { useState } from 'react';
 import type { ChatItem } from '../../model/chat';
 import { KEEP_DAYS, type CharacterShelf } from '../../model/library';
 import { copyCharacter, purgeCharacter, setDeleted } from '../../runtime/characters';
-import { navigate } from '../router';
+import { describeFailure } from '../common/failure';
 import { useFiles, useStore } from '../session';
+import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { describeFailure } from './failure';
 import { describeStep } from './saving';
-import { editPath } from './shelves';
 
 type Shelf = CharacterShelf<ChatItem>;
 
@@ -31,7 +30,7 @@ export function useCharacterActions() {
     setBusy(null);
     if (!copied.ok) return toast({ message: `사본을 만들지 못했어요. ${describeFailure(copied)}` });
     toast({ message: '사본을 만들었어요. 사본을 고쳐도 원본은 그대로예요.' });
-    navigate(editPath(copied.data));
+    navigate({ kind: 'edit', character: copied.data });
   }
 
   // Whether it went to 지운 캐릭터.

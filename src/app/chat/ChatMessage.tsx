@@ -2,10 +2,10 @@ import { Bot, Copy, Info, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
+import { describeReplyError } from '../common/failure';
+import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { Avatar, Button, EditBox, Failure, Marker, Message as Row, Prose, Switcher, Tool, ToolDivider, Waiting } from '../ui';
-import { describeReplyError } from './failure';
-import { timeOfDay } from './time';
 
 type Props = {
   message: Shown;

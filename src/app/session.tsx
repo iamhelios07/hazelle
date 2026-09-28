@@ -30,7 +30,7 @@ export const useTalk = (): Talk => useSession().talk;
 
 // Every snapshot below is either one the session built for this store version or an object the store
 // holds as it is: a selector that built a fresh array or object each time would make React re-render forever.
-function useViews(): Views {
+export function useViews(): Views {
   const session = useSession();
   return useSyncExternalStore(session.store.subscribe, session.views);
 }
@@ -41,19 +41,9 @@ export const useConnections = (): Stored<'connection'>[] => useViews().connectio
 export const useSettings = (): Settings => useViews().settings;
 export const useUnreadable = (): number => useViews().unreadable;
 
-export function useChat(id: string | null): ChatItem | null {
-  const { chatById } = useViews();
-  return id === null ? null : (chatById.get(id) ?? null);
-}
-
 export function useCharacter(id: string | null): CharacterShelf<ChatItem> | null {
   const { characterById } = useViews();
   return id === null ? null : (characterById.get(id) ?? null);
-}
-
-export function useConnection(id: string): Stored<'connection'> | null {
-  const store = useStore();
-  return useSyncExternalStore(store.subscribe, () => store.get('connection', id));
 }
 
 // How many lorebook entries a character holds, which its chats do not use yet (engine/pipeline).

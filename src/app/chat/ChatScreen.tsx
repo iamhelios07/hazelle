@@ -3,14 +3,19 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import type { Assignment, ModelRef } from '../../connectors/assignment';
 import { unused } from '../../engine/pipeline';
 import { render } from '../../engine/render';
-import { shown, type Chat } from '../../model/chat';
-import { KEEP_DAYS } from '../../model/library';
+import { shown, type Chat, type ChatItem } from '../../model/chat';
+import type { CharacterShelf } from '../../model/library';
 import { chatModel, setChatModel } from '../../runtime/assignment';
 import { editMessage, removeChat, removeMessage, renameChat, restoreChat, restoreMessage, selectVersion, startChat } from '../../runtime/chat-log';
 import { withTurn, type Shown, type TalkFailure } from '../../runtime/talk';
 import { scopeOf, takeTurn, type Target } from '../../runtime/turn';
-import { navigate } from '../router';
-import { useCharacter, useChat, useLoreCount, useSession, useTurn } from '../session';
+import { describeFailure, describeTalkFailure } from '../common/failure';
+import { NameDialog } from '../common/NameDialog';
+import { day } from '../common/time';
+import { describeUnused } from '../common/unused';
+import { useLoreCount, useSession, useTurn } from '../session';
+import { navigate } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { ToastSlot, useToast } from '../toast';
 import {
   Avatar,
@@ -34,11 +39,6 @@ import {
 import { ChatInfo } from './ChatInfo';
 import { ChatMessage } from './ChatMessage';
 import { ChatModelMenu } from './ChatModelMenu';
-import { describeFailure, describeTalkFailure } from './failure';
-import { NameDialog } from './NameDialog';
-import { shelfPath } from './shelves';
-import { describeUnused } from './unused';
-import { day } from './time';
 
 // Unsent text per chat, kept while the page is open. A new chat's is kept under NEW.
 const drafts = new Map<string, string>();
@@ -54,19 +54,26 @@ const SHORTCUTS = [
   { label: '수정 취소', keys: ['Esc'] },
 ];
 
-// design F3. id is null for a new chat, which is saved with its first message.
-export function ChatScreen({ id, character }: { id: string | null; character: string | null }) {
+type Props = {
+  // null for a new chat, which is saved with its first message.
+  item: ChatItem | null;
+  // The chat's character, or null for 캐릭터 없이.
+  shelf: CharacterShelf<ChatItem> | null;
+  back: Back | null;
+};
+
+// design F3.
+export function ChatScreen({ item, shelf, back }: Props) {
   const session = useSession();
   const { store, talk } = session;
   const turn = useTurn();
   const wide = useWide();
   const toast = useToast();
-  const item = useChat(id);
+  const id = item?.id ?? null;
   const [draftModels, setDraftModels] = useState<Assignment>({});
-  const chat: Chat = item?.chat ?? { title: null, character, models: draftModels };
+  const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, models: draftModels };
   const route = chatModel(store, chat);
   const scope = scopeOf(session, chat);
-  const shelf = useCharacter(chat.character);
   const card = shelf?.character.card ?? null;
   const lore = useLoreCount(chat.character);
   const [greeting, setGreeting] = useState(0);
@@ -85,7 +92,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
         }
       : null;
   const messages: Shown[] = opening ? [opening] : withTurn(item?.messages ?? [], turn, id ?? '');
-  const draftKey = id ?? (character ? `${NEW}-${character}` : NEW);
+  const draftKey = id ?? (chat.character ? `${NEW}-${chat.character}` : NEW);
 
   const [draft, setDraftState] = useState(() => drafts.get(draftKey) ?? '');
   const [pop, setPop] = useState<'model' | 'menu' | null>(null);
@@ -161,7 +168,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
         return;
       }
       chatId = started.id;
-      navigate(`/chats/${chatId}`, { replace: true });
+      navigate({ kind: 'chat', id: chatId }, { replace: true });
     }
     const failure = await takeTurn(session, chatId, { kind: 'send', text });
     if (failure?.kind === 'unsent') drafts.set(chatId, text);
@@ -225,10 +232,10 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
       return;
     }
     const stored = removed.data;
-    navigate(shelfPath(stored.value.character));
+    navigate({ kind: 'shelf', character: stored.value.character });
     toast({
       message: '채팅을 지웠어요',
-      action: { label: '되돌리기', onClick: () => void restoreChat(store, stored).then((saved) => saved.ok && navigate(`/chats/${stored.id}`)) },
+      action: { label: '되돌리기', onClick: () => void restoreChat(store, stored).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })) },
     });
   }
 
@@ -294,18 +301,6 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
     if (bottom) setUnread(false);
   }
 
-  // The character is in 지운 캐릭터, or gone for good.
-  const orphaned = chat.character !== null && !shelf;
-  if ((id !== null && !item) || orphaned) {
-    return (
-      <ChatFrame title={<ChatTitle avatar={<Avatar face={MessageSquare} />} title="채팅" typing={false} />} actions={null} above={null} footer={null} scrollRef={scroller} onScroll={() => {}} onBack={wide ? undefined : () => navigate('/')}>
-        <Text tone="muted">
-          {orphaned ? `지운 캐릭터의 채팅이에요. ${KEEP_DAYS}일 안에는 캐릭터 둘러보기의 ‘지운 캐릭터’에서 되살릴 수 있어요.` : '이 채팅이 없어요. 지워졌거나 주소가 잘못됐어요.'}
-        </Text>
-      </ChatFrame>
-    );
-  }
-
   const title = card ? `${card.name} · ${item?.title ?? '새 채팅'}` : (item?.title ?? '새 채팅');
   const face = card ? <Avatar face={card.name} image={shelf!.face} /> : <Avatar face={MessageSquare} />;
   const notUsed = card && describeUnused(unused(card, lore));
@@ -367,7 +362,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
   return (
     <>
       <ChatFrame
-        onBack={wide ? undefined : () => navigate(shelfPath(chat.character))}
+        back={back ? { label: back.label, onClick: () => navigate(back.to) } : undefined}
         title={<ChatTitle avatar={face} title={title} typing={streaming} />}
         actions={
           <>

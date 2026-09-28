@@ -35,7 +35,7 @@ export type Session = {
   // The same object until the store's version changes, so useSyncExternalStore can read it directly.
   views: () => Views;
   // Stops sync, the reply and the background work, and drops the tokens and model lists. Every way out
-  // of an open vault (잠그기, 로그아웃) unmounts app/Workspace, which calls it.
+  // of an open vault (잠그기, 로그아웃) unmounts app/shell/Workspace, which calls it.
   close: () => void;
 };
 

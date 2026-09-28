@@ -1,8 +1,8 @@
 import { Import, MessageSquarePlus, Plug } from 'lucide-react';
-import { navigate } from '../router';
 import { useChats, useConnections } from '../session';
-import { useImport } from './ImportFlow';
+import { navigate } from '../shell/router';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
+import { useImport } from './ImportFlow';
 
 // F1's landing, until there is a character to show instead (design F6). 새 채팅 appears once there is
 // a connection to talk through.
@@ -19,7 +19,7 @@ export function Welcome() {
       )}
       <Stack>
         {connections.length > 0 && (
-          <ActionCard tone="accent" icon={MessageSquarePlus} title="새 채팅" description="캐릭터 없이 모델과 바로 이야기해요" onClick={() => navigate('/chats/new')} />
+          <ActionCard tone="accent" icon={MessageSquarePlus} title="새 채팅" description="캐릭터 없이 모델과 바로 이야기해요" onClick={() => navigate({ kind: 'new-chat', character: null })} />
         )}
         <ActionCard
           tone={connections.length ? 'default' : 'accent'}
@@ -29,9 +29,9 @@ export function Welcome() {
           onClick={pick}
         />
         {connections.length === 0 ? (
-          <ActionCard icon={Plug} title="연결 추가" description="쓰는 곳을 고르고 API 키만 넣으면 돼요" onClick={() => navigate('/connections/new')} />
+          <ActionCard icon={Plug} title="연결 추가" description="쓰는 곳을 고르고 API 키만 넣으면 돼요" onClick={() => navigate({ kind: 'add-connection' })} />
         ) : (
-          <ActionCard icon={Plug} title="연결" description={`연결 ${connections.length}개 · 모델 별표와 기본 모델`} onClick={() => navigate('/connections')} />
+          <ActionCard icon={Plug} title="연결" description={`연결 ${connections.length}개 · 모델 별표와 기본 모델`} onClick={() => navigate({ kind: 'connections' })} />
         )}
       </Stack>
     </Stack>

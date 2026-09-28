@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { fitsRole, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
-import { navigate } from '../router';
 import { useChats, useConnections } from '../session';
+import { navigate } from '../shell/router';
 import { ChipButton, MenuDivider, MenuHeading, MenuItem, MenuNote, Popover, SearchField } from '../ui';
 
 type Props = {
@@ -93,7 +93,7 @@ export function ChatModelMenu({ open, onOpen, current, label, onPick }: Props) {
         </>
       )}
       <MenuDivider />
-      <MenuItem tone="muted" label="연결에서 모델 더 별표하기" onClick={() => navigate('/connections')} />
+      <MenuItem tone="muted" label="연결에서 모델 더 별표하기" onClick={() => navigate({ kind: 'connections' })} />
     </Popover>
   );
 }

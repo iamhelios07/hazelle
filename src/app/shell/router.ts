@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
+import { href, parseRoute, type Route } from './routes';
 
 // Paths in the address bar, so the browser's back button and a reload keep the place. A router
 // library would add nothing for a handful of fixed paths.
@@ -13,13 +14,17 @@ function subscribe(listener: () => void) {
   };
 }
 
-export function usePath(): string {
-  return useSyncExternalStore(subscribe, () => location.pathname);
+const address = () => location.pathname + location.search;
+
+export function useRoute(): Route {
+  const at = useSyncExternalStore(subscribe, address);
+  return useMemo(() => parseRoute(at), [at]);
 }
 
-export function navigate(path: string, { replace = false } = {}) {
-  if (path === location.pathname) return;
-  history[replace ? 'replaceState' : 'pushState'](null, '', path);
+export function navigate(route: Route, { replace = false } = {}) {
+  const at = href(route);
+  if (at === address()) return;
+  history[replace ? 'replaceState' : 'pushState'](null, '', at);
   window.scrollTo(0, 0);
   window.dispatchEvent(new Event(NAVIGATED));
 }

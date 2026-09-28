@@ -2,11 +2,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect } from 'react';
 import { shown, type Receipt } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
+import { describeReplyError } from '../common/failure';
+import { ago } from '../common/time';
 import { useTalk } from '../session';
 import { Breakdown, Callout, Facts, IconButton, PanelSection, SidePanel, Text } from '../ui';
-import { describeReplyError } from './failure';
 import { cost, seconds, speed, tokens, UNKNOWN } from './receipt';
-import { ago } from './time';
 
 type Props = {
   chat: string | null;

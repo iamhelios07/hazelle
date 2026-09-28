@@ -1,15 +1,17 @@
 import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Model } from '../../connectors/types';
+import type { Stored } from '../../model/kinds';
 import type { CatalogResult } from '../../runtime/catalog';
 import { removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { reportsMeters } from '../../runtime/meters';
-import { navigate } from '../router';
-import { useConnection, useSession } from '../session';
+import { describeCatalogFailure, describeFailure } from '../common/failure';
+import { useSession } from '../session';
+import { navigate } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, IconButton, List, ListItem, NavBar, Screen, SearchField, Stack, Text } from '../ui';
 import { ConnectionMeters } from './ConnectionMeters';
-import { describeCatalogFailure, describeFailure } from './failure';
 
 type Filter = 'all' | 'starred' | 'reasoning' | 'vision' | 'tools';
 
@@ -26,10 +28,10 @@ function tags(model: Model): string[] {
     .map((filter) => filter.label);
 }
 
-export function ConnectionModelsScreen({ id }: { id: string }) {
+export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'connection'>; back: Back }) {
   const { store, catalogs } = useSession();
   const toast = useToast();
-  const stored = useConnection(id);
+  const { id, value: connection } = stored;
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState('');
@@ -39,10 +41,8 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
   const [pendingStars, setPendingStars] = useState<Model[] | null>(null);
   const saving = useRef({ queue: Promise.resolve(), count: 0 });
 
-  const connection = stored?.value;
-  const catalogKey = connection && JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
+  const catalogKey = JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
   useEffect(() => {
-    if (!connection) return;
     let current = true;
     setCatalog(null);
     void catalogs.load(connection, { fresh: attempt > 0 }).then((result) => current && setCatalog(result));
@@ -52,21 +52,13 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
     // The stored object is replaced on every sync; only a change to its endpoint or key means a new list.
   }, [catalogKey, attempt]);
 
-  const starred = pendingStars ?? connection?.starred ?? [];
+  const starred = pendingStars ?? connection.starred;
   const models = useMemo(() => {
     const listed = catalog?.ok ? catalog.models : [];
     // A starred model the provider no longer lists stays visible, so it can be unstarred.
     const missing = starred.filter((model) => !listed.some((entry) => entry.id === model.id));
     return [...missing, ...listed];
   }, [catalog, starred]);
-
-  if (!stored || !connection) {
-    return (
-      <Screen top={<NavBar title="연결" onBack={() => navigate('/connections')} />}>
-        <Text tone="muted">이 연결을 찾을 수 없어요. 지워졌을 수 있어요.</Text>
-      </Screen>
-    );
-  }
 
   const known = models.some((model) => tags(model).length > 0);
   const filters = [
@@ -106,7 +98,7 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
       setMessage(describeFailure(result));
       return;
     }
-    navigate('/connections');
+    navigate({ kind: 'connections' });
     toast({
       message: `${result.data.value.label} 연결을 지웠어요.`,
       action: { label: '되돌리기', onClick: () => void restoreConnection(store, result.data) },
@@ -121,7 +113,8 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
         <NavBar
           title={connection.label}
           subtitle={subtitle}
-          onBack={() => navigate('/connections')}
+          onBack={() => navigate(back.to)}
+          backLabel={back.label}
           actions={<IconButton icon={Trash2} label="연결 지우기" onClick={() => void remove()} />}
         />
       }
@@ -131,7 +124,7 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
           <Text size="sm" tone="muted">
             별표 {starred.length}개 · 기본 모델로 고를 수 있어요
           </Text>
-          <Button onClick={() => navigate('/connections')}>완료</Button>
+          <Button onClick={() => navigate({ kind: 'connections' })}>완료</Button>
         </Stack>
       }
     >

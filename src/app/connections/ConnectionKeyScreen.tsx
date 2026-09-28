@@ -2,13 +2,14 @@ import { useState, type FormEvent } from 'react';
 import { detect } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { addConnection } from '../../runtime/connections';
-import { navigate } from '../router';
+import { describeAddFailure } from '../common/failure';
 import { useSession } from '../session';
+import { navigate } from '../shell/router';
+import type { Back } from '../shell/routes';
 import { Button, Callout, Intro, Link, NavBar, Screen, Stack, Text, TextField } from '../ui';
-import { describeAddFailure } from './failure';
 
 // F5 for a provider picked from the list: its address is known, so only the key is asked.
-export function ConnectionKeyScreen({ type }: { type: ConnectionType }) {
+export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back: Back }) {
   const session = useSession();
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,13 +25,13 @@ export function ConnectionKeyScreen({ type }: { type: ConnectionType }) {
     setMessage(null);
     const added = await addConnection(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
     setBusy(false);
-    if (added.ok) navigate(`/connections/${added.id}`, { replace: true });
+    if (added.ok) navigate({ kind: 'connection', id: added.id }, { replace: true });
     else setMessage(describeAddFailure(added.failure));
   }
 
   return (
     <Screen
-      top={<NavBar title={`${type.label} 연결`} onBack={() => navigate('/connections/new')} />}
+      top={<NavBar title={`${type.label} 연결`} onBack={() => navigate(back.to)} backLabel={back.label} />}
       onSubmit={submit}
       actions={
         <>

@@ -4,11 +4,11 @@ import { IconButton } from './IconButton';
 import { usePane } from './layout';
 import styles from './NavBar.module.css';
 
-type Props = { title: string; subtitle?: string; backLabel?: string; onBack: () => void; actions?: ReactNode };
+type Props = { title: string; subtitle?: string; backLabel: string; onBack: () => void; actions?: ReactNode };
 
 // The top row of every screen below home: back, the screen's name, and its own actions. Beside its
 // list (ListDetail) a screen has nothing to go back to.
-export function NavBar({ title, subtitle, backLabel = '뒤로', onBack, actions }: Props) {
+export function NavBar({ title, subtitle, backLabel, onBack, actions }: Props) {
   const pane = usePane();
   return (
     <div className={styles.bar}>

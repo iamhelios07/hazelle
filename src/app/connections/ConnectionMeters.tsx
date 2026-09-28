@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { Connection, Meter, MeterReset, MeterUnit } from '../../connectors/types';
 import { loadMeters, type MetersResult } from '../../runtime/meters';
+import { describeMetersFailure } from '../common/failure';
+import { creditAmount, credits, usd } from '../common/money';
 import { Button, Callout, Facts, Section, Stack, Text } from '../ui';
-import { describeMetersFailure } from './failure';
-import { creditAmount, credits, usd } from './money';
 
 const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 
