@@ -1,5 +1,6 @@
-.chat,
-.nav {
+.item,
+.nav,
+.folderHead {
   display: flex;
   align-items: center;
   width: 100%;
@@ -11,14 +12,15 @@
   cursor: pointer;
 }
 
-.chat {
+.item {
   gap: var(--space-10);
   padding: var(--space-8) var(--space-10);
   border-radius: var(--radius-md);
 }
 
-.chat:hover,
-.nav:hover {
+.item:hover,
+.nav:hover,
+.folderHead:hover {
   background: var(--color-surface);
 }
 
@@ -77,8 +79,73 @@
   font-size: var(--text-sm);
 }
 
-.nav:hover {
+.nav:hover,
+.folderHead:hover {
   color: var(--color-text);
+}
+
+.folderHead {
+  gap: var(--space-6);
+  height: var(--control-compact);
+  padding: 0 var(--space-10);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.count {
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+}
+
+.folder,
+.folderItems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.folderItems {
+  padding-left: var(--space-12);
+}
+
+.sideTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.titleBox {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-md);
+}
+
+.titleButton {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.titleButton:hover {
+  background: var(--color-surface);
+}
+
+.heading {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .label {

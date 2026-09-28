@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { Connection } from '../connectors/types';
 import { chatTitle, fold, preview, type Chat, type Entry, type Message } from '../runtime/chat';
 import { SETTINGS_ID, type Settings } from '../runtime/docs';
+import { shelve, type Avatar, type Character, type Folder } from '../runtime/library';
 import type { ObjectStore, Stored } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 
@@ -80,6 +81,27 @@ export function useChats(): ChatItem[] {
       })
       .sort((a, b) => b.order - a.order);
   }, [store, version]);
+}
+
+// The characters, each with its chats, most recent first, and the folders by name (design F6).
+export function useLibrary() {
+  const store = useStore();
+  const version = useVersion(store);
+  const chats = useChats();
+  return useMemo(
+    () => ({
+      ...shelve(store.list<Character>('character'), store.list<Avatar>('avatar'), chats),
+      folders: store.list<Folder>('folder').sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko')),
+    }),
+    [store, version, chats],
+  );
+}
+
+// How many lorebook entries a character holds, which its chats do not use yet (runtime/prompt).
+export function useLoreCount(character: string | null): number {
+  const store = useStore();
+  const version = useVersion(store);
+  return useMemo(() => (character === null ? 0 : store.list<unknown>('lore').filter((entry) => entry.parent === character).length), [store, version, character]);
 }
 
 export function useTalk(): Talk {

@@ -13,8 +13,13 @@ type Props = {
   // The user's message right before the last reply, which 저장하고 답장 다시 받기 answers again.
   beforeLastReply: boolean;
   username: string;
+  // Who replies: the chat's character, or with none, the model named on each reply.
+  character: { name: string; image: string | null } | null;
   // The chat's model, naming a reply still being written.
   modelName: string | null;
+  // The greeting of a chat not started yet: its versions are the other greetings, and it has nothing
+  // to regenerate, edit or delete.
+  opening: boolean;
   // A reply is being written somewhere, so no other can start.
   busy: boolean;
   // The text in the edit box, while this message is being edited.
@@ -36,7 +41,7 @@ const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼
 
 // One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
-  const { message, isLast, beforeLastReply, username, modelName, busy, editing, pinned, onTap, onEdit, onSaveEdit, onSwipe } = props;
+  const { message, isLast, beforeLastReply, username, character, modelName, opening, busy, editing, pinned, onTap, onEdit, onSaveEdit, onSwipe } = props;
   const version = shown(message);
   const receipt = version.receipt;
   const mine = message.role === 'user';
@@ -119,8 +124,8 @@ export function ChatMessage(props: Props) {
         <Switcher
           label={`${message.selected + 1} / ${count}`}
           prevDisabled={busy || message.selected === 0}
-          nextDisabled={busy}
-          nextLabel={message.selected === count - 1 ? '새 답장 받기' : '다음'}
+          nextDisabled={busy || (opening && message.selected === count - 1)}
+          nextLabel={message.selected === count - 1 && !opening ? '새 답장 받기' : '다음'}
           onPrev={() => onSwipe(-1)}
           onNext={() => onSwipe(1)}
         />
@@ -128,7 +133,9 @@ export function ChatMessage(props: Props) {
     </>
   );
 
-  const tools = live || editing !== null ? undefined : (
+  const tools = live || editing !== null ? undefined : opening ? (
+    <Tool icon={Copy} label="복사" onClick={props.onCopy} />
+  ) : (
     <>
       {!mine && isLast && !failed && !busy && <Tool icon={RotateCcw} label="다시 생성" onClick={props.onRegenerate} />}
       {!mine && failed && !busy && <Tool icon={RotateCcw} label="다시 시도" onClick={props.onRetry} />}
@@ -142,8 +149,8 @@ export function ChatMessage(props: Props) {
 
   return (
     <Row
-      avatar={mine ? <Avatar face={username} tone="you" /> : <Avatar face={Bot} />}
-      name={mine ? username : (receipt?.modelName ?? modelName ?? '모델')}
+      avatar={mine ? <Avatar face={username} tone="you" /> : character ? <Avatar face={character.name} image={character.image} /> : <Avatar face={Bot} />}
+      name={mine ? username : (character?.name ?? receipt?.modelName ?? modelName ?? '모델')}
       time={timeOfDay(version.at)}
       mine={mine && editing === null}
       after={after}

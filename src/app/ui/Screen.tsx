@@ -5,6 +5,8 @@ import styles from './Screen.module.css';
 type Props = {
   top?: ReactNode;
   align?: 'start' | 'center';
+  // wide: a grid of cards, such as 캐릭터 둘러보기, instead of a phone-width column.
+  width?: 'narrow' | 'wide';
   actions?: ReactNode;
   // Keeps the actions in view at the bottom while a long body scrolls, such as a model list.
   stickyActions?: boolean;
@@ -16,7 +18,7 @@ type Props = {
 // body and actions become one form, so a submit button can live in the actions slot. align="center"
 // centers the body vertically, for screens without actions such as the empty home. In a pane of a
 // ListDetail it fills the pane from the top instead of centering on the page.
-export function Screen({ top, align = 'start', actions, stickyActions = false, onSubmit, children }: Props) {
+export function Screen({ top, align = 'start', width = 'narrow', actions, stickyActions = false, onSubmit, children }: Props) {
   const pane = usePane();
   // A page has one main landmark; beside a list, a screen is one section of it.
   const Root = pane ? 'section' : 'main';
@@ -28,7 +30,7 @@ export function Screen({ top, align = 'start', actions, stickyActions = false, o
     </>
   );
   return (
-    <Root className={pane ? `${styles.screen} ${styles.pane}` : styles.screen}>
+    <Root className={[styles.screen, pane && styles.pane, width === 'wide' && styles.wide].filter(Boolean).join(' ')}>
       {top && <header className={styles.top}>{top}</header>}
       {onSubmit ? (
         <form className={content} onSubmit={onSubmit} noValidate>

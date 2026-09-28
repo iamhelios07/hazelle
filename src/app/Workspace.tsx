@@ -7,8 +7,8 @@ import { keepSynced, ObjectStore } from '../runtime/store';
 import { Talk } from '../runtime/talk';
 import type { VaultKey } from '../vault/keys';
 import { usePath } from './router';
+import { CharacterScreen } from './screens/CharacterScreen';
 import { ChatScreen } from './screens/ChatScreen';
-import { ChatSidebar } from './screens/ChatSidebar';
 import { ConnectionAddScreen } from './screens/ConnectionAddScreen';
 import { ConnectionDirectScreen } from './screens/ConnectionDirectScreen';
 import { ConnectionKeyScreen } from './screens/ConnectionKeyScreen';
@@ -16,9 +16,12 @@ import { ConnectionModelsScreen } from './screens/ConnectionModelsScreen';
 import { ConnectionSignInScreen } from './screens/ConnectionSignInScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { describeFailure } from './screens/failure';
+import { GalleryScreen } from './screens/GalleryScreen';
 import { HomeScreen } from './screens/HomeScreen';
+import { ImportProvider } from './screens/ImportFlow';
+import { LibrarySidebar } from './screens/LibrarySidebar';
 import { UnreachableScreen } from './screens/UnreachableScreen';
-import { StoreProvider, TalkProvider } from './store';
+import { StoreProvider, TalkProvider, useLibrary } from './store';
 import { ToastProvider } from './toast';
 import { ListDetail, Screen, Shell, Text, useSplit, useWide } from './ui';
 
@@ -44,7 +47,7 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
         setFailure(describeFailure(pulled));
         return;
       }
-      const talk = new Talk(opened);
+      const talk = new Talk(opened, account.username);
       const stopSync = keepSynced(opened);
       stop = () => {
         stopSync();
@@ -58,7 +61,7 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
       forgetCatalogs();
       forgetCredentials();
     };
-  }, [accountId, vaultKey, attempt]);
+  }, [accountId, vaultKey, account.username, attempt]);
 
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
   if (!open) return null;
@@ -66,7 +69,9 @@ export function Workspace({ accountId, vaultKey, ...account }: Props) {
     <StoreProvider value={open.store}>
       <TalkProvider value={open.talk}>
         <ToastProvider>
-          <Layout {...account} />
+          <ImportProvider vault={{ accountId, vaultKey, request: api }}>
+            <Layout {...account} />
+          </ImportProvider>
         </ToastProvider>
       </TalkProvider>
     </StoreProvider>
@@ -98,11 +103,12 @@ function Layout({ username, onLock, onLogout }: Account) {
     }
   };
   const sidebar = (page: boolean) => (
-    <ChatSidebar page={page} collapsed={collapsed} onCollapse={collapse} username={username} onLock={onLock} onLogout={onLogout} />
+    <LibrarySidebar page={page} collapsed={collapsed} onCollapse={collapse} username={username} onLock={onLock} onLogout={onLogout} />
   );
 
-  // On phones the chat list is the home screen, and every other page takes the whole screen.
-  if (!wide) return path === '/' ? sidebar(true) : <Page path={path} username={username} />;
+  // On phones the character list is the home screen, a character's chats are its page, and every
+  // other page takes the whole screen.
+  if (!wide) return path === '/' || SHELF.test(path) ? sidebar(true) : <Page path={path} username={username} />;
   return (
     <Shell side={sidebar(false)}>
       <Page path={path} username={username} />
@@ -111,17 +117,33 @@ function Layout({ username, onLock, onLogout }: Account) {
 }
 
 const CHAT = /^\/chats\/([0-9a-f-]{36})$/;
+const SHELF = /^\/characters\/([0-9a-f-]{36}|none)$/;
+const NEW_CHAT = /^\/characters\/([0-9a-f-]{36})\/new$/;
+const ABOUT = /^\/characters\/([0-9a-f-]{36})\/about$/;
 const CONNECTION = /^\/connections\/([0-9a-f-]{36})$/;
 
 function Page({ path, username }: { path: string; username: string }) {
   const split = useSplit();
-  if (path === '/chats/new') return <ChatScreen key="new" id={null} username={username} />;
+  if (path === '/chats/new') return <ChatScreen key="new" id={null} character={null} username={username} />;
+  const fresh = NEW_CHAT.exec(path)?.[1];
+  if (fresh) return <ChatScreen key={`new-${fresh}`} id={null} character={fresh} username={username} />;
   const chat = CHAT.exec(path)?.[1];
-  if (chat) return <ChatScreen key={chat} id={chat} username={username} />;
+  if (chat) return <ChatScreen key={chat} id={chat} character={null} username={username} />;
+  if (path === '/characters') return <GalleryScreen />;
+  const shelf = SHELF.exec(path)?.[1];
+  if (shelf) return <CharacterScreen key={shelf} id={shelf === 'none' ? null : shelf} />;
+  const about = ABOUT.exec(path)?.[1];
+  if (about) return <CharacterScreen key={about} id={about} />;
   const panes = connectionPanes(path);
-  if (!panes) return <HomeScreen />;
+  if (!panes) return <Home />;
   if (split) return <ListDetail list={panes.list} detail={panes.detail ?? <Placeholder text={panes.empty} />} />;
   return panes.detail ?? panes.list;
+}
+
+// The desktop home: every character, or before there is one, the first steps (F1).
+function Home() {
+  const { characters } = useLibrary();
+  return characters.length ? <GalleryScreen /> : <HomeScreen />;
 }
 
 // The connection screens as a list and the item picked from it, which sit side by side when there is

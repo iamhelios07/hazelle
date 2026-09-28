@@ -8,7 +8,7 @@ type Props = {
   onClose: () => void;
   trigger: ReactNode;
   // Which corner of the trigger it opens from, and which way.
-  place?: 'below-start' | 'below-end' | 'above-start' | 'beside';
+  place?: 'below-start' | 'below-end' | 'above-start' | 'above-end' | 'beside';
   size?: 'md' | 'lg';
   label: string;
   role?: 'menu' | 'dialog';

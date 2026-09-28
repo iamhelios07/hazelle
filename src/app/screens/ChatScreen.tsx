@@ -2,9 +2,10 @@ import { MessageSquare, MoreHorizontal, PanelRight } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { Assignment, ModelRef } from '../../connectors/assignment';
 import { shown, type Chat, type Message } from '../../runtime/chat';
-import { addEntry, chatModel, editMessage, withTurn, type TalkFailure } from '../../runtime/talk';
+import { fillNames, unused } from '../../engine/prompt';
+import { addEntry, addGreeting, chatModel, editMessage, withTurn, type TalkFailure } from '../../runtime/talk';
 import { navigate } from '../router';
-import { useChats, useStore, useTalk, useTurn } from '../store';
+import { useChats, useLibrary, useLoreCount, useStore, useTalk, useTurn } from '../store';
 import { ToastSlot, useToast } from '../toast';
 import {
   Avatar,
@@ -22,15 +23,16 @@ import {
   Popover,
   SendButton,
   Shortcuts,
-  Stack,
   Text,
-  TextField,
   useWide,
 } from '../ui';
 import { ChatInfo } from './ChatInfo';
 import { ChatMessage } from './ChatMessage';
 import { ChatModelMenu } from './ChatModelMenu';
 import { describeFailure, describeTalkFailure } from './failure';
+import { NameDialog } from './NameDialog';
+import { shelfPath } from './shelves';
+import { describeUnused } from './unused';
 import { day } from './time';
 
 // Unsent text per chat, kept while the page is open. A new chat's is kept under NEW.
@@ -50,20 +52,38 @@ const SHORTCUTS = [
 type Shown = Message & { live: string | null };
 
 // design F3. id is null for a new chat, which is saved with its first message.
-export function ChatScreen({ id, username }: { id: string | null; username: string }) {
+export function ChatScreen({ id, character, username }: { id: string | null; character: string | null; username: string }) {
   const store = useStore();
   const talk = useTalk();
   const turn = useTurn();
   const chats = useChats();
   const wide = useWide();
   const toast = useToast();
+  const { characters } = useLibrary();
   const item = id === null ? null : (chats.find((chat) => chat.id === id) ?? null);
   const [draftModels, setDraftModels] = useState<Assignment>({});
-  const chat: Chat = item?.chat ?? { title: null, character: null, models: draftModels };
+  const chat: Chat = item?.chat ?? { title: null, character, models: draftModels };
   const route = chatModel(store, chat);
-  const messages: Shown[] = withTurn(item?.messages ?? [], turn, id ?? '');
+  const shelf = characters.find((candidate) => candidate.id === chat.character) ?? null;
+  const card = shelf?.character.card ?? null;
+  const lore = useLoreCount(chat.character);
+  const [greeting, setGreeting] = useState(0);
+  const [openedAt] = useState(() => Date.now());
+  const opening: Shown | null =
+    item === null && card && card.greetings.length > 0
+      ? {
+          id: 'opening',
+          role: 'assistant',
+          at: openedAt,
+          versions: card.greetings.map((text, index) => ({ id: `opening-${index}`, text: fillNames(text, card, username), receipt: null, edited: false, at: openedAt })),
+          selected: greeting,
+          live: null,
+        }
+      : null;
+  const messages: Shown[] = opening ? [opening] : withTurn(item?.messages ?? [], turn, id ?? '');
+  const draftKey = id ?? (character ? `${NEW}-${character}` : NEW);
 
-  const [draft, setDraftState] = useState(() => drafts.get(id ?? NEW) ?? '');
+  const [draft, setDraftState] = useState(() => drafts.get(draftKey) ?? '');
   const [pop, setPop] = useState<'model' | 'menu' | null>(null);
   const [dialog, setDialog] = useState<'keys' | 'rename' | null>(null);
   const [panel, setPanel] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
@@ -83,7 +103,7 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
   const seen = useRef({ count: messages.length, streaming });
 
   const setDraft = (text: string) => {
-    drafts.set(id ?? NEW, text);
+    drafts.set(draftKey, text);
     setDraftState(text);
   };
 
@@ -137,6 +157,14 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
         toast({ message: `채팅을 만들지 못했어요. ${describeFailure(created)}` });
         return;
       }
+      if (opening) {
+        const opened = await addGreeting(store, chatId, opening.versions.map((version) => version.text), opening.selected);
+        if (opened) {
+          setDraft(text);
+          toast({ message: `첫인사를 저장하지 못했어요. ${describeFailure(opened)}` });
+          return;
+        }
+      }
       navigate(`/chats/${chatId}`, { replace: true });
     }
     const failure = await talk.send(chatId, text);
@@ -161,6 +189,10 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
   function swipe(message: Shown, step: -1 | 1) {
     if (busy) return;
     const next = message.selected + step;
+    if (message === opening) {
+      if (next >= 0 && next < message.versions.length) setGreeting(next);
+      return;
+    }
     if (next >= 0 && next < message.versions.length) select(message, next);
     else if (step === 1 && message === last) ask((chat) => talk.regenerate(chat, message.id));
   }
@@ -199,7 +231,7 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
       toast({ message: describeFailure(removed) });
       return;
     }
-    navigate('/');
+    navigate(shelfPath(value.character));
     toast({
       message: '채팅을 지웠어요',
       action: { label: '되돌리기', onClick: () => void store.save<Chat>('chat', chatId, () => value).then((saved) => saved.ok && navigate(`/chats/${chatId}`)) },
@@ -276,17 +308,26 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
     );
   }
 
-  const title = item?.title ?? '새 채팅';
+  const title = card ? `${card.name} · ${item?.title ?? '새 채팅'}` : (item?.title ?? '새 채팅');
+  const face = card ? <Avatar face={card.name} image={shelf!.face} /> : <Avatar face={MessageSquare} />;
+  const notUsed = card && describeUnused(unused(card, lore));
   const modelLabel = 'kind' in route ? '모델 고르기' : route.model.name;
   const currentRef = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
   // Key hints only where there is a keyboard to press them.
   const hint = !focused || !wide ? '' : streaming ? 'Esc 멈추기' : draft ? 'Enter 보내기 · Shift+Enter 줄바꿈' : 'Enter 보내기 · ↑ 내 메시지 수정 · ← → 답장 넘기기';
 
   const rows: ReactNode[] = [];
+  if (notUsed) {
+    rows.push(
+      <Text key="unused" tone="muted" align="center">
+        {notUsed}
+      </Text>,
+    );
+  }
   if (messages.length === 0) {
     rows.push(
       <Text key="intro" tone="muted" align="center">
-        캐릭터 없이 모델과 바로 이야기하는 채팅이에요. 모델은 오른쪽 위 버튼에서 이 채팅만 바꿀 수 있어요.
+        {card ? '첫인사가 없는 캐릭터예요. 먼저 말을 걸어 보세요.' : '캐릭터 없이 모델과 바로 이야기하는 채팅이에요. 모델은 오른쪽 위 버튼에서 이 채팅만 바꿀 수 있어요.'}
       </Text>,
     );
   }
@@ -304,7 +345,9 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
         isLast={index === messages.length - 1}
         beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
         username={username}
+        character={card && { name: card.nickname || card.name, image: shelf!.face }}
         modelName={'kind' in route ? null : route.model.name}
+        opening={message === opening}
         busy={busy}
         editing={editing?.id === message.id ? editing.text : null}
         pinned={pinned === message.id}
@@ -325,8 +368,8 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
   return (
     <>
       <ChatFrame
-        onBack={wide ? undefined : () => navigate('/')}
-        title={<ChatTitle avatar={<Avatar face={MessageSquare} />} title={title} typing={streaming} />}
+        onBack={wide ? undefined : () => navigate(shelfPath(chat.character))}
+        title={<ChatTitle avatar={face} title={title} typing={streaming} />}
         actions={
           <>
             <ChatModelMenu open={pop === 'model'} onOpen={(open) => setPop(open ? 'model' : null)} current={currentRef} label={modelLabel} onPick={pickModel} />
@@ -405,29 +448,9 @@ export function ChatScreen({ id, username }: { id: string | null; username: stri
           <Shortcuts items={SHORTCUTS} />
         </Dialog>
       )}
-      {dialog === 'rename' && item && <RenameDialog title={item.title} onSave={(name) => void rename(name)} onClose={() => setDialog(null)} />}
+      {dialog === 'rename' && item && (
+        <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 불러요." onSave={(name) => void rename(name)} onClose={() => setDialog(null)} />
+      )}
     </>
-  );
-}
-
-// An empty name gives the chat back its default: the first line of its first message.
-function RenameDialog({ title, onSave, onClose }: { title: string; onSave: (name: string) => void; onClose: () => void }) {
-  const [name, setName] = useState(title);
-  return (
-    <Dialog title="채팅 이름 바꾸기" onClose={onClose}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSave(name);
-        }}
-      >
-        <Stack gap={12}>
-          <TextField label="이름" value={name} onChange={setName} hint="비워 두면 첫 메시지로 불러요." />
-          <Button type="submit" size="md">
-            저장
-          </Button>
-        </Stack>
-      </form>
-    </Dialog>
   );
 }

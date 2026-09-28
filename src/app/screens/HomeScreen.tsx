@@ -1,13 +1,15 @@
 import { Import, MessageSquarePlus, Plug } from 'lucide-react';
 import { navigate } from '../router';
 import { useChats, useConnections } from '../store';
+import { useImport } from './ImportFlow';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
 
-// F1's landing, and the page beside the chat list when no chat is open. Import does not exist yet, so
-// its card says so. 새 채팅 appears once there is a connection to talk through.
+// F1's landing, until there is a character to show instead (design F6). 새 채팅 appears once there is
+// a connection to talk through.
 export function Welcome() {
   const connections = useConnections();
   const chats = useChats();
+  const { pick } = useImport();
   return (
     <Stack gap={24}>
       {chats.length ? (
@@ -23,8 +25,8 @@ export function Welcome() {
           tone={connections.length ? 'default' : 'accent'}
           icon={Import}
           title="봇 가져오기"
-          description="PNG · charx · JSON · risum 파일을 끌어다 놓거나 눌러서 고르기"
-          pending="준비 중"
+          description="PNG · charx · JSON 파일을 끌어다 놓거나 눌러서 고르기"
+          onClick={pick}
         />
         {connections.length === 0 ? (
           <ActionCard icon={Plug} title="연결 추가" description="쓰는 곳을 고르고 API 키만 넣으면 돼요" onClick={() => navigate('/connections/new')} />

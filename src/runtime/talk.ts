@@ -5,6 +5,8 @@ import { fold, history, shown, type Chat, type Entry, type Message, type Receipt
 import { settleCost } from './cost';
 import { SETTINGS_ID, type Settings } from './docs';
 import { generate } from './generate';
+import type { Character } from './library';
+import { cardPrompt } from '../engine/prompt';
 import type { ObjectStore, Stored } from './store';
 
 // The reply being written. user is the message sent with it, shown until the store has it; reply says
@@ -41,6 +43,23 @@ export function addEntry(store: ObjectStore, chat: string, entry: Entry) {
   return store.save<Entry>('entry', crypto.randomUUID(), () => entry, chat);
 }
 
+// A character's chat opens on its greeting, and the other greetings are versions of it (design F3).
+export async function addGreeting(store: ObjectStore, chat: string, greetings: string[], selected: number): Promise<ApiFailure | null> {
+  const at = Date.now();
+  const ids = greetings.map(() => crypto.randomUUID());
+  const first = ids[0]!;
+  const entries: [string, Entry][] = greetings.map((text, index) => [
+    ids[index]!,
+    index === 0 ? { type: 'message', role: 'assistant', at, text, receipt: null } : { type: 'version', message: first, replaces: null, edit: false, at, text, receipt: null },
+  ]);
+  if (selected > 0) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
+  for (const [id, entry] of entries) {
+    const saved = await store.save<Entry>('entry', id, () => entry, chat);
+    if (!saved.ok) return saved;
+  }
+  return null;
+}
+
 // The chat's messages with the turn laid over them, until its entries are saved. live marks the version
 // being written.
 export function withTurn(messages: Message[], turn: Turn | null, chat: string): (Message & { live: string | null })[] {
@@ -74,7 +93,11 @@ export class Talk {
   private readonly settling = new Set<string>();
   private readonly listeners = new Set<() => void>();
 
-  constructor(private readonly store: ObjectStore) {}
+  // username stands in for {{user}} until personas exist (design F3).
+  constructor(
+    private readonly store: ObjectStore,
+    private readonly username: string,
+  ) {}
 
   readonly subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -160,10 +183,12 @@ export class Talk {
     this.abort = abort;
 
     const sending = user && this.store.save<Entry>('entry', user.id, () => ({ type: 'message', role: 'user', at: Date.now(), text: user.text, receipt: null }), chat);
+    const said = [...history(before), ...(user ? [{ role: 'user' as const, content: user.text }] : [])];
+    const character = stored.value.character === null ? null : this.store.get<Character>(stored.value.character);
     const replying = generate({
       connection: route.connection.value,
       model: route.model,
-      messages: [...history(before), ...(user ? [{ role: 'user' as const, content: user.text }] : [])],
+      messages: character ? cardPrompt(character.value.card, this.username, said) : said,
       maxTokens: null,
       signal: abort.signal,
       onText: (phase, chunk) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk }),

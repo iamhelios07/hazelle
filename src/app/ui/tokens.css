@@ -136,6 +136,10 @@
   --panel-width: 360px;
   --list-pane-width: 400px;
   --pane-max-width: 560px;
+  /* 캐릭터 둘러보기 (design F6): the narrowest face card, and the widest the grid grows. */
+  --card-min-width: 152px;
+  --gallery-max-width: 1120px;
+  --portrait-width: 200px;
   --header-height: 60px;
   --control-compact: 38px;
   --control-tool: 32px;

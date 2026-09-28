@@ -93,7 +93,7 @@
   scrollbar-width: none;
 }
 
-.railItem {
+.faceButton {
   position: relative;
   display: flex;
   align-items: center;
@@ -108,9 +108,27 @@
   cursor: pointer;
 }
 
-.railItem:hover {
+.faceButton:hover {
   background: var(--color-surface-hover);
   color: var(--color-text);
+}
+
+.stripBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.caption {
+  padding: 0 var(--space-8);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+}
+
+.strip {
+  display: flex;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
 }
 
 .current > :first-child {

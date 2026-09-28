@@ -7,17 +7,14 @@ type Props = {
   icon: LucideIcon;
   title: string;
   description: string;
-  // A card for a feature that does not exist yet is shown disabled with this badge, never as a dead button.
-  pending?: string;
-  onClick?: () => void;
+  onClick: () => void;
 };
 
-export function ActionCard({ tone = 'default', icon, title, description, pending, onClick }: Props) {
+export function ActionCard({ tone = 'default', icon, title, description, onClick }: Props) {
   return (
-    <button type="button" className={tone === 'accent' ? `${styles.card} ${styles.accent}` : styles.card} disabled={pending !== undefined} onClick={onClick}>
+    <button type="button" className={tone === 'accent' ? `${styles.card} ${styles.accent}` : styles.card} onClick={onClick}>
       <span className={styles.head}>
         <Icon icon={icon} />
-        {pending && <span className={styles.badge}>{pending}</span>}
       </span>
       <span className={styles.title}>{title}</span>
       <span className={styles.description}>{description}</span>

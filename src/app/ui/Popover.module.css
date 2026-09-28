@@ -42,6 +42,11 @@
   left: 0;
 }
 
+.above-end {
+  bottom: calc(100% + var(--space-12));
+  right: 0;
+}
+
 .beside {
   top: 0;
   left: calc(100% + var(--space-8));
