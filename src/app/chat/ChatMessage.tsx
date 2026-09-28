@@ -5,8 +5,8 @@ import type { Shown } from '../../runtime/talk';
 import { describeReplyError } from '../common/failure';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
-import { hints, pressed, SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, Marker, Prose, StoryMessage, Switcher, Tool, Waiting } from '../ui';
+import { hints, SHORTCUTS, titled } from '../shortcuts';
+import { Avatar, Button, Divider, EditBox, Failure, Marker, pressed, Prose, StoryMessage, Switcher, Tool, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
 
 type Props = {
@@ -28,6 +28,8 @@ type Props = {
   // The text in the edit box, while this message is being edited.
   editing: string | null;
   pinned: boolean;
+  // The header's model menu, which a failed reply's 다른 모델로 opens.
+  modelMenu: MenuHandle;
   actions: ChatActions;
 };
 
@@ -35,8 +37,9 @@ const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼
 
 // One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
-  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, actions } = props;
+  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, modelMenu, actions } = props;
   const { username } = useSession();
+  const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
   const mine = message.role === 'user';
@@ -47,10 +50,10 @@ export function ChatMessage(props: Props) {
   const cut = !live && !version.edited && receipt?.state === 'cut' ? receipt.cut : null;
 
   const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (pressed(event, SHORTCUTS.cancelEdit)) {
+    if (pressed(event, SHORTCUTS.cancelEdit.keys)) {
       event.preventDefault();
       actions.edit(message, null);
-    } else if (pressed(event, SHORTCUTS.saveEdit)) {
+    } else if (pressed(event, SHORTCUTS.saveEdit.keys)) {
       event.preventDefault();
       void actions.saveEdit(message, false);
     }
@@ -92,7 +95,7 @@ export function ChatMessage(props: Props) {
             <Button size="sm" disabled={busy} onClick={() => actions.retry(message)}>
               다시 시도
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => actions.menu('model')}>
+            <Button variant="secondary" size="sm" {...otherModel}>
               다른 모델로
             </Button>
           </>

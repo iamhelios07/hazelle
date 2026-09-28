@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Icon } from '../foundation/Icon';
 import styles from './CardGrid.module.css';
 
@@ -19,14 +19,26 @@ type CardProps = {
   // null while the grid is not picking characters.
   selected: boolean | null;
   onClick: () => void;
+  // A card that opens a menu takes these from Menu.
+  popup?: 'menu';
+  expanded?: boolean;
+  ref?: Ref<HTMLButtonElement>;
   // A menu button over the picture's corner, beside the card rather than inside its button.
   menu?: ReactNode;
 };
 
-export function FaceCard({ image, name, note, selected, onClick, menu }: CardProps) {
+export function FaceCard({ image, name, note, selected, onClick, popup, expanded, ref, menu }: CardProps) {
   return (
     <div className={styles.cardBox}>
-      <button type="button" className={selected ? `${styles.card} ${styles.selected}` : styles.card} aria-pressed={selected ?? undefined} onClick={onClick}>
+      <button
+        ref={ref}
+        type="button"
+        className={selected ? `${styles.card} ${styles.selected}` : styles.card}
+        aria-pressed={selected ?? undefined}
+        aria-haspopup={popup}
+        aria-expanded={expanded}
+        onClick={onClick}
+      >
         <span className={styles.picture}>
           {image ? <img className={styles.image} src={image} alt="" /> : <span className={styles.letter}>{name.slice(0, 1)}</span>}
           {selected !== null && <span className={styles.check}>{selected && <Icon icon={Check} size="xs" />}</span>}

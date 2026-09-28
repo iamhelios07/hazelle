@@ -1,49 +1,76 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
+import { Kbd } from '../foundation/Kbd';
+import { keyCaps, type Chord } from '../foundation/keys';
+import { Row } from '../layout/Row';
+import { Stack } from '../layout/Stack';
 import styles from './Dialog.module.css';
+import { useFocusTrap, useLayer } from './layers';
 
-// A small window over the page. Esc or a press outside it closes it.
-export function Dialog({ title, note, onClose, children }: { title: string; note?: string; onClose: () => void; children: ReactNode }) {
+type Props = {
+  title: string;
+  note?: string;
+  onClose: () => void;
+  // Makes the body and its actions a form, so Enter in a field presses the submit button among the actions.
+  onSubmit?: () => void;
+  actions?: ReactNode;
+  // Today's two looks, kept apart until the design settles on one: 'full' stretches each action across the dialog,
+  // 12 under the body (a form's 저장); 'row' sets them side by side, 16 under it (a confirm's 취소 and its action).
+  actionsLayout?: 'full' | 'row';
+  children: ReactNode;
+};
+
+// A small window over the page. Esc or a press on the page around it closes it.
+export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout = 'row', children }: Props) {
+  const scrim = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    box.current?.querySelector<HTMLElement>('input, textarea, button')?.focus();
-    const key = (event: KeyboardEvent) => event.key === 'Escape' && close.current();
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('keydown', key);
-      opener?.focus();
-    };
-  }, []);
+  // Only the scrim itself is outside: the toast sits above the dialog and stays pressable while it is open.
+  useLayer(true, { outside: (target) => target === scrim.current, close: onClose });
+  const trap = useFocusTrap(box);
+  const body = actions ? (
+    <Stack gap={actionsLayout === 'full' ? 12 : 16}>
+      {children}
+      {actionsLayout === 'full' ? actions : <Row>{actions}</Row>}
+    </Stack>
+  ) : (
+    children
+  );
   return (
-    <div className={styles.scrim} onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div ref={box} className={styles.dialog} role="dialog" aria-modal="true" aria-label={title}>
+    <div ref={scrim} className={styles.scrim}>
+      <div ref={box} className={styles.dialog} role="dialog" aria-modal="true" aria-label={title} onKeyDown={trap}>
         <div className={styles.head}>
           <h2 className={styles.title}>{title}</h2>
           <IconButton icon={X} label="닫기" size="sm" onClick={onClose} />
         </div>
         {note && <p className={styles.note}>{note}</p>}
-        {children}
+        {onSubmit ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmit();
+            }}
+          >
+            {body}
+          </form>
+        ) : (
+          body
+        )}
       </div>
     </div>
   );
 }
 
 // Keyboard shortcuts, each with its keys drawn as key caps.
-export function Shortcuts({ items }: { items: { label: string; keys: string[] }[] }) {
+export function Shortcuts({ items }: { items: readonly { label: string; keys: readonly Chord[] }[] }) {
   return (
     <dl className={styles.shortcuts}>
       {items.map((item) => (
         <div key={item.label} className={styles.shortcut}>
           <dt className={styles.action}>{item.label}</dt>
           <dd className={styles.keys}>
-            {item.keys.map((key) => (
-              <kbd key={key} className={styles.key}>
-                {key}
-              </kbd>
+            {item.keys.flatMap(keyCaps).map((cap) => (
+              <Kbd key={cap}>{cap}</Kbd>
             ))}
           </dd>
         </div>

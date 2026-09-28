@@ -1,7 +1,7 @@
 import { MessageSquare, MoreHorizontal, PanelRight } from 'lucide-react';
 import { NameDialog } from '../common/NameDialog';
-import { SHORTCUT_LIST } from '../shortcuts';
-import { Avatar, ChatTitle, Dialog, Divider, IconButton, MenuItem, Popover, Shortcuts } from '../ui';
+import { SHORTCUTS } from '../shortcuts';
+import { Avatar, ChatTitle, Dialog, Divider, IconButton, Menu, MenuItem, Shortcuts } from '../ui';
 import { ChatModelMenu } from './ChatModelMenu';
 import type { OpenChat } from './useChat';
 
@@ -13,36 +13,23 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
 }
 
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
-  const { item, route, panel, pop, actions } = chat;
+  const { item, route, panel, modelMenu, actions } = chat;
   const label = 'kind' in route ? '모델 고르기' : route.model.name;
   const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
   return (
     <>
-      <ChatModelMenu open={pop === 'model'} onOpen={(open) => actions.menu(open ? 'model' : null)} current={current} label={label} onPick={actions.pickModel} />
+      <ChatModelMenu handle={modelMenu} current={current} label={label} onPick={actions.pickModel} />
       <IconButton icon={PanelRight} label="답장 정보" size="sm" expanded={panel.open} onClick={() => (panel.open ? actions.closeInfo() : actions.info(null))} />
-      <Popover
-        open={pop === 'menu'}
-        onClose={() => actions.menu(null)}
-        place="below-end"
-        label="더보기"
-        trigger={<IconButton icon={MoreHorizontal} label="더보기" size="sm" expanded={pop === 'menu'} onClick={() => actions.menu(pop === 'menu' ? null : 'menu')} />}
-      >
+      <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
         <MenuItem label="단축키" onClick={() => actions.openDialog('keys')} />
         {item && (
           <>
             <Divider variant="menu" />
-            <MenuItem
-              label="이 채팅 삭제"
-              tone="warn"
-              onClick={() => {
-                actions.menu(null);
-                void actions.drop();
-              }}
-            />
+            <MenuItem label="이 채팅 삭제" tone="warn" onClick={() => void actions.drop()} />
           </>
         )}
-      </Popover>
+      </Menu>
     </>
   );
 }
@@ -52,7 +39,7 @@ export function ChatDialogs({ chat }: { chat: OpenChat }) {
   if (dialog === 'keys') {
     return (
       <Dialog title="단축키" note="입력창에서 동작해요. 화살표는 입력창이 비어 있을 때만 써요." onClose={actions.closeDialog}>
-        <Shortcuts items={SHORTCUT_LIST} />
+        <Shortcuts items={Object.values(SHORTCUTS)} />
       </Dialog>
     );
   }

@@ -147,7 +147,7 @@
   --avatar-sm: 22px;
   --avatar-md: 32px;
   --avatar-lg: 72px;
-  --popover-width: 300px;
+  --menu-width: 300px;
   --dialog-width: 440px;
   --composer-max-height: 240px;
   /* Reading width (design F3, 읽기 설정): the story column, message gutters included. */
@@ -156,9 +156,9 @@
   --read-wide: 960px;
   --read-gutter: 40px;
 
-  /* The gap a popover keeps from the screen's sides, the phone gutter. Popover.tsx reads it too. */
-  --popover-edge: var(--space-16);
-  --popover-max-height: 70vh;
+  /* The gap a menu keeps from the screen's sides, the phone gutter. Menu.tsx reads it too. */
+  --menu-edge: var(--space-16);
+  --menu-max-height: 70vh;
   --chip-max-width: 240px;
   --chip-max-width-narrow: 132px;
   --edit-min-height: 96px;
@@ -184,9 +184,10 @@
   --ease-enter: ease-out;
   --ease-loop: ease-in-out;
 
-  /* Layers, bottom to top. The toast is above dialogs, so a failure shown while one is open can be read and pressed. */
+  /* Layers, bottom to top. The toast is above every layer but the file drop (a message's tools, menus, the side panel,
+     dialogs), so a failure shown while one is open can be read and pressed. */
   --layer-raised: 2;
-  --layer-popover: 20;
+  --layer-menu: 20;
   --layer-panel: 30;
   --layer-dialog: 40;
   --layer-toast: 45;

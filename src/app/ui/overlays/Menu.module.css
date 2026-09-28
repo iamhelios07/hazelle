@@ -3,14 +3,14 @@
   display: flex;
 }
 
-.popover {
+.menu {
   composes: dropIn from '../foundation/motion.module.css';
   position: absolute;
-  z-index: var(--layer-popover);
+  z-index: var(--layer-menu);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: var(--popover-max-height);
+  max-height: var(--menu-max-height);
   padding: var(--space-6);
   overflow-y: auto;
   border: var(--border-thin) solid var(--color-border);
@@ -21,11 +21,11 @@
 }
 
 .md {
-  width: var(--popover-width);
+  width: var(--menu-width);
 }
 
 .lg {
-  width: calc(var(--popover-width) + var(--space-20));
+  width: calc(var(--menu-width) + var(--space-20));
 }
 
 .below-start {
@@ -53,11 +53,11 @@
   left: calc(100% + var(--space-8));
 }
 
-/* A popover never runs off a phone screen. */
+/* A menu never runs off a phone screen. */
 @media (max-width: 959px) {
   .md,
   .lg {
-    width: min(var(--popover-width), calc(100vw - 2 * var(--popover-edge)));
+    width: min(var(--menu-width), calc(100vw - 2 * var(--menu-edge)));
   }
 }
 

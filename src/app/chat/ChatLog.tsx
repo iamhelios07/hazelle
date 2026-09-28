@@ -7,7 +7,7 @@ import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { messages, opening, last, card, shelf, route, scope, notUsed, busy, editing, pinned, actions } = chat;
+  const { messages, opening, last, card, shelf, route, scope, notUsed, busy, editing, pinned, modelMenu, actions } = chat;
   const rows: ReactNode[] = [];
   if (notUsed) {
     rows.push(
@@ -44,6 +44,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         busy={busy}
         editing={editing?.id === message.id ? editing.text : null}
         pinned={pinned === message.id}
+        modelMenu={modelMenu}
         actions={actions}
       />,
     );

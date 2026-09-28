@@ -1,4 +1,5 @@
+export { ConfirmDialog } from './ConfirmDialog';
 export { Dialog, Shortcuts } from './Dialog';
 export { DropOverlay } from './DropOverlay';
-export { MenuHeading, MenuItem, MenuNote, Popover } from './Popover';
+export { Menu, MenuHeading, MenuItem, MenuNote, useMenuHandle, useMenuOpener, type MenuHandle } from './Menu';
 export { Toast } from './Toast';

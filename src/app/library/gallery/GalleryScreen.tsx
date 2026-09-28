@@ -15,8 +15,6 @@ import { FolderTabs, type Filter, type Naming } from './FolderTabs';
 import { MoveBar } from './MoveBar';
 import { PurgeDialog } from './PurgeDialog';
 
-type Menu = 'move' | 'folder' | `card-${string}`;
-
 // 캐릭터 둘러보기 (design F6): every character as a face, filtered by folder, and where folders are
 // made, renamed, emptied and filled.
 export function GalleryScreen({ back }: { back: Back | null }) {
@@ -29,7 +27,6 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   // The characters picked to move, or null while not picking.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
-  const [menu, setMenu] = useState<Menu | null>(null);
   // The character 지금 지우기 asks about before it goes for good.
   const [purging, setPurging] = useState<CharacterShelf<ChatItem> | null>(null);
 
@@ -57,7 +54,6 @@ export function GalleryScreen({ back }: { back: Back | null }) {
 
   async function movePicked(to: string | null) {
     if (!picked) return;
-    setMenu(null);
     if (await move([...picked], to)) setPicked(null);
   }
 
@@ -68,8 +64,6 @@ export function GalleryScreen({ back }: { back: Back | null }) {
     else next.add(id);
     setPicked(next);
   };
-
-  const opener = (which: Menu) => (open: boolean) => setMenu(open ? which : null);
 
   return (
     <Screen width="wide" top={back && <NavBar title="캐릭터" onBack={() => navigate(back.to)} backLabel={back.label} />}>
@@ -85,7 +79,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
             </Button>
           )}
         </Row>
-        <FolderTabs filter={filter} onFilter={choose} folder={folder} menuOpen={menu === 'folder'} onMenu={opener('folder')} onName={setNaming} />
+        <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />
         {binned && <Text tone="muted">{`지운 캐릭터는 ${KEEP_DAYS}일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
         {shown.length > 0 ? (
           <CardGrid label="캐릭터">
@@ -97,8 +91,6 @@ export function GalleryScreen({ back }: { back: Back | null }) {
                 busy={characterActions.busy?.id === shelf.id ? characterActions.busy.label : null}
                 picked={picked && picked.has(shelf.id)}
                 onPick={() => toggle(shelf.id)}
-                menuOpen={menu === `card-${shelf.id}`}
-                onMenu={opener(`card-${shelf.id}`)}
                 actions={characterActions}
                 onPurge={() => setPurging(shelf)}
               />
@@ -108,7 +100,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
           <Text tone="muted">{words ? noResults(words) : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Text>
         )}
       </Stack>
-      {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={(to) => void movePicked(to)} menuOpen={menu === 'move'} onMenu={opener('move')} />}
+      {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={(to) => void movePicked(to)} />}
       {purging && (
         <PurgeDialog
           shelf={purging}

@@ -3,7 +3,7 @@ import type { ChatItem } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
 import { navigate } from '../../shell/router';
 import { enterShelf } from '../../shell/routes';
-import { FaceCard, IconButton, MenuItem, Popover, useWide } from '../../ui';
+import { FaceCard, IconButton, Menu, MenuItem, useMenuHandle, useMenuOpener, useWide } from '../../ui';
 import { binCardNote, cardNote } from '../shelf';
 import type { CharacterActions } from '../useCharacterActions';
 
@@ -16,49 +16,42 @@ type Props = {
   // Whether it is picked to move, or null while not picking.
   picked: boolean | null;
   onPick: () => void;
-  menuOpen: boolean;
-  onMenu: (open: boolean) => void;
   actions: CharacterActions;
   // 지금 지우기 asks first.
   onPurge: () => void;
 };
 
-export function CharacterCard({ shelf, binned, busy, picked, onPick, menuOpen, onMenu, actions, onPurge }: Props) {
+export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge }: Props) {
   const wide = useWide();
   const { name } = shelf.character.card;
-  const closing = (act: () => void) => () => {
-    onMenu(false);
-    act();
-  };
+  const handle = useMenuHandle();
+  const card = useMenuOpener(handle);
+  const shows = picked === null && busy === null;
   const menu = (
-    <Popover
-      open={menuOpen}
-      onClose={() => onMenu(false)}
-      place="below-end"
-      label={`${name} 메뉴`}
-      trigger={<IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" expanded={menuOpen} onClick={() => onMenu(!menuOpen)} />}
-    >
+    <Menu handle={handle} place="below-end" label={`${name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" {...opener} />}>
       {binned ? (
         <>
-          <MenuItem icon={RotateCcw} label="되살리기" onClick={closing(() => void actions.restore(shelf))} />
-          <MenuItem icon={Trash2} label="지금 지우기" tone="warn" onClick={closing(onPurge)} />
+          <MenuItem icon={RotateCcw} label="되살리기" onClick={() => void actions.restore(shelf)} />
+          <MenuItem icon={Trash2} label="지금 지우기" tone="warn" onClick={onPurge} />
         </>
       ) : (
         <>
-          <MenuItem icon={Copy} label="사본 만들기" onClick={closing(() => void actions.copy(shelf))} />
-          <MenuItem icon={Trash2} label="지우기" tone="warn" onClick={closing(() => void actions.remove(shelf))} />
+          <MenuItem icon={Copy} label="사본 만들기" onClick={() => void actions.copy(shelf)} />
+          <MenuItem icon={Trash2} label="지우기" tone="warn" onClick={() => void actions.remove(shelf)} />
         </>
       )}
-    </Popover>
+    </Menu>
   );
+  // A binned card being removed for good has no menu to open.
+  const press = picked !== null ? { onClick: onPick } : binned ? (shows ? card : { onClick: () => {} }) : { onClick: () => navigate(enterShelf(shelf, wide)) };
   return (
     <FaceCard
       image={shelf.face}
       name={name}
       note={busy ?? (binned ? binCardNote(shelf) : cardNote(shelf))}
       selected={picked}
-      onClick={() => (picked !== null ? onPick() : binned ? onMenu(true) : navigate(enterShelf(shelf, wide)))}
-      menu={picked !== null || busy !== null ? undefined : menu}
+      menu={shows ? menu : undefined}
+      {...press}
     />
   );
 }

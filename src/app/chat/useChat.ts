@@ -12,6 +12,7 @@ import { describeUnused } from '../common/unused';
 import { useLoreCount, useSession, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
+import { useMenuHandle } from '../ui';
 import { useDraft } from './useDraft';
 import { useFollow } from './useFollow';
 
@@ -56,8 +57,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
 
   const draft = useDraft(id, chat.character);
   const { follow: toBottom, ...scroll } = useFollow(messages.length, streaming);
-  const [pop, setPop] = useState<'model' | 'menu' | null>(null);
   const [dialog, setDialog] = useState<'keys' | 'rename' | null>(null);
+  const modelMenu = useMenuHandle();
   const [panel, setPanel] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
@@ -195,8 +196,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     editing,
     pinned,
     panel,
-    pop,
     dialog,
+    modelMenu,
     draft,
     scroll,
     actions: {
@@ -214,11 +215,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       follow,
       info: (reply: string | null) => setPanel({ open: true, id: reply }),
       closeInfo: () => setPanel({ open: false, id: null }),
-      menu: setPop,
-      openDialog: (which: 'keys' | 'rename') => {
-        setPop(null);
-        setDialog(which);
-      },
+      openDialog: (which: 'keys' | 'rename') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
       rename,

@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { shown } from '../../model/chat';
-import { hints, pressed, pressedKey, SHORTCUTS, titled } from '../shortcuts';
-import { Button, Callout, Composer, SendButton, useWide } from '../ui';
+import { hints, SHORTCUTS, titled } from '../shortcuts';
+import { Button, Callout, Composer, pressed, pressedKey, SendButton, useWide } from '../ui';
 import type { OpenChat } from './useChat';
 
 export function ChatComposer({ chat }: { chat: OpenChat }) {
@@ -11,19 +11,19 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
   const input = useRef<HTMLTextAreaElement>(null);
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (pressed(event, SHORTCUTS.send)) {
+    if (pressed(event, SHORTCUTS.send.keys)) {
       event.preventDefault();
       void actions.send();
       return;
     }
-    if (streaming && pressed(event, SHORTCUTS.stop)) {
+    if (streaming && pressed(event, SHORTCUTS.stop.keys)) {
       event.preventDefault();
       actions.stop();
       return;
     }
     if (draft.text !== '' || busy) return;
-    const step = pressedKey(event, SHORTCUTS.swipe);
-    if (pressed(event, SHORTCUTS.editLast)) {
+    const step = pressedKey(event, SHORTCUTS.swipe.keys);
+    if (pressed(event, SHORTCUTS.editLast.keys)) {
       const mine = messages.findLast((message) => message.role === 'user');
       if (mine) {
         event.preventDefault();

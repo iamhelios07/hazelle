@@ -1,33 +1,18 @@
 import { Lock, LogOut, Plug, Settings } from 'lucide-react';
-import { useState } from 'react';
 import { useAccount, useSession } from '../../session';
 import { useToast } from '../../toast';
-import { AccountRow, Avatar, IconButton, MenuItem, NavRow, Popover } from '../../ui';
+import { AccountRow, Avatar, IconButton, Menu, MenuItem, NavRow } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { connectionList } from '../routes';
 
 export function AccountMenu({ beside }: { beside: boolean }) {
   const { onLock, onLogout } = useAccount();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
   return (
-    <Popover
-      open={open}
-      onClose={() => setOpen(false)}
-      place={beside ? 'beside' : 'above-start'}
-      label="계정"
-      trigger={<IconButton icon={Settings} label="계정" size="sm" expanded={open} onClick={() => setOpen(!open)} />}
-    >
+    <Menu place={beside ? 'beside' : 'above-start'} label="계정" trigger={(opener) => <IconButton icon={Settings} label="계정" size="sm" {...opener} />}>
       <MenuItem icon={Lock} label="잠그기" onClick={onLock} />
-      <MenuItem
-        icon={LogOut}
-        label="로그아웃"
-        onClick={() => {
-          setOpen(false);
-          void onLogout().then((failure) => failure && toast.show(failure));
-        }}
-      />
-    </Popover>
+      <MenuItem icon={LogOut} label="로그아웃" onClick={() => void onLogout().then((failure) => failure && toast.show(failure))} />
+    </Menu>
   );
 }
 

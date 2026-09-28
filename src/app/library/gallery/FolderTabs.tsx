@@ -1,7 +1,7 @@
 import { FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { holds, type FolderTree } from '../../../model/library';
 import { useLibrary } from '../../session';
-import { IconButton, MenuItem, Popover, Row, Stack, Tab, Tabs } from '../../ui';
+import { IconButton, Menu, MenuItem, Row, Stack, Tab, Tabs } from '../../ui';
 import { useFolderActions } from '../useFolderActions';
 
 // 'all', 'loose' (in no folder), 'deleted' (지운 캐릭터), or a folder's id.
@@ -14,12 +14,10 @@ type Props = {
   onFilter: (filter: Filter) => void;
   // The folder the filter picks, if it picks one.
   folder: FolderTree | null;
-  menuOpen: boolean;
-  onMenu: (open: boolean) => void;
   onName: (naming: Naming) => void;
 };
 
-export function FolderTabs({ filter, onFilter, folder, menuOpen, onMenu, onName }: Props) {
+export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
   const { characters, folders, deleted } = useLibrary();
   const { remove } = useFolderActions();
   // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
@@ -28,15 +26,9 @@ export function FolderTabs({ filter, onFilter, folder, menuOpen, onMenu, onName 
   const count = (candidate: FolderTree) => characters.filter(({ character }) => holds(candidate, character)).length;
 
   async function drop(target: FolderTree) {
-    onMenu(false);
     const removed = await remove(target);
     if (removed) onFilter(removed.up?.id ?? 'all');
   }
-
-  const name = (naming: Naming) => {
-    onMenu(false);
-    onName(naming);
-  };
 
   return (
     <Stack gap={12}>
@@ -51,17 +43,11 @@ export function FolderTabs({ filter, onFilter, folder, menuOpen, onMenu, onName 
         </Tabs>
         {!binned && <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => onName({ id: null, name: '' })} />}
         {folder && (
-          <Popover
-            open={menuOpen}
-            onClose={() => onMenu(false)}
-            place="below-end"
-            label={`${folder.value.name} 폴더`}
-            trigger={<IconButton icon={MoreHorizontal} label="폴더 관리" size="sm" expanded={menuOpen} onClick={() => onMenu(!menuOpen)} />}
-          >
-            <MenuItem icon={Pencil} label="이름 바꾸기" onClick={() => name({ id: folder.id, name: folder.value.name })} />
-            {folder === top && <MenuItem icon={SubfolderIcon} label="안에 폴더 만들기" onClick={() => name({ id: null, name: '', parent: folder })} />}
+          <Menu place="below-end" label={`${folder.value.name} 폴더`} trigger={(opener) => <IconButton icon={MoreHorizontal} label="폴더 관리" size="sm" {...opener} />}>
+            <MenuItem icon={Pencil} label="이름 바꾸기" onClick={() => onName({ id: folder.id, name: folder.value.name })} />
+            {folder === top && <MenuItem icon={SubfolderIcon} label="안에 폴더 만들기" onClick={() => onName({ id: null, name: '', parent: folder })} />}
             <MenuItem icon={Trash2} label="폴더 지우기" tone="warn" onClick={() => void drop(folder)} />
-          </Popover>
+          </Menu>
         )}
       </Row>
       {top && top.children.length > 0 && (

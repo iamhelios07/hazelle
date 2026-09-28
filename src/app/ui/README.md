@@ -12,6 +12,8 @@ and only this folder styles elements.**
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
 - `foundation/motion.module.css` holds every keyframe, and `foundation/a11y.module.css` the
   screen-reader-only box and the one-line ellipsis. Components take them with `composes`.
+- `overlays/layers.ts` is the only document listener for keys and presses. Menus and dialogs join
+  its stack with `useLayer`, and Esc or a press outside reaches the newest one only.
 - Each component is a `.tsx` named after its main export, with its own `.module.css`, in one of the
   folders below. Each folder has an `index.ts`, and `index.ts` here re-exports them all. Inside the
   kit, files import each other by path, never through an index.
@@ -33,10 +35,12 @@ and only this folder styles elements.**
 | foundation | — | `motion.module.css` | Every animation: fade, rise, drop, spin, pulse, blink, waiting dots |
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
 | foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`) | — | Every breakpoint and media query |
+| foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
 | foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |
 | foundation | `Brand` | `Brand.module.css` | The wordmark |
 | foundation | `Divider` | `Divider.module.css` | Lines between groups: the story's labeled line, and the menu, tools and rail lines |
 | foundation | `Icon` | `Icon.module.css` | Icon sizes and stroke |
+| foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag |
 | foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
 | layout | `ChatFrame` (`ChatTitle`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title |
@@ -71,10 +75,12 @@ and only this folder styles elements.**
 | collections | `SideNote` | `SideNote.module.css` | A line where the sidebar's rows would be |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
-| overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page; key caps |
+| overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap |
+| overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
+| overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
-| overlays | `Popover` (`MenuItem`, `MenuHeading`, `MenuNote`) | `Popover.module.css` | Menus and small panels opened from a button |
-| overlays | `Toast` | `Toast.module.css` | A short notice, above dialogs |
+| overlays | `Menu` (`MenuItem`, `MenuHeading`, `MenuNote`, `useMenuHandle`, `useMenuOpener`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu |
+| overlays | `Toast` | `Toast.module.css` | A short notice, above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
 | feedback | `Callout` | `Callout.module.css` | A warning or success note |
 | feedback | `CodeCard` | `CodeCard.module.css` | A code to copy, such as the recovery key |

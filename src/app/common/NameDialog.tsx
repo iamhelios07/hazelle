@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Dialog, Stack, TextField } from '../ui';
+import { Button, Dialog, TextField } from '../ui';
 
 type Props = { title: string; value: string; hint?: string; onSave: (name: string) => void; onClose: () => void };
 
@@ -7,20 +7,18 @@ type Props = { title: string; value: string; hint?: string; onSave: (name: strin
 export function NameDialog({ title, value, hint, onSave, onClose }: Props) {
   const [name, setName] = useState(value);
   return (
-    <Dialog title={title} onClose={onClose}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSave(name);
-        }}
-      >
-        <Stack gap={12}>
-          <TextField label="이름" value={name} onChange={setName} hint={hint} />
-          <Button type="submit" size="md">
-            저장
-          </Button>
-        </Stack>
-      </form>
+    <Dialog
+      title={title}
+      onClose={onClose}
+      onSubmit={() => onSave(name)}
+      actionsLayout="full"
+      actions={
+        <Button type="submit" size="md">
+          저장
+        </Button>
+      }
+    >
+      <TextField label="이름" value={name} onChange={setName} hint={hint} />
     </Dialog>
   );
 }
