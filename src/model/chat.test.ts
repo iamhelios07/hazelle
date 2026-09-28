@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatTitle, fold, history, recentModels, shown, type Entry, type Receipt } from './chat';
+import { chatItems, chatTitle, fold, history, recentModels, shown, type Entry, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -80,6 +80,20 @@ describe('chatTitle', () => {
     expect(chatTitle({ title: null, character: null, models: {} }, messages)).toBe('기숙사 첫날');
     expect(chatTitle({ title: '이름', character: null, models: {} }, messages)).toBe('이름');
     expect(chatTitle({ title: null, character: null, models: {} }, [])).toBe('새 채팅');
+  });
+});
+
+describe('chatItems', () => {
+  it('puts the chat written to last first, and a rename does not move it', () => {
+    const chat = (id: string, at: number, title: string | null = null): Stored<'chat'> => ({ id, kind: 'chat', parent: null, rev: at, value: { title, character: null, models: {} } });
+    const written = (at: number): Stored<'entry'> => ({ ...user(`u${at}`, '안녕'), rev: at });
+    const entries: Record<string, Stored<'entry'>[]> = { a: [written(5)], renamed: [written(3)], empty: [] };
+    const items = chatItems([chat('a', 1), chat('renamed', 10, '새 이름'), chat('empty', 7)], (id) => entries[id]!);
+    expect(items.map((item) => [item.id, item.order])).toEqual([
+      ['empty', 7],
+      ['a', 5],
+      ['renamed', 3],
+    ]);
   });
 });
 

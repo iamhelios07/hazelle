@@ -1,8 +1,9 @@
 import { ChevronLeft, Import, LayoutGrid, Lock, LogOut, MessageSquare, Plug, Plus, Settings } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import type { ChatItem } from '../../model/chat';
 import { holds, shownFolders, type FolderTree, type Shelf } from '../../model/library';
 import { navigate, usePath } from '../router';
-import { useLibrary, useTurn, type ChatItem } from '../store';
+import { useAccount, useLibrary, useTurn } from '../session';
 import { useToast } from '../toast';
 import {
   AccountRow,
@@ -55,15 +56,13 @@ type Props = {
   page: boolean;
   collapsed: boolean;
   onCollapse: (collapsed: boolean) => void;
-  username: string;
-  onLock: () => void;
-  onLogout: () => Promise<string | null>;
 };
 
 // Characters first (design F6). Inside a character, the list is its chats, and "모든 캐릭터" goes back
 // up without leaving the open chat.
-export function LibrarySidebar({ page, collapsed, onCollapse, username, onLock, onLogout }: Props) {
+export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { characters, none, folders } = useLibrary();
+  const { username, onLock, onLogout } = useAccount();
   const turn = useTurn();
   const path = usePath();
   const wide = useWide();

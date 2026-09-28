@@ -1,0 +1,84 @@
+import { chatItems, type ChatItem } from '../model/chat';
+import type { Stored } from '../model/kinds';
+import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
+import { SETTINGS_ID, type Settings } from '../model/settings';
+import type { VaultKey } from '../vault/keys';
+import { api, type ApiResult } from './api';
+import { Catalogs } from './catalog';
+import { Credentials } from './credential';
+import { Files } from './files';
+import { purgeExpired } from './library';
+import { keepSynced, ObjectStore } from './store';
+import { Talk } from './talk';
+
+export type Views = {
+  chats: ChatItem[];
+  chatById: ReadonlyMap<string, ChatItem>;
+  // The characters, each with its chats, most recent first, and the folders by name (design F6).
+  library: { characters: CharacterShelf<ChatItem>[]; none: Shelf<ChatItem>; deleted: CharacterShelf<ChatItem>[]; folders: FolderTree[] };
+  // The characters not in 지운 캐릭터.
+  characterById: ReadonlyMap<string, CharacterShelf<ChatItem>>;
+  connections: Stored<'connection'>[];
+  settings: Settings;
+  unreadable: number;
+};
+
+export type Session = {
+  store: ObjectStore;
+  files: Files;
+  talk: Talk;
+  credentials: Credentials;
+  catalogs: Catalogs;
+  // The same object until the store's version changes, so useSyncExternalStore can read it directly.
+  views: () => Views;
+  // Stops sync, the reply and the background work, and drops the tokens and model lists. Every way out
+  // of an open vault (잠그기, 로그아웃) unmounts app/Workspace, which calls it.
+  close: () => void;
+};
+
+// Pulls once before the first screen, then keeps the store in sync while the session is open. An open
+// given up while it pulls (signal) starts nothing.
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal): Promise<ApiResult<Session>> {
+  const store = await ObjectStore.open(accountId, vaultKey, api);
+  const pulled = await store.pull();
+  if (pulled) return pulled;
+  const files = await Files.open(accountId, vaultKey, api);
+  if (signal.aborted) return { ok: false, error: 'stopped' };
+
+  const credentials = new Credentials();
+  const catalogs = new Catalogs(credentials);
+  const talk = new Talk(store, username, credentials);
+  const stopSync = keepSynced(store);
+  const closing = new AbortController();
+  void purgeExpired(store, files, Date.now(), closing.signal);
+
+  let cached: { version: number; views: Views } | null = null;
+  const views = () => {
+    const version = store.snapshot();
+    if (cached?.version !== version) cached = { version, views: derive(store) };
+    return cached.views;
+  };
+  const close = () => {
+    closing.abort();
+    stopSync();
+    talk.close();
+    catalogs.close();
+    credentials.close();
+  };
+  return { ok: true, data: { store, files, talk, credentials, catalogs, views, close } };
+}
+
+function derive(store: ObjectStore): Views {
+  const chats = chatItems(store.list('chat'), (chat) => store.children('entry', chat));
+  const shelves = shelve(store.list('character'), store.list('avatar'), chats);
+  return {
+    chats,
+    chatById: new Map(chats.map((item) => [item.id, item])),
+    library: { ...shelves, folders: nest(store.list('folder')) },
+    characterById: new Map(shelves.characters.map((shelf) => [shelf.id, shelf])),
+    connections: store.list('connection'),
+    // Until something is saved, nothing is assigned: an empty layer, not a guessed default.
+    settings: store.get('settings', SETTINGS_ID)?.value ?? { models: {} },
+    unreadable: store.unreadable(),
+  };
+}

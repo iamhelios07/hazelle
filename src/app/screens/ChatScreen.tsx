@@ -5,7 +5,7 @@ import { shown, type Chat, type Message } from '../../model/chat';
 import { fillNames, unused } from '../../engine/prompt';
 import { addEntry, addGreeting, chatModel, editMessage, withTurn, type TalkFailure } from '../../runtime/talk';
 import { navigate } from '../router';
-import { useChats, useLibrary, useLoreCount, useStore, useTalk, useTurn } from '../store';
+import { useAccount, useCharacter, useChat, useLoreCount, useStore, useTalk, useTurn } from '../session';
 import { ToastSlot, useToast } from '../toast';
 import {
   Avatar,
@@ -52,19 +52,18 @@ const SHORTCUTS = [
 type Shown = Message & { live: string | null };
 
 // design F3. id is null for a new chat, which is saved with its first message.
-export function ChatScreen({ id, character, username }: { id: string | null; character: string | null; username: string }) {
+export function ChatScreen({ id, character }: { id: string | null; character: string | null }) {
   const store = useStore();
   const talk = useTalk();
   const turn = useTurn();
-  const chats = useChats();
+  const { username } = useAccount();
   const wide = useWide();
   const toast = useToast();
-  const { characters } = useLibrary();
-  const item = id === null ? null : (chats.find((chat) => chat.id === id) ?? null);
+  const item = useChat(id);
   const [draftModels, setDraftModels] = useState<Assignment>({});
   const chat: Chat = item?.chat ?? { title: null, character, models: draftModels };
   const route = chatModel(store, chat);
-  const shelf = characters.find((candidate) => candidate.id === chat.character) ?? null;
+  const shelf = useCharacter(chat.character);
   const card = shelf?.character.card ?? null;
   const lore = useLoreCount(chat.character);
   const [greeting, setGreeting] = useState(0);
@@ -350,7 +349,6 @@ export function ChatScreen({ id, character, username }: { id: string | null; cha
         message={message}
         isLast={index === messages.length - 1}
         beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
-        username={username}
         character={card && { name: card.nickname || card.name, image: shelf!.face }}
         modelName={'kind' in route ? null : route.model.name}
         opening={message === opening}

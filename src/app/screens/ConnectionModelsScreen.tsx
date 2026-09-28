@@ -1,10 +1,10 @@
 import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Model } from '../../connectors/types';
-import { loadCatalog, type CatalogResult } from '../../runtime/catalog';
+import type { CatalogResult } from '../../runtime/catalog';
 import { reportsMeters } from '../../runtime/meters';
 import { navigate } from '../router';
-import { useConnection, useStore } from '../store';
+import { useConnection, useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, IconButton, List, ListItem, NavBar, Screen, SearchField, Stack, Text } from '../ui';
 import { ConnectionMeters } from './ConnectionMeters';
@@ -26,7 +26,7 @@ function tags(model: Model): string[] {
 }
 
 export function ConnectionModelsScreen({ id }: { id: string }) {
-  const store = useStore();
+  const { store, catalogs } = useSession();
   const toast = useToast();
   const stored = useConnection(id);
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
@@ -44,7 +44,7 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
     if (!connection) return;
     let current = true;
     setCatalog(null);
-    void loadCatalog(connection, { fresh: attempt > 0 }).then((result) => current && setCatalog(result));
+    void catalogs.load(connection, { fresh: attempt > 0 }).then((result) => current && setCatalog(result));
     return () => {
       current = false;
     };

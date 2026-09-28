@@ -1,6 +1,7 @@
 import { Bot, Copy, Info, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { shown, type Message } from '../../model/chat';
+import { useAccount } from '../session';
 import { Avatar, Button, EditBox, Failure, Marker, Message as Row, Prose, Switcher, Tool, ToolDivider, Waiting } from '../ui';
 import { describeReplyError } from './failure';
 import { timeOfDay } from './time';
@@ -12,7 +13,6 @@ type Props = {
   isLast: boolean;
   // The user's message right before the last reply, which 저장하고 답장 다시 받기 answers again.
   beforeLastReply: boolean;
-  username: string;
   // Who replies: the chat's character, or with none, the model named on each reply.
   character: { name: string; image: string | null } | null;
   // The chat's model, naming a reply still being written.
@@ -41,7 +41,8 @@ const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼
 
 // One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
-  const { message, isLast, beforeLastReply, username, character, modelName, opening, busy, editing, pinned, onTap, onEdit, onSaveEdit, onSwipe } = props;
+  const { message, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, onTap, onEdit, onSaveEdit, onSwipe } = props;
+  const { username } = useAccount();
   const version = shown(message);
   const receipt = version.receipt;
   const mine = message.role === 'user';

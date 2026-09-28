@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect } from 'react';
 import { shown, type Message, type Receipt } from '../../model/chat';
-import { useTalk } from '../store';
+import { useTalk } from '../session';
 import { Breakdown, Callout, Facts, IconButton, PanelSection, SidePanel, Text } from '../ui';
 import { describeReplyError } from './failure';
 import { cost, seconds, speed, tokens, UNKNOWN } from './receipt';

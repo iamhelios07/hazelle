@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { fitsRole, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
 import { navigate } from '../router';
-import { useChats, useConnections } from '../store';
+import { useChats, useConnections } from '../session';
 import { ChipButton, MenuDivider, MenuHeading, MenuItem, MenuNote, Popover, SearchField } from '../ui';
 
 type Props = {

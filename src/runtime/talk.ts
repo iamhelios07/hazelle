@@ -5,6 +5,7 @@ import type { Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure } from './api';
 import { settleCost } from './cost';
+import type { Credentials } from './credential';
 import { generate, type Reply } from './generate';
 import { cardPrompt } from '../engine/prompt';
 import type { ObjectStore } from './store';
@@ -96,6 +97,7 @@ export class Talk {
   constructor(
     private readonly store: ObjectStore,
     private readonly username: string,
+    private readonly credentials: Credentials,
   ) {}
 
   readonly subscribe = (listener: () => void) => {
@@ -185,6 +187,7 @@ export class Talk {
     const said = [...history(before), ...(user ? [{ role: 'user' as const, content: user.text }] : [])];
     const character = stored.value.character === null ? null : this.store.get('character', stored.value.character);
     const replying = generate({
+      credentials: this.credentials,
       connection: route.connection.value,
       model: route.model,
       messages: character ? cardPrompt(character.value.card, this.username, said) : said,

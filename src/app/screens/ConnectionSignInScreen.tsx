@@ -4,7 +4,7 @@ import type { DeviceCode } from '../../connectors/device-code';
 import type { Connection, ConnectionType, SignIn } from '../../connectors/types';
 import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
 import { navigate } from '../router';
-import { useStore } from '../store';
+import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, CodeCard, Intro, NavBar, Screen, Text } from '../ui';
 import { connect } from './connect';
@@ -15,7 +15,7 @@ type Stage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step:
 // F5 for a type connected by signing in: the provider's own site takes a short code, and this screen
 // waits for the approval, then checks the model list and saves the connection, as a pasted key does.
 export function ConnectionSignInScreen({ type, signIn }: { type: ConnectionType; signIn: SignIn }) {
-  const store = useStore();
+  const session = useSession();
   const toast = useToast();
   const [stage, setStage] = useState<Stage>({ step: 'starting' });
   const [attempt, setAttempt] = useState(0);
@@ -42,11 +42,11 @@ export function ConnectionSignInScreen({ type, signIn }: { type: ConnectionType;
         secret: approved.secret,
         starred: [],
       };
-      const failure = await connect(store, connection, signal);
+      const failure = await connect(session, connection, signal);
       if (failure) fail(failure);
     })();
     return () => abort.abort();
-  }, [type, signIn, store, attempt]);
+  }, [type, signIn, session, attempt]);
 
   // The copy starts before the new tab takes focus, which the clipboard needs.
   function openSite(code: DeviceCode) {

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { navigate, usePath } from '../router';
-import { useConnections, useStore } from '../store';
+import { useConnections, useSession } from '../session';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
 import { connect } from './connect';
 
@@ -16,7 +16,7 @@ const GROUPS: Record<ConnectionType['group'], string> = {
 // F5: pick a provider from the list, or paste its key or address into the one field on top. What the
 // list does not hold goes through 직접 연결.
 export function ConnectionAddScreen() {
-  const store = useStore();
+  const session = useSession();
   const connections = useConnections();
   const path = usePath();
   const [query, setQuery] = useState('');
@@ -31,7 +31,7 @@ export function ConnectionAddScreen() {
   async function connectKey(type: ConnectionType, secret: string) {
     setBusy(true);
     setMessage(null);
-    const failure = await connect(store, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
+    const failure = await connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
     setBusy(false);
     setMessage(failure);
   }

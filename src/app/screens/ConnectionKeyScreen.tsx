@@ -2,13 +2,13 @@ import { useState, type FormEvent } from 'react';
 import { detect } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { navigate } from '../router';
-import { useStore } from '../store';
+import { useSession } from '../session';
 import { Button, Callout, Intro, Link, NavBar, Screen, Stack, Text, TextField } from '../ui';
 import { connect } from './connect';
 
 // F5 for a provider picked from the list: its address is known, so only the key is asked.
 export function ConnectionKeyScreen({ type }: { type: ConnectionType }) {
-  const store = useStore();
+  const session = useSession();
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export function ConnectionKeyScreen({ type }: { type: ConnectionType }) {
     if (!secret) return;
     setBusy(true);
     setMessage(null);
-    const failure = await connect(store, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
+    const failure = await connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
     setBusy(false);
     setMessage(failure);
   }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Connection, Model } from '../connectors/types';
-import { forgetCredentials } from './credential';
+import { Credentials } from './credential';
 import { generate } from './generate';
 import { stubRelay, upstream } from './testing';
 
@@ -9,9 +9,10 @@ const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUr
 
 const answer = (status: number, body: string, headers: Record<string, string>) => stubRelay(() => new Response(body, { status, headers }));
 
-async function run(connection = openRouter, target = model) {
+async function run(connection = openRouter, target = model, credentials = new Credentials()) {
   const texts: string[] = [];
   const reply = await generate({
+    credentials,
     connection,
     model: target,
     messages: [{ role: 'user', content: '안녕' }],
@@ -68,20 +69,19 @@ describe('a connection that trades its key for a token', () => {
     return () => log.map((call) => call.sent);
   }
 
-  afterEach(() => forgetCredentials());
-
   it('sends the traded token, and trades again only when it nears its end', async () => {
     const sent = copilotApi(1800);
-    expect((await run(copilot, gpt)).text).toBe('네');
-    await run(copilot, gpt);
+    const credentials = new Credentials();
+    expect((await run(copilot, gpt, credentials)).text).toBe('네');
+    await run(copilot, gpt, credentials);
     expect(sent().map((call) => call.url)).toEqual([EXCHANGE, CHAT, CHAT]);
     expect(sent()[0]!.headers.authorization).toBe('Bearer gho_x');
     expect(sent()[1]!.headers.authorization).toBe('Bearer tid');
 
-    forgetCredentials();
     const shortLived = copilotApi(30);
-    await run(copilot, gpt);
-    await run(copilot, gpt);
+    const fresh = new Credentials();
+    await run(copilot, gpt, fresh);
+    await run(copilot, gpt, fresh);
     expect(shortLived().map((call) => call.url)).toEqual([EXCHANGE, CHAT, EXCHANGE, CHAT]);
   });
 

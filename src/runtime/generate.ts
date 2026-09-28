@@ -1,7 +1,7 @@
 import { chatRequest, resolveConnection, resolveModel, withCredential, type Resolved } from '../connectors/registry';
 import { decodeStream, type Outcome } from '../connectors/stream';
 import { ConnectorError, type ChatMessage, type Connection, type HttpRequest, type Model, type Phase } from '../connectors/types';
-import { credentialFor, type CredentialFailure } from './credential';
+import type { CredentialFailure, Credentials } from './credential';
 import { relay } from './relay';
 
 export type ReplyError =
@@ -18,6 +18,7 @@ export type Reply = Omit<Outcome, 'error'> & {
 };
 
 export type GenerateInput = {
+  credentials: Credentials;
   connection: Connection;
   model: Model;
   messages: ChatMessage[];
@@ -26,7 +27,7 @@ export type GenerateInput = {
   onText: (phase: Phase, text: string) => void;
 };
 
-export async function generate({ connection, model, messages, maxTokens, signal, onText }: GenerateInput): Promise<Reply> {
+export async function generate({ credentials, connection, model, messages, maxTokens, signal, onText }: GenerateInput): Promise<Reply> {
   const started = performance.now();
   let firstText: number | null = null;
   const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
@@ -52,7 +53,7 @@ export async function generate({ connection, model, messages, maxTokens, signal,
 
   const failed = (failure: CredentialFailure) =>
     failure.kind === 'stopped' ? reply({ state: 'cut', cut: 'stopped', ...empty }, null) : reply({ state: 'failed', cut: null, ...empty }, failure);
-  const credential = await credentialFor(resolved, connection.secret, signal);
+  const credential = await credentials.get(resolved, connection.secret, signal);
   if (!credential.ok) return failed(credential.failure);
   const response = await relay(withCredential(route, request, credential.credential), signal);
   if (!(response instanceof Response)) return failed(response);

@@ -1,9 +1,10 @@
 import { Copy, FolderInput, FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiFailure } from '../../runtime/api';
+import type { ChatItem } from '../../model/chat';
 import { holds, KEEP_DELETED, shownFolders, type CharacterShelf, type FolderTree } from '../../model/library';
 import { navigate } from '../router';
-import { useLibrary, useStore, type ChatItem } from '../store';
+import { useLibrary, useStore } from '../session';
 import { useToast } from '../toast';
 import {
   Button,

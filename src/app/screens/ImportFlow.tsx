@@ -5,7 +5,7 @@ import type { Imported, ImportFailure, UnsupportedKind } from '../../engine/impo
 import { addCharacter } from '../../runtime/library';
 import { unused } from '../../engine/prompt';
 import { navigate } from '../router';
-import { useStore, useVault } from '../store';
+import { useFiles, useStore } from '../session';
 import { Button, Callout, Dialog, DropOverlay, Section, Stack, Text } from '../ui';
 import { describeFailure } from './failure';
 import { describeStep } from './saving';
@@ -71,7 +71,7 @@ async function thumbnail({ bytes, type }: { bytes: Uint8Array<ArrayBuffer>; type
 // says what came in, what did not, and what its chats do not use yet.
 export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
-  const vault = useVault();
+  const files = useFiles();
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -85,7 +85,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     const lore = parsed.card.lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : loreFolders[entry.folder]!.id }));
     const thumb = avatar ? await thumbnail(avatar).catch(() => null) : null;
     const picture = avatar && thumb !== null ? { ...avatar, thumb } : null;
-    const saved = await addCharacter(store, vault, { card, folder: null, loreFolders }, lore, picture, (step) => progress(describeStep(step)));
+    const saved = await addCharacter(store, files, { card, folder: null, loreFolders }, lore, picture, (step) => progress(describeStep(step)));
     if (!saved.ok) return { file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
     return { file: file.name, id: saved.data, imported: parsed.card, faceless: avatar !== null && thumb === null, lore: lore.length };
   }

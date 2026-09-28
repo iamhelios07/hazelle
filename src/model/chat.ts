@@ -137,6 +137,29 @@ export function preview(messages: Message[]): string {
   return last ? firstLine(shown(last).text) : '';
 }
 
+export type ChatItem = { id: string; chat: Chat; messages: Message[]; title: string; preview: string; at: number | null; order: number };
+
+// Every chat with its messages, the one written to last first. Renaming a chat or changing its model
+// does not move it.
+export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => Stored<'entry'>[]): ChatItem[] {
+  return chats
+    .map((chat) => {
+      const own = entriesOf(chat.id);
+      const messages = fold(own);
+      const latest = own.reduce<Stored<'entry'> | null>((last, entry) => (last && last.rev > entry.rev ? last : entry), null);
+      return {
+        id: chat.id,
+        chat: chat.value,
+        messages,
+        title: chatTitle(chat.value, messages),
+        preview: preview(messages),
+        at: latest?.value.at ?? null,
+        order: latest?.rev ?? chat.rev,
+      };
+    })
+    .sort((a, b) => b.order - a.order);
+}
+
 // Models used lately across all chats, newest first, for the model picker's 최근 (design F4).
 export function recentModels(chats: Message[][], limit: number): ModelRef[] {
   const used = chats

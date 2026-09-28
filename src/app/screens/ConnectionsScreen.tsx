@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { fitsRole, resolveRole, type ModelRef } from '../../connectors/assignment';
 import { resolveConnection } from '../../connectors/registry';
 import { navigate, usePath } from '../router';
-import { useConnections, useSettings, useStore, useUnreadable } from '../store';
+import { useConnections, useSettings, useStore, useUnreadable } from '../session';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, Section, Text } from '../ui';
 import { describeFailure } from './failure';
 

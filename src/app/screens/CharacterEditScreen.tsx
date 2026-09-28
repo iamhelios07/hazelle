@@ -2,7 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Card } from '../../engine/import/types';
 import { navigate } from '../router';
-import { useLibrary, useStore } from '../store';
+import { useCharacter, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, IconButton, NavBar, Screen, Section, Stack, Text, TextField, useWide } from '../ui';
 import { describeFailure } from './failure';
@@ -17,9 +17,8 @@ const STATUS: Record<Status, string> = { saving: '저장 중', saved: '저장됨
 // 캐릭터 편집 (design F6): the card's text, which its chats' prompt uses. Lorebook and regex scripts
 // are not edited here yet.
 export function CharacterEditScreen({ id }: { id: string }) {
-  const { characters } = useLibrary();
+  const shelf = useCharacter(id);
   const wide = useWide();
-  const shelf = characters.find((candidate) => candidate.id === id);
   if (!shelf) {
     return (
       <Screen top={<NavBar title="캐릭터 편집" onBack={() => navigate('/')} backLabel="목록으로" />}>

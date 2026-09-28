@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { detect, GENERIC } from '../../connectors/registry';
 import type { Connection, Protocol } from '../../connectors/types';
 import { navigate } from '../router';
-import { useStore } from '../store';
+import { useSession } from '../session';
 import { Button, Callout, ChoiceGroup, Intro, NavBar, Screen, Stack, Text, TextField } from '../ui';
 import { connect } from './connect';
 
@@ -19,7 +19,7 @@ const PROBLEMS = {
 // F5 for what the list does not hold. An address the list does know becomes that provider, so it
 // gets the provider's balance and costs however it was entered.
 export function ConnectionDirectScreen() {
-  const store = useStore();
+  const session = useSession();
   const [address, setAddress] = useState(() => new URLSearchParams(location.search).get('address') ?? '');
   const [protocol, setProtocol] = useState<Protocol | null>(null);
   const [key, setKey] = useState('');
@@ -40,7 +40,7 @@ export function ConnectionDirectScreen() {
     if (!draft) return;
     setBusy(true);
     setMessage(null);
-    const failure = await connect(store, draft);
+    const failure = await connect(session, draft);
     setBusy(false);
     setMessage(failure);
   }

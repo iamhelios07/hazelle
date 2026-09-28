@@ -4,7 +4,7 @@ import { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
 import { api } from './api';
-import type { OpenVault } from './blobs';
+import { Files } from './files';
 import { ObjectStore } from './store';
 
 type App = Awaited<ReturnType<typeof testApp>>;
@@ -18,6 +18,7 @@ let relay: Relay | null = null;
 // is the real server, in process, over an in-memory D1 and R2 (server/testing).
 function stubFetch() {
   vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+    if (init.signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
     if (url === '/api/relay') {
       if (!relay) throw new Error('This test gave the relay no answers.');
       const answer = relay(JSON.parse(init.body as string) as HttpRequest);
@@ -68,17 +69,18 @@ export function testServer() {
     async account() {
       const body = signupBody();
       server!.cookie = sessionCookie(await app.post('signup', body));
-      const vault: OpenVault = { accountId: body.accountId, vaultKey: randomBytes(32), request: api };
-      const open = (vaultKey: VaultKey = vault.vaultKey) => ObjectStore.open(vault.accountId, vaultKey, api);
+      const { accountId } = body;
+      const vaultKey = randomBytes(32);
+      const open = (key: VaultKey = vaultKey) => ObjectStore.open(accountId, key, api);
       // The sealed bytes R2 holds under an id.
       const blobs = {
         get: async (id: string) => {
-          const object = await app.env.BLOBS.get(`${vault.accountId}/${id}`);
+          const object = await app.env.BLOBS.get(`${accountId}/${id}`);
           return object && new Uint8Array(await object.arrayBuffer());
         },
-        put: (id: string, bytes: Uint8Array<ArrayBuffer>) => app.env.BLOBS.put(`${vault.accountId}/${id}`, bytes),
+        put: (id: string, bytes: Uint8Array<ArrayBuffer>) => app.env.BLOBS.put(`${accountId}/${id}`, bytes),
       };
-      return { vault, store: await open(), open, blobs };
+      return { accountId, vaultKey, store: await open(), files: await Files.open(accountId, vaultKey, api), open, blobs };
     },
   };
 }

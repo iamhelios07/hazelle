@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import type { ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { copyCharacter, purgeCharacter } from '../../runtime/library';
 import { navigate } from '../router';
-import { useStore, useVault, type ChatItem } from '../store';
+import { useFiles, useStore } from '../session';
 import { useToast } from '../toast';
 import { describeFailure } from './failure';
 import { describeStep } from './saving';
@@ -14,7 +15,7 @@ type Shelf = CharacterShelf<ChatItem>;
 // the character being copied or removed for good, and the step it is at.
 export function useCharacterActions() {
   const store = useStore();
-  const vault = useVault();
+  const files = useFiles();
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
 
@@ -32,7 +33,7 @@ export function useCharacterActions() {
 
   async function copy({ id, character }: Shelf) {
     setBusy({ id, label: '사본 만드는 중' });
-    const copied = await copyCharacter(store, vault, id, `${character.card.name} (사본)`, (step) => setBusy({ id, label: describeStep(step) }));
+    const copied = await copyCharacter(store, files, id, `${character.card.name} (사본)`, (step) => setBusy({ id, label: describeStep(step) }));
     setBusy(null);
     if (!copied.ok) return toast({ message: `사본을 만들지 못했어요. ${describeFailure(copied)}` });
     toast({ message: '사본을 만들었어요. 사본을 고쳐도 원본은 그대로예요.' });
@@ -56,7 +57,7 @@ export function useCharacterActions() {
 
   async function purge({ id, character }: Shelf) {
     setBusy({ id, label: '지우는 중' });
-    const removed = await purgeCharacter(store, vault, id, (done, total) => setBusy({ id, label: `지우는 중 · ${done} / ${total}` }));
+    const removed = await purgeCharacter(store, files, id, (done, total) => setBusy({ id, label: `지우는 중 · ${done} / ${total}` }));
     setBusy(null);
     toast({ message: removed.ok ? `‘${character.card.name}’ 캐릭터를 완전히 지웠어요.` : `다 지우지 못했어요. ${describeFailure(removed)}` });
   }

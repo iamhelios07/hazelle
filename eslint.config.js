@@ -12,7 +12,7 @@ const CSS_IMPORT = { regex: '\\.css$', message: 'Only src/app/ui imports CSS (sr
 // Matches the flat src/app/ui only: one level up from a file there is src/app.
 const APP_OUTSIDE_UI = {
   regex: '^\\.\\./(?!\\.\\.)',
-  message: 'src/app/ui imports nothing else from src/app, so a component never reaches the store, router, toasts or a screen (tech-spec §3).',
+  message: 'src/app/ui imports nothing else from src/app, so a component never reaches the session, router, toasts or a screen (tech-spec §3).',
 };
 const HEX_COLOR = {
   selector: 'Literal[value=/^#(?:[0-9a-fA-F]{3,4}){1,2}$/]',

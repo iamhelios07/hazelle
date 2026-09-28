@@ -1,6 +1,6 @@
 import { catalogRequest, parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
 import type { Connection, Model } from '../connectors/types';
-import { credentialFor, type CredentialFailure } from './credential';
+import type { CredentialFailure, Credentials } from './credential';
 import { relayJson } from './relay';
 
 export type CatalogFailure = CredentialFailure | { kind: 'refused'; code: string } | { kind: 'not-a-catalog' };
@@ -9,31 +9,36 @@ export type CatalogResult = { ok: true; models: Model[] } | { ok: false; failure
 // A model list stays in memory for five minutes per connection and key, so moving between screens
 // does not ask the provider again. A new key is a new entry.
 const TTL_MS = 5 * 60 * 1000;
-const cache = new Map<string, { at: number; result: Promise<CatalogResult> }>();
 
-export function loadCatalog(connection: Connection, { fresh = false } = {}): Promise<CatalogResult> {
-  const key = JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
-  const hit = cache.get(key);
-  if (hit && !fresh && performance.now() - hit.at < TTL_MS) return hit.result;
-  const result = fetchCatalog(connection);
-  cache.set(key, { at: performance.now(), result });
-  // A failure is not kept, so the next visit asks again.
-  void result.then((outcome) => outcome.ok || cache.delete(key));
-  return result;
-}
+// The model lists of one open vault. Cache keys hold API keys, so close() drops them (runtime/session).
+export class Catalogs {
+  private readonly cache = new Map<string, { at: number; result: Promise<CatalogResult> }>();
 
-async function fetchCatalog(connection: Connection): Promise<CatalogResult> {
-  const resolved = resolveConnection(connection);
-  if (!resolved) return { ok: false, failure: { kind: 'refused', code: 'unknown-connection-type' } };
-  const credential = await credentialFor(resolved, connection.secret);
-  if (!credential.ok) return credential;
-  const response = await relayJson(withCredential(resolved, catalogRequest(resolved), credential.credential));
-  if (!response.ok) return response;
-  const models = parseCatalog(resolved, response.data);
-  return models ? { ok: true, models } : { ok: false, failure: { kind: 'not-a-catalog' } };
-}
+  constructor(private readonly credentials: Credentials) {}
 
-// Cache keys hold API keys, so nothing is left behind once the vault closes.
-export function forgetCatalogs() {
-  cache.clear();
+  load(connection: Connection, { fresh = false } = {}): Promise<CatalogResult> {
+    const key = JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
+    const hit = this.cache.get(key);
+    if (hit && !fresh && performance.now() - hit.at < TTL_MS) return hit.result;
+    const result = this.fetch(connection);
+    this.cache.set(key, { at: performance.now(), result });
+    // A failure is not kept, so the next visit asks again.
+    void result.then((outcome) => outcome.ok || this.cache.delete(key));
+    return result;
+  }
+
+  close() {
+    this.cache.clear();
+  }
+
+  private async fetch(connection: Connection): Promise<CatalogResult> {
+    const resolved = resolveConnection(connection);
+    if (!resolved) return { ok: false, failure: { kind: 'refused', code: 'unknown-connection-type' } };
+    const credential = await this.credentials.get(resolved, connection.secret);
+    if (!credential.ok) return credential;
+    const response = await relayJson(withCredential(resolved, catalogRequest(resolved), credential.credential));
+    if (!response.ok) return response;
+    const models = parseCatalog(resolved, response.data);
+    return models ? { ok: true, models } : { ok: false, failure: { kind: 'not-a-catalog' } };
+  }
 }

@@ -1,6 +1,6 @@
 import { Import, MessageSquarePlus, Plug } from 'lucide-react';
 import { navigate } from '../router';
-import { useChats, useConnections } from '../store';
+import { useChats, useConnections } from '../session';
 import { useImport } from './ImportFlow';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
 

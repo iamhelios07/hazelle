@@ -1,7 +1,7 @@
 import { Copy, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
 import { unused } from '../../engine/prompt';
 import { navigate } from '../router';
-import { useLibrary, useLoreCount } from '../store';
+import { useCharacter, useLibrary, useLoreCount } from '../session';
 import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Stack, Tag, Text, useWide } from '../ui';
 import { useCharacterActions } from './characterActions';
 import { editPath, newChatPath, pagePath, shelfPath } from './shelves';
@@ -9,7 +9,9 @@ import { describeUnused } from './unused';
 
 // A character's own page beside its chats (design F6), or with id null, 캐릭터 없이.
 export function CharacterScreen({ id }: { id: string | null }) {
-  const { characters, deleted } = useLibrary();
+  const { deleted } = useLibrary();
+  const shelf = useCharacter(id);
+  const original = useCharacter(shelf?.character.origin?.id ?? null);
   const lore = useLoreCount(id);
   const { busy, copy, remove } = useCharacterActions();
   const wide = useWide();
@@ -28,7 +30,6 @@ export function CharacterScreen({ id }: { id: string | null }) {
     );
   }
 
-  const shelf = characters.find((candidate) => candidate.id === id);
   if (!shelf) {
     const inBin = deleted.some((candidate) => candidate.id === id);
     return (
@@ -40,7 +41,7 @@ export function CharacterScreen({ id }: { id: string | null }) {
 
   const { card, origin } = shelf.character;
   const notUsed = describeUnused(unused(card, lore));
-  const originHere = origin && characters.some((candidate) => candidate.id === origin.id);
+  const originHere = original !== null;
   const copying = busy?.id === shelf.id ? busy.label : null;
 
   return (
