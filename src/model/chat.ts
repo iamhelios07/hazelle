@@ -10,6 +10,10 @@ export type Chat = {
   character: string | null;
   // The 채팅 layer of the model assignment (design §4.1), written by the model button (F4).
   models: Assignment;
+  // The chat's own prompt, persona and 작가의 노트; each absent follows the default (design §4.2, §4.3).
+  prompt?: string;
+  persona?: string;
+  note?: string;
 };
 
 // What a reply's generation left behind (tech-spec §5). The raw request is never stored.

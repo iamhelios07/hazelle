@@ -1,6 +1,8 @@
 import type { Connection } from '../connectors/types';
 import type { Chat, Entry } from './chat';
 import type { Avatar, Character, Folder, Lore } from './library';
+import type { Persona } from './persona';
+import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
 
 // Every kind of stored object, with the value its sealed body holds (tech-spec §5, Object kinds).
@@ -13,6 +15,8 @@ export type Values = {
   entry: Entry;
   connection: Connection;
   settings: Settings;
+  prompt: Prompt;
+  persona: Persona;
 };
 export type Kind = keyof Values;
 
@@ -37,6 +41,8 @@ export const KINDS = {
   entry: { parent: 'chat', appendOnly: true },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
+  prompt: { parent: null },
+  persona: { parent: null },
 } as const satisfies Record<Kind, Rule> & { [K in Kind]: { owner?: { field: Link<K> } } };
 
 export type Singleton = { [K in Kind]: (typeof KINDS)[K] extends { id: string } ? K : never }[Kind];
