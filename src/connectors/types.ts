@@ -85,6 +85,11 @@ export type Codec = {
 export type ConnectionType = {
   id: string;
   label: string;
+  // Where it sits in the 연결 추가 list, and the line under its name there.
+  group: 'gateway' | 'maker' | 'subscription';
+  description: string;
+  // The provider's page for making an API key, linked from the key screen.
+  keyPage?: string;
   // Where the model list is, and how a model that names no protocol of its own is called.
   endpoint: Endpoint;
   // The base address of each other protocol its models may name.

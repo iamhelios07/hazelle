@@ -3,13 +3,10 @@ import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
 import { copilot } from './copilot';
 import { openRouter } from './openrouter';
-import { ConnectorError, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model, type SignIn } from './types';
+import { ConnectorError, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
 // Adding a provider means adding its connection type here (design §4). Nothing else names one.
-const BUILT_IN: ConnectionType[] = [openRouter, anthropic, copilot];
-
-// The types connected by signing in, each offered as its own button next to the key field (design F5).
-export const SIGN_IN_TYPES = BUILT_IN.filter((type): type is ConnectionType & { signIn: SignIn } => type.signIn !== undefined);
+export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, anthropic, copilot];
 
 // The type of a connection the user described by address and protocol.
 export const GENERIC = 'generic';
@@ -23,13 +20,18 @@ export type Resolved = { type: ConnectionType | null; endpoint: Endpoint; codec:
 // null for a type this version does not know, such as one saved by a newer version of the app.
 export function resolveConnection(connection: Connection): Resolved | null {
   if (connection.type === GENERIC) {
+    // An address saved before its provider joined the list is that provider now (design F5).
+    const claimed = connection.baseUrl && URL.canParse(connection.baseUrl) ? typeForHost(new URL(connection.baseUrl).hostname) : undefined;
+    if (claimed) return { type: claimed, endpoint: claimed.endpoint, codec: CODECS[claimed.endpoint.protocol]! };
     const codec = connection.protocol && CODECS[connection.protocol];
     if (!connection.baseUrl || !connection.protocol || !codec) return null;
     return { type: null, endpoint: { baseUrl: connection.baseUrl, protocol: connection.protocol }, codec };
   }
-  const type = BUILT_IN.find((candidate) => candidate.id === connection.type);
+  const type = CONNECTION_TYPES.find((candidate) => candidate.id === connection.type);
   return type ? { type, endpoint: type.endpoint, codec: CODECS[type.endpoint.protocol]! } : null;
 }
+
+const typeForHost = (hostname: string) => CONNECTION_TYPES.find((type) => type.detect?.host === hostname);
 
 // The address and codec one model is called through: the connection's own, or the route its type
 // gives for the protocol the model names.
@@ -72,13 +74,34 @@ export function detect(input: string): Detection | null {
   const baseUrl = normalizeBaseUrl(text);
   if (baseUrl) {
     const url = new URL(baseUrl);
-    const type = BUILT_IN.find((candidate) => candidate.detect?.host === url.hostname);
+    const type = typeForHost(url.hostname);
     if (type) return { kind: 'url', type };
     return { kind: 'generic-url', baseUrl, problem: url.protocol !== 'https:' ? 'not-https' : isLocal(url.hostname) ? 'local' : null };
   }
   if (/\s/.test(text)) return null;
-  const type = BUILT_IN.find((candidate) => candidate.detect?.key?.test(text));
+  const type = CONNECTION_TYPES.find((candidate) => candidate.detect?.key?.test(text));
   return type ? { kind: 'key', type, secret: text } : { kind: 'unknown-key', secret: text };
+}
+
+export type Search =
+  | { kind: 'key'; type: ConnectionType; secret: string }
+  | { kind: 'types'; types: readonly ConnectionType[] }
+  | { kind: 'address'; baseUrl: string }
+  | { kind: 'none' };
+
+// The 연결 추가 list's one field: a pasted key or address is recognized first, because detect reads
+// any single word as a key; only then is the text a name to look for. A key never shapes the result
+// beyond its type, so it is not echoed back.
+export function searchTypes(input: string): Search {
+  const text = input.trim();
+  if (!text) return { kind: 'types', types: CONNECTION_TYPES };
+  const detection = detect(text);
+  if (detection?.kind === 'key') return detection;
+  if (detection?.kind === 'url') return { kind: 'types', types: [detection.type] };
+  if (detection?.kind === 'generic-url') return { kind: 'address', baseUrl: detection.baseUrl };
+  const needle = text.toLowerCase();
+  const types = CONNECTION_TYPES.filter((type) => `${type.label} ${type.description}`.toLowerCase().includes(needle));
+  return types.length ? { kind: 'types', types } : { kind: 'none' };
 }
 
 // Accepts an address copied from a provider's docs, with or without an endpoint path on the end.

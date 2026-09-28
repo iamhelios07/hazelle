@@ -28,7 +28,7 @@ export function HomeScreen({ connectionCount, onConnections, onLock, onLogout, m
           pending="준비 중"
         />
         {connectionCount === 0 ? (
-          <ActionCard icon={Plug} title="연결 추가" description="API 키나 주소를 붙여 넣으면 어디인지 알아서 알아봐요" onClick={onConnections} />
+          <ActionCard icon={Plug} title="연결 추가" description="쓰는 곳을 고르고 API 키만 넣으면 돼요" onClick={onConnections} />
         ) : (
           <ActionCard icon={Plug} title="연결" description={`연결 ${connectionCount}개 · 모델 별표와 기본 모델, 시험해 보기`} onClick={onConnections} />
         )}

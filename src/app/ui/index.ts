@@ -10,6 +10,7 @@ export { FileButton } from './FileButton';
 export { Icon } from './Icon';
 export { IconButton } from './IconButton';
 export { Intro } from './Intro';
+export { Link } from './Link';
 export { List, ListItem } from './List';
 export { NavBar } from './NavBar';
 export { Reply } from './Reply';

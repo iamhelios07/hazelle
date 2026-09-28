@@ -2,24 +2,23 @@ import { ExternalLink, RotateCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DeviceCode } from '../../connectors/device-code';
 import type { Connection, ConnectionType, SignIn } from '../../connectors/types';
-import { loadCatalog } from '../../runtime/catalog';
 import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
 import { navigate } from '../router';
 import { useStore } from '../store';
 import { useToast } from '../toast';
 import { Button, Callout, CodeCard, Intro, NavBar, Screen, Text } from '../ui';
-import { describeCatalogFailure, describeFailure, describeSignInFailure } from './failure';
+import { connect } from './connect';
+import { describeSignInFailure } from './failure';
 
 type Stage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
 
 // F5 for a type connected by signing in: the provider's own site takes a short code, and this screen
 // waits for the approval, then checks the model list and saves the connection, as a pasted key does.
-export function ConnectionSignInScreen({ type }: { type: ConnectionType & { signIn: SignIn } }) {
+export function ConnectionSignInScreen({ type, signIn }: { type: ConnectionType; signIn: SignIn }) {
   const store = useStore();
   const toast = useToast();
   const [stage, setStage] = useState<Stage>({ step: 'starting' });
   const [attempt, setAttempt] = useState(0);
-  const { signIn } = type;
 
   useEffect(() => {
     const abort = new AbortController();
@@ -43,13 +42,8 @@ export function ConnectionSignInScreen({ type }: { type: ConnectionType & { sign
         secret: approved.secret,
         starred: [],
       };
-      const catalog = await loadCatalog(connection, { fresh: true });
-      if (signal.aborted) return;
-      if (!catalog.ok) return fail(describeCatalogFailure(catalog.failure));
-      const id = crypto.randomUUID();
-      const saved = await store.save<Connection>('connection', id, () => connection);
-      if (!saved.ok) return fail(describeFailure(saved));
-      navigate(`/connections/${id}`, { replace: true });
+      const failure = await connect(store, connection, signal);
+      if (failure) fail(failure);
     })();
     return () => abort.abort();
   }, [type, signIn, store, attempt]);

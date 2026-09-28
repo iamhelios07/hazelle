@@ -10,6 +10,9 @@ function modalities(value: unknown): Modality[] | null {
 export const openRouter: ConnectionType = {
   id: 'openrouter',
   label: 'OpenRouter',
+  group: 'gateway',
+  description: '여러 회사의 모델을 키 하나로 써요.',
+  keyPage: 'https://openrouter.ai/settings/keys',
   endpoint: { baseUrl: 'https://openrouter.ai/api/v1', protocol: 'chat-completions' },
   detect: { key: /^sk-or-/, host: 'openrouter.ai' },
 

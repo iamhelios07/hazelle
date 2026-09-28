@@ -2,7 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { copilot } from './copilot';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterModels from './fixtures/openrouter-models.json';
-import { catalogRequest, chatRequest, detect, normalizeBaseUrl, parseCatalog, resolveConnection, resolveModel, withCredential } from './registry';
+import {
+  catalogRequest,
+  chatRequest,
+  CONNECTION_TYPES,
+  detect,
+  normalizeBaseUrl,
+  parseCatalog,
+  resolveConnection,
+  resolveModel,
+  searchTypes,
+  withCredential,
+} from './registry';
 import { ConnectorError, type Connection, type Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}) =>
@@ -46,6 +57,31 @@ describe('detection', () => {
     expect(normalizeBaseUrl('https://api.anthropic.com/v1/messages')).toBe('https://api.anthropic.com/v1');
     expect(normalizeBaseUrl('https://example.com/openai/v1/models?x=1')).toBe('https://example.com/openai/v1');
     expect(normalizeBaseUrl('example.com')).toBeNull();
+  });
+});
+
+describe('the 연결 추가 list', () => {
+  const ids = (input: string) => {
+    const search = searchTypes(input);
+    return search.kind === 'types' ? search.types.map((type) => type.id) : search.kind;
+  };
+
+  it('reads a pasted key or address before taking the text as a name', () => {
+    expect(ids('')).toEqual(CONNECTION_TYPES.map((type) => type.id));
+    expect(searchTypes(' sk-or-v1-abc ')).toMatchObject({ kind: 'key', type: { id: 'openrouter' }, secret: 'sk-or-v1-abc' });
+    expect(ids('https://openrouter.ai/api/v1/chat/completions')).toEqual(['openrouter']);
+    expect(searchTypes('https://llm.example.com/v1/')).toEqual({ kind: 'address', baseUrl: 'https://llm.example.com/v1' });
+  });
+
+  it('finds a name in labels and descriptions, and says when nothing matches without guessing at keys', () => {
+    expect(ids('open')).toEqual(['openrouter']);
+    expect(ids('Claude')).toEqual(['anthropic', 'copilot']);
+    expect(ids('sk-1234')).toBe('none');
+  });
+
+  it('hands an address saved as a direct connection to the provider that later claims its host', () => {
+    const saved: Connection = { type: 'generic', label: 'openrouter.ai', baseUrl: 'https://openrouter.ai/api/v1', protocol: 'anthropic-messages', secret: 'k', starred: [] };
+    expect(resolveConnection(saved)).toMatchObject({ type: { id: 'openrouter' }, endpoint: { baseUrl: 'https://openrouter.ai/api/v1', protocol: 'chat-completions' } });
   });
 });
 
