@@ -8,3 +8,4 @@ dist/
 worker-configuration.d.ts
 .vitest/
 *.module.d.css.ts
+.claude/

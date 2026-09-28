@@ -14,7 +14,7 @@ const STYLE_PROPS = {
 };
 
 export default defineConfig([
-  globalIgnores(['dist/', '.wrangler/', 'worker-configuration.d.ts', '**/*.module.d.css.ts']),
+  globalIgnores(['dist/', '.wrangler/', '.claude/', 'worker-configuration.d.ts', '**/*.module.d.css.ts']),
   js.configs.recommended,
   tseslint.configs.recommended,
   {
