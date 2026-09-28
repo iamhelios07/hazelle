@@ -2,6 +2,7 @@ import type { Outcome } from '../../connectors/stream';
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
 import type { ReplyError } from '../../runtime/generate';
+import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
 
 const MESSAGES: Record<string, string> = {
@@ -95,6 +96,11 @@ export function describeSignInFailure(failure: SignInFailure, site: string): str
 
 export function describeCatalogFailure(failure: CatalogFailure): string {
   if (failure.kind === 'not-a-catalog') return '모델 목록이 오지 않았어요. 주소를 확인해 주세요.';
+  return describeReplyError(failure);
+}
+
+export function describeMetersFailure(failure: MetersFailure): string {
+  if (failure.kind === 'not-meters') return '사용량을 읽지 못했어요. 프로바이더가 알 수 없는 모양으로 답했어요.';
   return describeReplyError(failure);
 }
 

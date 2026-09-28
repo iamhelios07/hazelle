@@ -2,10 +2,12 @@ import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Connection, Model } from '../../connectors/types';
 import { loadCatalog, type CatalogResult } from '../../runtime/catalog';
+import { reportsMeters } from '../../runtime/meters';
 import { navigate } from '../router';
 import { useConnection, useStore } from '../store';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, IconButton, List, ListItem, NavBar, Screen, SearchField, Stack, Text } from '../ui';
+import { ConnectionMeters } from './ConnectionMeters';
 import { describeCatalogFailure, describeFailure } from './failure';
 
 type Filter = 'all' | 'starred' | 'reasoning' | 'vision' | 'tools';
@@ -136,6 +138,7 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
         </Stack>
       }
     >
+      {reportsMeters(connection) && <ConnectionMeters connection={connection} />}
       <Stack gap={12}>
         <SearchField label="모델 검색" value={query} onChange={setQuery} />
         <ChoiceGroup label="모델 거르기" options={filters} value={filter} onChange={setFilter} />

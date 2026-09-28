@@ -7,6 +7,7 @@ import { navigate } from '../router';
 import { useConnections, useSettings } from '../store';
 import { Button, Callout, Facts, NavBar, Reply, Screen, Stack, Tag, Text, TextField } from '../ui';
 import { CUT, describeReplyError } from './failure';
+import { usd } from './money';
 
 const UNKNOWN = '알 수 없음';
 
@@ -16,7 +17,7 @@ const cost = (value: Cost | null) =>
   value === null
     ? UNKNOWN
     : value.unit === 'usd'
-      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumSignificantDigits: 3 }).format(value.amount)
+      ? usd(value.amount)
       : `${value.amount} 크레딧`;
 
 // One message to the 본 대화 model and its streamed answer, with the receipt's facts: a way to see

@@ -55,6 +55,17 @@ export type Usage = {
 
 export type Cost = { unit: 'usd' | 'credit'; amount: number };
 
+// One figure a provider reports about a credential's spending (design §4, Meters row): what was used,
+// in the meter's unit, and the cap it counts against when there is one. A cap that starts over each
+// period names the period. Units are never summed together.
+export type Meter = {
+  label: string;
+  unit: 'usd' | 'requests';
+  used: number;
+  limit: number | null;
+  resets: 'daily' | 'weekly' | 'monthly' | null;
+};
+
 export type Phase = 'text' | 'reasoning';
 
 export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: string | null };
@@ -103,6 +114,9 @@ export type ConnectionType = {
   headers?: (credential: string) => Record<string, string>;
   parseModels?: (payload: unknown) => Model[] | null;
   cost?: (facts: StreamFacts) => Cost | null;
+  // Asked with the stored credential. It is also the check that a pasted key works, where the model
+  // list is public (OpenRouter's is).
+  meters?: { request(secret: string): HttpRequest; parse(payload: unknown): Meter[] | null };
 };
 
 export type Token = { value: string; expiresAt: number };

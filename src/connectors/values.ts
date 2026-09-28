@@ -7,6 +7,11 @@ export function count(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+// An amount of money or requests, or null when the provider did not send a usable one.
+export function amount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 export function list(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }

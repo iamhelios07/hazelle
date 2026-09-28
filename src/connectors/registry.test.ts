@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { copilot } from './copilot';
 import copilotModels from './fixtures/copilot-models.json';
+import openRouterKey from './fixtures/openrouter-key.json';
 import openRouterModels from './fixtures/openrouter-models.json';
+import { openRouter } from './openrouter';
 import {
   catalogRequest,
   chatRequest,
@@ -134,6 +136,28 @@ describe('catalogs', () => {
     expect(resolveConnection({ type: 'generic', label: '', baseUrl: null, protocol: 'chat-completions', secret: '', starred: [] })).toBeNull();
     const newer = { type: 'generic', label: '', baseUrl: 'https://api.example.com/v1', protocol: 'responses', secret: '', starred: [] };
     expect(resolveConnection(newer as unknown as Connection)).toBeNull();
+  });
+});
+
+describe('meters', () => {
+  const meters = openRouter.meters!;
+
+  it('reads an OpenRouter key: its cap, what it spent, and the free model requests', () => {
+    expect(meters.request('sk-or-v1-x')).toMatchObject({ url: 'https://openrouter.ai/api/v1/key', method: 'GET', headers: { authorization: 'Bearer sk-or-v1-x' } });
+    expect(meters.parse(openRouterKey)).toEqual([
+      { label: '이 키 한도', unit: 'usd', used: 25.5, limit: 100, resets: 'monthly' },
+      { label: '이번 달 쓴 돈', unit: 'usd', used: 25.5, limit: null, resets: null },
+      { label: '지금까지 쓴 돈', unit: 'usd', used: 25.5, limit: null, resets: null },
+      { label: '무료 모델 요청', unit: 'requests', used: 12, limit: 50, resets: 'daily' },
+    ]);
+  });
+
+  it('shows no cap for a key without one, and leaves out what the answer does not carry', () => {
+    const data = { ...openRouterKey.data, limit: null, limit_remaining: null, limit_reset: null, usage_monthly: 'n/a', free_model_daily_requests: undefined };
+    expect(meters.parse({ data })).toEqual([
+      { label: '지금까지 쓴 돈', unit: 'usd', used: 25.5, limit: null, resets: null },
+    ]);
+    expect(meters.parse({ error: { message: 'User not found.', code: 401 } })).toBeNull();
   });
 });
 
