@@ -5,6 +5,7 @@ import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
 import { api } from './api';
 import { Files } from './files';
+import { openSession, type Session } from './session';
 import { ObjectStore } from './store';
 
 type App = Awaited<ReturnType<typeof testApp>>;
@@ -65,7 +66,7 @@ export function testServer() {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  return {
+  const harness = {
     async account() {
       const body = signupBody();
       server!.cookie = sessionCookie(await app.post('signup', body));
@@ -82,5 +83,20 @@ export function testServer() {
       };
       return { accountId, vaultKey, store: await open(), files: await Files.open(accountId, vaultKey, api), open, blobs };
     },
+    // A session on an account of its own, closed when test ends. keepSynced listens on the window and
+    // pulls only while the tab is visible, so a hidden one never pulls on its own.
+    async withSession(test: (session: Session) => Promise<void>) {
+      vi.stubGlobal('window', new EventTarget());
+      vi.stubGlobal('document', { visibilityState: 'hidden' });
+      const { accountId, vaultKey } = await harness.account();
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal);
+      if (!opened.ok) throw new Error(opened.error);
+      try {
+        await test(opened.data);
+      } finally {
+        opened.data.close();
+      }
+    },
   };
+  return harness;
 }

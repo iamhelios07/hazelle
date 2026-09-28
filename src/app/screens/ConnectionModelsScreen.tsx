@@ -2,6 +2,7 @@ import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Model } from '../../connectors/types';
 import type { CatalogResult } from '../../runtime/catalog';
+import { setStarred } from '../../runtime/connections';
 import { reportsMeters } from '../../runtime/meters';
 import { navigate } from '../router';
 import { useConnection, useSession } from '../session';
@@ -83,15 +84,12 @@ export function ConnectionModelsScreen({ id }: { id: string }) {
 
   function toggle(model: Model) {
     const on = starred.some((entry) => entry.id === model.id);
-    const without = (list: Model[]) => list.filter((entry) => entry.id !== model.id);
-    setPendingStars(on ? without(starred) : [...starred, model]);
+    setPendingStars(on ? starred.filter((entry) => entry.id !== model.id) : [...starred, model]);
     setMessage(null);
     const state = saving.current;
     state.count++;
     state.queue = state.queue.then(async () => {
-      const result = store.get('connection', id)
-        ? await store.update('connection', id, (current) => ({ ...current, starred: on ? without(current.starred) : [...without(current.starred), model] }))
-        : null;
+      const result = store.get('connection', id) ? await setStarred(store, id, model, !on) : null;
       state.count--;
       if (result && !result.ok) {
         setMessage(describeFailure(result));

@@ -1,7 +1,7 @@
 import { ChevronLeft, Import, LayoutGrid, Lock, LogOut, MessageSquare, Plug, Plus, Settings } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { ChatItem } from '../../model/chat';
-import { holds, shownFolders, type FolderTree, type Shelf } from '../../model/library';
+import { holds, matches, shownFolders, type FolderTree, type Shelf } from '../../model/library';
 import { navigate, usePath } from '../router';
 import { useAccount, useLibrary, useTurn } from '../session';
 import { useToast } from '../toast';
@@ -199,7 +199,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
     );
   }
 
-  const words = query.trim().toLowerCase();
+  const words = query.trim();
   const filed = shownFolders(folders);
   const row = (shelf: Shelf<ChatItem>) => {
     const latest = shelf.chats[0];
@@ -228,7 +228,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
       {characters.filter(({ character }) => character.folder === folder.id).map(row)}
     </FolderRow>
   );
-  const found = characters.filter(({ character }) => `${character.card.name} ${character.card.nickname ?? ''}`.toLowerCase().includes(words));
+  const found = characters.filter(({ character }) => matches(character, query));
 
   return (
     <Sidebar
@@ -249,7 +249,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
     >
       {empty && (page ? <Welcome /> : <SideNote>아직 캐릭터가 없어요. 봇을 가져와 보세요.</SideNote>)}
       {!empty && words && found.map(row)}
-      {!empty && words && found.length === 0 && <SideNote>“{query.trim()}” 검색 결과가 없어요.</SideNote>}
+      {!empty && words && found.length === 0 && <SideNote>“{words}” 검색 결과가 없어요.</SideNote>}
       {!empty && !words && (
         <>
           {folders.map(folderRow)}

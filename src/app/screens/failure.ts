@@ -1,5 +1,6 @@
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
+import type { AddFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
 import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
@@ -103,6 +104,19 @@ export function describeCatalogFailure(failure: CatalogFailure): string {
 export function describeMetersFailure(failure: MetersFailure): string {
   if (failure.kind === 'not-meters') return '사용량을 읽지 못했어요. 프로바이더가 알 수 없는 모양으로 답했어요.';
   return describeReplyError(failure);
+}
+
+export function describeAddFailure(failure: AddFailure): string {
+  switch (failure.kind) {
+    case 'models':
+      return describeCatalogFailure(failure.failure);
+    case 'key':
+      return describeMetersFailure(failure.failure);
+    case 'save':
+      return describeFailure(failure.failure);
+    case 'stopped':
+      return describeReplyError(failure);
+  }
 }
 
 export function describeTalkFailure(failure: TalkFailure): string {

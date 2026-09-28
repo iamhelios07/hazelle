@@ -1,4 +1,4 @@
-import type { Progress } from '../../runtime/library';
+import type { Progress } from '../../runtime/characters';
 
 // What a busy button or dialog says while a character is being saved (import and 사본 만들기).
 export function describeStep(step: Parameters<Progress>[0]): string {

@@ -2,10 +2,11 @@ import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
+import { addConnection } from '../../runtime/connections';
 import { navigate, usePath } from '../router';
 import { useConnections, useSession } from '../session';
 import { Button, Callout, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
-import { connect } from './connect';
+import { describeAddFailure } from './failure';
 
 const GROUPS: Record<ConnectionType['group'], string> = {
   gateway: '여러 회사 모델을 한 키로',
@@ -31,9 +32,10 @@ export function ConnectionAddScreen() {
   async function connectKey(type: ConnectionType, secret: string) {
     setBusy(true);
     setMessage(null);
-    const failure = await connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
+    const added = await addConnection(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
     setBusy(false);
-    setMessage(failure);
+    if (added.ok) navigate(`/connections/${added.id}`, { replace: true });
+    else setMessage(describeAddFailure(added.failure));
   }
 
   return (

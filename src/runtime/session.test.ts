@@ -1,27 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { resolveConnection } from '../connectors/registry';
 import type { Connection } from '../connectors/types';
-import { openSession, type Session } from './session';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
-
-// keepSynced listens on the window and pulls only while the tab is visible.
-beforeEach(() => {
-  vi.stubGlobal('window', new EventTarget());
-  vi.stubGlobal('document', { visibilityState: 'hidden' });
-});
-
-async function withSession(test: (session: Session) => Promise<void>) {
-  const { accountId, vaultKey } = await server.account();
-  const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal);
-  if (!opened.ok) throw new Error(opened.error);
-  try {
-    await test(opened.data);
-  } finally {
-    opened.data.close();
-  }
-}
 
 const copilot: Connection = { type: 'copilot', label: 'Copilot · jin', baseUrl: null, protocol: null, secret: 'gho_x', starred: [] };
 const EXCHANGE = 'https://api.github.com/copilot_internal/v2/token';
@@ -29,7 +11,7 @@ const MODELS = 'https://api.githubcopilot.com/models';
 
 describe('session', () => {
   it('drops its tokens and model lists on close, and keeps none from a trade answered after it', () =>
-    withSession(async (session) => {
+    server.withSession(async (session) => {
       const log = stubRelay(({ url }) => (url === EXCHANGE ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + 1800 }) : upstream(200, { data: [] })));
       const resolved = resolveConnection(copilot)!;
       expect(await session.credentials.get(resolved, copilot.secret)).toEqual({ ok: true, credential: 'tid' });
@@ -45,7 +27,7 @@ describe('session', () => {
     }));
 
   it('gives the same views until the store changes', () =>
-    withSession(async (session) => {
+    server.withSession(async (session) => {
       const first = session.views();
       expect(session.views()).toBe(first);
       const chat = await session.store.create('chat', { title: null, character: null, models: {} });

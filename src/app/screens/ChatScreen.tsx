@@ -2,6 +2,7 @@ import { MessageSquare, MoreHorizontal, PanelRight } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { Assignment, ModelRef } from '../../connectors/assignment';
 import { shown, type Chat, type Message } from '../../model/chat';
+import { KEEP_DAYS } from '../../model/library';
 import { fillNames, unused } from '../../engine/prompt';
 import { addEntry, addGreeting, chatModel, editMessage, withTurn, type TalkFailure } from '../../runtime/talk';
 import { navigate } from '../router';
@@ -307,7 +308,7 @@ export function ChatScreen({ id, character }: { id: string | null; character: st
     return (
       <ChatFrame title={<ChatTitle avatar={<Avatar face={MessageSquare} />} title="채팅" typing={false} />} actions={null} above={null} footer={null} scrollRef={scroller} onScroll={() => {}} onBack={wide ? undefined : () => navigate('/')}>
         <Text tone="muted">
-          {orphaned ? '지운 캐릭터의 채팅이에요. 7일 안에는 캐릭터 둘러보기의 ‘지운 캐릭터’에서 되살릴 수 있어요.' : '이 채팅이 없어요. 지워졌거나 주소가 잘못됐어요.'}
+          {orphaned ? `지운 캐릭터의 채팅이에요. ${KEEP_DAYS}일 안에는 캐릭터 둘러보기의 ‘지운 캐릭터’에서 되살릴 수 있어요.` : '이 채팅이 없어요. 지워졌거나 주소가 잘못됐어요.'}
         </Text>
       </ChatFrame>
     );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import type { Stored } from './kinds';
-import { holds, nest, shelve, shownFolders } from './library';
+import { daysLeft, holds, KEEP_DELETED, matches, nest, shelve, shownFolders } from './library';
 
 const character = (id: string, rev: number): Stored<'character'> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: null, loreFolders: [] } });
 const chat = (id: string, character: string | null, order: number) => ({ id, chat: { character }, order });
@@ -44,5 +44,23 @@ describe('nest', () => {
     inKnights.folder = 'k';
     expect(holds(tree[2]!, inKnights)).toBe(true);
     expect(holds(tree[2]!.children[1]!, inKnights)).toBe(false);
+  });
+});
+
+describe('daysLeft', () => {
+  it('counts whole days left in 지운 캐릭터, and reaches 0 when the character is due', () => {
+    const gone = { ...character('a', 1).value, deleted: 0 };
+    expect(daysLeft(gone, 0)).toBe(7);
+    expect(daysLeft(gone, KEEP_DELETED - 1)).toBe(1);
+    expect(daysLeft(gone, KEEP_DELETED)).toBe(0);
+  });
+});
+
+describe('matches', () => {
+  it('finds the query, trimmed and in any case, in the name or the nickname', () => {
+    const luna = character('Luna', 1).value;
+    luna.card.nickname = '달토끼';
+    expect(['  lu ', 'LUNA', '토끼', ''].map((query) => matches(luna, query))).toEqual([true, true, true, true]);
+    expect(matches(luna, 'kael')).toBe(false);
   });
 });

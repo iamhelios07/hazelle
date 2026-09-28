@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { detect, GENERIC } from '../../connectors/registry';
 import type { Connection, Protocol } from '../../connectors/types';
+import { addConnection } from '../../runtime/connections';
 import { navigate } from '../router';
 import { useSession } from '../session';
 import { Button, Callout, ChoiceGroup, Intro, NavBar, Screen, Stack, Text, TextField } from '../ui';
-import { connect } from './connect';
+import { describeAddFailure } from './failure';
 
 const PROTOCOLS: { value: Protocol; label: string }[] = [
   { value: 'chat-completions', label: 'OpenAI 호환' },
@@ -40,9 +41,10 @@ export function ConnectionDirectScreen() {
     if (!draft) return;
     setBusy(true);
     setMessage(null);
-    const failure = await connect(session, draft);
+    const added = await addConnection(session, draft);
     setBusy(false);
-    setMessage(failure);
+    if (added.ok) navigate(`/connections/${added.id}`, { replace: true });
+    else setMessage(describeAddFailure(added.failure));
   }
 
   return (

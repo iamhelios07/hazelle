@@ -7,8 +7,18 @@ import type { Stored } from './kinds';
 export type Character = { card: Card; folder: string | null; loreFolders: LoreFolder[]; origin?: { id: string; name: string }; deleted?: number };
 export type LoreFolder = { id: string; name: string };
 
+const DAY = 24 * 60 * 60 * 1000;
+
 // How long a deleted character waits in 지운 캐릭터 before it is removed for good.
-export const KEEP_DELETED = 7 * 24 * 60 * 60 * 1000;
+export const KEEP_DELETED = 7 * DAY;
+// KEEP_DELETED as the copy names it (7일).
+export const KEEP_DAYS = KEEP_DELETED / DAY;
+
+// Whole days a character in 지운 캐릭터 has left. At 0 or less it is due, and purgeExpired removes it.
+export const daysLeft = (character: Character, now: number) => Math.ceil((character.deleted! + KEEP_DELETED - now) / DAY);
+
+// The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name or nickname.
+export const matches = ({ card }: Character, query: string) => `${card.name} ${card.nickname ?? ''}`.toLowerCase().includes(query.trim().toLowerCase());
 
 // Kind `lore`, whose parent is the character. folder is the id of one of its loreFolders.
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };

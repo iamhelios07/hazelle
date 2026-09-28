@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Card } from '../../engine/import/types';
+import { editCard } from '../../runtime/characters';
 import { navigate } from '../router';
 import { useCharacter, useStore } from '../session';
 import { useToast } from '../toast';
@@ -29,8 +30,8 @@ export function CharacterEditScreen({ id }: { id: string }) {
   return <Editor id={id} initial={shelf.character.card} onBack={() => navigate(pagePath(id, wide))} />;
 }
 
-// Each change saves on its own after a pause, and only the fields changed here are written, so an edit
-// on another device to another field survives. Leaving the screen saves what is still waiting.
+// Each change saves on its own after a pause, and only the fields changed here go to editCard. Leaving
+// the screen saves what is still waiting.
 function Editor({ id, initial, onBack }: { id: string; initial: Card; onBack: () => void }) {
   const store = useStore();
   const toast = useToast();
@@ -45,7 +46,7 @@ function Editor({ id, initial, onBack }: { id: string; initial: Card; onBack: ()
     if (Object.keys(patch).length === 0) return;
     waiting.current = {};
     setStatus('saving');
-    const saved = await store.update('character', id, (current) => ({ ...current, card: { ...current.card, ...patch } }));
+    const saved = await editCard(store, id, patch);
     if (saved.ok) return setStatus('saved');
     // Kept for the next change to try again, under anything typed since.
     waiting.current = { ...patch, ...waiting.current };

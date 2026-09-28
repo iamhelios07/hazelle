@@ -2,7 +2,8 @@ import { Copy, FolderInput, FolderPlus, FolderTree as SubfolderIcon, MoreHorizon
 import { useState } from 'react';
 import type { ApiFailure } from '../../runtime/api';
 import type { ChatItem } from '../../model/chat';
-import { holds, KEEP_DELETED, shownFolders, type CharacterShelf, type FolderTree } from '../../model/library';
+import { daysLeft, holds, KEEP_DAYS, matches, shownFolders, type CharacterShelf, type FolderTree } from '../../model/library';
+import { createFolder, moveCharacters, removeFolder, renameFolder, restoreFolder } from '../../runtime/characters';
 import { navigate } from '../router';
 import { useLibrary, useStore } from '../session';
 import { useToast } from '../toast';
@@ -35,9 +36,7 @@ import { ago } from './time';
 // 'all', 'loose' (in no folder), 'deleted' (지운 캐릭터), or a folder's id.
 type Filter = string;
 type Menu = 'move' | 'folder' | `card-${string}`;
-const DAY = 24 * 60 * 60 * 1000;
 type Naming = { id: string | null; name: string; parent?: FolderTree };
-type Placement = { id: string; folder: string | null };
 
 // 캐릭터 둘러보기 (design F6): every character as a face, filtered by folder, and where folders are
 // made, renamed, emptied and filled.
@@ -62,72 +61,43 @@ export function GalleryScreen() {
   const folder = everyFolder.find((candidate) => candidate.id === filter) ?? null;
   // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
   const top = folder && (folders.find((candidate) => candidate === folder || candidate.children.includes(folder)) ?? null);
-  const words = query.trim().toLowerCase();
+  const words = query.trim();
   const binned = filter === 'deleted';
   const shown = (binned ? deleted : characters)
     .filter(({ character }) => binned || filter === 'all' || (filter === 'loose' ? character.folder === null || !filed.has(character.folder) : folder !== null && holds(folder, character)))
-    .filter(({ character }) => `${character.card.name} ${character.card.nickname ?? ''}`.toLowerCase().includes(words));
+    .filter(({ character }) => matches(character, query));
   if (byName) shown.sort((a, b) => a.character.card.name.localeCompare(b.character.card.name, 'ko'));
 
   const saveFailed = (failure: ApiFailure) => {
     toast({ message: describeFailure(failure) });
   };
 
-  // Whether every character moved; a failure is shown and stops the rest.
-  async function place(moves: Placement[]): Promise<boolean> {
-    for (const { id, folder: to } of moves) {
-      const saved = await store.update('character', id, (current) => ({ ...current, folder: to }));
-      if (!saved.ok) {
-        saveFailed(saved);
-        return false;
-      }
-    }
-    return true;
-  }
-
   async function saveFolder({ id, name, parent }: Naming) {
     const trimmed = name.trim();
     if (!trimmed) return;
     setNaming(null);
-    const saved =
-      id === null
-        ? await store.create('folder', parent ? { name: trimmed, parent: parent.id } : { name: trimmed })
-        : await store.update('folder', id, (current) => ({ ...current, name: trimmed }));
+    const saved = id === null ? await createFolder(store, trimmed, parent?.id ?? null) : await renameFolder(store, id, trimmed);
     if (!saved.ok) saveFailed(saved);
   }
 
-  // A folder goes with the folders inside it, and its characters first move up a level, so no
-  // character points at a folder that is gone. 되돌리기 puts the folders back under their ids and every
-  // character back where it was.
-  async function removeFolder(target: FolderTree) {
+  async function dropFolder(target: FolderTree) {
     setMenu(null);
-    const up = folders.find((candidate) => candidate.children.includes(target)) ?? null;
-    const members = characters.filter(({ character }) => holds(target, character)).map(({ id, character }) => ({ id, folder: character.folder }));
-    if (!(await place(members.map(({ id }) => ({ id, folder: up?.id ?? null }))))) return;
-    for (const gone of [...target.children, target]) {
-      const removed = await store.remove(gone.id);
-      if (!removed.ok) return saveFailed(removed);
-    }
+    const removed = await removeFolder(store, target.id);
+    if (!removed.ok) return saveFailed(removed);
+    const { folders: gone, up } = removed.data;
     setFilter(up?.id ?? 'all');
-    const inside = target.children.length ? `와 안의 폴더 ${target.children.length}개` : '';
+    const inside = gone.length > 1 ? `와 안의 폴더 ${gone.length - 1}개` : '';
     toast({
       message: `‘${target.value.name}’ 폴더${inside}를 지웠어요. 캐릭터는 ${up ? `‘${up.value.name}’ 폴더로` : '폴더 밖으로'} 옮겼어요.`,
-      action: { label: '되돌리기', onClick: () => void restoreFolders([target, ...target.children], members) },
+      action: { label: '되돌리기', onClick: () => void restoreFolder(store, removed.data).then((restored) => restored.ok || saveFailed(restored)) },
     });
-  }
-
-  async function restoreFolders(gone: FolderTree[], members: Placement[]) {
-    for (const folder of gone) {
-      const saved = await store.restore(folder);
-      if (!saved.ok) return saveFailed(saved);
-    }
-    await place(members);
   }
 
   async function movePicked(to: string | null) {
     if (!picked) return;
     setMenu(null);
-    if (!(await place([...picked].map((id) => ({ id, folder: to }))))) return;
+    const moved = await moveCharacters(store, [...picked], to);
+    if (!moved.ok) return saveFailed(moved);
     const name = everyFolder.find((candidate) => candidate.id === to)?.value.name;
     toast({ message: to ? `${picked.size}명을 ‘${name}’ 폴더로 옮겼어요.` : `${picked.size}명을 폴더에서 뺐어요.` });
     setPicked(null);
@@ -208,7 +178,7 @@ export function GalleryScreen() {
                     }}
                   />
                 )}
-                <MenuItem icon={Trash2} label="폴더 지우기" tone="warn" onClick={() => void removeFolder(folder)} />
+                <MenuItem icon={Trash2} label="폴더 지우기" tone="warn" onClick={() => void dropFolder(folder)} />
               </Popover>
             )}
           </Row>
@@ -227,7 +197,7 @@ export function GalleryScreen() {
             </Tabs>
           )}
         </Stack>
-        {binned && <Text tone="muted">지운 캐릭터는 7일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.</Text>}
+        {binned && <Text tone="muted">{`지운 캐릭터는 ${KEEP_DAYS}일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
         {shown.length > 0 ? (
           <CardGrid label="캐릭터">
             {shown.map((shelf) => {
@@ -300,7 +270,7 @@ export function GalleryScreen() {
           </CardGrid>
         ) : (
           <Text tone="muted">
-            {words ? `“${query.trim()}” 검색 결과가 없어요.` : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}
+            {words ? `“${words}” 검색 결과가 없어요.` : binned ? '지운 캐릭터가 없어요.' : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}
           </Text>
         )}
       </Stack>
@@ -369,7 +339,7 @@ function note(shelf: CharacterShelf<ChatItem>): string {
 
 // How long a character in 지운 캐릭터 has left. Past its time it goes when the app next opens.
 function leftFor(shelf: CharacterShelf<ChatItem>): string {
-  const days = Math.ceil((shelf.character.deleted! + KEEP_DELETED - Date.now()) / DAY);
+  const days = daysLeft(shelf.character, Date.now());
   const chats = shelf.chats.length ? ` · 채팅 ${shelf.chats.length}개` : '';
   return (days > 0 ? `${days}일 남음` : '곧 지워져요') + chats;
 }

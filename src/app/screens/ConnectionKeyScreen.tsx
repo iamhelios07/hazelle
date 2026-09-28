@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { detect } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
+import { addConnection } from '../../runtime/connections';
 import { navigate } from '../router';
 import { useSession } from '../session';
 import { Button, Callout, Intro, Link, NavBar, Screen, Stack, Text, TextField } from '../ui';
-import { connect } from './connect';
+import { describeAddFailure } from './failure';
 
 // F5 for a provider picked from the list: its address is known, so only the key is asked.
 export function ConnectionKeyScreen({ type }: { type: ConnectionType }) {
@@ -21,9 +22,10 @@ export function ConnectionKeyScreen({ type }: { type: ConnectionType }) {
     if (!secret) return;
     setBusy(true);
     setMessage(null);
-    const failure = await connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
+    const added = await addConnection(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] });
     setBusy(false);
-    setMessage(failure);
+    if (added.ok) navigate(`/connections/${added.id}`, { replace: true });
+    else setMessage(describeAddFailure(added.failure));
   }
 
   return (

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ChatItem } from '../../model/chat';
-import type { CharacterShelf } from '../../model/library';
-import { copyCharacter, purgeCharacter } from '../../runtime/library';
+import { KEEP_DAYS, type CharacterShelf } from '../../model/library';
+import { copyCharacter, purgeCharacter, setDeleted } from '../../runtime/characters';
 import { navigate } from '../router';
 import { useFiles, useStore } from '../session';
 import { useToast } from '../toast';
@@ -19,14 +19,8 @@ export function useCharacterActions() {
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
 
-  // deleted undefined brings it back from 지운 캐릭터.
-  async function mark(id: string, deleted: number | undefined): Promise<boolean> {
-    const saved = await store.update('character', id, (current) => {
-      const next = { ...current };
-      if (deleted === undefined) delete next.deleted;
-      else next.deleted = deleted;
-      return next;
-    });
+  async function mark(id: string, at: number | null): Promise<boolean> {
+    const saved = await setDeleted(store, id, at);
     if (!saved.ok) toast({ message: describeFailure(saved) });
     return saved.ok;
   }
@@ -40,19 +34,19 @@ export function useCharacterActions() {
     navigate(editPath(copied.data));
   }
 
-  // Whether it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good.
+  // Whether it went to 지운 캐릭터.
   async function remove({ id, character, chats }: Shelf): Promise<boolean> {
     if (!(await mark(id, Date.now()))) return false;
     const what = chats.length ? `캐릭터와 채팅 ${chats.length}개를` : '캐릭터를';
     toast({
-      message: `‘${character.card.name}’ ${what} 지웠어요. 7일 안에는 ‘지운 캐릭터’에서 되살릴 수 있어요.`,
-      action: { label: '되돌리기', onClick: () => void mark(id, undefined) },
+      message: `‘${character.card.name}’ ${what} 지웠어요. ${KEEP_DAYS}일 안에는 ‘지운 캐릭터’에서 되살릴 수 있어요.`,
+      action: { label: '되돌리기', onClick: () => void mark(id, null) },
     });
     return true;
   }
 
   async function restore({ id, character }: Shelf) {
-    if (await mark(id, undefined)) toast({ message: `‘${character.card.name}’ 캐릭터를 되살렸어요.` });
+    if (await mark(id, null)) toast({ message: `‘${character.card.name}’ 캐릭터를 되살렸어요.` });
   }
 
   async function purge({ id, character }: Shelf) {

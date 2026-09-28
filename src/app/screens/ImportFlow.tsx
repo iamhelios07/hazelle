@@ -2,8 +2,9 @@ import { MessageSquarePlus } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { importCard } from '../../engine/import/card';
 import type { Imported, ImportFailure, UnsupportedKind } from '../../engine/import/types';
-import { addCharacter } from '../../runtime/library';
 import { unused } from '../../engine/prompt';
+import { importCharacter } from '../../runtime/characters';
+import { thumbnail } from '../../runtime/picture';
 import { navigate } from '../router';
 import { useFiles, useStore } from '../session';
 import { Button, Callout, Dialog, DropOverlay, Section, Stack, Text } from '../ui';
@@ -13,8 +14,6 @@ import { newChatPath } from './shelves';
 import { describeUnused } from './unused';
 
 const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum';
-// The longest side of the thumbnail that lists and 캐릭터 둘러보기 show; the original stays in its blob.
-const THUMB = 400;
 
 type Done = { file: string; id: string; imported: Imported; faceless: boolean; lore: number };
 type Result = Done | { file: string; failure: string };
@@ -49,24 +48,6 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요. 깨졌거나 캐릭터 카드가 아니에요.',
 };
 
-// A small copy of the picture for lists. Safari cannot write WebP and hands back PNG, which is far
-// larger, so it gets JPEG instead.
-async function thumbnail({ bytes, type }: { bytes: Uint8Array<ArrayBuffer>; type: string }): Promise<string> {
-  const bitmap = await createImageBitmap(new Blob([bytes], { type }));
-  const scale = Math.min(1, THUMB / Math.max(bitmap.width, bitmap.height));
-  const canvas = new OffscreenCanvas(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  let blob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.82 });
-  if (blob.type !== 'image/webp') blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-
 // Bot import (design F2): pick or drop files anywhere, each is saved as a character, and a summary
 // says what came in, what did not, and what its chats do not use yet.
 export function ImportProvider({ children }: { children: ReactNode }) {
@@ -80,14 +61,12 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   async function save(file: File, progress: (busy: string) => void): Promise<Result> {
     const parsed = importCard(file.name, new Uint8Array(await file.arrayBuffer()));
     if (!parsed.ok) return { file: file.name, failure: FAILURE[parsed.failure.kind] };
-    const { card, avatar } = parsed.card;
-    const loreFolders = parsed.card.loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
-    const lore = parsed.card.lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : loreFolders[entry.folder]!.id }));
+    const { avatar } = parsed.card;
     const thumb = avatar ? await thumbnail(avatar).catch(() => null) : null;
     const picture = avatar && thumb !== null ? { ...avatar, thumb } : null;
-    const saved = await addCharacter(store, files, { card, folder: null, loreFolders }, lore, picture, (step) => progress(describeStep(step)));
+    const saved = await importCharacter(store, files, parsed.card, picture, (step) => progress(describeStep(step)));
     if (!saved.ok) return { file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
-    return { file: file.name, id: saved.data, imported: parsed.card, faceless: avatar !== null && thumb === null, lore: lore.length };
+    return { file: file.name, id: saved.data, imported: parsed.card, faceless: avatar !== null && thumb === null, lore: parsed.card.lore.length };
   }
 
   async function take(files: File[]) {

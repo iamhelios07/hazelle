@@ -5,9 +5,9 @@ import { SETTINGS_ID, type Settings } from '../model/settings';
 import type { VaultKey } from '../vault/keys';
 import { api, type ApiResult } from './api';
 import { Catalogs } from './catalog';
+import { purgeExpired } from './characters';
 import { Credentials } from './credential';
 import { Files } from './files';
-import { purgeExpired } from './library';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
 
