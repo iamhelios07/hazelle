@@ -125,37 +125,31 @@ export const shown = (message: Message): Version => message.versions[message.sel
 
 const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 
-// display turns a message's stored text into the text shown (engine/render, which the model cannot call).
-type Display = (text: string) => string;
-
-export function chatTitle(chat: Chat, messages: Message[], display: Display): string {
+// texts: each message's text as it is displayed (engine/render, which the model cannot call).
+export function chatTitle(chat: Chat, messages: Message[], texts: string[]): string {
   if (chat.title) return chat.title;
-  const first = messages.find((message) => message.role === 'user');
-  return (first && firstLine(display(shown(first).text))) || '새 채팅';
-}
-
-export function preview(messages: Message[], display: Display): string {
-  const last = messages.at(-1);
-  return last ? firstLine(display(shown(last).text)) : '';
+  const first = messages.findIndex((message) => message.role === 'user');
+  return (first !== -1 && firstLine(texts[first]!)) || '새 채팅';
 }
 
 export type ChatItem = { id: string; chat: Chat; messages: Message[]; title: string; preview: string; at: number | null; order: number };
 
 // Every chat with its messages, the one written to last first. Renaming a chat or changing its model
 // does not move it.
-export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => Stored<'entry'>[], display: (chat: Chat, text: string) => string): ChatItem[] {
+export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => Stored<'entry'>[], display: (chat: Stored<'chat'>, messages: Message[]) => string[]): ChatItem[] {
   return chats
     .map((chat) => {
       const own = entriesOf(chat.id);
       const messages = fold(own);
       const latest = own.reduce<Stored<'entry'> | null>((last, entry) => (last && last.rev > entry.rev ? last : entry), null);
-      const show = (text: string) => display(chat.value, text);
+      const texts = display(chat, messages);
+      const last = texts.at(-1);
       return {
         id: chat.id,
         chat: chat.value,
         messages,
-        title: chatTitle(chat.value, messages, show),
-        preview: preview(messages, show),
+        title: chatTitle(chat.value, messages, texts),
+        preview: last === undefined ? '' : firstLine(last),
         at: latest?.value.at ?? null,
         order: latest?.rev ?? chat.rev,
       };

@@ -1,23 +1,64 @@
 import { describe, expect, it } from 'vitest';
-import type { Card } from './import/types';
-import { buildPrompt, unused } from './pipeline';
-import { render } from './render';
+import type { Prompt } from '../model/prompt';
+import type { HistoryMessage } from './history';
+import type { Card, LoreEntry, RegexScript } from './import/types';
+import { assemble, unused, type PromptInput } from './pipeline';
+import { renderChat } from './render';
+
+// The user's own Risu preset "🏓 핑퐁 간소화" (design §4.2), block for block: its wrappers and marks as written,
+// its long texts cut down around the parts that carry CBS. Its 장기 기억 block has no slot yet, so it is not here.
+const starter: Prompt = {
+  name: '🏓 핑퐁 간소화',
+  toggles: [{ key: 'sims', label: '시뮬레이터 모드', kind: 'check', default: '0' }],
+  authorNote: '',
+  models: {},
+  blocks: [
+    { id: 'setting', name: null, kind: 'text', role: 'system', mark: null, text: '<System Setting>\nYour collaborator performs a single character, {{user}}.\nYou perform everything else: {{char}}, the world.\n</System Setting>\n\n---' },
+    {
+      id: 'description',
+      name: null,
+      kind: 'slot',
+      slot: 'description',
+      role: 'assistant',
+      wrapper:
+        "<Role-play Materials>\n\n[<char> (Main NPC)]\nThis profile is yours to perform. Everything here is {{char}}'s own — their tastes, opinions, and knowledge come from this profile and the scene, nowhere else.\n\n{{slot}}",
+    },
+    { id: 'persona', name: null, kind: 'slot', slot: 'persona', role: 'system', wrapper: "[<user> (Main PC)]\nThis profile belongs to your collaborator's character.\n{{slot}}" },
+    { id: 'material-2', name: null, kind: 'text', role: 'system', mark: null, text: '# Material 2: Additional Information/Rules\nThis material is about the world, lore, other characters, internal rules, etc.' },
+    { id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' },
+    { id: 'material-3', name: null, kind: 'text', role: 'system', mark: null, text: '# Material 3: Past Events/Prelude Summary' },
+    { id: 'guidelines', name: null, kind: 'text', role: 'system', mark: null, text: '</Role-play Materials>\n\n---\n\n<Guidelines>' },
+    { id: 'global-note', name: '글노덮', kind: 'text', role: 'system', mark: 'globalNote', text: '' },
+    { id: 'author-note', name: null, kind: 'slot', slot: 'authorNote', role: 'assistant', wrapper: null },
+    { id: 'post-everything', name: null, kind: 'slot', slot: 'postEverything' },
+    {
+      id: 'main',
+      name: '가이드라인 (중요!!!)',
+      kind: 'text',
+      role: 'system',
+      mark: 'main',
+      text: "# Premise\nYou write {{char}}. Your partner writes {{user}}.\n# Everyone else\nEvery other person acts on their own goals.\n{{#if {{getglobalvar::toggle_sims}}}}\n{{char}} is one person among many.\n{{/if}}\n\n</Guidelines>\n\n---\n",
+    },
+    { id: 'past', name: '과거 챗', kind: 'slot', slot: 'chat', range: { from: 0, to: -1 } },
+    { id: 'last', name: '마지막 챗', kind: 'slot', slot: 'chat', range: { from: -1, to: null } },
+  ],
+};
 
 const card = (over: Partial<Card> = {}): Card => ({
   name: 'Luna',
   nickname: null,
-  description: '{{char}} is a lighthouse keeper.',
+  description: '{{char}} keeps the lighthouse.',
   personality: '',
   scenario: '',
-  greetings: [],
+  greetings: ['The lamp is lit, {{user}}.'],
   exampleDialogue: '',
   systemPrompt: '',
-  postHistoryInstructions: '',
+  postHistoryInstructions: 'Keep it short. {{original}}',
   creatorNotes: '',
   creator: '',
   version: '',
   tags: [],
-  variables: [],
+  variables: [['count', '0']],
   toggles: '',
   utility: false,
   bias: [],
@@ -26,52 +67,124 @@ const card = (over: Partial<Card> = {}): Card => ({
   ...over,
 });
 
-describe('render', () => {
-  it('fills {{char}} with the nickname when there is one, and {{user}} with the user; with no character {{char}} stays', () => {
-    expect(render('display', '{{char}} greets {{User}} · {{bot}}', { card: card({ nickname: 'Lu' }), user: 'jin' })).toBe('Lu greets jin · Lu');
-    expect(render('prompt', '{{char}} greets {{user}}', { card: null, user: 'jin' })).toBe('{{char}} greets jin');
+const script = (stage: RegexScript['stage'], find: string, replace: string): RegexScript => ({ name: stage, find, replace, stage, flags: null });
+
+const lore = (id: string, content: string, over: Partial<LoreEntry> = {}) => ({
+  id,
+  value: { name: id, keys: [], secondaryKeys: [], content, enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 0, priority: null, position: null, ...over },
+});
+
+const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, role, text, time: null });
+
+const scope = (over: Partial<PromptInput['scope']> = {}): PromptInput['scope'] => ({
+  card: card(),
+  persona: { name: 'jin', description: 'A traveler.' },
+  prompt: starter,
+  note: 'Rain tonight.',
+  lore: [],
+  messages: [message('g1', 'assistant', 'The lamp is lit, {{user}}.'), message('u1', 'user', 'Is it safe?'), message('a1', 'assistant', '{{setvar::mood::calm}}She nods. [OOC] ignore'), message('u2', 'user', 'Good.')],
+  greeting: { index: 0 },
+  toggle: (key) => (key === 'sims' ? '1' : null),
+  model: { id: 'model', maxContext: null, prefill: null },
+  clock: { now: Date.UTC(2026, 8, 28), timeZone: 'UTC' },
+  pick: 'luna:chat',
+  ...over,
+});
+
+const build = (over: Partial<PromptInput['scope']> = {}) => assemble({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length });
+
+describe('assemble', () => {
+  it("builds the user's own prompt with a card's lorebook, regex, toggle and variables", () => {
+    const entries = [
+      lore('lighthouse', 'The lighthouse is old.', { constant: false, keys: ['lighthouse'] }),
+      lore('born', '@@position before_desc\n{{char}} was born at sea.'),
+      lore('mood', '@@depth 1\nMood: {{getvar::mood}}'),
+      lore('later', '@@depth 0\nFinal A', { insertionOrder: 20 }),
+      lore('sooner', '@@depth 0\nFinal B', { insertionOrder: 10 }),
+    ];
+    const regex = [script('process', ' \\[OOC\\].*', ''), script('display', 'nods', 'nods slowly')];
+    const messages = [...scope().messages.slice(0, 3), message('u2', 'user', 'Good. Is the lighthouse lit?')];
+    expect(build({ card: card({ regex }), lore: entries, messages })).toEqual([
+      { role: 'system', content: '<System Setting>\nYour collaborator performs a single character, jin.\nYou perform everything else: Luna, the world.\n</System Setting>\n\n---' },
+      {
+        role: 'assistant',
+        content:
+          "<Role-play Materials>\n\n[Luna (Main NPC)]\nThis profile is yours to perform. Everything here is Luna's own — their tastes, opinions, and knowledge come from this profile and the scene, nowhere else.\n\nLuna was born at sea.\n\nLuna keeps the lighthouse.",
+      },
+      { role: 'system', content: "[jin (Main PC)]\nThis profile belongs to your collaborator's character.\nA traveler." },
+      { role: 'system', content: '# Material 2: Additional Information/Rules\nThis material is about the world, lore, other characters, internal rules, etc.' },
+      { role: 'system', content: 'The lighthouse is old.' },
+      { role: 'system', content: '# Material 3: Past Events/Prelude Summary' },
+      { role: 'system', content: '</Role-play Materials>\n\n---\n\n<Guidelines>' },
+      { role: 'system', content: 'Keep it short.' },
+      { role: 'assistant', content: 'Rain tonight.' },
+      // 최종 삽입 (design §4.2): the higher insertion order goes later.
+      { role: 'system', content: 'Final B' },
+      { role: 'system', content: 'Final A' },
+      { role: 'system', content: '# Premise\nYou write Luna. Your partner writes jin.\n# Everyone else\nEvery other person acts on their own goals.\nLuna is one person among many.\n\n</Guidelines>\n\n---' },
+      { role: 'assistant', content: 'The lamp is lit, jin.' },
+      { role: 'user', content: 'Is it safe?' },
+      { role: 'assistant', content: 'She nods.' },
+      { role: 'system', content: 'Mood: calm' },
+      { role: 'user', content: 'Good. Is the lighthouse lit?' },
+    ]);
+    expect(renderChat('display', scope({ card: card({ regex }), messages })).texts[2]).toBe('She nods slowly. [OOC] ignore');
+  });
+
+  it('leaves out what a toggle turns off, fills {{position}} and @@inject_at, and puts 최종 삽입 last when the prompt has no such slot', () => {
+    const blocks: Prompt['blocks'] = [
+      { id: 'notes', name: null, kind: 'text', role: 'system', mark: null, text: 'Notes: {{position::bell}}' },
+      ...starter.blocks.filter((block) => (block.kind === 'text' ? block.mark === 'main' : block.slot === 'chat')),
+    ];
+    const entries = [lore('end', '@@depth 0\nLast word'), lore('bell', '@@position pt_bell\nThe bell rings.'), lore('kind', '@@inject_at main\nStay kind.')];
+    const sent = build({ prompt: { ...starter, blocks }, toggle: (key) => (key === 'sims' ? '0' : null), lore: entries });
+    expect(sent[0]).toEqual({ role: 'system', content: 'Notes: The bell rings.' });
+    expect(sent[1]!.content).not.toContain('one person among many');
+    expect(sent[1]!.content.endsWith('---\n Stay kind.')).toBe(true);
+    expect(sent.at(-1)).toEqual({ role: 'system', content: 'Last word' });
+  });
+
+  it('keeps an entry that fired for an earlier reply after @@keep_activate_after_match, and drops one after @@dont_activate_after_match', () => {
+    const entries = [
+      lore('kept', '@@keep_activate_after_match\nkept', { constant: false, keys: ['storm'] }),
+      lore('once', '@@dont_activate_after_match\nonce', { constant: false, keys: ['storm', 'Good'] }),
+    ];
+    const messages = [message('u1', 'user', 'A storm comes.'), message('a1', 'assistant', 'She shivers.'), message('u2', 'user', 'Good.')];
+    const sent = build({ card: card({ loreSettings: { scanDepth: 1, tokenBudget: null, recursive: null, fullWordMatching: null } }), lore: entries, messages, greeting: null });
+    const lorebook = sent.filter(({ content }) => content === 'kept' || content === 'once');
+    expect(lorebook).toEqual([{ role: 'system', content: 'kept' }]);
   });
 });
 
-describe('buildPrompt', () => {
-  const scope = (over: Partial<Card> = {}) => ({ card: card(over), user: 'jin' });
+describe('renderChat', () => {
+  const counting: RegexScript[] = [
+    script('output', 'nods', 'nods{{addvar::count::1}}'),
+    script('process', 'She', '{{addvar::count::1}}She'),
+    script('display', 'She', '{{addvar::count::1}}She'),
+  ];
+  const messages = [message('a1', 'assistant', '{{addvar::count::1}}She nods.'), message('u1', 'user', '{{getvar::count}}'), message('a2', 'assistant', 'She nods. {{randint::1::1000000}}')];
 
-  it('puts the card before the chat and its post-history instructions after it', () => {
-    const messages = buildPrompt({ scope: scope({ scenario: 'A storm.', postHistoryInstructions: 'Stay terse, {{user}}.' }), history: [{ role: 'user', text: 'hi' }] });
-    expect(messages[0]!.role).toBe('system');
-    expect(messages[0]!.content).toContain('Luna is a lighthouse keeper.');
-    expect(messages[0]!.content).toContain('Scenario: A storm.');
-    expect(messages.slice(1)).toEqual([
-      { role: 'user', content: 'hi' },
-      { role: 'system', content: 'Stay terse, jin.' },
-    ]);
+  it("writes a message's variables once, in its own text and its output stage, never in the stages chained after", () => {
+    const over = { card: card({ regex: counting, greetings: [] }), messages, greeting: null };
+    const prompt = renderChat('prompt', scope(over));
+    const display = renderChat('display', scope(over));
+    expect(prompt.variables.get('count')).toBe('3');
+    expect(display.variables).toEqual(prompt.variables);
+    expect([prompt.texts[1], display.texts[1]]).toEqual(['2', '2']);
   });
 
-  it('renders every history message for the prompt, and leaves a failed reply out', () => {
-    const history = [
-      { role: 'assistant' as const, text: '어서 와, {{user}}. 나는 {{char}}야.' },
-      { role: 'user' as const, text: '안녕' },
-      { role: 'assistant' as const, text: '' },
-    ];
-    expect(buildPrompt({ scope: scope(), history }).slice(1)).toEqual([
-      { role: 'assistant', content: '어서 와, jin. 나는 Luna야.' },
-      { role: 'user', content: '안녕' },
-    ]);
-  });
-
-  it('lets a card system prompt replace the main text, reaching it through {{original}}', () => {
-    const [system] = buildPrompt({ scope: scope({ systemPrompt: 'Be poetic. {{original}}' }), history: [] });
-    expect(system!.content).toMatch(/^Be poetic\. Write Luna's next reply/);
+  it('rolls a random tag in a message the same on screen as in the prompt', () => {
+    const over = { card: card({ greetings: [] }), messages, greeting: null };
+    expect(renderChat('display', scope(over)).texts[2]).toBe(renderChat('prompt', scope(over)).texts[2]);
+    expect(renderChat('prompt', scope(over)).texts[2]).toMatch(/^She nods\. \d+$/);
   });
 });
 
 describe('unused', () => {
-  it('counts what the prompt does not use yet, other CBS tags included', () => {
-    const regex = [{ name: 'r', find: 'a', replace: 'b', stage: 'display' as const, flags: null }];
-    expect(unused(card({ description: '{{getvar::mood}} {{char}} {{user}}', regex }), 3)).toEqual([
-      { kind: 'lorebook', count: 3 },
-      { kind: 'regex', count: 1 },
-      { kind: 'cbs', count: 1 },
+  it('counts what the prompt does not use yet', () => {
+    expect(unused(card({ bias: [['a', 1]], utility: true }))).toEqual([
+      { kind: 'bias', count: 1 },
+      { kind: 'utility', count: 1 },
     ]);
   });
 });

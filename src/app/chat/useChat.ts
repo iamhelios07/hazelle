@@ -5,11 +5,11 @@ import { shown, type Chat, type ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { chatModel, setChatModel } from '../../runtime/assignment';
 import { editMessage, removeChat, removeMessage, renameChat, restoreChat, restoreMessage, selectVersion, startChat } from '../../runtime/chat-log';
-import { withTurn, type Shown, type TalkFailure } from '../../runtime/talk';
-import { scopeOf, takeTurn, type Target } from '../../runtime/turn';
-import { describeTalkFailure } from '../common/failure';
+import { withTurn, type Shown } from '../../runtime/talk';
+import { blocked, displayChat, takeTurn, type Target, type TurnFailure } from '../../runtime/turn';
+import { describeTurnFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
-import { useLoreCount, useSession, useTurn } from '../session';
+import { useSession, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle } from '../ui';
@@ -32,25 +32,26 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const [draftModels, setDraftModels] = useState<Assignment>({});
   const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, models: draftModels };
   const route = chatModel(store, chat);
-  const scope = scopeOf(session, chat);
   const card = shelf?.character.card ?? null;
-  const lore = useLoreCount(chat.character);
   const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
   // A blank greeting keeps its place in the card, but a chat never opens on nothing.
   const greetings = card?.greetings.filter((text) => text.trim()) ?? [];
+  // The ids the greetings are saved under, so their random tags roll the same before and after the first send.
+  const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
   const opening: Shown | null =
     item === null && card && greetings.length > 0
       ? {
           id: 'opening',
           role: 'assistant',
           at: openedAt,
-          versions: greetings.map((text, index) => ({ id: `opening-${index}`, text, receipt: null, edited: false, at: openedAt })),
+          versions: greetings.map((text, index) => ({ id: openingIds[index]!, text, receipt: null, edited: false, at: openedAt })),
           selected: greeting,
           live: null,
         }
       : null;
   const messages: Shown[] = opening ? [opening] : withTurn(item?.messages ?? [], turn, id ?? '');
+  const texts = displayChat(session, id, chat, messages);
   const busy = turn !== null;
   const streaming = busy && turn.chat === id;
   const last = messages.at(-1);
@@ -70,9 +71,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     if (replyTarget) setPanel((current) => (current.open ? { open: true, id: replyTarget } : current));
   }, [replyTarget]);
 
-  function report(failure: TalkFailure | null) {
+  function report(failure: TurnFailure | null) {
     if (!failure) return;
-    toast.show(describeTalkFailure(failure), failure.kind === 'unsaved' ? { label: '다시 저장', onClick: () => void talk.saveAgain().then(report) } : undefined);
+    toast.show(describeTurnFailure(failure), failure.kind === 'unsaved' ? { label: '다시 저장', onClick: () => void talk.saveAgain().then(report) } : undefined);
   }
 
   // Back to the foot of the story, which also puts away tools a tap pinned open.
@@ -84,8 +85,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   async function send() {
     const text = draft.text.trim();
     if (!text || busy) return;
-    if ('kind' in route) {
-      setProblem(describeTalkFailure(route));
+    const stop = blocked(session, chat);
+    if (stop) {
+      setProblem(describeTurnFailure(stop));
       return;
     }
     setProblem(null);
@@ -93,7 +95,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     follow();
     let chatId = id;
     if (chatId === null) {
-      const started = await startChat(store, chat, opening && { texts: opening.versions.map((version) => version.text), selected: opening.selected });
+      const started = await startChat(store, chat, opening && { ids: opening.versions.map((version) => version.id), texts: opening.versions.map((version) => version.text), selected: opening.selected });
       if (!started.ok) {
         draft.set(text);
         toast.failed(started.failure, started.step === 'chat' ? '채팅을 만들지 못했어요.' : '첫인사를 저장하지 못했어요.');
@@ -103,7 +105,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       navigate({ kind: 'chat', id: chatId }, { replace: true });
     }
     const failure = await takeTurn(session, chatId, { kind: 'send', text });
-    if (failure?.kind === 'unsent') draft.putBack(chatId, text);
+    // Only an unsaved reply means the user's message was saved.
+    if (failure && failure.kind !== 'unsaved') draft.putBack(chatId, text);
     report(failure);
   }
 
@@ -185,9 +188,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     shelf,
     card,
     route,
-    scope,
-    notUsed: card && describeUnused(unused(card, lore)),
+    notUsed: card && describeUnused(unused(card)),
     messages,
+    texts,
     opening,
     last,
     busy,

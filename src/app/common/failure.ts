@@ -4,7 +4,7 @@ import type { AddFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
 import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
-import type { TalkFailure } from '../../runtime/talk';
+import type { TurnFailure } from '../../runtime/turn';
 
 const MESSAGES: Record<string, string> = {
   'bad-username': '아이디는 2–32자의 글자, 숫자, _ . - 로만 만들 수 있어요.',
@@ -122,12 +122,18 @@ export function describeAddFailure(failure: AddFailure): string {
   }
 }
 
-export function describeTalkFailure(failure: TalkFailure): string {
+export function describeTurnFailure(failure: TurnFailure): string {
   switch (failure.kind) {
     case 'no-model':
       return '본 대화 모델이 정해지지 않았어요. 모델 버튼에서 골라 주세요.';
     case 'model-gone':
       return '고른 모델이 별표 목록에 없어요. 모델 버튼에서 다시 골라 주세요.';
+    case 'prompt-missing':
+      return failure.own ? '이 채팅의 프롬프트가 지워졌어요. 다른 프롬프트를 골라 주세요.' : '기본 프롬프트가 없어요.';
+    case 'persona-missing':
+      return failure.own ? '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.' : '기본 페르소나가 지워졌어요. 다른 페르소나를 기본으로 골라 주세요.';
+    case 'tokenizer':
+      return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 보내 주세요.';
     case 'unsent':
       return `보낸 말을 저장하지 못해서 답장을 멈췄어요. ${describeFailure(failure.failure)}`;
     case 'unsaved':

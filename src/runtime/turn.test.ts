@@ -6,7 +6,27 @@ import { takeTurn } from './turn';
 
 const server = testServer();
 
-const luna = { name: '루나', nickname: null, description: '', personality: '', scenario: '', exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '' } as Card;
+const luna: Card = {
+  name: '루나',
+  nickname: null,
+  description: '',
+  personality: '',
+  scenario: '',
+  greetings: ['어서 와, {{user}}.', '또 왔네, {{char}}야.'],
+  exampleDialogue: '',
+  systemPrompt: '',
+  postHistoryInstructions: '',
+  creatorNotes: '',
+  creator: '',
+  version: '',
+  tags: [],
+  variables: [],
+  toggles: '',
+  utility: false,
+  bias: [],
+  regex: [],
+  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
+};
 
 describe('a new chat', () => {
   it('is saved as the chat, its greetings as written with the shown one selected, then the first message; names are filled where shown and sent', () =>
@@ -16,7 +36,7 @@ describe('a new chat', () => {
       const character = await store.create('character', { card: luna, folder: null, loreFolders: [] });
       const log = stubRelay(() => saying('왔구나.'));
 
-      const started = await startChat(store, { title: null, character: character.ok ? character.data.id : null, models: {} }, { texts: ['어서 와, {{user}}.', '또 왔네, {{char}}야.'], selected: 0 });
+      const started = await startChat(store, { title: null, character: character.ok ? character.data.id : null, models: {} }, { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0 });
       const chat = started.ok ? started.id : '';
       expect(session.views().chatById.get(chat)?.preview).toBe('어서 와, jin.');
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
@@ -31,7 +51,10 @@ describe('a new chat', () => {
         ['message', '왔구나.'],
       ]);
       const sent = JSON.parse(log[0]!.sent.body!) as { messages: { role: string; content: string }[] };
-      expect(sent.messages.slice(1)).toEqual([
+      // The starter prompt the session seeds: its texts, with the empty slots and notes left out, then the chat.
+      expect(sent.messages.map(({ role }) => role)).toEqual(['system', 'system', 'system', 'system', 'system', 'assistant', 'user']);
+      expect(sent.messages[4]!.content).toMatch(/^# Premise\nYou write 루나\. Your partner writes jin\./);
+      expect(sent.messages.slice(-2)).toEqual([
         { role: 'assistant', content: '어서 와, jin.' },
         { role: 'user', content: '안녕' },
       ]);

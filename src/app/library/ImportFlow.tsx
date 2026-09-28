@@ -130,7 +130,7 @@ function Summary({ result }: { result: Done }) {
   ].filter(Boolean);
   const missed = report.unsupported.map((item) => UNSUPPORTED[item.kind](item.count));
   if (result.faceless) missed.unshift('그림: 읽지 못함');
-  const notUsed = describeUnused(unused(card, result.lore));
+  const notUsed = describeUnused(unused(card));
   return (
     <Section title={card.name}>
       <Text>{came.join(' · ')}</Text>

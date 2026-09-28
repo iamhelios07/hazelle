@@ -1,3 +1,5 @@
+import { stripComments } from '../cbs/parse';
+
 // What a key is searched in: a chat message, or the body of an entry that fired in an earlier pass.
 export type Source = { kind: 'message' | 'entry'; id: string };
 
@@ -8,12 +10,10 @@ export type Matcher = (scanned: Scanned) => boolean;
 
 export type KeyMode = { regex: boolean; caseSensitive: boolean; fullWord: boolean };
 
-// A comment ends at its first `}}`, so a tag nested inside one ends it early.
-const COMMENT = /\{\{(?:\/\/|comment:)[\s\S]*?\}\}/gi;
 const SYNTAX = /[.*+?^${}()|[\]\\]/g;
 
 export function scan(source: Source, text: string): Scanned {
-  const stripped = text.replace(COMMENT, '');
+  const stripped = stripComments(text);
   const compact = stripped.replace(/\s+/g, '');
   return { source, text: stripped, compact, compactLower: compact.toLowerCase() };
 }

@@ -68,3 +68,8 @@ function append(nodes: Node[], node: Node) {
   if (typeof node === 'string' && typeof last === 'string') nodes[nodes.length - 1] = last + node;
   else nodes.push(node);
 }
+
+// Removes {{//…}} and {{comment:…}} from text that is searched rather than evaluated (lorebook keys, design
+// §5 row 1). A comment ends at its first `}}`, so a tag nested inside one ends it early.
+const COMMENT = /\{\{(?:\/\/|comment:)[\s\S]*?\}\}/gi;
+export const stripComments = (text: string) => text.replace(COMMENT, '');

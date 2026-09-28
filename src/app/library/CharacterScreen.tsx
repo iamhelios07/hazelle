@@ -3,7 +3,7 @@ import { unused } from '../../engine/pipeline';
 import type { ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { describeUnused } from '../common/unused';
-import { useCharacter, useLoreCount } from '../session';
+import { useCharacter } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME, type Back } from '../shell/routes';
 import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Tag, Text, useWide } from '../ui';
@@ -13,7 +13,6 @@ import { useCharacterActions } from './useCharacterActions';
 export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatItem> | null; back: Back | null }) {
   const id = shelf?.id ?? null;
   const original = useCharacter(shelf?.character.origin?.id ?? null);
-  const lore = useLoreCount(id);
   const { busy, copy, remove } = useCharacterActions();
   const wide = useWide();
   const start = (
@@ -32,7 +31,7 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatIte
   }
 
   const { card, origin } = shelf.character;
-  const notUsed = describeUnused(unused(card, lore));
+  const notUsed = describeUnused(unused(card));
   const originHere = original !== null;
   const copying = busy?.id === shelf.id ? busy.label : null;
 

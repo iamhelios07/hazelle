@@ -114,6 +114,9 @@ export const readToggle = (context: CbsContext, key: string) => context.toggle(k
 const readGlobal = (context: CbsContext, name: string) => (name.startsWith('toggle_') ? readToggle(context, name.slice('toggle_'.length)) : '');
 
 const messageIndex = (context: CbsContext) => ('message' in context.source ? context.source.message : null);
+// A bot reads the greeting as message -1 and the first message after it as 0 (design §5 row 20), so a message's
+// number is its index less this.
+const opened = (context: CbsContext) => (context.greeting === null ? 0 : 1);
 const currentMessage = (context: CbsContext) => {
   const index = messageIndex(context);
   return index === null ? undefined : context.messages[index];
@@ -145,15 +148,16 @@ const numbers = (args: string[]) => variadic(args).map(Number);
 
 const cardText = (field: 'description' | 'personality' | 'scenario' | 'exampleDialogue'): Run => (_, { context, insert }) => (context.card ? insert(context.card[field]) : null);
 define('char bot', 0, (_, { context: { card } }) => card && (card.nickname || card.name));
-define('user', 0, (_, { context }) => context.persona.name);
-define('persona userpersona', 0, (_, { context, insert }) => insert(context.persona.description));
+define('user', 0, (_, { context: { persona } }) => persona && persona.name);
+define('persona userpersona', 0, (_, { context: { persona }, insert }) => persona && insert(persona.description));
 define('description chardesc', 0, cardText('description'));
 define('personality charpersona', 0, cardText('personality'));
 define('scenario', 0, cardText('scenario'));
 define('exampledialogue examplemessage', 0, cardText('exampleDialogue'));
-define('mainprompt systemprompt', 0, (_, { context, insert }) => insert(context.prompt.main));
-define('globalnote systemnote ujb', 0, (_, { context, insert }) => insert(context.prompt.globalNote));
-define('authornote', 0, (_, { context, insert }) => insert(context.prompt.authorNote));
+const promptText = (field: 'main' | 'globalNote' | 'authorNote'): Run => (_, { context, insert }) => (context.prompt ? insert(context.prompt[field]) : null);
+define('mainprompt systemprompt', 0, promptText('main'));
+define('globalnote systemnote ujb', 0, promptText('globalNote'));
+define('authornote', 0, promptText('authorNote'));
 define('lorebook worldinfo', 0, (_, { context }) => serialize(context.lore));
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
@@ -287,18 +291,18 @@ const lastOf = (context: CbsContext, role: 'user' | 'assistant') => {
   return context.messages.slice(0, before).findLast((message) => message.role === role)?.text ?? '';
 };
 define('lastmessage', 0, (_, { context }) => context.messages.at(-1)?.text ?? '');
-define('lastmessageid lastmessageindex', 0, (_, { context }) => (context.messages.length ? String(context.messages.length - 1) : null));
+define('lastmessageid lastmessageindex', 0, (_, { context }) => (context.messages.length ? String(context.messages.length - 1 - opened(context)) : null));
 define('previouscharchat lastcharmessage', 0, (_, { context }) => lastOf(context, 'assistant'));
 define('previoususerchat lastusermessage', 0, (_, { context }) => lastOf(context, 'user'));
-define('previouschatlog', 1, ([index], { context }) => context.messages[Number(index)]?.text ?? 'Out of range');
+define('previouschatlog', 1, ([number], { context }) => context.messages[Number(number) + opened(context)]?.text ?? 'Out of range');
 define('history messages', 0, (_, { context }) => serialize(context.messages.map(({ text }) => text)));
 define('userhistory', 0, (_, { context }) => serialize(context.messages.filter(({ role }) => role === 'user').map(({ text }) => text)));
 define('charhistory', 0, (_, { context }) => serialize(context.messages.filter(({ role }) => role === 'assistant').map(({ text }) => text)));
 define('chatindex', 0, (_, { context }) => {
   const index = messageIndex(context);
-  return index === null ? null : String(index);
+  return index === null ? null : String(index - opened(context));
 });
-define('firstmsgindex', 0, (_, { context }) => (context.greeting === null ? null : String(context.greeting)));
+define('firstmsgindex', 0, (_, { context: { greeting } }) => (greeting && greeting.index !== null ? String(greeting.index) : null));
 // Risu names a character's message `char`, which bots compare against.
 define('role', 0, (_, { context }) => {
   const role = currentMessage(context)?.role;
@@ -374,8 +378,8 @@ define('comment', 1, ([text], { context }) => (context.stage === 'display' ? tex
 // The lorebook track scans the entry's raw text, so the key still chains entries.
 define('hiddenkey', 1, () => '');
 
-define('model', 0, (_, { context }) => context.model.id);
-define('maxcontext', 0, (_, { context }) => (context.model.maxContext === null ? null : String(context.model.maxContext)));
-define('prefillsupported prefill', 0, (_, { context }) => bool(context.model.prefill));
+define('model', 0, (_, { context: { model } }) => model && model.id);
+define('maxcontext', 0, (_, { context: { model } }) => (model && model.maxContext !== null ? String(model.maxContext) : null));
+define('prefillsupported prefill', 0, (_, { context: { model } }) => (model && model.prefill !== null ? bool(model.prefill) : null));
 define('screenwidth', 0, (_, { context }) => (context.screen ? String(context.screen.width) : null));
 define('screenheight', 0, (_, { context }) => (context.screen ? String(context.screen.height) : null));

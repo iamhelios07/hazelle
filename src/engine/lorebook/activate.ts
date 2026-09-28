@@ -384,7 +384,8 @@ function find(query: Query, sources: Scanned[]): { key: string; source: Source }
   return null;
 }
 
-function merge(target: string, body: string, operation: Operation): string | null {
+// null: the text a replace looks for is not in the target.
+export function merge(target: string, body: string, operation: Operation): string | null {
   switch (operation.kind) {
     case 'append':
       return `${target} ${body}`;

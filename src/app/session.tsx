@@ -46,12 +46,6 @@ export function useCharacter(id: string | null): CharacterShelf<ChatItem> | null
   return id === null ? null : (characterById.get(id) ?? null);
 }
 
-// How many lorebook entries a character holds, which its chats do not use yet (engine/pipeline).
-export function useLoreCount(character: string | null): number {
-  const store = useStore();
-  return useSyncExternalStore(store.subscribe, () => (character === null ? 0 : store.children('lore', character).length));
-}
-
 export function useTurn(): Turn | null {
   const talk = useTalk();
   return useSyncExternalStore(talk.subscribe, talk.snapshot);

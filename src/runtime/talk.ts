@@ -21,8 +21,8 @@ export type Turn = {
 export type Shown = Message & { live: string | null };
 
 // One reply to ask for (runtime/turn): the model, the prompt, the user's message sent with it, and where
-// the reply goes.
-export type Ask = { chat: string; route: Route; prompt: ChatMessage[]; said: Turn['said']; reply: Omit<Turn['reply'], 'id'> };
+// the reply goes. The reply's id is chosen before the prompt is built, which it seeds (engine/pipeline).
+export type Ask = { chat: string; route: Route; prompt: ChatMessage[]; said: Turn['said']; reply: Turn['reply'] };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain tries once more.
@@ -112,9 +112,9 @@ export class Talk {
     for (const listener of this.listeners) listener();
   }
 
-  async run({ chat, route, prompt, said, reply: target }: Ask): Promise<TalkFailure | null> {
+  async run({ chat, route, prompt, said, reply }: Ask): Promise<TalkFailure | null> {
     if (this.turn) return null;
-    const turn: Turn = { chat, said, reply: { id: crypto.randomUUID(), ...target }, text: '' };
+    const turn: Turn = { chat, said, reply, text: '' };
     this.set(turn);
     const abort = new AbortController();
     this.abort = abort;
@@ -152,7 +152,7 @@ export class Talk {
       firstTextMs: answer.firstTextMs,
       totalMs: answer.totalMs,
     };
-    const written: Written = { id: turn.reply.id, ...target, at: Date.now(), text: this.turn!.text, receipt };
+    const written: Written = { ...reply, at: Date.now(), text: this.turn!.text, receipt };
     const saved = await appendReply(this.store, chat, written);
     this.set(null);
     if (!saved.ok) {

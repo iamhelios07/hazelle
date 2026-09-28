@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react';
-import { render } from '../../engine/render';
-import { shown } from '../../model/chat';
 import { day } from '../common/time';
 import { Divider, Empty, Text } from '../ui';
 import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { messages, opening, last, card, shelf, route, scope, notUsed, busy, editing, pinned, modelMenu, actions } = chat;
+  const { messages, texts, opening, last, card, shelf, route, notUsed, busy, editing, pinned, modelMenu, actions } = chat;
   const rows: ReactNode[] = [];
   if (notUsed) {
     rows.push(
@@ -25,7 +23,6 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   }
   let lastDay = '';
   messages.forEach((message, index) => {
-    const text = render('display', shown(message).text, scope);
     const label = day(message.at);
     if (label !== lastDay) {
       rows.push(<Divider key={`day-${message.at}`} label={label} />);
@@ -35,7 +32,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
       <ChatMessage
         key={message.id}
         message={message}
-        text={text}
+        text={texts[index]!}
         isLast={index === messages.length - 1}
         beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
         character={card && { name: card.nickname || card.name, image: shelf!.face }}

@@ -1,4 +1,3 @@
-import { render } from '../engine/render';
 import { chatItems, type ChatItem } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
@@ -12,7 +11,7 @@ import { Files } from './files';
 import { addStarter } from './prompts';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
-import { scopeOf } from './turn';
+import { displayChat } from './turn';
 
 export type Views = {
   chats: ChatItem[];
@@ -80,7 +79,7 @@ function derive(store: ObjectStore, username: string): Views {
   const chats = chatItems(
     store.list('chat'),
     (chat) => store.children('entry', chat),
-    (chat, text) => render('display', text, scopeOf({ store, username }, chat)),
+    (chat, messages) => displayChat({ store, username }, chat.id, chat.value, messages),
   );
   const shelves = shelve(store.list('character'), store.list('avatar'), chats);
   return {

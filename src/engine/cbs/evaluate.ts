@@ -11,25 +11,28 @@ export type CbsContext = {
   stage: Stage;
   card: Card | null;
   // The chat's persona; with none, the account's username and no description (design §4.3).
-  persona: { name: string; description: string };
+  persona: { name: string; description: string } | null;
   // The prompt's own main text and global note, not a card's replacements, and the author's note in effect.
-  prompt: { main: string; globalNote: string; authorNote: string };
-  lore: LoreEntry[];
+  // persona and prompt are null when the chat's is gone, which only the display renders through.
+  prompt: { main: string; globalNote: string; authorNote: string } | null;
+  lore: readonly Omit<LoreEntry, 'folder'>[];
   messages: HistoryMessage[];
   // A chat message, by its index in messages: its version id seeds its random tags, and its setvar, addvar
   // and setdefaultvar write the variables. Or text outside messages: its random tags roll from a seed fresh
   // for each request, and its variable writes are removed without effect (design §5 rows 11 and 18).
   source: { message: number } | { seed: string };
-  // The index in card.greetings of the greeting the chat opened with, which is then messages[0]; null when
-  // it opened with none.
-  greeting: number | null;
+  // The greeting the chat opened with, which is then messages[0], and its index in card.greetings: null when
+  // the version shown is not one of the card's (the card changed, or the model rewrote it). null when the chat
+  // opened with none.
+  greeting: { index: number | null } | null;
   // The chat's variables as of this text, written in place. They start from the card's default variables,
   // and the chat's messages are replayed over them in order (design §5 row 17).
   variables: Map<string, string>;
   // A toggle's value by its key, or null when nothing declares it (design §4.2).
   toggle: (key: string) => string | null;
   // prefill: whether the model takes an assistant prefill, as its connection says; never read from the id.
-  model: { id: string; maxContext: number | null; prefill: boolean };
+  // null when unknown, and model null when the chat has no model.
+  model: { id: string; maxContext: number | null; prefill: boolean | null } | null;
   // null in the prompt, and when the display does not know it.
   screen: { width: number; height: number } | null;
   // now in ms since the epoch; timeZone an IANA name, since the engine reads no zone of the device it runs on.

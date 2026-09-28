@@ -37,10 +37,10 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => ({
   lore: [],
   messages: [message('v1', 'assistant', 'Hello')],
   source: { seed: 'request-1' },
-  greeting: 0,
+  greeting: { index: 0 },
   variables: new Map(),
   toggle: () => null,
-  model: { id: 'model', maxContext: null, prefill: false },
+  model: { id: 'model', maxContext: null, prefill: null },
   screen: null,
   clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
   pickSeed: 'pick-1',
@@ -164,12 +164,16 @@ describe('evaluate', () => {
     expect(run('{{? $hp * 2 + 1}} {{calc::2 + abc}}', { variables: new Map([['hp', '4']]) })).toBe('9 {{calc::2 + abc}}');
   });
 
-  it('numbers messages from the greeting at 0', () => {
+  it('numbers messages as Risu does: the greeting -1 and the message after it 0, or from 0 with no greeting', () => {
     const messages = [message('g', 'assistant', 'Hello'), message('u', 'user', 'hi'), message('a', 'assistant', 'yo')];
-    const tags = '{{chatindex}} {{isfirstmsg}} {{firstmsgindex}} {{role}} {{previouscharchat}} {{previoususerchat}} {{lastmessageid}}';
-    expect(run(tags, { messages, greeting: 1, source: { message: 2 } })).toBe('2 0 1 char Hello hi 2');
-    expect(run('{{isfirstmsg}} {{role}}', { messages, source: { message: 0 } })).toBe('1 char');
+    const tags = '{{chatindex}} {{isfirstmsg}} {{firstmsgindex}} {{role}} {{previouscharchat}} {{previoususerchat}} {{lastmessageid}} {{previouschatlog::-1}} {{previouschatlog::0}}';
+    expect(run(tags, { messages, greeting: { index: 1 }, source: { message: 2 } })).toBe('1 0 1 char Hello hi 1 Hello hi');
+    expect(run('{{chatindex}} {{isfirstmsg}} {{role}}', { messages, source: { message: 0 } })).toBe('-1 1 char');
     expect(run('{{chatindex}} {{isfirstmsg}}', { messages })).toBe('{{chatindex}} 0');
+    const plain = messages.slice(1);
+    expect(run('{{chatindex}} {{lastmessageid}} {{previouschatlog::0}} {{previouschatlog::-1}} {{firstmsgindex}}', { messages: plain, greeting: null, source: { message: 1 } })).toBe(
+      '1 1 hi Out of range {{firstmsgindex}}',
+    );
   });
 
   it('escapes :: inside an array, and spreads an array into the arguments of the tag around it', () => {

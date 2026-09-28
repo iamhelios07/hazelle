@@ -15,20 +15,20 @@ import type { ObjectStore } from './store';
 export async function startChat(
   store: ObjectStore,
   chat: Chat,
-  greetings: { texts: string[]; selected: number } | null,
+  greetings: { ids: string[]; texts: string[]; selected: number } | null,
 ): Promise<{ ok: true; id: string } | { ok: false; step: 'chat' | 'greetings'; failure: ApiFailure }> {
   const created = await store.create('chat', chat);
   if (!created.ok) return { ok: false, step: 'chat', failure: created };
   const id = created.data.id;
-  const greeted = greetings && (await addGreetings(store, id, greetings.texts, greetings.selected));
+  const greeted = greetings && (await addGreetings(store, id, greetings));
   return greeted ? { ok: false, step: 'greetings', failure: greeted } : { ok: true, id };
 }
 
 // A character's chat opens on its greeting, and the other greetings are versions of it (design F3).
-// They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
-async function addGreetings(store: ObjectStore, chat: string, texts: string[], selected: number): Promise<ApiFailure | null> {
+// They are saved as the card wrote them; engine/render fills them each time they are shown or sent. ids are
+// the ones the greetings were shown under before the chat was saved, which seed their random tags.
+async function addGreetings(store: ObjectStore, chat: string, { ids, texts, selected }: { ids: string[]; texts: string[]; selected: number }): Promise<ApiFailure | null> {
   const at = Date.now();
-  const ids = texts.map(() => crypto.randomUUID());
   const first = ids[0]!;
   const entries: [string, Entry][] = texts.map((text, index) => [
     ids[index]!,
