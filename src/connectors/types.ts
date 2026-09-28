@@ -1,3 +1,5 @@
+import type { Carries, ModelSettings, Takes } from './settings';
+
 export type Protocol = 'chat-completions' | 'anthropic-messages';
 
 // A request that cannot be built, refused before any network call. The code names the reason; the UI words it.
@@ -18,7 +20,7 @@ export type Connection = {
   baseUrl: string | null;
   protocol: Protocol | null;
   secret: string;
-  starred: Model[];
+  starred: Starred[];
 };
 
 export type HttpRequest = { url: string; method: 'GET' | 'POST'; headers: Record<string, string>; body: string | null };
@@ -39,10 +41,16 @@ export type Model = {
   // (Copilot). null means the connection's own. 'unsupported' means only formats this app does not
   // speak yet, so a request is refused before sending.
   protocol: Protocol | 'unsupported' | null;
+  // Absent where the catalog says nothing about request settings (the generic list), and from a
+  // snapshot starred before catalogs were read for them.
+  takes?: Takes;
 };
 
+// A starred model: the catalog's snapshot, with the settings the user gave it (design §4.4).
+export type Starred = Model & { settings?: ModelSettings };
+
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-export type ChatRequest = { model: Model; messages: ChatMessage[]; maxTokens: number | null };
+export type ChatRequest = { model: Model; messages: ChatMessage[]; settings: ModelSettings };
 
 // A missing count stays null. Filling it with 0 would read as a measured zero and shrink totals.
 export type Usage = {
@@ -85,7 +93,9 @@ export type Codec = {
   listModels(endpoint: Endpoint): HttpRequest;
   // null when the payload is not a model list at all, which is not the same as an empty one.
   parseModels(payload: unknown): Model[] | null;
-  chat(endpoint: Endpoint, request: ChatRequest): HttpRequest;
+  carries: Carries;
+  // fields are the connection type's own, laid over the format's body.
+  chat(endpoint: Endpoint, request: ChatRequest, fields: Record<string, unknown>): HttpRequest;
   // Reads one decoded SSE event. Text goes through append; usage and the finish reason go to facts.
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
   terminal(event: unknown): Terminal | null;
@@ -116,6 +126,9 @@ export type ConnectionType = {
   // Presents the credential with the provider's own headers, in place of the codec's.
   headers?: (credential: string) => Record<string, string>;
   parseModels?: (payload: unknown) => Model[] | null;
+  // Reasoning by a token budget, in a field of the provider's own where its codec has none. Its
+  // parseModels says which models take one.
+  reasoningBudget?: (tokens: number) => Record<string, unknown>;
   // usage is the codec's reading of the stream's counts, for a type that prices tokens itself.
   cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
   // Asked with the stored credential. It is also the check that a pasted key works, where the model

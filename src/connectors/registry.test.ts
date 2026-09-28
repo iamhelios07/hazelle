@@ -102,6 +102,10 @@ describe('catalogs', () => {
         reasoning: true,
         tools: true,
         protocol: null,
+        takes: {
+          settings: ['maxOutput', 'temperature', 'stop', 'reasoning'],
+          reasoning: { off: false, levels: ['max', 'xhigh', 'high', 'medium', 'low'], budget: null, adaptive: null },
+        },
       },
       expect.objectContaining({ id: 'openrouter/auto-beta', name: 'Auto Router (Beta)', output: ['text', 'image'] }),
     ]);
@@ -119,6 +123,10 @@ describe('catalogs', () => {
         reasoning: true,
         tools: true,
         protocol: null,
+        takes: {
+          settings: ['maxOutput', 'stop', 'reasoning'],
+          reasoning: { off: true, levels: ['low', 'medium', 'high', 'xhigh', 'max'], budget: { min: null, max: null }, adaptive: null },
+        },
       },
       expect.objectContaining({ id: 'alibaba/qwen3-coder', input: ['text'], reasoning: false, tools: true }),
     ]);
@@ -143,7 +151,18 @@ describe('catalogs', () => {
       has_more: false,
     };
     expect(parseCatalog(connection('anthropic'), payload)).toEqual([
-      { id: 'claude-opus-5', name: 'Claude Opus 5', input: ['text', 'image'], output: ['text'], contextLength: null, maxOutput: 128000, reasoning: true, tools: null, protocol: null },
+      {
+        id: 'claude-opus-5',
+        name: 'Claude Opus 5',
+        input: ['text', 'image'],
+        output: ['text'],
+        contextLength: null,
+        maxOutput: 128000,
+        reasoning: true,
+        tools: null,
+        protocol: null,
+        takes: { settings: null, reasoning: { off: null, levels: null, budget: null, adaptive: null } },
+      },
     ]);
   });
 
@@ -207,7 +226,7 @@ describe('chat requests', () => {
 
   it('sends max_tokens to a compatible server only when asked', () => {
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
-    const request = withCredential(generic, chatRequest(generic, { model: model(), messages, maxTokens: null }), '');
+    const request = withCredential(generic, chatRequest(generic, { model: model(), messages, settings: {} }), '');
     expect(request).toMatchObject({ url: 'https://api.example.com/v1/chat/completions', headers: { 'content-type': 'application/json' } });
     expect(request.headers).not.toHaveProperty('authorization');
     expect(JSON.parse(request.body!)).toEqual({ model: 'm', messages, stream: true, stream_options: { include_usage: true } });
@@ -215,10 +234,10 @@ describe('chat requests', () => {
 
   it('moves system text to Anthropic’s system field and needs a known output limit', () => {
     const anthropic = connection('anthropic');
-    const request = withCredential(anthropic, chatRequest(anthropic, { model: model({ maxOutput: 64000 }), messages, maxTokens: null }), 'sk-ant');
+    const request = withCredential(anthropic, chatRequest(anthropic, { model: model({ maxOutput: 64000 }), messages, settings: {} }), 'sk-ant');
     expect(request.headers).toEqual({ 'x-api-key': 'sk-ant', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
     expect(JSON.parse(request.body!)).toEqual({ model: 'm', max_tokens: 64000, system: '짧게 답해.', messages: [messages[1]], stream: true });
-    expect(() => chatRequest(anthropic, { model: model(), messages, maxTokens: null })).toThrow(ConnectorError);
+    expect(() => chatRequest(anthropic, { model: model(), messages, settings: {} })).toThrow(ConnectorError);
   });
 });
 
@@ -238,11 +257,24 @@ describe('copilot', () => {
   };
 
   it('lists the chat models the model picker offers, each with the protocol it declares', () => {
+    const takes = (reasoning: object) => ({ settings: null, reasoning: { off: null, levels: null, budget: null, adaptive: null, ...reasoning } });
+    const efforts = takes({ levels: ['low', 'medium', 'high'] });
     expect(models).toEqual([
-      { id: 'claude-opus-4.6', name: 'Claude Opus 4.6', input: ['text', 'image'], output: ['text'], contextLength: 200000, maxOutput: 64000, reasoning: true, tools: true, protocol: 'anthropic-messages' },
-      { id: 'gpt-5-mini', name: 'GPT-5 mini', input: ['text', 'image'], output: ['text'], contextLength: 264000, maxOutput: 64000, reasoning: true, tools: true, protocol: 'chat-completions' },
-      { id: 'gpt-5.1-codex', name: 'GPT-5.1-Codex', input: ['text', 'image'], output: ['text'], contextLength: 400000, maxOutput: 128000, reasoning: true, tools: true, protocol: 'unsupported' },
-      { id: 'gpt-4.1', name: 'GPT-4.1', input: ['text'], output: ['text'], contextLength: 128000, maxOutput: 16384, reasoning: null, tools: true, protocol: null },
+      {
+        id: 'claude-opus-4.6',
+        name: 'Claude Opus 4.6',
+        input: ['text', 'image'],
+        output: ['text'],
+        contextLength: 200000,
+        maxOutput: 64000,
+        reasoning: true,
+        tools: true,
+        protocol: 'anthropic-messages',
+        takes: takes({ budget: { min: 1024, max: 32000 }, adaptive: true }),
+      },
+      { id: 'gpt-5-mini', name: 'GPT-5 mini', input: ['text', 'image'], output: ['text'], contextLength: 264000, maxOutput: 64000, reasoning: true, tools: true, protocol: 'chat-completions', takes: efforts },
+      { id: 'gpt-5.1-codex', name: 'GPT-5.1-Codex', input: ['text', 'image'], output: ['text'], contextLength: 400000, maxOutput: 128000, reasoning: true, tools: true, protocol: 'unsupported', takes: efforts },
+      { id: 'gpt-4.1', name: 'GPT-4.1', input: ['text'], output: ['text'], contextLength: 128000, maxOutput: 16384, reasoning: null, tools: true, protocol: null, takes: takes({}) },
     ]);
   });
 
@@ -250,14 +282,14 @@ describe('copilot', () => {
     expect(withCredential(resolved, catalogRequest(resolved), 'tid')).toEqual({ url: 'https://api.githubcopilot.com/models', method: 'GET', headers: identity, body: null });
 
     const claude = resolveModel(resolved, find('claude-opus-4.6'));
-    const request = withCredential(claude, chatRequest(claude, { model: find('claude-opus-4.6'), messages, maxTokens: null }), 'tid');
+    const request = withCredential(claude, chatRequest(claude, { model: find('claude-opus-4.6'), messages, settings: {} }), 'tid');
     expect(request.url).toBe('https://api.githubcopilot.com/v1/messages');
     expect(request.headers).toEqual({ ...identity, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
     expect(JSON.parse(request.body!)).toMatchObject({ model: 'claude-opus-4.6', max_tokens: 64000 });
 
     for (const id of ['gpt-5-mini', 'gpt-4.1']) {
       const route = resolveModel(resolved, find(id));
-      expect(chatRequest(route, { model: find(id), messages, maxTokens: null }).url).toBe('https://api.githubcopilot.com/chat/completions');
+      expect(chatRequest(route, { model: find(id), messages, settings: {} }).url).toBe('https://api.githubcopilot.com/chat/completions');
     }
   });
 

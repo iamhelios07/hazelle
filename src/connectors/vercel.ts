@@ -1,3 +1,5 @@
+import { listedSettings } from './chat-completions';
+import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, Modality } from './types';
 import { amount, count, isRecord } from './values';
 
@@ -13,6 +15,20 @@ function modalities(value: unknown): Modality[] | null {
 // Credits come as decimal strings, such as "95.50".
 function decimal(value: unknown): number | null {
   return typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) ? Number(value) : amount(value);
+}
+
+// reasoning_options names every control a model has, so one it leaves out is not there; a model
+// without the list has controls the catalog does not describe.
+function reasoningTakes(options: unknown[]): ReasoningTakes {
+  const listed = options.filter(isRecord);
+  const efforts = effortLevels(listed.find((option) => option.type === 'effort')?.values);
+  const budget = listed.find((option) => option.type === 'budget_tokens');
+  return {
+    off: listed.some((option) => option.type === 'toggle') || efforts?.none === true,
+    levels: efforts?.levels ?? [],
+    budget: budget ? { min: count(budget.min), max: count(budget.max) } : false,
+    adaptive: null,
+  };
 }
 
 const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
@@ -44,9 +60,15 @@ export const vercel: ConnectionType = {
           reasoning: tags ? tags.includes('reasoning') : null,
           tools: tags ? tags.includes('tool-use') : null,
           protocol: null,
+          takes: {
+            settings: Array.isArray(raw.supported_parameters) ? listedSettings(raw.supported_parameters) : null,
+            reasoning: Array.isArray(raw.reasoning_options) ? reasoningTakes(raw.reasoning_options) : null,
+          },
         };
       });
   },
+
+  reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 
   // The team's credits, not the key's: every key of a team draws on one balance.
   meters: {

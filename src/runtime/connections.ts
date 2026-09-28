@@ -1,3 +1,4 @@
+import type { ModelSettings } from '../connectors/settings';
 import type { Connection, Model } from '../connectors/types';
 import type { Stored } from '../model/kinds';
 import type { ApiFailure, ApiResult } from './api';
@@ -34,6 +35,32 @@ export function setStarred(store: ObjectStore, id: string, model: Model, starred
     return { ...current, starred: starred ? [...others, model] : others };
   });
 }
+
+// A starred model's settings (design §4.4) are rewritten from the current copy on every try, so a
+// field changed meanwhile on another device survives. No field left set drops the settings whole, so
+// nothing set has one form.
+function updateSettings(store: ObjectStore, id: string, model: string, change: (settings: ModelSettings) => ModelSettings) {
+  return store.update('connection', id, (current) => ({
+    ...current,
+    starred: current.starred.map((entry) => {
+      if (entry.id !== model) return entry;
+      const { settings, ...snapshot } = entry;
+      const next = change(settings ?? {});
+      return Object.keys(next).length ? { ...snapshot, settings: next } : snapshot;
+    }),
+  }));
+}
+
+export const setModelSettings = (store: ObjectStore, id: string, model: string, values: ModelSettings) =>
+  updateSettings(store, id, model, (settings) => ({ ...settings, ...values }));
+
+export const clearModelSetting = (store: ObjectStore, id: string, model: string, setting: keyof ModelSettings) =>
+  updateSettings(store, id, model, ({ ...settings }) => {
+    delete settings[setting];
+    return settings;
+  });
+
+export const clearModelSettings = (store: ObjectStore, id: string, model: string) => updateSettings(store, id, model, () => ({}));
 
 // Answers the removed connection, which restoreConnection (되돌리기) writes back.
 export async function removeConnection(store: ObjectStore, id: string): Promise<ApiResult<Stored<'connection'>>> {

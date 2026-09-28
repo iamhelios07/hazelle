@@ -3,6 +3,7 @@ import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
 import { copilot } from './copilot';
 import { openRouter } from './openrouter';
+import { problems, settingsSchema, type Carries, type SettingsSchema } from './settings';
 import { vercel } from './vercel';
 import { ConnectorError, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
@@ -53,8 +54,33 @@ export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
 
-export function chatRequest({ codec, endpoint }: Resolved, request: ChatRequest): HttpRequest {
-  return codec.chat(endpoint, request);
+// What one model's requests can carry: its codec's, and a reasoning budget its connection type adds.
+function carries({ type, codec }: Resolved): Carries {
+  const { reasoning } = codec.carries;
+  if (reasoning.budget || !type?.reasoningBudget) return codec.carries;
+  return { ...codec.carries, reasoning: { ...reasoning, budget: { min: null, max: null } } };
+}
+
+// The settings a starred model offers (design §4.4); null for a model this version cannot call at all.
+export function modelSettings(connection: Connection, model: Model): SettingsSchema | null {
+  const resolved = resolveConnection(connection);
+  if (!resolved) return null;
+  try {
+    return settingsSchema(carries(resolveModel(resolved, model)), model);
+  } catch (error) {
+    if (error instanceof ConnectorError) return null;
+    throw error;
+  }
+}
+
+// A setting the model does not take is refused here, before a credential is fetched or anything is
+// sent (design §4.4). The settings screen names which one with the same problems().
+export function chatRequest(route: Resolved, { model, messages, settings }: ChatRequest): HttpRequest {
+  if (problems(settingsSchema(carries(route), model), settings).length) throw new ConnectorError('setting-refused');
+  const { reasoning } = settings;
+  const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
+  const sent = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
+  return route.codec.chat(route.endpoint, { model, messages: sent, settings }, fields);
 }
 
 // The credential is the stored key, or the token a connection type traded it for.
