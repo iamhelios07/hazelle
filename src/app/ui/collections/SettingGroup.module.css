@@ -15,6 +15,11 @@
   padding: var(--space-12) var(--space-16);
 }
 
+.row.wide {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-10);
+}
+
 .row + .row {
   border-top: var(--border-thin) solid var(--color-divider);
 }
@@ -64,6 +69,15 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-8);
+}
+
+.wide .control {
+  justify-content: flex-start;
+}
+
+.wide .error,
+.wide .note {
+  justify-self: start;
 }
 
 .error,

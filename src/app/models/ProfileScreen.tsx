@@ -207,6 +207,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         changed={reasoning !== undefined}
         error={typed && !typed.ok ? typed.error : undefined}
         note={noteFor('reasoning')}
+        wide
         control={
           <Stack gap="related">
             <ChoiceGroup layout="chips" label="생각" options={options} value={current} onChange={pick} />

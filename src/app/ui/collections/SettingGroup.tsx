@@ -19,15 +19,19 @@ type RowProps = {
   help?: ReactNode;
   // What sets it: a field, a menu, a button, or a fact in words. Beside the words where there is room, under them on phones.
   control: ReactNode;
+  // Under the words at every width, for a control as wide as the row, such as a row of chips. Beside them, its
+  // grid column takes the chips' one-line width and squeezes the words to a letter a line.
+  wide?: boolean;
   error?: string;
   // A quiet line under it, such as what some models are sent of the value instead.
   note?: string;
 };
 
-export function SettingRow({ label, place = 'group', changed = false, help, control, error, note }: RowProps) {
+export function SettingRow({ label, place = 'group', changed = false, help, control, wide = false, error, note }: RowProps) {
   const id = useId();
+  const className = [styles.row, place === 'panel' && styles.panel, wide && styles.wide].filter(Boolean).join(' ');
   return (
-    <div className={place === 'group' ? styles.row : `${styles.row} ${styles.panel}`} role="group" aria-labelledby={id}>
+    <div className={className} role="group" aria-labelledby={id}>
       <div className={styles.words}>
         <span id={id} className={styles.label}>
           {changed && <span className={styles.changed} aria-hidden />}
