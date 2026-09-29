@@ -9,8 +9,9 @@ type Props = {
   toggles: readonly Toggle[];
   // How many conditions in the prompt read a key.
   uses: (key: string) => number;
-  onChange: (toggles: Toggle[]) => void;
-  onRekey: (from: string, to: string) => void;
+  onAdd: (toggle: Toggle) => void;
+  onEdit: (before: Toggle, after: Toggle, what: 'label' | 'default') => void;
+  onRekey: (toggle: Toggle, to: string) => void;
   onRemove: (key: string) => void;
   // The new-toggle form is open; 조건 넣기's 새 토글 만들기 opens it too.
   adding: boolean;
@@ -20,9 +21,8 @@ type Props = {
 const KIND_WORDS = { check: '켜고 끄기', choice: '고르기' } as const;
 
 // design §4.2: a prompt's toggles, each a key that conditions name and a label that screens show, with its default.
-export function TogglePane({ toggles, uses, onChange, onRekey, onRemove, adding, onAdding }: Props) {
+export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, adding, onAdding }: Props) {
   const [renaming, setRenaming] = useState<{ key: string; field: 'label' | 'key' } | null>(null);
-  const set = (key: string, change: (toggle: Toggle) => Toggle) => onChange(toggles.map((toggle) => (toggle.key === key ? change(toggle) : toggle)));
   const target = renaming && toggles.find((toggle) => toggle.key === renaming.key);
 
   return (
@@ -48,14 +48,14 @@ export function TogglePane({ toggles, uses, onChange, onRekey, onRemove, adding,
               control={
                 <Row kind="toolbar">
                   {toggle.kind === 'check' ? (
-                    <Switch label={`${toggle.label} 처음 값`} checked={toggle.default === '1'} onChange={(on) => set(toggle.key, () => ({ ...toggle, default: on ? '1' : '0' }))} />
+                    <Switch label={`${toggle.label} 처음 값`} checked={toggle.default === '1'} onChange={(on) => onEdit(toggle, { ...toggle, default: on ? '1' : '0' }, 'default')} />
                   ) : (
                     <ChoiceGroup
                       label={`${toggle.label} 처음 값`}
                       layout="segmented"
                       options={toggle.options.map((option, index) => ({ value: String(index), label: option }))}
                       value={toggle.default}
-                      onChange={(value) => set(toggle.key, () => ({ ...toggle, default: value }))}
+                      onChange={(value) => onEdit(toggle, { ...toggle, default: value }, 'default')}
                     />
                   )}
                   <Menu label={toggle.label} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`‘${toggle.label}’ 더 보기`} title="더 보기" {...opener} />}>
@@ -77,7 +77,7 @@ export function TogglePane({ toggles, uses, onChange, onRekey, onRemove, adding,
           onClose={() => setRenaming(null)}
           onSave={(label) => {
             setRenaming(null);
-            if (label.trim()) set(target.key, (toggle) => ({ ...toggle, label: label.trim() }));
+            if (label.trim()) onEdit(target, { ...target, label: label.trim() }, 'label');
           }}
         />
       )}
@@ -89,7 +89,7 @@ export function TogglePane({ toggles, uses, onChange, onRekey, onRemove, adding,
           onClose={() => setRenaming(null)}
           onSave={(key) => {
             setRenaming(null);
-            if (key !== target.key) onRekey(target.key, key);
+            if (key !== target.key) onRekey(target, key);
           }}
         />
       )}
@@ -99,7 +99,7 @@ export function TogglePane({ toggles, uses, onChange, onRekey, onRemove, adding,
           onClose={() => onAdding(false)}
           onSave={(toggle) => {
             onAdding(false);
-            onChange([...toggles, toggle]);
+            onAdd(toggle);
           }}
         />
       )}

@@ -2,16 +2,35 @@ import { Copy, Cpu, Ellipsis, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
-import { SLOTS, type Block, type TextBlock, type Toggle } from '../../model/prompt';
+import { SLOTS, type Block, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel } from '../../runtime/assignment';
 import { copyPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
 import { useStore, useViews } from '../session';
+import { useShortcut } from '../shortcuts';
 import { useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
-import { blockIcon, blockKind, blockMeta, blockTitle, hasConditions, isText, MARKS, SLOT, TEXTS } from './blocks';
-import { conditionSnippet, countUses, draftOf, moved, newBlock, rekey, withMark, type Draft, type NewBlock } from './edits';
+import { blockIcon, blockKind, blockMeta, blockTitle, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
+import { conditionSnippet, countUses, draftOf, newBlock, withMark, type Draft, type NewBlock } from './edits';
+import {
+  addBlock,
+  addToggle,
+  editToggle,
+  moveBlock,
+  NO_HISTORY,
+  recorded,
+  redoing,
+  removeBlock,
+  removeToggle,
+  renameKey,
+  setMark,
+  setRange,
+  setRole,
+  setWrapper,
+  undoing,
+  type Step,
+} from './history';
 import { ModelPane, modelWords } from './ModelPane';
 import { chatWarning } from './ranges';
 import { TogglePane } from './TogglePane';
@@ -25,6 +44,13 @@ const DEFAULT_REFUSED = '기본 프롬프트는 지울 수 없어요. 다른 프
 const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 누르면 순서를 바꿔요. Enter로 글을 고치고, Delete로 빼요. 맨 위가 맨 처음 보내는 블록, 맨 아래가 답장 직전이에요.';
 
 type Pane = 'toggles' | null;
+
+const TEXT_INPUTS = new Set(['text', 'search', 'password']);
+// Ctrl+Z in a text field is the browser's own undo of what was typed there; the editor's steps are everything else.
+function typing(event?: KeyboardEvent): boolean {
+  const target = event?.target;
+  return target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && TEXT_INPUTS.has(target.type)) || (target instanceof HTMLElement && target.isContentEditable);
+}
 
 // side: the outline, beside the open part, in the split layout only. open: the part open, which a frame scrolls back
 // to the top of when it changes.
@@ -72,7 +98,6 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     setDraft(latest.current);
     save.queue(patch);
   };
-  const setBlocks = (change: (blocks: Block[]) => Block[]) => update((current) => ({ blocks: change(current.blocks) }));
 
   const firstText = () => latest.current.blocks.find(isText)?.id ?? MODEL;
   const [picked, setPicked] = useState<string>(firstText);
@@ -112,33 +137,61 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (pane) onPane(null);
   };
 
-  const change = (next: Block) => setBlocks((blocks) => blocks.map((each) => (each.id === next.id ? next : each)));
+  // Every structural edit is a step on this one stack; a toast's 되돌리기 undoes its own step.
+  const history = useRef(NO_HISTORY);
+  const perform = (step: Step) => {
+    update(step.redo);
+    history.current = recorded(history.current, step);
+    return step;
+  };
+  const undo = (step?: Step) => {
+    const undone = undoing(history.current, step);
+    if (!undone) return null;
+    history.current = undone.history;
+    update(undone.step.undo);
+    return undone.step;
+  };
+  const redo = () => {
+    const redone = redoing(history.current);
+    if (!redone) return null;
+    history.current = redone.history;
+    update(redone.step.redo);
+    return redone.step;
+  };
+  const report = (step: Step | null, words: string) => {
+    if (!step) return false;
+    if (split && step.block !== null && latest.current.blocks.some((each) => each.id === step.block)) pick(step.block);
+    toast.show(`${words}: ${step.label}`);
+  };
+  useShortcut('undo', (event) => (typing(event) ? false : report(undo(), '되돌렸어요')));
+  useShortcut('redo', (event) => (typing(event) ? false : report(redo(), '다시 했어요')));
+
+  const change = (next: Block) => update((current) => ({ blocks: current.blocks.map((each) => (each.id === next.id ? next : each)) }));
   const insert = (at: number, kind: NewBlock) => {
     const added = newBlock(kind);
-    setBlocks((blocks) => [...blocks.slice(0, at), added, ...blocks.slice(at)]);
+    perform(addBlock(added, at));
     pick(added.id);
     select.current = added.kind === 'text' ? 'text' : 'name';
   };
-  const move = (from: number, to: number) => setBlocks((blocks) => moved(blocks, from, to));
+  const move = (from: number, to: number) => perform(moveBlock(latest.current.blocks[from]!, from, to));
   const remove = (id: string) => {
     const at = latest.current.blocks.findIndex((each) => each.id === id);
     const gone = latest.current.blocks[at];
     if (!gone) return;
     const next = latest.current.blocks[at + 1] ?? latest.current.blocks[at - 1];
-    setBlocks((blocks) => blocks.filter((each) => each.id !== id));
+    const step = perform(removeBlock(gone, at));
     if (open === id) setPicked(next?.id ?? MODEL);
-    toast.undoable(`‘${blockTitle(gone).title}’ 블록을 뺐어요.`, () => setBlocks((blocks) => [...blocks.slice(0, at), gone, ...blocks.slice(at)]));
+    toast.undoable(`‘${blockTitle(gone).title}’ 블록을 뺐어요.`, () => undo(step));
   };
-  const mark = (id: string, value: TextBlock['mark']) => {
-    const { blocks, taken } = withMark(latest.current.blocks, id, value);
-    setBlocks(() => blocks);
+  const mark = (target: TextBlock, value: TextBlock['mark']) => {
+    if (value === target.mark) return;
+    const { taken } = withMark(latest.current.blocks, target.id, value);
+    perform(setMark(target, value, taken));
     if (value && taken) toast.show(`‘${MARKS[value].label}’ 표시를 이 글로 옮겼어요.`);
   };
-  const unwrap = (target: Block) => {
-    if (!('wrapper' in target) || target.wrapper === null) return;
-    const wrapper = target.wrapper;
-    change({ ...target, wrapper: null });
-    toast.undoable('감싸는 글을 뺐어요.', () => setBlocks((blocks) => blocks.map((each) => (each.id === target.id && 'wrapper' in each ? { ...each, wrapper } : each))));
+  const wrap = (target: WrappedSlot, wrapper: string | null) => {
+    const step = perform(setWrapper(target, wrapper));
+    if (wrapper === null) toast.undoable('감싸는 글을 뺐어요.', () => undo(step));
   };
   const condition = (toggle: Toggle) => {
     const area = textRef.current!;
@@ -147,16 +200,16 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     select.current = [start + snippet.select[0], start + snippet.select[1]];
     typeInto(area, [start, end], snippet.text);
   };
-  const removeToggle = (key: string) => {
+  const dropToggle = (key: string) => {
     const at = latest.current.toggles.findIndex((toggle) => toggle.key === key);
     const gone = latest.current.toggles[at];
     if (!gone) return;
-    update((current) => ({ toggles: current.toggles.filter((toggle) => toggle.key !== key) }));
-    toast.undoable(`‘${gone.label}’ 토글을 지웠어요. 글 속 조건은 그대로예요.`, () => update((current) => ({ toggles: [...current.toggles.slice(0, at), gone, ...current.toggles.slice(at)] })));
+    const step = perform(removeToggle(gone, at));
+    toast.undoable(`‘${gone.label}’ 토글을 지웠어요. 글 속 조건은 그대로예요.`, () => undo(step));
   };
-  const renameKey = (from: string, to: string) => {
-    const count = countUses(latest.current, from);
-    update((current) => rekey(current, from, to));
+  const changeKey = (toggle: Toggle, to: string) => {
+    const count = countUses(latest.current, toggle.key);
+    perform(renameKey(toggle, to));
     toast.show(count ? `이름을 바꾸고 글 속 조건 ${count}곳도 함께 바꿨어요.` : '이름을 바꿨어요.');
   };
   const pickModel = async (ref: ModelRef | null) => {
@@ -267,9 +320,10 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       <TogglePane
         toggles={draft.toggles}
         uses={(key) => countUses(latest.current, key)}
-        onChange={(toggles) => update(() => ({ toggles }))}
-        onRekey={renameKey}
-        onRemove={removeToggle}
+        onAdd={(toggle) => perform(addToggle(toggle, latest.current.toggles.length))}
+        onEdit={(before, after, what) => before[what] !== after[what] && perform(editToggle(before, after, what))}
+        onRekey={changeKey}
+        onRemove={dropToggle}
         adding={addingToggle}
         onAdding={setAddingToggle}
       />
@@ -283,9 +337,11 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           toggles={draft.toggles}
           authorNote={draft.authorNote}
           onChange={change}
-          onUnwrap={() => unwrap(block)}
+          onRole={(target, role) => role !== target.role && perform(setRole(target, role))}
+          onRange={(target, range) => rangeKey(range) !== rangeKey(target.range) && perform(setRange(target, range))}
+          onWrapper={wrap}
           onAuthorNote={(authorNote) => update(() => ({ authorNote }))}
-          onMark={(value) => mark(block.id, value)}
+          onMark={mark}
           onMove={(to) => move(index, to)}
           onRemove={() => remove(block.id)}
           onCondition={condition}

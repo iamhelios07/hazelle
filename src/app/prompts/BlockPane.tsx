@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Ellipsis, GitBranch, Plus, X } from 'lucide-react';
 import type { Ref } from 'react';
-import type { Block, Role, TextBlock, Toggle } from '../../model/prompt';
+import type { Block, ChatRange, ChatSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
 import { Button, ChoiceGroup, Divider, Empty, IconButton, MarkupArea, Menu, MenuHeading, MenuItem, Row, Section, Stack, Tag, Text, TitleField } from '../ui';
 import { blockTitle, describeRange, MARKS, RANGES, rangeKey, ROLES, SLOT } from './blocks';
 
@@ -10,11 +10,13 @@ type Props = {
   count: number;
   toggles: readonly Toggle[];
   authorNote: string;
+  // What is typed into the block's fields, which the browser undoes; the rest are the editor's steps.
   onChange: (block: Block) => void;
-  // Takes the 감싸는 글 off, with a way back.
-  onUnwrap: () => void;
+  onRole: (block: Extract<Block, { role: Role }>, role: Role) => void;
+  onRange: (block: ChatSlot, range: ChatRange) => void;
+  onWrapper: (block: WrappedSlot, wrapper: string | null) => void;
   onAuthorNote: (text: string) => void;
-  onMark: (mark: TextBlock['mark']) => void;
+  onMark: (block: TextBlock, mark: TextBlock['mark']) => void;
   onMove: (to: number) => void;
   onRemove: () => void;
   onCondition: (toggle: Toggle) => void;
@@ -26,7 +28,7 @@ type Props = {
 const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 
 // The block picked in the outline, and only it (design §4.2): where it goes, its name, its role, and what it holds.
-export function BlockPane({ block, index, count, toggles, authorNote, onChange, onUnwrap, onAuthorNote, onMark, onMove, onRemove, onCondition, onNewToggle, textRef, nameRef }: Props) {
+export function BlockPane({ block, index, count, toggles, authorNote, onChange, onRole, onRange, onWrapper, onAuthorNote, onMark, onMove, onRemove, onCondition, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
   const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
   const placeholder = block.kind === 'slot' ? SLOT[block.slot].name : firstLine(block.text) || '이름 붙이기';
@@ -39,7 +41,7 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
         </Text>
         <TitleField ref={nameRef} label="블록 이름" value={block.name ?? ''} placeholder={placeholder} onChange={(name) => onChange({ ...block, name: name || null })} />
         <Row kind="toolbar">
-          {'role' in block && <ChoiceGroup<Role> label="보내는 역할" showLabel layout="segmented" options={ROLES} value={block.role} onChange={(role) => onChange({ ...block, role })} />}
+          {'role' in block && <ChoiceGroup<Role> label="보내는 역할" showLabel layout="segmented" options={ROLES} value={block.role} onChange={(role) => onRole(block, role)} />}
           {block.kind === 'text' && block.mark && <Tag tone="accent">{MARKS[block.mark].label}</Tag>}
           {block.kind === 'text' && (
             <Menu
@@ -69,9 +71,9 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
             {block.kind === 'text' && (
               <>
                 <MenuHeading>캐릭터 카드가 이 글을 대신할 때</MenuHeading>
-                <MenuItem label="대신하지 않음" sub="카드와 상관없이 늘 이 글을 보내요" checked={block.mark === null} onClick={() => onMark(null)} />
+                <MenuItem label="대신하지 않음" sub="카드와 상관없이 늘 이 글을 보내요" checked={block.mark === null} onClick={() => onMark(block, null)} />
                 {(['main', 'globalNote'] as const).map((mark) => (
-                  <MenuItem key={mark} label={MARKS[mark].label} sub={MARKS[mark].hint} checked={block.mark === mark} onClick={() => onMark(mark)} />
+                  <MenuItem key={mark} label={MARKS[mark].label} sub={MARKS[mark].hint} checked={block.mark === mark} onClick={() => onMark(block, mark)} />
                 ))}
                 <Divider variant="menu" />
               </>
@@ -97,7 +99,7 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
           onChange={(text) => onChange({ ...block, text })}
         />
       )}
-      {block.kind === 'slot' && block.slot === 'chat' && <ChatRange block={block} onChange={onChange} />}
+      {block.kind === 'slot' && block.slot === 'chat' && <RangeChoice block={block} onRange={(range) => onRange(block, range)} />}
       {block.kind === 'slot' && block.slot === 'authorNote' && (
         <Section title="채팅에 노트가 없을 때 쓰는 글" level={3} note="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
           <MarkupArea label="채팅에 노트가 없을 때 쓰는 글" variant="field" value={authorNote} onChange={onAuthorNote} />
@@ -106,7 +108,7 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
       {'wrapper' in block &&
         (block.wrapper === null ? (
           <Row kind="actions">
-            <Button variant="ghost" size="sm" icon={Plus} onClick={() => onChange({ ...block, wrapper: '{{slot}}' })}>
+            <Button variant="ghost" size="sm" icon={Plus} onClick={() => onWrapper(block, '{{slot}}')}>
               감싸는 글 넣기
             </Button>
           </Row>
@@ -116,7 +118,7 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
             level={3}
             note={`{{slot}} 자리에 ${SLOT[block.slot].name}이(가) 들어가요.`}
             action={
-              <Button variant="ghost" size="xs" onClick={onUnwrap}>
+              <Button variant="ghost" size="xs" onClick={() => onWrapper(block, null)}>
                 빼기
               </Button>
             }
@@ -128,7 +130,7 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
   );
 }
 
-function ChatRange({ block, onChange }: { block: Extract<Block, { slot: 'chat' }>; onChange: (block: Block) => void }) {
+function RangeChoice({ block, onRange }: { block: ChatSlot; onRange: (range: ChatRange) => void }) {
   const current = rangeKey(block.range);
   const known = RANGES.some((option) => rangeKey(option.range) === current);
   const options = [...RANGES, ...(known ? [] : [{ range: block.range, ...describeRange(block.range) }])];
@@ -138,7 +140,7 @@ function ChatRange({ block, onChange }: { block: Extract<Block, { slot: 'chat' }
       layout="list"
       options={options.map((option) => ({ value: rangeKey(option.range), label: option.label }))}
       value={current}
-      onChange={(key) => onChange({ ...block, range: options.find((option) => rangeKey(option.range) === key)!.range })}
+      onChange={(key) => onRange(options.find((option) => rangeKey(option.range) === key)!.range)}
     />
   );
 }
