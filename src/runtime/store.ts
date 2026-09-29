@@ -98,8 +98,8 @@ export class ObjectStore {
     });
   }
 
-  // Writes a snapshot back (되돌리기): over the live object, or in place of a deleted one at the rev its
-  // deletion took, under the parent it had.
+  // Writes a snapshot back (되돌리기, and a backup's objects): over the live object, or in place of a deleted
+  // one at the rev its deletion took, under the parent it had.
   restore<K extends Kind>({ id, kind, parent, value }: Stored<K>): Promise<ApiResult<Stored<K>>> {
     return this.retry(() => {
       const held = this.live.get(id);

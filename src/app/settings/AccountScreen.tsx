@@ -3,6 +3,7 @@ import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Avatar, Button, NavBar, Row, Screen, SettingGroup, SettingRow, Stack, Text } from '../ui';
+import { BackupSection } from './BackupSection';
 
 export function AccountScreen({ back }: { back: Back | null }) {
   const { username } = useSession();
@@ -39,6 +40,7 @@ export function AccountScreen({ back }: { back: Back | null }) {
           }
         />
       </SettingGroup>
+      <BackupSection />
     </Screen>
   );
 }

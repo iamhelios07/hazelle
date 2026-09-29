@@ -6,7 +6,7 @@ import type { ApiResult } from './api';
 import type { ObjectStore } from './store';
 
 // Fixed, so two devices adding the first persona at once meet in a version conflict instead of making two.
-const FIRST_ID = '00000000-0000-4000-8000-000000000002';
+export const FIRST_ID = '00000000-0000-4000-8000-000000000002';
 
 // Who the user plays in a chat: its own persona, else the default (design §4.3). There is no chat without a
 // persona ("페르소나가 없을 순 없지"); a deleted one, or a default not added yet, reads as missing and never as

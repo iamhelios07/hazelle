@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { strFromU8, unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
 import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider } from './helpers';
 
@@ -82,5 +83,21 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(messages.nth(0)).toContainText(GREETING);
     await expect(messages.nth(1)).toContainText('hi');
     await expect(messages.nth(2)).toContainText('Mira smiles. (bows)');
+  });
+
+  await test.step('the backup holds the card and the reply, and loading it again carries on without adding anything', async () => {
+    await page.goto('/account');
+    const saved = page.waitForEvent('download');
+    await page.getByRole('button', { name: '받기', exact: true }).click();
+    const file = await (await saved).path();
+    const objects = strFromU8(unzipSync(readFileSync(file))['objects.jsonl']!);
+    expect(objects).toContain(DESCRIPTION);
+    expect(objects).toContain('[[bow]]');
+
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: '불러오기', exact: true }).click();
+    await (await chooser).setFiles(file);
+    await expect(page.getByText('백업을 불러왔어요.', { exact: true })).toBeVisible();
+    expect(violations).toEqual([]);
   });
 });

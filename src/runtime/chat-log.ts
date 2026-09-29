@@ -5,8 +5,8 @@ import type { ApiFailure, ApiResult } from './api';
 import type { ObjectStore } from './store';
 
 // The only writer of `chat` and `entry` objects (tech-spec §5), except a chat's `models` layer, which
-// runtime/assignment writes with the other layers, and a character's purge (runtime/characters), which
-// removes them with the character.
+// runtime/assignment writes with the other layers, a character's purge (runtime/characters), which
+// removes them with the character, and a backup's restore (runtime/backup), which copies them as they were.
 
 // A new chat is saved in this order: the chat, then its greetings with the one shown selected, then
 // the user's first message (runtime/turn, sent with its reply). Messages stand in the order they were

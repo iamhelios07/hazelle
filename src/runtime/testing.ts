@@ -96,6 +96,9 @@ export function testServer() {
       };
       return { accountId, vaultKey, store: await open(), files: await Files.open(accountId, vaultKey, api), open, blobs };
     },
+    // The operator deletes the account on the server, which opens signup again (server/accounts): how a user
+    // who lost both the password and the recovery key starts over.
+    wipe: () => app.reset(),
     // A session on an account of its own, closed when test ends. keepSynced listens on the window and
     // pulls only while the tab is visible, so a hidden one never pulls on its own.
     async withSession(test: (session: Session) => Promise<void>) {

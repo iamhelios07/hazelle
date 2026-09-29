@@ -8,10 +8,10 @@ import type { ApiFailure, ApiResult } from './api';
 import type { ObjectStore } from './store';
 
 // Every write of `prompt` objects and of the default prompt, except a prompt's `models` layer, which
-// runtime/assignment writes with the other layers.
+// runtime/assignment writes with the other layers, and a backup's restore (runtime/backup).
 
 // Fixed, so two devices adding the starter prompt at once meet in a version conflict instead of making two.
-const STARTER_ID = '00000000-0000-4000-8000-000000000001';
+export const STARTER_ID = '00000000-0000-4000-8000-000000000001';
 
 // Which prompt a chat uses: its own, else the default (design §4.2). A deleted one, or a default not added
 // yet, reads as missing and never as another prompt; a turn stops on it ("기본 프롬프트가 없어요").

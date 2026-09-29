@@ -2,7 +2,7 @@ import { ChevronLeft, Download } from 'lucide-react';
 import { useState } from 'react';
 import { useAttempt } from '../common/useAttempt';
 import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Screen, Steps, Text } from '../ui';
-import { downloadText } from './download';
+import { download } from '../common/download';
 
 const FILENAME = 'risu-alpha-recovery.txt';
 
@@ -19,22 +19,20 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
   const [saved, setSaved] = useState(false);
   const { busy, failure, run } = useAttempt();
 
-  function download() {
+  function save() {
     const created = new Date().toISOString().slice(0, 10);
-    downloadText(
-      FILENAME,
-      [
-        'risu-alpha 복구 키',
-        `계정: ${username}`,
-        '',
-        recoveryKey,
-        '',
-        '비밀번호를 잊었을 때 로그인 화면의 "복구 키로 로그인"에 이 파일이나 위의 키를 넣으세요.',
-        '비밀번호와 이 키를 둘 다 잃으면 누구도 데이터를 되살릴 수 없습니다.',
-        `만든 날: ${created}`,
-        '',
-      ].join('\n'),
-    );
+    const text = [
+      'risu-alpha 복구 키',
+      `계정: ${username}`,
+      '',
+      recoveryKey,
+      '',
+      '비밀번호를 잊었을 때 로그인 화면의 "복구 키로 로그인"에 이 파일이나 위의 키를 넣으세요.',
+      '비밀번호와 이 키를 둘 다 잃으면, 받아 둔 백업 파일이 없는 한 누구도 데이터를 되살릴 수 없습니다.',
+      `만든 날: ${created}`,
+      '',
+    ].join('\n');
+    download(FILENAME, new Blob([text], { type: 'text/plain;charset=utf-8' }));
     setDownloaded(true);
   }
 
@@ -66,7 +64,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
       {downloaded ? (
         <Callout tone="success">내려받음 · {FILENAME}</Callout>
       ) : (
-        <Button variant="outline" icon={Download} onClick={download}>
+        <Button variant="outline" icon={Download} onClick={save}>
           복구 키 파일 내려받기
         </Button>
       )}
