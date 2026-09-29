@@ -16,13 +16,14 @@ import type { Session } from './session';
 import type { Ask, TalkFailure } from './talk';
 
 // What the user asks for: their new message and a reply to it, a reply to the last message sending
-// nothing new (답장 받기), another version of a reply (다시 생성), or one in place of a failed version
-// (다시 시도).
+// nothing new (답장 받기), another version of a reply (다시 생성), one in place of a failed version
+// (다시 시도), or the rest of a cut version, which takes its place (이어 쓰기).
 export type Target =
   | { kind: 'send'; text: string }
   | { kind: 'answer' }
   | { kind: 'regenerate'; message: string }
-  | { kind: 'retry'; message: string; version: string };
+  | { kind: 'retry'; message: string; version: string }
+  | { kind: 'continue'; message: string; version: string };
 
 // Why a chat cannot start a turn: no model, or its prompt or persona is missing (design §4.2, §4.3); own says
 // whether the missing one was the chat's own or the default.
@@ -114,7 +115,7 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
   return 'kind' in scope ? scope : null;
 }
 
-// null: the chat, or the message the target names, is gone.
+// null: the chat, or the message the target names, is gone; for a continue, so is the version it names.
 export function gatherTurn(session: Session, chat: string, target: Target): TurnContext | Blocked | null {
   const stored = session.store.get('chat', chat);
   if (!stored) return null;
@@ -122,15 +123,23 @@ export function gatherTurn(session: Session, chat: string, target: Target): Turn
   if ('kind' in route) return route;
 
   const messages = fold(session.store.children('entry', chat));
-  const message = target.kind === 'regenerate' || target.kind === 'retry' ? target.message : null;
+  const message = 'message' in target ? target.message : null;
   const at = message === null ? messages.length : messages.findIndex((candidate) => candidate.id === message);
   if (at === -1) return null;
+  const index = 'version' in target ? messages[at]!.versions.findIndex((version) => version.id === target.version) : -1;
+  const version = messages[at]?.versions[index];
+  // 이어 쓰기 continues the version it names. So does 다시 시도 on a continuation that failed, so that neither the text
+  // it continues nor the calls its receipt carries are dropped.
+  const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt } : null;
+  if (target.kind === 'continue' && !continues) return null;
   const said: Ask['said'] = target.kind === 'send' ? { id: crypto.randomUUID(), text: target.text } : null;
   const now = Date.now();
   const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
-  const scope = sendable(scopeOf(session, chat, stored.value, [...messages.slice(0, at), ...sending]), stored.value);
+  // A continuation's prompt ends with the version it continues.
+  const history = continues ? [...messages.slice(0, at), { ...messages[at]!, selected: index }] : [...messages.slice(0, at), ...sending];
+  const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);
   if ('kind' in scope) return scope;
-  return { route, scope, budget: budgetOf(route.model), said, reply: { id: crypto.randomUUID(), message, replaces: target.kind === 'retry' ? target.version : null } };
+  return { route, scope, budget: budgetOf(route.model), said, reply: { id: crypto.randomUUID(), message, replaces: 'version' in target ? target.version : null, continues } };
 }
 
 // o200k_base counts for every model (tech-spec §8), loaded with the first send rather than with the page. Text
@@ -143,7 +152,7 @@ export async function takeTurn(session: Session, chat: string, target: Target): 
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { kind: 'tokenizer' };
   const { route, scope, budget, said, reply } = turn;
-  const prompt = assemble({ scope, seed: reply.id, countTokens, budget });
+  const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null });
   if ('kind' in prompt) return prompt;
   return session.talk.run({ chat, route, prompt, said, reply });
 }

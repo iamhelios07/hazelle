@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../connectors/types';
+import type { Assembled } from '../engine/pipeline';
 import type { Message, Receipt, ReceiptError } from '../model/chat';
 import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
@@ -9,11 +9,12 @@ import { generate, type Reply } from './generate';
 import type { ObjectStore } from './store';
 
 // The reply being written. said is the user's message sent with it, shown until the store has it; reply
-// says where the answer goes: a new message, or a new version of one (in place of a failed one on 다시 시도).
+// says where the answer goes: a new message, or a new version of one (in place of a failed one on 다시 시도, or
+// of the cut one it continues on 이어 쓰기). A continuation's text starts as the text it continues.
 export type Turn = {
   chat: string;
   said: { id: string; text: string } | null;
-  reply: { id: string; message: string | null; replaces: string | null };
+  reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt } | null };
   text: string;
 };
 
@@ -22,7 +23,11 @@ export type Shown = Message & { live: string | null };
 
 // One reply to ask for (runtime/turn): the model, the prompt, the user's message sent with it, and where
 // the reply goes. The reply's id is chosen before the prompt is built, which it seeds (engine/pipeline).
-export type Ask = { chat: string; route: Route; prompt: ChatMessage[]; said: Turn['said']; reply: Turn['reply'] };
+export type Ask = { chat: string; route: Route; prompt: Assembled; said: Turn['said']; reply: Turn['reply'] };
+
+// What one reply sent, for 정보's 요청 원문 and lorebook part (design F3). It lives in page memory only, until the
+// session closes (tech-spec §5: the raw request is not stored).
+export type Sent = { request: Reply['request']; prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain tries once more.
@@ -60,6 +65,8 @@ export class Talk {
   private readonly lookups = new AbortController();
   private readonly settling = new Set<string>();
   private readonly listeners = new Set<() => void>();
+  // By the id of the version each reply wrote.
+  private readonly sentBy = new Map<string, Sent>();
 
   constructor(
     private readonly store: ObjectStore,
@@ -73,6 +80,11 @@ export class Talk {
 
   readonly snapshot = () => this.turn;
 
+  // null: not written by this page since the session opened, or written as another version (an edit).
+  sent(version: string): Sent | null {
+    return this.sentBy.get(version) ?? null;
+  }
+
   stop() {
     this.abort?.abort();
   }
@@ -80,6 +92,7 @@ export class Talk {
   close() {
     this.stop();
     this.lookups.abort();
+    this.sentBy.clear();
   }
 
   // A reply whose save failed is kept in memory for one more try.
@@ -114,7 +127,7 @@ export class Talk {
 
   async run({ chat, route, prompt, said, reply }: Ask): Promise<TalkFailure | null> {
     if (this.turn) return null;
-    const turn: Turn = { chat, said, reply, text: '' };
+    const turn: Turn = { chat, said, reply, text: reply.continues?.text ?? '' };
     this.set(turn);
     const abort = new AbortController();
     this.abort = abort;
@@ -124,7 +137,7 @@ export class Talk {
       credentials: this.credentials,
       connection: route.connection.value,
       model: route.model,
-      messages: prompt,
+      messages: prompt.messages,
       signal: abort.signal,
       onText: (phase, chunk) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk }),
     });
@@ -151,8 +164,11 @@ export class Talk {
       replyId: answer.replyId,
       firstTextMs: answer.firstTextMs,
       totalMs: answer.totalMs,
+      ...(reply.continues && { continues: reply.continues.receipt }),
     };
-    const written: Written = { ...reply, at: Date.now(), text: this.turn!.text, receipt };
+    const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt };
+    // Kept before the save, whose store change is what shows the reply's 정보.
+    this.sentBy.set(reply.id, { request: answer.request, prompt });
     const saved = await appendReply(this.store, chat, written);
     this.set(null);
     if (!saved.ok) {

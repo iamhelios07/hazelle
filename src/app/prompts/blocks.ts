@@ -1,34 +1,30 @@
 import { ArrowDownToLine, BookOpen, IdCard, MessageSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
+import { ROLE_WORDS, SLOT_NAMES, textName } from '../common/prompt-words';
 import type { OutlineKind } from '../ui';
 import { toggleUses } from './rekey';
 
 export const SLOT = {
-  description: { name: '캐릭터 설명', hint: '카드의 설명 · 성격 · 상황 · 예시 대화', line: '캐릭터 카드의 설명, 성격, 상황, 예시 대화가 여기에 들어가요.', kind: 'char', icon: IdCard },
-  persona: { name: '페르소나', hint: '이 채팅에서 내가 맡은 사람의 설명', line: '이 채팅의 페르소나 설명이 여기에 들어가요.', kind: 'char', icon: UserRound },
+  description: { name: SLOT_NAMES.description, hint: '카드의 설명 · 성격 · 상황 · 예시 대화', line: '캐릭터 카드의 설명, 성격, 상황, 예시 대화가 여기에 들어가요.', kind: 'char', icon: IdCard },
+  persona: { name: SLOT_NAMES.persona, hint: '이 채팅에서 내가 맡은 사람의 설명', line: '이 채팅의 페르소나 설명이 여기에 들어가요.', kind: 'char', icon: UserRound },
   lorebook: {
-    name: '로어북',
+    name: SLOT_NAMES.lorebook,
     hint: '이번 대화에서 떠오른 로어북 항목',
     line: '이번 대화에서 떠오른 로어북 항목이 여기에 들어가요. 항목마다 역할이 따로 있어서 이 자리에는 역할이 없어요.',
     kind: 'lore',
     icon: BookOpen,
   },
-  authorNote: { name: '작가의 노트', hint: '채팅마다 따로 쓰는 메모', line: '채팅마다 따로 쓰는 작가의 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
-  postEverything: { name: '최종 삽입', hint: '맨 끝으로 정한 로어북 항목이 여기 붙어요', line: '로어북에서 맨 끝으로 정한 항목이 여기 붙어요.', kind: 'lore', icon: ArrowDownToLine },
-  chat: { name: '채팅', hint: '지금까지 주고받은 메시지', line: '지금까지 주고받은 메시지 가운데 아래 범위가 여기에 들어가요.', kind: 'chat', icon: MessageSquare },
+  authorNote: { name: SLOT_NAMES.authorNote, hint: '채팅마다 따로 쓰는 메모', line: '채팅마다 따로 쓰는 작가의 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
+  postEverything: { name: SLOT_NAMES.postEverything, hint: '맨 끝으로 정한 로어북 항목이 여기 붙어요', line: '로어북에서 맨 끝으로 정한 항목이 여기 붙어요.', kind: 'lore', icon: ArrowDownToLine },
+  chat: { name: SLOT_NAMES.chat, hint: '지금까지 주고받은 메시지', line: '지금까지 주고받은 메시지 가운데 아래 범위가 여기에 들어가요.', kind: 'chat', icon: MessageSquare },
 } satisfies Record<SlotKind, { name: string; hint: string; line: string; kind: OutlineKind; icon: LucideIcon }>;
 
-export const ROLES: { value: Role; label: string }[] = [
-  { value: 'system', label: '시스템' },
-  { value: 'user', label: '사용자' },
-  { value: 'assistant', label: 'AI' },
-];
-export const roleWord = (role: Role) => ROLES.find((option) => option.value === role)!.label;
+export const ROLES: { value: Role; label: string }[] = (['system', 'user', 'assistant'] as const).map((value) => ({ value, label: ROLE_WORDS[value] }));
 
 export const TEXTS: { role: Role; name: string; hint: string }[] = [
-  { role: 'system', name: '시스템 글', hint: '규칙과 지시를 적어요' },
-  { role: 'user', name: '사용자 글', hint: '내가 한 말처럼 보내요' },
-  { role: 'assistant', name: 'AI 글', hint: '모델이 한 말처럼 보내요. 답장 첫머리를 정할 때 써요' },
+  { role: 'system', name: textName('system'), hint: '규칙과 지시를 적어요' },
+  { role: 'user', name: textName('user'), hint: '내가 한 말처럼 보내요' },
+  { role: 'assistant', name: textName('assistant'), hint: '모델이 한 말처럼 보내요. 답장 첫머리를 정할 때 써요' },
 ];
 
 export const MARKS = {
@@ -72,7 +68,7 @@ export const blockIcon = (block: Block): LucideIcon => (block.kind === 'text' ? 
 export function blockMeta(block: Block): string {
   if (block.kind === 'text') return block.text ? `${block.text.length.toLocaleString('ko-KR')}자` : '비어 있음';
   if (block.slot === 'chat') return describeRange(block.range).meta;
-  return 'role' in block ? roleWord(block.role) : '';
+  return 'role' in block ? ROLE_WORDS[block.role] : '';
 }
 
 // The CBS a block sends: a text's own, or a wrapped slot's 감싸는 글.

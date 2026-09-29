@@ -28,4 +28,19 @@ describe('Talk', () => {
       expect(await session.talk.saveAgain()).toBeNull();
       expect(fold(session.store.children('entry', chat)).map((message) => shown(message).text)).toEqual(['안녕', '반가워요']);
     }));
+
+  it('keeps what each reply sent, its address and body and never its headers, until it closes', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
+      stubRelay(() => saying('반가워요'));
+
+      await takeTurn(session, chat, { kind: 'answer' });
+      const reply = shown(fold(session.store.children('entry', chat))[1]!);
+      expect(session.talk.sent(reply.id)?.request).toEqual({ url: 'https://openrouter.ai/api/v1/chat/completions', body: expect.stringContaining('"content":"안녕"') });
+      session.talk.close();
+      expect(session.talk.sent(reply.id)).toBeNull();
+    }));
 });

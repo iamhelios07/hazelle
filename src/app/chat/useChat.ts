@@ -300,6 +300,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       stop: () => talk.stop(),
       regenerate: (message: Shown) => ask({ kind: 'regenerate', message: message.id }),
       retry: (message: Shown) => ask({ kind: 'retry', message: message.id, version: shown(message).id }),
+      continue: (message: Shown) => ask({ kind: 'continue', message: message.id, version: shown(message).id }),
       swipe,
       edit: (message: Shown, text: string | null) => setEditing(text === null ? null : { id: message.id, text }),
       saveEdit,

@@ -4,7 +4,7 @@ import type { ChatMessage } from '../connectors/types';
 import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, unused, type PromptInput, type TooLong } from './pipeline';
+import { assemble, unused, type Assembled, type PromptInput, type TooLong } from './pipeline';
 import { renderChat } from './render';
 
 // The user's own Risu preset "🏓 핑퐁 간소화" (design §4.2), block for block: its wrappers and marks as written,
@@ -93,11 +93,13 @@ const scope = (over: Partial<PromptInput['scope']> = {}): PromptInput['scope'] =
   ...over,
 });
 
-const sentOf = (result: ChatMessage[] | TooLong) => {
+const assembledOf = (result: Assembled | TooLong) => {
   if ('kind' in result) throw new Error(`over budget: ${result.tokens} of ${result.budget}`);
   return result;
 };
-const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null }));
+const sentOf = (result: Assembled | TooLong) => assembledOf(result).messages;
+const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false });
+const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
 describe('assemble', () => {
   it("builds the user's own prompt with a card's lorebook, regex, toggle and variables", () => {
@@ -137,6 +139,31 @@ describe('assemble', () => {
     expect(renderChat('display', scope({ card: card({ regex }), messages })).texts[2]).toBe('She nods slowly. [OOC] ignore');
   });
 
+  it('says which block, lorebook entry or instruction each sent message came from, with its count, and why each entry fired', () => {
+    const blocks: Prompt['blocks'] = [
+      { id: 'rules', name: null, kind: 'text', role: 'system', mark: null, text: 'Rules.' },
+      { id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' },
+      { id: 'past', name: '과거 챗', kind: 'slot', slot: 'chat', range: { from: 0, to: null } },
+    ];
+    const entries = [lore('lighthouse', 'The lighthouse is old.', { constant: false, keys: ['lighthouse'] }), lore('mood', '@@depth 1\nMood: calm')];
+    const messages = [message('u1', 'user', 'Is the lighthouse lit?'), message('a1', 'assistant', 'It flick')];
+    const result = assembledOf(assemble({ ...input({ prompt: { ...starter, blocks }, lore: entries, messages, greeting: null }), continuing: true }));
+    expect(result.parts.map(({ from }) => from)).toEqual([
+      { kind: 'block', name: null, slot: null },
+      { kind: 'lore', name: 'lighthouse', slot: 'lorebook' },
+      { kind: 'block', name: '과거 챗', slot: 'chat' },
+      { kind: 'depth', name: 'mood', depth: 1 },
+      { kind: 'block', name: '과거 챗', slot: 'chat' },
+      { kind: 'continue' },
+    ]);
+    expect(result.parts[0]!.tokens).toBe('Rules.'.length);
+    expect(result.messages.slice(-2).map(({ role }) => role)).toEqual(['assistant', 'user']);
+    expect(result.lore).toEqual([
+      { id: 'lighthouse', name: 'lighthouse', why: { kind: 'keys', matched: [{ query: 'primary', key: 'lighthouse', source: { kind: 'message', id: 'u1' } }] }, fate: { kind: 'placed', tokens: 22 } },
+      { id: 'mood', name: 'mood', why: { kind: 'constant' }, fate: { kind: 'placed', tokens: 10 } },
+    ]);
+  });
+
   it('leaves out what a toggle turns off, fills {{position}} and @@inject_at, and puts 최종 삽입 last when the prompt has no such slot', () => {
     const blocks: Prompt['blocks'] = [
       { id: 'notes', name: null, kind: 'text', role: 'system', mark: null, text: 'Notes: {{position::bell}}' },
@@ -164,7 +191,7 @@ describe('assemble', () => {
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));
-    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens };
+    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, continuing: false };
     const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
     const inChat = ({ content }: ChatMessage) => content.startsWith('Message ');
     const whole = sentOf(assemble({ ...input, budget: null }));

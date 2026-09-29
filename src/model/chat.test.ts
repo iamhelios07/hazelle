@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, chatItems, chatTitle, fold, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, chatItems, chatTitle, fold, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -61,6 +61,21 @@ describe('fold', () => {
     expect(shown(fold(entries)[0]!).receipt!.cost).toBe('pending');
     entries.push(entry('k1', { type: 'cost', replyId: 'gen_1', cost: { unit: 'usd', amount: 0.01, source: 'reported' }, at: 0 }));
     expect(shown(fold(entries)[0]!).receipt!.cost).toEqual({ unit: 'usd', amount: 0.01, source: 'reported' });
+  });
+
+  it('settles the pending cost of a cut call a continued version carries, and keeps both calls', () => {
+    const cut = receipt({ state: 'cut', cut: 'length', cost: 'pending', replyId: 'gen_1' });
+    const entries = [
+      entry('b1', { type: 'message', role: 'assistant', at: 0, text: '옛날', receipt: cut }),
+      entry('c1', { type: 'version', message: 'b1', replaces: 'b1', edit: false, at: 0, text: '옛날 옛적에', receipt: receipt({ continues: cut }) }),
+      entry('k1', { type: 'cost', replyId: 'gen_1', cost: { unit: 'usd', amount: 0.01, source: 'reported' }, at: 0 }),
+    ];
+    const [message] = fold(entries);
+    expect(message!.versions).toHaveLength(1);
+    expect(calls(shown(message!).receipt!).map((call) => [call.state, call.cost])).toEqual([
+      ['cut', { unit: 'usd', amount: 0.01, source: 'reported' }],
+      ['done', null],
+    ]);
   });
 });
 

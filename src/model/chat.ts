@@ -37,6 +37,9 @@ export type Receipt = {
   replyId: string | null;
   firstTextMs: number | null;
   totalMs: number;
+  // 이어 쓰기: the receipt of the reply this one continued, as it read then, so every call and its cost stays
+  // visible after the continued version replaces the cut one. It nests when a continuation is continued again.
+  continues?: Receipt;
 };
 
 // A receipt's own copy of runtime/generate ReplyError, converted where the receipt is written, so a
@@ -58,14 +61,15 @@ export type ReceiptError =
 export type Entry =
   // A new message with its first version, which has the entry's id.
   | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null }
-  // replaces: the version this one takes the place of, for an edit or a retried failure, so the count
-  // of versions does not grow; null for a new version, which goes last. An edit keeps the receipt of
-  // the reply it changes.
+  // replaces: the version this one takes the place of, for an edit, a retried failure or a continued cut
+  // (이어 쓰기), so the count of versions does not grow; null for a new version, which goes last. An edit keeps
+  // the receipt of the reply it changes.
   | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null }
   | { type: 'select'; message: string; version: string; at: number }
   | { type: 'delete'; message: string; at: number }
   | { type: 'restore'; message: string; at: number }
-  // A cost the provider booked after the reply (connector settle), for every version with this replyId.
+  // A cost the provider booked after the reply (connector settle), for every receipt with this replyId, the
+  // ones a continued reply carries (Receipt continues) included.
   | { type: 'cost'; replyId: string; cost: Cost | null; at: number };
 
 export type Version = { id: string; text: string; receipt: Receipt | null; edited: boolean; at: number };
@@ -115,17 +119,26 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     }
   }
 
-  const settled = (version: Version): Version => {
-    const receipt = version.receipt;
-    if (receipt?.cost !== 'pending' || !receipt.replyId || !costs.has(receipt.replyId)) return version;
-    return { ...version, receipt: { ...receipt, cost: costs.get(receipt.replyId)! } };
+  const settled = (receipt: Receipt): Receipt => {
+    const earlier = receipt.continues && settled(receipt.continues);
+    const own = receipt.cost === 'pending' && receipt.replyId && costs.has(receipt.replyId) ? { ...receipt, cost: costs.get(receipt.replyId)! } : receipt;
+    return earlier === receipt.continues ? own : { ...own, continues: earlier };
   };
   return [...messages.values()]
     .filter((message) => !deleted.has(message.id))
-    .map((message) => ({ ...message, versions: message.versions.map(settled) }));
+    .map((message) => ({
+      ...message,
+      versions: message.versions.map((version) => {
+        const receipt = version.receipt && settled(version.receipt);
+        return receipt === version.receipt ? version : { ...version, receipt };
+      }),
+    }));
 }
 
 export const shown = (message: Message): Version => message.versions[message.selected]!;
+
+// The calls a reply took, the first one first: one, or more when it was continued (이어 쓰기).
+export const calls = (receipt: Receipt): Receipt[] => [...(receipt.continues ? calls(receipt.continues) : []), receipt];
 
 const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 

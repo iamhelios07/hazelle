@@ -10,11 +10,13 @@ export type ReplyError =
   | NonNullable<Outcome['error']>;
 
 // The facts a receipt keeps (tech-spec §5): the outcome, and times measured from the moment of sending.
-// A stop is a cut, never an error.
+// A stop is a cut, never an error. request is the address and body the request was built with, for 요청 원문;
+// null when it was refused before it could be built.
 export type Reply = Omit<Outcome, 'error'> & {
   error: Exclude<ReplyError, { kind: 'stopped' }> | null;
   firstTextMs: number | null;
   totalMs: number;
+  request: Pick<HttpRequest, 'url' | 'body'> | null;
 };
 
 export type GenerateInput = {
@@ -29,11 +31,14 @@ export type GenerateInput = {
 export async function generate({ credentials, connection, model, messages, signal, onText }: GenerateInput): Promise<Reply> {
   const started = performance.now();
   let firstText: number | null = null;
+  // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
+  let built: Reply['request'] = null;
   const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
     ...outcome,
     error,
     firstTextMs: firstText === null ? null : Math.round(firstText - started),
     totalMs: Math.round(performance.now() - started),
+    request: built,
   });
   const empty = { finishReason: null, usage: null, cost: null, replyId: null };
 
@@ -45,6 +50,7 @@ export async function generate({ credentials, connection, model, messages, signa
   try {
     route = resolveModel(resolved, model);
     request = chatRequest(route, { model, messages, settings: model.settings ?? {} });
+    built = { url: request.url, body: request.body };
   } catch (error) {
     if (error instanceof ConnectorError) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: error.code });
     throw error;

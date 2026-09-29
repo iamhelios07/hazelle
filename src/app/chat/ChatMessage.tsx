@@ -90,21 +90,25 @@ export function ChatMessage(props: Props) {
     body = <Waiting />;
   } else if (failed) {
     body = (
-      <Failure
-        title="답장을 받지 못했어요"
-        actions={
-          <>
-            <Button size="sm" disabled={busy} onClick={() => actions.retry(message)}>
-              다시 시도
-            </Button>
-            <Button variant="secondary" size="sm" {...otherModel}>
-              다른 모델로
-            </Button>
-          </>
-        }
-      >
-        {receipt.error ? describeReplyError(receipt.error) : '실패한 이유를 알 수 없어요.'}
-      </Failure>
+      <>
+        {/* A continuation that failed still holds the text it continued, and 다시 시도 continues it again. */}
+        {receipt.continues && <Prose text={text} cursor={false} />}
+        <Failure
+          title="답장을 받지 못했어요"
+          actions={
+            <>
+              <Button size="sm" disabled={busy} onClick={() => actions.retry(message)}>
+                다시 시도
+              </Button>
+              <Button variant="secondary" size="sm" {...otherModel}>
+                다른 모델로
+              </Button>
+            </>
+          }
+        >
+          {receipt.error ? describeReplyError(receipt.error) : '실패한 이유를 알 수 없어요.'}
+        </Failure>
+      </>
     );
   } else if (!empty || live) {
     body = <Prose text={text} cursor={live} />;
@@ -119,7 +123,13 @@ export function ChatMessage(props: Props) {
         <Marker
           reason={cut === 'stopped' ? 'stopped' : 'length'}
           label={cut === 'stopped' && empty ? '답장을 받기 전에 멈췄어요' : CUT[cut]}
-          action={cut === 'stopped' && empty ? { label: '다시 받기', disabled: busy, onClick: () => actions.retry(message) } : undefined}
+          action={
+            !empty
+              ? { label: '이어 쓰기', disabled: busy, onClick: () => actions.continue(message) }
+              : cut === 'stopped'
+                ? { label: '다시 받기', disabled: busy, onClick: () => actions.retry(message) }
+                : undefined
+          }
         />
       )}
       {!mine && isLast && count > 1 && editing === null && (
