@@ -85,7 +85,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(messages.nth(2)).toContainText('Mira smiles. (bows)');
   });
 
-  await test.step('Ctrl+P opens the prompts beside the chat, a role changed there comes back with Ctrl+Z, and Ctrl+/ lists every shortcut', async () => {
+  await test.step('Ctrl+P opens the prompts beside the chat, a role changed there comes back with Ctrl+Z, Ctrl+/ lists every shortcut, and Ctrl+S opens and closes 설정', async () => {
     await page.keyboard.press('Control+p');
     const side = page.getByRole('complementary', { name: '프롬프트' });
     await side.getByRole('button', { name: /핑퐁 간소화/ }).first().click();
@@ -102,6 +102,11 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.keyboard.press('Control+/');
     await expect(page.getByRole('dialog', { name: '단축키' })).toBeVisible();
     await page.keyboard.press('Escape');
+    const closeSettings = page.getByRole('button', { name: '설정 닫기', exact: true });
+    await page.keyboard.press('Control+s');
+    await expect(closeSettings).toBeVisible();
+    await page.keyboard.press('Control+s');
+    await expect(closeSettings).toBeHidden();
     expect(violations).toEqual([]);
   });
 

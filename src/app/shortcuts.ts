@@ -6,7 +6,8 @@ type Shortcut = { label: string; hint: string; keys: readonly Chord[] };
 // label names the shortcut in 단축키; hint is the shorter word of the hint lines and button titles. A modifier a
 // chord leaves out is not checked, so Ctrl+Enter still sends and Ctrl+Shift+Enter still saves an edit.
 export const SHORTCUTS = {
-  settings: { label: '설정 열기 · 닫기', hint: '설정', keys: [{ key: ',', mod: true }] },
+  // Ctrl+S too (user, 2026-09-29). Its handler must never pass the key on, or the browser's save-page dialog opens.
+  settings: { label: '설정 열기 · 닫기', hint: '설정', keys: [{ key: ',', mod: true }, { key: 's', mod: true }] },
   personas: { label: '페르소나 (채팅에서는 옆 패널)', hint: '페르소나', keys: [{ key: 'e', mod: true }] },
   prompts: { label: '프롬프트 (채팅에서는 옆 패널)', hint: '프롬프트', keys: [{ key: 'p', mod: true }] },
   shortcutList: { label: '단축키 보기', hint: '단축키', keys: [{ key: '/', mod: true }] },
@@ -44,18 +45,10 @@ const handlers: Entry[] = [];
 
 const inTurn = () => [...handlers.filter((entry) => !entry.fallback).reverse(), ...handlers.filter((entry) => entry.fallback).reverse()];
 
-// Ctrl+S would open the browser's save-page dialog, which saves nothing of the app; edits save themselves. The user
-// gave 설정 Ctrl+, instead (2026-09-29), so Ctrl+S does nothing at all.
-const SAVE_PAGE: Chord[] = [{ key: 's', mod: true }];
-
 function onKey(event: KeyboardEvent) {
   // A key a focused control already took, such as Ctrl+Enter saving an edit, is not a shortcut.
   if (event.defaultPrevented) return;
   const press = { key: event.key, code: event.code, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, nativeEvent: event };
-  if (pressed(press, SAVE_PAGE)) {
-    event.preventDefault();
-    return;
-  }
   for (const { name, run } of inTurn()) {
     if (!pressed(press, SHORTCUTS[name].keys) || run(event) === false) continue;
     event.preventDefault();
