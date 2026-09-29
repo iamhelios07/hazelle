@@ -74,17 +74,24 @@ export function keyProblem(key: string, toggles: readonly Toggle[], own: string 
   return null;
 }
 
-// What 조건 넣기 puts at the caret, with the first branch's words selected so typing replaces them.
-export function conditionSnippet(toggle: Toggle): { text: string; select: [number, number] } {
-  if (toggle.kind === 'check') {
-    const head = `{{#when::toggle::${toggle.key}}}`;
-    const on = '켰을 때 글';
-    return { text: `${head}${on}{{:else}}껐을 때 글{{/when}}`, select: [head.length, head.length + on.length] };
+// What 조건 넣기 puts in place of the selection: selected text becomes the first branch, not replaced by it.
+// select: the placeholder to type over next, the first branch's or, after a selection, the second's.
+export function conditionSnippet(toggle: Toggle, selected: string): { text: string; select: [number, number] } {
+  const branches =
+    toggle.kind === 'check'
+      ? [
+          { open: `{{#when::toggle::${toggle.key}}}`, body: '켰을 때 글', close: '' },
+          { open: '{{:else}}', body: '껐을 때 글', close: '{{/when}}' },
+        ]
+      : toggle.options.map((option, index) => ({ open: `{{#when::${toggle.key}::tis::${index}}}`, body: `${option}일 때 글`, close: '{{/when}}' }));
+  const target = selected ? 1 : 0;
+  let text = '';
+  let select: [number, number] | null = null;
+  for (const [index, { open, body, close }] of branches.entries()) {
+    const words = index === 0 && selected ? selected : body;
+    text += open;
+    if (index === target) select = [text.length, text.length + words.length];
+    text += words + close;
   }
-  const heads = toggle.options.map((option, index) => ({ head: `{{#when::${toggle.key}::tis::${index}}}`, body: `${option}일 때 글` }));
-  const first = heads[0];
-  return {
-    text: heads.map(({ head, body }) => `${head}${body}{{/when}}`).join(''),
-    select: first ? [first.head.length, first.head.length + first.body.length] : [0, 0],
-  };
+  return { text, select: select ?? [text.length, text.length] };
 }

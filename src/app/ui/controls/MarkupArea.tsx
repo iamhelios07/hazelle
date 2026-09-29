@@ -16,6 +16,14 @@ const LINE = { body: null, heading: styles.heading, rule: styles.rule } as const
 const MARK = { cbs: styles.cbs, slot: styles.slot, angle: styles.angle } as const;
 const pieceClass = (piece: Piece) => [LINE[piece.line], piece.mark && MARK[piece.mark]].filter(Boolean).join(' ') || undefined;
 
+// Not a state write: that would skip the browser's undo stack, so Ctrl+Z could not take the insert back.
+// insertText lands on it and fires input, which reaches onChange.
+export function typeInto(area: HTMLTextAreaElement, [start, end]: [number, number], text: string) {
+  area.focus();
+  area.setSelectionRange(start, end);
+  document.execCommand('insertText', false, text);
+}
+
 // Prompt text with its CBS tags, <tags>, headings and rules colored. The colors are drawn on a layer behind a
 // transparent textarea, so the layer must set the text exactly as the textarea does: it never changes weight, size,
 // spacing or font (a heading is brighter, not bolder), or the caret drifts from the letters. The layer is in the flow

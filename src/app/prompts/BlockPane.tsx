@@ -51,7 +51,7 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
                 </Button>
               )}
             >
-              <MenuHeading>어떤 토글에 따라 바뀔까요? 글의 커서 자리에 조건이 들어가요. 들어간 뒤 각 칸의 글만 고쳐 쓰면 돼요.</MenuHeading>
+              <MenuHeading>어떤 토글에 따라 바뀔까요? 커서 자리에 조건이 들어가고, 선택해 둔 글은 첫 칸에 담겨요. 그 뒤 각 칸의 글만 고쳐 쓰면 돼요.</MenuHeading>
               {toggles.length === 0 && <Empty variant="menu">아직 이 프롬프트에 토글이 없어요.</Empty>}
               {toggles.map((toggle) => (
                 <MenuItem

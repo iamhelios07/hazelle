@@ -7,7 +7,7 @@ export { EditBox } from './EditBox';
 export { FileButton } from './FileButton';
 export { IconButton } from './IconButton';
 export { Link } from './Link';
-export { MarkupArea } from './MarkupArea';
+export { MarkupArea, typeInto } from './MarkupArea';
 export { NumberInput } from './NumberInput';
 export { PhraseField } from './PhraseField';
 export { Pill } from './Pill';

@@ -10,7 +10,7 @@ import { useStore, useViews } from '../session';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, Divider, EditorFrame, IconButton, Menu, MenuHeading, MenuItem, NavBar, NavRow, Outline, Screen, Section, Stack, Tag, useWide, type OutlineStop } from '../ui';
+import { Button, Callout, Divider, EditorFrame, IconButton, Menu, MenuHeading, MenuItem, NavBar, NavRow, Outline, Screen, Section, Stack, Tag, typeInto, useWide, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, hasConditions, isText, MARKS, SLOT, TEXTS } from './blocks';
 import { conditionSnippet, countUses, draftOf, moved, newBlock, rekey, withMark, type Draft, type NewBlock } from './edits';
@@ -121,12 +121,11 @@ export function PromptScreen({ stored, pane, back }: Props) {
     toast.undoable('감싸는 글을 뺐어요.', () => setBlocks((blocks) => blocks.map((each) => (each.id === target.id && 'wrapper' in each ? { ...each, wrapper } : each))));
   };
   const condition = (toggle: Toggle) => {
-    const area = textRef.current;
-    if (!block || block.kind !== 'text') return;
-    const [start, end] = area ? [area.selectionStart, area.selectionEnd] : [block.text.length, block.text.length];
-    const snippet = conditionSnippet(toggle);
-    change({ ...block, text: block.text.slice(0, start) + snippet.text + block.text.slice(end) });
+    const area = textRef.current!;
+    const { selectionStart: start, selectionEnd: end } = area;
+    const snippet = conditionSnippet(toggle, area.value.slice(start, end));
     select.current = [start + snippet.select[0], start + snippet.select[1]];
+    typeInto(area, [start, end], snippet.text);
   };
   const removeToggle = (key: string) => {
     const at = latest.current.toggles.findIndex((toggle) => toggle.key === key);
