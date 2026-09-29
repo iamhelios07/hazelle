@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { addPersona } from '../../runtime/personas';
+import { personaTitle } from '../common/persona-words';
 import { useSettings, useStore, useViews } from '../session';
 import { useToast } from '../toast';
 import { Avatar, Button, List, ListItem, type NavBarProps } from '../ui';
@@ -38,7 +39,7 @@ export function PersonaList({ onPick, current, inUse, frame }: Props) {
         <ListItem
           key={id}
           leading={<Avatar face={value.name} image={value.picture} tone="you" />}
-          title={value.name}
+          title={personaTitle(value)}
           tags={[...(settings.persona === id ? ['기본'] : []), ...(inUse === id ? ['사용 중'] : [])]}
           description={value.description}
           current={current === id}

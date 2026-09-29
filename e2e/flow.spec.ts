@@ -5,6 +5,7 @@ import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider } from './helpers';
 
 const CSP = /Content-Security-Policy: (.+)/.exec(readFileSync(new URL('../public/_headers', import.meta.url), 'utf8'))![1];
 const PASSWORD = 'e2e-password';
+const NICKNAME = 'rich-steve';
 const GREETING = /Welcome to the inn\. Tonight's omen is (amber|birch)\./;
 
 test('a new account imports a card, chats through the fake provider and finds the chat after a reload', async ({ page }) => {
@@ -41,6 +42,13 @@ test('a new account imports a card, chats through the fake provider and finds th
     await main.click();
     await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();
     await expect(main).toContainText(FAKE_MODEL);
+  });
+
+  await test.step('give the default persona a 별명, which lists show and no request carries', async () => {
+    await page.getByRole('button', { name: '페르소나', exact: true }).click();
+    await page.getByRole('button', { name: /^e2e/ }).click();
+    await page.getByLabel('별명', { exact: true }).fill(NICKNAME);
+    await expect(page.getByRole('button', { name: new RegExp(`^e2e · ${NICKNAME}`) })).toBeVisible();
     await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   });
 
@@ -73,6 +81,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     expect(prompt.some((message) => message.content.includes('This is private roleplay between two performers'))).toBe(true);
     expect(prompt.find((message) => message.content.includes(DESCRIPTION))?.content).toContain('(Main NPC)');
     expect(prompt.at(-1)).toEqual({ role: 'user', content: 'hi' });
+    expect(JSON.stringify(sent[0])).not.toContain(NICKNAME);
   });
 
   await test.step('after a reload the chat and its rendered messages are still there', async () => {

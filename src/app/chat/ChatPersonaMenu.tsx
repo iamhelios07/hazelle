@@ -1,4 +1,5 @@
 import { UserRound } from 'lucide-react';
+import { personaTitle } from '../common/persona-words';
 import { useSettings, useViews } from '../session';
 import { Avatar, ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
@@ -8,7 +9,7 @@ import type { OpenChat } from './useChat';
 export function ChatPersonaMenu({ chat }: { chat: OpenChat }) {
   const { persona, personaMenu } = chat;
   const shown = persona.kind === 'persona' ? persona.persona.value : null;
-  const label = shown?.name ?? (persona.own ? '페르소나가 지워졌어요' : '기본 페르소나가 지워졌어요');
+  const label = shown ? personaTitle(shown) : (persona.own ? '페르소나가 지워졌어요' : '기본 페르소나가 지워졌어요');
   return (
     <Menu
       handle={personaMenu}
@@ -43,11 +44,11 @@ function PersonaChoices({ chat }: { chat: OpenChat }) {
   return (
     <>
       <MenuHeading>이 채팅에서 나는</MenuHeading>
-      <MenuItem label="기본 페르소나 따르기" sub={fallback?.value.name ?? '기본 페르소나가 지워졌어요'} checked={!persona.own} onClick={() => void actions.setOwn('persona', null)} />
+      <MenuItem label="기본 페르소나 따르기" sub={fallback ? personaTitle(fallback.value) : '기본 페르소나가 지워졌어요'} checked={!persona.own} onClick={() => void actions.setOwn('persona', null)} />
       {personas.map(({ id, value }) => (
         <MenuItem
           key={id}
-          label={value.name}
+          label={personaTitle(value)}
           sub={value.description.split('\n')[0] || undefined}
           avatar={<Avatar tone="you" face={value.name} image={value.picture} />}
           tag={id === settings.persona ? <Tag tone="accent">기본</Tag> : undefined}

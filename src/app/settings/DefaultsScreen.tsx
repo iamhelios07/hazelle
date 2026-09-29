@@ -3,6 +3,7 @@ import type { ApiFailure } from '../../runtime/api';
 import { defaultModel, setDefaultModel } from '../../runtime/assignment';
 import { setDefaultPersona } from '../../runtime/personas';
 import { setDefaultPrompt } from '../../runtime/prompts';
+import { personaTitle } from '../common/persona-words';
 import { useSettings, useStore, useViews } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -73,8 +74,8 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
             help="새 채팅에서 내가 맡는 사람이에요. 채팅마다 입력창 옆에서 바꿀 수 있어요."
             control={choose(
               '기본 페르소나',
-              persona === null ? UNSET : (persona?.value.name ?? MISSING),
-              personas.map(({ id, value }) => ({ key: id, label: value.name, checked: id === settings.persona, pick: () => setDefaultPersona(store, id) })),
+              persona === null ? UNSET : (persona ? personaTitle(persona.value) : MISSING),
+              personas.map(({ id, value }) => ({ key: id, label: personaTitle(value), checked: id === settings.persona, pick: () => setDefaultPersona(store, id) })),
               '페르소나가 없어요.',
             )}
           />
