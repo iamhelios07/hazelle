@@ -188,13 +188,13 @@ const declaresAfterMatch = (content: string) =>
 
 // Which after-match entries went into the prompts of the replies before this one (design §5 row 8). It is not
 // stored: like the variables (row 17), it is replayed from the chat, each earlier reply's activation rolled again
-// from its version id, the seed its own request used.
+// from its seed, which is the id its own request rolled from (or, for a branch's copy, the original's).
 function afterMatch(card: Card, scope: ChatScope, countTokens: (text: string) => number): string[] {
   let state: string[] = [];
   if (!scope.lore.some(({ value }) => declaresAfterMatch(value.content))) return state;
   scope.messages.forEach((message, index) => {
     if (message.role === 'user' || (index === 0 && scope.greeting !== null)) return;
-    state = activate(loreInput(card, scope, scope.messages.slice(0, index), state, message.id, countTokens)).afterMatch;
+    state = activate(loreInput(card, scope, scope.messages.slice(0, index), state, message.seed, countTokens)).afterMatch;
   });
   return state;
 }

@@ -53,13 +53,13 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     lore: chat.character === null ? [] : store.children('lore', chat.character),
     messages: messages.map((message) => {
       const version = shown(message);
-      return { id: version.id, role: message.role, text: version.text, time: version.at };
+      return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at };
     }),
     greeting: card && greetingOf(card, messages),
     toggle: togglesOf(store, chat, prompt).value,
     model: 'kind' in route ? null : botModel(route),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    pick: `${chat.character ?? ''}:${id ?? ''}`,
+    pick: `${chat.character ?? ''}:${chat.seed ?? id ?? ''}`,
   };
 }
 
@@ -130,11 +130,11 @@ export function gatherTurn(session: Session, chat: string, target: Target): Turn
   const version = messages[at]?.versions[index];
   // 이어 쓰기 continues the version it names. So does 다시 시도 on a continuation that failed, so that neither the text
   // it continues nor the calls its receipt carries are dropped.
-  const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt } : null;
+  const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt, seed: version.seed } : null;
   if (target.kind === 'continue' && !continues) return null;
   const said: Ask['said'] = target.kind === 'send' ? { id: crypto.randomUUID(), text: target.text } : null;
   const now = Date.now();
-  const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
+  const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
   // A continuation's prompt ends with the version it continues.
   const history = continues ? [...messages.slice(0, at), { ...messages[at]!, selected: index }] : [...messages.slice(0, at), ...sending];
   const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);

@@ -75,7 +75,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
           id: 'opening',
           role: 'assistant',
           at: openedAt,
-          versions: greetings.map((text, index) => ({ id: openingIds[index]!, text, receipt: null, edited: false, at: openedAt })),
+          versions: greetings.map((text, index) => ({ id: openingIds[index]!, seed: openingIds[index]!, text, receipt: null, edited: false, at: openedAt })),
           selected: greeting,
           live: null,
         }

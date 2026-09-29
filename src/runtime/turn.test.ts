@@ -83,7 +83,7 @@ describe('a new chat', () => {
 });
 
 describe('이어 쓰기', () => {
-  it('sends the chat ending in the cut text with the continue instruction, and saves the joined text in the cut version’s place, keeping both calls', () =>
+  it('sends the chat ending in the cut text with the continue instruction, and saves the joined text in the cut version’s place, keeping both calls and its rolls', () =>
     server.withSession(async (session) => {
       const { chat, log, reply, cut } = await cutReply(session, [saying(' 용이 살았어요.')]);
       expect(cut.receipt).toMatchObject({ state: 'cut', cut: 'length', cost: { unit: 'usd', amount: 0.002 } });
@@ -93,7 +93,7 @@ describe('이어 쓰기', () => {
       expect(last).toEqual({ role: 'assistant', content: '옛날 옛적에' });
       expect(instruction).toMatchObject({ role: 'user', content: expect.stringMatching(/^Your previous reply was cut off\./) });
       expect(reply().versions).toHaveLength(1);
-      expect(shown(reply())).toMatchObject({ text: '옛날 옛적에 용이 살았어요.', receipt: { state: 'done', continues: cut.receipt } });
+      expect(shown(reply())).toMatchObject({ text: '옛날 옛적에 용이 살았어요.', receipt: { state: 'done', continues: cut.receipt }, seed: cut.seed });
     }));
 
   it('continues again on 다시 시도 after a continuation failed, so the cut text and every call stay', () =>

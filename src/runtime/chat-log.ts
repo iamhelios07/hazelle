@@ -60,7 +60,7 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
       if (!saved.ok) return saved;
     }
   }
-  const created = await store.create('chat', { ...item.chat, title: null, origin: { id: item.id, name: item.title, after } }, { id });
+  const created = await store.create('chat', { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id }, { id });
   return created.ok ? { ok: true, data: id } : created;
 }
 
@@ -71,12 +71,12 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
 function copied(id: string, { role, at, versions, selected }: Message): [string, Entry][] {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
-  const entries: [string, Entry][] = [[id, { type: 'message', role, at, text: first!.text, receipt: first!.receipt }]];
+  const entries: [string, Entry][] = [[id, { type: 'message', role, at, text: first!.text, receipt: first!.receipt, seed: first!.seed }]];
   if (first!.edited || first!.at !== at) {
-    entries.push([crypto.randomUUID(), { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, text: first!.text, receipt: first!.receipt }]);
+    entries.push([crypto.randomUUID(), { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, text: first!.text, receipt: first!.receipt, seed: first!.seed }]);
   }
   rest.forEach((version, index) => {
-    entries.push([ids[index + 1]!, { type: 'version', message: id, replaces: null, edit: version.edited, at: version.at, text: version.text, receipt: version.receipt }]);
+    entries.push([ids[index + 1]!, { type: 'version', message: id, replaces: null, edit: version.edited, at: version.at, text: version.text, receipt: version.receipt, seed: version.seed }]);
   });
   if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
   return entries;
@@ -120,10 +120,10 @@ export const appendUserMessage = (store: ObjectStore, chat: string, { id, text }
 // A reply as its stream ended: a new message, or a new version of `message`, in place of `replaces` on
 // 다시 시도. at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain)
 // sends the same entry, and a first try that landed unanswered is found as it is (runtime/store create).
-export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt };
+export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt; seed?: string };
 
-export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt }: Written) {
-  return append(store, chat, message === null ? { type: 'message', role: 'assistant', at, text, receipt } : { type: 'version', message, replaces, edit: false, at, text, receipt }, id);
+export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt, seed }: Written) {
+  return append(store, chat, message === null ? { type: 'message', role: 'assistant', at, text, receipt } : { type: 'version', message, replaces, edit: false, at, text, receipt, ...(seed && { seed }) }, id);
 }
 
 export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });

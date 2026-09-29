@@ -17,7 +17,7 @@ export type CbsContext = {
   prompt: { main: string; globalNote: string; authorNote: string } | null;
   lore: readonly Omit<LoreEntry, 'folder'>[];
   messages: HistoryMessage[];
-  // A chat message, by its index in messages: its version id seeds its random tags, and its setvar, addvar
+  // A chat message, by its index in messages: its seed rolls its random tags, and its setvar, addvar
   // and setdefaultvar write the variables. Or text outside messages: its random tags roll from a seed fresh
   // for each request, and its variable writes are removed without effect (design §5 rows 11 and 18).
   source: { message: number } | { seed: string };
@@ -55,7 +55,7 @@ type Frame = { run: Run; prefix: string; writes: boolean; depth: number; args: s
 export function evaluate(text: string, context: CbsContext): string {
   const { source } = context;
   const message = 'message' in source;
-  const seed = message ? context.messages[source.message]!.id : source.seed;
+  const seed = message ? context.messages[source.message]!.seed : source.seed;
   const run: Run = { context, seed, temp: new Map(), functions: new Map() };
   return enter(parse(prestep(text)), { run, prefix: '', writes: message, depth: 0, args: null, slots: new Map() });
 }

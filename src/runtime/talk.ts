@@ -14,7 +14,7 @@ import type { ObjectStore } from './store';
 export type Turn = {
   chat: string;
   said: { id: string; text: string } | null;
-  reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt } | null };
+  reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string } | null };
   text: string;
 };
 
@@ -39,9 +39,9 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   if (turn?.chat !== chat) return out;
   const { said, reply } = turn;
   if (said && !out.some((message) => message.id === said.id)) {
-    out.push({ id: said.id, role: 'user', at: Date.now(), versions: [{ id: said.id, text: said.text, receipt: null, edited: false, at: Date.now() }], selected: 0, live: null });
+    out.push({ id: said.id, role: 'user', at: Date.now(), versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: Date.now() }], selected: 0, live: null });
   }
-  const version = { id: reply.id, text: turn.text, receipt: null, edited: false, at: Date.now() };
+  const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: Date.now() };
   if (reply.message === null) {
     if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: Date.now(), versions: [version], selected: 0, live: reply.id });
     return out;
@@ -166,7 +166,7 @@ export class Talk {
       totalMs: answer.totalMs,
       ...(reply.continues && { continues: reply.continues.receipt }),
     };
-    const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt };
+    const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed };
     // Kept before the save, whose store change is what shows the reply's 정보.
     this.sentBy.set(reply.id, { request: answer.request, prompt });
     const saved = await appendReply(this.store, chat, written);

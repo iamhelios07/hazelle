@@ -18,6 +18,9 @@ export type Chat = {
   // A branch's original chat, named as it was then so a renamed or deleted one still reads; after is the message
   // of this chat that the split comes after, where its divider stands (design F3).
   origin?: { id: string; name: string; after: string };
+  // The id pick and rollp roll from in place of this chat's own: a branch keeps its original's, so the history
+  // it copied reads the same.
+  seed?: string;
 };
 
 // What a reply's generation left behind (tech-spec §5). The raw request is never stored.
@@ -58,13 +61,15 @@ export type ReceiptError =
 
 // Chat entries are created and never changed (design §3): an edit, a swipe or a deletion is a new
 // entry. at is the writer's clock, for showing times only; order is the server's rev.
+// seed: the id a version's random tags roll from in place of its own. A branch's copy keeps its original's and
+// a continued cut keeps the cut's, so text already shown never rolls again.
 export type Entry =
   // A new message with its first version, which has the entry's id.
-  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null }
+  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string }
   // replaces: the version this one takes the place of, for an edit, a retried failure or a continued cut
   // (이어 쓰기), so the count of versions does not grow; null for a new version, which goes last. An edit keeps
   // the receipt of the reply it changes.
-  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null }
+  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null; seed?: string }
   | { type: 'select'; message: string; version: string; at: number }
   | { type: 'delete'; message: string; at: number }
   | { type: 'restore'; message: string; at: number }
@@ -72,7 +77,7 @@ export type Entry =
   // ones a continued reply carries (Receipt continues) included.
   | { type: 'cost'; replyId: string; cost: Cost | null; at: number };
 
-export type Version = { id: string; text: string; receipt: Receipt | null; edited: boolean; at: number };
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number };
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number };
 
 // A chat's entries, read in rev order into the messages on screen. Entries naming a message or version
@@ -90,7 +95,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
 
   for (const { id, value: entry } of [...entries].sort((a, b) => a.rev - b.rev)) {
     if (entry.type === 'message') {
-      const version = { id, text: entry.text, receipt: entry.receipt, edited: false, at: entry.at };
+      const version = { id, seed: entry.seed ?? id, text: entry.text, receipt: entry.receipt, edited: false, at: entry.at };
       versions.set(id, version);
       messages.set(id, { id, role: entry.role, at: entry.at, versions: [version], selected: 0 });
       continue;
@@ -102,7 +107,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     const message = messages.get(entry.message);
     if (!message) continue;
     if (entry.type === 'version') {
-      const version = { id, text: entry.text, receipt: entry.receipt, edited: entry.edit, at: entry.at };
+      const version = { id, seed: entry.seed ?? id, text: entry.text, receipt: entry.receipt, edited: entry.edit, at: entry.at };
       const slot = entry.replaces === null ? -1 : locate(message, entry.replaces);
       if (slot === -1) message.versions.push(version);
       else message.versions[slot] = version;

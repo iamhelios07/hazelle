@@ -14,7 +14,10 @@ describe('startChat', () => {
     const opened = async (selected: number) => {
       const id = crypto.randomUUID();
       const chat: Chat = { title: null, character: null, models: {} };
-      const versions = texts.map((text) => ({ id: crypto.randomUUID(), text, receipt: null, edited: false, at: 0 }));
+      const versions = texts.map((text) => {
+        const id = crypto.randomUUID();
+        return { id, seed: id, text, receipt: null, edited: false, at: 0 };
+      });
       const before = displayChat(reader, id, chat, [{ id: 'opening', role: 'assistant', at: 0, versions, selected }]);
       expect(await startChat(store, id, chat, { ids: versions.map((version) => version.id), texts, selected })).toEqual({ ok: true });
       const messages = fold(store.children('entry', id));
@@ -28,7 +31,7 @@ describe('startChat', () => {
 });
 
 describe('branchChat', () => {
-  it('copies the messages up to the split as they fold, without the deleted one, and saves the chat after them', async () => {
+  it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();
     const chat: Chat = { title: '기숙사의 밤', character: null, models: {}, note: '노트' };
@@ -38,7 +41,7 @@ describe('branchChat', () => {
     const split = crypto.randomUUID();
     const folded = () => fold(store.children('entry', source));
 
-    await startChat(store, source, chat, { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['하나', '둘', '셋'], selected: 1 });
+    await startChat(store, source, chat, { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['하나', '둘 {{random::빨강::파랑::노랑::초록}} {{pick::봄::여름::가을::겨울}}', '셋'], selected: 1 });
     await appendUserMessage(store, source, { id: said, text: '안녕' });
     await editMessage(store, source, folded().find((message) => message.id === said)!, '안녕하세요');
     // A reply cut at its limit, then continued (이어 쓰기), whose cut call's cost is booked later.
@@ -58,12 +61,14 @@ describe('branchChat', () => {
     const entries = store.children('entry', branched.data);
     const copy = fold(entries);
     const withoutIds = (messages: Message[]) =>
-      messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ text, receipt, edited, at: written }) => ({ text, receipt, edited, written })) }));
+      messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ seed, text, receipt, edited, at: written }) => ({ seed, text, receipt, edited, written })) }));
     expect(withoutIds(copy)).toEqual(withoutIds(item.messages.slice(0, 4)));
-    expect([shown(copy[0]!).text, copy[0]!.versions.length, shown(copy[1]!).text, shown(copy[1]!).edited]).toEqual(['둘', 3, '안녕하세요', true]);
+    expect([copy[0]!.versions.length, shown(copy[1]!).text, shown(copy[1]!).edited]).toEqual([3, '안녕하세요', true]);
     expect([shown(copy[2]!).text, copy[2]!.versions.length, calls(shown(copy[2]!).receipt!).map((call) => call.cost)]).toEqual(['답장', 1, [{ unit: 'usd', amount: 0.01, source: 'reported' }, null]]);
     const stored = store.get('chat', branched.data)!;
-    expect(stored.value).toEqual({ ...chat, title: null, origin: { id: source, name: '기숙사의 밤', after: copy[3]!.id } });
+    expect(stored.value).toEqual({ ...chat, title: null, origin: { id: source, name: '기숙사의 밤', after: copy[3]!.id }, seed: source });
+    const reader = { store, username: 'jin' };
+    expect(displayChat(reader, branched.data, stored.value, copy)).toEqual(displayChat(reader, source, chat, item.messages.slice(0, 4)));
     expect(stored.rev).toBeGreaterThan(Math.max(...entries.map((entry) => entry.rev)));
   });
 });

@@ -4,7 +4,7 @@ import type { RegexScript } from '../import/types';
 import { applyScripts, type Context } from './scripts';
 
 const script = (find: string, replace: string, over: Partial<RegexScript> = {}): RegexScript => ({ name: find, find, replace, stage: 'display', flags: null, ...over });
-const message = (role: HistoryMessage['role'], text: string, index: number): HistoryMessage => ({ id: `m${index}`, role, text, time: null });
+const message = (role: HistoryMessage['role'], text: string, index: number): HistoryMessage => ({ id: `m${index}`, seed: `m${index}`, role, text, time: null });
 const cbs = (text: string) => text.replaceAll('{{user}}', 'jin');
 const apply = (scripts: RegexScript[], text: string, over: Partial<Context> = {}) =>
   applyScripts('display', text, { scripts, messages: [message('assistant', text, 0)], index: 0, cbs, ...over });

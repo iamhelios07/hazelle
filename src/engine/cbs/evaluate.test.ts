@@ -27,7 +27,7 @@ const card = (over: Partial<Card> = {}): Card => ({
   ...over,
 });
 
-const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, role, text, time: null });
+const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
 
 const context = (over: Partial<CbsContext> = {}): CbsContext => ({
   stage: 'prompt',

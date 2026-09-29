@@ -76,7 +76,7 @@ const lore = (id: string, content: string, over: Partial<LoreEntry> = {}) => ({
   value: { name: id, keys: [], secondaryKeys: [], content, enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 0, priority: null, position: null, ...over },
 });
 
-const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, role, text, time: null });
+const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
 
 const scope = (over: Partial<PromptInput['scope']> = {}): PromptInput['scope'] => ({
   card: card(),
