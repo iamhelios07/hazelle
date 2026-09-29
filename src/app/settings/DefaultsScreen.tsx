@@ -1,10 +1,10 @@
-import { resolveRole, ROLES, type ModelRef, type Role } from '../../connectors/assignment';
+import { ROLES, type ModelRef, type Role } from '../../connectors/assignment';
 import type { ApiFailure } from '../../runtime/api';
 import { setDefaultModel } from '../../runtime/assignment';
 import { setDefaultPersona } from '../../runtime/personas';
 import { setDefaultPrompt } from '../../runtime/prompts';
 import { personaTitle } from '../common/persona-words';
-import { findStarred, HelperPickers, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
+import { findStarred, HelperPickers, ROLE_WORDS, RolePicker } from '../common/RolePicker';
 import { useSettings, useStore, useViews } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -33,11 +33,7 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
       if (!result.ok) toast.failed(result, '기본값을 바꾸지 못했어요.');
     });
   // An unset helper role is the same as the role it falls back to.
-  const follow = (role: Role) => {
-    const next = ROLES[role].fallsBackTo!;
-    const ref = resolveRole(next, [settings.models]);
-    return { label: `${ROLE_WORDS[next]}와 같게`, model: ref ? modelName(ref, connections) : '정해지지 않음' };
-  };
+  const follow = (role: Role) => `${ROLE_WORDS[ROLES[role].fallsBackTo!]}와 같게`;
 
   const choose = (label: string, current: string, choices: Choice[], empty: string) => (
     <Menu place="below-end" label={label} trigger={(opener) => <ChipButton variant="field" label={current} title={label} {...opener} />}>

@@ -21,7 +21,7 @@ export function findStarred(ref: ModelRef, connections: readonly Stored<'connect
 }
 
 // A starred model reads as its name and connection; one no longer starred reads as missing, never as another model.
-export function modelName(ref: ModelRef, connections: readonly Stored<'connection'>[]): string {
+function modelName(ref: ModelRef, connections: readonly Stored<'connection'>[]): string {
   const choice = findStarred(ref, connections);
   return choice ? `${choice.name} · ${choice.source}` : GONE;
 }
@@ -31,8 +31,9 @@ type Props = {
   help?: string;
   // This layer's own choice.
   own: ModelRef | undefined;
-  // What leaving it unset means here, and the model that comes to; null where it cannot be left unset.
-  follow: { label: string; model: string } | null;
+  // What leaving it unset means here; null where it cannot be left unset. It names no model: 본 대화 differs by
+  // chat, so a model named here would be wrong in any chat that picked another.
+  follow: string | null;
   connections: readonly Stored<'connection'>[];
   onPick: (ref: ModelRef | null) => void;
 };
@@ -41,15 +42,14 @@ type Props = {
 export function RolePicker({ role, help, own, follow, connections, onPick }: Props) {
   const label = `${ROLE_WORDS[role]} 모델`;
   const starred = starredModels(connections, role);
-  const current = own ? modelName(own, connections) : (follow?.label ?? '정하지 않음');
+  const current = own ? modelName(own, connections) : (follow ?? '정하지 않음');
   return (
     <SettingRow
       label={label}
       help={help}
-      note={!own && follow ? `지금은 ${follow.model}` : undefined}
       control={
         <Menu place="below-end" label={label} trigger={(opener) => <ChipButton variant="field" label={current} title={label} {...opener} />}>
-          {follow && <MenuItem label={follow.label} sub={follow.model} checked={!own} onClick={() => onPick(null)} />}
+          {follow && <MenuItem label={follow} checked={!own} onClick={() => onPick(null)} />}
           {own && !findStarred(own, connections) && <MenuItem label={GONE} sub={own.model} checked onClick={() => undefined} />}
           {starred.length === 0 ? (
             <Empty variant="menu">별표 찍은 모델이 없어요. 연결에서 모델에 별표를 찍으면 여기서 고를 수 있어요.</Empty>

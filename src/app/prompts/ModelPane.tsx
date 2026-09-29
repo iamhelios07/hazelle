@@ -1,6 +1,6 @@
-import { resolveRole, ROLES, type Assignment, type ModelRef, type Role } from '../../connectors/assignment';
+import { ROLES, type Assignment, type ModelRef, type Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
-import { findStarred, GONE, HelperPickers, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
+import { findStarred, GONE, HelperPickers, ROLE_WORDS, RolePicker } from '../common/RolePicker';
 import { Section, SettingGroup, Text } from '../ui';
 
 const DEFAULT = '전체 기본값 따르기';
@@ -19,11 +19,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
   // Unset here, a role takes 전체 기본값's own choice first, and only then the role it falls back to.
   const follow = (role: Role) => {
     const next = ROLES[role].fallsBackTo;
-    const ref = resolveRole(role, [{ ...models, [role]: undefined }, defaults]);
-    return {
-      label: defaults[role] || !next ? DEFAULT : `${ROLE_WORDS[next]}와 같게`,
-      model: ref ? modelName(ref, connections) : '정해지지 않음',
-    };
+    return defaults[role] || !next ? DEFAULT : `${ROLE_WORDS[next]}와 같게`;
   };
   const picker = (role: Role, help?: string) => <RolePicker key={role} role={role} help={help} own={models[role]} follow={follow(role)} connections={connections} onPick={(ref) => onPick(role, ref)} />;
   return (
