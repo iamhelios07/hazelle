@@ -10,7 +10,7 @@ import styles from './NavBar.module.css';
 // named: beside a list, back is a link naming where it goes, for a page opened from the item picked there
 // (a model's settings from its connection); elsewhere it is the usual back. close: back leaves a layer, as an ×.
 type Back = { backLabel: string; onBack: () => void; named?: boolean; close?: boolean } | { backLabel?: never; onBack?: never; named?: never; close?: never };
-type Props = {
+export type NavBarProps = {
   title: string;
   // Makes the title a field that renames what the screen shows, with placeholder standing in while it is empty.
   rename?: { label: string; placeholder: string; onChange: (title: string) => void };
@@ -22,7 +22,7 @@ type Props = {
 
 // The top row of every screen below home: back, the screen's name, and its own actions. Beside its
 // list (ListDetail) a screen has nothing to go back to.
-export function NavBar({ title, rename, subtitle, status, backLabel, onBack, named = false, close = false, actions }: Props) {
+export function NavBar({ title, rename, subtitle, status, backLabel, onBack, named = false, close = false, actions }: NavBarProps) {
   const pane = usePane();
   const inPane = named && pane === 'detail';
   const back =

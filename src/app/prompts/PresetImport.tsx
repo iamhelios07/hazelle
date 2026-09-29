@@ -4,7 +4,6 @@ import type { Prompt } from '../../model/prompt';
 import { importPrompt } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
 import { useStore } from '../session';
-import { navigate } from '../shell/router';
 import { Button, Callout, Dialog, DropOverlay, Outcome, Section, Stack, Text, useFileDrop } from '../ui';
 import { promptName } from './usePromptUse';
 
@@ -36,7 +35,7 @@ type Result = Opened | { file: string; failure: string };
 
 // A .risup picked or dropped on the prompt list becomes a new prompt (design §5 Scope), and a summary says what came
 // in and what did not. It takes dropped files from the app's character import while the list is open.
-export function usePresetImport(): { take: (files: File[]) => void; view: ReactNode } {
+export function usePresetImport(onOpen: (id: string) => void): { take: (files: File[]) => void; view: ReactNode } {
   const store = useStore();
   const [busy, setBusy] = useState<string | null>(null);
   const [results, setResults] = useState<Result[] | null>(null);
@@ -87,7 +86,7 @@ export function usePresetImport(): { take: (files: File[]) => void; view: ReactN
                   size="md"
                   onClick={() => {
                     setResults(null);
-                    navigate({ kind: 'prompt', id: only.id, pane: null });
+                    onOpen(only.id);
                   }}
                 >
                   열어 보기
