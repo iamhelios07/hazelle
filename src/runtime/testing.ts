@@ -60,7 +60,7 @@ export async function answerable(session: Session): Promise<void> {
   const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
   const connection = await session.store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [model] });
   if (!connection.ok) throw new Error(connection.error);
-  await setDefaultModel(session.store, { connection: connection.data.id, model: model.id });
+  await setDefaultModel(session.store, 'main', { connection: connection.data.id, model: model.id });
 }
 
 // Gives each test in the file a server with no accounts. account() signs one up; each open() is one

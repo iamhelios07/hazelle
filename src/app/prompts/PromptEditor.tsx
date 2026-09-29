@@ -1,6 +1,6 @@
 import { Copy, Cpu, Ellipsis, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import type { ModelRef } from '../../connectors/assignment';
+import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { SLOTS, type Block, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel } from '../../runtime/assignment';
@@ -215,8 +215,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     perform(renameKey(toggle, to));
     toast.show(count ? `이름을 바꾸고 글 속 조건 ${count}곳도 함께 바꿨어요.` : '이름을 바꿨어요.');
   };
-  const pickModel = async (ref: ModelRef | null) => {
-    const saved = await setPromptModel(store, stored.id, ref);
+  const pickModel = async (role: Role, ref: ModelRef | null) => {
+    const saved = await setPromptModel(store, stored.id, role, ref);
     if (!saved.ok) toast.failed(saved, '모델을 바꾸지 못했어요.');
   };
 
@@ -326,7 +326,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   const page: ReactNode =
     open === MODEL ? (
-      <ModelPane models={stored.value.models} defaults={settings.models} connections={connections} onPick={(ref) => void pickModel(ref)} />
+      <ModelPane models={stored.value.models} defaults={settings.models} connections={connections} onPick={(role, ref) => void pickModel(role, ref)} />
     ) : open === TOGGLES ? (
       <TogglePane
         toggles={draft.toggles}

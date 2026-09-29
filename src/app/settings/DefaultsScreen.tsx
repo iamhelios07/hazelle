@@ -1,14 +1,15 @@
-import { fitsRole } from '../../connectors/assignment';
+import { resolveRole, ROLES, type ModelRef, type Role } from '../../connectors/assignment';
 import type { ApiFailure } from '../../runtime/api';
-import { defaultModel, setDefaultModel } from '../../runtime/assignment';
+import { setDefaultModel } from '../../runtime/assignment';
 import { setDefaultPersona } from '../../runtime/personas';
 import { setDefaultPrompt } from '../../runtime/prompts';
 import { personaTitle } from '../common/persona-words';
+import { findStarred, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
 import { useSettings, useStore, useViews } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Callout, ChipButton, Empty, Menu, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow } from '../ui';
+import { Callout, ChipButton, Empty, Menu, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
 
 type Choice = { key: string; label: string; sub?: string; checked: boolean; pick: () => Promise<{ ok: true } | ApiFailure> };
 
@@ -26,12 +27,17 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
 
   const prompt = settings.prompt === undefined ? null : prompts.find(({ id }) => id === settings.prompt);
   const persona = settings.persona === undefined ? null : personas.find(({ id }) => id === settings.persona);
-  const main = defaultModel(settings);
-  const models = connections.flatMap((connection) =>
-    connection.value.starred.filter((model) => fitsRole(model, 'main')).map((model) => ({ connection, model, ref: { connection: connection.id, model: model.id } })),
-  );
-  const mainChoice = main && models.find(({ ref }) => ref.connection === main.connection && ref.model === main.model);
-  const nameOf = (choice: (typeof models)[number]) => `${choice.model.name} · ${choice.connection.value.label}`;
+  const main = settings.models.main;
+  const pickModel = (role: Role, ref: ModelRef | null) =>
+    void setDefaultModel(store, role, ref).then((result) => {
+      if (!result.ok) toast.failed(result, '기본값을 바꾸지 못했어요.');
+    });
+  // An unset helper role is the same as the role it falls back to.
+  const follow = (role: Role) => {
+    const next = ROLES[role].fallsBackTo!;
+    const ref = resolveRole(next, [settings.models]);
+    return { label: `${ROLE_WORDS[next]}와 같게`, model: ref ? modelName(ref, connections) : '정해지지 않음' };
+  };
 
   const choose = (label: string, current: string, choices: Choice[], empty: string) => (
     <Menu place="below-end" label={label} trigger={(opener) => <ChipButton variant="field" label={current} title={label} {...opener} />}>
@@ -79,24 +85,32 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
               '페르소나가 없어요.',
             )}
           />
-          <SettingRow
-            label="본 대화 모델"
+          <RolePicker
+            role="main"
             help="프롬프트나 채팅에서 따로 정하지 않았을 때 쓰는 모델이에요."
-            control={choose(
-              '본 대화 모델',
-              main === null ? UNSET : mainChoice ? nameOf(mainChoice) : MISSING,
-              models.map((choice) => ({
-                key: `${choice.ref.connection}/${choice.ref.model}`,
-                label: choice.model.name,
-                sub: choice.connection.value.label,
-                checked: choice === mainChoice,
-                pick: () => setDefaultModel(store, choice.ref),
-              })),
-              '별표 찍은 모델이 없어요. 연결에서 모델에 별표를 찍으면 여기서 고를 수 있어요.',
-            )}
+            own={main}
+            follow={null}
+            connections={connections}
+            onPick={(ref) => ref && pickModel('main', ref)}
           />
         </SettingGroup>
-        {main && !mainChoice && <Callout tone="warn">본 대화로 정했던 모델이 별표 목록에 없어요. 다시 골라 주세요.</Callout>}
+        {main && !findStarred(main, connections) && <Callout tone="warn">본 대화로 정했던 모델이 별표 목록에 없어요. 다시 골라 주세요.</Callout>}
+      </Section>
+      <Section title="보조 모델">
+        <Text tone="muted">장기 기억·번역·감정 에셋은 아직 만들고 있어요. 그 기능이 들어오면 여기서 고른 모델을 써요. 프롬프트마다 따로 정할 수도 있어요.</Text>
+        <SettingGroup label="보조 모델">
+          {(['aux', 'memory', 'translate', 'emotion'] as const).map((role) => (
+            <RolePicker
+              key={role}
+              role={role}
+              help={role === 'aux' ? '장기 기억·번역·감정 에셋 모델을 따로 정하지 않으면 이 모델을 써요.' : undefined}
+              own={settings.models[role]}
+              follow={follow(role)}
+              connections={connections}
+              onPick={(ref) => pickModel(role, ref)}
+            />
+          ))}
+        </SettingGroup>
       </Section>
     </Screen>
   );

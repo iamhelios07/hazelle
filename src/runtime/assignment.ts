@@ -1,8 +1,8 @@
-import { resolveRole, type ModelRef } from '../connectors/assignment';
+import { resolveRole, type Assignment, type ModelRef, type Role } from '../connectors/assignment';
 import type { Model } from '../connectors/types';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
-import { SETTINGS_ID, type Settings } from '../model/settings';
+import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { chatPrompt } from './prompts';
 import type { ObjectStore } from './store';
@@ -25,23 +25,23 @@ export function chatModel(store: ObjectStore, chat: Chat): Route | RouteFailure 
   return connection && model ? { connection, model } : { kind: 'model-gone' };
 }
 
-export const defaultModel = (settings: Settings): ModelRef | null => resolveRole('main', [settings.models]);
-
 // The chat layer, which the model button writes (design F4).
 export function setChatModel(store: ObjectStore, chat: string, ref: ModelRef): Promise<ApiResult<Stored<'chat'>>> {
   return store.update('chat', chat, (current) => ({ ...current, models: { ...current.models, main: ref } }));
 }
 
-// The prompt layer; null leaves the role to 전체 기본값.
-export function setPromptModel(store: ObjectStore, prompt: string, ref: ModelRef | null): Promise<ApiResult<Stored<'prompt'>>> {
-  return store.update('prompt', prompt, (current) => {
-    const models = { ...current.models };
-    if (ref === null) delete models.main;
-    else models.main = ref;
-    return { ...current, models };
-  });
+// null leaves the role to the layer below, or to the role it falls back to.
+function assign(models: Assignment, role: Role, ref: ModelRef | null): Assignment {
+  const next = { ...models };
+  if (ref === null) delete next[role];
+  else next[role] = ref;
+  return next;
 }
 
-export function setDefaultModel(store: ObjectStore, ref: ModelRef): Promise<ApiResult<Stored<'settings'>>> {
-  return store.upsert('settings', (current) => ({ ...current, models: { ...current?.models, main: ref } }));
+export function setPromptModel(store: ObjectStore, prompt: string, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'prompt'>>> {
+  return store.update('prompt', prompt, (current) => ({ ...current, models: assign(current.models, role, ref) }));
+}
+
+export function setDefaultModel(store: ObjectStore, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'settings'>>> {
+  return store.upsert('settings', (current) => ({ ...current, models: assign(current?.models ?? {}, role, ref) }));
 }

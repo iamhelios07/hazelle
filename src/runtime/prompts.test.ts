@@ -111,7 +111,7 @@ describe('prompts', () => {
     const [byDefault, own] = await Promise.all([addPrompt(store, '기본'), addPrompt(store, '따로')]);
     const [defaultId, ownId] = [byDefault, own].map((added) => (added.ok ? added.data.id : ''));
     await setDefaultPrompt(store, defaultId!);
-    await setPromptModel(store, defaultId!, { connection: connection.ok ? connection.data.id : '', model: 'm' });
+    await setPromptModel(store, defaultId!, 'main', { connection: connection.ok ? connection.data.id : '', model: 'm' });
     const created = await store.create('chat', { title: null, character: null, models: {} });
     const chat = created.ok ? created.data.id : '';
     const read = () => store.get('chat', chat)!.value;
