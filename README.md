@@ -16,6 +16,7 @@ Chat
 - Send, regenerate, continue and branch. Edits and regenerations are kept as versions instead of overwriting earlier replies.
 - A per-reply info panel showing the request that was sent, the lorebook entries that fired, token counts, cache hits and cost.
 - Per-chat notes and toggles, switching persona, prompt or model mid-chat, and per-device reading settings (font, size, spacing).
+- Translation per character: replies shown in Korean and the user's messages sent in English, while the model always reads the original. Each message can switch between original and translation, and both can be edited.
 - Keyboard shortcuts.
 
 Characters
@@ -26,7 +27,7 @@ Prompts and models
 - A block-based prompt editor. RisuAI presets (`.risup`) import as prompts.
 - Personas.
 - Per-model setting profiles and prompt caching settings.
-- Auxiliary model slots, reserved for upcoming features such as long-term memory and translation.
+- Auxiliary model slots. The translation slot is in use; the others are reserved for upcoming features such as long-term memory.
 
 Connections
 - Anthropic, OpenRouter, Vercel AI Gateway, and GitHub Copilot (through GitHub sign-in).
@@ -36,7 +37,7 @@ Connections
 Backup
 - A full backup exports the whole account as one zip, which can be restored into a new, empty account.
 
-Not built yet: status panels, long-term memory, replies that keep streaming after the tab closes, assets other than avatars, usage gauges, and translation. Out of scope: group chat, image generation, TTS, plugins, card v1, embeddings, and trigger scripts and Lua (may be revisited).
+Not built yet: status panels, long-term memory, replies that keep streaming after the tab closes, assets other than avatars, usage gauges, and a page for translating long texts. Out of scope: group chat, image generation, TTS, plugins, card v1, embeddings, and trigger scripts and Lua (may be revisited).
 
 ## Security model
 

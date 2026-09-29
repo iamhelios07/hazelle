@@ -13,6 +13,7 @@ import { addFirstProfile, adoptModelSettings } from './profiles';
 import { addStarter } from './prompts';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
+import { Translator } from './translate';
 import { displayChat } from './turn';
 
 export type Views = {
@@ -35,6 +36,7 @@ export type Session = {
   store: ObjectStore;
   files: Files;
   talk: Talk;
+  translator: Translator;
   credentials: Credentials;
   catalogs: Catalogs;
   // The same object until the store's version changes, so useSyncExternalStore can read it directly.
@@ -58,6 +60,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
   const talk = new Talk(store, credentials);
+  const translator = new Translator(store, credentials, talk);
   const stopSync = keepSynced(store);
   const closing = new AbortController();
   void purgeExpired(store, files, Date.now(), closing.signal);
@@ -73,10 +76,11 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     closing.abort();
     stopSync();
     talk.close();
+    translator.close();
     catalogs.close();
     credentials.close();
   };
-  return { ok: true, data: { username, store, files, talk, credentials, catalogs, views, close } };
+  return { ok: true, data: { username, store, files, talk, translator, credentials, catalogs, views, close } };
 }
 
 // A chat's shown texts as last rendered, and the key of what they were rendered from.

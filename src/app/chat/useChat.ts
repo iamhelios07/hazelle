@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
 import { unused } from '../../engine/pipeline';
-import { shown, type Chat, type ChatItem } from '../../model/chat';
+import { shown, type Chat, type ChatItem, type TranslateSwitches } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { resetToggles, setToggle } from '../../runtime/characters';
+import { resetToggles, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import {
   branchChat,
   editMessage,
@@ -21,10 +21,10 @@ import {
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
-import { blocked, displayChat, preloadTokenizer, takeTurn, togglesOf, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, displayChat, preloadTokenizer, takeTurn, togglesOf, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
-import { useSession, useTurn } from '../session';
+import { useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle } from '../ui';
@@ -51,8 +51,9 @@ export type ChatActions = OpenChat['actions'];
 // for 캐릭터 없이.
 export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> | null) {
   const session = useSession();
-  const { store, talk } = session;
+  const { store, talk, translator } = session;
   const turn = useTurn();
+  const translating = useTranslating();
   const toast = useToast();
   const id = item?.id ?? null;
   // The id a new chat is shown under and then saved under, so its greeting's pick and rollp tags keep their rolls.
@@ -60,7 +61,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   // A new chat's own model, prompt, persona and note, saved with it on the first send.
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
   const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, ...unsaved };
-  const route = chatModel(store, chat);
+  const route = chatModel(store, chat, 'main');
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
   const toggles = toggleRows(togglesOf(store, chat, prompt), prompt.kind === 'prompt' ? prompt.prompt.value.toggles.length : 0);
@@ -85,6 +86,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   // A new chat shows its turn while it is saved, under the id it is saved as.
   const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, id ?? newId);
   const texts = displayChat(session, id ?? newId, chat, messages);
+  const translate = translateSwitches(store, chat.character);
+  const translateModel = chatModel(store, chat, 'translate');
   const busy = turn !== null;
   const streaming = busy && turn.chat === (id ?? newId);
   const last = messages.at(-1);
@@ -97,7 +100,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const personaMenu = useMenuHandle();
   // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another.
   const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
-  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  // translation: the edited translation of a version that has one (design §6.3).
+  const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
+  // The versions shown the other way round from their default, the original in place of the translation (§6.3).
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
   // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
@@ -106,6 +112,17 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const problem = stopped ? blocked(session, chat) : null;
 
   useEffect(preloadTokenizer, []);
+
+  // design §6.3 답장 번역: the latest reply is translated once it is whole, whichever way it came (a new reply, 다시
+  // 생성, 이어 쓰기, a greeting, a version switched to) and when the switch goes on. One that failed is left for 다시 번역.
+  const latest = last?.role === 'assistant' && last.live === null ? shown(last) : null;
+  const waiting =
+    translate.replies && latest && latest.receipt?.state !== 'failed' && !latest.translation && !translating.held.has(latest.id) && !translating.live.has(latest.id) && !translating.failed.has(latest.id) && texts.at(-1)!.trim()
+      ? latest.id
+      : null;
+  useEffect(() => {
+    if (waiting) translateMessage(last!);
+  }, [waiting]);
 
   // A reply starting here while 정보 is open shows its own information.
   const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
@@ -138,7 +155,12 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       id === null
         ? {
             chat,
-            greetings: opening && { ids: opening.versions.map((version) => version.id), texts: opening.versions.map((version) => version.text), selected: opening.selected },
+            greetings: opening && {
+              ids: opening.versions.map((version) => version.id),
+              texts: opening.versions.map((version) => version.text),
+              selected: opening.selected,
+              translations: translating.held,
+            },
             started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
           }
         : null;
@@ -172,9 +194,26 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     else if (step === 1 && message === last) ask({ kind: 'regenerate', message: message.id });
   }
 
+  // chat is the id the message is shown under, saved or not yet (runtime/translate Translator).
+  function translateMessage(message: Shown) {
+    const chatId = id ?? newId;
+    translator.translate(chatId, shown(message).id, translationInput(session, chatId, chat, messages, { kind: 'message', index: messages.indexOf(message) }));
+  }
+
+  function flipTranslation(message: Shown) {
+    const version = shown(message).id;
+    const next = new Set(flipped);
+    if (!next.delete(version)) next.add(version);
+    setFlipped(next);
+  }
+
+  function setSwitches(switches: TranslateSwitches) {
+    void track(setTranslate(store, chat.character, switches)).then((saved) => saved.ok || toast.failed(saved));
+  }
+
   async function saveEdit(message: Shown, andReply: boolean) {
     if (!id || !editing) return;
-    const saved = await editMessage(store, id, message, editing.text);
+    const saved = await editMessage(store, id, message, editing.text, editing.translation);
     if (!saved.ok) return toast.failed(saved);
     setEditing(null);
     if (andReply && last && last.role === 'assistant') ask({ kind: 'regenerate', message: last.id });
@@ -283,6 +322,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
+    translate,
+    translateModel,
+    translating,
+    flipped,
     opening,
     last,
     busy,
@@ -306,8 +349,16 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       retry: (message: Shown) => ask({ kind: 'retry', message: message.id, version: shown(message).id }),
       continue: (message: Shown) => ask({ kind: 'continue', message: message.id, version: shown(message).id }),
       swipe,
-      edit: (message: Shown, text: string | null) => setEditing(text === null ? null : { id: message.id, text }),
+      edit: (message: Shown) => {
+        const version = shown(message);
+        setEditing({ id: message.id, text: version.text, translation: version.translation?.text ?? null });
+      },
+      changeEdit: (change: { text: string } | { translation: string }) => setEditing((current) => current && { ...current, ...change }),
+      cancelEdit: () => setEditing(null),
       saveEdit,
+      translate: translateMessage,
+      flipTranslation,
+      setTranslate: setSwitches,
       remove,
       copy,
       branch,

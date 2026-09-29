@@ -4,6 +4,7 @@ import type { AddFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
 import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
+import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
 
 const MESSAGES: Record<string, string> = {
@@ -145,5 +146,23 @@ export function describeTurnFailure(failure: TurnFailure): string {
       return `보낸 말을 저장하지 못해서 답장을 멈췄어요. ${describeFailure(failure.failure)}`;
     case 'unsaved':
       return `답장을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+    case 'untranslated':
+      return failure.failure.kind === 'stopped' ? '번역하다 멈춰서 보내지 않았어요.' : `보낼 말을 번역하지 못해서 보내지 않았어요. ${describeTranslateFailure(failure.failure)}`;
+  }
+}
+
+// design §6.3.
+export function describeTranslateFailure(failure: Exclude<TranslateFailure, { kind: 'stopped' }> | TranslatorFailure): string {
+  switch (failure.kind) {
+    case 'no-model':
+      return '번역 모델이 정해지지 않았어요.';
+    case 'model-gone':
+      return '번역에 쓸 모델이 별표 목록에 없어요. 기본값이나 프롬프트에서 다시 골라 주세요.';
+    case 'profile-missing':
+      return failure.own ? '번역 모델이 쓰던 설정이 지워졌어요. 모델 설정에서 다른 설정을 골라 주세요.' : '기본 설정이 없어요. 모델 설정에서 다른 설정을 기본으로 골라 주세요.';
+    case 'failed':
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 빈 번역을 보냈어요.';
+    case 'unsaved':
+      return `번역을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
   }
 }

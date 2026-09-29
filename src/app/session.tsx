@@ -7,6 +7,7 @@ import type { Files } from '../runtime/files';
 import type { Session, Views } from '../runtime/session';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
+import type { Translating, Translator } from '../runtime/translate';
 
 export type Account = { onLock: () => void; onLogout: () => Promise<string | null> };
 
@@ -27,6 +28,7 @@ export const useAccount = (): Account => useOpen().account;
 export const useStore = (): ObjectStore => useSession().store;
 export const useFiles = (): Files => useSession().files;
 export const useTalk = (): Talk => useSession().talk;
+export const useTranslator = (): Translator => useSession().translator;
 
 // Every snapshot below is either one the session built for this store version or an object the store
 // holds as it is: a selector that built a fresh array or object each time would make React re-render forever.
@@ -50,4 +52,9 @@ export function useCharacter(id: string | null): CharacterShelf<ChatItem> | null
 export function useTurn(): Turn | null {
   const talk = useTalk();
   return useSyncExternalStore(talk.subscribe, talk.snapshot);
+}
+
+export function useTranslating(): Translating {
+  const translator = useTranslator();
+  return useSyncExternalStore(translator.subscribe, translator.snapshot);
 }

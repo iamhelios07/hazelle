@@ -59,25 +59,37 @@ export type ReceiptError =
   | { kind: 'offline' }
   | { kind: 'no-token' };
 
+// A version as the reader reads it (design §6.3), beside its text, which is what the model is sent and never this.
+// A reply's is translated from its displayed text; a message sent translated keeps here what the user typed, and its
+// text is the translation sent. receipt: the call that translated, null when the user wrote it in an edit.
+export type Translation = { text: string; receipt: Receipt | null; at: number };
+
+// Per character, or for every 캐릭터 없이 chat (design §6.3): replies translates each chat's latest reply, input
+// sends the user's messages translated. Absent is both off.
+export type TranslateSwitches = { replies: boolean; input: boolean };
+
 // Chat entries are created and never changed (design §3): an edit, a swipe or a deletion is a new
 // entry. at is the writer's clock, for showing times only; order is the server's rev.
 // seed: the id a version's random tags roll from in place of its own. A branch's copy keeps its original's, and
 // an edit or a continued cut keeps the seed of the version it replaces, so text already shown never rolls again.
+// translation: the version's own from the start, for a message sent translated, an edit and a branch's copy.
 export type Entry =
   // A new message with its first version, which has the entry's id.
-  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string }
+  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation }
   // replaces: the version this one takes the place of, for an edit, a retried failure or a continued cut
   // (이어 쓰기), so the count of versions does not grow; null for a new version, which goes last. An edit keeps
   // the receipt of the reply it changes.
-  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null; seed?: string }
+  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation }
   | { type: 'select'; message: string; version: string; at: number }
   | { type: 'delete'; message: string; at: number }
   | { type: 'restore'; message: string; at: number }
   // A cost the provider booked after the reply (connector settle), for every receipt with this replyId, the
-  // ones a continued reply carries (Receipt continues) included.
-  | { type: 'cost'; replyId: string; cost: Cost | null; at: number };
+  // ones a continued reply carries (Receipt continues) and translations included.
+  | { type: 'cost'; replyId: string; cost: Cost | null; at: number }
+  // A translation made after the version was saved; the latest one for a version is its translation.
+  | ({ type: 'translation'; version: string } & Translation);
 
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number };
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation };
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number };
 
 // A chat's entries, read in rev order into the messages on screen. Entries naming a message or version
@@ -87,6 +99,8 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
   const deleted = new Set<string>();
   // A replaced version's id keeps leading to the version that took its place.
   const versions = new Map<string, Version>();
+  // By a version's own id only: a translation of a replaced version is not its replacement's.
+  const own = new Map<string, Version>();
   const costs = new Map<string, Cost | null>();
   const locate = (message: Message, id: string) => {
     const version = versions.get(id);
@@ -95,8 +109,9 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
 
   for (const { id, value: entry } of [...entries].sort((a, b) => a.rev - b.rev)) {
     if (entry.type === 'message') {
-      const version = { id, seed: entry.seed ?? id, text: entry.text, receipt: entry.receipt, edited: false, at: entry.at };
+      const version: Version = { id, seed: entry.seed ?? id, text: entry.text, receipt: entry.receipt, edited: false, at: entry.at, ...(entry.translation && { translation: entry.translation }) };
       versions.set(id, version);
+      own.set(id, version);
       messages.set(id, { id, role: entry.role, at: entry.at, versions: [version], selected: 0 });
       continue;
     }
@@ -104,10 +119,16 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       costs.set(entry.replyId, entry.cost);
       continue;
     }
+    if (entry.type === 'translation') {
+      const version = own.get(entry.version);
+      if (version) version.translation = { text: entry.text, receipt: entry.receipt, at: entry.at };
+      continue;
+    }
     const message = messages.get(entry.message);
     if (!message) continue;
     if (entry.type === 'version') {
-      const version = { id, seed: entry.seed ?? id, text: entry.text, receipt: entry.receipt, edited: entry.edit, at: entry.at };
+      const version: Version = { id, seed: entry.seed ?? id, text: entry.text, receipt: entry.receipt, edited: entry.edit, at: entry.at, ...(entry.translation && { translation: entry.translation }) };
+      own.set(id, version);
       const slot = entry.replaces === null ? -1 : locate(message, entry.replaces);
       if (slot === -1) message.versions.push(version);
       else message.versions[slot] = version;
@@ -119,7 +140,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       if (slot !== -1) message.selected = slot;
     } else if (entry.type === 'delete') {
       deleted.add(message.id);
-    } else {
+    } else if (entry.type === 'restore') {
       deleted.delete(message.id);
     }
   }
@@ -135,7 +156,9 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       ...message,
       versions: message.versions.map((version) => {
         const receipt = version.receipt && settled(version.receipt);
-        return receipt === version.receipt ? version : { ...version, receipt };
+        const translated = version.translation?.receipt && settled(version.translation.receipt);
+        if (receipt === version.receipt && translated === version.translation?.receipt) return version;
+        return { ...version, receipt, ...(version.translation && { translation: { ...version.translation, receipt: translated ?? null } }) };
       }),
     }));
 }
@@ -165,7 +188,8 @@ export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => 
       const own = entriesOf(chat.id);
       const messages = fold(own);
       const latest = own.reduce<Stored<'entry'> | null>((last, entry) => (last && last.rev > entry.rev ? last : entry), null);
-      const texts = display(chat, messages);
+      // A message is named as the reader reads it: its translation when it has one (design §6.3).
+      const texts = display(chat, messages).map((text, index) => shown(messages[index]!).translation?.text ?? text);
       const last = texts.at(-1);
       return {
         id: chat.id,
@@ -195,34 +219,37 @@ type Tally = { total: number; unknown: number };
 // costs: one per unit, never summed together; estimated once any part came from a price list. last: the newest reply's time.
 export type ModelUsage = { calls: number; last: number | null; input: Tally; output: Tally; costs: { unit: Cost['unit']; amount: number; estimated: boolean }[]; costUnknown: number };
 
-// Every call to one model in the chats kept, a continued reply counting each of its calls (design §4.4). A branch
-// copies the replies it holds with their receipts (runtime/chat-log branchChat), so a call is counted once however
-// many chats hold it; the cost stays out of the key, as the original settles it later than a copy made after.
+// Every call to one model in the chats kept, a continued reply counting each of its calls and a translation its own
+// (design §4.4). A branch copies the replies it holds with their receipts (runtime/chat-log branchChat), so a call is
+// counted once however many chats hold it; the cost stays out of the key, as the original settles it later than a copy
+// made after.
 export function modelUsage(chats: Message[][], ref: ModelRef): ModelUsage {
   const usage: ModelUsage = { calls: 0, last: null, input: { total: 0, unknown: 0 }, output: { total: 0, unknown: 0 }, costs: [], costUnknown: 0 };
   const seen = new Set<string>();
   const add = (tally: Tally, value: number | null) => (value === null ? tally.unknown++ : (tally.total += value));
-  for (const version of chats.flat().flatMap((message) => message.versions)) {
-    for (const call of version.receipt ? calls(version.receipt) : []) {
-      if (call.connection !== ref.connection || call.model !== ref.model) continue;
-      const key = JSON.stringify([version.at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      usage.calls++;
-      usage.last = Math.max(usage.last ?? 0, version.at);
-      add(usage.input, call.usage?.inputTokens ?? null);
-      add(usage.output, call.usage?.outputTokens ?? null);
-      const cost = call.cost === 'pending' ? null : call.cost;
-      if (!cost) {
-        usage.costUnknown++;
-        continue;
-      }
-      const sum = usage.costs.find((entry) => entry.unit === cost.unit);
-      if (sum) {
-        sum.amount += cost.amount;
-        sum.estimated ||= cost.source === 'price-list';
-      } else usage.costs.push({ unit: cost.unit, amount: cost.amount, estimated: cost.source === 'price-list' });
+  const made = chats
+    .flat()
+    .flatMap((message) => message.versions)
+    .flatMap(({ at, receipt, translation }) => [...(receipt ? calls(receipt).map((call) => ({ at, call })) : []), ...(translation?.receipt ? [{ at: translation.at, call: translation.receipt }] : [])]);
+  for (const { at, call } of made) {
+    if (call.connection !== ref.connection || call.model !== ref.model) continue;
+    const key = JSON.stringify([at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    usage.calls++;
+    usage.last = Math.max(usage.last ?? 0, at);
+    add(usage.input, call.usage?.inputTokens ?? null);
+    add(usage.output, call.usage?.outputTokens ?? null);
+    const cost = call.cost === 'pending' ? null : call.cost;
+    if (!cost) {
+      usage.costUnknown++;
+      continue;
     }
+    const sum = usage.costs.find((entry) => entry.unit === cost.unit);
+    if (sum) {
+      sum.amount += cost.amount;
+      sum.estimated ||= cost.source === 'price-list';
+    } else usage.costs.push({ unit: cost.unit, amount: cost.amount, estimated: cost.source === 'price-list' });
   }
   return usage;
 }

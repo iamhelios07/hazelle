@@ -1,5 +1,6 @@
 import { GitBranch } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { shown } from '../../model/chat';
 import { day } from '../common/time';
 import { useViews } from '../session';
 import { navigate } from '../shell/router';
@@ -8,7 +9,7 @@ import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, opening, last, card, shelf, route, notUsed, busy, editing, pinned, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, translating, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, branching, modelMenu, actions } = chat;
   const { chatById } = useViews();
   const origin = item?.chat.origin;
   const rows: ReactNode[] = [];
@@ -38,13 +39,15 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         key={message.id}
         message={message}
         text={texts[index]!}
+        translating={translating}
+        flipped={flipped.has(shown(message).id)}
         isLast={index === messages.length - 1}
         beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
         character={card && { name: card.nickname || card.name, image: shelf!.face }}
         modelName={'kind' in route ? null : route.model.name}
         opening={message === opening}
         busy={busy}
-        editing={editing?.id === message.id ? editing.text : null}
+        editing={editing?.id === message.id ? editing : null}
         pinned={pinned === message.id}
         branching={branching}
         modelMenu={modelMenu}

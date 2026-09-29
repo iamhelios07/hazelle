@@ -1,8 +1,9 @@
-import { Bot, Copy, GitBranch, Info, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Bot, Copy, GitBranch, Info, Languages, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
-import { describeReplyError } from '../common/failure';
+import type { Translating } from '../../runtime/translate';
+import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
@@ -14,6 +15,10 @@ type Props = {
   message: Shown;
   // The shown version's text as it is displayed (engine/render). Editing starts from the stored text.
   text: string;
+  // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
+  // other way round from its default (design §6.3).
+  translating: Translating;
+  flipped: boolean;
   isLast: boolean;
   // The user's message right before the last reply, which 저장하고 답장 다시 받기 answers again.
   beforeLastReply: boolean;
@@ -26,8 +31,8 @@ type Props = {
   opening: boolean;
   // A reply is being written somewhere, so no other can start.
   busy: boolean;
-  // The text in the edit box, while this message is being edited.
-  editing: string | null;
+  // What the edit box holds, while this message is being edited: its text, and its translation when it has one.
+  editing: { text: string; translation: string | null } | null;
   pinned: boolean;
   // A branch of this chat is being saved; one at a time.
   branching: boolean;
@@ -40,23 +45,28 @@ const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼
 
 // One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
-  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
+  const { message, text: original, translating, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
   const mine = message.role === 'user';
   const live = message.live === version.id;
+  // design §6.3: a version with a translation shows it, and a translation being made shows as it comes.
+  const translation = version.translation ?? translating.held.get(version.id) ?? null;
+  const translatingText = translating.live.get(version.id) ?? null;
+  const untranslated = translating.failed.get(version.id) ?? null;
+  const text = flipped ? original : translatingText || (translation?.text ?? original);
   const reveal = useReveal(version.id, text, live);
   const failed = receipt?.state === 'failed';
-  const empty = text === '';
+  const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
   const cut = !live && !version.edited && receipt?.state === 'cut' ? receipt.cut : null;
 
   const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (pressed(event, SHORTCUTS.cancelEdit.keys)) {
       event.preventDefault();
-      actions.edit(message, null);
+      actions.cancelEdit();
     } else if (pressed(event, SHORTCUTS.saveEdit.keys)) {
       event.preventDefault();
       void actions.saveEdit(message, false);
@@ -67,13 +77,20 @@ export function ChatMessage(props: Props) {
   if (editing !== null) {
     body = (
       <EditBox
-        value={editing}
-        onChange={(text) => actions.edit(message, text)}
+        value={editing.text}
+        onChange={(text) => actions.changeEdit({ text })}
+        second={
+          editing.translation === null
+            ? undefined
+            : mine
+              ? { firstLabel: '모델에게 보낸 말', label: '내가 쓴 말', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
+              : { firstLabel: '원문', label: '번역', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
+        }
         onKeyDown={editKeys}
         hint={hints(SHORTCUTS.cancelEdit, SHORTCUTS.saveEdit)}
         actions={
           <>
-            <Button variant="ghost" size="sm" onClick={() => actions.edit(message, null)}>
+            <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>
               취소
             </Button>
             {beforeLastReply && (
@@ -94,7 +111,7 @@ export function ChatMessage(props: Props) {
     body = (
       <>
         {/* A continuation that failed still holds the text it continued, and 다시 시도 continues it again. */}
-        {receipt.continues && <Prose text={text} cursor={false} />}
+        {receipt.continues && <Prose text={original} cursor={false} />}
         <Failure
           title="답장을 받지 못했어요"
           actions={
@@ -113,14 +130,33 @@ export function ChatMessage(props: Props) {
       </>
     );
   } else if (!empty || live) {
-    body = <Prose text={reveal.text} cursor={live || reveal.revealing} />;
+    body = <Prose text={reveal.text} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />;
   }
+
+  // design §6.3: how the translation stands, under the text; 다시 번역 makes it again.
+  const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => actions.translate(message) };
+  const translationMark =
+    translatingText === '' ? (
+      <Marker reason="translation" label="번역하는 중…" />
+    ) : untranslated ? (
+      <Marker reason="translation" label={`번역하지 못했어요. ${describeTranslateFailure(untranslated)}`} action={again} />
+    ) : translatingText === null && !flipped && translation?.receipt?.state === 'cut' ? (
+      <Marker reason="translation" label="번역이 여기서 잘렸어요" action={again} />
+    ) : null;
+  const translateTool = mine ? (
+    translation && <IconButton icon={Languages} size="xs" label={flipped ? '내가 쓴 말 보기' : '모델에게 보낸 말 보기'} onClick={() => actions.flipTranslation(message)} />
+  ) : translation ? (
+    <IconButton icon={Languages} size="xs" label={flipped ? '번역 보기' : '원문 보기'} onClick={() => actions.flipTranslation(message)} />
+  ) : (
+    !empty && !failed && <IconButton icon={Languages} size="xs" label="번역" disabled={translatingText !== null} onClick={() => actions.translate(message)} />
+  );
 
   const count = message.versions.length;
   const nextLabel = message.selected === count - 1 && !opening ? '새 답장 받기' : '다음';
   const [back, forward] = SHORTCUTS.swipe.keys;
   const after = (
     <>
+      {editing === null && translationMark}
       {cut && (
         <Marker
           reason={cut === 'stopped' ? 'stopped' : 'length'}
@@ -150,12 +186,16 @@ export function ChatMessage(props: Props) {
   );
 
   const tools = live || editing !== null ? undefined : opening ? (
-    <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />
+    <>
+      {translateTool}
+      <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />
+    </>
   ) : (
     <>
       {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 생성" onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 시도" onClick={() => actions.retry(message)} />}
-      {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message, version.text)} />}
+      {translateTool}
+      {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message)} />}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 갈라지기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="답장 정보" onClick={() => actions.info(message.id)} />}

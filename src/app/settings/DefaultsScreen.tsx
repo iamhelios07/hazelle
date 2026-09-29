@@ -93,7 +93,7 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
         {main && !findStarred(main, connections) && <Callout tone="warn">본 대화로 정했던 모델이 별표 목록에 없어요. 다시 골라 주세요.</Callout>}
       </Section>
       <Section title="보조 모델" hint="프롬프트마다 따로 정할 수도 있어요.">
-        <Text tone="muted">장기 기억·번역·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요.</Text>
+        <Text tone="muted">장기 기억·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요.</Text>
         <HelperPickers
           models={settings.models}
           picker={(role, help) => (

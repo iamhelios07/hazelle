@@ -14,11 +14,11 @@ import type { ObjectStore } from './store';
 export type Route = { connection: Stored<'connection'>; model: Model };
 export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' };
 
-// The 본 대화 model for a chat: its own layer, its prompt's, then 전체 기본값. A missing prompt has no layer;
+// A chat's model for a role: its own layer, its prompt's, then 전체 기본값. A missing prompt has no layer;
 // the turn stops on it before the model matters (runtime/prompts chatPrompt).
-export function chatModel(store: ObjectStore, chat: Chat): Route | RouteFailure {
+export function chatModel(store: ObjectStore, chat: Chat, role: Role): Route | RouteFailure {
   const prompt = chatPrompt(store, chat);
-  const ref = resolveRole('main', [chat.models, ...(prompt.kind === 'prompt' ? [prompt.prompt.value.models] : []), store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
+  const ref = resolveRole(role, [chat.models, ...(prompt.kind === 'prompt' ? [prompt.prompt.value.models] : []), store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
   if (!ref) return { kind: 'no-model' };
   const connection = store.get('connection', ref.connection);
   const model = connection?.value.starred.find((starred) => starred.id === ref.model);

@@ -49,6 +49,14 @@ describe('fold', () => {
     expect(shown(fold(entries)[0]!).text).toBe('하나 고침');
   });
 
+  it('gives a version the latest translation made of it, never one made of the version it replaced', () => {
+    const made = (text: string) => ({ text, receipt: receipt(), at: rev });
+    const entries = [bot('b1', 'Hello'), entry('t1', { type: 'translation', version: 'b1', ...made('안녕') }), entry('t2', { type: 'translation', version: 'b1', ...made('안녕하세요') })];
+    expect(shown(fold(entries)[0]!).translation?.text).toBe('안녕하세요');
+    entries.push(version('b2', 'b1', 'Hi', 'b1'), entry('t3', { type: 'translation', version: 'b1', ...made('늦은 번역') }));
+    expect(shown(fold(entries)[0]!).translation).toBeUndefined();
+  });
+
   it('hides a deleted message until it is restored', () => {
     const entries = [user('u1', '안녕'), entry('d1', { type: 'delete', message: 'u1', at: 0 })];
     expect(fold(entries)).toEqual([]);
@@ -142,6 +150,13 @@ describe('modelUsage', () => {
       costs: [{ unit: 'usd', amount: 0.75, estimated: true }],
       costUnknown: 0,
     });
+  });
+});
+
+describe('modelUsage of translations', () => {
+  it('counts a translation as a call of the model that made it, at the time it was made', () => {
+    const translated = fold([bot('b1', 'Hello', { model: 'm2' }), entry('t1', { type: 'translation', version: 'b1', text: '안녕', receipt: receipt({ cost: { unit: 'usd', amount: 0.1, source: 'reported' } }), at: 5 })]);
+    expect(modelUsage([translated], { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 1, last: 5, costs: [{ unit: 'usd', amount: 0.1, estimated: false }] });
   });
 });
 

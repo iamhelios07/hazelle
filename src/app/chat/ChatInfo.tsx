@@ -48,13 +48,14 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
   const at = reply ? replies.indexOf(reply) : -1;
   const version = reply && shown(reply);
   const receipt = version?.receipt ?? null;
+  const translated = version?.translation?.receipt ?? null;
   const live = reply !== undefined && reply.live === version?.id;
 
-  // A cost still 확인 중 after a reload is looked up again, for every call a continued reply took.
+  // A cost still 확인 중 after a reload is looked up again, for every call a continued reply took and its translation.
   useEffect(() => {
-    if (!chat || !receipt) return;
-    for (const call of calls(receipt)) if (call.cost === 'pending') talk.settle(chat, call);
-  }, [chat, receipt, talk]);
+    if (!chat) return;
+    for (const call of [...(receipt ? calls(receipt) : []), ...(translated ? [translated] : [])]) if (call.cost === 'pending') talk.settle(chat, call);
+  }, [chat, receipt, translated, talk]);
 
   const stepper = (
     <>
@@ -66,7 +67,14 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
   let body;
   if (!version) body = <Empty>이 채팅에는 아직 답장이 없어요.</Empty>;
   else if (live) body = <Text tone="muted">답장을 쓰는 중이에요. 끝나면 토큰과 비용이 채워져요.</Text>;
-  else if (!receipt) body = <Empty>모델이 만든 답장이 아니라서 토큰이나 비용 정보가 없어요.</Empty>;
+  else if (!receipt) {
+    body = (
+      <>
+        <Empty>모델이 만든 답장이 아니라서 토큰이나 비용 정보가 없어요.</Empty>
+        {translated && <TranslationCall receipt={translated} />}
+      </>
+    );
+  }
   else {
     const earlier = calls(receipt).slice(0, -1);
     const sent = talk.sent(version.id);
@@ -85,6 +93,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
               <Text tone="muted">{`이어 쓴 답장이에요. 호출 ${earlier.length + 1}번으로 만들었고, 비용은 호출마다 따로 들어요. 아래는 마지막 호출이고, 앞선 호출은 맨 아래에 있어요.`}</Text>
             )}
             <Call receipt={receipt} />
+            {translated && <TranslationCall receipt={translated} />}
             {earlier.length > 0 && (
               <Section level={3} title="앞선 호출">
                 {earlier.map((call, index) => (
@@ -116,6 +125,24 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
     <SidePanel title="답장 정보" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper} onClose={onClose}>
       {body}
     </SidePanel>
+  );
+}
+
+// design §6.3: the call that translated the reply, a call of its own with its own cost.
+function TranslationCall({ receipt }: { receipt: Receipt }) {
+  return (
+    <Section level={3} title="번역">
+      <Text size="sm" tone="muted">{`${receipt.modelName} · ${receipt.source}`}</Text>
+      <Facts
+        variant="tiles"
+        items={[
+          { label: '보냄', value: tokens(receipt.usage?.inputTokens ?? null) },
+          { label: '답장', value: tokens(receipt.usage?.outputTokens ?? null) },
+          costFact(receipt),
+          finish(receipt),
+        ]}
+      />
+    </Section>
   );
 }
 

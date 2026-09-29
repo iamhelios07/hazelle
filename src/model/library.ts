@@ -1,12 +1,21 @@
 import type { Card, LoreEntry } from '../engine/import/types';
+import type { TranslateSwitches } from './chat';
 import type { Stored } from './kinds';
 import type { ToggleValues } from './prompt';
 
 // folder is the library folder it sits in (design F6); loreFolders only group its lorebook on screen.
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
 // deleted is when it went to 지운 캐릭터; it and its chats are removed for good KEEP_DELETED later.
-// toggles holds the values set for it, over the declared defaults (design §4.2).
-export type Character = { card: Card; folder: string | null; loreFolders: LoreFolder[]; origin?: { id: string; name: string }; deleted?: number; toggles?: ToggleValues };
+// toggles holds the values set for it, over the declared defaults (design §4.2); translate, its chats' 번역 (§6.3).
+export type Character = {
+  card: Card;
+  folder: string | null;
+  loreFolders: LoreFolder[];
+  origin?: { id: string; name: string };
+  deleted?: number;
+  toggles?: ToggleValues;
+  translate?: TranslateSwitches;
+};
 export type LoreFolder = { id: string; name: string };
 
 const DAY = 24 * 60 * 60 * 1000;

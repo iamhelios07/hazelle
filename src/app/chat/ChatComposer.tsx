@@ -1,11 +1,11 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { shown } from '../../model/chat';
 import type { Blocked } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
 import { Button, Callout, Composer, pressed, pressedKey, SendButton, useMenuOpener, useWide } from '../ui';
 import { ChatNote } from './ChatNote';
 import { ChatPersonaMenu } from './ChatPersonaMenu';
+import { ChatTranslate } from './ChatTranslate';
 import type { OpenChat } from './useChat';
 
 type Chip = 'model' | 'prompt' | 'persona';
@@ -42,7 +42,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
       const mine = messages.findLast((message) => message.role === 'user');
       if (mine) {
         event.preventDefault();
-        actions.edit(mine, shown(mine).text);
+        actions.edit(mine);
       }
     } else if (step !== -1 && last?.role === 'assistant') {
       event.preventDefault();
@@ -73,6 +73,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
           <>
             <ChatPersonaMenu chat={chat} />
             <ChatNote chat={chat} />
+            <ChatTranslate chat={chat} />
           </>
         }
         actions={

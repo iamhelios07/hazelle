@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, shown } from '../model/chat';
+import { setTranslate } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
@@ -65,7 +66,7 @@ describe('a new chat', () => {
         { kind: 'send', text: '안녕' },
         {
           chat: { title: null, character: character.ok ? character.data.id : null, models: {} },
-          greetings: { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0 },
+          greetings: { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0, translations: new Map() },
           started: () => (preview = session.views().chatById.get(chat)?.preview),
         },
       );
@@ -119,5 +120,34 @@ describe('이어 쓰기', () => {
       expect(lastTwo(log[2]!.sent.body)[0]).toEqual({ role: 'assistant', content: '옛날 옛적에' });
       expect(reply().versions).toHaveLength(1);
       expect(shown(reply())).toMatchObject({ text: '옛날 옛적에 끝.', receipt: { state: 'done', continues: failed.receipt } });
+    }));
+});
+
+describe('보낼 말 번역', () => {
+  it('translates the message first, sends the translation and saves it, with what the user typed as its translation', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await setTranslate(session.store, null, { replies: false, input: true });
+      const log = stubRelay(inTurn([saying('Hello there'), saying('Hi!')]));
+
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      expect(lastTwo(log[0]!.sent.body)[1]).toEqual({ role: 'user', content: '안녕' });
+      expect(lastTwo(log[1]!.sent.body)[1]).toEqual({ role: 'user', content: 'Hello there' });
+      expect(shown(fold(session.store.children('entry', chat))[0]!)).toMatchObject({ text: 'Hello there', translation: { text: '안녕', receipt: { state: 'done' } } });
+    }));
+
+  it('sends and saves nothing when the message is not translated', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await setTranslate(session.store, null, { replies: false, input: true });
+      const log = stubRelay(inTurn([upstream(500, { error: { message: 'overloaded' } })]));
+
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toMatchObject({ kind: 'untranslated', failure: { kind: 'failed' } });
+      expect(log).toHaveLength(1);
+      expect(fold(session.store.children('entry', chat))).toEqual([]);
     }));
 });

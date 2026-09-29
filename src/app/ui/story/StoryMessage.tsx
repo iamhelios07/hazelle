@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Scissors, Square, TriangleAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Languages, Scissors, Square, TriangleAlert } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
 import { Button } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
@@ -79,13 +79,15 @@ export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, ne
   );
 }
 
-type MarkerProps = { reason: 'length' | 'stopped'; label: string; action?: { label: string; disabled: boolean; onClick: () => void } };
+// translation: the state of a message's translation, such as one being made or one that failed (design §6.3).
+type MarkerProps = { reason: 'length' | 'stopped' | 'translation'; label: string; action?: { label: string; disabled: boolean; onClick: () => void } };
+const MARKS = { length: Scissors, stopped: Square, translation: Languages };
 
 // A reply that did not end cleanly says so, quietly, under its text (design F3).
 export function Marker({ reason, label, action }: MarkerProps) {
   return (
     <div className={reason === 'stopped' ? `${styles.marker} ${styles.stopped}` : styles.marker}>
-      <Icon icon={reason === 'length' ? Scissors : Square} size="xs" />
+      <Icon icon={MARKS[reason]} size="xs" />
       <span>{action ? `${label} ·` : label}</span>
       {action && (
         <Button variant="link" size="xs" disabled={action.disabled} onClick={action.onClick}>

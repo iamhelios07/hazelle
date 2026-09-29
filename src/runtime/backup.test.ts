@@ -26,7 +26,7 @@ async function oldAccount() {
   const character = added.ok ? added.data : '';
   const chat = crypto.randomUUID();
   const opened: Chat = { title: null, character, models: {} };
-  const greetings = { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['안녕', '반가워', '어서 와'], selected: 1 };
+  const greetings = { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['안녕', '반가워', '어서 와'], selected: 1, translations: new Map() };
   await startChat(store, chat, opened, greetings);
   await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '등대에 가자' });
   const gone = crypto.randomUUID();

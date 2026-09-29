@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
-import { appendCost, appendReply, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
+import { appendCost, appendReply, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
 import { testServer } from './testing';
 import { displayChat } from './turn';
 
@@ -19,7 +19,7 @@ describe('startChat', () => {
         return { id, seed: id, text, receipt: null, edited: false, at: 0 };
       });
       const before = displayChat(reader, id, chat, [{ id: 'opening', role: 'assistant', at: 0, versions, selected }]);
-      expect(await startChat(store, id, chat, { ids: versions.map((version) => version.id), texts, selected })).toEqual({ ok: true });
+      expect(await startChat(store, id, chat, { ids: versions.map((version) => version.id), texts, selected, translations: new Map() })).toEqual({ ok: true });
       const messages = fold(store.children('entry', id));
       expect(messages[0]!.versions.map((version) => version.id)).toEqual(versions.map((version) => version.id));
       expect(displayChat(reader, id, chat, messages)).toEqual(before);
@@ -41,15 +41,17 @@ describe('branchChat', () => {
     const split = crypto.randomUUID();
     const folded = () => fold(store.children('entry', source));
 
-    await startChat(store, source, chat, { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['하나', '둘 {{random::빨강::파랑::노랑::초록}} {{pick::봄::여름::가을::겨울}}', '셋'], selected: 1 });
+    await startChat(store, source, chat, { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['하나', '둘 {{random::빨강::파랑::노랑::초록}} {{pick::봄::여름::가을::겨울}}', '셋'], selected: 1, translations: new Map() });
     await appendUserMessage(store, source, { id: said, text: '안녕' });
-    await editMessage(store, source, folded().find((message) => message.id === said)!, '안녕하세요');
+    await editMessage(store, source, folded().find((message) => message.id === said)!, '안녕하세요', null);
     // A reply cut at its limit, then continued (이어 쓰기), whose cut call's cost is booked later.
     const reply = crypto.randomUUID();
     const cut: Receipt = { ...pending, state: 'cut', cut: 'length' };
     await appendReply(store, source, { id: reply, message: null, replaces: null, at: 1, text: '답', receipt: cut });
-    await appendReply(store, source, { id: crypto.randomUUID(), message: reply, replaces: reply, at: 2, text: '답장', receipt: { ...pending, cost: null, replyId: null, continues: cut } });
+    const continued = crypto.randomUUID();
+    await appendReply(store, source, { id: continued, message: reply, replaces: reply, at: 2, text: '답장', receipt: { ...pending, cost: null, replyId: null, continues: cut } });
     await appendCost(store, source, 'r1', { unit: 'usd', amount: 0.01, source: 'reported' });
+    await appendTranslation(store, source, continued, { text: 'A reply', receipt: pending, at: 3 });
     await appendUserMessage(store, source, { id: deleted, text: '지울 말' });
     await removeMessage(store, source, deleted);
     await appendUserMessage(store, source, { id: split, text: '여기서' });
@@ -62,7 +64,7 @@ describe('branchChat', () => {
     const entries = store.children('entry', branched.data);
     const copy = fold(entries);
     const withoutIds = (messages: Message[]) =>
-      messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ seed, text, receipt, edited, at: written }) => ({ seed, text, receipt, edited, written })) }));
+      messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ seed, text, receipt, edited, at: written, translation }) => ({ seed, text, receipt, edited, written, translation })) }));
     expect(withoutIds(copy)).toEqual(withoutIds(item.messages.slice(0, 4)));
     expect([copy[0]!.versions.length, shown(copy[1]!).text, shown(copy[1]!).edited]).toEqual([3, '안녕하세요', true]);
     expect([shown(copy[2]!).text, copy[2]!.versions.length, calls(shown(copy[2]!).receipt!).map((call) => call.cost)]).toEqual(['답장', 1, [{ unit: 'usd', amount: 0.01, source: 'reported' }, null]]);

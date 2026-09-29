@@ -1,5 +1,5 @@
 import type { Cost } from '../connectors/types';
-import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt } from '../model/chat';
+import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { ApiFailure, ApiResult } from './api';
 import type { ObjectStore } from './store';
@@ -13,28 +13,27 @@ import type { ObjectStore } from './store';
 // saved (model/chat fold), so the greeting leads only when it is saved before the message; and a chat
 // that failed to save leaves no entries behind. id is the one the chat was shown under before it was saved,
 // which seeds its greeting's pick and rollp tags.
-export async function startChat(
-  store: ObjectStore,
-  id: string,
-  chat: Chat,
-  greetings: { ids: string[]; texts: string[]; selected: number } | null,
-): Promise<{ ok: true } | { ok: false; step: 'chat' | 'greetings'; failure: ApiFailure }> {
+export async function startChat(store: ObjectStore, id: string, chat: Chat, greetings: Greetings | null): Promise<{ ok: true } | { ok: false; step: 'chat' | 'greetings'; failure: ApiFailure }> {
   const created = await store.create('chat', chat, { id });
   if (!created.ok) return { ok: false, step: 'chat', failure: created };
   const greeted = greetings && (await addGreetings(store, id, greetings));
   return greeted ? { ok: false, step: 'greetings', failure: greeted } : { ok: true };
 }
 
+// ids are the ones the greetings were shown under before the chat was saved, which seed their random tags.
+// translations: those made before the chat was saved (runtime/translate Translator), by the greeting's id.
+export type Greetings = { ids: string[]; texts: string[]; selected: number; translations: ReadonlyMap<string, Translation> };
+
 // A character's chat opens on its greeting, and the other greetings are versions of it (design F3).
-// They are saved as the card wrote them; engine/render fills them each time they are shown or sent. ids are
-// the ones the greetings were shown under before the chat was saved, which seed their random tags.
-async function addGreetings(store: ObjectStore, chat: string, { ids, texts, selected }: { ids: string[]; texts: string[]; selected: number }): Promise<ApiFailure | null> {
+// They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
+async function addGreetings(store: ObjectStore, chat: string, { ids, texts, selected, translations }: Greetings): Promise<ApiFailure | null> {
   const at = Date.now();
   const first = ids[0]!;
-  const entries: [string, Entry][] = texts.map((text, index) => [
-    ids[index]!,
-    index === 0 ? { type: 'message', role: 'assistant', at, text, receipt: null } : { type: 'version', message: first, replaces: null, edit: false, at, text, receipt: null },
-  ]);
+  const entries: [string, Entry][] = texts.map((text, index) => {
+    const translation = translations.get(ids[index]!);
+    const common = { at, text, receipt: null, ...(translation && { translation }) };
+    return [ids[index]!, index === 0 ? { type: 'message', role: 'assistant', ...common } : { type: 'version', message: first, replaces: null, edit: false, ...common }];
+  });
   // Adding a version selects it, so without a select the chat would open on the last greeting.
   if (selected !== texts.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
   for (const [id, entry] of entries) {
@@ -71,12 +70,13 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
 function copied(id: string, { role, at, versions, selected }: Message): [string, Entry][] {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
-  const entries: [string, Entry][] = [[id, { type: 'message', role, at, text: first!.text, receipt: first!.receipt, seed: first!.seed }]];
+  const held = ({ text, receipt, seed, translation }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }) });
+  const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(first!) }]];
   if (first!.edited || first!.at !== at) {
-    entries.push([crypto.randomUUID(), { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, text: first!.text, receipt: first!.receipt, seed: first!.seed }]);
+    entries.push([crypto.randomUUID(), { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, ...held(first!) }]);
   }
   rest.forEach((version, index) => {
-    entries.push([ids[index + 1]!, { type: 'version', message: id, replaces: null, edit: version.edited, at: version.at, text: version.text, receipt: version.receipt, seed: version.seed }]);
+    entries.push([ids[index + 1]!, { type: 'version', message: id, replaces: null, edit: version.edited, at: version.at, ...held(version) }]);
   });
   if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
   return entries;
@@ -114,8 +114,11 @@ export const setChatNote = (store: ObjectStore, chat: string, note: string | nul
 
 const append = (store: ObjectStore, chat: string, entry: Entry, id?: string) => store.create('entry', entry, { id, parent: chat });
 
-export const appendUserMessage = (store: ObjectStore, chat: string, { id, text }: { id: string; text: string }) =>
-  append(store, chat, { type: 'message', role: 'user', at: Date.now(), text, receipt: null }, id);
+// translation: what the user typed, when text is its translation sent (design §6.3).
+export type Said = { id: string; text: string; translation?: Translation };
+
+export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, translation }: Said) =>
+  append(store, chat, { type: 'message', role: 'user', at: Date.now(), text, receipt: null, ...(translation && { translation }) }, id);
 
 // A reply as its stream ended: a new message, or a new version of `message`, in place of `replaces` on
 // 다시 시도. at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain)
@@ -128,11 +131,18 @@ export function appendReply(store: ObjectStore, chat: string, { id, message, rep
 
 export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });
 
-// An edit is a new version in the place of the one shown, keeping its receipt (model/chat Entry).
-export function editMessage(store: ObjectStore, chat: string, message: Message, text: string) {
+// An edit is a new version in the place of the one shown, keeping its receipt (model/chat Entry). translation: the
+// edited translation of a version that has one, which keeps the receipt of the call that made it; a blank one leaves
+// the new version without a translation.
+export function editMessage(store: ObjectStore, chat: string, message: Message, text: string, translation: string | null) {
   const current = shown(message);
-  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at: Date.now(), text, receipt: current.receipt, seed: current.seed });
+  const at = Date.now();
+  const kept = translation?.trim() && current.translation && { translation: { text: translation, receipt: current.translation.receipt, at } };
+  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...kept });
 }
+
+// A translation of a version already saved (design §6.3).
+export const appendTranslation = (store: ObjectStore, chat: string, version: string, translation: Translation) => append(store, chat, { type: 'translation', version, ...translation });
 
 export const selectVersion = (store: ObjectStore, chat: string, message: string, version: string) => append(store, chat, { type: 'select', message, version, at: Date.now() });
 

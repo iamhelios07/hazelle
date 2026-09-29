@@ -28,7 +28,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
         <SettingGroup label="본 대화 모델">{picker('main')}</SettingGroup>
       </Section>
       <Section title="보조 모델">
-        <Text tone="muted">장기 기억·번역·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요.</Text>
+        <Text tone="muted">장기 기억·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요.</Text>
         <HelperPickers models={models} picker={picker} />
       </Section>
     </>

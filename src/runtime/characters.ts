@@ -1,7 +1,9 @@
 import type { Card, Imported } from '../engine/import/types';
+import type { TranslateSwitches } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { daysLeft, holds, nest, type Character, type Lore } from '../model/library';
 import type { ToggleValues } from '../model/prompt';
+import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
 import { planRemoval } from './removal';
@@ -113,6 +115,18 @@ export function editCard(store: ObjectStore, id: string, patch: Partial<Card>): 
 export function setToggle(store: ObjectStore, character: string | null, key: string, value: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
   if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, toggles: { ...current?.toggles, [key]: value } }));
   return store.update('character', character, (current) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
+}
+
+// design §6.3: a character's 번역, in every chat of it, or that of every 캐릭터 없이 chat, as toggle values are. Nothing
+// saved is both off.
+export function translateSwitches(store: ObjectStore, character: string | null): TranslateSwitches {
+  const saved = character === null ? store.get('settings', SETTINGS_ID)?.value.translate : store.get('character', character)?.value.translate;
+  return saved ?? { replies: false, input: false };
+}
+
+export function setTranslate(store: ObjectStore, character: string | null, switches: TranslateSwitches): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
+  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, translate: switches }));
+  return store.update('character', character, (current) => ({ ...current, translate: switches }));
 }
 
 // 기본값으로 되돌리기: the chats go back to the toggles' declared defaults.

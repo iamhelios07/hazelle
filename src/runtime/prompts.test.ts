@@ -116,7 +116,7 @@ describe('prompts', () => {
     const chat = created.ok ? created.data.id : '';
     const read = () => store.get('chat', chat)!.value;
 
-    expect(chatModel(store, read())).toMatchObject({ model: { id: 'm' } });
+    expect(chatModel(store, read(), 'main')).toMatchObject({ model: { id: 'm' } });
     await setChatPrompt(store, chat, ownId!);
     await removePrompt(store, ownId!);
     expect(chatPrompt(store, read())).toEqual({ kind: 'missing', own: true });

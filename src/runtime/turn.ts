@@ -5,18 +5,21 @@ import type { Card } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
 import { assemble, type PromptInput, type TooLong } from '../engine/pipeline';
 import { renderChat, type ChatScope } from '../engine/render';
+import type { TranslationRequest } from '../engine/translate';
 import { fold, shown, type Chat, type Message } from '../model/chat';
 import type { Toggle } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route, type RouteFailure } from './assignment';
+import { translateSwitches } from './characters';
 import { chatPersona } from './personas';
 import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
-import { startChat } from './chat-log';
+import { startChat, type Greetings, type Said } from './chat-log';
 import type { Ask, TalkFailure, Turn } from './talk';
+import { translate, type TranslateFailure, type TranslateInput } from './translate';
 
 // What the user asks for: their new message and a reply to it, a reply to the last message sending
 // nothing new (답장 받기), another version of a reply (다시 생성), one in place of a failed version
@@ -31,13 +34,19 @@ export type Target =
 // Why a chat cannot start a turn: no model, or its prompt, persona or its model's 설정 묶음 is missing (design §4.2,
 // §4.3, §4.4); own says whether the missing one was the chat's (the model's) own or the default.
 export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; own: boolean } | { kind: 'profile-missing'; own: boolean };
-// A turn also stops before sending on a new chat that was not saved, a tokenizer that did not load, or a prompt
-// over the model's budget.
-export type TurnFailure = TalkFailure | Blocked | TooLong | { kind: 'tokenizer' } | { kind: 'unstarted'; step: 'chat' | 'greetings'; failure: ApiFailure };
+// A turn also stops before sending on a new chat that was not saved, a user's message that was not translated
+// (design §6.3), a tokenizer that did not load, or a prompt over the model's budget.
+export type TurnFailure =
+  | TalkFailure
+  | Blocked
+  | TooLong
+  | { kind: 'tokenizer' }
+  | { kind: 'unstarted'; step: 'chat' | 'greetings'; failure: ApiFailure }
+  | { kind: 'untranslated'; failure: TranslateFailure };
 
-// Everything one reply needs, read once when it is asked for: the model, what the prompt is built from (the
+// Everything one reply needs, read once when it is asked for: the chat, the model, what the prompt is built from (the
 // user's new message last in its messages), the message Talk saves with the reply, and where the reply goes.
-export type TurnContext = Pick<Ask, 'route' | 'settings'> & Pick<Turn, 'said' | 'reply'> & Pick<PromptInput, 'scope' | 'budget'>;
+export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 'reply'> & Pick<PromptInput, 'scope' | 'budget'> & { chat: Chat };
 
 type Reader = Pick<Session, 'store'>;
 
@@ -48,7 +57,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
   const card = character?.card ?? null;
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
-  const route = chatModel(store, chat);
+  const route = chatModel(store, chat, 'main');
   return {
     card,
     persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : null,
@@ -112,6 +121,11 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
 // Each message's text as the chat shows it, for its log, its title and its preview.
 export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[]) => renderChat('display', scopeOf(reader, id, chat, messages)).texts;
 
+// What a translation in this chat is made from (design §6.3): one of messages, or the user's message after them.
+export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
+  return { chat, scope: scopeOf(reader, id, chat, messages), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
+}
+
 // A scope a turn can send from, or why not.
 function sendable(scope: ChatScope, chat: Chat): PromptInput['scope'] | Blocked {
   const { prompt, persona } = scope;
@@ -122,7 +136,7 @@ function sendable(scope: ChatScope, chat: Chat): PromptInput['scope'] | Blocked 
 
 // null: nothing stops the chat from starting a turn. The screen asks before it saves a new chat.
 export function blocked(reader: Reader, chat: Chat): Blocked | null {
-  const route = chatModel(reader.store, chat);
+  const route = chatModel(reader.store, chat, 'main');
   if ('kind' in route) return route;
   const profile = modelProfile(reader.store, route.model);
   if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
@@ -135,7 +149,7 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
 export function gatherTurn(session: Session, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
   const stored = session.store.get('chat', chat);
   if (!stored) return null;
-  const route = chatModel(session.store, stored.value);
+  const route = chatModel(session.store, stored.value, 'main');
   if ('kind' in route) return route;
   const profile = modelProfile(session.store, route.model);
   if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
@@ -151,14 +165,22 @@ export function gatherTurn(session: Session, chat: string, target: Target, ids =
   // it continues nor the calls its receipt carries are dropped.
   const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt, seed: version.seed } : null;
   if (target.kind === 'continue' && !continues) return null;
-  const said: Turn['said'] = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
+  const said: Said | null = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
   const now = Date.now();
   const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
   // A continuation's prompt ends with the version it continues.
   const history = continues ? [...messages.slice(0, at), { ...messages[at]!, selected: index }] : [...messages.slice(0, at), ...sending];
   const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);
   if ('kind' in scope) return scope;
-  return { route, settings, scope, budget: budgetOf(route.model, sentSettings(session.store, route)), said, reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues } };
+  return {
+    chat: stored.value,
+    route,
+    settings,
+    scope,
+    budget: budgetOf(route.model, sentSettings(session.store, route)),
+    said,
+    reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues },
+  };
 }
 
 // o200k_base counts for every model (tech-spec §8), loaded when a chat opens rather than with the page. Text
@@ -169,28 +191,46 @@ const tokenizer = () => import('gpt-tokenizer/encoding/o200k_base').then(({ coun
 export const preloadTokenizer = () => void tokenizer().catch(() => {});
 
 // start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.
-export function takeTurn(session: Session, chat: string, target: Target, start: { chat: Chat; greetings: Parameters<typeof startChat>[3]; started: () => void } | null = null): Promise<TurnFailure | null> {
+export function takeTurn(session: Session, chat: string, target: Target, start: { chat: Chat; greetings: Greetings | null; started: () => void } | null = null): Promise<TurnFailure | null> {
   if (start) {
     const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const said = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
-    return session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async () => {
+    return session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async (signal) => {
       const started = await startChat(session.store, chat, start.chat, start.greetings);
       if (!started.ok) return { kind: 'unstarted', step: started.step, failure: started.failure };
       start.started();
       // The chat was just saved and a new chat's target names no message, so it is there.
       const turn = gatherTurn(session, chat, target, ids)!;
-      return 'kind' in turn ? turn : prepare(turn);
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
     });
   }
   const turn = gatherTurn(session, chat, target);
   if (turn === null || 'kind' in turn) return Promise.resolve(turn);
-  return session.talk.run({ chat, said: turn.said, reply: turn.reply }, () => prepare(turn));
+  return session.talk.run({ chat, said: turn.said, reply: turn.reply }, (signal) => prepare(session, chat, turn, signal));
 }
 
-async function prepare(turn: TurnContext): Promise<Ask | TooLong | { kind: 'tokenizer' }> {
+async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal): Promise<Ask | TooLong | { kind: 'tokenizer' } | Extract<TurnFailure, { kind: 'untranslated' }>> {
+  const turn = gathered.said && translateSwitches(session.store, gathered.chat.character).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
+  if ('kind' in turn) return turn;
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { kind: 'tokenizer' };
-  const { route, settings, scope, budget, reply } = turn;
+  const { route, settings, scope, budget, said, reply } = turn;
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null });
-  return 'kind' in prompt ? prompt : { route, settings, prompt };
+  return 'kind' in prompt ? prompt : { route, settings, prompt, said };
+}
+
+// design §6.3: the user's message goes out translated, which the prompt sends and the chat saves as its text, with
+// what the user typed as its translation. The chat's messages before it are the translation's context.
+async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
+  const typed = turn.said!;
+  const messages = fold(session.store.children('entry', chat));
+  const made = await translate(session, translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text }), signal, () => {});
+  if (!made.ok) return { kind: 'untranslated', failure: made.failure };
+  const sent = made.translation.text;
+  const last = turn.scope.messages.at(-1)!;
+  return {
+    ...turn,
+    scope: { ...turn.scope, messages: turn.scope.messages.with(-1, { ...last, text: sent }) },
+    said: { id: typed.id, text: sent, translation: { ...made.translation, text: typed.text } },
+  };
 }

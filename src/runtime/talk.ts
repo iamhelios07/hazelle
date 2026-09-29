@@ -3,7 +3,7 @@ import type { Assembled } from '../engine/pipeline';
 import type { Message, Receipt, ReceiptError } from '../model/chat';
 import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
-import { appendCost, appendReply, appendUserMessage, type Written } from './chat-log';
+import { appendCost, appendReply, appendUserMessage, type Said, type Written } from './chat-log';
 import { settleCost } from './cost';
 import type { Credentials } from './credential';
 import { generate, type Reply } from './generate';
@@ -24,7 +24,8 @@ export type Shown = Message & { live: string | null };
 
 // What one reply is sent with, ready once its prompt is built (runtime/turn): the model and the prompt, which
 // the reply's id seeds (engine/pipeline). settings: the model's 설정 묶음 as stored, which the request fits to the model.
-export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled };
+// said: the user's message as it is saved, which a message sent translated saves translated (design §6.3).
+export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null };
 
 // What one reply sent, for 정보's 요청 원문 and lorebook part (design F3). It lives in page memory only, until the
 // session closes (tech-spec §5: the raw request is not stored).
@@ -126,21 +127,22 @@ export class Talk {
     for (const listener of this.listeners) listener();
   }
 
-  // The turn is shown before prepare, which may save a new chat and builds the prompt, so the user's message
-  // appears the moment it is sent. A failure prepare returns ends the turn unsent.
-  async run<F extends { kind: string }>({ chat, said, reply }: Omit<Turn, 'text'>, prepare: () => Promise<Ask | F>): Promise<TalkFailure | F | null> {
+  // The turn is shown before prepare, which may save a new chat, translate the user's message and builds the prompt,
+  // so the user's message appears the moment it is sent; stop() stops prepare too. A failure prepare returns ends the
+  // turn unsent.
+  async run<F extends { kind: string }>({ chat, said, reply }: Omit<Turn, 'text'>, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
     if (this.turn) return null;
     this.set({ chat, said, reply, text: reply.continues?.text ?? '' });
     const abort = new AbortController();
     this.abort = abort;
-    const ready = await prepare();
+    const ready = await prepare(abort.signal);
     if ('kind' in ready) {
       this.set(null);
       return ready;
     }
     const { route, settings, prompt } = ready;
 
-    const sending = said && appendUserMessage(this.store, chat, said);
+    const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
     const replying = generate({
       credentials: this.credentials,
       connection: route.connection.value,
@@ -159,22 +161,7 @@ export class Talk {
     }
     const answer = await replying;
 
-    const receipt: Receipt = {
-      connection: route.connection.id,
-      source: route.connection.value.label,
-      model: route.model.id,
-      modelName: route.model.name,
-      state: answer.state,
-      cut: answer.cut,
-      error: answer.error && receiptError(answer.error),
-      finishReason: answer.finishReason,
-      usage: answer.usage,
-      cost: answer.cost,
-      replyId: answer.replyId,
-      firstTextMs: answer.firstTextMs,
-      totalMs: answer.totalMs,
-      ...(reply.continues && { continues: reply.continues.receipt }),
-    };
+    const receipt: Receipt = { ...receiptOf(route, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
     const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed };
     // Kept before the save, whose store change is what shows the reply's 정보.
     this.sentBy.set(reply.id, { request: answer.request, prompt });
@@ -187,6 +174,25 @@ export class Talk {
     this.settle(chat, receipt);
     return null;
   }
+}
+
+// What a call leaves in a saved chat: a reply's receipt, or a translation's (runtime/translate).
+export function receiptOf(route: Route, answer: Reply): Receipt {
+  return {
+    connection: route.connection.id,
+    source: route.connection.value.label,
+    model: route.model.id,
+    modelName: route.model.name,
+    state: answer.state,
+    cut: answer.cut,
+    error: answer.error && receiptError(answer.error),
+    finishReason: answer.finishReason,
+    usage: answer.usage,
+    cost: answer.cost,
+    replyId: answer.replyId,
+    firstTextMs: answer.firstTextMs,
+    totalMs: answer.totalMs,
+  };
 }
 
 // Field by field, never the error itself: whatever a network error gains must not reach saved chats.
