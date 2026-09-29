@@ -1,15 +1,14 @@
 import { resolveRole, ROLES, type Assignment, type ModelRef, type Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
-import { findStarred, GONE, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
+import { findStarred, GONE, HelperPickers, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
 import { Section, SettingGroup, Text } from '../ui';
 
 const DEFAULT = '전체 기본값 따르기';
-const HELPERS = ['aux', 'memory', 'translate', 'emotion'] as const;
 
 // What the 모델 row says: this prompt's 본 대화, and how many helper roles it sets apart.
 export function modelWords(models: Assignment, connections: readonly Stored<'connection'>[]): string {
   const main = models.main ? (findStarred(models.main, connections)?.name ?? GONE) : DEFAULT;
-  const apart = HELPERS.filter((role) => models[role]).length;
+  const apart = (Object.keys(ROLES) as Role[]).filter((role) => role !== 'main' && models[role]).length;
   return apart ? `${main} · 보조 ${apart}개` : main;
 }
 
@@ -26,7 +25,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
       model: ref ? modelName(ref, connections) : '정해지지 않음',
     };
   };
-  const picker = (role: Role) => <RolePicker key={role} role={role} own={models[role]} follow={follow(role)} connections={connections} onPick={(ref) => onPick(role, ref)} />;
+  const picker = (role: Role, help?: string) => <RolePicker key={role} role={role} help={help} own={models[role]} follow={follow(role)} connections={connections} onPick={(ref) => onPick(role, ref)} />;
   return (
     <>
       <Section title="모델">
@@ -35,7 +34,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
       </Section>
       <Section title="보조 모델">
         <Text tone="muted">장기 기억·번역·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요.</Text>
-        <SettingGroup label="보조 모델">{HELPERS.map(picker)}</SettingGroup>
+        <HelperPickers models={models} picker={picker} />
       </Section>
     </>
   );

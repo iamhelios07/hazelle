@@ -4,7 +4,7 @@ import { setDefaultModel } from '../../runtime/assignment';
 import { setDefaultPersona } from '../../runtime/personas';
 import { setDefaultPrompt } from '../../runtime/prompts';
 import { personaTitle } from '../common/persona-words';
-import { findStarred, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
+import { findStarred, HelperPickers, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
 import { useSettings, useStore, useViews } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -98,19 +98,12 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
       </Section>
       <Section title="보조 모델">
         <Text tone="muted">장기 기억·번역·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요. 프롬프트마다 따로 정할 수도 있어요.</Text>
-        <SettingGroup label="보조 모델">
-          {(['aux', 'memory', 'translate', 'emotion'] as const).map((role) => (
-            <RolePicker
-              key={role}
-              role={role}
-              help={role === 'aux' ? '장기 기억·번역·감정 에셋 모델을 따로 정하지 않으면 이 모델을 써요.' : undefined}
-              own={settings.models[role]}
-              follow={follow(role)}
-              connections={connections}
-              onPick={(ref) => pickModel(role, ref)}
-            />
-          ))}
-        </SettingGroup>
+        <HelperPickers
+          models={settings.models}
+          picker={(role, help) => (
+            <RolePicker key={role} role={role} help={help} own={settings.models[role]} follow={follow(role)} connections={connections} onPick={(ref) => pickModel(role, ref)} />
+          )}
+        />
       </Section>
     </Screen>
   );

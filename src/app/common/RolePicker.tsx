@@ -1,8 +1,9 @@
-import { fitsRole, type ModelRef, type Role } from '../../connectors/assignment';
+import type { ReactNode } from 'react';
+import { fitsRole, type Assignment, type ModelRef, type Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
-import { ChipButton, Empty, Menu, MenuItem, SettingRow } from '../ui';
+import { ChipButton, Disclosure, Empty, Menu, MenuItem, SettingGroup, SettingRow } from '../ui';
 
-export const ROLE_WORDS: Record<Role, string> = { main: '본 대화', aux: '기타 보조', memory: '장기 기억', translate: '번역', emotion: '감정 에셋' };
+export const ROLE_WORDS: Record<Role, string> = { main: '본 대화', aux: '기본 보조', memory: '장기 기억', translate: '번역', emotion: '감정 에셋' };
 
 export const GONE = '별표 목록에 없는 모델';
 const same = (a: ModelRef, b: ModelRef) => a.connection === b.connection && a.model === b.model;
@@ -66,5 +67,20 @@ export function RolePicker({ role, help, own, follow, connections, onPick }: Pro
         </Menu>
       }
     />
+  );
+}
+
+const DETAIL = ['memory', 'translate', 'emotion'] as const;
+
+// 기본 보조, with the roles that fall back to it folded under 상세 보조 설정.
+export function HelperPickers({ models, picker }: { models: Assignment; picker: (role: Role, help?: string) => ReactNode }) {
+  const apart = DETAIL.filter((role) => models[role]).length;
+  return (
+    <>
+      <SettingGroup label="기본 보조 모델">{picker('aux', '보조 작업에 쓰는 모델이에요. 작업마다 다른 모델을 쓰려면 상세 보조 설정에서 정해요.')}</SettingGroup>
+      <Disclosure label={apart ? `상세 보조 설정 · ${apart}개 따로 정함` : '상세 보조 설정'}>
+        <SettingGroup label="상세 보조 설정">{DETAIL.map((role) => picker(role))}</SettingGroup>
+      </Disclosure>
+    </>
   );
 }
