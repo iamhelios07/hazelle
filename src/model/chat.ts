@@ -61,8 +61,8 @@ export type ReceiptError =
 
 // Chat entries are created and never changed (design §3): an edit, a swipe or a deletion is a new
 // entry. at is the writer's clock, for showing times only; order is the server's rev.
-// seed: the id a version's random tags roll from in place of its own. A branch's copy keeps its original's and
-// a continued cut keeps the cut's, so text already shown never rolls again.
+// seed: the id a version's random tags roll from in place of its own. A branch's copy keeps its original's, and
+// an edit or a continued cut keeps the seed of the version it replaces, so text already shown never rolls again.
 export type Entry =
   // A new message with its first version, which has the entry's id.
   | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string }

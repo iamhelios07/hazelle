@@ -131,7 +131,7 @@ export const appendCost = (store: ObjectStore, chat: string, replyId: string, co
 // An edit is a new version in the place of the one shown, keeping its receipt (model/chat Entry).
 export function editMessage(store: ObjectStore, chat: string, message: Message, text: string) {
   const current = shown(message);
-  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at: Date.now(), text, receipt: current.receipt });
+  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at: Date.now(), text, receipt: current.receipt, seed: current.seed });
 }
 
 export const selectVersion = (store: ObjectStore, chat: string, message: string, version: string) => append(store, chat, { type: 'select', message, version, at: Date.now() });
