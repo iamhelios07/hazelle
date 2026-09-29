@@ -8,6 +8,7 @@ import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, pressed, Prose, StoryMessage, Switcher, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
+import { useReveal } from './useReveal';
 
 type Props = {
   message: Shown;
@@ -46,6 +47,7 @@ export function ChatMessage(props: Props) {
   const receipt = version.receipt;
   const mine = message.role === 'user';
   const live = message.live === version.id;
+  const reveal = useReveal(version.id, text, live);
   const failed = receipt?.state === 'failed';
   const empty = text === '';
   // An edited reply is the user's text now; its cut no longer applies.
@@ -111,7 +113,7 @@ export function ChatMessage(props: Props) {
       </>
     );
   } else if (!empty || live) {
-    body = <Prose text={text} cursor={live} />;
+    body = <Prose text={reveal.text} cursor={live || reveal.revealing} />;
   }
 
   const count = message.versions.length;
