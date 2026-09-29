@@ -5,6 +5,7 @@ import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import type { Files } from './files';
 import { FIRST_ID } from './personas';
+import { FIRST_PROFILE_ID } from './profiles';
 import { STARTER_ID } from './prompts';
 import type { ObjectStore } from './store';
 
@@ -18,7 +19,7 @@ const FILES = 'files/';
 const PARALLEL = 8;
 
 // What opening an account adds by itself.
-const SEEDED = new Set([STARTER_ID, FIRST_ID, SETTINGS_ID]);
+const SEEDED = new Set([STARTER_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
 
 const ALL = Object.keys(KINDS) as Kind[];
 const holdsFile = (kind: Kind) => 'file' in KINDS[kind];
