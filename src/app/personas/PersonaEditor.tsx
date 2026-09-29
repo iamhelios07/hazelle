@@ -16,6 +16,8 @@ const STATUS: Record<Status, string> = { saving: '저장 중', saved: '저장됨
 
 type Props = {
   stored: Stored<'persona'>;
+  backLabel: string;
+  onBack: () => void;
   onRemoved: () => void;
   // A page or a side panel: the editor says what its head holds, the caller how it looks.
   frame: (parts: { head: NavBarProps; body: ReactNode }) => ReactNode;
@@ -23,7 +25,7 @@ type Props = {
 
 // Saves as CharacterEditScreen does: after a pause, and what still waits when it is left. Its state is one persona's,
 // so a caller keys it by id, and leaves by unmounting it, which saves.
-export function PersonaEditor({ stored, onRemoved, frame }: Props) {
+export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
@@ -125,5 +127,5 @@ export function PersonaEditor({ stored, onRemoved, frame }: Props) {
       </Row>
     </>
   );
-  return frame({ head: { title: persona.name, actions: status && <Text tone="muted">{STATUS[status]}</Text> }, body });
+  return frame({ head: { title: persona.name, backLabel, onBack, actions: status && <Text tone="muted">{STATUS[status]}</Text> }, body });
 }
