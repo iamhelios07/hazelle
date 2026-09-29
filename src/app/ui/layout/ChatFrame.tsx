@@ -1,6 +1,7 @@
-import { ChevronLeft } from 'lucide-react';
-import type { ReactNode, RefObject } from 'react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
+import type { ReactNode, Ref, RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
+import { Icon } from '../foundation/Icon';
 import styles from './ChatFrame.module.css';
 
 type Props = {
@@ -39,12 +40,28 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   );
 }
 
+type TitleProps = {
+  avatar: ReactNode;
+  title: string;
+  typing: boolean;
+  // The name opens the menu of the chats it sits among (design F3), and takes these from Menu.
+  popup: 'menu' | 'dialog';
+  expanded: boolean;
+  ref: Ref<HTMLButtonElement>;
+  onClick: () => void;
+};
+
 // The chat's name in its header, with 쓰는 중 while a reply is being written.
-export function ChatTitle({ avatar, title, typing }: { avatar: ReactNode; title: string; typing: boolean }) {
+export function ChatTitle({ avatar, title, typing, popup, expanded, ref, onClick }: TitleProps) {
   return (
     <span className={styles.chatTitle}>
       {avatar}
-      <h1 className={styles.name}>{title}</h1>
+      <h1 className={styles.heading}>
+        <button ref={ref} type="button" className={styles.switch} aria-haspopup={popup} aria-expanded={expanded} onClick={onClick}>
+          <span className={styles.name}>{title}</span>
+          <Icon icon={ChevronDown} size="xs" />
+        </button>
+      </h1>
       {typing && (
         <span className={styles.typing}>
           <span className={styles.pulse} />

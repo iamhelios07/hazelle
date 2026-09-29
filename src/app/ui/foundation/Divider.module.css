@@ -6,6 +6,11 @@
   font-size: var(--text-xs);
 }
 
+.marked {
+  gap: var(--space-10);
+  color: var(--color-text-muted);
+}
+
 .rule {
   flex-grow: 1;
   height: var(--border-thin);

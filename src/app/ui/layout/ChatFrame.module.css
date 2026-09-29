@@ -27,6 +27,11 @@
   display: flex;
 }
 
+/* The title's menu wraps it, and without this would not let a long title shrink to its ellipsis. */
+.title > * {
+  min-width: 0;
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -97,10 +102,35 @@
   min-width: 0;
 }
 
-.name {
-  composes: ellipsis from '../foundation/a11y.module.css';
+.heading {
+  min-width: 0;
+  display: flex;
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
+}
+
+.switch {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--control-tool);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-sm);
+}
+
+.switch:hover,
+.switch[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+}
+
+.switch svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.name {
+  composes: ellipsis from '../foundation/a11y.module.css';
 }
 
 .typing {

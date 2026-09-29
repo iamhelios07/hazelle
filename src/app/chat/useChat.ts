@@ -6,6 +6,7 @@ import type { CharacterShelf } from '../../model/library';
 import { chatModel, setChatModel } from '../../runtime/assignment';
 import { resetToggles, setToggle } from '../../runtime/characters';
 import {
+  branchChat,
   editMessage,
   removeChat,
   removeMessage,
@@ -95,6 +96,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | null>(null);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
+  const [branching, setBranching] = useState(false);
   // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
@@ -180,6 +182,18 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     const saved = await removeMessage(store, chatId, message.id);
     if (!saved.ok) return toast.failed(saved);
     toast.undoable('메시지를 지웠어요', () => void restoreMessage(store, chatId, message.id));
+  }
+
+  // The copy is saved one entry after another (runtime/chat-log branchChat), so a long chat takes a while.
+  async function branch(message: Shown) {
+    if (!item || branching) return;
+    setBranching(true);
+    toast.show('갈라진 채팅을 만드는 중이에요…');
+    const made = await branchChat(store, item, message.id);
+    setBranching(false);
+    if (!made.ok) return toast.failed(made, '갈라진 채팅을 만들지 못했어요.');
+    navigate({ kind: 'chat', id: made.data });
+    toast.show('여기서 갈라진 새 채팅을 만들었어요');
   }
 
   async function drop() {
@@ -272,6 +286,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     problem,
     editing,
     pinned,
+    branching,
     panel,
     dialog,
     modelMenu,
@@ -290,6 +305,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       saveEdit,
       remove,
       copy,
+      branch,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
       info: (reply: string | null) => setPanel({ kind: 'info', id: reply }),

@@ -1,7 +1,11 @@
-import { MessageSquare, MoreHorizontal, PanelRight, SlidersHorizontal } from 'lucide-react';
+import { GitBranch, MessageSquare, MoreHorizontal, PanelRight, Plus, SlidersHorizontal } from 'lucide-react';
+import { branchTree } from '../../model/chat';
 import { NameDialog } from '../common/NameDialog';
+import { ago } from '../common/time';
+import { useLibrary } from '../session';
+import { navigate } from '../shell/router';
 import { SHORTCUTS } from '../shortcuts';
-import { Avatar, ChatTitle, Dialog, Divider, IconButton, Menu, MenuItem, Shortcuts, ToolButton, useWide } from '../ui';
+import { Avatar, ChatTitle, Dialog, Divider, IconButton, Menu, MenuHeading, MenuItem, Shortcuts, ToolButton, useWide } from '../ui';
 import { ChatModelMenu } from './ChatModelMenu';
 import { ChatPromptMenu } from './ChatPromptMenu';
 import type { OpenChat } from './useChat';
@@ -10,7 +14,35 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
   const { item, card, shelf, streaming } = chat;
   const title = card ? `${card.name} · ${item?.title ?? '새 채팅'}` : (item?.title ?? '새 채팅');
   const face = card ? <Avatar face={card.name} image={shelf!.face} /> : <Avatar face={MessageSquare} />;
-  return <ChatTitle avatar={face} title={title} typing={streaming} />;
+  return (
+    <Menu label={card ? `${card.name}의 채팅` : '캐릭터 없이'} size="lg" trigger={(opener) => <ChatTitle avatar={face} title={title} typing={streaming} {...opener} />}>
+      <ChatChoices chat={chat} />
+    </Menu>
+  );
+}
+
+// design F3: the chats of this chat's character, or of 캐릭터 없이, each branch under the chat it came from.
+// Mounted only while the menu is open.
+function ChatChoices({ chat }: { chat: OpenChat }) {
+  const { id, card, shelf } = chat;
+  const { none } = useLibrary();
+  return (
+    <>
+      <MenuHeading>{card ? `${card.name}의 채팅` : '캐릭터 없이'}</MenuHeading>
+      {branchTree(shelf?.chats ?? none.chats).map(({ item, nested }) => (
+        <MenuItem
+          key={item.id}
+          icon={nested ? GitBranch : undefined}
+          label={item.title}
+          sub={item.at === null ? `메시지 ${item.messages.length}개` : `메시지 ${item.messages.length}개 · ${ago(item.at)}`}
+          checked={item.id === id}
+          onClick={() => navigate({ kind: 'chat', id: item.id })}
+        />
+      ))}
+      <Divider variant="menu" />
+      <MenuItem icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />
+    </>
+  );
 }
 
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {

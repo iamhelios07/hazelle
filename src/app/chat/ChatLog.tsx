@@ -1,11 +1,16 @@
+import { GitBranch } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { day } from '../common/time';
+import { useViews } from '../session';
+import { navigate } from '../shell/router';
 import { Divider, Empty, Text } from '../ui';
 import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { messages, texts, opening, last, card, shelf, route, notUsed, busy, editing, pinned, modelMenu, actions } = chat;
+  const { item, messages, texts, opening, last, card, shelf, route, notUsed, busy, editing, pinned, branching, modelMenu, actions } = chat;
+  const { chatById } = useViews();
+  const origin = item?.chat.origin;
   const rows: ReactNode[] = [];
   if (notUsed) {
     rows.push(
@@ -41,10 +46,23 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         busy={busy}
         editing={editing?.id === message.id ? editing.text : null}
         pinned={pinned === message.id}
+        branching={branching}
         modelMenu={modelMenu}
         actions={actions}
       />,
     );
+    // Deleting the message the split comes after takes its divider with it, until 되돌리기.
+    if (origin?.after === message.id) {
+      const here = chatById.has(origin.id);
+      rows.push(
+        <Divider
+          key="split"
+          icon={GitBranch}
+          label={here ? `‘${origin.name}’에서 갈라졌어요` : `‘${origin.name}’에서 갈라졌어요 · 원래 채팅은 지워졌어요`}
+          action={here ? { label: '원래 채팅 보기', onClick: () => navigate({ kind: 'chat', id: origin.id }) } : undefined}
+        />,
+      );
+    }
   });
   return rows;
 }

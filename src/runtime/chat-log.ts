@@ -1,5 +1,5 @@
 import type { Cost } from '../connectors/types';
-import { shown, type Chat, type Entry, type Message, type Receipt } from '../model/chat';
+import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { ApiFailure, ApiResult } from './api';
 import type { ObjectStore } from './store';
@@ -42,6 +42,44 @@ async function addGreetings(store: ObjectStore, chat: string, { ids, texts, sele
     if (!saved.ok) return saved;
   }
   return null;
+}
+
+// 갈라지기 (design F3): a new chat holding item's messages up to and including message, as they fold. Its entries
+// are saved one at a time, in order, because fold reads them in rev order; the chat goes last, so it appears only
+// once whole, and a copy cut short leaves its entries unreachable, like an import cut short. The spread takes the
+// original's own choices; nothing links the two chats but origin, so deleting either leaves the other whole.
+export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<string>> {
+  const upTo = item.messages.findIndex((candidate) => candidate.id === message);
+  if (upTo === -1) return { ok: false, error: 'gone' };
+  const id = crypto.randomUUID();
+  let after = '';
+  for (const source of item.messages.slice(0, upTo + 1)) {
+    after = crypto.randomUUID();
+    for (const [entryId, entry] of copied(after, source)) {
+      const saved = await store.create('entry', entry, { id: entryId, parent: id });
+      if (!saved.ok) return saved;
+    }
+  }
+  const created = await store.create('chat', { ...item.chat, title: null, origin: { id: item.id, name: item.title, after } }, { id });
+  return created.ok ? { ok: true, data: id } : created;
+}
+
+// The entries that fold back to message under the id given: its first version as the message entry, and that
+// version again in its own place when it is an edit or came later than the message, which a message entry cannot
+// hold; the other versions; and a select when the one shown is not the last, since adding a version selects it.
+// A field added to versions or messages must be written here too, or a branch drops it.
+function copied(id: string, { role, at, versions, selected }: Message): [string, Entry][] {
+  const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
+  const [first, ...rest] = versions;
+  const entries: [string, Entry][] = [[id, { type: 'message', role, at, text: first!.text, receipt: first!.receipt }]];
+  if (first!.edited || first!.at !== at) {
+    entries.push([crypto.randomUUID(), { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, text: first!.text, receipt: first!.receipt }]);
+  }
+  rest.forEach((version, index) => {
+    entries.push([ids[index + 1]!, { type: 'version', message: id, replaces: null, edit: version.edited, at: version.at, text: version.text, receipt: version.receipt }]);
+  });
+  if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
+  return entries;
 }
 
 // A blank name gives the chat back its first message as its name (model/chat chatTitle).

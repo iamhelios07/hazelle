@@ -1,4 +1,4 @@
-import { Bot, Copy, Info, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Bot, Copy, GitBranch, Info, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
@@ -28,6 +28,8 @@ type Props = {
   // The text in the edit box, while this message is being edited.
   editing: string | null;
   pinned: boolean;
+  // A branch of this chat is being saved; one at a time.
+  branching: boolean;
   // The header's model menu, which a failed reply's 다른 모델로 opens.
   modelMenu: MenuHandle;
   actions: ChatActions;
@@ -37,7 +39,7 @@ const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼
 
 // One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
-  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, modelMenu, actions } = props;
+  const { message, text, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
@@ -143,6 +145,7 @@ export function ChatMessage(props: Props) {
       {!mine && failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 시도" onClick={() => actions.retry(message)} />}
       {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message, version.text)} />}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
+      {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 갈라지기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="답장 정보" onClick={() => actions.info(message.id)} />}
       <Divider variant="tools" />
       <IconButton icon={Trash2} size="xs" label="삭제 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />

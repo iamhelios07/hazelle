@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatItems, chatTitle, fold, recentModels, shown, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, chatItems, chatTitle, fold, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -67,10 +67,11 @@ describe('fold', () => {
 const asStored = (messages: Message[]) => messages.map((message) => shown(message).text);
 
 describe('chatTitle', () => {
-  it('uses the given title, then the first line of the first message', () => {
+  it('uses the given title, then a branch its origin, then the first line of the first message', () => {
     const messages = fold([user('u1', '  기숙사 첫날\n둘째 줄')]);
     expect(chatTitle({ title: null, character: null, models: {} }, messages, asStored(messages))).toBe('기숙사 첫날');
     expect(chatTitle({ title: '이름', character: null, models: {} }, messages, asStored(messages))).toBe('이름');
+    expect(chatTitle({ title: null, character: null, models: {}, origin: { id: 'a', name: '기숙사의 밤', after: 'u1' } }, messages, asStored(messages))).toBe('기숙사의 밤 · 갈래');
     expect(chatTitle({ title: null, character: null, models: {} }, [], [])).toBe('새 채팅');
   });
 });
@@ -85,6 +86,28 @@ describe('chatItems', () => {
       ['empty', 7],
       ['a', 5],
       ['renamed', 3],
+    ]);
+  });
+});
+
+describe('branchTree', () => {
+  it('puts each branch under the chat it came from, and one whose origin is gone at the top', () => {
+    const item = (id: string, origin?: string): ChatItem => ({
+      id,
+      chat: { title: null, character: null, models: {}, ...(origin && { origin: { id: origin, name: origin, after: 'm' } }) },
+      messages: [],
+      title: id,
+      preview: '',
+      at: null,
+      order: 0,
+    });
+    const tree = branchTree([item('b1', 'a'), item('c'), item('orphan', 'deleted'), item('a'), item('b2', 'b1')]);
+    expect(tree.map(({ item, nested }) => [item.id, nested])).toEqual([
+      ['c', false],
+      ['orphan', false],
+      ['a', false],
+      ['b1', true],
+      ['b2', true],
     ]);
   });
 });

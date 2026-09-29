@@ -4,7 +4,8 @@ import type { Stored } from './kinds';
 
 // The stored `chat` object (tech-spec §5). Its messages are `entry` objects whose parent is the chat.
 export type Chat = {
-  // null until the user names the chat; until then it is called by its first message (chatTitle).
+  // null until the user names the chat; until then it is called by its first message, or a branch after its
+  // origin (chatTitle).
   title: string | null;
   // A chat with no character talks to the model as it is. Characters arrive with import (design F2).
   character: string | null;
@@ -14,6 +15,9 @@ export type Chat = {
   prompt?: string;
   persona?: string;
   note?: string;
+  // A branch's original chat, named as it was then so a renamed or deleted one still reads; after is the message
+  // of this chat that the split comes after, where its divider stands (design F3).
+  origin?: { id: string; name: string; after: string };
 };
 
 // What a reply's generation left behind (tech-spec §5). The raw request is never stored.
@@ -128,6 +132,7 @@ const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 // texts: each message's text as it is displayed (engine/render, which the model cannot call).
 export function chatTitle(chat: Chat, messages: Message[], texts: string[]): string {
   if (chat.title) return chat.title;
+  if (chat.origin) return `${chat.origin.name} · 갈래`;
   const first = messages.findIndex((message) => message.role === 'user');
   return (first !== -1 && firstLine(texts[first]!)) || '새 채팅';
 }
@@ -155,6 +160,16 @@ export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => 
       };
     })
     .sort((a, b) => b.order - a.order);
+}
+
+// One shelf's chats with each branch right under the chat it came from, in the order given at each level
+// (design F3). A branch whose origin is not among them stands at the top level.
+export function branchTree(items: ChatItem[]): { item: ChatItem; nested: boolean }[] {
+  const ids = new Set(items.map((item) => item.id));
+  const parent = ({ chat }: ChatItem) => (chat.origin && ids.has(chat.origin.id) ? chat.origin.id : null);
+  const under = (origin: string | null): { item: ChatItem; nested: boolean }[] =>
+    items.filter((item) => parent(item) === origin).flatMap((item) => [{ item, nested: origin !== null }, ...under(item.id)]);
+  return under(null);
 }
 
 // Models used lately across all chats, newest first, for the model picker's 최근 (design F4).
