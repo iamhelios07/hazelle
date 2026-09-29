@@ -41,6 +41,7 @@ const EXAMPLES = {
     { kind: 'model', connection: CHAT, model: 'claude-opus-5.5' },
     { kind: 'model', connection: CHAT, model: 'anthropic/claude-opus-5.5' },
     { kind: 'model', connection: CHAT, model: 'a b%c@d?e#f' },
+    { kind: 'model', connection: CHAT, model: 'a//b/' },
   ],
   defaults: [{ kind: 'defaults' }],
   account: [{ kind: 'account' }],
@@ -57,9 +58,12 @@ describe('routes', () => {
     expect(href({ kind: 'new-chat', character: null })).toBe('/chats/new');
     expect(href({ kind: 'new-chat', character: CHARACTER })).toBe(`/characters/${CHARACTER}/new`);
     expect(href({ kind: 'connect-direct', address: 'https://a.example/v1' })).toBe('/connections/new/direct?address=https%3A%2F%2Fa.example%2Fv1');
+    const model = { kind: 'model', connection: CHAT, model: 'anthropic/claude-opus-5.5' } as const;
+    expect(parseRoute(`/models/${CHAT}/anthropic%2Fclaude-opus-5.5`)).toEqual(model);
+    expect(href(model)).toBe(`/models/${CHAT}/anthropic/claude-opus-5.5`);
   });
 
-  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, `/models/${CHAT}/x/y`, '/settings/x', '/defaults/x'])(
+  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x', '/defaults/x'])(
     '%s is home',
     (at) => {
       expect(parseRoute(at)).toEqual(HOME);

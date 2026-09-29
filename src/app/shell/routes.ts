@@ -56,6 +56,11 @@ export function parseRoute(at: string): Route {
   const query = at.indexOf('?');
   const path = query < 0 ? at : at.slice(0, query);
   const [top, id, sub, ...rest] = path.slice(1).split('/');
+  // A model id's own slashes stay path separators: Cloudflare's asset handler redirects an escaped one (%2F) to a bare one.
+  if (top === 'models' && id !== undefined && sub !== undefined) {
+    const model = decoded([sub, ...rest]);
+    return ID.test(id) && model ? { kind: 'model', connection: id, model } : HOME;
+  }
   if (rest.length > 0) return HOME;
   if (top === 'characters') {
     if (id === undefined) return { kind: 'gallery' };
@@ -93,10 +98,7 @@ export function parseRoute(at: string): Route {
   }
   if (top === 'models') {
     if (id === undefined) return { kind: 'profiles' };
-    if (!ID.test(id)) return HOME;
-    if (sub === undefined) return { kind: 'profile', id };
-    const model = decoded(sub);
-    return model ? { kind: 'model', connection: id, model } : HOME;
+    return ID.test(id) ? { kind: 'profile', id } : HOME;
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
@@ -107,9 +109,9 @@ export function parseRoute(at: string): Route {
 }
 
 // A malformed escape (a stray %) names no model.
-function decoded(segment: string): string | null {
+function decoded(segments: string[]): string | null {
   try {
-    return decodeURIComponent(segment) || null;
+    return segments.map(decodeURIComponent).join('/') || null;
   } catch {
     return null;
   }
@@ -154,7 +156,7 @@ export function href(route: Route): string {
     case 'profile':
       return `/models/${route.id}`;
     case 'model':
-      return `/models/${route.connection}/${encodeURIComponent(route.model)}`;
+      return `/models/${route.connection}/${route.model.split('/').map(encodeURIComponent).join('/')}`;
     case 'defaults':
       return '/defaults';
     case 'account':
