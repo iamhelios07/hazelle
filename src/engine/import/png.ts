@@ -5,7 +5,7 @@ const decoder = new TextDecoder();
 export type Png = {
   // The card's base64 payload. ccv3 wins over chara.
   card: string | null;
-  // The file without the card's tEXt chunks, ending at IEND: the stored avatar is the image alone (tech-spec §5).
+  // The file without the card's tEXt chunks, ending at IEND: the stored avatar is the image alone.
   image: Uint8Array<ArrayBuffer>;
 };
 

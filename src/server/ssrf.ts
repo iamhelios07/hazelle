@@ -39,7 +39,7 @@ export function isPublicAddress(address: string): boolean {
 export type TargetRefusal = 'not-https' | 'not-public';
 
 // Only IP literals are checked here. Host names are checked by the platform, whose outbound fetch
-// refuses internal addresses (tech-spec §6).
+// refuses internal addresses.
 export function checkTarget(url: URL): TargetRefusal | null {
   if (url.protocol !== 'https:') return 'not-https';
   const host = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;

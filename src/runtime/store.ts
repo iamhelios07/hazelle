@@ -7,14 +7,14 @@ type Api = typeof realApi;
 type Change = { id: string; kind: string; parent: string | null; rev: number; body: string | null };
 type Page = { changes: Change[]; cursor: number; more: boolean };
 
-// value is undefined for a body that did not open (objects.ts). Such an object is counted, never
+// value is undefined for a body that did not open. Such an object is counted, never
 // shown as if it were empty, and never overwritten. kind may be one a newer version wrote.
 type Held = { id: string; kind: string; parent: string | null; rev: number; value: unknown };
 
 const MAX_ATTEMPTS = 3;
 
 // The browser's copy of the account's objects, decrypted in memory. The server stays the only source
-// of truth (design §3): writes go to it first, and a version conflict is resolved by pulling the
+// of truth: writes go to it first, and a version conflict is resolved by pulling the
 // newer copy and applying the change again on top of it.
 export class ObjectStore {
   private readonly live = new Map<string, Held>();
@@ -66,7 +66,7 @@ export class ObjectStore {
   }
 
   // A create whose answer was lost after it landed finds its own object there when tried again, and
-  // succeeds (tech-spec §5: a retried write with the same id is idempotent).
+  // succeeds: a retried write with the same id is idempotent.
   async create<K extends Exclude<Kind, Singleton>>(kind: K, value: Values[K], { id = crypto.randomUUID(), parent = null }: { id?: string; parent?: string | null } = {}): Promise<ApiResult<Stored<K>>> {
     if (!this.fits(kind, parent)) return { ok: false, error: 'bad-input' };
     return this.retry(() => {
@@ -88,7 +88,7 @@ export class ObjectStore {
     });
   }
 
-  // A singleton lives at the id its kind names (model/kinds), and current is undefined until it is first written.
+  // A singleton lives at the id its kind names, and current is undefined until it is first written.
   upsert<K extends Singleton>(kind: K, change: (current: Values[K] | undefined) => Values[K]): Promise<ApiResult<Stored<K>>> {
     const id = KINDS[kind].id;
     return this.retry(() => {
@@ -118,6 +118,14 @@ export class ObjectStore {
       this.changed();
       return { ok: true, data: null };
     });
+  }
+
+  // Answers the removed object, which restore (되돌리기) writes back.
+  async take<K extends Kind>(kind: K, id: string): Promise<ApiResult<Stored<K>>> {
+    const object = this.get(kind, id);
+    if (!object) return { ok: false, error: 'gone' };
+    const removed = await this.remove(id);
+    return removed.ok ? { ok: true, data: object } : removed;
   }
 
   private async retry<T>(attempt: () => ApiResult<T> | Promise<ApiResult<T>>): Promise<ApiResult<T>> {
@@ -194,7 +202,13 @@ export class ObjectStore {
   }
 }
 
-// tech-spec §5: pull when the window regains focus, and every 30 s while the tab is visible.
+// A copy without key, for an update that clears an optional field.
+export function without<T extends object>(from: T, key: keyof T): T {
+  const rest = { ...from };
+  delete rest[key];
+  return rest;
+}
+
 export function keepSynced(store: ObjectStore): () => void {
   const pull = () => {
     if (document.visibilityState === 'visible') void store.pull();

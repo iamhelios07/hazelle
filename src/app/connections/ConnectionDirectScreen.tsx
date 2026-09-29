@@ -4,7 +4,7 @@ import type { Connection, Protocol } from '../../connectors/types';
 import { HTTPS_ONLY } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
 import { useSession } from '../session';
-import { navigate } from '../shell/router';
+import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, ChoiceGroup, Intro, NavBar, Screen, Stack, Text, TextField } from '../ui';
 import { connect } from './connect';
@@ -19,8 +19,8 @@ const PROBLEMS = {
   local: '내 컴퓨터나 집 안 네트워크의 주소는 서버에서 닿을 수 없어서 연결할 수 없어요.',
 };
 
-// F5 for what the list does not hold. An address the list does know becomes that provider, so it
-// gets the provider's balance and costs however it was entered. address is only where the field starts.
+// An address the list does know becomes that provider, so it gets the provider's balance and costs however it was
+// entered. address is only where the field starts.
 export function ConnectionDirectScreen({ address: pasted, back }: { address: string; back: Back }) {
   const session = useSession();
   const [address, setAddress] = useState(pasted);
@@ -45,7 +45,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
 
   return (
     <Screen
-      top={<NavBar title="직접 연결" onBack={() => navigate(back.to)} backLabel={back.label} />}
+      top={<NavBar title="직접 연결" {...backBar(back)} />}
       onSubmit={submit}
       actions={
         <Button type="submit" busy={busy} disabled={!draft}>

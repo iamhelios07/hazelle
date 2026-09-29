@@ -15,8 +15,8 @@ type Props = {
   // Makes the body and its actions a form, so Enter in a field presses the submit button among the actions.
   onSubmit?: () => void;
   actions?: ReactNode;
-  // Today's two looks, kept apart until the design settles on one: 'full' stretches each action across the dialog,
-  // 12 under the body (a form's 저장); 'row' sets them side by side, 16 under it (a confirm's 취소 and its action).
+  // full: each action stretched across the dialog, such as a form's 저장. row: side by side, such as a confirm's
+  // 취소 and its action.
   actionsLayout?: 'full' | 'row';
   children: ReactNode;
 };

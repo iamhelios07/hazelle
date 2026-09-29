@@ -17,6 +17,7 @@ type Props = {
 
 export function Section({ title, level = 2, note, hint, action, children }: Props) {
   const Heading = level === 2 ? 'h2' : 'h3';
+  const noted = note && <span className={styles.note}>{note}</span>;
   return (
     <section className={`${styles.section} ${styles[`level${level}`]}`}>
       <div className={styles.head}>
@@ -26,11 +27,11 @@ export function Section({ title, level = 2, note, hint, action, children }: Prop
         </span>
         {action ? (
           <span className={styles.end}>
-            {note && <span className={styles.note}>{note}</span>}
+            {noted}
             {action}
           </span>
         ) : (
-          note && <span className={styles.note}>{note}</span>
+          noted
         )}
       </div>
       {children}

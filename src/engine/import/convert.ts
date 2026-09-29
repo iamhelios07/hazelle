@@ -7,10 +7,18 @@ import type { Card, ImportReport, LoreEntry, RegexScript, UnsupportedKind } from
 type Json = Record<string, unknown>;
 type Entry = Omit<LoreEntry, 'name' | 'folder'>;
 
-export type Tally = Map<UnsupportedKind, number>;
+export type Tally<K = UnsupportedKind> = Map<K, number>;
 
-export function add(tally: Tally, kind: UnsupportedKind, amount = 1) {
+export function add<K>(tally: Tally<K>, kind: K, amount = 1) {
   tally.set(kind, (tally.get(kind) ?? 0) + amount);
+}
+
+// The kinds counted at least once, in the order kinds lists them.
+export function counted<K>(kinds: readonly K[], tally: Tally<K>): { kind: K; count: number }[] {
+  return kinds.flatMap((kind) => {
+    const count = tally.get(kind) ?? 0;
+    return count > 0 ? [{ kind, count }] : [];
+  });
 }
 
 export type Converted = {
@@ -132,7 +140,7 @@ function pickIcon(assets: unknown[]): Json | null {
 
 const isLua = (trigger: unknown) => isRecord(trigger) && record(list(trigger.effect)[0]).type === 'triggerlua';
 
-// Each line splits at its first '=' (design §5); Risu cuts the value at a second '='. `key=` keeps '' as the
+// Each line splits at its first '='; Risu cuts the value at a second '='. `key=` keeps '' as the
 // default, where Risu drops the line.
 function variables(value: unknown): [string, string][] {
   return text(value)
@@ -230,7 +238,7 @@ const BOOK_LORE: LoreSource = {
       keys: keys(raw.keys),
       secondaryKeys,
       content: migrate(content, extensions.risu_activationPercent),
-      // Honored (design §5, 5a and 5b); Risu drops enabled and never reads case_sensitive.
+      // Honored; Risu drops enabled and never reads case_sensitive.
       enabled: raw.enabled !== false,
       caseSensitive: raw.case_sensitive === true,
       constant: raw.constant === true,
@@ -243,7 +251,7 @@ const BOOK_LORE: LoreSource = {
   },
 };
 
-// Risu's one-time lore migration (updateLorebooks, characters.ts:648-663), the one rewrite design §5 allows.
+// Risu's one-time lore migration (updateLorebooks, characters.ts:648-663).
 // @@end is matched as a whole decorator: Risu's unanchored pattern also rewrites text such as "@@endless".
 function migrate(content: string, percent: unknown): string {
   const probability = typeof percent === 'number' && Number.isFinite(percent) && percent !== 0 ? `@@probability ${percent}\n` : '';

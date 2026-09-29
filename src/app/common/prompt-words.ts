@@ -1,6 +1,6 @@
 import type { Role, SlotKind } from '../../model/prompt';
 
-// What a prompt's parts are called, in the prompt editor and in 요청 원문 (design §4.2, F3).
+// What a prompt's parts are called, in the prompt editor and in 요청 원문.
 export const SLOT_NAMES: Record<SlotKind, string> = {
   description: '캐릭터 설명',
   persona: '페르소나',

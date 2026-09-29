@@ -48,8 +48,8 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요. 깨졌거나 캐릭터 카드가 아니에요.',
 };
 
-// Bot import (design F2): pick or drop files anywhere, each is saved as a character, and a summary
-// says what came in, what did not, and what its chats do not use yet.
+// Bot import: pick or drop files anywhere, each is saved as a character, and a summary says what came in, what did
+// not, and what its chats do not use yet.
 export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
   const files = useFiles();

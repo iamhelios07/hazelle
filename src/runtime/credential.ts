@@ -10,7 +10,7 @@ const MARGIN_MS = 60 * 1000;
 
 // What a request carries: the stored key itself, or the short-lived token its connection type trades
 // the key for, kept in page memory until it nears its end. The tokens are secrets, so close() drops
-// them and stops every trade still under way (runtime/session).
+// them and stops every trade still under way.
 export class Credentials {
   private readonly tokens = new Map<string, Token>();
   private readonly closing = new AbortController();

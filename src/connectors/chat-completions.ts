@@ -1,7 +1,7 @@
 import type { NumberSetting, Reasoning, Setting } from './settings';
-import { cacheControl } from './anthropic-messages';
+import { wireMessage } from './anthropic-messages';
 import type { Codec } from './types';
-import { count, isRecord, list } from './values';
+import { count, isRecord, list, modelEntries } from './values';
 
 // This format's field for each setting it carries. OpenRouter's and Vercel's catalogs name the same
 // fields in supported_parameters. max_tokens rather than max_completion_tokens: OpenAI's reasoning
@@ -20,7 +20,6 @@ const FIELDS: Record<NumberSetting | 'stop', string> = {
 };
 const CARRIED = Object.keys(FIELDS) as (keyof typeof FIELDS)[];
 
-// A catalog's supported_parameters, read as settings.
 export function listedSettings(names: unknown[]): Setting[] {
   const settings: Setting[] = CARRIED.filter((setting) => names.includes(FIELDS[setting]));
   return names.includes('reasoning') || names.includes('reasoning_effort') ? [...settings, 'reasoning'] : settings;
@@ -33,29 +32,25 @@ function effort(reasoning: Reasoning | undefined) {
   return {};
 }
 
-// The OpenAI-compatible wire format, the generic base of design §4.
+// The OpenAI-compatible wire format, the generic base every connection type builds on.
 export const chatCompletions: Codec = {
   authHeaders: (secret): Record<string, string> => (secret ? { authorization: `Bearer ${secret}` } : {}),
 
   listModels: (endpoint) => ({ url: `${endpoint.baseUrl}/models`, method: 'GET', headers: {}, body: null }),
 
   // The standard list names models and nothing else, so every capability stays unknown.
-  parseModels(payload) {
-    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
-    return payload.data
-      .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
-      .map((raw) => ({
-        id: raw.id as string,
-        name: raw.id as string,
-        input: null,
-        output: null,
-        contextLength: null,
-        maxOutput: null,
-        reasoning: null,
-        tools: null,
-        protocol: null,
-      }));
-  },
+  parseModels: (payload) =>
+    modelEntries(payload)?.map(({ id }) => ({
+      id,
+      name: id,
+      input: null,
+      output: null,
+      contextLength: null,
+      maxOutput: null,
+      reasoning: null,
+      tools: null,
+      protocol: null,
+    })) ?? null,
 
   // top_k, min_p and repetition_penalty are not OpenAI's, but vLLM and OpenRouter take them.
   carries: {
@@ -71,7 +66,7 @@ export const chatCompletions: Codec = {
       seed: { min: null, max: null },
     },
     reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'], budget: null, adaptive: false },
-    // The standard has no cache points; a connection type whose provider reads cache_control says so (cacheControl).
+    // The standard has no cache points; a connection type whose provider reads cache_control says so.
     cache: false,
   },
 
@@ -81,8 +76,7 @@ export const chatCompletions: Codec = {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       model: model.id,
-      // Never the cache mark itself; a cache point is a text part that carries it, as OpenRouter reads it.
-      messages: messages.map(({ role, content, cache }) => (cache && settings.cache ? { role, content: [{ type: 'text', text: content, ...cacheControl(settings.cache) }] } : { role, content })),
+      messages: messages.map((message) => wireMessage(message, settings.cache)),
       stream: true,
       stream_options: { include_usage: true },
       ...Object.fromEntries(CARRIED.filter((setting) => settings[setting] !== undefined).map((setting) => [FIELDS[setting], settings[setting]])),

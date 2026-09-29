@@ -4,12 +4,12 @@ import type { ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { describeUnused } from '../common/unused';
 import { useCharacter } from '../session';
-import { navigate } from '../shell/router';
+import { backBar, navigate } from '../shell/router';
 import { characterPage, HOME, type Back } from '../shell/routes';
 import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Tag, Text, useWide } from '../ui';
 import { useCharacterActions } from './useCharacterActions';
 
-// A character's own page beside its chats (design F6), or with shelf null, 캐릭터 없이.
+// A character's own page beside its chats, or with shelf null, 캐릭터 없이.
 export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatItem> | null; back: Back | null }) {
   const id = shelf?.id ?? null;
   const original = useCharacter(shelf?.character.origin?.id ?? null);
@@ -36,7 +36,7 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatIte
   const copying = busy?.id === shelf.id ? busy.label : null;
 
   return (
-    <Screen top={back && <NavBar title={card.name} onBack={() => navigate(back.to)} backLabel={back.label} />}>
+    <Screen top={back && <NavBar title={card.name} {...backBar(back)} />}>
       <Portrait image={shelf.face} name={card.name} />
       <Intro title={card.name}>{card.creator ? `만든 사람 ${card.creator}` : undefined}</Intro>
       {origin && (

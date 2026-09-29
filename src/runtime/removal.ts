@@ -1,7 +1,7 @@
 import { KINDS, type Kind, type Rule } from '../model/kinds';
 import type { ObjectStore } from './store';
 
-// A sealed file (runtime/files) or a stored object, by id.
+// A sealed file or a stored object, by id.
 export type Removal = { from: 'files' | 'store'; id: string };
 
 const KIND_NAMES = Object.keys(KINDS) as Kind[];
@@ -23,7 +23,7 @@ export function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }
   return files.length ? [files, ...rounds] : rounds;
 }
 
-// What an object owns by either link the registry declares (model/kinds): the parent, or a body field.
+// What an object owns by either link KINDS declares: the parent, or a body field.
 function owned(store: ObjectStore, owner: Kind, id: string): { kind: Kind; id: string }[] {
   return KIND_NAMES.flatMap((kind) => {
     const rule: Rule = KINDS[kind];

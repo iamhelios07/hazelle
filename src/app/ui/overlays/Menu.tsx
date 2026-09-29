@@ -2,7 +2,7 @@ import { Check, type LucideIcon } from 'lucide-react';
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { Item } from '../collections/Item';
 import { Icon } from '../foundation/Icon';
-import { useLayer } from './layers';
+import { keepOnScreen, useLayer } from './layers';
 import styles from './Menu.module.css';
 
 // What a menu hands a button that opens it, spread onto an IconButton, Button, ChipButton, ToolButton or FaceCard.
@@ -45,7 +45,7 @@ type Props = {
   label: string;
   trigger: (opener: MenuOpener) => ReactNode;
   // Which corner of the trigger it opens from, and which way.
-  place?: 'below-start' | 'below-end' | 'above-start' | 'above-end' | 'beside';
+  place?: 'below-start' | 'below-end' | 'above-start' | 'above-end';
   // form: a dialog's width, for kind dialog.
   size?: 'md' | 'lg' | 'form';
   // dialog: a small form opened and closed like a menu, such as the chat's 작가의 노트; useMenuClose closes it.
@@ -96,16 +96,8 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
     };
   }, [open, menu]);
 
-  // A menu that would cross the screen's side moves back inside it, whichever corner it opens from,
-  // before it is painted.
   useLayoutEffect(() => {
-    const element = panel.current;
-    if (!element) return;
-    const box = element.getBoundingClientRect();
-    const edge = parseFloat(getComputedStyle(element).getPropertyValue('--menu-edge'));
-    const room = document.documentElement.clientWidth;
-    const shift = box.left < edge ? edge - box.left : box.right > room - edge ? room - edge - box.right : 0;
-    element.style.setProperty('--nudge', `${shift}px`);
+    if (panel.current) keepOnScreen(panel.current);
   }, [open]);
 
   return (

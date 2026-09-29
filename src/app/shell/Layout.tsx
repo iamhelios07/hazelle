@@ -15,7 +15,7 @@ export function Layout() {
   const wide = useWide();
   const [collapsed, setCollapsed] = usePersisted(COLLAPSED, (stored) => stored === '1', false, (folded) => (folded ? '1' : '0'));
   const settings = settingsPage(route);
-  // Where 설정's × goes: the last place outside it, or home after a reload inside it (design: Secondary screens).
+  // Where 설정's × goes: the last place outside it, or home after a reload inside it.
   const [outside, setOutside] = useState<Route>(HOME);
   if (settings === null && outside !== route) setOutside(route);
   const closeSettings = () => navigate(outside);
@@ -35,8 +35,7 @@ export function Layout() {
     </>
   );
 
-  // 설정 stands in for the library while it is open: "채팅은 채팅만 하는 거고, 설정 관련된 건 또 설정
-  // 관련된 것만 하는 거" (user, 2026-09-28).
+  // 설정 stands in for the library while it is open.
   if (settings !== null) return wide ? <Shell side={<SettingsSidebar current={settings} onClose={closeSettings} />}>{page}</Shell> : page;
   const sidebar = (asPage: boolean) => <LibrarySidebar page={asPage} collapsed={collapsed} onCollapse={setCollapsed} />;
   // On phones the character list is the home screen, a character's chats are its page, and every

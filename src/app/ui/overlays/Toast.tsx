@@ -3,7 +3,6 @@ import styles from './Toast.module.css';
 
 type Props = { message: string; action?: { label: string; onClick: () => void }; floating: boolean };
 
-// design F3: deletion takes effect at once and a toast offers 되돌리기 instead of a confirm dialog.
 // floating: at the top of the window; otherwise in a place the page keeps for it.
 export function Toast({ message, action, floating }: Props) {
   return (

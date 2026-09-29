@@ -15,19 +15,14 @@ import {
   setProfileSettings,
   type ProfileUser,
 } from '../../runtime/profiles';
+import { PAUSE, SAVE_STATUS, type SaveStatus } from '../common/useAutosave';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
-import { navigate } from '../shell/router';
+import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Row, Screen, Section, SettingGroup, SettingRow, Stack, Text } from '../ui';
 import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, UNSET, type Field } from './settingWords';
 import { count, readTyped } from './typedNumber';
-
-// How long typing pauses before a change is saved.
-const PAUSE = 600;
-
-type Status = 'saving' | 'saved' | 'failed';
-const STATUS: Record<Status, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
 
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
 const BUDGET_START = 8000;
@@ -51,7 +46,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   const [local, setLocal] = useState<ModelSettings | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget', string>>>({});
   const [name, setName] = useState(stored.value.name);
-  const [status, setStatus] = useState<Status | null>(null);
+  const [status, setStatus] = useState<SaveStatus | null>(null);
   const writes = useRef(0);
   const waiting = useRef<{ settings: ModelSettings; name?: string }>({ settings: {} });
   const timer = useRef<number | undefined>(undefined);
@@ -298,9 +293,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <NavBar
           title={name}
           rename={{ label: '설정 이름', placeholder: stored.value.name, onChange: rename }}
-          backLabel={back.label}
-          onBack={() => navigate(back.to)}
-          actions={status && <Text tone="muted">{STATUS[status]}</Text>}
+          {...backBar(back)}
+          actions={status && <Text tone="muted">{SAVE_STATUS[status]}</Text>}
         />
       }
     >

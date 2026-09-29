@@ -7,10 +7,10 @@ import { calendarDate, clockTime, duration, formatTime } from './time';
 
 export type Env = {
   context: CbsContext;
-  // Whether setvar, addvar and setdefaultvar write: only in a chat message's own text (design §5 row 18).
+  // Whether setvar, addvar and setdefaultvar write: only in a chat message's own text.
   writes: boolean;
   temp: Map<string, string>;
-  // The tag's own rolls, placed by where it stands (design §5 row 11).
+  // The tag's own rolls, placed by where it stands.
   random: () => number;
   // Card, persona and prompt texts go out through this, never as they are: they hold CBS of their own, and
   // write no variables.
@@ -87,8 +87,8 @@ const UNSUPPORTED = new Set([
   'jb',
   'jailbreak',
   'jbtoggled',
-  // Marked N, but nothing to read: no auxiliary model is assigned yet (design §4.1), the spec gives the rest no
-  // semantics, and messages are shown as plain text, so display markup has no reader.
+  // Marked N, but nothing to read: no auxiliary model is assigned yet, the spec gives the rest no semantics, and
+  // messages are shown as plain text, so display markup has no reader.
   'axmodel',
   'metadata',
   'declare',
@@ -114,8 +114,8 @@ export const readToggle = (context: CbsContext, key: string) => context.toggle(k
 const readGlobal = (context: CbsContext, name: string) => (name.startsWith('toggle_') ? readToggle(context, name.slice('toggle_'.length)) : '');
 
 const messageIndex = (context: CbsContext) => ('message' in context.source ? context.source.message : null);
-// A bot reads the greeting as message -1 and the first message after it as 0 (design §5 row 20), so a message's
-// number is its index less this.
+// A bot reads the greeting as message -1 and the first message after it as 0, so a message's number is its index
+// less this.
 const opened = (context: CbsContext) => (context.greeting === null ? 0 : 1);
 const currentMessage = (context: CbsContext) => {
   const index = messageIndex(context);
@@ -243,7 +243,7 @@ function roll(notation: string, next: () => number): string | null {
   for (let i = 0; i < (count ? Number(count) : 1); i++) total += Math.floor(next() * Number(sides)) + 1;
   return String(total);
 }
-// pick and rollp keep Risu's seed, the character, chat and message count, and not the tag's place (design §5 row 11).
+// pick and rollp keep Risu's seed, the character, chat and message count, and not the tag's place.
 const pickRolls = (context: CbsContext) => seeded(context.pickSeed);
 define('random', 0, (args, { random }) => choose(args, random));
 define('pick', 0, (args, { context }) => choose(args, pickRolls(context)));
@@ -252,12 +252,12 @@ define('randint', 2, ([low, high], { random }) => {
   return min <= max ? String(min + Math.floor(random() * (max - min + 1))) : null;
 });
 define('dice', 1, ([notation], { random }) => roll(notation!, random));
-// With no argument, 1d6 (design §5 row 13b); Risu returns 1.
+// With no argument, 1d6; Risu returns 1.
 define('roll', 0, ([notation = '1d6'], { random }) => roll(notation, random));
 define('rollp rollpick', 0, ([notation = '1d6'], { context }) => roll(notation, pickRolls(context)));
 define('hash', 1, ([text]) => String(1_000_000 + Math.floor(seeded(text!)() * 9_000_000)));
 
-// A timestamp argument is in seconds, as documented (design §5 row 13a).
+// A timestamp argument is in seconds, as documented.
 const formatAt = ([format, timestamp]: string[], { now, timeZone }: CbsContext['clock']) =>
   formatTime(format!, timestamp === undefined ? now : Number(timestamp) * 1000, timeZone);
 define('time', 0, (args, { context: { clock } }) => (args.length ? formatAt(args, clock) : clockTime(clock.now, clock.timeZone)));
@@ -285,7 +285,7 @@ define('messageidleduration', 0, (_, { context }) => {
 });
 define('messageunixtimearray', 0, (_, { context }) => serialize(context.messages.map(({ time }) => (time === null ? null : Math.floor(time / 1000)))));
 
-// Chat tags read stored text, tags and all: risu-alpha never bakes a message (design §5 row 17).
+// Chat tags read stored text, tags and all: risu-alpha never bakes a message.
 const lastOf = (context: CbsContext, role: 'user' | 'assistant') => {
   const before = messageIndex(context) ?? context.messages.length;
   return context.messages.slice(0, before).findLast((message) => message.role === role)?.text ?? '';

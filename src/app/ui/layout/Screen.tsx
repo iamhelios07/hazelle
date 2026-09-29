@@ -15,10 +15,9 @@ type Props = {
   children: ReactNode;
 };
 
-// The page frame: a top row, the body, and actions that sit at the bottom on phones. With onSubmit,
-// body and actions become one form, so a submit button can live in the actions slot. align="center"
-// centers the body vertically, for screens without actions such as the empty home. In a pane of a
-// ListDetail it fills the pane from the top instead of centering on the page.
+// The page frame: a top row, the body, and actions that sit at the bottom on phones. With onSubmit, body and
+// actions are one form, so a submit button can sit among the actions. In a ListDetail pane it fills the pane from
+// the top instead of centering on the page.
 export function Screen({ top, align = 'start', width = 'narrow', actions, stickyActions = false, onSubmit, children }: Props) {
   const pane = usePane();
   // A page has one main landmark; beside a list, a screen is one section of it.

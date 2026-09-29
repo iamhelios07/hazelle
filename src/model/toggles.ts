@@ -1,6 +1,6 @@
 import type { Toggle, ToggleValues } from './prompt';
 
-// The toggles a chat declares (design §4.2): its prompt's, then its card's as read from the card's text. A key
+// The toggles a chat declares: its prompt's, then its card's as read from the card's text. A key
 // declared twice is one toggle, since conditions read one value per key; the prompt's declaration is kept.
 export function chatToggles(prompt: readonly Toggle[], card: readonly Toggle[]): Toggle[] {
   const keys = new Set(prompt.map(({ key }) => key));

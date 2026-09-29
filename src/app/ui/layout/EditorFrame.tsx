@@ -10,8 +10,7 @@ type Props = {
   children: ReactNode;
 };
 
-// A long thing edited one part at a time (design §4.2, the prompt editor on wide screens): a header across the top,
-// the outline in its own column, and the open part as the page. Each column scrolls on its own.
+// A long thing edited one part at a time, such as a prompt on wide screens. Each column scrolls on its own.
 export function EditorFrame({ top, side, page, children }: Props) {
   const main = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {

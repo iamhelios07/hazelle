@@ -6,7 +6,7 @@ import type { Route, SettingsPage } from '../routes';
 
 type Place = { page: SettingsPage; label: string; icon: LucideIcon; route: Route };
 
-// 설정's pages (design: Secondary screens). Only built pages are listed.
+// 설정's pages. Only built pages are listed.
 const GROUPS: { label: string; places: Place[] }[] = [
   {
     label: '대화',

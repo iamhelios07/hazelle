@@ -3,10 +3,10 @@ import type { TranslateSwitches } from './chat';
 import type { Stored } from './kinds';
 import type { ToggleValues } from './prompt';
 
-// folder is the library folder it sits in (design F6); loreFolders only group its lorebook on screen.
+// folder is the library folder it sits in; loreFolders only group its lorebook on screen.
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
 // deleted is when it went to 지운 캐릭터; it and its chats are removed for good KEEP_DELETED later.
-// toggles holds the values set for it, over the declared defaults (design §4.2); translate, its chats' 번역 (§6.3).
+// toggles holds the values set for it, over the declared defaults; translate, its chats' 번역.
 export type Character = {
   card: Card;
   folder: string | null;
@@ -34,7 +34,7 @@ export const matches = ({ card }: Character, query: string) => `${card.name} ${c
 // Kind `lore`, whose parent is the character. folder is the id of one of its loreFolders.
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 
-// Two levels deep (design F6): a subfolder's parent is the top folder it sits in, and top folders have
+// Two levels deep: a subfolder's parent is the top folder it sits in, and top folders have
 // none. It lives in the sealed body, not the object's parent, so the server never sees the tree.
 export type Folder = { name: string; parent?: string };
 export type FolderTree = Stored<'folder'> & { children: FolderTree[] };

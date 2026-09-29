@@ -5,15 +5,15 @@ import type { Block, Prompt } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiFailure, ApiResult } from './api';
-import type { ObjectStore } from './store';
+import { without, type ObjectStore } from './store';
 
 // Every write of `prompt` objects and of the default prompt, except a prompt's `models` layer, which
-// runtime/assignment writes with the other layers, and a backup's restore (runtime/backup).
+// runtime/assignment writes with the other layers, and a backup's restore.
 
 // Fixed, so two devices adding the starter prompt at once meet in a version conflict instead of making two.
 export const STARTER_ID = '00000000-0000-4000-8000-000000000001';
 
-// Which prompt a chat uses: its own, else the default (design §4.2). A deleted one, or a default not added
+// Which prompt a chat uses: its own, else the default. A deleted one, or a default not added
 // yet, reads as missing and never as another prompt; a turn stops on it ("기본 프롬프트가 없어요").
 export type PromptChoice = { kind: 'prompt'; prompt: Stored<'prompt'>; own: boolean } | { kind: 'missing'; own: boolean };
 
@@ -43,7 +43,7 @@ export function addPrompt(store: ObjectStore, name: string): Promise<ApiResult<S
 
 export type ImportPromptResult = { ok: true; id: string; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure | { kind: 'save'; failure: ApiFailure } };
 
-// A dropped .risup becomes a new prompt (design §5 Scope); unsupported is what the summary counts.
+// A dropped .risup becomes a new prompt; unsupported is what the summary counts.
 export async function importPrompt(store: ObjectStore, bytes: Uint8Array): Promise<ImportPromptResult> {
   const read = await importPreset(bytes);
   if (!read.ok) return read;
@@ -51,8 +51,8 @@ export async function importPrompt(store: ObjectStore, bytes: Uint8Array): Promi
   return saved.ok ? { ok: true, id: saved.data.id, unsupported: read.unsupported } : { ok: false, failure: { kind: 'save', failure: saved } };
 }
 
-// design §4.2: an account that has never had a default prompt gets the bundled starter prompt as its
-// default, once. The session awaits it when it opens (runtime/session); a failure is tried again next time.
+// An account that has never had a default prompt gets the bundled starter prompt as its default, once. The
+// session awaits it when it opens; a failure is tried again next time.
 export async function addStarter(store: ObjectStore): Promise<void> {
   if (store.get('settings', SETTINGS_ID)?.value.prompt !== undefined) return;
   if (!store.get('prompt', STARTER_ID)) {
@@ -76,23 +76,18 @@ export type PromptPatch = Partial<Pick<Prompt, 'name' | 'blocks' | 'toggles' | '
 
 export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current) => ({ ...current, ...patch }));
 
-// A fork that goes its own way (design §4.2), model layer and toggles included. It remembers its origin, and
-// is the user's own rather than an imported preset.
+// A fork that goes its own way, model layer and toggles included. It remembers its origin, and is the user's
+// own rather than an imported preset.
 export function copyPrompt(store: ObjectStore, id: string, name: string): Promise<ApiResult<Stored<'prompt'>>> {
   const original = store.get('prompt', id)?.value;
   if (!original) return Promise.resolve({ ok: false, error: 'gone' });
-  const copy: Prompt = { ...original, name, origin: { id, name: original.name } };
-  delete copy.imported;
-  return store.create('prompt', copy);
+  return store.create('prompt', without({ ...original, name, origin: { id, name: original.name } }, 'imported'));
 }
 
-// design §4.2: the default prompt cannot be deleted until another prompt is made the default.
+// The default prompt cannot be deleted until another prompt is made the default.
 export async function removePrompt(store: ObjectStore, id: string): Promise<ApiResult<Stored<'prompt'>> | { ok: false; error: 'default' }> {
   if (store.get('settings', SETTINGS_ID)?.value.prompt === id) return { ok: false, error: 'default' };
-  const prompt = store.get('prompt', id);
-  if (!prompt) return { ok: false, error: 'gone' };
-  const removed = await store.remove(id);
-  return removed.ok ? { ok: true, data: prompt } : removed;
+  return store.take('prompt', id);
 }
 
 export const restorePrompt = (store: ObjectStore, removed: Stored<'prompt'>) => store.restore(removed);

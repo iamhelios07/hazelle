@@ -10,7 +10,7 @@ import { bool, handlerFor, items, normalize, readToggle, readVar, Return, truthy
 export type CbsContext = {
   stage: Stage;
   card: Card | null;
-  // The chat's persona; with none, the account's username and no description (design §4.3).
+  // The chat's persona; with none, the account's username and no description.
   persona: { name: string; description: string } | null;
   // The prompt's own main text and global note, not a card's replacements, and the author's note in effect.
   // persona and prompt are null when the chat's is gone, which only the display renders through.
@@ -19,16 +19,15 @@ export type CbsContext = {
   messages: HistoryMessage[];
   // A chat message, by its index in messages: its seed rolls its random tags, and its setvar, addvar
   // and setdefaultvar write the variables. Or text outside messages: its random tags roll from a seed fresh
-  // for each request, and its variable writes are removed without effect (design §5 rows 11 and 18).
+  // for each request, and its variable writes are removed without effect.
   source: { message: number } | { seed: string };
   // The greeting the chat opened with, which is then messages[0], and its index in card.greetings: null when
   // the version shown is not one of the card's (the card changed, or the model rewrote it). null when the chat
   // opened with none.
   greeting: { index: number | null } | null;
-  // The chat's variables as of this text, written in place. They start from the card's default variables,
-  // and the chat's messages are replayed over them in order (design §5 row 17).
+  // The chat's variables as of this text, written in place, replayed over the card's defaults in message order.
   variables: Map<string, string>;
-  // A toggle's value by its key, or null when nothing declares it (design §4.2).
+  // null when nothing declares the toggle.
   toggle: (key: string) => string | null;
   // prefill: whether the model takes an assistant prefill, as its connection says; never read from the id.
   // null when unknown, and model null when the chat has no model.
@@ -113,7 +112,7 @@ function env(frame: Frame, place: string): Env {
     writes: frame.writes,
     temp: run.temp,
     random: () => (rolls ??= seeded(`${run.seed}:${place}`))(),
-    // An inserted text is not a chat message, so it writes no variables (design §5 row 18).
+    // An inserted text is not a chat message, so it writes no variables.
     insert: (text) => enter(parse(prestep(text)), nested(null, false)),
     call: (name, args) => {
       const body = run.functions.get(name);

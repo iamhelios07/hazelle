@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, type ChangeEvent, type ReactNode } from 'react';
 import { Hint } from '../overlays/Hint';
 import styles from './TextField.module.css';
 
@@ -34,6 +34,14 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
+  const shared = {
+    id,
+    value,
+    onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value),
+    placeholder,
+    'aria-invalid': error ? true : undefined,
+    'aria-describedby': note ? noteId : undefined,
+  };
   return (
     <div className={styles.field}>
       <div className={styles.head}>
@@ -46,27 +54,9 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
         {action}
       </div>
       {lines ? (
-        <textarea
-          id={id}
-          className={`${styles.input} ${styles.area}`}
-          rows={lines}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={note ? noteId : undefined}
-        />
+        <textarea className={`${styles.input} ${styles.area}`} rows={lines} {...shared} />
       ) : (
-        <input
-          id={id}
-          className={kind === 'key' ? `${styles.input} ${styles.mono}` : styles.input}
-          {...KINDS[kind]}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={note ? noteId : undefined}
-        />
+        <input className={kind === 'key' ? `${styles.input} ${styles.mono}` : styles.input} {...KINDS[kind]} {...shared} />
       )}
       {note && (
         <p id={noteId} className={error ? styles.error : styles.hint}>

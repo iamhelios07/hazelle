@@ -53,7 +53,7 @@ export function describeRange(range: ChatRange): { label: string; meta: string }
   return { label: `${start} ${end}`, meta: '직접 정한 범위' };
 }
 
-const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
+export const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 
 // A block's title: its name, else a slot's kind or a text's first line, which reads dimmed.
 export function blockTitle(block: Block): { title: string; dim: boolean } {
@@ -80,8 +80,8 @@ export const isText = (block: Block): block is TextBlock => block.kind === 'text
 
 export type CacheMark = 'set' | 'auto';
 
-// The cache point after each block: its own 여기까지 캐시, or one of the two the prompt engine sets itself (cachePoints
-// in engine/pipeline.ts; keep the two in step): before the first chat block and after the last.
+// The cache point after each block: its own, or one the engine sets itself before the first chat block and after the
+// last (keep in step with cachePoints in engine/pipeline.ts).
 export function cacheMarks(blocks: readonly Block[]): Map<string, CacheMark> {
   const chat = (block: Block) => block.kind === 'slot' && block.slot === 'chat';
   const first = blocks.findIndex(chat);

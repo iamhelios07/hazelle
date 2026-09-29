@@ -11,7 +11,7 @@ export type Operation = { kind: 'append' } | { kind: 'prepend' } | { kind: 'repl
 export type Placement =
   | { kind: 'lorebook'; role: Role }
   | { kind: 'description'; side: 'before' | 'after' }
-  // Counted from the end of the chat: 0 is after the last message (design §5 row 3).
+  // Counted from the end of the chat: 0 is after the last message.
   | { kind: 'depth'; depth: number; role: Role }
   // Where the template's text holds {{position::name}}.
   | { kind: 'position'; name: string }
@@ -131,7 +131,7 @@ export function activate({ entries, settings, history, turn, greeting, afterMatc
   let waiting = books.filter(open);
   let recursion: Scanned[] = [];
   // Each pass scans what the passes before it activated; an entry fires once, and its roll is its own for the
-  // whole send, whichever pass reaches it (design §5 row 9).
+  // whole send, whichever pass reaches it.
   for (;;) {
     const waited = waiting;
     const now: Book[] = [];
@@ -206,7 +206,7 @@ function prepare({ id, value }: LoreInput['entries'][number], fullWordMatching: 
     probability: 100,
     scanDepth: null,
     fullWord: null,
-    // CCv3 defines priority and position, which Risu drops; CCv3 wins (design §5).
+    // CCv3 defines priority and position, which Risu drops; CCv3 wins.
     priority: value.priority ?? value.insertionOrder,
     recursive: null,
     searchRecursion: true,
@@ -258,7 +258,7 @@ const finite = (value: string) => {
 };
 
 // false when the decorator is not handled, so its @@@ fallbacks are tried: unknown names, invalid arguments,
-// and @@disable_ui_prompt, which risu-alpha does not implement (design §5 row 7).
+// and @@disable_ui_prompt, which risu-alpha does not implement.
 function apply(rules: Rules, { name, value }: DecoratorLine): boolean {
   switch (name) {
     case 'depth':
@@ -328,7 +328,7 @@ function apply(rules: Rules, { name, value }: DecoratorLine): boolean {
     case 'dont_activate':
       rules.trigger = 'never';
       return true;
-    // Per entry (design §5 row 8): the flag lives in this entry's rules, and the state is keyed by its id.
+    // Per entry: the flag lives in this entry's rules, and the state is keyed by its id.
     case 'keep_activate_after_match':
     case 'dont_activate_after_match':
       rules.afterMatch = name === 'keep_activate_after_match' ? 'keep' : 'dont';
@@ -371,7 +371,7 @@ function triggered({ id, value, rules, queries }: Book, afterMatch: ReadonlySet<
   if (queries.secondary.length > 0 && !needs(queries.secondary, 'secondary')) return null;
   if (!queries.additional.every((query) => needs(query, 'additional'))) return null;
   if (queries.exclude.some((query) => find(query, sources))) return null;
-  // Every key somewhere in the scanned text, not every key in every message (design §5 row 4).
+  // Every key somewhere in the scanned text, not every key in every message.
   if (queries.excludeAll.some((query) => query.every(({ match }) => sources.some(match)))) return null;
   return { kind: 'keys', matched };
 }

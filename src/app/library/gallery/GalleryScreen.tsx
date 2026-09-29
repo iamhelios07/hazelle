@@ -5,18 +5,17 @@ import { holds, KEEP_DAYS, matches, shownFolders, type CharacterShelf } from '..
 import { NameDialog } from '../../common/NameDialog';
 import { noResults } from '../../common/search';
 import { useLibrary } from '../../session';
-import { navigate } from '../../shell/router';
+import { backBar } from '../../shell/router';
 import type { Back } from '../../shell/routes';
 import { Button, CardGrid, Empty, NavBar, Row, Screen, SearchField, Text } from '../../ui';
 import { useCharacterActions } from '../useCharacterActions';
-import { useFolderActions } from '../useFolderActions';
+import { findFolder, useFolderActions } from '../useFolderActions';
 import { CharacterCard } from './CharacterCard';
 import { FolderTabs, type Filter, type Naming } from './FolderTabs';
 import { MoveBar } from './MoveBar';
 import { PurgeDialog } from './PurgeDialog';
 
-// 캐릭터 둘러보기 (design F6): every character as a face, filtered by folder, and where folders are
-// made, renamed, emptied and filled.
+// 캐릭터 둘러보기: every character as a face, filtered by folder, and where folders are made, renamed, emptied and filled.
 export function GalleryScreen({ back }: { back: Back | null }) {
   const { characters, folders, deleted } = useLibrary();
   const characterActions = useCharacterActions();
@@ -31,7 +30,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   const [purging, setPurging] = useState<CharacterShelf<ChatItem> | null>(null);
 
   const filed = shownFolders(folders);
-  const folder = folders.flatMap((top) => [top, ...top.children]).find((candidate) => candidate.id === filter) ?? null;
+  const folder = findFolder(folders, filter) ?? null;
   const words = query.trim();
   const binned = filter === 'deleted';
   const shown = (binned ? deleted : characters)
@@ -66,7 +65,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   };
 
   return (
-    <Screen width="wide" top={back && <NavBar title="캐릭터" onBack={() => navigate(back.to)} backLabel={back.label} />}>
+    <Screen width="wide" top={back && <NavBar title="캐릭터" {...backBar(back)} />}>
       <Row kind="toolbar">
         <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />
         <Button variant="secondary" size="sm" onClick={() => setByName(!byName)}>

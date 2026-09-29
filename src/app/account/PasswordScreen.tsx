@@ -5,7 +5,7 @@ import { Brand, Button, Callout, Intro, Screen, Stack, Steps, Text, TextField } 
 const MIN_LENGTH = 8;
 
 type Props = {
-  // signup: F1 step 1. reset: after the recovery key opened the vault, a new password is required.
+  // reset: after the recovery key opened the vault, a new password is required.
   mode: 'signup' | 'reset';
   username: string;
   onDone: (username: string, password: string) => Promise<string | null>;

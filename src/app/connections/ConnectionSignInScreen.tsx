@@ -5,7 +5,7 @@ import type { Connection, ConnectionType, SignIn } from '../../connectors/types'
 import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
 import { describeSignInFailure } from '../common/failure';
 import { useSession } from '../session';
-import { navigate } from '../shell/router';
+import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, CodeCard, Intro, NavBar, Screen, Text } from '../ui';
@@ -13,8 +13,8 @@ import { connect } from './connect';
 
 type Stage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
 
-// F5 for a type connected by signing in: the provider's own site takes a short code, and this screen
-// waits for the approval, then checks the model list and saves the connection, as a pasted key does.
+// Signing in with a device code: the provider's site takes the code, and this screen waits for the approval, then
+// checks the model list and saves the connection, as a pasted key does.
 export function ConnectionSignInScreen({ type, signIn, back }: { type: ConnectionType; signIn: SignIn; back: Back }) {
   const session = useSession();
   const toast = useToast();
@@ -58,7 +58,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
     window.open(code.verificationUri, '_blank', 'noopener');
   }
 
-  const top = <NavBar title={`${type.label} 연결`} onBack={() => navigate(back.to)} backLabel={back.label} />;
+  const top = <NavBar title={`${type.label} 연결`} {...backBar(back)} />;
 
   if (stage.step === 'failed') {
     return (

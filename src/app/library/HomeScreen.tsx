@@ -4,8 +4,7 @@ import { navigate } from '../shell/router';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
 import { useImport } from './ImportFlow';
 
-// F1's landing, until there is a character to show instead (design F6). 새 채팅 appears once there is
-// a connection to talk through.
+// The landing until there is a character to show instead. 새 채팅 appears once there is a connection to talk through.
 export function Welcome() {
   const connections = useConnections();
   const chats = useChats();

@@ -7,9 +7,8 @@ import { PromptList } from '../prompts/PromptList';
 import { useViews } from '../session';
 import { NavBar, SidePanel, type NavBarProps } from '../ui';
 
-// design F3: Ctrl+E and Ctrl+P beside the chat. The list comes first ("목록부터", user, 2026-09-29), and the one
-// picked opens in its place with a way back to it. Each editor is keyed by its id and saves as it unmounts, so going
-// back to the list or closing the panel saves what was typed.
+// Ctrl+E and Ctrl+P beside the chat: the list first, and the one picked opens in its place. Each editor is keyed by
+// its id and saves as it unmounts, so going back to the list or closing the panel saves what was typed.
 export function ChatSide({ open, inUse, onOpen, onClose }: SideAt) {
   const { personas, prompts } = useViews();
   const panel =

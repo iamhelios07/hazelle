@@ -3,20 +3,26 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 
 type Parts = { year: number; month: number; day: number; hour: number; minute: number; second: number; weekday: number };
 
-// The wall-clock reading of a time in a time zone, read through Intl so the engine never depends on the
-// zone of the device it runs on.
+// Building a DateTimeFormat is costly and time tags run on every render, so one is kept per zone.
+const FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+// Read through Intl so the engine never depends on the zone of the device it runs on.
 function partsOf(ms: number, timeZone: string): Parts {
-  const format = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    weekday: 'long',
-  });
+  let format = FORMATS.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      weekday: 'long',
+    });
+    FORMATS.set(timeZone, format);
+  }
   const part = new Map(format.formatToParts(ms).map(({ type, value }) => [type, value]));
   const number = (type: Intl.DateTimeFormatPartTypes) => Number(part.get(type));
   return {

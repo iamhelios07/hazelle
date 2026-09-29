@@ -10,8 +10,8 @@ import { modelProfile } from './profiles';
 import type { ObjectStore } from './store';
 import { receiptOf, type Talk } from './talk';
 
-// What one translation is made from (runtime/turn translationInput): the chat, whose layers pick the 번역 model
-// (design §4.1), its scope with each message's translation text or null, and what to translate.
+// What one translation is made from: the chat, whose layers pick the 번역 model, its scope with each message's
+// translation text or null, and what to translate.
 export type TranslateInput = { chat: Chat; scope: ChatScope; translations: (string | null)[]; request: TranslationRequest };
 
 // failed: the call's receipt says why, and a cut one that wrote nothing is failed too.
@@ -19,7 +19,7 @@ export type TranslateFailure = RouteFailure | { kind: 'profile-missing'; own: bo
 
 type Deps = { store: ObjectStore; credentials: Credentials };
 
-// design §6.3: one call to the chat's 번역 model, with that model's 설정 묶음. A translation cut at its length keeps
+// One call to the chat's 번역 model, with that model's 설정 묶음. A translation cut at its length keeps
 // what it wrote, and its receipt says it was cut.
 export async function translate(
   { store, credentials }: Deps,
@@ -55,11 +55,11 @@ export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }> |
 
 // live: the text so far of each translation being made, by the version's id. failed: why the last try at a version
 // did not translate it, kept for the session so a chat does not try it again on its own. held: translations of a
-// new chat's greetings, which runtime/chat-log startChat saves with them.
+// new chat's greetings, which startChat saves with them.
 export type Translating = { live: ReadonlyMap<string, string>; failed: ReadonlyMap<string, TranslatorFailure>; held: ReadonlyMap<string, Translation> };
 
-// design §6.3: the translations of the chats' messages. Unlike replies (runtime/talk), several run at once, one per
-// version, and each goes on when its chat is left.
+// The translations of the chats' messages. Unlike replies, several run at once, one per version, and each goes
+// on when its chat is left.
 export class Translator {
   private state: Translating = { live: new Map(), failed: new Map(), held: new Map() };
   private readonly aborts = new Map<string, AbortController>();

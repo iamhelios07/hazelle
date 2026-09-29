@@ -1,8 +1,9 @@
 import type { Cache, Change, ModelSettings, NumberSetting } from '../../connectors/settings';
+import type { Stored } from '../../model/kinds';
 import { count } from './typedNumber';
 
-// An empty field is unset: nothing is sent, and the provider's default applies. It is never shown as a number (design §4.4).
-// Not 기본값, which read as the default 설정 named 기본 (user, 2026-09-29).
+// An empty field is unset: nothing is sent, and the provider's default applies. It is never shown as a number.
+// Not 기본값, which reads as the default 설정 named 기본.
 export const UNSET = '모델 원래 값';
 
 export type Field = NumberSetting | 'context';
@@ -52,3 +53,7 @@ export function changeWords(changes: Change[]): string | undefined {
   const parts = [...(left.length ? [`빼고 보냄: ${left.join(', ')}`] : []), ...(capped.length ? [`맞춰 보냄: ${capped.join(', ')}`] : [])];
   return parts.length ? parts.join(' · ') : undefined;
 }
+
+// The default 설정 first, then by name.
+export const defaultFirst = (profiles: readonly Stored<'profile'>[], defaultId: string | undefined) =>
+  [...profiles].sort((a, b) => Number(b.id === defaultId) - Number(a.id === defaultId) || a.value.name.localeCompare(b.value.name, 'ko'));

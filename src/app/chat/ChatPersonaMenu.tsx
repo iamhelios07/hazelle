@@ -4,8 +4,7 @@ import { useSettings, useViews } from '../session';
 import { Avatar, ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
 
-// design §4.3: who the user plays in this chat. Without its own choice it follows the default, and a deleted one
-// shows as missing.
+// Without its own choice it follows the default, and a deleted one shows as missing.
 export function ChatPersonaMenu({ chat }: { chat: OpenChat }) {
   const { persona, personaMenu } = chat;
   const shown = persona.kind === 'persona' ? persona.persona.value : null;

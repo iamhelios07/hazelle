@@ -22,7 +22,6 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
   );
 }
 
-// design F3: the chats of this chat's character, or of 캐릭터 없이, each branch under the chat it came from.
 // Mounted only while the menu is open.
 function ChatChoices({ chat }: { chat: OpenChat }) {
   const { id, card, shelf } = chat;
@@ -66,7 +65,7 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
       />
       {/* A phone's header has no room left beside the chat's title, so there 읽기 설정 opens from ⋯. */}
       {wide && <ReadingMenu reading={reading} />}
-      {/* design F3: a phone opens 정보 from a tapped message's tools. */}
+      {/* A phone opens 정보 from a tapped message's tools. */}
       {wide && (
         <IconButton
           icon={PanelRight}

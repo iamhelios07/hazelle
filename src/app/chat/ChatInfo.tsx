@@ -32,14 +32,16 @@ function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn'
   return { label: '끝난 이유', value: '정상 종료' };
 }
 
+const tokenFacts = (receipt: Receipt) => [
+  { label: '보냄', value: tokens(receipt.usage?.inputTokens ?? null) },
+  { label: '답장', value: tokens(receipt.usage?.outputTokens ?? null) },
+];
 const costFact = (receipt: Receipt) => ({ label: '비용', value: cost(receipt.cost), tone: receipt.cost === null ? ('muted' as const) : undefined });
 const timeFacts = (receipt: Receipt) => [
   { label: '첫 글자까지', value: seconds(receipt.firstTextMs) },
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
 ];
 
-// design F3 정보: the receipt of one reply, stepping between the chat's replies with ‹ ›; what it sent and the lorebook
-// entries that fired sit one tab away.
 export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
   const talk = useTalk();
   const [tab, setTab] = useState<(typeof TABS)[number]['value']>('reply');
@@ -101,13 +103,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
                     <Text size="sm" tone="muted">{`${index === 0 ? '처음 답장' : `이어 쓰기 ${index}`} · ${call.modelName} · ${call.source}`}</Text>
                     <Facts
                       variant="tiles"
-                      items={[
-                        { label: '보냄', value: tokens(call.usage?.inputTokens ?? null) },
-                        { label: '답장', value: tokens(call.usage?.outputTokens ?? null) },
-                        costFact(call),
-                        finish(call),
-                        ...timeFacts(call),
-                      ]}
+                      items={[...tokenFacts(call), costFact(call), finish(call), ...timeFacts(call)]}
                     />
                   </Stack>
                 ))}
@@ -128,31 +124,24 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
   );
 }
 
-// design §6.3: the call that translated the reply, a call of its own with its own cost.
 function TranslationCall({ receipt }: { receipt: Receipt }) {
   return (
     <Section level={3} title="번역">
       <Text size="sm" tone="muted">{`${receipt.modelName} · ${receipt.source}`}</Text>
       <Facts
         variant="tiles"
-        items={[
-          { label: '보냄', value: tokens(receipt.usage?.inputTokens ?? null) },
-          { label: '답장', value: tokens(receipt.usage?.outputTokens ?? null) },
-          costFact(receipt),
-          finish(receipt),
-        ]}
+        items={[...tokenFacts(receipt), costFact(receipt), finish(receipt)]}
       />
     </Section>
   );
 }
 
-// One call's receipt: its model, result, tokens, cost and times.
 function Call({ receipt }: { receipt: Receipt }) {
   const usage = receipt.usage;
   const cached = usage?.cachedInputTokens ?? null;
   const input = usage?.inputTokens ?? null;
   const fresh = input !== null && cached !== null ? input - cached : null;
-  // Counted in fresh: the tokens this call sent that the next one can read from the cache (design §4.4).
+  // Counted in fresh: the tokens this call sent that the next one can read from the cache.
   const written = usage?.cacheWriteInputTokens ?? null;
   return (
     <>

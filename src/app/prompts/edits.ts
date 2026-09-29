@@ -30,8 +30,7 @@ export function moved<T>(items: readonly T[], from: number, to: number): T[] {
   return next;
 }
 
-// A mark is on one text at most (design §4.2: the main text and the global note a card overrides); marking a text
-// takes it off the one that had it. taken: that one's id.
+// A mark is on one text at most, so marking a text takes it off the one that had it (taken).
 export function withMark(blocks: readonly Block[], id: string, mark: TextBlock['mark']): { blocks: Block[]; taken: string | null } {
   let taken: string | null = null;
   const next = blocks.map((block) => {
@@ -61,7 +60,7 @@ function rewrite(draft: Draft, change: (text: string) => string): Pick<Draft, 'b
 export const countUses = (draft: Draft, key: string) =>
   [...draft.blocks.map(blockSource), draft.authorNote].reduce((count, text) => count + toggleUses(text).filter((use) => use.key === key).length, 0);
 
-// design §4.2: changing a key rewrites its conditions; changing only the label never touches them.
+// Changing a key rewrites its conditions; changing only the label never touches them.
 export function rekey(draft: Draft, from: string, to: string): PromptPatch {
   return { ...rewrite(draft, (text) => renameToggle(text, from, to)), toggles: draft.toggles.map((toggle) => (toggle.key === from ? { ...toggle, key: to } : toggle)) };
 }

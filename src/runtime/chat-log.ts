@@ -2,17 +2,16 @@ import type { Cost } from '../connectors/types';
 import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { ApiFailure, ApiResult } from './api';
-import type { ObjectStore } from './store';
+import { without, type ObjectStore } from './store';
 
-// The only writer of `chat` and `entry` objects (tech-spec §5), except a chat's `models` layer, which
-// runtime/assignment writes with the other layers, a character's purge (runtime/characters), which
-// removes them with the character, and a backup's restore (runtime/backup), which copies them as they were.
+// The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment
+// writes with the other layers, a character's purge, which removes them with the character, and a backup's
+// restore, which copies them as they were.
 
-// A new chat is saved in this order: the chat, then its greetings with the one shown selected, then
-// the user's first message (runtime/turn, sent with its reply). Messages stand in the order they were
-// saved (model/chat fold), so the greeting leads only when it is saved before the message; and a chat
-// that failed to save leaves no entries behind. id is the one the chat was shown under before it was saved,
-// which seeds its greeting's pick and rollp tags.
+// A new chat is saved in this order: the chat, then its greetings with the one shown selected, then the
+// user's first message, sent with its reply. Messages stand in the order they were saved, so the greeting
+// leads only when it is saved before the message; and a chat that failed to save leaves no entries behind.
+// id is the one the chat was shown under before it was saved, which seeds its greeting's pick and rollp tags.
 export async function startChat(store: ObjectStore, id: string, chat: Chat, greetings: Greetings | null): Promise<{ ok: true } | { ok: false; step: 'chat' | 'greetings'; failure: ApiFailure }> {
   const created = await store.create('chat', chat, { id });
   if (!created.ok) return { ok: false, step: 'chat', failure: created };
@@ -21,11 +20,10 @@ export async function startChat(store: ObjectStore, id: string, chat: Chat, gree
 }
 
 // ids are the ones the greetings were shown under before the chat was saved, which seed their random tags.
-// translations: those made before the chat was saved (runtime/translate Translator), by the greeting's id.
+// translations: those made before the chat was saved, by the greeting's id.
 export type Greetings = { ids: string[]; texts: string[]; selected: number; translations: ReadonlyMap<string, Translation> };
 
-// A character's chat opens on its greeting, and the other greetings are versions of it (design F3).
-// They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
+// A character's chat opens on its greeting, and the other greetings are versions of it. They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
 async function addGreetings(store: ObjectStore, chat: string, { ids, texts, selected, translations }: Greetings): Promise<ApiFailure | null> {
   const at = Date.now();
   const first = ids[0]!;
@@ -43,7 +41,7 @@ async function addGreetings(store: ObjectStore, chat: string, { ids, texts, sele
   return null;
 }
 
-// 갈라지기 (design F3): a new chat holding item's messages up to and including message, as they fold. Its entries
+// 갈라지기: a new chat holding item's messages up to and including message, as they fold. Its entries
 // are saved one at a time, in order, because fold reads them in rev order; the chat goes last, so it appears only
 // once whole, and a copy cut short leaves its entries unreachable, like an import cut short. The spread takes the
 // original's own choices; nothing links the two chats but origin, so deleting either leaves the other whole.
@@ -82,28 +80,17 @@ function copied(id: string, { role, at, versions, selected }: Message): [string,
   return entries;
 }
 
-// A blank name gives the chat back its first message as its name (model/chat chatTitle).
+// A blank name gives the chat back its first message as its name.
 export const renameChat = (store: ObjectStore, id: string, name: string) => store.update('chat', id, (current) => ({ ...current, title: name.trim() || null }));
 
 // Removes the chat object only. Its entries stay, unreachable, so restoreChat (되돌리기) brings back all of it.
-export async function removeChat(store: ObjectStore, id: string): Promise<ApiResult<Stored<'chat'>>> {
-  const chat = store.get('chat', id);
-  if (!chat) return { ok: false, error: 'gone' };
-  const removed = await store.remove(id);
-  return removed.ok ? { ok: true, data: chat } : removed;
-}
+export const removeChat = (store: ObjectStore, id: string) => store.take('chat', id);
 
 export const restoreChat = (store: ObjectStore, removed: Stored<'chat'>) => store.restore(removed);
 
-// A chat's own prompt, persona or 작가의 노트; null clears it, and the chat follows the default again
-// (design §4.2, §4.3).
+// A chat's own prompt, persona or 작가의 노트; null clears it, and the chat follows the default again.
 function setOwn(store: ObjectStore, chat: string, field: 'prompt' | 'persona' | 'note', value: string | null): Promise<ApiResult<Stored<'chat'>>> {
-  return store.update('chat', chat, (current) => {
-    const next = { ...current };
-    if (value === null) delete next[field];
-    else next[field] = value;
-    return next;
-  });
+  return store.update('chat', chat, (current) => (value === null ? without(current, field) : { ...current, [field]: value }));
 }
 
 export const setChatPrompt = (store: ObjectStore, chat: string, prompt: string | null) => setOwn(store, chat, 'prompt', prompt);
@@ -114,7 +101,7 @@ export const setChatNote = (store: ObjectStore, chat: string, note: string | nul
 
 const append = (store: ObjectStore, chat: string, entry: Entry, id?: string) => store.create('entry', entry, { id, parent: chat });
 
-// translation: what the user typed, when text is its translation sent (design §6.3).
+// translation: what the user typed, when text is its translation sent.
 export type Said = { id: string; text: string; translation?: Translation };
 
 export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, translation }: Said) =>
@@ -122,7 +109,7 @@ export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, 
 
 // A reply as its stream ended: a new message, or a new version of `message`, in place of `replaces` on
 // 다시 시도. at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain)
-// sends the same entry, and a first try that landed unanswered is found as it is (runtime/store create).
+// sends the same entry, and a first try that landed unanswered is found as it is.
 export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt; seed?: string };
 
 export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt, seed }: Written) {
@@ -131,7 +118,7 @@ export function appendReply(store: ObjectStore, chat: string, { id, message, rep
 
 export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });
 
-// An edit is a new version in the place of the one shown, keeping its receipt (model/chat Entry). translation: the
+// An edit is a new version in the place of the one shown, keeping its receipt. translation: the
 // edited translation of a version that has one, which keeps the receipt of the call that made it; a blank one leaves
 // the new version without a translation.
 export function editMessage(store: ObjectStore, chat: string, message: Message, text: string, translation: string | null) {
@@ -141,7 +128,6 @@ export function editMessage(store: ObjectStore, chat: string, message: Message, 
   return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...kept });
 }
 
-// A translation of a version already saved (design §6.3).
 export const appendTranslation = (store: ObjectStore, chat: string, version: string, translation: Translation) => append(store, chat, { type: 'translation', version, ...translation });
 
 export const selectVersion = (store: ObjectStore, chat: string, message: string, version: string) => append(store, chat, { type: 'select', message, version, at: Date.now() });

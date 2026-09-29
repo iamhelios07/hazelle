@@ -10,7 +10,7 @@ export type ReplyError =
   | CredentialFailure
   | NonNullable<Outcome['error']>;
 
-// The facts a receipt keeps (tech-spec §5): the outcome, and times measured from the moment of sending.
+// The facts a receipt keeps: the outcome, and times measured from the moment of sending.
 // A stop is a cut, never an error. request is the address and body the request was built with, for 요청 원문;
 // null when it was refused before it could be built.
 export type Reply = Omit<Outcome, 'error'> & {
@@ -44,7 +44,7 @@ export async function generate({ credentials, connection, model, settings, messa
   });
   const empty = { finishReason: null, usage: null, cost: null, replyId: null };
 
-  // Refusals the connector can see coming are made here, before anything is sent (design §4).
+  // Refusals the connector can see coming are made here, before anything is sent.
   const resolved = resolveConnection(connection);
   if (!resolved) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'unknown-connection-type' });
   let route: Resolved;

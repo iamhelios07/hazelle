@@ -70,7 +70,7 @@ export function FaceButton({ label, current = false, dot, onClick, children }: F
   );
 }
 
-// Recent characters in one row, to jump between them without going back to the list (design F6).
+// Recent characters in one row, to jump between them without going back to the list.
 export function FaceStrip({ label, children }: { label: string; children: ReactNode }) {
   const caption = useId();
   return (

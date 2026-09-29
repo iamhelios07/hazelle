@@ -20,7 +20,7 @@ type Props = {
 
 const KIND_WORDS = { check: '켜고 끄기', choice: '고르기' } as const;
 
-// design §4.2: a prompt's toggles, each a key that conditions name and a label that screens show, with its default.
+// Each toggle has a key that conditions name and a label that screens show.
 export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, adding, onAdding }: Props) {
   const [renaming, setRenaming] = useState<{ key: string; field: 'label' | 'key' } | null>(null);
   const target = renaming && toggles.find((toggle) => toggle.key === renaming.key);

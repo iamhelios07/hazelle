@@ -4,15 +4,15 @@ import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { modelUsage, type ModelUsage } from '../../model/chat';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
-import { credits, usd } from '../common/money';
+import { money } from '../common/money';
 import { UNKNOWN } from '../common/receipt';
 import { ago } from '../common/time';
 import { useStore, useViews } from '../session';
-import { navigate } from '../shell/router';
+import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChipButton, Divider, Empty, Facts, List, ListItem, Menu, MenuItem, NavBar, Row, Screen, Section, Text } from '../ui';
-import { changeWords, NOT_CALLABLE, valueWords } from './settingWords';
+import { changeWords, defaultFirst, NOT_CALLABLE, valueWords } from './settingWords';
 import { count } from './typedNumber';
 
 const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '소리', video: '영상', file: '파일' };
@@ -29,11 +29,11 @@ function tally({ total, unknown }: ModelUsage['input'], calls: number): string {
 
 function spent({ costs, costUnknown }: ModelUsage): string {
   if (!costs.length) return UNKNOWN;
-  const sums = costs.map(({ unit, amount, estimated }) => `${estimated ? '약 ' : ''}${unit === 'usd' ? usd(amount) : credits(amount)}`).join(' + ');
+  const sums = costs.map(({ unit, amount, estimated }) => `${estimated ? '약 ' : ''}${money(unit, amount)}`).join(' + ');
   return costUnknown ? `${sums} · ${costUnknown}번은 알 수 없음` : sums;
 }
 
-// One starred model (design §4.4): the settings it uses, which it picks here, what it is, and what it has cost.
+// One starred model: the settings it uses, which it picks here, what it is, and what it has cost.
 export function ModelScreen({ connection, model, back }: { connection: Stored<'connection'>; model: Starred; back: Back }) {
   const store = useStore();
   const toast = useToast();
@@ -41,7 +41,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
-  const sorted = [...profiles].sort((a, b) => Number(b.id === settings.profile) - Number(a.id === settings.profile) || a.value.name.localeCompare(b.value.name, 'ko'));
+  const sorted = defaultFirst(profiles, settings.profile);
   const usage = modelUsage(
     chats.map((item) => item.messages),
     { connection: connection.id, model: model.id },
@@ -66,7 +66,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
   const sent = current && (schema ? changeWords(fit(schema, current.value.settings).changes) : NOT_CALLABLE);
 
   return (
-    <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} backLabel={back.label} onBack={() => navigate(back.to)} />}>
+    <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}>
       <Section
         title="쓰는 설정"
         hint="같은 설정을 쓰는 모델은 함께 바뀌어요."

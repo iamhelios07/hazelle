@@ -6,6 +6,7 @@ import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { describeStep } from './saving';
+import { withChats } from './shelf';
 
 type Shelf = CharacterShelf<ChatItem>;
 export type CharacterActions = ReturnType<typeof useCharacterActions>;
@@ -34,10 +35,10 @@ export function useCharacterActions() {
   }
 
   // Whether it went to 지운 캐릭터.
-  async function remove({ id, character, chats }: Shelf): Promise<boolean> {
+  async function remove(shelf: Shelf): Promise<boolean> {
+    const { id, character } = shelf;
     if (!(await mark(id, Date.now()))) return false;
-    const what = chats.length ? `캐릭터와 채팅 ${chats.length}개를` : '캐릭터를';
-    toast.undoable(`‘${character.card.name}’ ${what} 지웠어요. ${KEEP_DAYS}일 안에는 ‘지운 캐릭터’에서 되살릴 수 있어요.`, () => void mark(id, null));
+    toast.undoable(`‘${character.card.name}’ ${withChats(shelf)} 지웠어요. ${KEEP_DAYS}일 안에는 ‘지운 캐릭터’에서 되살릴 수 있어요.`, () => void mark(id, null));
     return true;
   }
 

@@ -3,7 +3,7 @@ import { useId, useLayoutEffect, useRef, useState, type DragEvent, type Keyboard
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
-import { Menu } from '../overlays/Menu';
+import { Menu, type MenuOpener } from '../overlays/Menu';
 import styles from './Outline.module.css';
 
 // The rail's sections, each drawn in its own color (tokens.css --color-kind-*).
@@ -50,7 +50,7 @@ type Props = {
   drill?: boolean;
 };
 
-// A subway map of what is sent, top to bottom (design §4.2, outline variant C). The line between two stops takes the
+// A subway map of what is sent, top to bottom. The line between two stops takes the
 // upper stop's color, so it changes color at the stop where the section changes, and a section change leaves a wider
 // gap. Stops are one grid: number, node, title, meta.
 export function Outline({ label, help, start, end, stops, current, onPick, onOpen, onRemove, onMove, insert, onCache, reorder = 'drag', drill = false }: Props) {
@@ -60,11 +60,13 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
   // The row to focus once the stops have changed under it: moved, or next after a removal.
   const refocus = useRef<string | null>(null);
 
+  const focusStop = (id: string) => list.current?.querySelector<HTMLElement>(`[data-stop="${CSS.escape(id)}"]`)?.focus();
+
   useLayoutEffect(() => {
     const id = refocus.current;
     if (id === null) return;
     refocus.current = null;
-    list.current?.querySelector<HTMLElement>(`[data-stop="${CSS.escape(id)}"]`)?.focus();
+    focusStop(id);
   }, [stops]);
 
   const move = (from: number, to: number) => {
@@ -82,7 +84,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
       const next = stops[index + step];
       if (!next) return;
       onPick(next.id);
-      list.current?.querySelector<HTMLElement>(`[data-stop="${CSS.escape(next.id)}"]`)?.focus();
+      focusStop(next.id);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       onOpen(stop.id);
@@ -107,20 +109,18 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
     setDrag(null);
   };
 
+  const addMenu = (index: number, trigger: (opener: MenuOpener) => ReactNode) => (
+    <Menu label="블록 추가" size="lg" place="below-start" trigger={trigger}>
+      {insert(index)}
+    </Menu>
+  );
   const plus = (index: number, where: string) => (
     <span className={styles.plusAt}>
-      <Menu
-        label="블록 추가"
-        size="lg"
-        place="below-start"
-        trigger={(opener) => (
-          <button type="button" className={styles.plus} aria-label={where} title="여기에 추가" ref={opener.ref} aria-haspopup="menu" aria-expanded={opener.expanded} onClick={opener.onClick}>
-            <Icon icon={Plus} size="xs" />
-          </button>
-        )}
-      >
-        {insert(index)}
-      </Menu>
+      {addMenu(index, (opener) => (
+        <button type="button" className={styles.plus} aria-label={where} title="여기에 추가" ref={opener.ref} aria-haspopup="menu" aria-expanded={opener.expanded} onClick={opener.onClick}>
+          <Icon icon={Plus} size="xs" />
+        </button>
+      ))}
     </span>
   );
 
@@ -221,21 +221,13 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
         <span className={`${styles.end} ${styles.closed}`} />
         <span className={styles.capLabel}>{end}</span>
       </div>
-      {reorder === 'drag' && (
-        <Menu
-          label="블록 추가"
-          size="lg"
-          place="below-start"
-          trigger={(opener) => (
-            <button type="button" className={styles.append} ref={opener.ref} aria-haspopup="menu" aria-expanded={opener.expanded} onClick={opener.onClick}>
-              <Icon icon={Plus} size="xs" />
-              <span>맨 끝에 추가</span>
-            </button>
-          )}
-        >
-          {insert(stops.length)}
-        </Menu>
-      )}
+      {reorder === 'drag' &&
+        addMenu(stops.length, (opener) => (
+          <button type="button" className={styles.append} ref={opener.ref} aria-haspopup="menu" aria-expanded={opener.expanded} onClick={opener.onClick}>
+            <Icon icon={Plus} size="xs" />
+            <span>맨 끝에 추가</span>
+          </button>
+        ))}
     </div>
   );
 }

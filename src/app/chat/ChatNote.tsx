@@ -6,8 +6,8 @@ import type { OpenChat } from './useChat';
 // A saved chat's note is written this long after the last key, and at once when the box closes.
 const SAVE_AFTER = 600;
 
-// design §4.2 작가의 노트: this chat's own note in place of its prompt's default. '' is the chat's own choice of no
-// note; following the default again is a separate choice, never an emptied box.
+// '' is the chat's own choice of no note; following the prompt's default again is a separate choice, never an
+// emptied box.
 export function ChatNote({ chat }: { chat: OpenChat }) {
   const { note } = chat;
   return (

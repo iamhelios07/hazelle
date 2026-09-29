@@ -11,16 +11,15 @@ export type Toasts = {
   show: (message: string, action?: Action) => void;
   // Why a write failed, in failure.ts's words, led by prefix when it names what did not happen.
   failed: (failure: ApiFailure, prefix?: string) => void;
-  // design F3: deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog.
+  // Deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog.
   undoable: (message: string, undo: () => void) => void;
 };
 
 const ToastContext = createContext<Toasts | null>(null);
 const SlotContext = createContext<(slot: HTMLElement | null) => void>(() => {});
 
-// One toast at a time; a new one replaces the old. It closes by itself, and its action closes it too.
-// It floats at the top of the page, or sits in a ToastSlot when the page has one, such as the chat's
-// place under its header, apart from the pill above its composer.
+// One toast at a time; a new one replaces the old. It floats at the top of the page, or sits in a ToastSlot when the
+// page has one, such as under the chat's header, apart from the pill above its composer.
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [slot, setSlot] = useState<HTMLElement | null>(null);

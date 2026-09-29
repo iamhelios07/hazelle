@@ -2,7 +2,7 @@ import type { Assignment } from '../connectors/assignment';
 
 export type Role = 'system' | 'user' | 'assistant';
 
-// The slot kinds (design §4.2): a feature that brings something new to the prompt adds a row.
+// The slot kinds: a feature that brings something new to the prompt adds a row.
 // wrapped: the slot takes a role and a 감싸는 글 with {{slot}} where its content goes. repeats: it may
 // be placed more than once.
 export const SLOTS = {
@@ -20,7 +20,7 @@ type Wrapped = { [K in SlotKind]: (typeof SLOTS)[K]['wrapped'] extends true ? K 
 // Past chat is {from: 0, to: -1}; the last message is {from: -1, to: null}.
 export type ChatRange = { from: number; to: number | null };
 
-// cache: 여기까지 캐시, a cache point on the last message sent up to and including this block (design §4.4).
+// cache: 여기까지 캐시, a cache point on the last message sent up to and including this block.
 type Named = { id: string; name: string | null; cache?: true };
 // mark: the text a card replaces, main by its system prompt and globalNote by its post-history
 // instructions, with {{original}} in the card's text standing for this block's text.
@@ -34,10 +34,10 @@ export type Block = TextBlock | WrappedSlot | ChatSlot | PlainSlot;
 // strings because CBS reads them: a check is '1' or '0', a choice is its option's index.
 export type Toggle = { key: string; label: string } & ({ kind: 'check'; default: '0' | '1' } | { kind: 'choice'; options: string[]; default: string });
 
-// A character's or 캐릭터 없이's toggle values by key, over the declared defaults (design §4.2).
+// A character's or 캐릭터 없이's toggle values by key, over the declared defaults.
 export type ToggleValues = Record<string, string>;
 
-// Kind `prompt` (design §4.2). authorNote is the default 작가의 노트, which a chat's own note replaces.
+// authorNote is the default 작가의 노트, which a chat's own note replaces.
 // origin is a copy's original, named as it was then. imported marks a prompt made from a Risu preset; a copy
 // does not inherit it.
 export type Prompt = {

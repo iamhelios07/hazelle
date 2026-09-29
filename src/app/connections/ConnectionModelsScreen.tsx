@@ -9,7 +9,7 @@ import { reportsMeters } from '../../runtime/meters';
 import { modelProfile } from '../../runtime/profiles';
 import { describeCatalogFailure, describeFailure } from '../common/failure';
 import { useSession } from '../session';
-import { navigate } from '../shell/router';
+import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, NavBar, Row, Screen, SearchField, Stack, Text } from '../ui';
@@ -55,12 +55,13 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   }, [catalogKey, attempt]);
 
   const starred = pendingStars ?? connection.starred;
+  const starredIds = useMemo(() => new Set(starred.map((model) => model.id)), [starred]);
+  const listedIds = useMemo(() => (catalog?.ok ? new Set(catalog.models.map((model) => model.id)) : null), [catalog]);
   const models = useMemo(() => {
-    const listed = catalog?.ok ? catalog.models : [];
     // A starred model the provider no longer lists stays visible, so it can be unstarred.
-    const missing = starred.filter((model) => !listed.some((entry) => entry.id === model.id));
-    return [...missing, ...listed];
-  }, [catalog, starred]);
+    const missing = starred.filter((model) => !listedIds?.has(model.id));
+    return [...missing, ...(catalog?.ok ? catalog.models : [])];
+  }, [catalog, listedIds, starred]);
 
   const known = models.some((model) => tags(model).length > 0);
   const filters = [
@@ -72,12 +73,12 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const shown = models.filter(
     (model) =>
       (filter === 'all' ||
-        (filter === 'starred' ? starred.some((entry) => entry.id === model.id) : FILTERS[filter].test(model))) &&
+        (filter === 'starred' ? starredIds.has(model.id) : FILTERS[filter].test(model))) &&
       (!needle || model.name.toLowerCase().includes(needle) || model.id.toLowerCase().includes(needle)),
   );
 
   function toggle(model: Model) {
-    const on = starred.some((entry) => entry.id === model.id);
+    const on = starredIds.has(model.id);
     setPendingStars(on ? starred.filter((entry) => entry.id !== model.id) : [...starred, model]);
     setMessage(null);
     const state = saving.current;
@@ -112,8 +113,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         <NavBar
           title={connection.label}
           subtitle={subtitle}
-          onBack={() => navigate(back.to)}
-          backLabel={back.label}
+          {...backBar(back)}
           actions={<IconButton icon={Trash2} label="연결 지우기" onClick={() => void remove()} />}
         />
       }
@@ -145,8 +145,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       {shown.length > 0 ? (
         <List label="모델">
           {shown.map((model) => {
-            const on = starred.some((entry) => entry.id === model.id);
-            const listed = !catalog?.ok || catalog.models.some((entry) => entry.id === model.id);
+            const on = starredIds.has(model.id);
+            const listed = !listedIds || listedIds.has(model.id);
             // Only a star already saved has a page to open; one still saving has none yet.
             const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
             const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;

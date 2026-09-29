@@ -27,7 +27,6 @@ type Props = {
   side: (at: SideAt) => ReactNode;
 };
 
-// design F3.
 export function ChatScreen({ item, shelf, back, side }: Props) {
   const chat = useChat(item, shelf);
   const reading = useReading();

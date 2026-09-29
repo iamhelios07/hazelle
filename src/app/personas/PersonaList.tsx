@@ -1,19 +1,19 @@
 import { Plus } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { addPersona } from '../../runtime/personas';
 import { personaTitle } from '../common/persona-words';
 import { useSettings, useStore, useViews } from '../session';
 import { useToast } from '../toast';
-import { Avatar, Button, List, ListItem, type NavBarProps } from '../ui';
+import { Avatar, Button, List, ListItem } from '../ui';
+import type { Frame } from './PersonaEditor';
 
 type Props = {
   // A new persona is picked as soon as it is made.
   onPick: (id: string) => void;
-  // Open beside the list (ListDetail).
+  // Open beside the list.
   current?: string;
   // The one a chat uses, marked 사용 중.
   inUse?: string;
-  frame: (parts: { head: NavBarProps; body: ReactNode }) => ReactNode;
+  frame: Frame;
 };
 
 export function PersonaList({ onPick, current, inUse, frame }: Props) {

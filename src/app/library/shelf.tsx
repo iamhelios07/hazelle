@@ -8,6 +8,9 @@ export const shelfName = (shelf: Shelf<ChatItem>) => shelf.character?.card.name 
 
 export const NO_CHATS = '아직 채팅이 없어요';
 
+// What removing a character takes with it, as the object of 지웠어요 or 지워요.
+export const withChats = (shelf: CharacterShelf<ChatItem>) => (shelf.chats.length ? `캐릭터와 채팅 ${shelf.chats.length}개를` : '캐릭터를');
+
 export function ShelfFace({ shelf, size }: { shelf: Shelf<ChatItem>; size?: 'sm' | 'md' | 'lg' }) {
   return shelf.character ? <Avatar face={shelf.character.card.name} image={shelf.face} size={size} /> : <Avatar face={MessageSquare} size={size} />;
 }

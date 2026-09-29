@@ -23,8 +23,8 @@ type Props = {
   onCollapse: (collapsed: boolean) => void;
 };
 
-// Characters first (design F6). Inside a character, the list is its chats, and "모든 캐릭터" goes back
-// up without leaving the open chat. The search and the open folders outlast a visit inside one.
+// Inside a character, the list is its chats, and "모든 캐릭터" goes back up without leaving the open chat. The search
+// and the open folders outlast a visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { characters, none } = useLibrary();
   const { chatById } = useViews();

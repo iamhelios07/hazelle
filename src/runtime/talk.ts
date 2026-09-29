@@ -22,13 +22,13 @@ export type Turn = {
 // A message on screen: live marks the version being written.
 export type Shown = Message & { live: string | null };
 
-// What one reply is sent with, ready once its prompt is built (runtime/turn): the model and the prompt, which
-// the reply's id seeds (engine/pipeline). settings: the model's 설정 묶음 as stored, which the request fits to the model.
-// said: the user's message as it is saved, which a message sent translated saves translated (design §6.3).
+// What one reply is sent with, ready once its prompt is built: the model and the prompt, which the reply's id
+// seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model. said: the user's message
+// as it is saved, which a message sent translated saves translated.
 export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null };
 
-// What one reply sent, for 정보's 요청 원문 and lorebook part (design F3). It lives in page memory only, until the
-// session closes (tech-spec §5: the raw request is not stored).
+// What one reply sent, for 정보's 요청 원문 and lorebook part. It lives in page memory only, until the session
+// closes: the raw request is never stored.
 export type Sent = { request: Reply['request']; prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
@@ -40,12 +40,13 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   const out = messages.map((message) => ({ ...message, live: null as string | null }));
   if (turn?.chat !== chat) return out;
   const { said, reply } = turn;
+  const now = Date.now();
   if (said && !out.some((message) => message.id === said.id)) {
-    out.push({ id: said.id, role: 'user', at: Date.now(), versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: Date.now() }], selected: 0, live: null });
+    out.push({ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0, live: null });
   }
-  const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: Date.now() };
+  const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now };
   if (reply.message === null) {
-    if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: Date.now(), versions: [version], selected: 0, live: reply.id });
+    if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: now, versions: [version], selected: 0, live: reply.id });
     return out;
   }
   const index = out.findIndex((message) => message.id === reply.message);
@@ -58,8 +59,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
 }
 
 // One reply is written at a time, app-wide, and it outlives the screen that asked for it: leaving a
-// chat does not stop its reply. close() stops everything, for a locked vault. What to ask and where it
-// goes come from runtime/turn.
+// chat does not stop its reply. close() stops everything, for a locked vault.
 export class Talk {
   private turn: Turn | null = null;
   private abort: AbortController | null = null;
@@ -176,7 +176,7 @@ export class Talk {
   }
 }
 
-// What a call leaves in a saved chat: a reply's receipt, or a translation's (runtime/translate).
+// What a call leaves in a saved chat: a reply's receipt, or a translation's.
 export function receiptOf(route: Route, answer: Reply): Receipt {
   return {
     connection: route.connection.id,

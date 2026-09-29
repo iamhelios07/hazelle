@@ -19,7 +19,7 @@ type Props = {
 const RECENT = 3;
 const same = (a: ModelRef, b: ModelRef | null) => b !== null && a.connection === b.connection && a.model === b.model;
 
-// F4: starred models only, recent ones first, with the connection as a badge. It never lists providers.
+// Starred models only, recent ones first. It never lists providers.
 export function ChatModelMenu({ current, label, onPick, handle }: Props) {
   return (
     <Menu handle={handle} place="below-end" size="lg" label="모델" trigger={(opener) => <ChipButton label={label} title="모델 바꾸기" {...opener} />}>

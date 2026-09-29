@@ -76,9 +76,7 @@ type Props = {
   frame: (parts: Parts) => ReactNode;
 };
 
-// design §4.2: one prompt as an outline of its blocks, in the order they are sent, beside the one block picked from
-// it. Drilled down, the outline is the page, and a block opens a page of its own. Its state is one prompt's, so a
-// caller keys it by id, and leaves by unmounting it, which saves.
+// Its state is one prompt's, so a caller keys it by id; unmounting it saves.
 export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, onCopied, onErased, frame }: Props) {
   const store = useStore();
   const toast = useToast();

@@ -32,7 +32,6 @@ export function toggleUses(text: string): ToggleUse[] {
   return uses;
 }
 
-// design §4.2: changing a toggle's key rewrites its conditions.
 export function renameToggle(text: string, from: string, to: string): string {
   return toggleUses(text)
     .filter((use) => use.key === from)

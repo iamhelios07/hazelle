@@ -56,11 +56,6 @@
   right: 0;
 }
 
-.beside {
-  top: 0;
-  left: calc(100% + var(--space-8));
-}
-
 /* A menu never runs off a phone screen. */
 @media (max-width: 959px) {
   .md,

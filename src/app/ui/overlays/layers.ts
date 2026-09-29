@@ -45,6 +45,15 @@ export function useLayer(active: boolean, layer: Layer) {
   }, [active]);
 }
 
+// Shifts a popover sideways, through --nudge, back inside the screen's sides less the --menu-edge gutter.
+export function keepOnScreen(element: HTMLElement) {
+  const box = element.getBoundingClientRect();
+  const edge = parseFloat(getComputedStyle(element).getPropertyValue('--menu-edge'));
+  const room = document.documentElement.clientWidth;
+  const shift = box.left < edge ? edge - box.left : box.right > room - edge ? room - edge - box.right : 0;
+  element.style.setProperty('--nudge', `${shift}px`);
+}
+
 const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 // The focus moves into box when it opens and back to what had it when it closes; Tab and Shift+Tab go round

@@ -8,8 +8,8 @@ import { SessionProvider } from '../session';
 import { ToastProvider } from '../toast';
 import { Layout } from './Layout';
 
-// Everything behind an open vault is one session (runtime/session), opened before the first screen and
-// closed when this unmounts. 잠그기 and 로그아웃 both leave AccountFlow's unlocked state, which unmounts this.
+// Everything behind an open vault is one session, opened before the first screen and closed when this unmounts,
+// which 잠그기 and 로그아웃 both do.
 export function Workspace({ accountId, vaultKey, username, ...account }: Unlocked) {
   const [session, setSession] = useState<Session | null>(null);
   const [failure, setFailure] = useState<string | null>(null);

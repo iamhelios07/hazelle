@@ -34,7 +34,7 @@
   border-radius: var(--radius-md);
 }
 
-/* Only a list's rows fade their fill in; whether every row does is the user's design call. */
+/* Only a list's rows fade their fill in. */
 .tall {
   gap: var(--space-10);
   min-height: var(--row-min-height);
@@ -92,7 +92,7 @@
   font-weight: var(--weight-medium);
 }
 
-/* A menu's label still wraps, but its box cuts the first letter's overhang, as menus always did. */
+/* A menu's label still wraps, but its box cuts the first letter's overhang. */
 .compact.list .title {
   overflow: hidden;
 }

@@ -1,8 +1,6 @@
 import type { Model, Modality } from './types';
 
-// Roles are declared by the features that need a model (design §4.1); a feature that needs a model
-// for a new purpose adds its role here. A role that no layer sets takes the role it falls back to,
-// so every chain ends at 본 대화.
+// A role that no layer sets takes the role it falls back to, so every chain ends at 본 대화.
 export type Role = 'main' | 'aux' | 'memory' | 'translate' | 'emotion';
 
 export const ROLES: Record<Role, { needs: Modality; fallsBackTo: Role | null }> = {

@@ -6,7 +6,7 @@ import styles from './ChatFrame.module.css';
 
 type Spacing = 'narrow' | 'normal' | 'wide';
 
-// How the story reads (design F3, 읽기 설정). tokens.css holds each choice's look.
+// How the story reads (읽기 설정). tokens.css holds each choice's look.
 export type Reading = { font: 'serif' | 'sans'; size: number; leading: Spacing; width: Spacing };
 
 // The look before any reading setting. The size is read from tokens.css, not repeated here, since Prose keeps it
@@ -68,7 +68,7 @@ type TitleProps = {
   avatar: ReactNode;
   title: string;
   typing: boolean;
-  // The name opens the menu of the chats it sits among (design F3), and takes these from Menu.
+  // The name opens the menu of the chats it sits among, and takes these from Menu.
   popup: 'menu' | 'dialog';
   expanded: boolean;
   ref: Ref<HTMLButtonElement>;

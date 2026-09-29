@@ -1,7 +1,7 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, Meter, MeterReset, Modality } from './types';
-import { amount, count, isRecord } from './values';
+import { amount, count, isRecord, modelEntries } from './values';
 
 const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']);
 
@@ -56,16 +56,14 @@ export const openRouter: ConnectionType = {
 
   // Names read "Anthropic: Claude Opus 5.5"; the id already carries the maker, so the prefix is dropped.
   parseModels(payload) {
-    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
-    return payload.data
-      .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
-      .map((raw) => {
+    return (
+      modelEntries(payload)?.map((raw) => {
         const architecture = isRecord(raw.architecture) ? raw.architecture : {};
         const topProvider = isRecord(raw.top_provider) ? raw.top_provider : {};
         const parameters = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : null;
-        const name = typeof raw.name === 'string' && raw.name ? raw.name.replace(/^[^:]+:\s+(?=\S)/, '') : (raw.id as string);
+        const name = typeof raw.name === 'string' && raw.name ? raw.name.replace(/^[^:]+:\s+(?=\S)/, '') : raw.id;
         return {
-          id: raw.id as string,
+          id: raw.id,
           name,
           input: modalities(architecture.input_modalities),
           output: modalities(architecture.output_modalities),
@@ -76,7 +74,8 @@ export const openRouter: ConnectionType = {
           protocol: null,
           takes: { settings: parameters && listedSettings(parameters), reasoning: isRecord(raw.reasoning) ? reasoningTakes(raw.reasoning) : null },
         };
-      });
+      }) ?? null
+    );
   },
 
   reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),

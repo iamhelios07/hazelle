@@ -4,9 +4,9 @@ import type { Stored } from '../model/kinds';
 import type { Profile } from '../model/profile';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
-import type { ObjectStore } from './store';
+import { without, type ObjectStore } from './store';
 
-// Every write of `profile` objects, of the default 묶음, and of the 묶음 a starred model uses (design §4.4).
+// Every write of `profile` objects, of the default 묶음, and of the 묶음 a starred model uses.
 
 // Fixed, so two devices adding the first 묶음 at once meet in a version conflict instead of making two.
 export const FIRST_PROFILE_ID = '00000000-0000-4000-8000-000000000003';
@@ -28,8 +28,8 @@ export function profileUsers(connections: readonly Stored<'connection'>[], defau
   return connections.flatMap((connection) => connection.value.starred.filter((model) => (model.profile ?? defaultProfile) === id).map((model) => ({ connection, model })));
 }
 
-// An account that has never had a default 묶음 gets an empty one, once. The session awaits it when it opens
-// (runtime/session); a failure is tried again next time.
+// An account that has never had a default 묶음 gets an empty one, once. The session awaits it when it opens;
+// a failure is tried again next time.
 export async function addFirstProfile(store: ObjectStore): Promise<void> {
   if (store.get('settings', SETTINGS_ID)?.value.profile !== undefined) return;
   if (!store.get('profile', FIRST_PROFILE_ID)) {
@@ -66,7 +66,7 @@ export const renameProfile = (store: ObjectStore, id: string, name: string) => s
 const updateSettings = (store: ObjectStore, id: string, change: (settings: ModelSettings) => ModelSettings) =>
   store.update('profile', id, (current) => ({ ...current, settings: change(current.settings) }));
 
-// A setting given as undefined is cleared: nothing is sent for it (design §4.4).
+// A setting given as undefined is cleared: nothing is sent for it.
 export const setProfileSettings = (store: ObjectStore, id: string, values: ModelSettings) =>
   updateSettings(store, id, (settings) => {
     const next = { ...settings, ...values };
@@ -76,14 +76,11 @@ export const setProfileSettings = (store: ObjectStore, id: string, values: Model
 
 export const clearProfileSettings = (store: ObjectStore, id: string) => updateSettings(store, id, () => ({}));
 
-// As with prompts (design §4.2), the default goes only once another 묶음 is the default. A model that used a deleted
-// 묶음 reads as missing until it is given another, or the 묶음 comes back with 되돌리기.
+// As with prompts, the default goes only once another 묶음 is the default. A model that used a deleted 묶음 reads
+// as missing until it is given another, or the 묶음 comes back with 되돌리기.
 export async function removeProfile(store: ObjectStore, id: string): Promise<ApiResult<Stored<'profile'>> | { ok: false; error: 'default' }> {
   if (store.get('settings', SETTINGS_ID)?.value.profile === id) return { ok: false, error: 'default' };
-  const profile = store.get('profile', id);
-  if (!profile) return { ok: false, error: 'gone' };
-  const removed = await store.remove(id);
-  return removed.ok ? { ok: true, data: profile } : removed;
+  return store.take('profile', id);
 }
 
 export const restoreProfile = (store: ObjectStore, removed: Stored<'profile'>) => store.restore(removed);
@@ -96,10 +93,4 @@ export function setModelProfile(store: ObjectStore, connection: string, model: s
     ...current,
     starred: current.starred.map((entry) => (entry.id !== model ? entry : profile === null ? without(entry, 'profile') : { ...entry, profile })),
   }));
-}
-
-function without<T extends object>(from: T, key: keyof T): T {
-  const rest = { ...from };
-  delete rest[key];
-  return rest;
 }

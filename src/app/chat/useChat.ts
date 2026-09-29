@@ -41,14 +41,12 @@ const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failur
 
 export type OpenChat = ReturnType<typeof useChat>;
 
-// A persona or prompt list beside the chat, or one of them open from it (design F3, Ctrl+E and Ctrl+P).
+// A persona or prompt list beside the chat, or one of them open from it.
 export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; id: string | null; pane: 'toggles' | null };
-// Every part of the chat screen acts through this one object, so a new message action (이어 쓰기,
-// 갈라지기) is a new entry here rather than a new prop on each part between this and ChatMessage.
+// Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
 export type ChatActions = OpenChat['actions'];
 
-// design F3. item null is a new chat, saved with its first message; shelf is its character, or null
-// for 캐릭터 없이.
+// item null is a new chat, saved with its first message; shelf null is 캐릭터 없이.
 export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> | null) {
   const session = useSession();
   const { store, talk, translator } = session;
@@ -58,6 +56,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const id = item?.id ?? null;
   // The id a new chat is shown under and then saved under, so its greeting's pick and rollp tags keep their rolls.
   const [newId] = useState(() => crypto.randomUUID());
+  const chatId = id ?? newId;
   // A new chat's own model, prompt, persona and note, saved with it on the first send.
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
   const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, ...unsaved };
@@ -84,12 +83,12 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
         }
       : null;
   // A new chat shows its turn while it is saved, under the id it is saved as.
-  const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, id ?? newId);
-  const texts = displayChat(session, id ?? newId, chat, messages);
+  const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, chatId);
+  const texts = displayChat(session, chatId, chat, messages);
   const translate = translateSwitches(store, chat.character);
   const translateModel = chatModel(store, chat, 'translate');
   const busy = turn !== null;
-  const streaming = busy && turn.chat === (id ?? newId);
+  const streaming = busy && turn.chat === chatId;
   const last = messages.at(-1);
 
   const draft = useDraft(id, chat.character);
@@ -100,9 +99,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const personaMenu = useMenuHandle();
   // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another.
   const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
-  // translation: the edited translation of a version that has one (design §6.3).
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
-  // The versions shown the other way round from their default, the original in place of the translation (§6.3).
+  // The versions shown the other way round from their default, the original in place of the translation.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
@@ -113,8 +111,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
 
   useEffect(preloadTokenizer, []);
 
-  // design §6.3 답장 번역: the latest reply is translated once it is whole, whichever way it came (a new reply, 다시
-  // 생성, 이어 쓰기, a greeting, a version switched to) and when the switch goes on. One that failed is left for 다시 번역.
+  // 답장 번역: the latest reply is translated once it is whole, whichever way it came, and when the switch goes on. One
+  // that failed is left for 다시 번역.
   const latest = last?.role === 'assistant' && last.live === null ? shown(last) : null;
   const waiting =
     translate.replies && latest && latest.receipt?.state !== 'failed' && !latest.translation && !translating.held.has(latest.id) && !translating.live.has(latest.id) && !translating.failed.has(latest.id) && texts.at(-1)!.trim()
@@ -150,7 +148,6 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     setStopped(false);
     draft.set('');
     follow();
-    const chatId = id ?? newId;
     const start =
       id === null
         ? {
@@ -186,17 +183,16 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   function swipe(message: Shown, step: -1 | 1) {
     if (busy) return;
     const next = message.selected + step;
+    const exists = next >= 0 && next < message.versions.length;
     if (message === opening) {
-      if (next >= 0 && next < message.versions.length) setGreeting(next);
+      if (exists) setGreeting(next);
       return;
     }
-    if (next >= 0 && next < message.versions.length) select(message, next);
+    if (exists) select(message, next);
     else if (step === 1 && message === last) ask({ kind: 'regenerate', message: message.id });
   }
 
-  // chat is the id the message is shown under, saved or not yet (runtime/translate Translator).
   function translateMessage(message: Shown) {
-    const chatId = id ?? newId;
     translator.translate(chatId, shown(message).id, translationInput(session, chatId, chat, messages, { kind: 'message', index: messages.indexOf(message) }));
   }
 
@@ -221,13 +217,12 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
 
   async function remove(message: Shown) {
     if (!id) return;
-    const chatId = id;
-    const saved = await removeMessage(store, chatId, message.id);
+    const saved = await removeMessage(store, id, message.id);
     if (!saved.ok) return toast.failed(saved);
-    toast.undoable('메시지를 지웠어요', () => void restoreMessage(store, chatId, message.id));
+    toast.undoable('메시지를 지웠어요', () => void restoreMessage(store, id, message.id));
   }
 
-  // The copy is saved one entry after another (runtime/chat-log branchChat), so a long chat takes a while.
+  // The copy is saved one entry after another, so a long chat takes a while.
   async function branch(message: Shown) {
     if (!item || branching) return;
     setBranching(true);
@@ -274,7 +269,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     void track(setChatModel(store, id, ref)).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  // null: follow the default again (design §4.2, §4.3). A new chat holds it until its first send.
+  // null: follow the default again. A new chat holds it until its first send.
   async function setOwn(field: Own, value: string | null): Promise<void> {
     if (!id) {
       setUnsaved((current) => {
@@ -289,8 +284,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     if (!saved.ok) toast.failed(saved);
   }
 
-  // design §4.2: a value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat. The next
-  // turn reads it from the store (runtime/turn scopeOf).
+  // A value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat.
   function flip(key: string, value: string) {
     void track(setToggle(store, chat.character, key, value)).then((saved) => saved.ok || toast.failed(saved));
   }

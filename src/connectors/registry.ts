@@ -7,7 +7,7 @@ import { fit, settingsSchema, type Carries, type SettingsSchema } from './settin
 import { vercel } from './vercel';
 import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
-// Adding a provider means adding its connection type here (design §4). Nothing else names one.
+// Adding a provider means adding its connection type here. Nothing else names one.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, anthropic, copilot];
 
 // The type of a connection the user described by address and protocol.
@@ -22,7 +22,7 @@ export type Resolved = { type: ConnectionType | null; endpoint: Endpoint; codec:
 // null for a type this version does not know, such as one saved by a newer version of the app.
 export function resolveConnection(connection: Connection): Resolved | null {
   if (connection.type === GENERIC) {
-    // An address saved before its provider joined the list is that provider now (design F5).
+    // An address saved before its provider joined the list is that provider now.
     const claimed = connection.baseUrl && URL.canParse(connection.baseUrl) ? typeForHost(new URL(connection.baseUrl).hostname) : undefined;
     if (claimed) return { type: claimed, endpoint: claimed.endpoint, codec: CODECS[claimed.endpoint.protocol]! };
     const codec = connection.protocol && CODECS[connection.protocol];
@@ -64,7 +64,7 @@ function carries({ type, codec }: Resolved): Carries {
   };
 }
 
-// The settings a starred model offers (design §4.4); null for a model this version cannot call at all.
+// null for a model this version cannot call at all.
 export function modelSettings(connection: Connection, model: Model): SettingsSchema | null {
   const resolved = resolveConnection(connection);
   if (!resolved) return null;
@@ -76,8 +76,7 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
   }
 }
 
-// settings is the 묶음's as it is stored; what this model does not take of it is fitted here (design §4.4), and
-// the 모델 설정 screen names each change with the same fit().
+// settings is the 묶음's as stored; the 모델 설정 screen names each change with the same fit().
 export function chatRequest(route: Resolved, { model, messages, settings: stored }: ChatRequest): HttpRequest {
   const { settings } = fit(settingsSchema(carries(route), model), stored);
   const { reasoning } = settings;
@@ -106,7 +105,7 @@ export type Detection =
   | { kind: 'generic-url'; baseUrl: string; problem: 'not-https' | 'local' | null }
   | { kind: 'unknown-key'; secret: string };
 
-// F5: one pasted value, recognized by key shape or host.
+// One pasted value, recognized by key shape or host.
 export function detect(input: string): Detection | null {
   const text = input.trim();
   if (!text) return null;
@@ -156,7 +155,7 @@ export function normalizeBaseUrl(text: string): string | null {
   return `${url.origin}${path}`;
 }
 
-// The hosted relay can never reach these (tech-spec §6), so the form says so before the first try.
+// The hosted relay can never reach these, so the form says so before the first try.
 // Other LAN names cannot be recognized in advance and fail on first use.
 function isLocal(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, '');

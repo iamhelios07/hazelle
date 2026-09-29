@@ -23,7 +23,7 @@ type Props = {
 
 export function StoryMessage({ avatar, name, time, mine, children, after, tools, pinned, onTap }: Props) {
   const hover = useHover();
-  // Phones have no hover, so a tap on the message itself shows its tools (design F3).
+  // Phones have no hover, so a tap on the message itself shows its tools.
   const tap = (event: MouseEvent) => {
     if (hover || (event.target as HTMLElement).closest('button, a, textarea')) return;
     onTap();
@@ -63,7 +63,7 @@ type SwitcherProps = {
   nextDisabled: boolean;
   // On the last version, → asks for a new one.
   nextLabel: string;
-  // With the keys that press them (src/app/shortcuts.ts).
+  // With the keys that press them.
   prevTitle: string;
   nextTitle: string;
 };
@@ -79,11 +79,11 @@ export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, ne
   );
 }
 
-// translation: the state of a message's translation, such as one being made or one that failed (design §6.3).
+// translation: the state of a message's translation, such as one being made or one that failed.
 type MarkerProps = { reason: 'length' | 'stopped' | 'translation'; label: string; action?: { label: string; disabled: boolean; onClick: () => void } };
 const MARKS = { length: Scissors, stopped: Square, translation: Languages };
 
-// A reply that did not end cleanly says so, quietly, under its text (design F3).
+// A reply that did not end cleanly says so, quietly, under its text.
 export function Marker({ reason, label, action }: MarkerProps) {
   return (
     <div className={reason === 'stopped' ? `${styles.marker} ${styles.stopped}` : styles.marker}>

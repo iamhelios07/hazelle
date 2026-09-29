@@ -1,7 +1,7 @@
 import { copilotCost } from './copilot-prices';
 import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
-import { count, isRecord } from './values';
+import { count, isRecord, modelEntries, nameOf } from './values';
 
 // Copilot serves only clients it knows, so every request names VS Code's Copilot Chat, as provider-hub
 // did. The versions are the ones it last sent successfully.
@@ -132,9 +132,9 @@ export const copilot: ConnectionType = {
 
   // The list also holds embedding models, and models that VS Code's model picker does not offer.
   parseModels(payload) {
-    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
-    return payload.data
-      .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
+    const entries = modelEntries(payload);
+    if (!entries) return null;
+    return entries
       .filter((raw) => raw.model_picker_enabled !== false && (!isRecord(raw.capabilities) || (raw.capabilities.type ?? 'chat') === 'chat'))
       .map((raw) => {
         const capabilities = isRecord(raw.capabilities) ? raw.capabilities : {};
@@ -143,8 +143,8 @@ export const copilot: ConnectionType = {
         const vision = flag(supports.vision);
         const input: Modality[] | null = vision === null ? null : vision ? ['text', 'image'] : ['text'];
         return {
-          id: raw.id as string,
-          name: typeof raw.name === 'string' && raw.name ? raw.name : (raw.id as string),
+          id: raw.id,
+          name: nameOf(raw, 'name'),
           input,
           output: ['text'],
           contextLength: count(limits.max_context_window_tokens),

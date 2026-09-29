@@ -24,12 +24,10 @@ function partName(from: From, role: Role): string {
   }
 }
 
-// design F3 요청 원문: slot by slot with estimated counts, or the JSON body with its address. Headers, which carry the
-// credential, are never kept (runtime/generate), so there is nothing to redact here.
+// Headers, which carry the credential, are never kept (runtime/generate), so there is nothing to redact here.
 export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Receipt }) {
   const [view, setView] = useState<'parts' | 'body'>('parts');
-  // Not "gone": a reply written before this page opened, on another device, or edited (a version of its own) is not
-  // here either. The second sentence is the design's rule.
+  // Not "gone": a reply written before this page opened, on another device, or edited is not here either.
   if (!sent) {
     return (
       <>
@@ -115,7 +113,6 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
   }
 }
 
-// design F3: the lorebook entries that fired for the reply, why each fired, and whether it went in.
 export function SentLore({ sent }: { sent: Sent | null }) {
   if (!sent) return <Empty variant="section">이 답장의 로어북 기록이 이 페이지에 없어요. 로어북 기록도 요청 원문처럼 페이지를 닫으면 사라져요.</Empty>;
   const lore = sent.prompt.lore;

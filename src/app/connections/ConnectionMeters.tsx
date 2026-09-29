@@ -2,17 +2,16 @@ import { useEffect, useState } from 'react';
 import type { Connection, Meter, MeterReset, MeterUnit } from '../../connectors/types';
 import { loadMeters, type MetersResult } from '../../runtime/meters';
 import { describeMetersFailure } from '../common/failure';
-import { creditAmount, credits, usd } from '../common/money';
+import { creditAmount, money, usd } from '../common/money';
+import { monthDay } from '../common/time';
 import { Callout, Empty, Facts, Section, Text } from '../ui';
 
 const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 
 const number = (unit: MeterUnit, value: number) => (unit === 'credit' ? creditAmount(value) : value.toLocaleString('ko-KR'));
-const figure = (unit: MeterUnit, value: number) =>
-  unit === 'usd' ? usd(value) : unit === 'credit' ? credits(value) : `${number(unit, value)}회`;
+const figure = (unit: MeterUnit, value: number) => (unit === 'requests' ? `${number(unit, value)}회` : money(unit, value));
 
-const day = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' });
-const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${day.format(resets.at)} 초기화`);
+const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${monthDay(resets.at)} 초기화`);
 
 // Out of a cap, what is left reads as "남음"; a balance with no cap needs no such word.
 function fact(meter: Meter) {
@@ -23,7 +22,7 @@ function fact(meter: Meter) {
   return { label, value: `${amount} 남음 / ${figure(meter.unit, meter.limit)}` };
 }
 
-// For a connection whose type reports meters (runtime reportsMeters).
+// For a connection whose type reports meters.
 export function ConnectionMeters({ connection }: { connection: Connection }) {
   const [result, setResult] = useState<MetersResult | null>(null);
   const [attempt, setAttempt] = useState(0);

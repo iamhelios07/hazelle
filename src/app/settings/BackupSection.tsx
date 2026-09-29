@@ -15,7 +15,7 @@ const UNREAD = {
 // sv-SE writes the local date as 2026-09-29.
 const today = () => new Date().toLocaleDateString('sv-SE');
 
-// design §3 Full export: the user's own backup, loaded back only into a new account.
+// The user's own full backup, loaded back only into a new account.
 export function BackupSection() {
   const { username, store, files } = useSession();
   const toast = useToast();

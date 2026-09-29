@@ -11,4 +11,7 @@ export function creditAmount(amount: number): string {
   return new Intl.NumberFormat('ko-KR', digits).format(amount);
 }
 
-export const credits = (amount: number) => `${creditAmount(amount)} 크레딧`;
+const credits = (amount: number) => `${creditAmount(amount)} 크레딧`;
+
+// A sum in its own unit; units are never added together.
+export const money = (unit: 'usd' | 'credit', amount: number) => (unit === 'usd' ? usd(amount) : credits(amount));

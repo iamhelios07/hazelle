@@ -1,6 +1,5 @@
 import type { Reading } from '../ui';
 
-// design F3: the text size steps between these.
 export const SIZE = { min: 14, max: 21 };
 
 export const FONT: Record<Reading['font'], string> = { serif: '명조', sans: '고딕' };

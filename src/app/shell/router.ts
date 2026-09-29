@@ -29,5 +29,5 @@ export function navigate(route: Route, { replace = false } = {}) {
   window.dispatchEvent(new Event(NAVIGATED));
 }
 
-// NavBar's back for a screen whose back is null where a sidebar beside it is the way back.
+// NavBar's back; none where back is null, since a sidebar beside the screen is the way back.
 export const backBar = (back: Back | null) => (back ? { onBack: () => navigate(back.to), backLabel: back.label } : {});

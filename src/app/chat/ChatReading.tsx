@@ -5,8 +5,7 @@ import { choices, FONT, parseReading, SIZE, SPACING } from './reading';
 
 const READING = 'risu-alpha:reading';
 
-// Per device, never in the synced settings: the user chose "기기마다 따로" on 2026-09-29, since a phone and a desktop
-// screen differ.
+// Per device, never in the synced settings, since a phone and a desktop screen differ.
 export function useReading() {
   const [initial] = useState(readingDefault);
   const [value, set] = usePersisted(READING, (stored) => parseReading(stored, initial), initial);
@@ -15,7 +14,6 @@ export function useReading() {
 
 export type ReadingControl = ReturnType<typeof useReading>;
 
-// design F3: '가' in the header.
 export function ReadingMenu({ reading }: { reading: ReadingControl }) {
   return (
     <Menu kind="dialog" size="lg" place="below-end" label="읽기 설정" trigger={(opener) => <IconButton icon="가" label="읽기 설정" size="sm" {...opener} />}>

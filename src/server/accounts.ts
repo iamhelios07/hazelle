@@ -9,7 +9,7 @@ const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
 export const accounts = new Hono<AppEnv>();
 
 // Signup creates the account, its vault and a session in one batch, so an account never exists
-// without a vault. The client sends it only after the recovery key is saved (design F1).
+// without a vault. The client sends it only after the recovery key is saved.
 accounts.post('/signup', async (c) => {
   const body = await readObject(c);
   const accountId = typeof body?.accountId === 'string' && ID.test(body.accountId) ? body.accountId : null;
@@ -27,13 +27,11 @@ accounts.post('/signup', async (c) => {
   if (!(await signupOpen(db))) return fail(c, 403, 'signup-closed');
 
   const account = { id: accountId, username };
-  const session = await startSession(db, account.id);
+  const [session, loginHash, recoveryHash] = await Promise.all([startSession(db, account.id), hashProof(passwordProof), hashProof(recoveryProof)]);
   const now = Date.now();
   await db.batch([
-    db
-      .prepare('INSERT INTO accounts (id, username, login_hash, created_at) VALUES (?, ?, ?, ?)')
-      .bind(account.id, account.username, await hashProof(passwordProof), now),
-    insertVault(db, account.id, { passwordWrap, recoveryWrap, recoveryHash: await hashProof(recoveryProof) }, now),
+    db.prepare('INSERT INTO accounts (id, username, login_hash, created_at) VALUES (?, ?, ?, ?)').bind(account.id, account.username, loginHash, now),
+    insertVault(db, account.id, { passwordWrap, recoveryWrap, recoveryHash }, now),
     session.insert,
   ]);
   setSessionCookie(c, session.token);
@@ -63,7 +61,7 @@ accounts.post('/logout', async (c) => {
   return c.body(null, 204);
 });
 
-// Everything a page load needs, in one request: from Korea each round trip can take seconds (tech-spec §1).
+// Everything a page load needs, in one request: from Korea each round trip can take seconds.
 accounts.get('/session', async (c) => {
   const account = await currentAccount(c);
   if (!account) return c.json({ session: null, signupOpen: await signupOpen(c.env.DB) });
@@ -75,7 +73,7 @@ function describe(account: Account) {
   return { accountId: account.id, username: account.username };
 }
 
-// Signup closes after the first account. Invites wait until a second user actually joins (tech-spec §1).
+// Signup closes after the first account.
 async function signupOpen(db: D1Database): Promise<boolean> {
   return (await db.prepare('SELECT 1 FROM accounts LIMIT 1').first()) === null;
 }

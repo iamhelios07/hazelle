@@ -5,8 +5,7 @@ import { useChats, useSession, useSettings, useViews } from '../session';
 import { ChipButton, Divider, Icon, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
 
-// design §4.2: which prompt this chat uses. Without its own choice it follows the default live, and a deleted one
-// shows as missing, never as another prompt.
+// Without its own choice it follows the default live, and a deleted one shows as missing, never as another prompt.
 export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
   const { prompt, promptMenu } = chat;
   const label = prompt.kind === 'prompt' ? prompt.prompt.value.name : prompt.own ? '프롬프트가 지워졌어요' : '기본 프롬프트가 없어요';

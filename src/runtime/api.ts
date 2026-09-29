@@ -1,3 +1,5 @@
+import { isRecord } from '../connectors/values';
+
 export type ApiFailure = { ok: false; error: string; retryAfter?: number };
 export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
 
@@ -20,8 +22,8 @@ export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   const readBytes = response.ok && response.headers.get('content-type') === 'application/octet-stream';
   const data: unknown = await (readBytes ? response.arrayBuffer().then((buffer) => new Uint8Array(buffer)) : response.json()).catch(() => null);
   if (response.ok && data !== null) return { ok: true, data: data as T };
-  if (typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string') {
-    const retryAfter = 'retryAfter' in data && typeof data.retryAfter === 'number' ? data.retryAfter : undefined;
+  if (isRecord(data) && typeof data.error === 'string') {
+    const retryAfter = typeof data.retryAfter === 'number' ? data.retryAfter : undefined;
     return { ok: false, error: data.error, retryAfter };
   }
   return { ok: false, error: 'server-error' };

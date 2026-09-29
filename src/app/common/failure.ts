@@ -18,6 +18,8 @@ const MESSAGES: Record<string, string> = {
   offline: '서버에 닿지 못했어요. 연결을 확인해 주세요.',
 };
 
+const SERVER_TROUBLE = '서버에 문제가 생겼어요. 잠시 뒤 다시 해 주세요.';
+
 const SECRET = { password: '비밀번호가', recovery: '복구 키가' } as const;
 
 // A refused password or recovery key, named the way the user chose to sign in. Signed out, the
@@ -30,7 +32,7 @@ export function describeFailure(failure: ApiFailure): string {
   if (failure.error === 'too-many-attempts' && failure.retryAfter !== undefined) {
     return `시도가 너무 많았어요. ${Math.ceil(failure.retryAfter / 60)}분 뒤에 다시 해 주세요.`;
   }
-  return MESSAGES[failure.error] ?? '서버에 문제가 생겼어요. 잠시 뒤 다시 해 주세요.';
+  return MESSAGES[failure.error] ?? SERVER_TROUBLE;
 }
 
 const REFUSED: Record<string, string> = {
@@ -75,7 +77,7 @@ export function describeReplyError(error: ReplyError): string {
     case 'relay':
       return RELAY[error.code] ?? '중계 서버가 요청을 거절했어요.';
     case 'app':
-      return MESSAGES[error.code] ?? '서버에 문제가 생겼어요. 잠시 뒤 다시 해 주세요.';
+      return MESSAGES[error.code] ?? SERVER_TROUBLE;
     case 'offline':
       return MESSAGES.offline!;
     case 'stopped':
@@ -151,7 +153,6 @@ export function describeTurnFailure(failure: TurnFailure): string {
   }
 }
 
-// design §6.3.
 export function describeTranslateFailure(failure: Exclude<TranslateFailure, { kind: 'stopped' }> | TranslatorFailure): string {
   switch (failure.kind) {
     case 'no-model':

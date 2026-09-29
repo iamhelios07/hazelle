@@ -5,17 +5,17 @@ import type { Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { chatPrompt } from './prompts';
-import type { ObjectStore } from './store';
+import { without, type ObjectStore } from './store';
 
-// Every read and write of the model assignment's layers (design §4.1). The chat layer lives in the
-// chat object and the prompt layer in the prompt, which runtime/chat-log and runtime/prompts write
-// otherwise; their `models` fields are written only here.
+// Every read and write of the model assignment's layers. The chat layer lives in the chat object and
+// the prompt layer in the prompt, which runtime/chat-log and runtime/prompts write otherwise; their
+// `models` fields are written only here.
 
 export type Route = { connection: Stored<'connection'>; model: Model };
 export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' };
 
 // A chat's model for a role: its own layer, its prompt's, then 전체 기본값. A missing prompt has no layer;
-// the turn stops on it before the model matters (runtime/prompts chatPrompt).
+// the turn stops on it before the model matters.
 export function chatModel(store: ObjectStore, chat: Chat, role: Role): Route | RouteFailure {
   const prompt = chatPrompt(store, chat);
   const ref = resolveRole(role, [chat.models, ...(prompt.kind === 'prompt' ? [prompt.prompt.value.models] : []), store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
@@ -25,17 +25,14 @@ export function chatModel(store: ObjectStore, chat: Chat, role: Role): Route | R
   return connection && model ? { connection, model } : { kind: 'model-gone' };
 }
 
-// The chat layer, which the model button writes (design F4).
+// The chat layer, which the model button writes.
 export function setChatModel(store: ObjectStore, chat: string, ref: ModelRef): Promise<ApiResult<Stored<'chat'>>> {
   return store.update('chat', chat, (current) => ({ ...current, models: { ...current.models, main: ref } }));
 }
 
 // null leaves the role to the layer below, or to the role it falls back to.
 function assign(models: Assignment, role: Role, ref: ModelRef | null): Assignment {
-  const next = { ...models };
-  if (ref === null) delete next[role];
-  else next[role] = ref;
-  return next;
+  return ref === null ? without(models, role) : { ...models, [role]: ref };
 }
 
 export function setPromptModel(store: ObjectStore, prompt: string, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'prompt'>>> {

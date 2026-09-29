@@ -29,7 +29,6 @@ function modelName(ref: ModelRef, connections: readonly Stored<'connection'>[]):
 type Props = {
   role: Role;
   help?: string;
-  // This layer's own choice.
   own: ModelRef | undefined;
   // What leaving it unset means here; null where it cannot be left unset. It names no model: 본 대화 differs by
   // chat, so a model named here would be wrong in any chat that picked another.
@@ -38,7 +37,7 @@ type Props = {
   onPick: (ref: ModelRef | null) => void;
 };
 
-// One role of one layer of the model assignment (design §4.1).
+// One role of one layer of the model assignment.
 export function RolePicker({ role, help, own, follow, connections, onPick }: Props) {
   const label = `${ROLE_WORDS[role]} 모델`;
   const starred = starredModels(connections, role);

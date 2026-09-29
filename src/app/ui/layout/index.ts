@@ -4,7 +4,6 @@ export { FaceRow } from './FaceRow';
 export { EditorFrame } from './EditorFrame';
 export { ListDetail, usePane } from './ListDetail';
 export { NavBar, type NavBarProps } from './NavBar';
-export { PageHead } from './PageHead';
 export { Row } from './Row';
 export { Screen } from './Screen';
 export { Section } from './Section';

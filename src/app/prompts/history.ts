@@ -3,9 +3,8 @@ import type { PromptPatch } from '../../runtime/prompts';
 import { blockTitle, MARKS } from './blocks';
 import { moved, rekey, withMark, type Draft } from './edits';
 
-// One structural edit of a prompt and its inverse (design §4.2: Ctrl+Z outside a text field). Both are applied to the
-// draft as it is then and change only what the edit changed, never restoring a copy of the whole draft, so text typed
-// in between survives either way. Typing itself is not a step: a text field keeps the browser's own undo.
+// One structural edit and its inverse. Both apply to the draft as it is then and change only what the edit changed,
+// so text typed in between survives either way. Typing is not a step: a text field keeps the browser's own undo.
 export type Step = {
   // What it did, as a toast names it.
   label: string;
@@ -124,8 +123,7 @@ export function removeToggle(toggle: Toggle, at: number): Step {
   return { label: `‘${toggle.label}’ 토글 지우기`, block: null, undo: (draft) => ({ toggles: put(draft.toggles) }), redo: (draft) => ({ toggles: take(draft.toggles) }) };
 }
 
-// The whole toggle swaps, since nothing is typed into one in place: its label and default change from controls and
-// dialogs, each change a step of its own.
+// The whole toggle swaps, since nothing is typed into one in place.
 export function editToggle(before: Toggle, after: Toggle, what: 'label' | 'default'): Step {
   const to = (toggle: Toggle) => (draft: Draft): PromptPatch => ({ toggles: draft.toggles.map((each) => (each.key === before.key ? toggle : each)) });
   return { label: what === 'label' ? `‘${before.label}’ 토글 이름 바꾸기` : `‘${before.label}’ 처음 값 바꾸기`, block: null, undo: to(before), redo: to(after) };

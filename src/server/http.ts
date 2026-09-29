@@ -11,6 +11,15 @@ export function fail(c: Context, status: ContentfulStatusCode, error: string, de
   return c.json({ error, ...detail }, status);
 }
 
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return hex(digest);
+}
+
+export function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function readObject(c: Context): Promise<Record<string, unknown> | null> {
   const body: unknown = await c.req.json().catch(() => null);
   return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;

@@ -1,5 +1,5 @@
 import { KEEP_DAYS } from '../../model/library';
-import { navigate } from '../shell/router';
+import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Empty, NavBar, Screen } from '../ui';
 
@@ -19,11 +19,11 @@ const COPY = {
 
 export type Absent = keyof typeof COPY;
 
-// What the address names is not there (shell/Page looks it up for every screen).
+// What the address names is not there.
 export function Missing({ what, back }: { what: Absent; back: Back }) {
   const { title, message } = COPY[what];
   return (
-    <Screen top={<NavBar title={title} onBack={() => navigate(back.to)} backLabel={back.label} />}>
+    <Screen top={<NavBar title={title} {...backBar(back)} />}>
       <Empty>{message}</Empty>
     </Screen>
   );

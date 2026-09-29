@@ -3,15 +3,15 @@ import { checkProof, findAccount, hashProof, readMethod, readProof } from './cre
 import { fail, readObject, type AppEnv } from './http';
 import { requireSession } from './session';
 
-// The server stores the wrapped keys without understanding them (tech-spec §4). The cap only keeps
-// rows small: a real wrap is 80 characters.
+// The server stores the wrapped keys without understanding them. The cap only keeps rows small: a real wrap is 80
+// characters.
 const MAX_WRAP_LENGTH = 1024;
 
 export const vaults = new Hono<AppEnv>();
 
 vaults.use(requireSession);
 
-// No GET route here: GET /api/session and POST /api/login carry the record (tech-spec §4).
+// No GET route here: GET /api/session and POST /api/login carry the record.
 export async function readVault(db: D1Database, accountId: string) {
   const row = await db
     .prepare('SELECT password_wrap, recovery_wrap FROM vaults WHERE account_id = ?')

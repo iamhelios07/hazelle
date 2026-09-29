@@ -19,7 +19,7 @@ import { displayChat } from './turn';
 export type Views = {
   chats: ChatItem[];
   chatById: ReadonlyMap<string, ChatItem>;
-  // The characters, each with its chats, most recent first, and the folders by name (design F6).
+  // The characters, each with its chats, most recent first, and the folders by name.
   library: { characters: CharacterShelf<ChatItem>[]; none: Shelf<ChatItem>; deleted: CharacterShelf<ChatItem>[]; folders: FolderTree[] };
   // The characters not in 지운 캐릭터.
   characterById: ReadonlyMap<string, CharacterShelf<ChatItem>>;
@@ -88,7 +88,7 @@ type Displayed = { key: string; texts: string[] };
 
 // What any chat's display reads besides the chat itself and its entries.
 const SHARED: readonly Kind[] = ['character', 'lore', 'prompt', 'persona', 'settings', 'connection', 'profile'];
-// Every write takes the account's next rev (tech-spec §5), so the count and highest rev of a set of objects
+// Every write takes the account's next rev, so the count and highest rev of a set of objects
 // change with any write to it, a deletion included.
 const written = (objects: Stored<Kind>[]) => `${objects.length}:${objects.reduce((max, { rev }) => Math.max(max, rev), 0)}`;
 

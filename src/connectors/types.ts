@@ -11,9 +11,8 @@ export class ConnectorError extends Error {
 
 export type Endpoint = { baseUrl: string; protocol: Protocol };
 
-// The stored `connection` object (tech-spec §5). A built-in connection type fixes the endpoint, so
-// baseUrl and protocol are set only on a connection of the generic type. Starred models are kept as
-// catalog snapshots, so pickers and requests need no catalog fetch first.
+// A built-in connection type fixes the endpoint, so baseUrl and protocol are set only on a generic connection.
+// Starred models are kept as catalog snapshots, so pickers and requests need no catalog fetch first.
 export type Connection = {
   type: string;
   label: string;
@@ -46,12 +45,11 @@ export type Model = {
   takes?: Takes;
 };
 
-// A starred model: the catalog's snapshot, and the 설정 묶음 it uses (design §4.4). Without one it uses the
-// default 묶음, as a chat without its own prompt uses the default prompt.
+// profile: the 설정 묶음 it uses; without one, the default 묶음.
 export type Starred = Model & { profile?: string };
 
-// cache: the prompt up to and including this message is a cache point (design §4.4). Only a request whose model settings
-// turn caching on sends it (registry chatRequest), and a codec never puts the field itself on the wire.
+// cache: the prompt up to and including this message is a cache point. Only a request whose model settings turn
+// caching on sends it, and a codec never puts the field itself on the wire.
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true };
 export type ChatRequest = { model: Model; messages: ChatMessage[]; settings: ModelSettings };
 
@@ -68,9 +66,7 @@ export type Usage = {
 // carries, which can fall behind the provider's, so it is shown as an estimate.
 export type Cost = { unit: 'usd' | 'credit'; amount: number; source: 'reported' | 'price-list' };
 
-// One figure a provider reports about a credential's spending (design §4, Meters row): what is left,
-// out of a cap when there is one, or what was spent. A cap that starts over each period names the
-// period. Units are never summed together.
+// One figure a provider reports about a credential's spending. Units are never summed together.
 export type Meter =
   | { kind: 'left'; label: string; unit: MeterUnit; amount: number; limit: number | null; resets: MeterReset | null }
   | { kind: 'spent'; label: string; unit: MeterUnit; amount: number };
@@ -86,36 +82,31 @@ export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: str
 
 export type Terminal = { state: 'completed' } | { state: 'failed'; error: string };
 
-// One of the shared wire formats (design §4, Protocol row). A connection type never re-implements
-// one; it adds to it through its own hooks.
+// A connection type never re-implements a wire format; it adds to one through its own hooks.
 export type Codec = {
   // How a plain API key is presented. A connection type may present its credential its own way.
   authHeaders(secret: string): Record<string, string>;
-  // Requests are built without the credential, which is added last (registry withCredential), so a
-  // request that cannot be built is refused before a credential is fetched.
+  // Requests are built without the credential, which is added last, so a request that cannot be built is refused
+  // before a credential is fetched.
   listModels(endpoint: Endpoint): HttpRequest;
   // null when the payload is not a model list at all, which is not the same as an empty one.
   parseModels(payload: unknown): Model[] | null;
   carries: Carries;
   // fields are the connection type's own, laid over the format's body.
   chat(endpoint: Endpoint, request: ChatRequest, fields: Record<string, unknown>): HttpRequest;
-  // Reads one decoded SSE event. Text goes through append; usage and the finish reason go to facts.
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
   terminal(event: unknown): Terminal | null;
-  // Whether a finish reason means the output hit its token limit.
   truncated(finishReason: string): boolean;
   usage(raw: Record<string, unknown>): Usage;
 };
 
-// A built-in provider laid over the generic connection (design §4). Every hook is optional: without
-// one, the codec's default answers, exactly as for a connection the user described by hand.
+// Every hook is optional: without one, the codec's default answers, exactly as for a connection described by hand.
 export type ConnectionType = {
   id: string;
   label: string;
   // Where it sits in the 연결 추가 list, and the line under its name there.
   group: 'gateway' | 'maker' | 'subscription';
   description: string;
-  // The provider's page for making an API key, linked from the key screen.
   keyPage?: string;
   // Where the model list is, and how a model that names no protocol of its own is called.
   endpoint: Endpoint;
@@ -126,7 +117,6 @@ export type ConnectionType = {
   signIn?: SignIn;
   // Trades the stored credential for the short-lived one that requests carry.
   exchange?: { request(secret: string): HttpRequest; parse(payload: unknown): Token | null };
-  // Presents the credential with the provider's own headers, in place of the codec's.
   headers?: (credential: string) => Record<string, string>;
   parseModels?: (payload: unknown) => Model[] | null;
   // Reasoning by a token budget, in a field of the provider's own where its codec has none. Its

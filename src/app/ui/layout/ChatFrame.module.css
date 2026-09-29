@@ -11,7 +11,7 @@
   flex-direction: column;
 }
 
-/* 읽기 설정 (design F3): ChatFrame.tsx sets --reading-size and one class of each kind. */
+/* 읽기 설정: ChatFrame.tsx sets --reading-size and one class of each kind. */
 .serif {
   --prose-font: var(--font-serif);
   --prose-size: var(--reading-size);

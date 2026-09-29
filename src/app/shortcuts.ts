@@ -6,7 +6,7 @@ type Shortcut = { label: string; hint: string; keys: readonly Chord[] };
 // label names the shortcut in 단축키; hint is the shorter word of the hint lines and button titles. A modifier a
 // chord leaves out is not checked, so Ctrl+Enter still sends and Ctrl+Shift+Enter still saves an edit.
 export const SHORTCUTS = {
-  // Ctrl+S too (user, 2026-09-29). Its handler must never pass the key on, or the browser's save-page dialog opens.
+  // Its handler must never pass Ctrl+S on, or the browser's save-page dialog opens.
   settings: { label: '설정 열기 · 닫기', hint: '설정', keys: [{ key: ',', mod: true }, { key: 's', mod: true }] },
   personas: { label: '페르소나 (채팅에서는 옆 패널)', hint: '페르소나', keys: [{ key: 'e', mod: true }] },
   prompts: { label: '프롬프트 (채팅에서는 옆 패널)', hint: '프롬프트', keys: [{ key: 'p', mod: true }] },
@@ -37,9 +37,8 @@ export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: re
 // was run from a button or menu.
 type Handler = (event?: KeyboardEvent) => boolean | void;
 
-// Newest last. The one window listener below serves them all, so a screen claims a key by mounting a handler for it.
-// fallback: the shell's own answer, which every screen's handler for the same keys comes before. Mount order cannot
-// decide that, since React runs a child's effects before its parent's.
+// Newest last; the one window listener serves them all. fallback marks the shell's own answer, which every screen's
+// handler for the same keys comes before: mount order cannot decide that, since React runs a child's effects first.
 type Entry = { name: Name; run: Handler; fallback: boolean };
 const handlers: Entry[] = [];
 

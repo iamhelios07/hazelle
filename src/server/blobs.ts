@@ -3,8 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { fail, ID, type AppEnv } from './http';
 import { requireSession } from './session';
 
-// Counts sealed bytes, a few more than the file itself. Room for a large original card image
-// (tech-spec §5: avatar).
+// Counts sealed bytes, a few more than the file itself. Room for a large original card image.
 const MAX_BLOB_BYTES = 25 * 1024 * 1024;
 
 export const blobs = new Hono<AppEnv>();

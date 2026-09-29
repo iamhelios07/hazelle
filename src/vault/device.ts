@@ -1,8 +1,8 @@
 import { open, seal } from './aead';
 import type { VaultKey } from './keys';
 
-// The vault stays unlocked on this device (tech-spec §4): the vault key is kept sealed under a
-// non-extractable device key, so the stored copy is useless outside this browser profile.
+// The vault stays unlocked on this device: the vault key is kept sealed under a non-extractable
+// device key, so the stored copy is useless outside this browser profile.
 const DB_NAME = 'risu-alpha';
 const STORE = 'device';
 const DEVICE_KEY = 'device-key';
@@ -22,8 +22,7 @@ export async function rememberVault(accountId: string, vaultKey: VaultKey): Prom
 }
 
 export async function recallVault(accountId: string): Promise<VaultKey | null> {
-  const stored = await read<StoredVault>(VAULT);
-  const key = await read<CryptoKey>(DEVICE_KEY);
+  const [stored, key] = await Promise.all([read<StoredVault>(VAULT), read<CryptoKey>(DEVICE_KEY)]);
   if (!stored || !key || stored.accountId !== accountId) return null;
   return open(key, stored.sealed, deviceAad(accountId));
 }

@@ -10,7 +10,7 @@ export type CatalogResult = { ok: true; models: Model[] } | { ok: false; failure
 // does not ask the provider again. A new key is a new entry.
 const TTL_MS = 5 * 60 * 1000;
 
-// The model lists of one open vault. Cache keys hold API keys, so close() drops them (runtime/session).
+// The model lists of one open vault. Cache keys hold API keys, so close() drops them.
 export class Catalogs {
   private readonly cache = new Map<string, { at: number; result: Promise<CatalogResult> }>();
 

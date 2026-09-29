@@ -1,7 +1,8 @@
 import { providerMessage } from '../connectors/errors';
+import { isRecord } from '../connectors/values';
 import type { HttpRequest } from '../connectors/types';
 
-// Whose refusal it was decides what the user is told (tech-spec §6): the provider's answer, the relay's
+// Whose refusal it was decides what the user is told: the provider's answer, the relay's
 // own refusal (X-Relay: error), the app's (no X-Relay header, such as an expired session), or no
 // connection at all.
 export type RelayFailure =
@@ -29,7 +30,7 @@ async function send(request: HttpRequest, signal?: AbortSignal): Promise<Respons
   const source = response.headers.get('x-relay');
   if (source === 'upstream') return response;
   const body: unknown = await response.json().catch(() => null);
-  const code = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string' ? body.error : 'server-error';
+  const code = isRecord(body) && typeof body.error === 'string' ? body.error : 'server-error';
   return source === 'error' ? { kind: 'relay', code } : { kind: 'app', code };
 }
 

@@ -2,12 +2,11 @@ import type { Card, Imported } from '../engine/import/types';
 import type { TranslateSwitches } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { daysLeft, holds, nest, type Character, type Lore } from '../model/library';
-import type { ToggleValues } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
 import { planRemoval } from './removal';
-import type { ObjectStore } from './store';
+import { without, type ObjectStore } from './store';
 
 // The picture of a new character: the original goes to its sealed blob, the thumbnail into the avatar
 // object beside it.
@@ -40,7 +39,7 @@ export async function addCharacter(store: ObjectStore, files: Files, character: 
   return saved.ok ? { ok: true, data: id } : saved;
 }
 
-// A card as the importer read it (engine/import), in no library folder. Its lorebook folders get ids,
+// A card as the importer read it, in no library folder. Its lorebook folders get ids,
 // and each entry names its folder by that id instead of the importer's index.
 export function importCharacter(store: ObjectStore, files: Files, { card, lore, loreFolders }: Pick<Imported, 'card' | 'lore' | 'loreFolders'>, picture: Picture | null, progress: Progress): Promise<ApiResult<string>> {
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
@@ -68,16 +67,11 @@ export async function copyCharacter(store: ObjectStore, files: Files, id: string
 // at is when it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good
 // (purgeExpired); null brings it back.
 export function setDeleted(store: ObjectStore, id: string, at: number | null): Promise<ApiResult<Stored<'character'>>> {
-  return store.update('character', id, (current) => {
-    const next = { ...current };
-    if (at === null) delete next.deleted;
-    else next.deleted = at;
-    return next;
-  });
+  return store.update('character', id, (current) => (at === null ? without(current, 'deleted') : { ...current, deleted: at }));
 }
 
-// Removes a character for good with everything it owns, in the order of its removal plan
-// (runtime/removal). progress counts every file and object removed.
+// Removes a character for good with everything it owns, in the order of its removal plan. progress counts
+// every file and object removed.
 export async function purgeCharacter(store: ObjectStore, files: Files, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
   const rounds = planRemoval(store, { kind: 'character', id });
   const total = rounds.reduce((sum, round) => sum + round.length, 0);
@@ -95,9 +89,8 @@ export async function purgeCharacter(store: ObjectStore, files: Files, id: strin
   return { ok: true, data: null };
 }
 
-// The session runs it when it opens (runtime/session), on whichever device opens first. One that fails
-// is tried again next time.
-// A stop (the vault closing) lets the character under way finish and leaves the rest for next time.
+// The session runs it when it opens, on whichever device opens first. One that fails is tried again next
+// time. A stop (the vault closing) lets the character under way finish and leaves the rest for next time.
 export async function purgeExpired(store: ObjectStore, files: Files, now: number, signal: AbortSignal): Promise<void> {
   for (const { id, value } of store.list('character')) {
     if (signal.aborted) return;
@@ -111,14 +104,14 @@ export function editCard(store: ObjectStore, id: string, patch: Partial<Card>): 
   return store.update('character', id, (current) => ({ ...current, card: { ...current.card, ...patch } }));
 }
 
-// A toggle's value for a character's chats, or with character null for 캐릭터 없이's (design §4.2).
+// A toggle's value for a character's chats, or with character null for 캐릭터 없이's.
 export function setToggle(store: ObjectStore, character: string | null, key: string, value: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
   if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, toggles: { ...current?.toggles, [key]: value } }));
   return store.update('character', character, (current) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
 }
 
-// design §6.3: a character's 번역, in every chat of it, or that of every 캐릭터 없이 chat, as toggle values are. Nothing
-// saved is both off.
+// A character's 번역, in every chat of it, or that of every 캐릭터 없이 chat, as toggle values are. Nothing saved
+// is both off.
 export function translateSwitches(store: ObjectStore, character: string | null): TranslateSwitches {
   const saved = character === null ? store.get('settings', SETTINGS_ID)?.value.translate : store.get('character', character)?.value.translate;
   return saved ?? { replies: false, input: false };
@@ -131,13 +124,8 @@ export function setTranslate(store: ObjectStore, character: string | null, switc
 
 // 기본값으로 되돌리기: the chats go back to the toggles' declared defaults.
 export function resetToggles(store: ObjectStore, character: string | null): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
-  const drop = <T extends { toggles?: ToggleValues }>(current: T) => {
-    const next = { ...current };
-    delete next.toggles;
-    return next;
-  };
-  if (character === null) return store.upsert('settings', (current) => drop({ models: {}, ...current }));
-  return store.update('character', character, drop);
+  if (character === null) return store.upsert('settings', (current) => without({ models: {}, ...current }, 'toggles'));
+  return store.update('character', character, (current) => without(current, 'toggles'));
 }
 
 type Placement = { id: string; folder: string | null };

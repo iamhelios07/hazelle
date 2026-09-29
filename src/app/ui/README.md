@@ -48,7 +48,6 @@ and only this folder styles elements.**
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
-| layout | `PageHead` | `PageHead.module.css` | The head of a page's body: the name of what it shows, its id and a lead |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |

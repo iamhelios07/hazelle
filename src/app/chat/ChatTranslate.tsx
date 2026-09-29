@@ -3,8 +3,6 @@ import { describeTranslateFailure } from '../common/failure';
 import { Menu, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
 import type { OpenChat } from './useChat';
 
-// design §6.3: the chat's 번역 switches, which are its character's, in every chat of it, or shared by every 캐릭터 없이
-// chat, as its toggle values are.
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
   const { translate, translateModel, card, actions } = chat;
   const on = [translate.replies && '답장 번역', translate.input && '보낼 말 번역'].filter(Boolean).join(', ');

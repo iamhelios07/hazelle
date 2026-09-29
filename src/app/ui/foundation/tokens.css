@@ -66,17 +66,17 @@
   --color-you-bg: var(--palette-mint-800);
   --color-you-text: var(--palette-mint-100);
 
-  /* A row's fill under the pointer and while it is the current one (collections/Item). Lists and menus use these; the
-     sidebar and the filter tabs still set their own, and whether every row fills alike is the user's design call. */
+  /* A row's fill under the pointer and while it is the current one (collections/Item). The sidebar and the filter
+     tabs set their own. */
   --color-item-hover: var(--color-surface-hover);
   --color-item-current: var(--color-surface-raised);
 
-  /* Story text (desktop chat mockup): narration, "dialogue" and *actions* read in three tones. */
+  /* Story text: narration, "dialogue" and *actions* read in three tones. */
   --color-prose-narration: var(--palette-sand-200);
   --color-prose-dialogue: var(--palette-sand-50);
   --color-prose-action: var(--palette-lilac-350);
 
-  /* A prompt's blocks by kind (design §4.2, the outline's rail): the line and ring, and the node's fill. */
+  /* A prompt's blocks by kind, on the outline's rail: the line and ring, and the node's fill. */
   --color-kind-text: var(--palette-lilac-450);
   --color-kind-text-line: var(--palette-lilac-400);
   --color-kind-text-bg: var(--palette-ink-880);
@@ -139,7 +139,7 @@
 
   --tracking-wide: 0.06em;
 
-  /* Story text at the reading settings' defaults (design F3): 명조, 17, line spacing 보통. Prose keeps these outside the
+  /* Story text at the reading settings' defaults: 명조, 17, line spacing 보통. Prose keeps these outside the
      chat; ChatFrame.tsx's readingDefault names the same choices and reads --prose-size, so change them together. */
   --prose-font: var(--font-serif);
   --prose-size: 17px;
@@ -147,8 +147,7 @@
   --prose-leading-narrow: 1.7;
   --prose-leading-normal: 1.9;
   --prose-leading-wide: 2.1;
-  /* 고딕 reads larger than 명조 at one size, so the story sets it a pixel smaller and a little tighter (desktop chat
-     mockup v7). */
+  /* 고딕 reads larger than 명조 at one size, so the story sets it a pixel smaller and a little tighter. */
   --prose-sans-shrink: 1px;
   --prose-sans-tighten: 0.1;
 
@@ -193,7 +192,7 @@
   --list-pane-width: 400px;
   --pane-max-width: 560px;
   --form-max-width: 688px;
-  /* 캐릭터 둘러보기 (design F6): the narrowest face card, and the widest the grid grows. */
+  /* 캐릭터 둘러보기: the narrowest face card, and the widest the grid grows. */
   --card-min-width: 152px;
   --gallery-max-width: 1120px;
   --portrait-width: 200px;
@@ -232,13 +231,13 @@
   --editor-header: 68px;
   --editor-foot: 140px;
   --tile-min-width: 260px;
-  /* Reading width (design F3, 읽기 설정): the story column, message gutters included. */
+  /* Reading width (읽기 설정): the story column, message gutters included. */
   --read-narrow: 700px;
   --read-normal: 800px;
   --read-wide: 960px;
   --read-gutter: 40px;
 
-  /* The gap a menu keeps from the screen's sides, the phone gutter. Menu.tsx reads it too. */
+  /* The gap a menu keeps from the screen's sides, the phone gutter. layers.ts reads it too. */
   --menu-edge: var(--space-16);
   --menu-max-height: 70vh;
   --chip-max-width: 240px;

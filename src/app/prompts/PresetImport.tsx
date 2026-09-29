@@ -14,7 +14,7 @@ const FAILURE: Record<PresetFailure['kind'], string> = {
   'no-template': '프롬프트 템플릿을 쓰지 않는 옛 프리셋이라 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
 };
 
-// What a preset held that the prompt did not take (engine/import/preset), in the order the importer lists it.
+// What a preset held that the prompt did not take.
 const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: string; note?: string }> = {
   memory: (count) => ({ title: `장기 기억 자리 ${count}개`, note: '장기 기억이 생기면 그때 자리를 놓을 수 있어요.' }),
   jailbreak: (count) => ({ title: `탈옥 블록 ${count}개` }),
@@ -33,8 +33,8 @@ const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: str
 type Opened = { file: string; id: string; prompt: Prompt; unsupported: PresetUnsupported[] };
 type Result = Opened | { file: string; failure: string };
 
-// A .risup picked or dropped on the prompt list becomes a new prompt (design §5 Scope), and a summary says what came
-// in and what did not. It takes dropped files from the app's character import while the list is open.
+// A .risup picked or dropped on the prompt list becomes a new prompt. While the list is open, its drop takes files
+// from the app's character import.
 export function usePresetImport(onOpen: (id: string) => void): { take: (files: File[]) => void; view: ReactNode } {
   const store = useStore();
   const [busy, setBusy] = useState<string | null>(null);

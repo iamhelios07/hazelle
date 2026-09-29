@@ -1,79 +1,38 @@
 import { ImageUp } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { Persona } from '../../model/persona';
 import { editPersona, removePersona, restorePersona, setDefaultPersona } from '../../runtime/personas';
 import { thumbnail } from '../../runtime/picture';
 import { useSettings, useStore } from '../session';
 import { personaTitle } from '../common/persona-words';
+import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useToast } from '../toast';
 import { Avatar, Button, FaceRow, FileButton, Row, Text, TextField, type NavBarProps } from '../ui';
 
-// How long typing pauses before a change is saved.
-const PAUSE = 600;
-
-type Status = 'saving' | 'saved' | 'failed';
-const STATUS: Record<Status, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
+// A page or a side panel: the editor or list says what its head holds, the caller how it looks.
+export type Frame = (parts: { head: NavBarProps; body: ReactNode }) => ReactNode;
 
 type Props = {
   stored: Stored<'persona'>;
   backLabel: string;
   onBack: () => void;
   onRemoved: () => void;
-  // A page or a side panel: the editor says what its head holds, the caller how it looks.
-  frame: (parts: { head: NavBarProps; body: ReactNode }) => ReactNode;
+  frame: Frame;
 };
 
-// Saves as CharacterEditScreen does: after a pause, and what still waits when it is left. Its state is one persona's,
-// so a caller keys it by id, and leaves by unmounting it, which saves.
+// A caller leaves by unmounting it, which saves.
 export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
   const { id } = stored;
   const [persona, setPersona] = useState(stored.value);
-  const [status, setStatus] = useState<Status | null>(null);
-  const waiting = useRef<Partial<Persona>>({});
-  const timer = useRef<number | undefined>(undefined);
+  const { status, save, flush, change: queue } = useAutosave<Persona>((patch) => editPersona(store, id, patch));
 
-  async function save(patch: Partial<Persona>) {
-    setStatus('saving');
-    const saved = await editPersona(store, id, patch);
-    if (saved.ok) return setStatus('saved');
-    // Kept for the next change to try again, under anything typed since.
-    waiting.current = { ...patch, ...waiting.current };
-    setStatus('failed');
-    toast.failed(saved, '저장하지 못했어요.');
-  }
-
-  async function flush() {
-    window.clearTimeout(timer.current);
-    const patch = waiting.current;
-    if (Object.keys(patch).length === 0) return;
-    waiting.current = {};
-    await save(patch);
-  }
-
-  const leave = useRef(flush);
-  leave.current = flush;
-  useEffect(() => () => void leave.current(), []);
-  useEffect(() => {
-    const unload = (event: BeforeUnloadEvent) => {
-      if (Object.keys(waiting.current).length === 0) return;
-      event.preventDefault();
-      void leave.current();
-    };
-    window.addEventListener('beforeunload', unload);
-    return () => window.removeEventListener('beforeunload', unload);
-  }, []);
-
-  function change<K extends 'name' | 'nickname' | 'description'>(field: K, value: string) {
+  function change(field: 'name' | 'nickname' | 'description', value: string) {
     setPersona((current) => ({ ...current, [field]: value }));
-    // A blank name is shown as an error and never saved.
-    if (field === 'name' && !value.trim()) delete waiting.current.name;
-    else waiting.current = { ...waiting.current, [field]: value };
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => void flush(), PAUSE);
+    queue(field, value, field !== 'name' || !!value.trim());
   }
 
   async function picture(file: File) {
@@ -126,5 +85,5 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       </Row>
     </>
   );
-  return frame({ head: { title: personaTitle(persona), backLabel, onBack, actions: status && <Text tone="muted">{STATUS[status]}</Text> }, body });
+  return frame({ head: { title: personaTitle(persona), backLabel, onBack, actions: status && <Text tone="muted">{SAVE_STATUS[status]}</Text> }, body });
 }

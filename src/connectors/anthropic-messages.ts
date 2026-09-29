@@ -1,6 +1,6 @@
 import type { Cache, Reasoning } from './settings';
 import { ConnectorError, type ChatMessage, type Codec, type Modality } from './types';
-import { count, isRecord } from './values';
+import { count, isRecord, modelEntries, nameOf } from './values';
 
 const VERSION = { 'anthropic-version': '2023-06-01' };
 
@@ -26,12 +26,11 @@ function reasoningFields(reasoning: Reasoning | undefined) {
   }
 }
 
-// A cache point's field, which OpenRouter takes in the same shape (chat-completions). Five minutes is the default and
-// goes unnamed.
-export const cacheControl = (cache: Cache) => ({ cache_control: { type: 'ephemeral', ...(cache === '1h' ? { ttl: '1h' } : {}) } });
+// Five minutes is the default and goes unnamed.
+const cacheControl = (cache: Cache) => ({ cache_control: { type: 'ephemeral', ...(cache === '1h' ? { ttl: '1h' } : {}) } });
 
-// The message as the wire takes it: never the cache mark itself, and a cache point as a text block that carries it.
-const wire = (message: ChatMessage, cache: Cache | undefined) =>
+// Never the cache mark itself; a cache point is a text block that carries it. OpenRouter reads the same shape in chat completions.
+export const wireMessage = (message: ChatMessage, cache: Cache | undefined) =>
   message.cache && cache ? { role: message.role, content: [{ type: 'text', text: message.content, ...cacheControl(cache) }] } : { role: message.role, content: message.content };
 
 // Every system message goes up into system, joined by a blank line. It stays one string unless a cache point falls in
@@ -59,10 +58,8 @@ export const anthropicMessages: Codec = {
   // tool support, sampling, or whether thinking can be turned off. A limit of 0 is read as unknown, as
   // the API's own example shows 0 for real models.
   parseModels(payload) {
-    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
-    return payload.data
-      .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '')
-      .map((raw) => {
+    return (
+      modelEntries(payload)?.map((raw) => {
         const capabilities = isRecord(raw.capabilities) ? raw.capabilities : null;
         const input: Modality[] | null = capabilities
           ? ['text', ...(supported(capabilities.image_input) ? (['image'] as const) : []), ...(supported(capabilities.pdf_input) ? (['file'] as const) : [])]
@@ -72,8 +69,8 @@ export const anthropicMessages: Codec = {
         const effort = isRecord(capabilities?.effort) ? capabilities.effort : null;
         const budget = supported(types.enabled);
         return {
-          id: raw.id as string,
-          name: typeof raw.display_name === 'string' && raw.display_name ? raw.display_name : (raw.id as string),
+          id: raw.id,
+          name: nameOf(raw, 'display_name'),
           input,
           output: ['text'],
           contextLength: count(raw.max_input_tokens) || null,
@@ -93,7 +90,8 @@ export const anthropicMessages: Codec = {
             },
           }),
         };
-      });
+      }) ?? null
+    );
   },
 
   carries: {
@@ -118,7 +116,7 @@ export const anthropicMessages: Codec = {
           messages.filter((message) => message.role === 'system'),
           settings.cache,
         ),
-        messages: messages.filter((message) => message.role !== 'system').map((message) => wire(message, settings.cache)),
+        messages: messages.filter((message) => message.role !== 'system').map((message) => wireMessage(message, settings.cache)),
         ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
         ...(settings.topP === undefined ? {} : { top_p: settings.topP }),
         ...(settings.topK === undefined ? {} : { top_k: settings.topK }),

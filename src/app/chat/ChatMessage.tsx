@@ -13,10 +13,10 @@ import { useReveal } from './useReveal';
 
 type Props = {
   message: Shown;
-  // The shown version's text as it is displayed (engine/render). Editing starts from the stored text.
+  // The shown version's text as it is displayed. Editing starts from the stored text.
   text: string;
   // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
-  // other way round from its default (design §6.3).
+  // other way round from its default.
   translating: Translating;
   flipped: boolean;
   isLast: boolean;
@@ -43,7 +43,6 @@ type Props = {
 
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
-// One message of design F3, with its version switcher, its markers and its tools.
 export function ChatMessage(props: Props) {
   const { message, text: original, translating, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
   const { username } = useSession();
@@ -52,7 +51,7 @@ export function ChatMessage(props: Props) {
   const receipt = version.receipt;
   const mine = message.role === 'user';
   const live = message.live === version.id;
-  // design §6.3: a version with a translation shows it, and a translation being made shows as it comes.
+  // A version with a translation shows it, and a translation being made shows as it comes.
   const translation = version.translation ?? translating.held.get(version.id) ?? null;
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
@@ -133,7 +132,6 @@ export function ChatMessage(props: Props) {
     body = <Prose text={reveal.text} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />;
   }
 
-  // design §6.3: how the translation stands, under the text; 다시 번역 makes it again.
   const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => actions.translate(message) };
   const translationMark =
     translatingText === '' ? (

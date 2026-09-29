@@ -3,12 +3,11 @@ import { detect } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { useAttempt } from '../common/useAttempt';
 import { useSession } from '../session';
-import { navigate } from '../shell/router';
+import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, Intro, Link, NavBar, Screen, Stack, Text, TextField } from '../ui';
 import { connect } from './connect';
 
-// F5 for a provider picked from the list: its address is known, so only the key is asked.
 export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back: Back }) {
   const session = useSession();
   const [key, setKey] = useState('');
@@ -25,7 +24,7 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
 
   return (
     <Screen
-      top={<NavBar title={`${type.label} 연결`} onBack={() => navigate(back.to)} backLabel={back.label} />}
+      top={<NavBar title={`${type.label} 연결`} {...backBar(back)} />}
       onSubmit={submit}
       actions={
         <>

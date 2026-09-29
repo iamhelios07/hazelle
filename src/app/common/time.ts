@@ -7,6 +7,9 @@ const daysBetween = (at: number, now: number) => Math.round((new Date(now).setHo
 // 오후 11:02
 export const timeOfDay = (at: number) => clock.format(at);
 
+// 9월 27일
+export const monthDay = (at: number) => date.format(at);
+
 // How long ago, as a chat list says it: 방금, 오후 11:02, 어제, 3일 전, 9월 27일.
 export function ago(at: number, now = Date.now()): string {
   if (now - at < 60_000) return '방금';

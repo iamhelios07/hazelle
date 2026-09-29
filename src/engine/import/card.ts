@@ -1,11 +1,11 @@
-import { add, convert, type Converted, type Tally } from './convert';
+import { add, convert, counted, type Converted, type Tally } from './convert';
 import { UNSUPPORTED_KINDS, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
 import { readPng } from './png';
 import { readRisum } from './risum';
 import { openZip, type Zip } from './zip';
 
 const utf8 = new TextDecoder();
-// The same one-liner as vault/aead.ts; importers belong to the engine, which may not import the vault (tech-spec §3).
+// The same one-liner as vault/aead.ts, which the engine may not import.
 const base64 = (text: string) => Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
 const fail = (kind: ImportFailure['kind'], detail?: string): ImportResult => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
 
@@ -62,11 +62,7 @@ function fromJson(bytes: Uint8Array): ImportResult {
 
 function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], tally: Tally): ImportResult {
   const { card, lore, loreFolders, spec } = converted;
-  const unsupported = UNSUPPORTED_KINDS.flatMap((kind) => {
-    const count = tally.get(kind) ?? 0;
-    return count > 0 ? [{ kind, count }] : [];
-  });
-  return { ok: true, card: { card, lore, loreFolders, avatar, report: { format, spec, unsupported } } };
+  return { ok: true, card: { card, lore, loreFolders, avatar, report: { format, spec, unsupported: counted(UNSUPPORTED_KINDS, tally) } } };
 }
 
 // CCv3's icon resolution: no icon or ccdefault: is the file's own image (the JPEG in front of a charx's zip),

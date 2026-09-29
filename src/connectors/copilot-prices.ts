@@ -1,12 +1,8 @@
 import type { Cost, Usage } from './types';
 
-// Copilot bills tokens in AI credits (1 credit = $0.01) and reports no cost, so a reply's cost is
-// worked out here from GitHub's price table. Copied from
-// https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing on 2026-09-28. The
-// page can change (provider-hub's copy from five days earlier differs on GPT-5.6), so a cost from it is
-// an estimate, which the user chose to keep over showing no cost (design §8). Keyed by the ids
-// provider-hub saw in real Copilot model lists; a model priced on the page under a name whose id has
-// not been seen is left out, and its replies cost 알 수 없음.
+// Copilot bills tokens in AI credits (1 credit = $0.01) and reports no cost, so a reply's cost is estimated from
+// https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing (copied 2026-09-28; the page changes).
+// Keyed by ids seen in real Copilot model lists; a model whose id has not been seen is left out and costs 알 수 없음.
 
 // Dollars per million tokens. A tier applies up to maxInput input tokens; the last has no bound.
 type Rate = { maxInput?: number; input: number; cached: number; cacheWrite?: number; output: number };
@@ -49,8 +45,7 @@ const PRICES: Partial<Record<string, Rate[]>> = {
   'kimi-k2.7-code': [{ input: 0.95, cached: 0.19, output: 4 }],
 };
 
-// A cache count the reply did not send counts as none, as the Anthropic input total already does
-// (anthropic-messages usage). Without the input or output count there is no cost.
+// A cache count the reply did not send counts as none. Without the input or output count there is no cost.
 export function copilotCost(modelId: string, usage: Usage | null): Cost | null {
   const tiers = PRICES[modelId];
   if (!tiers || !usage || usage.inputTokens === null || usage.outputTokens === null) return null;

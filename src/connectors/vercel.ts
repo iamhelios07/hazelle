@@ -1,7 +1,7 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, Modality } from './types';
-import { amount, count, isRecord } from './values';
+import { amount, count, isRecord, modelEntries, nameOf } from './values';
 
 const API = 'https://ai-gateway.vercel.sh/v1';
 
@@ -44,15 +44,16 @@ export const vercel: ConnectionType = {
 
   // The list also holds image, video, embedding and speech models; only language models chat.
   parseModels(payload) {
-    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
-    return payload.data
-      .filter((raw): raw is Record<string, unknown> => isRecord(raw) && typeof raw.id === 'string' && raw.id !== '' && raw.type === 'language')
+    const entries = modelEntries(payload);
+    if (!entries) return null;
+    return entries
+      .filter((raw) => raw.type === 'language')
       .map((raw) => {
         const kinds = isRecord(raw.modalities) ? raw.modalities : {};
         const tags = Array.isArray(raw.tags) ? raw.tags : null;
         return {
-          id: raw.id as string,
-          name: typeof raw.name === 'string' && raw.name ? raw.name : (raw.id as string),
+          id: raw.id,
+          name: nameOf(raw, 'name'),
           input: modalities(kinds.input),
           output: modalities(kinds.output),
           contextLength: count(raw.context_window),

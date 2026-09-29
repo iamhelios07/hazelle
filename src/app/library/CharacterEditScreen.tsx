@@ -1,69 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { Card } from '../../engine/import/types';
 import { editCard } from '../../runtime/characters';
 import { EntryList } from '../common/EntryList';
+import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useStore } from '../session';
-import { navigate } from '../shell/router';
+import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { useToast } from '../toast';
 import { NavBar, Screen, Section, Text, TextField } from '../ui';
 
-// How long typing pauses before a change is saved.
-const PAUSE = 600;
-
-type Status = 'saving' | 'saved' | 'failed';
-const STATUS: Record<Status, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
-
-// 캐릭터 편집 (design F6): the card's text, which its chats' prompt uses. Lorebook and regex scripts
-// are not edited here yet. Each change saves on its own after a pause, and only the fields changed here
-// go to editCard. Leaving the screen saves what is still waiting.
+// 캐릭터 편집: the card's text. Only the fields changed here go to editCard.
 export function CharacterEditScreen({ id, initial, back }: { id: string; initial: Card; back: Back }) {
   const store = useStore();
-  const toast = useToast();
   const [card, setCard] = useState(initial);
-  const [status, setStatus] = useState<Status | null>(null);
-  const waiting = useRef<Partial<Card>>({});
-  const timer = useRef<number | undefined>(undefined);
-
-  async function flush() {
-    window.clearTimeout(timer.current);
-    const patch = waiting.current;
-    if (Object.keys(patch).length === 0) return;
-    waiting.current = {};
-    setStatus('saving');
-    const saved = await editCard(store, id, patch);
-    if (saved.ok) return setStatus('saved');
-    // Kept for the next change to try again, under anything typed since.
-    waiting.current = { ...patch, ...waiting.current };
-    setStatus('failed');
-    toast.failed(saved, '저장하지 못했어요.');
-  }
-
-  const leave = useRef(flush);
-  leave.current = flush;
-  useEffect(() => () => void leave.current(), []);
-  // Closing or reloading the tab gives a save no time to finish, so the browser asks first.
-  useEffect(() => {
-    const unload = (event: BeforeUnloadEvent) => {
-      if (Object.keys(waiting.current).length === 0) return;
-      event.preventDefault();
-      void leave.current();
-    };
-    window.addEventListener('beforeunload', unload);
-    return () => window.removeEventListener('beforeunload', unload);
-  }, []);
+  const { status, change: queue } = useAutosave<Card>((patch) => editCard(store, id, patch));
 
   function change<K extends keyof Card>(field: K, value: Card[K]) {
     setCard((current) => ({ ...current, [field]: value }));
-    // A blank name is shown as an error and never saved.
-    if (field === 'name' && !(value as string).trim()) delete waiting.current.name;
-    else waiting.current = { ...waiting.current, [field]: value };
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => void flush(), PAUSE);
+    queue(field, value, field !== 'name' || !!(value as string).trim());
   }
 
   return (
-    <Screen top={<NavBar title="캐릭터 편집" subtitle={card.name} onBack={() => navigate(back.to)} backLabel={back.label} actions={status && <Text tone="muted">{STATUS[status]}</Text>} />}>
+    <Screen top={<NavBar title="캐릭터 편집" subtitle={card.name} {...backBar(back)} actions={status && <Text tone="muted">{SAVE_STATUS[status]}</Text>} />}>
       <Text tone="muted">로어북과 정규식은 아직 여기서 고칠 수 없어요.</Text>
       <Section title="기본">
         <TextField label="이름" value={card.name} onChange={(value) => change('name', value)} error={card.name.trim() ? undefined : '이름을 적어 주세요.'} />

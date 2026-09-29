@@ -1,5 +1,5 @@
-// The engine's only source of randomness (tech-spec §8): the same seed gives the same sequence on
-// every device, so a message's random tags show and send the same values (design §5 row 11).
+// The engine's only source of randomness: the same seed gives the same sequence on every device, so a message's
+// random tags show and send the same values.
 export function seeded(seed: string): () => number {
   let state = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) state = Math.imul(state ^ seed.charCodeAt(i), 0x01000193);

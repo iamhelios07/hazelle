@@ -1,10 +1,10 @@
 import type { Context } from 'hono';
-import { fail, type AppEnv } from './http';
+import { fail, sha256Hex, type AppEnv } from './http';
 
 export type Method = 'password' | 'recovery';
 export type StoredAccount = { id: string; username: string; login_hash: string; recovery_hash: string; locked_until: number | null };
 
-// 256 bits in base64: what the client derives from the password or the recovery key (tech-spec §4).
+// 256 bits in base64: what the client derives from the password or the recovery key.
 const PROOF = /^[A-Za-z0-9+/]{43}=$/;
 const FREE_FAILURES = 5;
 const MAX_LOCK_MINUTES = 60;
@@ -18,10 +18,7 @@ export function readMethod(value: unknown): Method | null {
 }
 
 // A plain hash is enough: guessing a password from a stolen hash still costs the client's Argon2id per guess.
-export async function hashProof(proof: string): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(proof)));
-  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
-}
+export const hashProof = sha256Hex;
 
 export function findAccount(db: D1Database, column: 'id' | 'username', value: string) {
   return db

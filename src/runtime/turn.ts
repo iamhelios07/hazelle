@@ -31,11 +31,10 @@ export type Target =
   | { kind: 'retry'; message: string; version: string }
   | { kind: 'continue'; message: string; version: string };
 
-// Why a chat cannot start a turn: no model, or its prompt, persona or its model's 설정 묶음 is missing (design §4.2,
-// §4.3, §4.4); own says whether the missing one was the chat's (the model's) own or the default.
+// Why a chat cannot start a turn: no model, or its prompt, persona or its model's 설정 묶음 is missing; own says whether the missing one was the chat's (the model's) own or the default.
 export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; own: boolean } | { kind: 'profile-missing'; own: boolean };
-// A turn also stops before sending on a new chat that was not saved, a user's message that was not translated
-// (design §6.3), a tokenizer that did not load, or a prompt over the model's budget.
+// A turn also stops before sending on a new chat that was not saved, a user's message that was not translated, a
+// tokenizer that did not load, or a prompt over the model's budget.
 export type TurnFailure =
   | TalkFailure
   | Blocked
@@ -78,15 +77,14 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
 
 export type ChatToggleSet = { declared: Toggle[]; value: (key: string) => string | null };
 
-// A chat's toggles and their values (design §4.2): what its turns send with, and what its toggle panel lists.
+// A chat's toggles and their values: what its turns send with, and what its toggle panel lists.
 export function togglesOf(store: Session['store'], chat: Chat, prompt: PromptChoice): ChatToggleSet {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
   const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], character ? readToggles(character.card.toggles).toggles : []);
   return { declared, value: toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
 }
 
-// A chat's greeting is its first message when that is an assistant message the model did not write (tech-spec
-// §5). Its index in the card is that of the shown version among the card's greetings that are not blank, which
+// A chat's greeting is its first message when that is an assistant message the model did not write. Its index in the card is that of the shown version among the card's greetings that are not blank, which
 // are the ones a chat saves.
 function greetingOf(card: Card, messages: Message[]): ChatScope['greeting'] {
   const first = messages[0];
@@ -95,7 +93,7 @@ function greetingOf(card: Card, messages: Message[]): ChatScope['greeting'] {
   return { index: shown(first).receipt === null ? (greetings[first.selected] ?? null) : null };
 }
 
-// The 묶음's settings as this model is sent them (design §4.4); null while its 묶음 is missing, which a turn stops on.
+// The 묶음's settings as this model is sent them; null while its 묶음 is missing, which a turn stops on.
 function sentSettings(store: Reader['store'], { connection, model }: Route): ModelSettings | null {
   const profile = modelProfile(store, model);
   if (profile.kind === 'missing') return null;
@@ -103,7 +101,7 @@ function sentSettings(store: Reader['store'], { connection, model }: Route): Mod
   return schema ? fit(schema, profile.profile.value.settings).settings : profile.profile.value.settings;
 }
 
-// A model's context limit and reply length: the ones its 묶음 sets, else its catalog's (design §4.4).
+// A model's context limit and reply length: the ones its 묶음 sets, else its catalog's.
 const contextOf = (model: Starred, settings: ModelSettings | null) => settings?.context ?? model.contextLength;
 const replyOf = (model: Starred, settings: ModelSettings | null) => settings?.maxOutput ?? model.maxOutput;
 
@@ -121,7 +119,7 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
 // Each message's text as the chat shows it, for its log, its title and its preview.
 export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[]) => renderChat('display', scopeOf(reader, id, chat, messages)).texts;
 
-// What a translation in this chat is made from (design §6.3): one of messages, or the user's message after them.
+// What a translation in this chat is made from: one of messages, or the user's message after them.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
   return { chat, scope: scopeOf(reader, id, chat, messages), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
 }
@@ -146,7 +144,7 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
 
 // null: the chat, or the message the target names, is gone; for a continue, so is the version it names. ids are
 // the ones the turn was shown under, for a new chat shown before it was saved.
-export function gatherTurn(session: Session, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
+function gatherTurn(session: Session, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
   const stored = session.store.get('chat', chat);
   if (!stored) return null;
   const route = chatModel(session.store, stored.value, 'main');
@@ -183,7 +181,7 @@ export function gatherTurn(session: Session, chat: string, target: Target, ids =
   };
 }
 
-// o200k_base counts for every model (tech-spec §8), loaded when a chat opens rather than with the page. Text
+// o200k_base counts for every model, loaded when a chat opens rather than with the page. Text
 // that spells a special token counts as text.
 const tokenizer = () => import('gpt-tokenizer/encoding/o200k_base').then(({ countTokens }) => (text: string) => countTokens(text, { disallowedSpecial: new Set() }));
 
@@ -219,7 +217,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   return 'kind' in prompt ? prompt : { route, settings, prompt, said };
 }
 
-// design §6.3: the user's message goes out translated, which the prompt sends and the chat saves as its text, with
+// The user's message goes out translated, which the prompt sends and the chat saves as its text, with
 // what the user typed as its translation. The chat's messages before it are the translation's context.
 async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
   const typed = turn.said!;

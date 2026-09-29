@@ -168,8 +168,8 @@ export function href(route: Route): string {
 
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
-// The list a route sits in (design F5): its screen is the list itself, or the item beside it where there
-// is room (ListDetail). null outside the connection, persona and 모델 설정 screens.
+// The list a route sits in: its screen is the list itself, or the item beside it where there is room. null outside
+// the connection, persona and 모델 설정 screens.
 export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'profiles'> | null {
   switch (route.kind) {
     case 'connections':
@@ -193,8 +193,8 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
 
 export type SettingsPage = 'prompts' | 'personas' | 'connections' | 'profiles' | 'defaults' | 'account';
 
-// Which page of 설정 a route is on (design: Secondary screens), 'list' for 설정's own list, or null outside
-// 설정. While it is not null, the settings layer stands in for the library.
+// Which page of 설정 a route is on, 'list' for 설정's own list, or null outside 설정. While it is not null, the
+// settings layer stands in for the library.
 export function settingsPage(route: Route): SettingsPage | 'list' | null {
   switch (route.kind) {
     case 'prompts':

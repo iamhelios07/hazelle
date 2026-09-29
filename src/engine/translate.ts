@@ -3,8 +3,8 @@ import { unescapeCbs } from './cbs/escape';
 import { evaluate } from './cbs/evaluate';
 import { contexts, renderChat, type ChatScope } from './render';
 
-// design §6.3. The prompt was measured in the user's own translator and carried over through provider-hub
-// (src/translate/prompt.js): an edit must keep what it bought, markers kept whole and a character card never acted.
+// The prompt was measured in the user's own translator (provider-hub src/translate/prompt.js): an edit must keep what
+// it bought, markers kept whole and a character card never acted.
 
 // A chat message as the chat shows it, into the reader's language; or the user's new message, after the chat's
 // messages, into the language the model is sent.

@@ -14,7 +14,7 @@ export type AddFailure =
   | { kind: 'save'; failure: ApiFailure }
   | { kind: 'stopped' };
 
-// F5's last step on every path: the model list must load before the connection is saved. A model list
+// The model list must load before the connection is saved. A model list
 // may be public (OpenRouter's is), so a key the meters' request is refused with (401) stops the save
 // too; any other trouble with the meters leaves them to their own block on the next screen.
 // Leaving the screen (signal) while these load saves nothing.
@@ -35,12 +35,6 @@ export function setStarred(store: ObjectStore, id: string, model: Model, starred
   });
 }
 
-// Answers the removed connection, which restoreConnection (되돌리기) writes back.
-export async function removeConnection(store: ObjectStore, id: string): Promise<ApiResult<Stored<'connection'>>> {
-  const connection = store.get('connection', id);
-  if (!connection) return { ok: false, error: 'gone' };
-  const removed = await store.remove(id);
-  return removed.ok ? { ok: true, data: connection } : removed;
-}
+export const removeConnection = (store: ObjectStore, id: string) => store.take('connection', id);
 
 export const restoreConnection = (store: ObjectStore, removed: Stored<'connection'>) => store.restore(removed);

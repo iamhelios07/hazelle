@@ -5,7 +5,7 @@ import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, Empty, Icon, List, ListItem, NavBar, Screen } from '../ui';
 
-// The default model is chosen in 설정's 기본값 (settings/DefaultsScreen), not here.
+// The default model is chosen in 설정's 기본값, not here.
 export function ConnectionsScreen({ back }: { back: Back | null }) {
   const connections = useConnections();
   const unreadable = useUnreadable();

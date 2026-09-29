@@ -7,7 +7,7 @@ export type Context = {
   // In the caller's source order (spec §c); <order N> reorders them here.
   scripts: readonly RegexScript[];
   // The chat as shown, oldest first, and the place in it of the message the text belongs to: the stored
-  // message index display uses, never a position in a filtered history (design §5 row 14).
+  // message index display uses, never a position in a filtered history.
   messages: readonly HistoryMessage[];
   index: number;
   cbs: (text: string) => string;
@@ -25,7 +25,7 @@ const PLACEMENTS = new Map([
 ]);
 
 // Runs the one CBS pass over the text itself, so the caller hands in the text before CBS.
-// No result cache (design §5 row 11): Risu's froze random CBS in a replacement.
+// No result cache: Risu's froze random CBS in a replacement.
 export function applyScripts(stage: RegexScript['stage'], text: string, { scripts, messages, index, cbs }: Context): { text: string; skipped: Skipped[] } {
   const skipped: Skipped[] = [];
   const run = scripts
@@ -64,7 +64,7 @@ export function applyScripts(stage: RegexScript['stage'], text: string, { script
       result = cbs(move(result, once, argument, kind === 'move_top'));
     } else {
       // inject: the match leaves this stage's text. Risu also rewrote the stored message; stored text is never
-      // rewritten here (design §5 row 19), so that half has nothing to do.
+      // rewritten here, so that half has nothing to do.
       result = cbs(result.replace(regex, kind === 'inject' ? '' : argument));
     }
   }
@@ -87,7 +87,7 @@ function options(flags: string | null): { flags: string; actions: Set<string>; o
   return { flags: rest ? [...new Set(rest)].filter((char) => FLAG_CHARS.includes(char)).join('') : 'g', actions, order };
 }
 
-// {{data}} is the whole match (design §5 row 10). The function form is the fix: as a replacement string,
+// {{data}} is the whole match. The function form is the fix: as a replacement string,
 // '$&' puts {{data}} itself back, which is how Risu's stayed literal.
 function prepare(replace: string, actions: Set<string>): string {
   const out = replace.replaceAll('$n', '\n').replaceAll('{{data}}', () => '$&');
@@ -105,7 +105,7 @@ function move(text: string, once: () => RegExp, block: string, top: boolean): st
 }
 
 // Risu copied from the previous same-role message only, and carried a match forward because the output stage
-// rewrote that message in storage. Stored text stays as written (design §5 row 19), so the search goes back to
+// rewrote that message in storage. Stored text stays as written, so the search goes back to
 // the latest same-role message that has a match.
 function repeatBack(text: string, once: () => RegExp, mode: string, messages: readonly HistoryMessage[], index: number): string | null {
   const { role } = messages[index]!;

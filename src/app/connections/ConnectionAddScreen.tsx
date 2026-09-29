@@ -4,7 +4,7 @@ import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { useAttempt } from '../common/useAttempt';
 import { useConnections, useSession } from '../session';
-import { navigate, useRoute } from '../shell/router';
+import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Callout, Empty, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack } from '../ui';
 import { connect } from './connect';
@@ -15,8 +15,8 @@ const GROUPS: Record<ConnectionType['group'], string> = {
   subscription: '구독 계정으로',
 };
 
-// F5: pick a provider from the list, or paste its key or address into the one field on top. What the
-// list does not hold goes through 직접 연결.
+// Pick a provider from the list, or paste its key or address into the one field on top. What the list does not hold
+// goes through 직접 연결.
 export function ConnectionAddScreen({ back }: { back: Back }) {
   const session = useSession();
   const connections = useConnections();
@@ -30,7 +30,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
   const connectKey = (type: ConnectionType, secret: string) => run(() => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }));
 
   return (
-    <Screen top={<NavBar title="연결 추가" onBack={() => navigate(back.to)} backLabel={back.label} />}>
+    <Screen top={<NavBar title="연결 추가" {...backBar(back)} />}>
       <SearchField label="이름 검색, 또는 키·주소 붙여 넣기" value={query} onChange={setQuery} />
       {search.kind === 'key' && (
         <Stack gap="related">

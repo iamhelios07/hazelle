@@ -10,7 +10,7 @@ export type SettleResult = { ok: true; cost: Cost } | { ok: false; failure: Sett
 // seconds too short, so the waits grow to about a minute in all.
 const WAITS_MS = [1000, 2000, 4000, 8000, 15000, 30000];
 
-// For a reply whose cost came back 'pending' (connectors/stream), with the reply's id.
+// For a reply whose cost came back 'pending', with the reply's id.
 export async function settleCost(connection: Connection, replyId: string, signal: AbortSignal): Promise<SettleResult> {
   const settle = resolveConnection(connection)?.type?.settle;
   if (!settle) return { ok: false, failure: { kind: 'not-a-cost' } };

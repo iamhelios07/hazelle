@@ -3,17 +3,17 @@ import { useStore, useViews } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Empty, List, ListItem, NavBar, Screen, Section } from '../ui';
-import { valueWords } from './settingWords';
+import { defaultFirst, valueWords } from './settingWords';
 
-// Models first (user, 2026-09-29): a model opens its own page, where it picks its settings; the settings made so far
-// are listed under them, and each opens its editor. The screens never say 묶음.
+// Models first, each opening its own page where it picks its settings; the settings made so far are listed under
+// them. The screens never say 묶음.
 export function ProfilesScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const route = useRoute();
   const { profiles, connections, settings } = useViews();
 
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
-  const sorted = [...profiles].sort((a, b) => Number(b.id === settings.profile) - Number(a.id === settings.profile) || a.value.name.localeCompare(b.value.name, 'ko'));
+  const sorted = defaultFirst(profiles, settings.profile);
 
   return (
     <Screen top={<NavBar title="모델 설정" {...backBar(back)} />}>

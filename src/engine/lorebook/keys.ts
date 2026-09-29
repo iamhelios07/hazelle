@@ -3,7 +3,7 @@ import { stripComments } from '../cbs/parse';
 // What a key is searched in: a chat message, or the body of an entry that fired in an earlier pass.
 export type Source = { kind: 'message' | 'entry'; id: string };
 
-// A scanned text, with CBS comments removed (design §5 row 1) and prepared once for each way a key compares.
+// A scanned text, with CBS comments removed and prepared once for each way a key compares.
 export type Scanned = { source: Source; text: string; compact: string; compactLower: string };
 
 export type Matcher = (scanned: Scanned) => boolean;
@@ -24,7 +24,7 @@ const search = (pattern: RegExp): Matcher => (scanned) => scanned.text.search(pa
 // null for a regex key that does not compile.
 export function compile(key: string, { regex, caseSensitive, fullWord }: KeyMode): Matcher | null {
   // With regex on, a key is a regex exactly when it starts with `/`; flags are optional and decide case
-  // alone, so the entry's case setting does not reach it (design §5 row 2).
+  // alone, so the entry's case setting does not reach it.
   if (regex && key.startsWith('/')) {
     const end = key.lastIndexOf('/');
     if (end === 0) return null;

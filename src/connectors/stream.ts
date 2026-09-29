@@ -2,16 +2,14 @@ import type { Resolved } from './registry';
 import { SseParser } from './sse';
 import type { Cost, Model, Phase, StreamFacts, Terminal, Usage } from './types';
 
-// design F3: a reply is done, cut or failed, and a cut or failed reply is never shown as a clean success.
-// cut says why: the token limit, a stream that ended without its end marker, or the user's 멈추기.
-// A failure says whose it was: the provider's own message, an event that was not JSON, or the connection.
+// A cut or failed reply is never shown as a clean success.
 export type Outcome = {
   state: 'done' | 'cut' | 'failed';
   cut: 'length' | 'no-terminal' | 'stopped' | null;
   error: { kind: 'provider' | 'bad-event' | 'network'; detail: string } | null;
   finishReason: string | null;
   usage: Usage | null;
-  // pending: the type books the cost after the reply, to be looked up by replyId (runtime settleCost).
+  // pending: the type books the cost after the reply, to be looked up by replyId.
   cost: Cost | 'pending' | null;
   replyId: string | null;
 };

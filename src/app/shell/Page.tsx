@@ -57,7 +57,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
 
   function screen(at: Route): ReactNode {
     switch (at.kind) {
-      // The desktop home: every character, or before there is one, the first steps (F1).
+      // The desktop home: every character, or before there is one, the first steps.
       case 'home':
         return library.characters.length ? <GalleryScreen back={null} /> : <HomeScreen />;
       case 'gallery':
@@ -127,8 +127,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
     }
   }
 
-  // The connection, persona and 모델 설정 screens as their list and the item picked from it, which sit side by side
-  // when there is room (design F5, desktop).
+  // The connection, persona and 모델 설정 screens: their list and the item picked from it, side by side when there is room.
   const list = listOf(route);
   if (!list) return screen(route);
   const detail = route.kind === list.kind ? null : screen(route);

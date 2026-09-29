@@ -1,7 +1,6 @@
 import type { Model } from './types';
 
-// A 설정 묶음's settings (design §4.4), in this app's own names. Each codec puts them into its wire
-// format; a connection type adds only what its provider carries beyond its codec.
+// A 설정 묶음's settings in this app's own names; each codec puts them into its wire format.
 export const NUMBERS = ['maxOutput', 'temperature', 'topP', 'topK', 'frequencyPenalty', 'presencePenalty', 'repetitionPenalty', 'minP', 'seed'] as const;
 export type NumberSetting = (typeof NUMBERS)[number];
 export type Setting = NumberSetting | 'stop' | 'reasoning';
@@ -14,14 +13,14 @@ export type Reasoning =
   | { kind: 'budget'; tokens: number }
   | { kind: 'adaptive'; level: string | null };
 
-// An absent field is unset: nothing is sent for it, and the provider's default applies (design §4.4).
+// An absent field is unset: nothing is sent for it, and the provider's default applies.
 // context is the prompt's own limit beside the catalog's context length; it is never sent.
 export type ModelSettings = { [S in NumberSetting]?: number } & {
   context?: number;
   stop?: string[];
   reasoning?: Reasoning;
   systemAsUser?: true;
-  // How long a cache point's cache lives: 5 minutes, or an hour at a dearer write (design §4.4).
+  // How long a cache point's cache lives: 5 minutes, or an hour at a dearer write.
   cache?: Cache;
 };
 export type Cache = '5m' | '1h';
@@ -114,16 +113,15 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
     // Vercel's lists, checked 2026-09-28), and the Messages format cannot vouch for it: Anthropic's own
     // models from 4.6 on refuse a prefill. A connection type that learns it per model fills it here.
     prefill: null,
-    // No catalog lists it, so it is the format's word, or the connection type's (registry carries).
+    // No catalog lists it, so it is the format's word, or the connection type's.
     cache: carries.cache,
   };
 }
 
 const within = (value: number, rule: Bounds) => Math.min(Math.max(value, rule.min ?? value), rule.max ?? value);
 
-// What one model is sent of a 묶음's settings (design §4.4, user 2026-09-29: "빼거나 맞추고 알려주기"): a value it
-// is known not to take is left out, and a number past its bounds is brought within them. Unknown is sent as it
-// is. changes names each, for the screens to say.
+// A value the model is known not to take is left out, and a number past its bounds is brought within them; unknown is
+// sent as it is. changes names each, for the screens to say.
 export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   const sent: ModelSettings = { ...settings };
   const changes: Change[] = [];

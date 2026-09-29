@@ -3,7 +3,7 @@ import { fail, ID, readObject, type AppEnv } from './http';
 import { requireSession } from './session';
 
 const KIND = /^[a-z][a-z-]{0,31}$/;
-// D1 caps a row at 2 MB. Large things are split into objects before they get here (tech-spec §5).
+// D1 caps a row at 2 MB. Large things are split into objects before they get here.
 const MAX_BODY_LENGTH = 1_500_000;
 const PAGE_ROWS = 500;
 const PAGE_BODY_LENGTH = 4_000_000;
@@ -88,7 +88,7 @@ objects.put('/:id', async (c) => {
 });
 
 // A deleted object stays as a row without a body, so other devices learn of the deletion by sync.
-// Writing it again with its current rev restores it (design F3: 되돌리기).
+// Writing it again with its current rev restores it (되돌리기).
 objects.delete('/:id', async (c) => {
   const input = readWrite(c.req.param('id'), await readObject(c));
   if (!input || input.baseRev === null) return fail(c, 400, 'bad-input');

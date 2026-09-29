@@ -1,19 +1,20 @@
 import { gunzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, Prompt, Role, SLOTS, SlotKind, TextBlock, WrappedSlot } from '../../model/prompt';
+import { add, counted, type Tally } from './convert';
 import { readMsgpack } from './msgpack';
 import { unpack } from './risum';
 import { readToggles } from './toggles';
 
 type Json = Record<string, unknown>;
 
-// What a preset holds that the prompt does not take, in the order the summary lists it (design §5 Scope).
+// What a preset holds that the prompt does not take, in the order the summary lists it.
 const UNSUPPORTED = ['memory', 'jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
 export type PresetUnsupportedKind = (typeof UNSUPPORTED)[number];
 export type PresetUnsupported = { kind: PresetUnsupportedKind; count: number };
 
 // unreadable: not RPack'd gzip'd MessagePack. not-preset: a Risu container of another type. decrypt-failed:
-// the preset inside does not open. no-template: a legacy preset, which risu-alpha does not assemble (design §5).
+// the preset inside does not open. no-template: a legacy preset, which risu-alpha does not assemble.
 export type PresetFailure = { kind: 'unreadable' | 'not-preset' | 'decrypt-failed' | 'no-template' };
 export type PresetResult = { ok: true; prompt: Prompt; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure };
 
@@ -75,8 +76,8 @@ export async function importPreset(bytes: Uint8Array): Promise<PresetResult> {
 }
 
 function convert(preset: Json, template: unknown[]): { prompt: Prompt; unsupported: PresetUnsupported[] } {
-  const counts = new Map<PresetUnsupportedKind, number>();
-  const count = (kind: PresetUnsupportedKind, amount = 1) => counts.set(kind, (counts.get(kind) ?? 0) + amount);
+  const counts: Tally<PresetUnsupportedKind> = new Map();
+  const count = (kind: PresetUnsupportedKind, amount = 1) => add(counts, kind, amount);
   const blocks: Block[] = [];
   const placed = new Set<SlotKind>();
   let authorNote = '';
@@ -118,15 +119,11 @@ function convert(preset: Json, template: unknown[]): { prompt: Prompt; unsupport
   count('regex', list(preset.regex).length);
   // They default chat variables (getvar), not toggles, which are globals with no default (compat spec §d).
   count('variables', text(preset.templateDefaultVariables).split(/\r?\n/).filter((line) => line.trim()).length);
-  // Model, generation and prompt settings belong to each model's settings (design §4.4); every preset has them.
+  // Model, generation and prompt settings belong to each model's settings; every preset has them.
   count('settings');
 
-  const unsupported = UNSUPPORTED.flatMap((kind) => {
-    const amount = counts.get(kind) ?? 0;
-    return amount > 0 ? [{ kind, count: amount }] : [];
-  });
   // Preset model names are not this account's connections, so the prompt's model layer starts empty.
-  return { prompt: { name: text(preset.name), blocks, toggles, authorNote, models: {}, imported: 'risu-preset' }, unsupported };
+  return { prompt: { name: text(preset.name), blocks, toggles, authorNote, models: {}, imported: 'risu-preset' }, unsupported: counted(UNSUPPORTED, counts) };
 }
 
 // One template item (compat spec §e, Template assembly). Fields a type does not use, such as a persona

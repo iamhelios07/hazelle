@@ -6,7 +6,7 @@ import type { Profile } from './profile';
 import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
 
-// Every kind of stored object, with the value its sealed body holds (tech-spec §5, Object kinds).
+// Every kind of stored object, with the value its sealed body holds.
 export type Values = {
   character: Character;
   folder: Folder;
@@ -23,9 +23,9 @@ export type Values = {
 export type Kind = keyof Values;
 
 // parent: the kind an object's parent must be, or null for a top-level object. The server sees this
-// link, and an update never changes it (runtime/store, server/objects).
+// link, and an update never changes it.
 // id: the one id a singleton kind lives at. appendOnly: written once, never updated.
-// file: the object's id is also the id of the sealed file it holds (vault/blobs, runtime/files).
+// file: the object's id is also the id of the sealed file it holds.
 // owner: a body field naming the object that owns this one, for a link the server must not see. The
 // parent cannot carry it: it is bound into each object's sealing (vault/objects) and sent in the clear.
 export type Rule = { parent: Kind | null; id?: string; appendOnly?: true; file?: true; owner?: { field: string; kind: Kind } };

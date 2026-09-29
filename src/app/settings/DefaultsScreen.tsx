@@ -17,8 +17,7 @@ type Choice = { key: string; label: string; sub?: string; checked: boolean; pick
 const MISSING = '없어졌어요';
 const UNSET = '정하지 않음';
 
-// The 전체 기본값 layer (design §4.1) and the defaults a new chat starts from (§4.2, §4.3). This is the only
-// place they are chosen.
+// The 전체 기본값 layer and the defaults a new chat starts from. This is the only place they are chosen.
 export function DefaultsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
@@ -28,10 +27,10 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
   const prompt = settings.prompt === undefined ? null : prompts.find(({ id }) => id === settings.prompt);
   const persona = settings.persona === undefined ? null : personas.find(({ id }) => id === settings.persona);
   const main = settings.models.main;
-  const pickModel = (role: Role, ref: ModelRef | null) =>
-    void setDefaultModel(store, role, ref).then((result) => {
-      if (!result.ok) toast.failed(result, '기본값을 바꾸지 못했어요.');
-    });
+  const report = (result: { ok: true } | ApiFailure) => {
+    if (!result.ok) toast.failed(result, '기본값을 바꾸지 못했어요.');
+  };
+  const pickModel = (role: Role, ref: ModelRef | null) => void setDefaultModel(store, role, ref).then(report);
   // An unset helper role is the same as the role it falls back to.
   const follow = (role: Role) => `${ROLE_WORDS[ROLES[role].fallsBackTo!]}와 같게`;
 
@@ -46,11 +45,7 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
             label={choice.label}
             sub={choice.sub}
             checked={choice.checked}
-            onClick={() =>
-              void choice.pick().then((result) => {
-                if (!result.ok) toast.failed(result, '기본값을 바꾸지 못했어요.');
-              })
-            }
+            onClick={() => void choice.pick().then(report)}
           />
         ))
       )}

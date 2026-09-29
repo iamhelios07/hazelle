@@ -2,15 +2,14 @@ import { Info } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../foundation/Icon';
 import { useHover } from '../foundation/media';
-import { useLayer } from './layers';
+import { keepOnScreen, useLayer } from './layers';
 import styles from './Hint.module.css';
 
 // Long enough that a pointer passing over a column of ⓘ opens none of them.
 const PEEK_DELAY = 300;
 
-// An explanation behind an ⓘ beside a label, so the label leads and the reader who needs it asks for it
-// (user, 2026-09-29). Where there is hover, resting on it shows it until the pointer leaves; a click or tap
-// pins it until Esc, a press outside or another click.
+// An explanation behind an ⓘ beside a label. Where there is hover, resting on it shows it until the pointer
+// leaves; a click or tap pins it until Esc, a press outside or another click.
 export function Hint({ label, children }: { label: string; children: string }) {
   const hover = useHover();
   const [state, setState] = useState<'closed' | 'peek' | 'pinned'>('closed');
@@ -28,15 +27,8 @@ export function Hint({ label, children }: { label: string; children: string }) {
   });
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  // Moved back inside the screen's side before it is painted, as a menu is.
   useLayoutEffect(() => {
-    const element = bubble.current;
-    if (!element) return;
-    const at = element.getBoundingClientRect();
-    const edge = parseFloat(getComputedStyle(element).getPropertyValue('--menu-edge'));
-    const room = document.documentElement.clientWidth;
-    const shift = at.left < edge ? edge - at.left : at.right > room - edge ? room - edge - at.right : 0;
-    element.style.setProperty('--nudge', `${shift}px`);
+    if (bubble.current) keepOnScreen(bubble.current);
   }, [state]);
 
   const peek = () => {

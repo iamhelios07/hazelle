@@ -12,6 +12,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const { item, messages, texts, translating, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, branching, modelMenu, actions } = chat;
   const { chatById } = useViews();
   const origin = item?.chat.origin;
+  const character = card && { name: card.nickname || card.name, image: shelf!.face };
+  const modelName = 'kind' in route ? null : route.model.name;
   const rows: ReactNode[] = [];
   if (notUsed) {
     rows.push(
@@ -43,8 +45,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         flipped={flipped.has(shown(message).id)}
         isLast={index === messages.length - 1}
         beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
-        character={card && { name: card.nickname || card.name, image: shelf!.face }}
-        modelName={'kind' in route ? null : route.model.name}
+        character={character}
+        modelName={modelName}
         opening={message === opening}
         busy={busy}
         editing={editing?.id === message.id ? editing : null}

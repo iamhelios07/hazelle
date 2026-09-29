@@ -10,7 +10,6 @@ const SEARCH_FROM = 8;
 
 const defaultOf = (toggle: Toggle) => `처음 값: ${toggle.kind === 'check' ? (toggle.default === '1' ? '켬' : '끔') : (toggle.options[Number(toggle.default)] ?? toggle.default)}`;
 
-// design §4.2 toggles: values are the character's, in every chat of it, or shared by every 캐릭터 없이 chat.
 export function ChatToggles({ chat }: { chat: OpenChat }) {
   const { prompt, card, toggles, actions } = chat;
   const [query, setQuery] = useState('');

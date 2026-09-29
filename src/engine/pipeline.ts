@@ -24,9 +24,7 @@ export type PromptInput = {
 // Even the last message alone leaves the prompt over its budget.
 export type TooLong = { kind: 'too-long'; tokens: number; budget: number };
 
-// Where a sent message came from, for 요청 원문 (design F3): a prompt block with its own name (slot null for a text
-// block); a lorebook entry sent through the 로어북 or 최종 삽입 slot, or at @@depth before a chat message; or the
-// continue instruction.
+// Where a sent message came from, for 요청 원문. slot is null for a text block.
 export type From =
   | { kind: 'block'; name: string | null; slot: SlotKind | null }
   | { kind: 'lore'; name: string; slot: 'lorebook' | 'postEverything' }
@@ -37,15 +35,14 @@ export type From =
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card.
 export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null };
 
-// The app's own sentence, not a prompt's (user ruling 2026-09-29: "앱이 정한 문장"). It is a trailing user message
-// rather than an assistant prefill, which current Claude models refuse with 400.
+// The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
+// Claude models refuse with 400.
 const CONTINUE = 'Your previous reply was cut off. Continue it exactly from where it stopped. Do not repeat anything already written.';
 
 type Lore = { id: string; role: Role; body: string };
 type Sent = { message: ChatMessage; from: From };
 
-// A prompt's blocks, in order, as the messages sent (design §4.2, §5 Prompt template). Messages left empty are
-// dropped.
+// A prompt's blocks, in order, as the messages sent. Messages left empty are dropped.
 export function assemble({ scope, seed, countTokens, budget, continuing }: PromptInput): Assembled | TooLong {
   const { card, prompt } = scope;
   const chat = renderChat('prompt', scope);
@@ -77,16 +74,16 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
         sides[placement.side].push(body);
         break;
       case 'position':
-        positions.set(placement.name, [...(positions.get(placement.name) ?? []), body]);
+        add(positions, placement.name, body);
         break;
       case 'inject':
-        injections.set(placement.target, [...(injections.get(placement.target) ?? []), { body, operation: placement.operation }]);
+        add(injections, placement.target, { body, operation: placement.operation });
         break;
     }
   }
 
   // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
-  // text (design §5 row 11), and reads the variables as the chat's messages left them.
+  // text, and reads the variables as the chat's messages left them.
   const render = (text: string, place: string) => unescapeCbs(evaluate(atPositions(text, positions), context({ seed: `${seed}:${place}` }, new Map(chat.variables)))).trim();
   const loreMessage = ({ id, role, body }: Lore): ChatMessage => ({ role, content: render(body, id) });
   const throughSlot = (entries: Lore[], slot: 'lorebook' | 'postEverything') => entries.map((entry): Sent => ({ message: loreMessage(entry), from: { kind: 'lore', name: named(entry.id), slot } }));
@@ -113,7 +110,7 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
         case 'lorebook':
           out(...throughSlot(lorebook, 'lorebook'));
           break;
-        // 최종 삽입 (design §4.2): where it stands, and at the very end when the prompt has none (below).
+        // 최종 삽입: where it stands, or at the very end when the prompt has none (below).
         case 'postEverything':
           out(...throughSlot(last, 'postEverything'));
           break;
@@ -129,11 +126,11 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
   const messages = chat.texts.map((text, index) => ({ role: scope.messages[index]!.role, content: text.trim() })).filter(({ content }) => content !== '');
   const atDepth = depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(entry), from: { kind: 'depth', name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
   const fill = (kept: ChatMessage[]) => {
-    // An entry at @@depth N goes before the message N from the end (design §5 row 3), and wherever that message is.
+    // An entry at @@depth N goes before the message N from the end, wherever that message is.
     const before = new Map<number, Sent[]>();
     for (const { depth, sent } of atDepth) {
       const at = Math.max(kept.length - depth, 0);
-      before.set(at, [...(before.get(at) ?? []), sent]);
+      add(before, at, sent);
     }
     return template.flatMap((part) => ('range' in part ? range(kept, before, part) : [part]));
   };
@@ -147,8 +144,8 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
     };
   };
 
-  // The context budget (decided 2026-09-28) drops the oldest chat messages first and never the last one; the rest
-  // of the template stays whole. What does not fit even then is not sent.
+  // The budget drops the oldest chat messages first and never the last one; the rest of the template stays whole.
+  // What does not fit even then is not sent.
   let from = 0;
   let sent = fill(messages);
   if (budget === null) return assembled(sent);
@@ -160,10 +157,10 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
 type ChatPart = { range: ChatRange; from: From };
 type CachePart = { cache: true };
 
-// The cache points (design §4.4): the last message sent up to each block marked 여기까지 캐시, and two the app sets
-// itself, which the editor's cacheMarks draws (keep the two in step). One ends the part before the chat, which stays
-// the same from turn to turn; the other is the chat's last message, which the next turn's request repeats. Not the request's last message: a block after the chat (글로벌 노트, 최종 삽입, the continue
-// instruction) moves on every turn, so a point there is never met again.
+// The cache points: the last message sent up to each block marked 여기까지 캐시, and two the app sets itself, which the
+// editor's cacheMarks draws (keep the two in step): the end of the part before the chat, which stays the same from turn
+// to turn, and the chat's last message, which the next turn repeats. Not the request's last message: a block after the
+// chat moves on every turn, so a point there is never met again.
 function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
   const sent: Sent[] = [];
   const point = (index: number) => {
@@ -181,6 +178,12 @@ function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
   const last = sent.findLastIndex(({ from }) => chat(from));
   if (last !== -1) point(last);
   return sent;
+}
+
+function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
+  const values = map.get(key);
+  if (values) values.push(value);
+  else map.set(key, [value]);
 }
 
 const blockFrom = (block: Block): From => ({ kind: 'block', name: block.name, slot: block.kind === 'slot' ? block.slot : null });
@@ -212,9 +215,8 @@ const AFTER_MATCH = new Set(['keep_activate_after_match', 'dont_activate_after_m
 const declaresAfterMatch = (content: string) =>
   parseDecorators(content).decorators.some(({ name, fallbacks }) => [name, ...fallbacks.map((line) => line.name)].some((each) => AFTER_MATCH.has(each)));
 
-// Which after-match entries went into the prompts of the replies before this one (design §5 row 8). It is not
-// stored: like the variables (row 17), it is replayed from the chat, each earlier reply's activation rolled again
-// from its seed, which is the id its own request rolled from (or, for a branch's copy, the original's).
+// Which after-match entries went into the prompts of the replies before this one. It is not stored: like the
+// variables, it is replayed from the chat, each earlier reply's activation rolled again from its seed.
 function afterMatch(card: Card, scope: ChatScope, countTokens: (text: string) => number): string[] {
   let state: string[] = [];
   if (!scope.lore.some(({ value }) => declaresAfterMatch(value.content))) return state;

@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Ellipsis, GitBranch, Plus, X } from 'lucide-react';
 import type { Ref } from 'react';
 import type { Block, ChatRange, ChatSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
 import { Button, ChoiceGroup, Divider, Empty, IconButton, MarkupArea, Menu, MenuHeading, MenuItem, Row, Section, SettingRow, Stack, Switch, Tag, Text, TitleField } from '../ui';
-import { blockTitle, describeRange, MARKS, RANGES, rangeKey, ROLES, SLOT, type CacheMark } from './blocks';
+import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, SLOT, type CacheMark } from './blocks';
 
 type Props = {
   block: Block;
@@ -27,14 +27,11 @@ type Props = {
   nameRef: Ref<HTMLInputElement>;
 };
 
-const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
-
 const CACHE_HELP = {
   own: '이 블록까지 보낸 내용을 캐시해 두고 다음 요청에서 싸게 다시 읽어요. 모델 설정에서 캐시를 켠 모델에만 보내요. 앱이 채팅 앞과 끝에 지점을 알아서 두니, 그 밖에 더 두고 싶을 때만 켜요. 한 요청에 지점은 4개까지라, 넘으면 맨 뒤 지점과 앞쪽 지점 셋만 남겨요.',
   auto: '앱이 여기에 캐시 지점을 알아서 둬요. 모델 설정에서 캐시를 켠 모델에만 보내요.',
 };
 
-// The block picked in the outline, and only it (design §4.2): where it goes, its name, its role, and what it holds.
 export function BlockPane({ block, index, count, toggles, authorNote, onChange, onRole, onRange, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
   const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;

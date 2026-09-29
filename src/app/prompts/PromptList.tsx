@@ -23,7 +23,6 @@ type Props = {
   frame: (parts: { head: NavBarProps; body: ReactNode }) => ReactNode;
 };
 
-// design §4.2: a list made for dozens. Search, the ones used last, and every prompt with its copies under it.
 export function PromptList({ onPick, inUse, frame }: Props) {
   const store = useStore();
   const toast = useToast();

@@ -1,6 +1,6 @@
 import { isRecord } from '../../connectors/values';
 
-// RPack's decode table, ported under AGPL-3.0 (tech-spec §8): bytes 256-511 of src/ts/rpack/rpack_map.bin in
+// RPack's decode table, ported under AGPL-3.0: bytes 256-511 of src/ts/rpack/rpack_map.bin in
 // github.com/kwaroran/RisuAI at ca1345fca1b65f2f4eac976510b7753e290eaa98. It must equal
 // `xxd -p -c 32 -s 256 rpack_map.bin` of that file line for line.
 const RPACK = Uint8Array.from(

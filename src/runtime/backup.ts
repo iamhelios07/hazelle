@@ -8,8 +8,7 @@ import { FIRST_ID } from './personas';
 import { STARTER_ID } from './prompts';
 import type { ObjectStore } from './store';
 
-// design §3 Full export. version is the file format's one version key: a file of any other version is
-// refused, never read as this one.
+// version is the file format's one version key: a file of any other version is refused, never read as this one.
 const FORMAT = { format: 'risu-alpha-backup', version: 1 };
 const MANIFEST = 'manifest.json';
 const OBJECTS = 'objects.jsonl';
@@ -18,7 +17,7 @@ const FILES = 'files/';
 // Files are fetched and objects written this many at a time, one request each.
 const PARALLEL = 8;
 
-// What opening an account adds by itself (runtime/prompts addStarter, runtime/personas addFirstPersona).
+// What opening an account adds by itself.
 const SEEDED = new Set([STARTER_ID, FIRST_ID, SETTINGS_ID]);
 
 const ALL = Object.keys(KINDS) as Kind[];
@@ -27,8 +26,8 @@ const holdsFile = (kind: Kind) => 'file' in KINDS[kind];
 export type Backup = { objects: Stored<Kind>[]; files: Map<string, Uint8Array<ArrayBuffer>> };
 export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' };
 
-// Every object the account reaches, decrypted, with the file each holds; connection keys are kept (user,
-// 2026-09-29). Pieces nothing reaches are left out: a deleted chat's entries, and the lore and picture of an
+// Every object the account reaches, decrypted, with the file each holds; connection keys are kept. Pieces
+// nothing reaches are left out: a deleted chat's entries, and the lore and picture of an
 // import cut short. left counts the objects that did not open, which no backup can hold.
 export async function exportBackup(store: ObjectStore, files: Files): Promise<ApiResult<{ zip: Uint8Array<ArrayBuffer>; left: number }>> {
   const objects = ALL.flatMap((kind) => store.list(kind)).filter(({ kind, parent }) => {
@@ -77,7 +76,7 @@ export function readBackup(bytes: Uint8Array): { ok: true; backup: Backup } | Ba
     if (!isStored(object)) return damaged;
     objects.push(object);
     if (!holdsFile(object.kind)) continue;
-    // fflate writes every entry into a fresh ArrayBuffer (engine/import/zip); its types do not say so.
+    // fflate writes every entry into a fresh ArrayBuffer; its types do not say so.
     const file = entries[FILES + object.id] as Uint8Array<ArrayBuffer> | undefined;
     if (!file) return damaged;
     held.set(object.id, file);
@@ -86,7 +85,7 @@ export function readBackup(bytes: Uint8Array): { ok: true; backup: Backup } | Ba
 }
 
 // A backup goes only into a new account: one holding nothing but what opening it added, and what this same
-// backup already wrote, so loading the file again after a stop carries on from there (user, 2026-09-29).
+// backup already wrote, so loading the file again after a stop carries on from there.
 // The backup's copies replace what opening added, and what it added that the backup lacks goes, so the
 // account ends as the backup was.
 export async function restoreBackup(store: ObjectStore, files: Files, backup: Backup, progress: (done: number, total: number) => void): Promise<ApiResult<null> | { ok: false; error: 'not-new' }> {

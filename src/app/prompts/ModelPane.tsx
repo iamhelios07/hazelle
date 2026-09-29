@@ -14,7 +14,7 @@ export function modelWords(models: Assignment, connections: readonly Stored<'con
 
 type Props = { models: Assignment; defaults: Assignment; connections: readonly Stored<'connection'>[]; onPick: (role: Role, ref: ModelRef | null) => void };
 
-// The prompt's layer of the model assignment (design §4.1).
+// The prompt's layer of the model assignment.
 export function ModelPane({ models, defaults, connections, onPick }: Props) {
   // Unset here, a role takes 전체 기본값's own choice first, and only then the role it falls back to.
   const follow = (role: Role) => {

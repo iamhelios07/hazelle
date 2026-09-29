@@ -1,7 +1,7 @@
 import type { Cost } from '../../connectors/types';
-import { credits, usd } from './money';
+import { money } from './money';
 
-// A fact the provider did not report reads as unknown, never as zero (design UX rules).
+// A fact the provider did not report reads as unknown, never as zero.
 export const UNKNOWN = '알 수 없음';
 
 export const seconds = (ms: number | null) => (ms === null ? UNKNOWN : `${(ms / 1000).toFixed(1)}초`);
@@ -11,7 +11,7 @@ export const tokens = (count: number | null) => (count === null ? UNKNOWN : coun
 export function cost(value: Cost | 'pending' | null): string {
   if (value === null) return UNKNOWN;
   if (value === 'pending') return '확인 중…';
-  const amount = value.unit === 'usd' ? usd(value.amount) : credits(value.amount);
+  const amount = money(value.unit, value.amount);
   return value.source === 'price-list' ? `약 ${amount}` : amount;
 }
 
