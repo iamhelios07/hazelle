@@ -1,6 +1,6 @@
 import { resolveRole, ROLES, type Assignment, type ModelRef, type Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
-import { modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
+import { findStarred, GONE, modelName, ROLE_WORDS, RolePicker } from '../common/RolePicker';
 import { Section, SettingGroup, Text } from '../ui';
 
 const DEFAULT = '전체 기본값 따르기';
@@ -8,7 +8,7 @@ const HELPERS = ['aux', 'memory', 'translate', 'emotion'] as const;
 
 // What the 모델 row says: this prompt's 본 대화, and how many helper roles it sets apart.
 export function modelWords(models: Assignment, connections: readonly Stored<'connection'>[]): string {
-  const main = models.main ? modelName(models.main, connections) : DEFAULT;
+  const main = models.main ? (findStarred(models.main, connections)?.name ?? GONE) : DEFAULT;
   const apart = HELPERS.filter((role) => models[role]).length;
   return apart ? `${main} · 보조 ${apart}개` : main;
 }
@@ -34,7 +34,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
         <SettingGroup label="본 대화 모델">{picker('main')}</SettingGroup>
       </Section>
       <Section title="보조 모델">
-        <Text tone="muted">장기 기억·번역·감정 에셋은 아직 만들고 있어요. 그 기능이 들어오면 여기서 고른 모델을 써요.</Text>
+        <Text tone="muted">장기 기억·번역·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요.</Text>
         <SettingGroup label="보조 모델">{HELPERS.map(picker)}</SettingGroup>
       </Section>
     </>

@@ -4,7 +4,7 @@ import { ChipButton, Empty, Menu, MenuItem, SettingRow } from '../ui';
 
 export const ROLE_WORDS: Record<Role, string> = { main: '본 대화', aux: '기타 보조', memory: '장기 기억', translate: '번역', emotion: '감정 에셋' };
 
-const GONE = '별표 목록에 없는 모델';
+export const GONE = '별표 목록에 없는 모델';
 const same = (a: ModelRef, b: ModelRef) => a.connection === b.connection && a.model === b.model;
 
 export function starredModels(connections: readonly Stored<'connection'>[], role: Role) {
