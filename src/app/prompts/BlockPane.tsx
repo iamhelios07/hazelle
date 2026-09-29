@@ -30,7 +30,7 @@ const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 // The block picked in the outline, and only it (design §4.2): where it goes, its name, its role, and what it holds.
 export function BlockPane({ block, index, count, toggles, authorNote, onChange, onRole, onRange, onWrapper, onAuthorNote, onMark, onMove, onRemove, onCondition, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
-  const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
+  const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : block.slot === 'cache' ? SLOT.cache.name : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
   const placeholder = block.kind === 'slot' ? SLOT[block.slot].name : firstLine(block.text) || '이름 붙이기';
 
   return (

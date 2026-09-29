@@ -1,4 +1,4 @@
-import { ArrowDownToLine, BookOpen, IdCard, MessageSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowDownToLine, BookOpen, Bookmark, IdCard, MessageSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { ROLE_WORDS, SLOT_NAMES, textName } from '../common/prompt-words';
 import type { OutlineKind } from '../ui';
@@ -17,6 +17,13 @@ export const SLOT = {
   authorNote: { name: SLOT_NAMES.authorNote, hint: '채팅마다 따로 쓰는 메모', line: '채팅마다 따로 쓰는 작가의 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
   postEverything: { name: SLOT_NAMES.postEverything, hint: '맨 끝으로 정한 로어북 항목이 여기 붙어요', line: '로어북에서 맨 끝으로 정한 항목이 여기 붙어요.', kind: 'lore', icon: ArrowDownToLine },
   chat: { name: SLOT_NAMES.chat, hint: '지금까지 주고받은 메시지', line: '지금까지 주고받은 메시지 가운데 아래 범위가 여기에 들어가요.', kind: 'chat', icon: MessageSquare },
+  cache: {
+    name: SLOT_NAMES.cache,
+    hint: '여기까지 보낸 내용을 캐시해 다음 요청에서 싸게 다시 읽어요',
+    line: '아무것도 보내지 않고, 바로 앞 메시지까지를 캐시 지점으로 삼아요. 모델 설정에서 캐시를 켠 모델에만 보내요. 앱이 채팅 앞과 채팅 끝에 지점을 알아서 두니, 그 밖에 더 두고 싶을 때만 넣어요. 한 요청에 지점은 4개까지라, 넘으면 맨 뒤 지점과 앞쪽 지점 셋만 남겨요.',
+    kind: 'note',
+    icon: Bookmark,
+  },
 } satisfies Record<SlotKind, { name: string; hint: string; line: string; kind: OutlineKind; icon: LucideIcon }>;
 
 export const ROLES: { value: Role; label: string }[] = (['system', 'user', 'assistant'] as const).map((value) => ({ value, label: ROLE_WORDS[value] }));

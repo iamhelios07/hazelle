@@ -50,7 +50,9 @@ export type Model = {
 // default 묶음, as a chat without its own prompt uses the default prompt.
 export type Starred = Model & { profile?: string };
 
-export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+// cache: the prompt up to and including this message is a cache point (design §4.4). Only a request whose model settings
+// turn caching on sends it (registry chatRequest), and a codec never puts the field itself on the wire.
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true };
 export type ChatRequest = { model: Model; messages: ChatMessage[]; settings: ModelSettings };
 
 // A missing count stays null. Filling it with 0 would read as a measured zero and shrink totals.
@@ -130,6 +132,9 @@ export type ConnectionType = {
   // Reasoning by a token budget, in a field of the provider's own where its codec has none. Its
   // parseModels says which models take one.
   reasoningBudget?: (tokens: number) => Record<string, unknown>;
+  // Its chat-completions endpoint reads cache_control on a message's content (OpenRouter). Models that cache by
+  // cache points use it; the provider is left to say whether the others ignore it, so it stays unknown per model.
+  cacheControl?: true;
   // usage is the codec's reading of the stream's counts, for a type that prices tokens itself.
   cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
   // Asked with the stored credential. It is also the check that a pasted key works, where the model

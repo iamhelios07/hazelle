@@ -8,7 +8,7 @@ import { readToggles } from './toggles';
 type Json = Record<string, unknown>;
 
 // What a preset holds that the prompt does not take, in the order the summary lists it (design §5 Scope).
-const UNSUPPORTED = ['memory', 'jailbreak', 'cot', 'chatml', 'cache', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
+const UNSUPPORTED = ['memory', 'jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
 export type PresetUnsupportedKind = (typeof UNSUPPORTED)[number];
 export type PresetUnsupported = { kind: PresetUnsupportedKind; count: number };
 
@@ -37,11 +37,10 @@ const SKIPPED = new Map<unknown, PresetUnsupportedKind>([
   ['jailbreak', 'jailbreak'],
   ['cot', 'cot'],
   ['chatML', 'chatml'],
-  ['cache', 'cache'],
 ]);
 // A slot placed again where the model allows it once keeps its first place; SLOTS decides which repeat.
 type Repeating = { [K in SlotKind]: (typeof SLOTS)[K]['repeats'] extends true ? K : never }[SlotKind];
-const REPEATING: Record<Repeating, true> = { chat: true };
+const REPEATING: Record<Repeating, true> = { chat: true, cache: true };
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const fail = (kind: PresetFailure['kind']): PresetResult => ({ ok: false, failure: { kind } });
@@ -86,6 +85,9 @@ function convert(preset: Json, template: unknown[]): { prompt: Prompt; unsupport
       count('unread-item');
       continue;
     }
+    // Risu's cache item marks the last `depth` messages before it, of one role or of all; a 캐시 지점 marks the one
+    // message before it, which is Risu's depth 1 over all roles.
+    if (item.type === 'cache' && !(item.depth === 1 && item.role === 'all')) count('cache-narrowed');
     const read = block(item);
     if (typeof read === 'string') {
       count(read);
@@ -137,6 +139,7 @@ function block(item: Json): Block | PresetUnsupportedKind {
     }
     case 'lorebook':
     case 'postEverything':
+    case 'cache':
       return { ...named, kind: 'slot', slot: item.type };
     case 'chat': {
       const range = chatRange(item.rangeStart, item.rangeEnd);

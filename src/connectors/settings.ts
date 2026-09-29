@@ -21,7 +21,10 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   stop?: string[];
   reasoning?: Reasoning;
   systemAsUser?: true;
+  // How long a cache point's cache lives: 5 minutes, or an hour at a dearer write (design §4.4).
+  cache?: Cache;
 };
+export type Cache = '5m' | '1h';
 
 export type Bounds = { min: number | null; max: number | null };
 
@@ -37,6 +40,8 @@ export type ReasoningTakes = { off: boolean | null; levels: string[] | null; bud
 export type Carries = {
   numbers: { [S in NumberSetting]?: Bounds & { always?: true } };
   reasoning: { off: boolean; levels: string[]; budget: Bounds | null; adaptive: boolean };
+  // Whether the format can mark cache points: true where every model on it takes them, null where some may not.
+  cache: Accepts;
 };
 
 // null is unknown: the screen says so ("받는지 알 수 없어요") and still lets it be set and sent. Only a
@@ -51,10 +56,11 @@ export type SettingsSchema = {
   stop: Accepts;
   reasoning: { off: Accepts; level: Accepts; levels: string[]; budget: Rule; adaptive: Accepts };
   prefill: Accepts;
+  cache: Accepts;
 };
 
 // left-out: the model does not take it, or not the level named. capped: brought within the model's bounds, to that value.
-export type Change = { setting: Setting | 'context'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
+export type Change = { setting: Setting | 'context' | 'cache'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
 export type Fitted = { settings: ModelSettings; changes: Change[] };
 
 // Catalogs list 'none' among the effort levels of a model whose reasoning can be turned off; here that
@@ -108,6 +114,8 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
     // Vercel's lists, checked 2026-09-28), and the Messages format cannot vouch for it: Anthropic's own
     // models from 4.6 on refuse a prefill. A connection type that learns it per model fills it here.
     prefill: null,
+    // No catalog lists it, so it is the format's word, or the connection type's (registry carries).
+    cache: carries.cache,
   };
 }
 
@@ -119,7 +127,7 @@ const within = (value: number, rule: Bounds) => Math.min(Math.max(value, rule.mi
 export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   const sent: ModelSettings = { ...settings };
   const changes: Change[] = [];
-  const leave = (setting: Setting | 'context') => {
+  const leave = (setting: Setting | 'context' | 'cache') => {
     delete sent[setting];
     changes.push({ setting, change: 'left-out' });
   };
@@ -137,6 +145,7 @@ export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   }
   if (settings.context !== undefined) cap('context', settings.context, schema.context);
   if (settings.stop && schema.stop === false) leave('stop');
+  if (settings.cache && schema.cache === false) leave('cache');
   const { reasoning } = settings;
   if (reasoning?.kind === 'budget' && schema.reasoning.budget.accepted !== false) {
     const tokens = within(reasoning.tokens, schema.reasoning.budget);

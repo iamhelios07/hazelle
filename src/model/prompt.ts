@@ -12,6 +12,8 @@ export const SLOTS = {
   authorNote: { wrapped: true, repeats: false },
   postEverything: { wrapped: false, repeats: false },
   chat: { wrapped: false, repeats: true },
+  // Sends nothing: it makes the message before it a cache point (design §4.4).
+  cache: { wrapped: false, repeats: true },
 } as const;
 export type SlotKind = keyof typeof SLOTS;
 type Wrapped = { [K in SlotKind]: (typeof SLOTS)[K]['wrapped'] extends true ? K : never }[SlotKind];

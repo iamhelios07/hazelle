@@ -125,6 +125,8 @@ function Call({ receipt }: { receipt: Receipt }) {
   const cached = usage?.cachedInputTokens ?? null;
   const input = usage?.inputTokens ?? null;
   const fresh = input !== null && cached !== null ? input - cached : null;
+  // Counted in fresh: the tokens this call sent that the next one can read from the cache (design §4.4).
+  const written = usage?.cacheWriteInputTokens ?? null;
   return (
     <>
       <Section level={3} title="모델">
@@ -141,7 +143,7 @@ function Call({ receipt }: { receipt: Receipt }) {
         </Section>
       )}
       {usage ? (
-        <Section level={3} title="토큰" note={input && cached !== null ? `캐시 적중 ${Math.round((cached / input) * 100)}%` : undefined}>
+        <Section level={3} title="토큰" note={[input && cached !== null && `캐시 적중 ${Math.round((cached / input) * 100)}%`, written && `캐시에 저장 ${tokens(written)}`].filter(Boolean).join(' · ') || undefined}>
           <Breakdown
             shares={input && fresh !== null ? [cached! / input, fresh / input] : null}
             parts={

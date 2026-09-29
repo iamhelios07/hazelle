@@ -1,4 +1,4 @@
-import type { Reasoning } from './settings';
+import type { Cache, Reasoning } from './settings';
 import { ConnectorError, type ChatMessage, type Codec, type Modality } from './types';
 import { count, isRecord } from './values';
 
@@ -24,6 +24,30 @@ function reasoningFields(reasoning: Reasoning | undefined) {
     case 'adaptive':
       return { thinking: { type: 'adaptive' }, ...(reasoning.level === null ? {} : { output_config: { effort: reasoning.level } }) };
   }
+}
+
+// A cache point's field, which OpenRouter takes in the same shape (chat-completions). Five minutes is the default and
+// goes unnamed.
+export const cacheControl = (cache: Cache) => ({ cache_control: { type: 'ephemeral', ...(cache === '1h' ? { ttl: '1h' } : {}) } });
+
+// The message as the wire takes it: never the cache mark itself, and a cache point as a text block that carries it.
+const wire = (message: ChatMessage, cache: Cache | undefined) =>
+  message.cache && cache ? { role: message.role, content: [{ type: 'text', text: message.content, ...cacheControl(cache) }] } : { role: message.role, content: message.content };
+
+// Every system message goes up into system, joined by a blank line. It stays one string unless a cache point falls in
+// it; then it splits after each point into blocks, the blank line opening the next, so the text read is the same.
+function systemField(system: ChatMessage[], cache: Cache | undefined) {
+  if (!system.length) return {};
+  if (!cache || !system.some((message) => message.cache)) return { system: system.map((message) => message.content).join('\n\n') };
+  const blocks: { type: 'text'; text: string }[] = [];
+  let run: string[] = [];
+  system.forEach((message, index) => {
+    run.push(message.content);
+    if (!message.cache && index < system.length - 1) return;
+    blocks.push({ type: 'text', text: `${blocks.length ? '\n\n' : ''}${run.join('\n\n')}`, ...(message.cache ? cacheControl(cache) : {}) });
+    run = [];
+  });
+  return { system: blocks };
 }
 
 export const anthropicMessages: Codec = {
@@ -75,6 +99,7 @@ export const anthropicMessages: Codec = {
   carries: {
     numbers: { maxOutput: { min: 1, max: null, always: true }, temperature: { min: 0, max: 1 }, topP: { min: 0, max: 1 }, topK: { min: 0, max: null } },
     reasoning: { off: true, levels: LEVELS, budget: { min: 1024, max: null }, adaptive: true },
+    cache: true,
   },
 
   // The Messages API requires max_tokens. With no setting and no catalog limit there is no truthful
@@ -82,7 +107,6 @@ export const anthropicMessages: Codec = {
   chat(endpoint, { model, messages, settings }, fields) {
     const limit = settings.maxOutput ?? model.maxOutput;
     if (limit === null) throw new ConnectorError('max-tokens-unknown');
-    const system = messages.filter((message) => message.role === 'system').map((message) => message.content);
     return {
       url: `${endpoint.baseUrl}/messages`,
       method: 'POST',
@@ -90,8 +114,11 @@ export const anthropicMessages: Codec = {
       body: JSON.stringify({
         model: model.id,
         max_tokens: limit,
-        ...(system.length ? { system: system.join('\n\n') } : {}),
-        messages: messages.filter((message): message is ChatMessage & { role: 'user' | 'assistant' } => message.role !== 'system'),
+        ...systemField(
+          messages.filter((message) => message.role === 'system'),
+          settings.cache,
+        ),
+        messages: messages.filter((message) => message.role !== 'system').map((message) => wire(message, settings.cache)),
         ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
         ...(settings.topP === undefined ? {} : { top_p: settings.topP }),
         ...(settings.topK === undefined ? {} : { top_k: settings.topK }),

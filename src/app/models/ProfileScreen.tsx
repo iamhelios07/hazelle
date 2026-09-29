@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
-import { fit, WHOLE, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
+import { fit, WHOLE, type Cache, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
 import type { Stored } from '../../model/kinds';
 import type { ApiResult } from '../../runtime/api';
 import {
@@ -20,7 +20,7 @@ import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Row, Screen, Section, SettingGroup, SettingRow, Stack, Text } from '../ui';
-import { changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, UNSET, type Field } from './settingWords';
+import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, UNSET, type Field } from './settingWords';
 import { count, readTyped } from './typedNumber';
 
 // How long typing pauses before a change is saved.
@@ -199,6 +199,25 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     );
   }
 
+  const cacheRow = (
+    <SettingRow
+      key="cache"
+      label="캐시"
+      help="보낸 앞부분을 저장해 두었다 다음 요청에서 싸게 다시 읽어요. Claude는 저장할 때 입력값의 1.25배(1시간은 2배), 다시 읽을 때 0.1배예요"
+      changed={shown.cache !== undefined}
+      note={noteFor('cache')}
+      control={
+        <ChoiceGroup
+          layout="segmented"
+          label="캐시"
+          options={[{ value: 'off' as const, label: '끔' }, ...(Object.keys(CACHE) as Cache[]).map((value) => ({ value, label: CACHE[value] }))]}
+          value={shown.cache ?? 'off'}
+          onChange={(value) => void set({ cache: value === 'off' ? undefined : value })}
+        />
+      }
+    />
+  );
+
   const stopRow = (
     <SettingRow
       key="stop"
@@ -349,6 +368,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <SettingGroup label="자주 쓰는 설정">
           {MAIN.map(numberRow)}
           {reasoningRow()}
+          {cacheRow}
         </SettingGroup>
       </Section>
 

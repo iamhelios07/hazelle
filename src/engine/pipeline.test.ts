@@ -129,14 +129,35 @@ describe('assemble', () => {
       // 최종 삽입 (design §4.2): the higher insertion order goes later.
       { role: 'system', content: 'Final B' },
       { role: 'system', content: 'Final A' },
-      { role: 'system', content: '# Premise\nYou write Luna. Your partner writes jin.\n# Everyone else\nEvery other person acts on their own goals.\nLuna is one person among many.\n\n</Guidelines>\n\n---' },
+      { role: 'system', content: '# Premise\nYou write Luna. Your partner writes jin.\n# Everyone else\nEvery other person acts on their own goals.\nLuna is one person among many.\n\n</Guidelines>\n\n---', cache: true },
       { role: 'assistant', content: 'The lamp is lit, jin.' },
       { role: 'user', content: 'Is it safe?' },
       { role: 'assistant', content: 'She nods.' },
       { role: 'system', content: 'Mood: calm' },
-      { role: 'user', content: 'Good. Is the lighthouse lit?' },
+      { role: 'user', content: 'Good. Is the lighthouse lit?', cache: true },
     ]);
     expect(renderChat('display', scope({ card: card({ regex }), messages })).texts[2]).toBe('She nods slowly. [OOC] ignore');
+  });
+
+  it('marks the message before a 캐시 지점, the last one before the chat, and the chat’s last message rather than a block after it', () => {
+    const prompt: Prompt = {
+      ...starter,
+      blocks: [
+        { id: 'rules', name: null, kind: 'text', role: 'system', mark: null, text: 'Rules.' },
+        { id: 'point', name: null, kind: 'slot', slot: 'cache' },
+        { id: 'more', name: null, kind: 'text', role: 'system', mark: null, text: 'More.' },
+        { id: 'chat', name: null, kind: 'slot', slot: 'chat', range: { from: 0, to: null } },
+        { id: 'after', name: null, kind: 'text', role: 'system', mark: null, text: 'After.' },
+      ],
+    };
+    const messages = [message('u1', 'user', 'Hi.'), message('a1', 'assistant', 'Hello.')];
+    expect(build({ prompt, messages, greeting: null })).toEqual([
+      { role: 'system', content: 'Rules.', cache: true },
+      { role: 'system', content: 'More.', cache: true },
+      { role: 'user', content: 'Hi.' },
+      { role: 'assistant', content: 'Hello.', cache: true },
+      { role: 'system', content: 'After.' },
+    ]);
   });
 
   it('says which block, lorebook entry or instruction each sent message came from, with its count, and why each entry fired', () => {

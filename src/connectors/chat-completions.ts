@@ -1,4 +1,5 @@
 import type { NumberSetting, Reasoning, Setting } from './settings';
+import { cacheControl } from './anthropic-messages';
 import type { Codec } from './types';
 import { count, isRecord, list } from './values';
 
@@ -70,6 +71,8 @@ export const chatCompletions: Codec = {
       seed: { min: null, max: null },
     },
     reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'], budget: null, adaptive: false },
+    // The standard has no cache points; a connection type whose provider reads cache_control says so (cacheControl).
+    cache: false,
   },
 
   chat: (endpoint, { model, messages, settings }, fields) => ({
@@ -78,7 +81,8 @@ export const chatCompletions: Codec = {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       model: model.id,
-      messages,
+      // Never the cache mark itself; a cache point is a text part that carries it, as OpenRouter reads it.
+      messages: messages.map(({ role, content, cache }) => (cache && settings.cache ? { role, content: [{ type: 'text', text: content, ...cacheControl(settings.cache) }] } : { role, content })),
       stream: true,
       stream_options: { include_usage: true },
       ...Object.fromEntries(CARRIED.filter((setting) => settings[setting] !== undefined).map((setting) => [FIELDS[setting], settings[setting]])),

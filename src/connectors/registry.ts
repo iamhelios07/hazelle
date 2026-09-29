@@ -5,7 +5,7 @@ import { copilot } from './copilot';
 import { openRouter } from './openrouter';
 import { fit, settingsSchema, type Carries, type SettingsSchema } from './settings';
 import { vercel } from './vercel';
-import { ConnectorError, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
+import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
 // Adding a provider means adding its connection type here (design §4). Nothing else names one.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, anthropic, copilot];
@@ -54,11 +54,14 @@ export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
 
-// What one model's requests can carry: its codec's, and a reasoning budget its connection type adds.
+// What one model's requests can carry: its codec's, and a reasoning budget and cache points its connection type adds.
 function carries({ type, codec }: Resolved): Carries {
-  const { reasoning } = codec.carries;
-  if (reasoning.budget || !type?.reasoningBudget) return codec.carries;
-  return { ...codec.carries, reasoning: { ...reasoning, budget: { min: null, max: null } } };
+  const { reasoning, cache } = codec.carries;
+  return {
+    ...codec.carries,
+    reasoning: reasoning.budget || !type?.reasoningBudget ? reasoning : { ...reasoning, budget: { min: null, max: null } },
+    cache: cache === false && type?.cacheControl ? null : cache,
+  };
 }
 
 // The settings a starred model offers (design §4.4); null for a model this version cannot call at all.
@@ -79,8 +82,17 @@ export function chatRequest(route: Resolved, { model, messages, settings: stored
   const { settings } = fit(settingsSchema(carries(route), model), stored);
   const { reasoning } = settings;
   const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
-  const sent = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
-  return route.codec.chat(route.endpoint, { model, messages: sent, settings }, fields);
+  const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
+  return route.codec.chat(route.endpoint, { model, messages: cachePoints(roled, settings.cache !== undefined), settings }, fields);
+}
+
+// A request takes at most four cache points (Anthropic's limit, which OpenRouter passes on). Past that the last one
+// stays, since the next turn meets it, and so do the first three, whose prefix changes least. None go without caching.
+const MAX_POINTS = 4;
+function cachePoints(messages: ChatMessage[], caching: boolean): ChatMessage[] {
+  const points = messages.flatMap((message, index) => (message.cache ? [index] : []));
+  const kept = new Set(caching ? [...points.slice(0, MAX_POINTS - 1), ...points.slice(-1)] : []);
+  return messages.map((message, index) => (!message.cache || kept.has(index) ? message : { role: message.role, content: message.content }));
 }
 
 // The credential is the stored key, or the token a connection type traded it for.

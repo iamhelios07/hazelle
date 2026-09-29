@@ -1,4 +1,4 @@
-import type { Change, ModelSettings, NumberSetting } from '../../connectors/settings';
+import type { Cache, Change, ModelSettings, NumberSetting } from '../../connectors/settings';
 import { count } from './typedNumber';
 
 // An empty field is unset: nothing is sent, and the provider's default applies. It is never shown as a number (design §4.4).
@@ -25,11 +25,13 @@ export const DETAIL: Field[] = ['topP', 'topK', 'minP', 'frequencyPenalty', 'pre
 export const LEVELS: Record<string, string> = { minimal: '최소', low: '낮음', medium: '보통', high: '높음', xhigh: '매우 높음', max: '최대' };
 export const levelName = (level: string) => LEVELS[level] ?? level;
 
-export const settingLabel = (setting: Change['setting']) => (setting === 'stop' ? '멈춤 문구' : setting === 'reasoning' ? '생각' : NUMBER[setting].label);
+export const CACHE: Record<Cache, string> = { '5m': '5분', '1h': '1시간' };
+
+export const settingLabel = (setting: Change['setting']) => (setting === 'stop' ? '멈춤 문구' : setting === 'reasoning' ? '생각' : setting === 'cache' ? '캐시' : NUMBER[setting].label);
 
 // The values set, in short words, in the order the editor shows them; empty when none is.
 export function valueWords(settings: ModelSettings): string[] {
-  const { reasoning, stop, systemAsUser } = settings;
+  const { reasoning, stop, systemAsUser, cache } = settings;
   const number = (field: Field) => {
     const value = settings[field];
     return value === undefined ? [] : [`${NUMBER[field].label} ${count(value)}`];
@@ -37,7 +39,7 @@ export function valueWords(settings: ModelSettings): string[] {
   const thinking = !reasoning
     ? []
     : [`생각 ${reasoning.kind === 'off' ? '끔' : reasoning.kind === 'budget' ? `예산 ${count(reasoning.tokens)}` : reasoning.kind === 'adaptive' ? (reasoning.level === null ? '적응형' : `적응형 · ${levelName(reasoning.level)}`) : levelName(reasoning.level)}`];
-  return [...MAIN.flatMap(number), ...thinking, ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : [])];
+  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : [])];
 }
 
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').

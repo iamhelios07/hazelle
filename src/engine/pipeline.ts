@@ -92,7 +92,7 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
   const throughSlot = (entries: Lore[], slot: 'lorebook' | 'postEverything') => entries.map((entry): Sent => ({ message: loreMessage(entry), from: { kind: 'lore', name: named(entry.id), slot } }));
 
   // The template with its chat slots left open, every other block rendered once.
-  const template: (Sent | ChatPart)[] = [];
+  const template: (Sent | ChatPart | CachePart)[] = [];
   const out = (...parts: Sent[]) => template.push(...parts.filter(({ message }) => message.content !== ''));
   const wrapped = (block: WrappedSlot, content: string) => {
     if (content.trim()) out({ message: { role: block.role, content: render(block.wrapper === null ? content : block.wrapper.replace('{{slot}}', () => content), block.id) }, from: blockFrom(block) });
@@ -122,6 +122,9 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
       case 'chat':
         template.push({ range: block.range, from: blockFrom(block) });
         break;
+      case 'cache':
+        template.push({ cache: true });
+        break;
     }
   }
   if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(last, 'postEverything'));
@@ -138,12 +141,15 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
     }
     return template.flatMap((part) => ('range' in part ? range(kept, before, part) : [part]));
   };
-  const size = (sent: Sent[]) => sent.reduce((sum, { message }) => sum + tokens(message.content), 0);
-  const assembled = (sent: Sent[]): Assembled => ({
-    messages: sent.map(({ message }) => message),
+  const size = (parts: (Sent | CachePart)[]) => parts.reduce((sum, part) => sum + ('cache' in part ? 0 : tokens(part.message.content)), 0);
+  const assembled = (parts: (Sent | CachePart)[]): Assembled => {
+    const sent = cachePoints(parts);
+    return {
+      messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
-    lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
-  });
+      lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
+    };
+  };
 
   // The context budget (decided 2026-09-28) drops the oldest chat messages first and never the last one; the rest
   // of the template stays whole. What does not fit even then is not sent.
@@ -156,6 +162,30 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
 }
 
 type ChatPart = { range: ChatRange; from: From };
+type CachePart = { cache: true };
+
+// The cache points (design §4.4): the message before each 캐시 지점 block, and two the app sets itself. One ends the part
+// before the chat, which stays the same from turn to turn; the other is the chat's last message, which the next turn's
+// request repeats. Not the request's last message: a block after the chat (글로벌 노트, 최종 삽입, the continue
+// instruction) moves on every turn, so a point there is never met again.
+function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
+  const sent: Sent[] = [];
+  const point = (index: number) => {
+    const part = sent[index]!;
+    sent[index] = { ...part, message: { ...part.message, cache: true } };
+  };
+  for (const part of parts) {
+    if (!('cache' in part)) sent.push(part);
+    else if (sent.length) point(sent.length - 1);
+  }
+  const chat = (from: From) => from.kind === 'block' && from.slot === 'chat';
+  // An entry at @@depth is placed among the chat's messages, so it starts the chat's part as much as a message does.
+  const first = sent.findIndex(({ from }) => chat(from) || from.kind === 'depth');
+  if (first > 0) point(first - 1);
+  const last = sent.findLastIndex(({ from }) => chat(from));
+  if (last !== -1) point(last);
+  return sent;
+}
 
 const blockFrom = (block: Block): From => ({ kind: 'block', name: block.name, slot: block.kind === 'slot' ? block.slot : null });
 

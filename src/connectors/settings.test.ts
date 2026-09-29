@@ -4,7 +4,7 @@ import openRouterModels from './fixtures/openrouter-models.json';
 import vercelModels from './fixtures/vercel-models.json';
 import { chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel } from './registry';
 import { fit, type ModelSettings } from './settings';
-import type { Connection, Model } from './types';
+import type { ChatMessage, Connection, Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Connection => ({ type, label: type, baseUrl: null, protocol: null, secret: 'key', starred: [], ...extra });
 const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
@@ -122,5 +122,50 @@ describe('what a request carries', () => {
     const sent = body(connection('copilot'), claude, fitted);
     expect(sent).toMatchObject({ temperature: 1, thinking: { type: 'enabled', budget_tokens: 32_000 } });
     expect(sent).not.toHaveProperty('frequency_penalty');
+  });
+});
+
+describe('cache points', () => {
+  const claude: Model = { ...bare, id: 'claude-opus-5-5', maxOutput: 64_000 };
+  const marked: ChatMessage[] = [
+    { role: 'system', content: 'Rules.', cache: true },
+    { role: 'system', content: 'Lore.' },
+    { role: 'user', content: 'Hi.', cache: true },
+    { role: 'assistant', content: 'Hello.' },
+  ];
+  const sent = (on: Connection, settings: ModelSettings, messages = marked) =>
+    JSON.parse(chatRequest(resolveModel(resolveConnection(on)!, claude), { model: claude, messages, settings }).body!) as Record<string, unknown>;
+
+  it('splits the Messages format’s system after a point and marks the message, and sends neither the mark nor a split without caching', () => {
+    expect(sent(connection('anthropic'), { cache: '1h' })).toMatchObject({
+      system: [
+        { type: 'text', text: 'Rules.', cache_control: { type: 'ephemeral', ttl: '1h' } },
+        { type: 'text', text: '\n\nLore.' },
+      ],
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'Hi.', cache_control: { type: 'ephemeral', ttl: '1h' } }] },
+        { role: 'assistant', content: 'Hello.' },
+      ],
+    });
+    const off = sent(connection('anthropic'), {});
+    expect(off).toMatchObject({ system: 'Rules.\n\nLore.', messages: [{ role: 'user', content: 'Hi.' }, { role: 'assistant', content: 'Hello.' }] });
+    expect(JSON.stringify(off)).not.toMatch(/cache/);
+  });
+
+  it('marks OpenRouter’s text parts, and leaves caching out on a connection the user described', () => {
+    expect(sent(connection('openrouter'), { cache: '5m' }).messages).toEqual([
+      { role: 'system', content: [{ type: 'text', text: 'Rules.', cache_control: { type: 'ephemeral' } }] },
+      { role: 'system', content: 'Lore.' },
+      { role: 'user', content: [{ type: 'text', text: 'Hi.', cache_control: { type: 'ephemeral' } }] },
+      { role: 'assistant', content: 'Hello.' },
+    ]);
+    expect(fit(modelSettings(generic, claude)!, { cache: '5m' }).changes).toEqual([{ setting: 'cache', change: 'left-out' }]);
+    expect(JSON.stringify(sent(generic, { cache: '5m' }))).not.toMatch(/cache/);
+  });
+
+  it('keeps the first three points and the last when there are more than four', () => {
+    const many = Array.from({ length: 6 }, (_, index): ChatMessage => ({ role: index % 2 ? 'assistant' : 'user', content: `${index}`, cache: true }));
+    const points = (sent(connection('anthropic'), { cache: '5m' }, many).messages as { content: unknown }[]).map(({ content }) => typeof content !== 'string');
+    expect(points).toEqual([true, true, true, false, false, true]);
   });
 });

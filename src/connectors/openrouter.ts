@@ -81,6 +81,8 @@ export const openRouter: ConnectionType = {
 
   reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 
+  cacheControl: true,
+
   // OpenRouter reports what the call cost, in US dollars, with the final usage.
   cost: ({ facts }) => (typeof facts.rawUsage.cost === 'number' && Number.isFinite(facts.rawUsage.cost) ? { unit: 'usd', amount: facts.rawUsage.cost, source: 'reported' } : null),
 
