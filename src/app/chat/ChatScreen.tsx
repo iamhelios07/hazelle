@@ -41,12 +41,8 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
         back={back ? { label: back.label, onClick: () => navigate(back.to) } : undefined}
         title={<ChatHeading chat={chat} />}
         actions={<ChatHeaderActions chat={chat} reading={reading} />}
-        above={
-          <>
-            {scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
-            <ToastSlot />
-          </>
-        }
+        above={scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
+        notice={<ToastSlot />}
         footer={<ChatComposer chat={chat} />}
         panel={
           panel?.kind === 'info' ? (

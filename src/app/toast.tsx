@@ -19,8 +19,8 @@ const ToastContext = createContext<Toasts | null>(null);
 const SlotContext = createContext<(slot: HTMLElement | null) => void>(() => {});
 
 // One toast at a time; a new one replaces the old. It closes by itself, and its action closes it too.
-// It floats at the foot of the page, or sits in a ToastSlot when the page has one, such as the chat's
-// place above its composer.
+// It floats at the top of the page, or sits in a ToastSlot when the page has one, such as the chat's
+// place under its header, apart from the pill above its composer.
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [slot, setSlot] = useState<HTMLElement | null>(null);

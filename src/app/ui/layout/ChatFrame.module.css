@@ -115,6 +115,21 @@
   gap: var(--space-8);
 }
 
+.notice {
+  position: absolute;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-12) var(--read-gutter) 0;
+  pointer-events: none;
+}
+
+.notice > * {
+  pointer-events: auto;
+}
+
 .above {
   position: absolute;
   left: 0;

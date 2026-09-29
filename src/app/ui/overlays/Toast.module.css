@@ -1,23 +1,30 @@
-/* Relative, so the toast keeps its layer in a page's slot too (ToastSlot), not only when floating. */
+/* Relative, so the toast keeps its layer in a page's slot too (ToastSlot), not only when floating.
+   A card rather than a capsule, so it never reads as one more button beside the chat's pill. */
 .toast {
-  composes: fadeIn from '../foundation/motion.module.css';
+  composes: dropIn from '../foundation/motion.module.css';
   position: relative;
   z-index: var(--layer-toast);
   max-width: var(--screen-narrow);
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
-  border: var(--border-thin) solid var(--color-border-strong);
-  border-radius: var(--radius-xl);
+  min-height: var(--control-md);
+  padding: var(--space-8) var(--space-16);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--color-surface-raised);
-  font-size: var(--text-md);
+  box-shadow: var(--shadow-popover);
+  font-size: var(--text-sm);
+}
+
+.toast:has(> button) {
+  padding-right: var(--space-8);
 }
 
 .floating {
   position: fixed;
   left: 50%;
-  bottom: var(--space-24);
+  top: var(--space-16);
   transform: translateX(-50%);
   width: calc(100% - var(--space-32));
 }
