@@ -1,5 +1,6 @@
 import { chatRequest, resolveConnection, resolveModel, withCredential, type Resolved } from '../connectors/registry';
 import { decodeStream, type Outcome } from '../connectors/stream';
+import type { ModelSettings } from '../connectors/settings';
 import { ConnectorError, type ChatMessage, type Connection, type HttpRequest, type Phase, type Starred } from '../connectors/types';
 import type { CredentialFailure, Credentials } from './credential';
 import { relay } from './relay';
@@ -23,12 +24,13 @@ export type GenerateInput = {
   credentials: Credentials;
   connection: Connection;
   model: Starred;
+  settings: ModelSettings;
   messages: ChatMessage[];
   signal: AbortSignal;
   onText: (phase: Phase, text: string) => void;
 };
 
-export async function generate({ credentials, connection, model, messages, signal, onText }: GenerateInput): Promise<Reply> {
+export async function generate({ credentials, connection, model, settings, messages, signal, onText }: GenerateInput): Promise<Reply> {
   const started = performance.now();
   let firstText: number | null = null;
   // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
@@ -49,7 +51,7 @@ export async function generate({ credentials, connection, model, messages, signa
   let request: HttpRequest;
   try {
     route = resolveModel(resolved, model);
-    request = chatRequest(route, { model, messages, settings: model.settings ?? {} });
+    request = chatRequest(route, { model, messages, settings });
     built = { url: request.url, body: request.body };
   } catch (error) {
     if (error instanceof ConnectorError) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: error.code });

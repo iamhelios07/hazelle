@@ -34,7 +34,6 @@ export function describeFailure(failure: ApiFailure): string {
 
 const REFUSED: Record<string, string> = {
   'max-tokens-unknown': '이 모델의 최대 출력 길이를 몰라서 보낼 수 없어요.',
-  'setting-refused': '이 모델이 받지 않는 설정이 있어요. 연결 → 이 모델의 설정에서 고쳐 주세요.',
   'unknown-connection-type': '이 버전이 모르는 연결 종류예요. 새로고침해 보세요.',
   'unsupported-protocol': '이 모델이 받는 요청 방식을 이 앱이 아직 몰라요.',
 };
@@ -133,11 +132,13 @@ export function describeTurnFailure(failure: TurnFailure): string {
       return failure.own ? '이 채팅의 프롬프트가 지워졌어요. 다른 프롬프트를 골라 주세요.' : '기본 프롬프트가 없어요.';
     case 'persona-missing':
       return failure.own ? '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.' : '기본 페르소나가 지워졌어요. 다른 페르소나를 기본으로 골라 주세요.';
+    case 'profile-missing':
+      return failure.own ? '이 모델이 쓰던 설정 묶음이 지워졌어요. 모델 설정에서 다른 묶음을 골라 주세요.' : '기본 설정 묶음이 없어요. 모델 설정에서 다른 묶음을 기본으로 골라 주세요.';
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 보내 주세요.';
     case 'too-long':
-      if (failure.budget <= 0) return '이 모델의 답장 길이가 컨텍스트만큼 커서 프롬프트가 들어갈 자리가 없어요. 연결에서 이 모델의 답장 길이를 줄여 주세요.';
-      return `마지막 메시지만 남겨도 프롬프트가 약 ${failure.tokens.toLocaleString('ko-KR')} 토큰이라, 답장 길이를 뺀 이 모델의 자리 ${failure.budget.toLocaleString('ko-KR')} 토큰에 들어가지 않아요. 프롬프트나 로어북을 줄이거나 연결에서 이 모델의 설정을 바꿔 주세요.`;
+      if (failure.budget <= 0) return '이 모델의 답장 길이가 컨텍스트만큼 커서 프롬프트가 들어갈 자리가 없어요. 모델 설정에서 이 모델의 답장 길이를 줄여 주세요.';
+      return `마지막 메시지만 남겨도 프롬프트가 약 ${failure.tokens.toLocaleString('ko-KR')} 토큰이라, 답장 길이를 뺀 이 모델의 자리 ${failure.budget.toLocaleString('ko-KR')} 토큰에 들어가지 않아요. 프롬프트나 로어북을 줄이거나 모델 설정에서 이 모델의 묶음을 바꿔 주세요.`;
     case 'unsent':
       return `보낸 말을 저장하지 못해서 답장을 멈췄어요. ${describeFailure(failure.failure)}`;
     case 'unsaved':

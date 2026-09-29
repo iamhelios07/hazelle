@@ -6,6 +6,7 @@ import type { Stored } from '../../model/kinds';
 import type { CatalogResult } from '../../runtime/catalog';
 import { removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { reportsMeters } from '../../runtime/meters';
+import { modelProfile } from '../../runtime/profiles';
 import { describeCatalogFailure, describeFailure } from '../common/failure';
 import { useSession } from '../session';
 import { navigate } from '../shell/router';
@@ -146,12 +147,17 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           {shown.map((model) => {
             const on = starred.some((entry) => entry.id === model.id);
             const listed = !catalog?.ok || catalog.models.some((entry) => entry.id === model.id);
-            // Only a star already saved has settings to open; one still saving has none yet.
+            // Only a star already saved has a 묶음 to open; one still saving has none yet.
             const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
-            const set = saved?.settings ? Object.keys(saved.settings).length : 0;
-            const opens = set ? `설정 · ${set}개 정함` : '설정';
-            const settings = saved && modelSettings(connection, saved) && (
-              <Button variant="ghost" size="sm" label={`${opens} · ${model.name}`} onClick={() => navigate({ kind: 'model-settings', connection: id, model: model.id })}>
+            const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
+            const opens = choice && (choice.kind === 'profile' ? `묶음 · ${choice.profile.value.name}` : '묶음 없음');
+            const settings = choice && (
+              <Button
+                variant="ghost"
+                size="sm"
+                label={`${opens} · ${model.name}`}
+                onClick={() => navigate(choice.kind === 'profile' ? { kind: 'profile', id: choice.profile.id } : { kind: 'profiles' })}
+              >
                 {opens}
               </Button>
             );

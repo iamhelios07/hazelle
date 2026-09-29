@@ -1,3 +1,4 @@
+import type { ModelSettings } from '../connectors/settings';
 import type { Assembled } from '../engine/pipeline';
 import type { Message, Receipt, ReceiptError } from '../model/chat';
 import type { ApiFailure } from './api';
@@ -23,7 +24,8 @@ export type Shown = Message & { live: string | null };
 
 // One reply to ask for (runtime/turn): the model, the prompt, the user's message sent with it, and where
 // the reply goes. The reply's id is chosen before the prompt is built, which it seeds (engine/pipeline).
-export type Ask = { chat: string; route: Route; prompt: Assembled; said: Turn['said']; reply: Turn['reply'] };
+// settings: the model's 설정 묶음 as stored, which the request fits to the model.
+export type Ask = { chat: string; route: Route; settings: ModelSettings; prompt: Assembled; said: Turn['said']; reply: Turn['reply'] };
 
 // What one reply sent, for 정보's 요청 원문 and lorebook part (design F3). It lives in page memory only, until the
 // session closes (tech-spec §5: the raw request is not stored).
@@ -125,7 +127,7 @@ export class Talk {
     for (const listener of this.listeners) listener();
   }
 
-  async run({ chat, route, prompt, said, reply }: Ask): Promise<TalkFailure | null> {
+  async run({ chat, route, settings, prompt, said, reply }: Ask): Promise<TalkFailure | null> {
     if (this.turn) return null;
     const turn: Turn = { chat, said, reply, text: reply.continues?.text ?? '' };
     this.set(turn);
@@ -137,6 +139,7 @@ export class Talk {
       credentials: this.credentials,
       connection: route.connection.value,
       model: route.model,
+      settings,
       messages: prompt.messages,
       signal: abort.signal,
       onText: (phase, chunk) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk }),

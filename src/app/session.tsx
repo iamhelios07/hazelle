@@ -38,6 +38,7 @@ export function useViews(): Views {
 export const useChats = (): ChatItem[] => useViews().chats;
 export const useLibrary = (): Views['library'] => useViews().library;
 export const useConnections = (): Stored<'connection'>[] => useViews().connections;
+export const useProfiles = (): Stored<'profile'>[] => useViews().profiles;
 export const useSettings = (): Settings => useViews().settings;
 export const useUnreadable = (): number => useViews().unreadable;
 

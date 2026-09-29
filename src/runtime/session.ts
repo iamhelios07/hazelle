@@ -9,6 +9,7 @@ import { purgeExpired } from './characters';
 import { Credentials } from './credential';
 import { Files } from './files';
 import { addFirstPersona } from './personas';
+import { addFirstProfile, adoptModelSettings } from './profiles';
 import { addStarter } from './prompts';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
@@ -24,6 +25,7 @@ export type Views = {
   connections: Stored<'connection'>[];
   prompts: Stored<'prompt'>[];
   personas: Stored<'persona'>[];
+  profiles: Stored<'profile'>[];
   settings: Settings;
   unreadable: number;
 };
@@ -49,8 +51,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const pulled = await store.pull();
   if (pulled) return pulled;
   const files = await Files.open(accountId, vaultKey, api);
-  // Awaited rather than started, so the first screen and every turn already see the default prompt and persona.
-  await Promise.all([addStarter(store), addFirstPersona(store, username)]);
+  // Awaited rather than started, so the first screen and every turn already see the default prompt, persona and 묶음.
+  await Promise.all([addStarter(store), addFirstPersona(store, username), addFirstProfile(store), adoptModelSettings(store)]);
   if (signal.aborted) return { ok: false, error: 'stopped' };
 
   const credentials = new Credentials();
@@ -81,7 +83,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
 type Displayed = { key: string; texts: string[] };
 
 // What any chat's display reads besides the chat itself and its entries.
-const SHARED: readonly Kind[] = ['character', 'lore', 'prompt', 'persona', 'settings', 'connection'];
+const SHARED: readonly Kind[] = ['character', 'lore', 'prompt', 'persona', 'settings', 'connection', 'profile'];
 // Every write takes the account's next rev (tech-spec §5), so the count and highest rev of a set of objects
 // change with any write to it, a deletion included.
 const written = (objects: Stored<Kind>[]) => `${objects.length}:${objects.reduce((max, { rev }) => Math.max(max, rev), 0)}`;
@@ -112,6 +114,7 @@ function derive(store: ObjectStore, displayed: Map<string, Displayed>): Views {
     connections: store.list('connection'),
     prompts: store.list('prompt'),
     personas: store.list('persona'),
+    profiles: store.list('profile'),
     // Until something is saved, nothing is assigned: an empty layer, not a guessed default.
     settings: store.get('settings', SETTINGS_ID)?.value ?? { models: {} },
     unreadable: store.unreadable(),

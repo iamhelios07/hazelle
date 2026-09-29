@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ModelSettings } from '../connectors/settings';
 import type { Connection, Model, Starred } from '../connectors/types';
 import { Credentials } from './credential';
 import { generate } from './generate';
@@ -9,12 +10,13 @@ const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUr
 
 const answer = (status: number, body: string, headers: Record<string, string>) => stubRelay(() => new Response(body, { status, headers }));
 
-async function run(connection = openRouter, target: Starred = model, credentials = new Credentials()) {
+async function run(connection = openRouter, target: Starred = model, credentials = new Credentials(), settings: ModelSettings = {}) {
   const texts: string[] = [];
   const reply = await generate({
     credentials,
     connection,
     model: target,
+    settings,
     messages: [{ role: 'user', content: '안녕' }],
     signal: new AbortController().signal,
     onText: (_, text) => texts.push(text),
@@ -51,13 +53,12 @@ describe('generate', () => {
     expect(log).toEqual([]);
   });
 
-  it('sends the starred model’s settings, and refuses one its catalog says it does not take', async () => {
+  it('sends the 묶음’s settings, leaving out one the catalog says the model does not take', async () => {
     const log = answer(200, 'data: {"choices":[{"delta":{"content":"네"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
     const listed: Starred = { ...model, takes: { settings: ['temperature'], reasoning: null } };
-    await run(openRouter, { ...listed, settings: { temperature: 0.7 } });
+    await run(openRouter, listed, undefined, { temperature: 0.7, topP: 0.9 });
     expect(JSON.parse(log[0]!.sent.body!)).toMatchObject({ temperature: 0.7 });
-    expect((await run(openRouter, { ...listed, settings: { topP: 0.9 } })).reply).toMatchObject({ state: 'failed', error: { kind: 'refused', code: 'setting-refused' } });
-    expect(log).toHaveLength(1);
+    expect(JSON.parse(log[0]!.sent.body!)).not.toHaveProperty('top_p');
   });
 });
 

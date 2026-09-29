@@ -66,11 +66,16 @@
   gap: var(--space-8);
 }
 
-.error {
+.error,
+.note {
   grid-column: 1 / -1;
   justify-self: end;
   color: var(--color-warn);
   font-size: var(--text-xs);
+}
+
+.note {
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 959px) {
@@ -83,7 +88,8 @@
     justify-content: space-between;
   }
 
-  .error {
+  .error,
+  .note {
     justify-self: start;
   }
 }

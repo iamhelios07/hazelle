@@ -20,9 +20,11 @@ type RowProps = {
   // What sets it: a field, a menu, a button, or a fact in words. Beside the words where there is room, under them on phones.
   control: ReactNode;
   error?: string;
+  // A quiet line under it, such as what some models are sent of the value instead.
+  note?: string;
 };
 
-export function SettingRow({ label, place = 'group', changed = false, help, control, error }: RowProps) {
+export function SettingRow({ label, place = 'group', changed = false, help, control, error, note }: RowProps) {
   const id = useId();
   return (
     <div className={place === 'group' ? styles.row : `${styles.row} ${styles.panel}`} role="group" aria-labelledby={id}>
@@ -39,6 +41,7 @@ export function SettingRow({ label, place = 'group', changed = false, help, cont
           {error}
         </p>
       )}
+      {note && <p className={styles.note}>{note}</p>}
     </div>
   );
 }

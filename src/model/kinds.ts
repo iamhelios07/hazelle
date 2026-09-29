@@ -2,6 +2,7 @@ import type { Connection } from '../connectors/types';
 import type { Chat, Entry } from './chat';
 import type { Avatar, Character, Folder, Lore } from './library';
 import type { Persona } from './persona';
+import type { Profile } from './profile';
 import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
 
@@ -17,6 +18,7 @@ export type Values = {
   settings: Settings;
   prompt: Prompt;
   persona: Persona;
+  profile: Profile;
 };
 export type Kind = keyof Values;
 
@@ -43,6 +45,7 @@ export const KINDS = {
   settings: { parent: null, id: SETTINGS_ID },
   prompt: { parent: null },
   persona: { parent: null },
+  profile: { parent: null },
 } as const satisfies Record<Kind, Rule> & { [K in Kind]: { owner?: { field: Link<K> } } };
 
 export type Singleton = { [K in Kind]: (typeof KINDS)[K] extends { id: string } ? K : never }[Kind];

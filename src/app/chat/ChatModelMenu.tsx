@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { fitsRole, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
+import { modelProfile } from '../../runtime/profiles';
 import { noResults } from '../common/search';
-import { useChats, useConnections } from '../session';
+import { useChats, useConnections, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, SearchField, type MenuHandle } from '../ui';
 
@@ -24,9 +25,21 @@ export function ChatModelMenu({ current, label, onPick, handle }: Props) {
     <Menu handle={handle} place="below-end" size="lg" label="모델" trigger={(opener) => <ChipButton label={label} title="모델 바꾸기" {...opener} />}>
       <ModelChoices current={current} onPick={onPick} />
       <Divider variant="menu" />
+      {current && <ProfileItem current={current} />}
       <MenuItem tone="muted" label="연결에서 모델 더 별표하기" onClick={() => navigate({ kind: 'connections' })} />
     </Menu>
   );
+}
+
+// The 설정 묶음 the current model uses; nothing while current names a model no longer starred.
+function ProfileItem({ current }: { current: ModelRef }) {
+  const store = useStore();
+  const connections = useConnections();
+  const starred = connections.find((connection) => connection.id === current.connection)?.value.starred.find((model) => model.id === current.model);
+  if (!starred) return null;
+  const choice = modelProfile(store, starred);
+  if (choice.kind === 'missing') return <MenuItem tone="muted" label="설정 묶음 · 없음" onClick={() => navigate({ kind: 'profiles' })} />;
+  return <MenuItem tone="muted" label={`설정 묶음 · ${choice.profile.value.name}`} onClick={() => navigate({ kind: 'profile', id: choice.profile.id })} />;
 }
 
 // Mounted only while the menu is open, so each opening starts with an empty search.

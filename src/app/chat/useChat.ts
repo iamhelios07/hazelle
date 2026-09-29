@@ -37,7 +37,7 @@ type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
 
 // The failures a chip fixes, shown by the composer for as long as they hold rather than as a toast.
-const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'prompt-missing', 'persona-missing']);
+const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'prompt-missing', 'persona-missing', 'profile-missing']);
 const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failure.kind);
 
 export type OpenChat = ReturnType<typeof useChat>;

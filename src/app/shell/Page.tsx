@@ -9,11 +9,12 @@ import { ConnectionKeyScreen } from '../connections/ConnectionKeyScreen';
 import { ConnectionModelsScreen } from '../connections/ConnectionModelsScreen';
 import { ConnectionSignInScreen } from '../connections/ConnectionSignInScreen';
 import { ConnectionsScreen } from '../connections/ConnectionsScreen';
-import { ModelSettingsScreen } from '../connections/ModelSettingsScreen';
 import { CharacterEditScreen } from '../library/CharacterEditScreen';
 import { CharacterScreen } from '../library/CharacterScreen';
 import { GalleryScreen } from '../library/gallery/GalleryScreen';
 import { HomeScreen } from '../library/HomeScreen';
+import { ProfileScreen } from '../models/ProfileScreen';
+import { ProfilesScreen } from '../models/ProfilesScreen';
 import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
@@ -33,12 +34,13 @@ const EMPTY = {
   connections: '연결을 고르면 모델 목록과 사용량이 여기에 보여요.',
   'add-connection': '왼쪽에서 연결할 곳을 고르면 여기서 이어서 연결해요.',
   personas: '페르소나를 고르면 여기서 고칠 수 있어요.',
+  profiles: '묶음을 고르면 설정과 쓰는 모델이 여기에 보여요.',
 };
 
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
 export function Page({ route, closeSettings }: { route: Route; closeSettings: () => void }) {
-  const { chatById, characterById, library, connections, prompts, personas } = useViews();
+  const { chatById, characterById, library, connections, prompts, personas, profiles } = useViews();
   const wide = useWide();
   const split = useSplit();
 
@@ -94,14 +96,6 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         const stored = connections.find((connection) => connection.id === at.id);
         return stored ? <ConnectionModelsScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'connection');
       }
-      case 'model-settings': {
-        const stored = connections.find((connection) => connection.id === at.connection);
-        if (!stored) return missing(at, 'connection');
-        const model = stored.value.starred.find((starred) => starred.id === at.model);
-        // Starred no more, here or on another device: back to the connection's models, not the list.
-        if (!model) return <Missing what="model" back={back(at)} />;
-        return <ModelSettingsScreen key={`${stored.id}/${model.id}`} stored={stored} model={model} back={back(at)} />;
-      }
       case 'prompts':
         return <PromptsScreen back={sideBack(at)} />;
       case 'prompt': {
@@ -114,6 +108,12 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         const stored = personas.find((persona) => persona.id === at.id);
         return stored ? <PersonaScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'persona');
       }
+      case 'profiles':
+        return <ProfilesScreen back={sideBack(at)} />;
+      case 'profile': {
+        const stored = profiles.find((profile) => profile.id === at.id);
+        return stored ? <ProfileScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'profile');
+      }
       case 'defaults':
         return <DefaultsScreen back={sideBack(at)} />;
       case 'account':
@@ -121,7 +121,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
     }
   }
 
-  // The connection and persona screens as their list and the item picked from it, which sit side by side
+  // The connection, persona and 설정 묶음 screens as their list and the item picked from it, which sit side by side
   // when there is room (design F5, desktop).
   const list = listOf(route);
   if (!list) return screen(route);

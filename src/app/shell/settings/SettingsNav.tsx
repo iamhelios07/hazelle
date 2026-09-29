@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Lock, Plug, SlidersHorizontal, User, type LucideIcon } from 'lucide-react';
+import { ChevronRight, FileText, Layers, Lock, Plug, SlidersHorizontal, User, type LucideIcon } from 'lucide-react';
 import { useSession, useViews } from '../../session';
 import { Icon, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
@@ -15,7 +15,13 @@ const GROUPS: { label: string; places: Place[] }[] = [
       { page: 'personas', label: '페르소나', icon: User, route: { kind: 'personas' } },
     ],
   },
-  { label: '모델', places: [{ page: 'connections', label: '연결', icon: Plug, route: { kind: 'connections' } }] },
+  {
+    label: '모델',
+    places: [
+      { page: 'connections', label: '연결', icon: Plug, route: { kind: 'connections' } },
+      { page: 'profiles', label: '모델 설정', icon: Layers, route: { kind: 'profiles' } },
+    ],
+  },
   {
     label: '일반',
     places: [
@@ -46,12 +52,13 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
 
 // 설정 on phones: its pages as a list, each with what it holds.
 export function SettingsList({ onClose }: { onClose: () => void }) {
-  const { prompts, personas, connections } = useViews();
+  const { prompts, personas, connections, profiles } = useViews();
   const { username } = useSession();
   const holds: Record<SettingsPage, string | undefined> = {
     prompts: `${prompts.length}개`,
     personas: `${personas.length}개`,
     connections: `${connections.length}곳`,
+    profiles: `${profiles.length}개`,
     defaults: undefined,
     account: username,
   };

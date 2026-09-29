@@ -46,8 +46,9 @@ export type Model = {
   takes?: Takes;
 };
 
-// A starred model: the catalog's snapshot, with the settings the user gave it (design §4.4).
-export type Starred = Model & { settings?: ModelSettings };
+// A starred model: the catalog's snapshot, and the 설정 묶음 it uses (design §4.4). Without one it uses the
+// default 묶음, as a chat without its own prompt uses the default prompt.
+export type Starred = Model & { profile?: string };
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 export type ChatRequest = { model: Model; messages: ChatMessage[]; settings: ModelSettings };

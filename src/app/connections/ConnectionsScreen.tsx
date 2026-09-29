@@ -35,7 +35,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
               description={connection.value.starred.length ? `별표 ${connection.value.starred.length}개` : '별표 없음'}
               tags={resolveConnection(connection.value) ? [] : ['이 버전이 모르는 연결']}
               trailing={<Icon icon={ChevronRight} />}
-              current={(route.kind === 'connection' && route.id === connection.id) || (route.kind === 'model-settings' && route.connection === connection.id)}
+              current={route.kind === 'connection' && route.id === connection.id}
               onClick={() => navigate({ kind: 'connection', id: connection.id })}
             />
           ))}

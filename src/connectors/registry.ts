@@ -3,7 +3,7 @@ import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
 import { copilot } from './copilot';
 import { openRouter } from './openrouter';
-import { problems, settingsSchema, type Carries, type SettingsSchema } from './settings';
+import { fit, settingsSchema, type Carries, type SettingsSchema } from './settings';
 import { vercel } from './vercel';
 import { ConnectorError, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
@@ -73,10 +73,10 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
   }
 }
 
-// A setting the model does not take is refused here, before a credential is fetched or anything is
-// sent (design §4.4). The settings screen names which one with the same problems().
-export function chatRequest(route: Resolved, { model, messages, settings }: ChatRequest): HttpRequest {
-  if (problems(settingsSchema(carries(route), model), settings).length) throw new ConnectorError('setting-refused');
+// settings is the 묶음's as it is stored; what this model does not take of it is fitted here (design §4.4), and
+// the 모델 설정 screen names each change with the same fit().
+export function chatRequest(route: Resolved, { model, messages, settings: stored }: ChatRequest): HttpRequest {
+  const { settings } = fit(settingsSchema(carries(route), model), stored);
   const { reasoning } = settings;
   const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
   const sent = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;

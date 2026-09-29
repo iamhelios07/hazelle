@@ -1,16 +1,17 @@
 import { modelSettings } from '../connectors/registry';
+import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Card } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
 import { assemble, type PromptInput, type TooLong } from '../engine/pipeline';
 import { renderChat, type ChatScope } from '../engine/render';
 import { fold, shown, type Chat, type Message } from '../model/chat';
-import type { Stored } from '../model/kinds';
 import type { Toggle } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route, type RouteFailure } from './assignment';
 import { chatPersona } from './personas';
+import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { Ask, TalkFailure } from './talk';
@@ -25,15 +26,15 @@ export type Target =
   | { kind: 'retry'; message: string; version: string }
   | { kind: 'continue'; message: string; version: string };
 
-// Why a chat cannot start a turn: no model, or its prompt or persona is missing (design §4.2, §4.3); own says
-// whether the missing one was the chat's own or the default.
-export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; own: boolean };
+// Why a chat cannot start a turn: no model, or its prompt, persona or its model's 설정 묶음 is missing (design §4.2,
+// §4.3, §4.4); own says whether the missing one was the chat's (the model's) own or the default.
+export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; own: boolean } | { kind: 'profile-missing'; own: boolean };
 // A turn also stops before sending on a tokenizer that did not load, or a prompt over the model's budget.
 export type TurnFailure = TalkFailure | Blocked | TooLong | { kind: 'tokenizer' };
 
 // Everything one reply needs, read once when it is asked for: the model, what the prompt is built from (the
 // user's new message last in its messages), the message Talk saves with the reply, and where the reply goes.
-export type TurnContext = { route: Route } & Pick<PromptInput, 'scope' | 'budget'> & Pick<Ask, 'said' | 'reply'>;
+export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said' | 'reply'> & Pick<PromptInput, 'scope' | 'budget'>;
 
 type Reader = Pick<Session, 'store'>;
 
@@ -57,7 +58,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     }),
     greeting: card && greetingOf(card, messages),
     toggle: togglesOf(store, chat, prompt).value,
-    model: 'kind' in route ? null : botModel(route),
+    model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     pick: `${chat.character ?? ''}:${chat.seed ?? id ?? ''}`,
   };
@@ -82,18 +83,27 @@ function greetingOf(card: Card, messages: Message[]): ChatScope['greeting'] {
   return { index: shown(first).receipt === null ? (greetings[first.selected] ?? null) : null };
 }
 
-// A model's context limit and reply length: the ones set for it, else its catalog's (design §4.4).
-const contextOf = (model: Starred) => model.settings?.context ?? model.contextLength;
-const replyOf = (model: Starred) => model.settings?.maxOutput ?? model.maxOutput;
+// The 묶음's settings as this model is sent them (design §4.4); null while its 묶음 is missing, which a turn stops on.
+function sentSettings(store: Reader['store'], { connection, model }: Route): ModelSettings | null {
+  const profile = modelProfile(store, model);
+  if (profile.kind === 'missing') return null;
+  const schema = modelSettings(connection.value, model);
+  return schema ? fit(schema, profile.profile.value.settings).settings : profile.profile.value.settings;
+}
 
-function botModel({ connection, model }: { connection: Stored<'connection'>; model: Starred }): ChatScope['model'] {
-  return { id: model.id, maxContext: contextOf(model), prefill: modelSettings(connection.value, model)?.prefill ?? null };
+// A model's context limit and reply length: the ones its 묶음 sets, else its catalog's (design §4.4).
+const contextOf = (model: Starred, settings: ModelSettings | null) => settings?.context ?? model.contextLength;
+const replyOf = (model: Starred, settings: ModelSettings | null) => settings?.maxOutput ?? model.maxOutput;
+
+function botModel(route: Route, settings: ModelSettings | null): ChatScope['model'] {
+  const { connection, model } = route;
+  return { id: model.id, maxContext: contextOf(model, settings), prefill: modelSettings(connection.value, model)?.prefill ?? null };
 }
 
 // What the prompt may take of the model's context. A reply length nobody knows reserves nothing.
-function budgetOf(model: Starred): number | null {
-  const context = contextOf(model);
-  return context === null ? null : context - (replyOf(model) ?? 0);
+function budgetOf(model: Starred, settings: ModelSettings | null): number | null {
+  const context = contextOf(model, settings);
+  return context === null ? null : context - (replyOf(model, settings) ?? 0);
 }
 
 // Each message's text as the chat shows it, for its log, its title and its preview.
@@ -111,6 +121,8 @@ function sendable(scope: ChatScope, chat: Chat): PromptInput['scope'] | Blocked 
 export function blocked(reader: Reader, chat: Chat): Blocked | null {
   const route = chatModel(reader.store, chat);
   if ('kind' in route) return route;
+  const profile = modelProfile(reader.store, route.model);
+  if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
   const scope = sendable(scopeOf(reader, null, chat, []), chat);
   return 'kind' in scope ? scope : null;
 }
@@ -121,6 +133,9 @@ export function gatherTurn(session: Session, chat: string, target: Target): Turn
   if (!stored) return null;
   const route = chatModel(session.store, stored.value);
   if ('kind' in route) return route;
+  const profile = modelProfile(session.store, route.model);
+  if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
+  const { settings } = profile.profile.value;
 
   const messages = fold(session.store.children('entry', chat));
   const message = 'message' in target ? target.message : null;
@@ -139,7 +154,7 @@ export function gatherTurn(session: Session, chat: string, target: Target): Turn
   const history = continues ? [...messages.slice(0, at), { ...messages[at]!, selected: index }] : [...messages.slice(0, at), ...sending];
   const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);
   if ('kind' in scope) return scope;
-  return { route, scope, budget: budgetOf(route.model), said, reply: { id: crypto.randomUUID(), message, replaces: 'version' in target ? target.version : null, continues } };
+  return { route, settings, scope, budget: budgetOf(route.model, sentSettings(session.store, route)), said, reply: { id: crypto.randomUUID(), message, replaces: 'version' in target ? target.version : null, continues } };
 }
 
 // o200k_base counts for every model (tech-spec §8), loaded with the first send rather than with the page. Text
@@ -151,8 +166,8 @@ export async function takeTurn(session: Session, chat: string, target: Target): 
   if (turn === null || 'kind' in turn) return turn;
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { kind: 'tokenizer' };
-  const { route, scope, budget, said, reply } = turn;
+  const { route, settings, scope, budget, said, reply } = turn;
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null });
   if ('kind' in prompt) return prompt;
-  return session.talk.run({ chat, route, prompt, said, reply });
+  return session.talk.run({ chat, route, settings, prompt, said, reply });
 }

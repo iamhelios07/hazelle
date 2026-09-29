@@ -28,11 +28,6 @@ const EXAMPLES = {
     { kind: 'connect-direct', address: 'https://llm.example.com/v1?key=a b&x=1+2#top' },
   ],
   connection: [{ kind: 'connection', id: CHAT }],
-  'model-settings': [
-    { kind: 'model-settings', connection: CHAT, model: 'claude-opus-5.5' },
-    { kind: 'model-settings', connection: CHAT, model: 'qwen/qwen3-235b:free' },
-    { kind: 'model-settings', connection: CHAT, model: 'a b%c@d?e#f' },
-  ],
   prompts: [{ kind: 'prompts' }],
   prompt: [
     { kind: 'prompt', id: CHAT, pane: null },
@@ -40,6 +35,8 @@ const EXAMPLES = {
   ],
   personas: [{ kind: 'personas' }],
   persona: [{ kind: 'persona', id: CHAT }],
+  profiles: [{ kind: 'profiles' }],
+  profile: [{ kind: 'profile', id: CHAT }],
   defaults: [{ kind: 'defaults' }],
   account: [{ kind: 'account' }],
   settings: [{ kind: 'settings' }],
@@ -57,7 +54,7 @@ describe('routes', () => {
     expect(href({ kind: 'connect-direct', address: 'https://a.example/v1' })).toBe('/connections/new/direct?address=https%3A%2F%2Fa.example%2Fv1');
   });
 
-  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/${CHAT}/%E0%A4%A`, `/connections/abc/model`, `/connections/${CHAT}/model/x`, '/personas/abc', `/personas/${CHAT}/x`, '/settings/x', '/defaults/x'])(
+  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/models/abc', `/models/${CHAT}/x`, '/settings/x', '/defaults/x'])(
     '%s is home',
     (at) => {
       expect(parseRoute(at)).toEqual(HOME);

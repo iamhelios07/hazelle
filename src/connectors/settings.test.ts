@@ -3,8 +3,8 @@ import copilotModels from './fixtures/copilot-models.json';
 import openRouterModels from './fixtures/openrouter-models.json';
 import vercelModels from './fixtures/vercel-models.json';
 import { chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel } from './registry';
-import { problems, type ModelSettings } from './settings';
-import { ConnectorError, type Connection, type Model } from './types';
+import { fit, type ModelSettings } from './settings';
+import type { Connection, Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Connection => ({ type, label: type, baseUrl: null, protocol: null, secret: 'key', starred: [], ...extra });
 const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
@@ -110,15 +110,17 @@ describe('what a request carries', () => {
     expect(body(connection('copilot'), claude, { reasoning: { kind: 'budget', tokens: 4096 } })).toMatchObject({ max_tokens: 64000, thinking: { type: 'enabled', budget_tokens: 4096 } });
   });
 
-  it('refuses a setting the model does not take, or a value out of its range, and names it', () => {
+  it('leaves out what the model does not take and brings a value past its bounds within them, and names each', () => {
     const claude = listed('copilot', copilotModels, 'claude-opus-4.6');
-    const route = resolveModel(resolveConnection(connection('copilot'))!, claude);
-    const refused: ModelSettings = { frequencyPenalty: 0.5, temperature: 1.5, reasoning: { kind: 'budget', tokens: 50_000 } };
-    expect(() => chatRequest(route, { model: claude, messages: [], settings: refused })).toThrow(new ConnectorError('setting-refused'));
-    expect(problems(modelSettings(connection('copilot'), claude)!, refused)).toEqual([
-      { setting: 'temperature', problem: 'out-of-range' },
-      { setting: 'frequencyPenalty', problem: 'not-accepted' },
-      { setting: 'reasoning', problem: 'out-of-range' },
+    const fitted: ModelSettings = { frequencyPenalty: 0.5, temperature: 1.5, context: 10_000_000, reasoning: { kind: 'budget', tokens: 50_000 } };
+    expect(fit(modelSettings(connection('copilot'), claude)!, fitted).changes).toEqual([
+      { setting: 'temperature', change: 'capped', to: 1 },
+      { setting: 'frequencyPenalty', change: 'left-out' },
+      { setting: 'context', change: 'capped', to: claude.contextLength },
+      { setting: 'reasoning', change: 'capped', to: 32_000 },
     ]);
+    const sent = body(connection('copilot'), claude, fitted);
+    expect(sent).toMatchObject({ temperature: 1, thinking: { type: 'enabled', budget_tokens: 32_000 } });
+    expect(sent).not.toHaveProperty('frequency_penalty');
   });
 });

@@ -1,12 +1,12 @@
 import type { Model } from './types';
 
-// A starred model's settings (design §4.4), in this app's own names. Each codec puts them into its wire
+// A 설정 묶음's settings (design §4.4), in this app's own names. Each codec puts them into its wire
 // format; a connection type adds only what its provider carries beyond its codec.
 export const NUMBERS = ['maxOutput', 'temperature', 'topP', 'topK', 'frequencyPenalty', 'presencePenalty', 'repetitionPenalty', 'minP', 'seed'] as const;
 export type NumberSetting = (typeof NUMBERS)[number];
 export type Setting = NumberSetting | 'stop' | 'reasoning';
 
-const WHOLE = new Set<NumberSetting>(['maxOutput', 'topK', 'seed']);
+export const WHOLE = new Set<NumberSetting>(['maxOutput', 'topK', 'seed']);
 
 export type Reasoning =
   | { kind: 'off' }
@@ -44,14 +44,18 @@ export type Carries = {
 export type Accepts = boolean | null;
 export type Rule = Bounds & { accepted: Accepts; whole: boolean };
 
+// context is the catalog's context length, which the prompt's own limit never goes past.
 export type SettingsSchema = {
   numbers: Record<NumberSetting, Rule>;
+  context: Rule;
   stop: Accepts;
   reasoning: { off: Accepts; level: Accepts; levels: string[]; budget: Rule; adaptive: Accepts };
   prefill: Accepts;
 };
 
-export type Problem = { setting: Setting; problem: 'not-accepted' | 'out-of-range' };
+// left-out: the model does not take it, or not the level named. capped: brought within the model's bounds, to that value.
+export type Change = { setting: Setting | 'context'; change: 'left-out' } | { setting: NumberSetting | 'context' | 'reasoning'; change: 'capped'; to: number };
+export type Fitted = { settings: ModelSettings; changes: Change[] };
 
 // Catalogs list 'none' among the effort levels of a model whose reasoning can be turned off; here that
 // is the off control, not a level.
@@ -85,6 +89,7 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
   const carriedBudget = carries.reasoning.budget;
   return {
     numbers,
+    context: { accepted: true, min: 1, max: model.contextLength, whole: true },
     stop: takes('stop'),
     reasoning: {
       off: control(carries.reasoning.off, facts?.off),
@@ -106,36 +111,55 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
   };
 }
 
-const within = (value: number, rule: Rule) =>
-  (!rule.whole || Number.isSafeInteger(value)) && (rule.min === null || value >= rule.min) && (rule.max === null || value <= rule.max);
+const within = (value: number, rule: Bounds) => Math.min(Math.max(value, rule.min ?? value), rule.max ?? value);
 
-// What in a model's settings its schema refuses. context is left out: it is never sent.
-export function problems(schema: SettingsSchema, settings: ModelSettings): Problem[] {
-  const found: Problem[] = [];
+// What one model is sent of a 묶음's settings (design §4.4, user 2026-09-29: "빼거나 맞추고 알려주기"): a value it
+// is known not to take is left out, and a number past its bounds is brought within them. Unknown is sent as it
+// is. changes names each, for the screens to say.
+export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
+  const sent: ModelSettings = { ...settings };
+  const changes: Change[] = [];
+  const leave = (setting: Setting | 'context') => {
+    delete sent[setting];
+    changes.push({ setting, change: 'left-out' });
+  };
+  const cap = (setting: NumberSetting | 'context', value: number, rule: Bounds) => {
+    const to = within(value, rule);
+    if (to === value) return;
+    sent[setting] = to;
+    changes.push({ setting, change: 'capped', to });
+  };
   for (const name of NUMBERS) {
     const value = settings[name];
     if (value === undefined) continue;
-    const rule = schema.numbers[name];
-    if (rule.accepted === false) found.push({ setting: name, problem: 'not-accepted' });
-    else if (!within(value, rule)) found.push({ setting: name, problem: 'out-of-range' });
+    if (schema.numbers[name].accepted === false) leave(name);
+    else cap(name, value, schema.numbers[name]);
   }
-  if (settings.stop && schema.stop === false) found.push({ setting: 'stop', problem: 'not-accepted' });
-  const reasoning = settings.reasoning && reasoningProblem(schema.reasoning, settings.reasoning);
-  if (reasoning) found.push({ setting: 'reasoning', problem: reasoning });
-  return found;
+  if (settings.context !== undefined) cap('context', settings.context, schema.context);
+  if (settings.stop && schema.stop === false) leave('stop');
+  const { reasoning } = settings;
+  if (reasoning?.kind === 'budget' && schema.reasoning.budget.accepted !== false) {
+    const tokens = within(reasoning.tokens, schema.reasoning.budget);
+    if (tokens !== reasoning.tokens) {
+      sent.reasoning = { kind: 'budget', tokens };
+      changes.push({ setting: 'reasoning', change: 'capped', to: tokens });
+    }
+  } else if (reasoning && refused(schema.reasoning, reasoning)) {
+    leave('reasoning');
+  }
+  return { settings: sent, changes };
 }
 
-function reasoningProblem(rules: SettingsSchema['reasoning'], reasoning: Reasoning): Problem['problem'] | null {
-  const level = (named: string) => (rules.levels.includes(named) ? null : 'out-of-range');
+function refused(rules: SettingsSchema['reasoning'], reasoning: Reasoning): boolean {
+  const unnamed = (level: string | null) => level !== null && (rules.level === false || !rules.levels.includes(level));
   switch (reasoning.kind) {
     case 'off':
-      return rules.off === false ? 'not-accepted' : null;
+      return rules.off === false;
     case 'level':
-      return rules.level === false ? 'not-accepted' : level(reasoning.level);
+      return unnamed(reasoning.level);
     case 'budget':
-      return rules.budget.accepted === false ? 'not-accepted' : within(reasoning.tokens, rules.budget) ? null : 'out-of-range';
+      return rules.budget.accepted === false;
     case 'adaptive':
-      if (rules.adaptive === false || (reasoning.level !== null && rules.level === false)) return 'not-accepted';
-      return reasoning.level === null ? null : level(reasoning.level);
+      return rules.adaptive === false || unnamed(reasoning.level);
   }
 }
