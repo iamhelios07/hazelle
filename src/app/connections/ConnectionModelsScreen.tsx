@@ -150,7 +150,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
             // Only a star already saved has a 묶음 to open; one still saving has none yet.
             const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
             const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
-            const opens = choice && (choice.kind === 'profile' ? `묶음 · ${choice.profile.value.name}` : '묶음 없음');
+            const opens = choice && (choice.kind === 'profile' ? `설정 · ${choice.profile.value.name}` : '설정 없음');
             const settings = choice && (
               <Button
                 variant="ghost"

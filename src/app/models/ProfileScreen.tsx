@@ -290,12 +290,12 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     flush();
     const removed = await removeProfile(store, id);
     if (!removed.ok) {
-      if (removed.error === 'default') return toast.show('기본 묶음은 지울 수 없어요. 다른 묶음을 기본으로 정한 뒤 지워 주세요.');
+      if (removed.error === 'default') return toast.show('기본 설정은 지울 수 없어요. 다른 설정을 기본으로 정한 뒤 지워 주세요.');
       return toast.failed(removed, '지우지 못했어요.');
     }
     navigate({ kind: 'profiles' });
-    const note = users.length ? ` 이 묶음을 쓰던 모델 ${users.length}개는 다른 묶음을 골라야 보낼 수 있어요.` : '';
-    toast.undoable(`${removed.data.value.name} 묶음을 지웠어요.${note}`, () => void restoreProfile(store, removed.data));
+    const note = users.length ? ` 이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 골라야 보낼 수 있어요.` : '';
+    toast.undoable(`${removed.data.value.name} 설정을 지웠어요.${note}`, () => void restoreProfile(store, removed.data));
   }
 
   const detailSet = DETAIL.filter((field) => shown[field] !== undefined).length + (shown.stop ? 1 : 0) + (shown.systemAsUser ? 1 : 0);
@@ -306,7 +306,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       top={
         <NavBar
           title={name}
-          rename={{ label: '묶음 이름', placeholder: stored.value.name, onChange: rename }}
+          rename={{ label: '설정 이름', placeholder: stored.value.name, onChange: rename }}
           backLabel={back.label}
           onBack={() => navigate(back.to)}
           actions={status && <Text tone="muted">{STATUS[status]}</Text>}
@@ -316,12 +316,12 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       <Stack gap="related">
         {isDefault ? (
           <Text size="sm" tone="accent">
-            기본 묶음이에요. 새로 별표한 모델과 묶음을 따로 고르지 않은 모델이 이 묶음을 써요.
+            기본 설정이에요. 새로 별표한 모델과 설정을 따로 고르지 않은 모델이 이 설정을 써요.
           </Text>
         ) : (
           <Row kind="actions">
             <Button variant="link" size="xs" onClick={() => void saved(setDefaultProfile(store, id))}>
-              기본 묶음으로 정하기
+              기본 설정으로 정하기
             </Button>
           </Row>
         )}
@@ -331,30 +331,30 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       </Stack>
 
       <Section
-        title="쓰는 모델"
+        title="이 설정을 쓰는 모델"
         note={users.length ? `${users.length}개` : undefined}
         action={
           others.length > 0 && (
             <Menu
               place="below-end"
               size="lg"
-              label="모델 붙이기"
+              label="모델 추가"
               trigger={(opener) => (
                 <Button variant="secondary" size="sm" {...opener}>
-                  모델 붙이기
+                  모델 추가
                 </Button>
               )}
             >
               {others.map(({ connection, models }) => [
                 <MenuHeading key={connection.id}>{connection.value.label}</MenuHeading>,
-                ...models.map((model) => <MenuItem key={`${connection.id}/${model.id}`} label={model.name} sub={`지금 묶음: ${profileName(model)}`} onClick={() => attach(connection.id, model.id)} />),
+                ...models.map((model) => <MenuItem key={`${connection.id}/${model.id}`} label={model.name} sub={`지금: ${profileName(model)}`} onClick={() => attach(connection.id, model.id)} />),
               ])}
             </Menu>
           )
         }
       >
         {users.length > 0 ? (
-          <List label="쓰는 모델">
+          <List label="이 설정을 쓰는 모델">
             {users.map((user) => (
               <ListItem
                 key={`${user.connection.id}/${user.model.id}`}
@@ -363,8 +363,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                 description={summary(user)}
                 trailing={
                   !isDefault && (
-                    <Button variant="ghost" size="sm" label={`${user.model.name} 빼기`} onClick={() => void saved(setModelProfile(store, user.connection.id, user.model.id, null))}>
-                      빼기
+                    <Button variant="ghost" size="sm" label={`${user.model.name} 기본 설정으로`} onClick={() => void saved(setModelProfile(store, user.connection.id, user.model.id, null))}>
+                      기본으로
                     </Button>
                   )
                 }
@@ -373,7 +373,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           </List>
         ) : (
           <Text size="sm" tone="muted">
-            아직 이 묶음을 쓰는 모델이 없어요. 모델 붙이기로 골라 주세요.
+            아직 이 설정을 쓰는 모델이 없어요. 모델 추가로 골라 주세요.
           </Text>
         )}
       </Section>
@@ -402,7 +402,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         </Button>
         {!isDefault && (
           <Button variant="danger" size="sm" onClick={() => void remove()}>
-            이 묶음 지우기
+            이 설정 지우기
           </Button>
         )}
       </Row>

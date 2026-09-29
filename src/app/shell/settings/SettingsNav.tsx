@@ -52,13 +52,13 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
 
 // 설정 on phones: its pages as a list, each with what it holds.
 export function SettingsList({ onClose }: { onClose: () => void }) {
-  const { prompts, personas, connections, profiles } = useViews();
+  const { prompts, personas, connections } = useViews();
   const { username } = useSession();
   const holds: Record<SettingsPage, string | undefined> = {
     prompts: `${prompts.length}개`,
     personas: `${personas.length}개`,
     connections: `${connections.length}곳`,
-    profiles: `${profiles.length}개`,
+    profiles: `모델 ${connections.reduce((sum, connection) => sum + connection.value.starred.length, 0)}개`,
     defaults: undefined,
     account: username,
   };

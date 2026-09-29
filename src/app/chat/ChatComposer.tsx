@@ -15,7 +15,7 @@ const FIX = {
   'model-gone': { label: '모델 고르기', chip: 'model' },
   'prompt-missing': { label: '프롬프트 고르기', chip: 'prompt' },
   'persona-missing': { label: '페르소나 고르기', chip: 'persona' },
-  'profile-missing': { label: '설정 묶음 고르기', chip: 'model' },
+  'profile-missing': { label: '모델 설정 고르기', chip: 'model' },
 } as const satisfies Record<Blocked['kind'], { label: string; chip: Chip }>;
 
 export function ChatComposer({ chat }: { chat: OpenChat }) {

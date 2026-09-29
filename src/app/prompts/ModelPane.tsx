@@ -33,7 +33,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
   ];
   return (
     <Section title="모델">
-      <Text tone="muted">이 프롬프트로 여는 채팅이 쓰는 본 대화 모델이에요. 채팅에서 모델을 바꾸면 그 채팅만 바뀌어요. 온도 같은 값은 모델 설정의 설정 묶음에서 정해요.</Text>
+      <Text tone="muted">이 프롬프트로 여는 채팅이 쓰는 본 대화 모델이에요. 채팅에서 모델을 바꾸면 그 채팅만 바뀌어요. 온도 같은 값은 설정 › 모델 설정에서 정해요.</Text>
       <ChoiceGroup
         label="본 대화 모델"
         layout="list"

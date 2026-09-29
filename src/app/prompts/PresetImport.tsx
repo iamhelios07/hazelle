@@ -27,7 +27,7 @@ const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: str
   'preset-text': (count) => ({ title: `템플릿 밖의 옛 글 ${count}개`, note: '템플릿을 쓰는 프리셋이라 Risu에서도 보내지 않던 글이에요.' }),
   regex: (count) => ({ title: `정규식 ${count}개` }),
   variables: (count) => ({ title: `기본 변수 ${count}개` }),
-  settings: () => ({ title: '모델과 생성 설정', note: '모델 설정은 설정 묶음에서 해요.' }),
+  settings: () => ({ title: '모델과 생성 설정', note: '모델 설정은 설정 › 모델 설정에서 해요.' }),
 };
 
 type Opened = { file: string; id: string; prompt: Prompt; unsupported: PresetUnsupported[] };

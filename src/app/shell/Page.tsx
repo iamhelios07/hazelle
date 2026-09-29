@@ -34,7 +34,7 @@ const EMPTY = {
   connections: '연결을 고르면 모델 목록과 사용량이 여기에 보여요.',
   'add-connection': '왼쪽에서 연결할 곳을 고르면 여기서 이어서 연결해요.',
   personas: '페르소나를 고르면 여기서 고칠 수 있어요.',
-  profiles: '묶음을 고르면 설정과 쓰는 모델이 여기에 보여요.',
+  profiles: '모델을 고르면 그 모델이 쓰는 설정이 여기에 보여요.',
 };
 
 // The chat, character or connection a route names is looked up here, so each screen is given what it
