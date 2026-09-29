@@ -14,7 +14,9 @@ import { chatPersona } from './personas';
 import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
-import type { Ask, TalkFailure } from './talk';
+import type { ApiFailure } from './api';
+import { startChat } from './chat-log';
+import type { Ask, TalkFailure, Turn } from './talk';
 
 // What the user asks for: their new message and a reply to it, a reply to the last message sending
 // nothing new (답장 받기), another version of a reply (다시 생성), one in place of a failed version
@@ -29,12 +31,13 @@ export type Target =
 // Why a chat cannot start a turn: no model, or its prompt, persona or its model's 설정 묶음 is missing (design §4.2,
 // §4.3, §4.4); own says whether the missing one was the chat's (the model's) own or the default.
 export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; own: boolean } | { kind: 'profile-missing'; own: boolean };
-// A turn also stops before sending on a tokenizer that did not load, or a prompt over the model's budget.
-export type TurnFailure = TalkFailure | Blocked | TooLong | { kind: 'tokenizer' };
+// A turn also stops before sending on a new chat that was not saved, a tokenizer that did not load, or a prompt
+// over the model's budget.
+export type TurnFailure = TalkFailure | Blocked | TooLong | { kind: 'tokenizer' } | { kind: 'unstarted'; step: 'chat' | 'greetings'; failure: ApiFailure };
 
 // Everything one reply needs, read once when it is asked for: the model, what the prompt is built from (the
 // user's new message last in its messages), the message Talk saves with the reply, and where the reply goes.
-export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said' | 'reply'> & Pick<PromptInput, 'scope' | 'budget'>;
+export type TurnContext = Pick<Ask, 'route' | 'settings'> & Pick<Turn, 'said' | 'reply'> & Pick<PromptInput, 'scope' | 'budget'>;
 
 type Reader = Pick<Session, 'store'>;
 
@@ -127,8 +130,9 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
   return 'kind' in scope ? scope : null;
 }
 
-// null: the chat, or the message the target names, is gone; for a continue, so is the version it names.
-export function gatherTurn(session: Session, chat: string, target: Target): TurnContext | Blocked | null {
+// null: the chat, or the message the target names, is gone; for a continue, so is the version it names. ids are
+// the ones the turn was shown under, for a new chat shown before it was saved.
+export function gatherTurn(session: Session, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
   const stored = session.store.get('chat', chat);
   if (!stored) return null;
   const route = chatModel(session.store, stored.value);
@@ -147,27 +151,43 @@ export function gatherTurn(session: Session, chat: string, target: Target): Turn
   // it continues nor the calls its receipt carries are dropped.
   const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt, seed: version.seed } : null;
   if (target.kind === 'continue' && !continues) return null;
-  const said: Ask['said'] = target.kind === 'send' ? { id: crypto.randomUUID(), text: target.text } : null;
+  const said: Turn['said'] = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
   const now = Date.now();
   const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
   // A continuation's prompt ends with the version it continues.
   const history = continues ? [...messages.slice(0, at), { ...messages[at]!, selected: index }] : [...messages.slice(0, at), ...sending];
   const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);
   if ('kind' in scope) return scope;
-  return { route, settings, scope, budget: budgetOf(route.model, sentSettings(session.store, route)), said, reply: { id: crypto.randomUUID(), message, replaces: 'version' in target ? target.version : null, continues } };
+  return { route, settings, scope, budget: budgetOf(route.model, sentSettings(session.store, route)), said, reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues } };
 }
 
 // o200k_base counts for every model (tech-spec §8), loaded with the first send rather than with the page. Text
 // that spells a special token counts as text.
 const tokenizer = () => import('gpt-tokenizer/encoding/o200k_base').then(({ countTokens }) => (text: string) => countTokens(text, { disallowedSpecial: new Set() }));
 
-export async function takeTurn(session: Session, chat: string, target: Target): Promise<TurnFailure | null> {
+// start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.
+export function takeTurn(session: Session, chat: string, target: Target, start: { chat: Chat; greetings: Parameters<typeof startChat>[3]; started: () => void } | null = null): Promise<TurnFailure | null> {
+  if (start) {
+    const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
+    const said = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
+    return session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async () => {
+      const started = await startChat(session.store, chat, start.chat, start.greetings);
+      if (!started.ok) return { kind: 'unstarted', step: started.step, failure: started.failure };
+      start.started();
+      // The chat was just saved and a new chat's target names no message, so it is there.
+      const turn = gatherTurn(session, chat, target, ids)!;
+      return 'kind' in turn ? turn : prepare(turn);
+    });
+  }
   const turn = gatherTurn(session, chat, target);
-  if (turn === null || 'kind' in turn) return turn;
+  if (turn === null || 'kind' in turn) return Promise.resolve(turn);
+  return session.talk.run({ chat, said: turn.said, reply: turn.reply }, () => prepare(turn));
+}
+
+async function prepare(turn: TurnContext): Promise<Ask | TooLong | { kind: 'tokenizer' }> {
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { kind: 'tokenizer' };
-  const { route, settings, scope, budget, said, reply } = turn;
+  const { route, settings, scope, budget, reply } = turn;
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null });
-  if ('kind' in prompt) return prompt;
-  return session.talk.run({ chat, route, settings, prompt, said, reply });
+  return 'kind' in prompt ? prompt : { route, settings, prompt };
 }

@@ -50,7 +50,7 @@ const luna: Card = {
 };
 
 describe('a new chat', () => {
-  it('is saved as the chat, its greetings as written with the shown one selected, then the first message; names are filled where shown and sent', () =>
+  it('shows the message at once, then is saved as the chat, its greetings as written with the shown one selected, then the first message; names are filled where shown and sent', () =>
     server.withSession(async (session) => {
       const { store } = session;
       await answerable(session);
@@ -58,9 +58,21 @@ describe('a new chat', () => {
       const log = stubRelay(() => saying('왔구나.'));
 
       const chat = crypto.randomUUID();
-      await startChat(store, chat, { title: null, character: character.ok ? character.data.id : null, models: {} }, { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0 });
-      expect(session.views().chatById.get(chat)?.preview).toBe('어서 와, jin.');
-      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      let preview: string | undefined;
+      const turn = takeTurn(
+        session,
+        chat,
+        { kind: 'send', text: '안녕' },
+        {
+          chat: { title: null, character: character.ok ? character.data.id : null, models: {} },
+          greetings: { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0 },
+          started: () => (preview = session.views().chatById.get(chat)?.preview),
+        },
+      );
+      expect(session.talk.snapshot()).toMatchObject({ chat, said: { text: '안녕' } });
+      expect(store.get('chat', chat)).toBeNull();
+      expect(await turn).toBeNull();
+      expect(preview).toBe('어서 와, jin.');
 
       const entries = store.children('entry', chat).sort((a, b) => a.rev - b.rev);
       expect(entries[0]!.rev).toBeGreaterThan(store.get('chat', chat)!.rev);

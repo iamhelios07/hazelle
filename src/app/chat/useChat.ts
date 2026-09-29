@@ -17,7 +17,6 @@ import {
   setChatNote,
   setChatPersona,
   setChatPrompt,
-  startChat,
 } from '../../runtime/chat-log';
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
@@ -83,10 +82,11 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
           live: null,
         }
       : null;
-  const messages: Shown[] = opening ? [opening] : withTurn(item?.messages ?? [], turn, id ?? '');
+  // A new chat shows its turn while it is saved, under the id it is saved as.
+  const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, id ?? newId);
   const texts = displayChat(session, id ?? newId, chat, messages);
   const busy = turn !== null;
-  const streaming = busy && turn.chat === id;
+  const streaming = busy && turn.chat === (id ?? newId);
   const last = messages.at(-1);
 
   const draft = useDraft(id, chat.character);
@@ -131,20 +131,19 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     setStopped(false);
     draft.set('');
     follow();
-    let chatId = id;
-    if (chatId === null) {
-      const started = await startChat(store, newId, chat, opening && { ids: opening.versions.map((version) => version.id), texts: opening.versions.map((version) => version.text), selected: opening.selected });
-      if (!started.ok) {
-        draft.set(text);
-        toast.failed(started.failure, started.step === 'chat' ? '채팅을 만들지 못했어요.' : '첫인사를 저장하지 못했어요.');
-        return;
-      }
-      chatId = newId;
-      navigate({ kind: 'chat', id: chatId }, { replace: true });
-    }
-    const failure = await takeTurn(session, chatId, { kind: 'send', text });
-    // Only an unsaved reply means the user's message was saved.
-    if (failure && failure.kind !== 'unsaved') draft.putBack(chatId, text);
+    const chatId = id ?? newId;
+    const start =
+      id === null
+        ? {
+            chat,
+            greetings: opening && { ids: opening.versions.map((version) => version.id), texts: opening.versions.map((version) => version.text), selected: opening.selected },
+            started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
+          }
+        : null;
+    const failure = await takeTurn(session, chatId, { kind: 'send', text }, start);
+    // Only an unsaved reply means the user's message was saved. A new chat that was not saved stays on this screen.
+    if (failure?.kind === 'unstarted') draft.set(text);
+    else if (failure && failure.kind !== 'unsaved') draft.putBack(chatId, text);
     report(failure);
   }
 

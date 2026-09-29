@@ -22,10 +22,9 @@ export type Turn = {
 // A message on screen: live marks the version being written.
 export type Shown = Message & { live: string | null };
 
-// One reply to ask for (runtime/turn): the model, the prompt, the user's message sent with it, and where
-// the reply goes. The reply's id is chosen before the prompt is built, which it seeds (engine/pipeline).
-// settings: the model's 설정 묶음 as stored, which the request fits to the model.
-export type Ask = { chat: string; route: Route; settings: ModelSettings; prompt: Assembled; said: Turn['said']; reply: Turn['reply'] };
+// What one reply is sent with, ready once its prompt is built (runtime/turn): the model and the prompt, which
+// the reply's id seeds (engine/pipeline). settings: the model's 설정 묶음 as stored, which the request fits to the model.
+export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled };
 
 // What one reply sent, for 정보's 요청 원문 and lorebook part (design F3). It lives in page memory only, until the
 // session closes (tech-spec §5: the raw request is not stored).
@@ -127,12 +126,19 @@ export class Talk {
     for (const listener of this.listeners) listener();
   }
 
-  async run({ chat, route, settings, prompt, said, reply }: Ask): Promise<TalkFailure | null> {
+  // The turn is shown before prepare, which may save a new chat and builds the prompt, so the user's message
+  // appears the moment it is sent. A failure prepare returns ends the turn unsent.
+  async run<F extends { kind: string }>({ chat, said, reply }: Omit<Turn, 'text'>, prepare: () => Promise<Ask | F>): Promise<TalkFailure | F | null> {
     if (this.turn) return null;
-    const turn: Turn = { chat, said, reply, text: reply.continues?.text ?? '' };
-    this.set(turn);
+    this.set({ chat, said, reply, text: reply.continues?.text ?? '' });
     const abort = new AbortController();
     this.abort = abort;
+    const ready = await prepare();
+    if ('kind' in ready) {
+      this.set(null);
+      return ready;
+    }
+    const { route, settings, prompt } = ready;
 
     const sending = said && appendUserMessage(this.store, chat, said);
     const replying = generate({
