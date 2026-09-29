@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
-import { ChatScreen } from '../chat/ChatScreen';
+import { ChatScreen, type SideAt } from '../chat/ChatScreen';
 import { Missing, type Absent } from '../common/Missing';
 import { ConnectionAddScreen } from '../connections/ConnectionAddScreen';
 import { ConnectionDirectScreen } from '../connections/ConnectionDirectScreen';
@@ -22,8 +22,11 @@ import { useViews } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { DefaultsScreen } from '../settings/DefaultsScreen';
 import { Empty, ListDetail, useSplit, useWide } from '../ui';
+import { ChatSide } from './ChatSide';
 import { backTo, listOf, up, upFromMissing, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
+
+const side = (at: SideAt) => <ChatSide {...at} />;
 
 // What the item's side of a list says before anything is picked from it.
 const EMPTY = {
@@ -63,8 +66,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
       case 'edit':
         return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} initial={shelf.character.card} back={back(at)} />);
       case 'new-chat':
-        if (at.character === null) return <ChatScreen key="new" item={null} shelf={null} back={sideBack(at)} />;
-        return withCharacter(at, at.character, (shelf) => <ChatScreen key={`new-${shelf.id}`} item={null} shelf={shelf} back={sideBack(at)} />);
+        if (at.character === null) return <ChatScreen key="new" item={null} shelf={null} back={sideBack(at)} side={side} />;
+        return withCharacter(at, at.character, (shelf) => <ChatScreen key={`new-${shelf.id}`} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
       case 'chat': {
         const item = chatById.get(at.id);
         if (!item) return missing(at, 'chat');
@@ -72,7 +75,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         const shelf = character === null ? null : characterById.get(character);
         // Its character is in 지운 캐릭터, or gone for good.
         if (shelf === undefined) return missing(at, 'orphaned-chat');
-        return <ChatScreen key={item.id} item={item} shelf={shelf} back={sideBack(at)} />;
+        return <ChatScreen key={item.id} item={item} shelf={shelf} back={sideBack(at)} side={side} />;
       }
       case 'settings':
         return <SettingsList onClose={closeSettings} />;

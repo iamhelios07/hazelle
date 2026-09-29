@@ -2,7 +2,6 @@ import { FileText } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt } from '../../runtime/prompts';
 import { useChats, useSession, useSettings, useViews } from '../session';
-import { navigate } from '../shell/router';
 import { ChipButton, Divider, Icon, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
 
@@ -22,8 +21,8 @@ export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
     >
       <PromptChoices chat={chat} />
       <Divider variant="menu" />
-      <MenuItem label="프롬프트 관리…" onClick={() => navigate({ kind: 'prompts' })} />
-      {prompt.kind === 'prompt' && <MenuItem label="이 프롬프트 고치기…" onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: null })} />}
+      <MenuItem label="프롬프트 관리…" onClick={() => chat.actions.side({ kind: 'prompts', id: null, pane: null })} />
+      {prompt.kind === 'prompt' && <MenuItem label="이 프롬프트 고치기…" onClick={() => chat.actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null })} />}
     </Menu>
   );
 }

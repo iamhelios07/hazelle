@@ -38,6 +38,13 @@
   border-bottom: var(--border-thin) solid var(--color-divider);
 }
 
+/* A screen's own top row can be taller than a title, with its subtitle under the name. */
+.screen {
+  height: auto;
+  min-height: var(--header-height);
+  padding-block: var(--space-10);
+}
+
 .titles {
   flex-grow: 1;
   min-width: 0;

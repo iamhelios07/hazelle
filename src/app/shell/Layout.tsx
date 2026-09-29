@@ -21,12 +21,12 @@ export function Layout() {
   const closeSettings = () => navigate(outside);
   const [listing, setListing] = useState(false);
 
-  // The shell's handlers are the first mounted, so a screen's own handler for the same keys runs before them.
-  useShortcut('settings', () => (settings === null ? navigate(settingsEntry(wide)) : closeSettings()));
-  useShortcut('personas', () => navigate({ kind: 'personas' }));
-  useShortcut('prompts', () => navigate({ kind: 'prompts' }));
-  useShortcut('shortcutList', () => setListing((open) => !open));
-  useShortcut('sidebar', () => (wide && settings === null ? setCollapsed(!collapsed) : false));
+  const fallback = { fallback: true };
+  useShortcut('settings', () => (settings === null ? navigate(settingsEntry(wide)) : closeSettings()), fallback);
+  useShortcut('personas', () => navigate({ kind: 'personas' }), fallback);
+  useShortcut('prompts', () => navigate({ kind: 'prompts' }), fallback);
+  useShortcut('shortcutList', () => setListing((open) => !open), fallback);
+  useShortcut('sidebar', () => (wide && settings === null ? setCollapsed(!collapsed) : false), fallback);
 
   const page = (
     <>

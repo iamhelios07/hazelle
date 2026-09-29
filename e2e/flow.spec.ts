@@ -85,6 +85,26 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(messages.nth(2)).toContainText('Mira smiles. (bows)');
   });
 
+  await test.step('Ctrl+P opens the prompts beside the chat, a role changed there comes back with Ctrl+Z, and Ctrl+/ lists every shortcut', async () => {
+    await page.keyboard.press('Control+p');
+    const side = page.getByRole('complementary', { name: '프롬프트' });
+    await side.getByRole('button', { name: /핑퐁 간소화/ }).first().click();
+    await side.getByRole('button', { name: /^1\. / }).click();
+    const system = side.getByRole('button', { name: '시스템', exact: true });
+    await expect(system).toHaveAttribute('aria-pressed', 'true');
+    await side.getByRole('button', { name: '사용자', exact: true }).click();
+    await expect(system).toHaveAttribute('aria-pressed', 'false');
+    await page.keyboard.press('Control+z');
+    await expect(system).toHaveAttribute('aria-pressed', 'true');
+    await expect(messages).toHaveCount(3);
+    await page.keyboard.press('Control+p');
+    await expect(side).toBeHidden();
+    await page.keyboard.press('Control+/');
+    await expect(page.getByRole('dialog', { name: '단축키' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    expect(violations).toEqual([]);
+  });
+
   await test.step('the backup holds the card and the reply, and loading it again carries on without adding anything', async () => {
     await page.goto('/account');
     const saved = page.waitForEvent('download');

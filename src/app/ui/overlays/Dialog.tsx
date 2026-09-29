@@ -44,18 +44,20 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
           <IconButton icon={X} label="닫기" size="sm" onClick={onClose} />
         </div>
         {note && <p className={styles.note}>{note}</p>}
-        {onSubmit ? (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmit();
-            }}
-          >
-            {body}
-          </form>
-        ) : (
-          body
-        )}
+        <div className={styles.body}>
+          {onSubmit ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSubmit();
+              }}
+            >
+              {body}
+            </form>
+          ) : (
+            body
+          )}
+        </div>
       </div>
     </div>
   );

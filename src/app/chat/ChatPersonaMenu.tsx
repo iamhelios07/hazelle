@@ -1,6 +1,5 @@
 import { UserRound } from 'lucide-react';
 import { useSettings, useViews } from '../session';
-import { navigate } from '../shell/router';
 import { Avatar, ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
 
@@ -29,7 +28,7 @@ export function ChatPersonaMenu({ chat }: { chat: OpenChat }) {
     >
       <PersonaChoices chat={chat} />
       <Divider variant="menu" />
-      <MenuItem label="페르소나 관리…" onClick={() => navigate({ kind: 'personas' })} />
+      <MenuItem label="페르소나 관리…" onClick={() => chat.actions.side({ kind: 'personas', id: null })} />
     </Menu>
   );
 }

@@ -41,6 +41,9 @@ const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'prompt
 const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failure.kind);
 
 export type OpenChat = ReturnType<typeof useChat>;
+
+// A persona or prompt list beside the chat, or one of them open from it (design F3, Ctrl+E and Ctrl+P).
+export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; id: string | null; pane: 'toggles' | null };
 // Every part of the chat screen acts through this one object, so a new message action (이어 쓰기,
 // 갈라지기) is a new entry here rather than a new prop on each part between this and ChatMessage.
 export type ChatActions = OpenChat['actions'];
@@ -92,8 +95,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
-  // 정보 and 토글 take the same place beside the story, so one closes the other.
-  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | null>(null);
+  // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another.
+  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
@@ -311,6 +314,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       follow,
       info: (reply: string | null) => setPanel({ kind: 'info', id: reply }),
       showToggles: () => setPanel({ kind: 'toggles' }),
+      side: (open: Side) => setPanel(open),
+      // The keys open the list, and close it again while that list or one of its items is open.
+      toggleSide: (kind: Side['kind']) => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
       closePanel: () => setPanel(null),
       openDialog: (which: 'rename' | 'reading') => setDialog(which),
       closeDialog: () => setDialog(null),

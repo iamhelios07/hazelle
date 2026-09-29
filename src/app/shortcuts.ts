@@ -36,9 +36,13 @@ export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: re
 // was run from a button or menu.
 type Handler = (event?: KeyboardEvent) => boolean | void;
 
-// Newest last. The one window listener below serves them all, so a screen claims a key by mounting a handler for it
-// over the shell's.
-const handlers: { name: Name; run: Handler }[] = [];
+// Newest last. The one window listener below serves them all, so a screen claims a key by mounting a handler for it.
+// fallback: the shell's own answer, which every screen's handler for the same keys comes before. Mount order cannot
+// decide that, since React runs a child's effects before its parent's.
+type Entry = { name: Name; run: Handler; fallback: boolean };
+const handlers: Entry[] = [];
+
+const inTurn = () => [...handlers.filter((entry) => !entry.fallback).reverse(), ...handlers.filter((entry) => entry.fallback).reverse()];
 
 // Ctrl+S would open the browser's save-page dialog, which saves nothing of the app; edits save themselves. The user
 // gave 설정 Ctrl+, instead (2026-09-29), so Ctrl+S does nothing at all.
@@ -52,31 +56,30 @@ function onKey(event: KeyboardEvent) {
     event.preventDefault();
     return;
   }
-  for (let at = handlers.length - 1; at >= 0; at--) {
-    const { name, run } = handlers[at]!;
+  for (const { name, run } of inTurn()) {
     if (!pressed(press, SHORTCUTS[name].keys) || run(event) === false) continue;
     event.preventDefault();
     return;
   }
 }
 
-export function useShortcut(name: Name, handler: Handler) {
+export function useShortcut(name: Name, handler: Handler, { fallback = false } = {}) {
   const latest = useRef(handler);
   latest.current = handler;
   useEffect(() => {
-    const entry = { name, run: (event?: KeyboardEvent) => latest.current(event) };
+    const entry = { name, run: (event?: KeyboardEvent) => latest.current(event), fallback };
     if (handlers.length === 0) window.addEventListener('keydown', onKey);
     handlers.push(entry);
     return () => {
       handlers.splice(handlers.indexOf(entry), 1);
       if (handlers.length === 0) window.removeEventListener('keydown', onKey);
     };
-  }, [name]);
+  }, [name, fallback]);
 }
 
 // What the shortcut's keys would do, for a button or menu item that does the same.
 export function runShortcut(name: Name) {
-  for (let at = handlers.length - 1; at >= 0; at--) if (handlers[at]!.name === name && handlers[at]!.run() !== false) return;
+  for (const entry of inTurn()) if (entry.name === name && entry.run() !== false) return;
 }
 
 export const hints = (...shortcuts: Shortcut[]) => shortcuts.map((shortcut) => `${formatKeys(shortcut.keys)} ${shortcut.hint}`).join(' · ');

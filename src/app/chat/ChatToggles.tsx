@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { noResults } from '../common/search';
-import { navigate } from '../shell/router';
 import { Button, ChoiceGroup, Empty, Row, SearchField, Section, SettingRow, SidePanel, Stack, Switch, Text } from '../ui';
 import { shownRows, type ToggleRow } from './toggles';
 import type { OpenChat } from './useChat';
@@ -72,7 +71,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
         </Text>
         {prompt.kind === 'prompt' && toggles.prompt.length > 0 && (
           <Row kind="actions">
-            <Button variant="link" size="xs" onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: 'toggles' })}>
+            <Button variant="link" size="xs" onClick={() => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles' })}>
               프롬프트 토글의 처음 값 바꾸기
             </Button>
           </Row>
