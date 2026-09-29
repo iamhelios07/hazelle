@@ -2,7 +2,7 @@ import { useAccount, useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Avatar, Button, NavBar, Row, Screen, SettingGroup, SettingRow, Stack, Text } from '../ui';
+import { Avatar, Button, FaceRow, NavBar, Screen, SettingGroup, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 
 export function AccountScreen({ back }: { back: Back | null }) {
@@ -11,15 +11,12 @@ export function AccountScreen({ back }: { back: Back | null }) {
   const toast = useToast();
   return (
     <Screen width="form" top={<NavBar title="계정" {...backBar(back)} />}>
-      <Row kind="actions">
-        <Avatar face={username} tone="you" />
-        <Stack gap="related">
-          <Text>{username}</Text>
-          <Text size="sm" tone="muted">
-            지금 로그인한 계정
-          </Text>
-        </Stack>
-      </Row>
+      <FaceRow face={<Avatar face={username} tone="you" />}>
+        <Text>{username}</Text>
+        <Text size="sm" tone="muted">
+          지금 로그인한 계정
+        </Text>
+      </FaceRow>
       <SettingGroup label="계정">
         <SettingRow
           label="잠그기"

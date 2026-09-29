@@ -1,0 +1,13 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-width: 0;
+}

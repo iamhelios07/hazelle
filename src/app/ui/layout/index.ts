@@ -1,5 +1,6 @@
 export { ChatFrame, ChatTitle, readingDefault, type Reading } from './ChatFrame';
 export { Disclosure } from './Disclosure';
+export { FaceRow } from './FaceRow';
 export { EditorFrame } from './EditorFrame';
 export { ListDetail, usePane } from './ListDetail';
 export { NavBar, type NavBarProps } from './NavBar';

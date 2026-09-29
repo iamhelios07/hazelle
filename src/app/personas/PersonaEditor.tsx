@@ -7,7 +7,7 @@ import { thumbnail } from '../../runtime/picture';
 import { useSettings, useStore } from '../session';
 import { personaTitle } from '../common/persona-words';
 import { useToast } from '../toast';
-import { Avatar, Button, FileButton, Row, Stack, Text, TextField, type NavBarProps } from '../ui';
+import { Avatar, Button, FaceRow, FileButton, Row, Text, TextField, type NavBarProps } from '../ui';
 
 // How long typing pauses before a change is saved.
 const PAUSE = 600;
@@ -102,23 +102,20 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   const isDefault = settings.persona === id;
   const body = (
     <>
-      <Row kind="actions">
-        <Avatar face={persona.name} image={persona.picture} size="lg" tone="you" />
-        <Stack gap="related">
-          <FileButton accept="image/*" size="sm" icon={ImageUp} onFile={(file) => void picture(file)}>
-            사진 바꾸기
-          </FileButton>
-          {isDefault ? (
-            <Text size="sm" tone="accent">
-              새 채팅의 기본 페르소나예요
-            </Text>
-          ) : (
-            <Button variant="link" size="xs" onClick={() => void makeDefault()}>
-              새 채팅의 기본으로 정하기
-            </Button>
-          )}
-        </Stack>
-      </Row>
+      <FaceRow face={<Avatar face={persona.name} image={persona.picture} size="lg" tone="you" />}>
+        <FileButton accept="image/*" size="sm" icon={ImageUp} onFile={(file) => void picture(file)}>
+          사진 바꾸기
+        </FileButton>
+        {isDefault ? (
+          <Text size="sm" tone="accent">
+            새 채팅의 기본 페르소나예요
+          </Text>
+        ) : (
+          <Button variant="link" size="xs" onClick={() => void makeDefault()}>
+            새 채팅의 기본으로 정하기
+          </Button>
+        )}
+      </FaceRow>
       <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 적어 주세요.'} />
       <TextField label="별명" value={persona.nickname ?? ''} onChange={(value) => change('nickname', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요. AI에게는 보내지 않아요." />
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} help="프롬프트의 ‘페르소나’ 자리에 이 설명이 들어가요." />

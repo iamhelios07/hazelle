@@ -45,6 +45,7 @@ and only this folder styles elements.**
 | layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
+| layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `PageHead` | `PageHead.module.css` | The head of a page's body: the name of what it shows, its id and a lead |
