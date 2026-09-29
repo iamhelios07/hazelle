@@ -7,7 +7,7 @@ import { ago } from '../common/time';
 import { useTalk } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentRequest } from './ChatSent';
-import { cost, seconds, speed, tokens, UNKNOWN } from './receipt';
+import { cost, seconds, speed, tokens, UNKNOWN } from '../common/receipt';
 
 type Props = {
   chat: string | null;

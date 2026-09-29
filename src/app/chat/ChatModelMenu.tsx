@@ -31,15 +31,15 @@ export function ChatModelMenu({ current, label, onPick, handle }: Props) {
   );
 }
 
-// The 설정 묶음 the current model uses; nothing while current names a model no longer starred.
+// The settings the current model uses, opening its page; nothing while current names a model no longer starred.
 function ProfileItem({ current }: { current: ModelRef }) {
   const store = useStore();
   const connections = useConnections();
   const starred = connections.find((connection) => connection.id === current.connection)?.value.starred.find((model) => model.id === current.model);
   if (!starred) return null;
   const choice = modelProfile(store, starred);
-  if (choice.kind === 'missing') return <MenuItem tone="muted" label="모델 설정 · 없음" onClick={() => navigate({ kind: 'profiles' })} />;
-  return <MenuItem tone="muted" label={`모델 설정 · ${choice.profile.value.name}`} onClick={() => navigate({ kind: 'profile', id: choice.profile.id })} />;
+  const name = choice.kind === 'profile' ? choice.profile.value.name : '없음';
+  return <MenuItem tone="muted" label={`모델 설정 · ${name}`} onClick={() => navigate({ kind: 'model', ...current })} />;
 }
 
 // Mounted only while the menu is open, so each opening starts with an empty search.

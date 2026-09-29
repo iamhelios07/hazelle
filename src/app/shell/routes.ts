@@ -31,6 +31,8 @@ export type Route =
   // 설정's 모델 설정: the 설정 묶음 list, and one 묶음's editor.
   | { kind: 'profiles' }
   | { kind: 'profile'; id: string }
+  // model: a starred model's id, which may hold any character; the path carries it escaped.
+  | { kind: 'model'; connection: string; model: string }
   | { kind: 'defaults' }
   | { kind: 'account' }
   // 설정's own list of its pages, which phones open from the library.
@@ -89,9 +91,12 @@ export function parseRoute(at: string): Route {
     if (id === undefined) return { kind: 'personas' };
     return ID.test(id) ? { kind: 'persona', id } : HOME;
   }
-  if (top === 'models' && sub === undefined) {
+  if (top === 'models') {
     if (id === undefined) return { kind: 'profiles' };
-    return ID.test(id) ? { kind: 'profile', id } : HOME;
+    if (!ID.test(id)) return HOME;
+    if (sub === undefined) return { kind: 'profile', id };
+    const model = decoded(sub);
+    return model ? { kind: 'model', connection: id, model } : HOME;
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
@@ -99,6 +104,15 @@ export function parseRoute(at: string): Route {
     if (top === 'account') return { kind: 'account' };
   }
   return HOME;
+}
+
+// A malformed escape (a stray %) names no model.
+function decoded(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment) || null;
+  } catch {
+    return null;
+  }
 }
 
 export function href(route: Route): string {
@@ -139,6 +153,8 @@ export function href(route: Route): string {
       return '/models';
     case 'profile':
       return `/models/${route.id}`;
+    case 'model':
+      return `/models/${route.connection}/${encodeURIComponent(route.model)}`;
     case 'defaults':
       return '/defaults';
     case 'account':
@@ -151,7 +167,7 @@ export function href(route: Route): string {
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
 // The list a route sits in (design F5): its screen is the list itself, or the item beside it where there
-// is room (ListDetail). null outside the connection, persona and 설정 묶음 screens.
+// is room (ListDetail). null outside the connection, persona and 모델 설정 screens.
 export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'profiles'> | null {
   switch (route.kind) {
     case 'connections':
@@ -162,6 +178,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
       return { kind: 'personas' };
     case 'profiles':
     case 'profile':
+    case 'model':
       return { kind: 'profiles' };
     case 'add-connection':
     case 'connect':
@@ -186,6 +203,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return 'personas';
     case 'profiles':
     case 'profile':
+    case 'model':
       return 'profiles';
     case 'defaults':
     case 'account':
@@ -259,6 +277,7 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     case 'persona':
       return { kind: 'personas' };
     case 'profile':
+    case 'model':
       return { kind: 'profiles' };
   }
 }

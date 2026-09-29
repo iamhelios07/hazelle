@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
-import { fit, WHOLE, type Change, type ModelSettings, type NumberSetting, type Reasoning, type SettingsSchema } from '../../connectors/settings';
+import { fit, WHOLE, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
 import type { Stored } from '../../model/kinds';
 import type { ApiResult } from '../../runtime/api';
 import {
@@ -20,6 +20,7 @@ import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Row, Screen, Section, SettingGroup, SettingRow, Stack, Text } from '../ui';
+import { changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, UNSET, type Field } from './settingWords';
 import { count, readTyped } from './typedNumber';
 
 // How long typing pauses before a change is saved.
@@ -28,30 +29,8 @@ const PAUSE = 600;
 type Status = 'saving' | 'saved' | 'failed';
 const STATUS: Record<Status, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
 
-// An empty field is unset: nothing is sent, and the provider's default applies. It is never shown as a number (design §4.4).
-const UNSET = '기본값';
-
-type Field = NumberSetting | 'context';
-const NUMBER: Record<Field, { label: string; help: string; unit?: string; unset?: string }> = {
-  maxOutput: { label: '답장 최대 길이', help: '한 번의 답장에 쓸 수 있는 최대 토큰', unit: '토큰' },
-  context: { label: '컨텍스트 한도', help: '대화가 이보다 길면 오래된 메시지부터 덜어 내요', unit: '토큰', unset: '모델 한도' },
-  temperature: { label: '온도', help: '높을수록 답이 들쭉날쭉해져요' },
-  topP: { label: 'top_p', help: '확률 높은 후보부터 이 비율만큼만 골라요' },
-  topK: { label: 'top_k', help: '후보를 이 개수만큼만 봐요' },
-  minP: { label: 'min_p', help: '가장 그럴듯한 후보에 비해 이 비율보다 낮은 후보는 버려요' },
-  frequencyPenalty: { label: '빈도 억제', help: '자주 나온 말일수록 덜 써요' },
-  presencePenalty: { label: '존재 억제', help: '한 번이라도 나온 말을 덜 써요' },
-  repetitionPenalty: { label: '반복 억제', help: '1보다 크면 같은 말을 덜 되풀이해요' },
-  seed: { label: 'seed', help: '같은 값이면 같은 조건에서 비슷한 답이 나와요' },
-};
-const MAIN: Field[] = ['maxOutput', 'context', 'temperature'];
-const DETAIL: Field[] = ['topP', 'topK', 'minP', 'frequencyPenalty', 'presencePenalty', 'repetitionPenalty', 'seed'];
-const settingLabel = (setting: Change['setting']) => (setting === 'stop' ? '멈춤 문구' : setting === 'reasoning' ? '생각' : NUMBER[setting].label);
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
 const BUDGET_START = 8000;
-
-// In the order a level list reads; a catalog's level not named here keeps its own name, after these.
-const LEVELS: Record<string, string> = { minimal: '최소', low: '낮음', medium: '보통', high: '높음', xhigh: '매우 높음', max: '최대' };
 
 type Choice = 'unset' | 'off' | 'adaptive' | 'budget' | `level:${string}`;
 const choiceOf = (reasoning: Reasoning | undefined): Choice => (!reasoning ? 'unset' : reasoning.kind === 'level' ? `level:${reasoning.level}` : reasoning.kind);
@@ -180,15 +159,15 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     const known = Object.keys(LEVELS);
     const levels = [...known.filter((level) => named.includes(level)), ...named.filter((level) => !known.includes(level))];
     // One stored elsewhere with a level still names it, so picking another choice never drops it unseen.
-    const adaptive = reasoning?.kind === 'adaptive' && reasoning.level !== null ? `적응형 · ${LEVELS[reasoning.level] ?? reasoning.level}` : '적응형';
+    const adaptive = reasoning?.kind === 'adaptive' && reasoning.level !== null ? `적응형 · ${levelName(reasoning.level)}` : '적응형';
     const options: { value: Choice; label: string }[] = [
       { value: 'unset', label: UNSET },
       ...(offers((rules) => rules.off !== false) ? [{ value: 'off' as const, label: '끔' }] : []),
       ...(offers((rules) => rules.adaptive !== false) ? [{ value: 'adaptive' as const, label: adaptive }] : []),
-      ...levels.map((level) => ({ value: `level:${level}` as const, label: LEVELS[level] ?? level })),
+      ...levels.map((level) => ({ value: `level:${level}` as const, label: levelName(level) })),
       ...(offers((rules) => rules.budget.accepted !== false) ? [{ value: 'budget' as const, label: '예산' }] : []),
     ];
-    if (!options.some((option) => option.value === current)) options.push({ value: current, label: current === 'adaptive' ? adaptive : current.startsWith('level:') ? (LEVELS[current.slice(6)] ?? current.slice(6)) : current });
+    if (!options.some((option) => option.value === current)) options.push({ value: current, label: current === 'adaptive' ? adaptive : current.startsWith('level:') ? levelName(current.slice(6)) : current });
 
     const pick = (choice: Choice) => {
       setDrafts((drafted) => ({ ...drafted, budget: undefined }));
@@ -252,14 +231,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     />
   );
 
-  // What a model is sent other than the 묶음's values, in short words, for its row under 쓰는 모델.
-  function summary(user: User): string | undefined {
-    if (!user.schema) return '이 버전은 이 모델을 부를 수 없어요';
-    const left = user.changes.filter((change) => change.change === 'left-out').map((change) => settingLabel(change.setting));
-    const capped = user.changes.flatMap((change) => (change.change === 'capped' ? [`${settingLabel(change.setting)} ${count(change.to)}`] : []));
-    const parts = [...(left.length ? [`빼고 보냄: ${left.join(', ')}`] : []), ...(capped.length ? [`맞춰 보냄: ${capped.join(', ')}`] : [])];
-    return parts.length ? parts.join(' · ') : undefined;
-  }
+  const summary = (user: User) => (user.schema ? changeWords(user.changes) : NOT_CALLABLE);
 
   const using = new Set(users.map((user) => `${user.connection.id}/${user.model.id}`));
   const profileName = (model: ProfileUser['model']) => {
@@ -362,13 +334,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
                 title={user.model.name}
                 tags={[user.connection.value.label]}
                 description={summary(user)}
-                trailing={
-                  !isDefault && (
-                    <Button variant="ghost" size="sm" label={`${user.model.name} 기본 설정으로`} onClick={() => void saved(setModelProfile(store, user.connection.id, user.model.id, null))}>
-                      기본으로
-                    </Button>
-                  )
-                }
+                onClick={() => navigate({ kind: 'model', connection: user.connection.id, model: user.model.id })}
               />
             ))}
           </List>

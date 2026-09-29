@@ -147,7 +147,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           {shown.map((model) => {
             const on = starred.some((entry) => entry.id === model.id);
             const listed = !catalog?.ok || catalog.models.some((entry) => entry.id === model.id);
-            // Only a star already saved has a 묶음 to open; one still saving has none yet.
+            // Only a star already saved has a page to open; one still saving has none yet.
             const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
             const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
             const opens = choice && (choice.kind === 'profile' ? `설정 · ${choice.profile.value.name}` : '설정 없음');
@@ -156,7 +156,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
                 variant="ghost"
                 size="sm"
                 label={`${opens} · ${model.name}`}
-                onClick={() => navigate(choice.kind === 'profile' ? { kind: 'profile', id: choice.profile.id } : { kind: 'profiles' })}
+                onClick={() => navigate({ kind: 'model', connection: id, model: model.id })}
               >
                 {opens}
               </Button>

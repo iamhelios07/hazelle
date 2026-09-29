@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, chatItems, chatTitle, fold, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, chatItems, chatTitle, fold, modelUsage, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -124,6 +124,24 @@ describe('branchTree', () => {
       ['b1', true],
       ['b2', true],
     ]);
+  });
+});
+
+describe('modelUsage', () => {
+  it('counts a branch’s copy once and each call of a continued reply, and keeps what was not reported apart', () => {
+    const cut = receipt({ usage: { inputTokens: 100, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 50, reasoningTokens: null }, cost: { unit: 'usd', amount: 0.5, source: 'reported' }, totalMs: 500 });
+    const continued = receipt({ continues: cut, cost: { unit: 'usd', amount: 0.25, source: 'price-list' } });
+    const original = fold([bot('b1', '하나', continued), bot('b2', '둘', { model: 'm2' })]);
+    const branch = fold([{ ...bot('b9', '하나', continued), rev: 99 }]);
+    branch[0]!.versions[0]!.at = original[0]!.versions[0]!.at;
+    expect(modelUsage([original, branch], { connection: 'c1', model: 'm1' })).toEqual({
+      calls: 2,
+      last: original[0]!.versions[0]!.at,
+      input: { total: 100, unknown: 1 },
+      output: { total: 50, unknown: 1 },
+      costs: [{ unit: 'usd', amount: 0.75, estimated: true }],
+      costUnknown: 0,
+    });
   });
 });
 

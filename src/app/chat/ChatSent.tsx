@@ -5,7 +5,7 @@ import type { Role } from '../../model/prompt';
 import type { Sent } from '../../runtime/talk';
 import { ROLE_WORDS, SLOT_NAMES, textName } from '../common/prompt-words';
 import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
-import { tokens } from './receipt';
+import { tokens } from '../common/receipt';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 

@@ -190,6 +190,43 @@ export function branchTree(items: ChatItem[]): { item: ChatItem; nested: boolean
   return under(null);
 }
 
+type Tally = { total: number; unknown: number };
+// A count sums the calls that reported it, and unknown counts those that did not, so a gap never shrinks the total.
+// costs: one per unit, never summed together; estimated once any part came from a price list. last: the newest reply's time.
+export type ModelUsage = { calls: number; last: number | null; input: Tally; output: Tally; costs: { unit: Cost['unit']; amount: number; estimated: boolean }[]; costUnknown: number };
+
+// Every call to one model in the chats kept, a continued reply counting each of its calls (design §4.4). A branch
+// copies the replies it holds with their receipts (runtime/chat-log branchChat), so a call is counted once however
+// many chats hold it; the cost stays out of the key, as the original settles it later than a copy made after.
+export function modelUsage(chats: Message[][], ref: ModelRef): ModelUsage {
+  const usage: ModelUsage = { calls: 0, last: null, input: { total: 0, unknown: 0 }, output: { total: 0, unknown: 0 }, costs: [], costUnknown: 0 };
+  const seen = new Set<string>();
+  const add = (tally: Tally, value: number | null) => (value === null ? tally.unknown++ : (tally.total += value));
+  for (const version of chats.flat().flatMap((message) => message.versions)) {
+    for (const call of version.receipt ? calls(version.receipt) : []) {
+      if (call.connection !== ref.connection || call.model !== ref.model) continue;
+      const key = JSON.stringify([version.at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      usage.calls++;
+      usage.last = Math.max(usage.last ?? 0, version.at);
+      add(usage.input, call.usage?.inputTokens ?? null);
+      add(usage.output, call.usage?.outputTokens ?? null);
+      const cost = call.cost === 'pending' ? null : call.cost;
+      if (!cost) {
+        usage.costUnknown++;
+        continue;
+      }
+      const sum = usage.costs.find((entry) => entry.unit === cost.unit);
+      if (sum) {
+        sum.amount += cost.amount;
+        sum.estimated ||= cost.source === 'price-list';
+      } else usage.costs.push({ unit: cost.unit, amount: cost.amount, estimated: cost.source === 'price-list' });
+    }
+  }
+  return usage;
+}
+
 // Models used lately across all chats, newest first, for the model picker's 최근 (design F4).
 export function recentModels(chats: Message[][], limit: number): ModelRef[] {
   const used = chats
