@@ -4,7 +4,8 @@ import { Icon } from '../foundation/Icon';
 import styles from './IconButton.module.css';
 
 type Props = {
-  icon: LucideIcon;
+  // A letter in the serif face in place of an icon, such as 읽기 설정's 가.
+  icon: LucideIcon | string;
   label: string;
   // The tooltip, when it says more than the label, such as the keys that press it.
   title?: string;
@@ -36,7 +37,13 @@ export function IconButton({ icon, label, title = label, onClick, pressed, popup
       disabled={disabled}
       onClick={onClick}
     >
-      <Icon icon={icon} size={size} />
+      {typeof icon === 'string' ? (
+        <span className={styles.glyph} aria-hidden>
+          {icon}
+        </span>
+      ) : (
+        <Icon icon={icon} size={size} />
+      )}
     </button>
   );
 }

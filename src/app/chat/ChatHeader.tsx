@@ -8,6 +8,7 @@ import { SHORTCUTS } from '../shortcuts';
 import { Avatar, ChatTitle, Dialog, Divider, IconButton, Menu, MenuHeading, MenuItem, Shortcuts, ToolButton, useWide } from '../ui';
 import { ChatModelMenu } from './ChatModelMenu';
 import { ChatPromptMenu } from './ChatPromptMenu';
+import { ReadingDialog, ReadingMenu, type ReadingControl } from './ChatReading';
 import type { OpenChat } from './useChat';
 
 export function ChatHeading({ chat }: { chat: OpenChat }) {
@@ -45,7 +46,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
   );
 }
 
-export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
+export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
   const { item, route, toggles, panel, modelMenu, actions } = chat;
   const wide = useWide();
   const label = 'kind' in route ? '모델 고르기' : route.model.name;
@@ -63,6 +64,8 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         expanded={panel?.kind === 'toggles'}
         onClick={() => (panel?.kind === 'toggles' ? actions.closePanel() : actions.showToggles())}
       />
+      {/* A phone's header has no room left beside the chat's title, so there 읽기 설정 opens from ⋯. */}
+      {wide && <ReadingMenu reading={reading} />}
       {/* design F3: a phone opens 정보 from a tapped message's tools. */}
       {wide && (
         <IconButton
@@ -75,6 +78,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
       )}
       <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
+        {!wide && <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />}
         <MenuItem label="단축키" onClick={() => actions.openDialog('keys')} />
         {item && (
           <>
@@ -87,8 +91,9 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   );
 }
 
-export function ChatDialogs({ chat }: { chat: OpenChat }) {
+export function ChatDialogs({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
   const { dialog, item, actions } = chat;
+  if (dialog === 'reading') return <ReadingDialog reading={reading} onClose={actions.closeDialog} />;
   if (dialog === 'keys') {
     return (
       <Dialog title="단축키" note="입력창에서 동작해요. 화살표는 입력창이 비어 있을 때만 써요." onClose={actions.closeDialog}>

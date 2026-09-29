@@ -5,7 +5,7 @@
 }
 
 .paragraph {
-  font-family: var(--font-serif);
+  font-family: var(--prose-font);
   font-size: var(--prose-size);
   line-height: var(--prose-leading);
   text-wrap: pretty;

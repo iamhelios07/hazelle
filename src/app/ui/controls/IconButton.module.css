@@ -33,6 +33,13 @@
   cursor: default;
 }
 
+.glyph {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+
 .button[aria-pressed='true'] {
   color: var(--color-accent);
 }

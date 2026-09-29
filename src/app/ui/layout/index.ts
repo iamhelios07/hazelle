@@ -1,4 +1,4 @@
-export { ChatFrame, ChatTitle } from './ChatFrame';
+export { ChatFrame, ChatTitle, readingDefault, type Reading } from './ChatFrame';
 export { Disclosure } from './Disclosure';
 export { EditorFrame } from './EditorFrame';
 export { ListDetail, usePane } from './ListDetail';

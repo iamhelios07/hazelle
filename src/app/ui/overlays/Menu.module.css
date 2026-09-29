@@ -30,6 +30,9 @@
 
 .form {
   width: var(--dialog-width);
+}
+
+.dialog {
   padding: var(--space-14) var(--space-16);
 }
 

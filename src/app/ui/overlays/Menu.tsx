@@ -112,7 +112,7 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
     <div className={styles.anchor} ref={anchor}>
       {trigger({ ...opener, popup: kind })}
       {open && (
-        <div ref={panel} className={`${styles.menu} ${styles[place]} ${styles[size]}`} role={kind} aria-label={label}>
+        <div ref={panel} className={`${styles.menu} ${styles[place]} ${styles[size]} ${kind === 'dialog' ? styles.dialog : ''}`} role={kind} aria-label={label}>
           <CloseMenu.Provider value={() => close(true)}>{children}</CloseMenu.Provider>
         </div>
       )}

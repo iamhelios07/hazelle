@@ -42,7 +42,7 @@ and only this folder styles elements.**
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
-| layout | `ChatFrame` (`ChatTitle`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title, which opens the list of its chats |
+| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
@@ -62,7 +62,7 @@ and only this folder styles elements.**
 | controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` | — | A `Button` that opens a file picker |
-| controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools |
+| controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가 |
 | controls | `Link` | `Link.module.css` | A link to another site |
 | controls | `MarkupArea` (`markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea |
 | controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |
@@ -70,6 +70,7 @@ and only this folder styles elements.**
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
 | controls | `SearchField` | `SearchField.module.css` | A search box |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
+| controls | `Stepper` | `Stepper.module.css` | A whole number stepped one at a time between two bounds, such as the story's text size |
 | controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
 | controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |

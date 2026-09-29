@@ -88,7 +88,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
 
   const draft = useDraft(id, chat.character);
   const { follow: toBottom, ...scroll } = useFollow(messages.length, streaming);
-  const [dialog, setDialog] = useState<'keys' | 'rename' | null>(null);
+  const [dialog, setDialog] = useState<'keys' | 'rename' | 'reading' | null>(null);
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
@@ -311,7 +311,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       info: (reply: string | null) => setPanel({ kind: 'info', id: reply }),
       showToggles: () => setPanel({ kind: 'toggles' }),
       closePanel: () => setPanel(null),
-      openDialog: (which: 'keys' | 'rename') => setDialog(which),
+      openDialog: (which: 'keys' | 'rename' | 'reading') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
       setOwn,

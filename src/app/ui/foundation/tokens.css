@@ -139,9 +139,18 @@
 
   --tracking-wide: 0.06em;
 
-  /* Story text at the reading settings' defaults (design F3): 명조, 17, line spacing 보통. */
+  /* Story text at the reading settings' defaults (design F3): 명조, 17, line spacing 보통. Prose keeps these outside the
+     chat; ChatFrame.tsx's readingDefault names the same choices and reads --prose-size, so change them together. */
+  --prose-font: var(--font-serif);
   --prose-size: 17px;
-  --prose-leading: 1.9;
+  --prose-leading: var(--prose-leading-normal);
+  --prose-leading-narrow: 1.7;
+  --prose-leading-normal: 1.9;
+  --prose-leading-wide: 2.1;
+  /* 고딕 reads larger than 명조 at one size, so the story sets it a pixel smaller and a little tighter (desktop chat
+     mockup v7). */
+  --prose-sans-shrink: 1px;
+  --prose-sans-tighten: 0.1;
 
   --space-2: 2px;
   --space-4: 4px;

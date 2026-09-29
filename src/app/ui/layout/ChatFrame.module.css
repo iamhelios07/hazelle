@@ -11,6 +11,43 @@
   flex-direction: column;
 }
 
+/* 읽기 설정 (design F3): ChatFrame.tsx sets --reading-size and one class of each kind. */
+.serif {
+  --prose-font: var(--font-serif);
+  --prose-size: var(--reading-size);
+  --prose-leading: var(--reading-leading);
+}
+
+.sans {
+  --prose-font: var(--font-sans);
+  --prose-size: calc(var(--reading-size) - var(--prose-sans-shrink));
+  --prose-leading: calc(var(--reading-leading) - var(--prose-sans-tighten));
+}
+
+.leadingNarrow {
+  --reading-leading: var(--prose-leading-narrow);
+}
+
+.leadingNormal {
+  --reading-leading: var(--prose-leading-normal);
+}
+
+.leadingWide {
+  --reading-leading: var(--prose-leading-wide);
+}
+
+.widthNarrow {
+  --read-width: var(--read-narrow);
+}
+
+.widthNormal {
+  --read-width: var(--read-normal);
+}
+
+.widthWide {
+  --read-width: var(--read-wide);
+}
+
 .header {
   flex-shrink: 0;
   display: flex;
@@ -47,7 +84,7 @@
 }
 
 .content {
-  max-width: var(--read-normal);
+  max-width: var(--read-width);
   min-height: 100%;
   margin: 0 auto;
   display: flex;
@@ -72,7 +109,7 @@
 
 .dock {
   width: 100%;
-  max-width: calc(var(--read-normal) - 2 * var(--read-gutter));
+  max-width: calc(var(--read-width) - 2 * var(--read-gutter));
   display: flex;
   flex-direction: column;
   gap: var(--space-8);

@@ -1,8 +1,25 @@
 import { ChevronDown, ChevronLeft } from 'lucide-react';
-import type { ReactNode, Ref, RefObject } from 'react';
+import type { CSSProperties, ReactNode, Ref, RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import styles from './ChatFrame.module.css';
+
+type Spacing = 'narrow' | 'normal' | 'wide';
+
+// How the story reads (design F3, 읽기 설정). tokens.css holds each choice's look.
+export type Reading = { font: 'serif' | 'sans'; size: number; leading: Spacing; width: Spacing };
+
+// The look before any reading setting. The size is read from tokens.css, not repeated here, since Prose keeps it
+// outside the chat.
+export const readingDefault = (): Reading => ({
+  font: 'serif',
+  size: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--prose-size')),
+  leading: 'normal',
+  width: 'normal',
+});
+
+const LEADING: Record<Spacing, string> = { narrow: styles.leadingNarrow, normal: styles.leadingNormal, wide: styles.leadingWide };
+const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: styles.widthNormal, wide: styles.widthWide };
 
 type Props = {
   back?: { label: string; onClick: () => void };
@@ -13,15 +30,19 @@ type Props = {
   above: ReactNode;
   footer: ReactNode;
   panel?: ReactNode;
+  reading: Reading;
   scrollRef: RefObject<HTMLDivElement | null>;
   onScroll: () => void;
 };
 
 // The chat page: a header, the story column that scrolls, the composer, and the 정보 panel beside it.
-export function ChatFrame({ back, title, actions, children, above, footer, panel, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, panel, reading, scrollRef, onScroll }: Props) {
   return (
     <div className={styles.frame}>
-      <main className={styles.column}>
+      <main
+        className={`${styles.column} ${styles[reading.font]} ${LEADING[reading.leading]} ${WIDTH[reading.width]}`}
+        style={{ '--reading-size': `${reading.size}px` } as CSSProperties}
+      >
         <header className={styles.header}>
           {back && <IconButton icon={ChevronLeft} label={back.label} onClick={back.onClick} />}
           <div className={styles.title}>{title}</div>

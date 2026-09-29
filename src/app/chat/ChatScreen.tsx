@@ -8,6 +8,7 @@ import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
+import { useReading } from './ChatReading';
 import { ChatToggles } from './ChatToggles';
 import { useChat } from './useChat';
 
@@ -22,13 +23,14 @@ type Props = {
 // design F3.
 export function ChatScreen({ item, shelf, back }: Props) {
   const chat = useChat(item, shelf);
+  const reading = useReading();
   const { id, messages, streaming, panel, scroll, actions } = chat;
   return (
     <>
       <ChatFrame
         back={back ? { label: back.label, onClick: () => navigate(back.to) } : undefined}
         title={<ChatHeading chat={chat} />}
-        actions={<ChatHeaderActions chat={chat} />}
+        actions={<ChatHeaderActions chat={chat} reading={reading} />}
         above={
           <>
             {scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
@@ -43,12 +45,13 @@ export function ChatScreen({ item, shelf, back }: Props) {
             panel?.kind === 'toggles' && <ChatToggles chat={chat} />
           )
         }
+        reading={reading.value}
         scrollRef={scroll.scrollRef}
         onScroll={scroll.onScroll}
       >
         <ChatLog chat={chat} />
       </ChatFrame>
-      <ChatDialogs chat={chat} />
+      <ChatDialogs chat={chat} reading={reading} />
     </>
   );
 }
