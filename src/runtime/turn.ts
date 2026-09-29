@@ -161,9 +161,12 @@ export function gatherTurn(session: Session, chat: string, target: Target, ids =
   return { route, settings, scope, budget: budgetOf(route.model, sentSettings(session.store, route)), said, reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues } };
 }
 
-// o200k_base counts for every model (tech-spec §8), loaded with the first send rather than with the page. Text
+// o200k_base counts for every model (tech-spec §8), loaded when a chat opens rather than with the page. Text
 // that spells a special token counts as text.
 const tokenizer = () => import('gpt-tokenizer/encoding/o200k_base').then(({ countTokens }) => (text: string) => countTokens(text, { disallowedSpecial: new Set() }));
+
+// A load that fails here is reported by the send that needs it.
+export const preloadTokenizer = () => void tokenizer().catch(() => {});
 
 // start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.
 export function takeTurn(session: Session, chat: string, target: Target, start: { chat: Chat; greetings: Parameters<typeof startChat>[3]; started: () => void } | null = null): Promise<TurnFailure | null> {

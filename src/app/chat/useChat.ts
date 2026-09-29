@@ -21,7 +21,7 @@ import {
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
-import { blocked, displayChat, takeTurn, togglesOf, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, displayChat, preloadTokenizer, takeTurn, togglesOf, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { useSession, useTurn } from '../session';
@@ -104,6 +104,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
   const problem = stopped ? blocked(session, chat) : null;
+
+  useEffect(preloadTokenizer, []);
 
   // A reply starting here while 정보 is open shows its own information.
   const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
