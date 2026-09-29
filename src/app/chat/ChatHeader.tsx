@@ -4,8 +4,8 @@ import { NameDialog } from '../common/NameDialog';
 import { ago } from '../common/time';
 import { useLibrary } from '../session';
 import { navigate } from '../shell/router';
-import { SHORTCUTS } from '../shortcuts';
-import { Avatar, ChatTitle, Dialog, Divider, IconButton, Menu, MenuHeading, MenuItem, Shortcuts, ToolButton, useWide } from '../ui';
+import { runShortcut } from '../shortcuts';
+import { Avatar, ChatTitle, Divider, IconButton, Menu, MenuHeading, MenuItem, ToolButton, useWide } from '../ui';
 import { ChatModelMenu } from './ChatModelMenu';
 import { ChatPromptMenu } from './ChatPromptMenu';
 import { ReadingDialog, ReadingMenu, type ReadingControl } from './ChatReading';
@@ -79,7 +79,7 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
       <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
         {!wide && <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />}
-        <MenuItem label="단축키" onClick={() => actions.openDialog('keys')} />
+        <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>
             <Divider variant="menu" />
@@ -94,13 +94,6 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
 export function ChatDialogs({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
   const { dialog, item, actions } = chat;
   if (dialog === 'reading') return <ReadingDialog reading={reading} onClose={actions.closeDialog} />;
-  if (dialog === 'keys') {
-    return (
-      <Dialog title="단축키" note="입력창에서 동작해요. 화살표는 입력창이 비어 있을 때만 써요." onClose={actions.closeDialog}>
-        <Shortcuts items={Object.values(SHORTCUTS)} />
-      </Dialog>
-    );
-  }
   if (dialog === 'rename' && item) {
     return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 불러요." onSave={(name) => void actions.rename(name)} onClose={actions.closeDialog} />;
   }

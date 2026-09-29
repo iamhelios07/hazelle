@@ -2,14 +2,20 @@
 export type Chord = { key: string; shift?: boolean; mod?: boolean };
 
 type KeyState = { isComposing: boolean; keyCode: number };
-type Press = { key: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; nativeEvent: KeyState };
+type Press = { key: string; code: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; nativeEvent: KeyState };
 
 // A key pressed while an IME is still composing a syllable belongs to the syllable, so it is never a shortcut:
 // Enter cannot send a Korean word half-typed, and Esc cannot close what it was typed into.
 export const isComposing = (event: KeyState) => event.isComposing || event.keyCode === 229;
 
+// A letter chord is written lower case and matches the letter typed or the key it sits on, so Shift (Z), a Korean
+// input mode (ㅋ) and other layouts all reach it.
+const LETTER = /^[a-z]$/;
+const sameKey = (event: Press, key: string) =>
+  LETTER.test(key) ? event.key.toLowerCase() === key || event.code === `Key${key.toUpperCase()}` : event.key === key;
+
 const matches = (event: Press, { key, shift, mod }: Chord) =>
-  event.key === key && (shift === undefined || shift === event.shiftKey) && (mod === undefined || mod === (event.ctrlKey || event.metaKey));
+  sameKey(event, key) && (shift === undefined || shift === event.shiftKey) && (mod === undefined || mod === (event.ctrlKey || event.metaKey));
 
 // Which of the chords was pressed, or -1.
 export function pressedKey(event: Press, chords: readonly Chord[]): number {
@@ -22,7 +28,7 @@ export const pressed = (event: Press, chords: readonly Chord[]) => pressedKey(ev
 const NAMES: Record<string, string> = { Escape: 'Esc', ArrowUp: '↑', ArrowLeft: '←', ArrowRight: '→' };
 
 // The caps a chord is pressed with, each one Kbd: Ctrl+Enter is ['Ctrl', 'Enter'].
-export const keyCaps = ({ key, shift, mod }: Chord) => [...(mod ? ['Ctrl'] : []), ...(shift ? ['Shift'] : []), NAMES[key] ?? key];
+export const keyCaps = ({ key, shift, mod }: Chord) => [...(mod ? ['Ctrl'] : []), ...(shift ? ['Shift'] : []), NAMES[key] ?? (LETTER.test(key) ? key.toUpperCase() : key)];
 
 // Chords in a line of text, such as a hint or a button's title: 'Ctrl+Enter', '← →'.
 export const formatKeys = (chords: readonly Chord[]) => chords.map((chord) => keyCaps(chord).join('+')).join(' ');

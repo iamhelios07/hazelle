@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hints, SHORTCUTS, titled } from './shortcuts';
+import { hints, SHORTCUT_GROUPS, SHORTCUTS, titled } from './shortcuts';
 
 describe('shortcuts', () => {
   it('writes the hints and titles the chat shows', () => {
@@ -11,5 +11,9 @@ describe('shortcuts', () => {
     expect(titled(SHORTCUTS.stop.hint, SHORTCUTS.stop.keys)).toBe('멈추기 · Esc');
     expect(titled('이전', [SHORTCUTS.swipe.keys[0]])).toBe('이전 · ←');
     expect(titled('새 답장 받기', [SHORTCUTS.swipe.keys[1]])).toBe('새 답장 받기 · →');
+  });
+
+  it('lists every shortcut in 단축키 once', () => {
+    expect(SHORTCUT_GROUPS.flatMap((group) => group.names).sort()).toEqual(Object.keys(SHORTCUTS).sort());
   });
 });

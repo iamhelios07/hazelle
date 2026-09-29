@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { formatKeys, keyCaps, pressed, pressedKey, type Chord } from './keys';
 
-const press = (key: string, { shift = false, ctrl = false, meta = false, composing = false, keyCode = 0 } = {}) => ({
+const press = (key: string, { shift = false, ctrl = false, meta = false, composing = false, keyCode = 0, code = '' } = {}) => ({
   key,
+  code,
   shiftKey: shift,
   ctrlKey: ctrl,
   metaKey: meta,
@@ -27,6 +28,14 @@ describe('keys', () => {
     expect(pressedKey(press('ArrowUp'), arrows)).toBe(-1);
   });
 
+  it('matches a letter chord by the letter or the key it sits on', () => {
+    const redo: Chord[] = [{ key: 'z', mod: true, shift: true }];
+    expect(pressed(press('Z', { ctrl: true, shift: true, code: 'KeyZ' }), redo)).toBe(true);
+    expect(pressed(press('ㅋ', { ctrl: true, shift: true, code: 'KeyZ' }), redo)).toBe(true);
+    expect(pressed(press('z', { ctrl: true, shift: true, code: 'KeyY' }), redo)).toBe(true);
+    expect(pressed(press('y', { ctrl: true, shift: true, code: 'KeyY' }), redo)).toBe(false);
+  });
+
   it('takes no key while a syllable is being composed', () => {
     expect(pressed(press('Enter', { composing: true }), enter)).toBe(false);
     expect(pressed(press('Enter', { keyCode: 229 }), enter)).toBe(false);
@@ -41,5 +50,6 @@ describe('keys', () => {
     expect(arrows.flatMap(keyCaps)).toEqual(['←', '→']);
     expect(formatKeys(modEnter)).toBe('Ctrl+Enter');
     expect(formatKeys(arrows)).toBe('← →');
+    expect(formatKeys([{ key: 'e', mod: true }])).toBe('Ctrl+E');
   });
 });
