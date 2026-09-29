@@ -24,8 +24,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
   const picker = (role: Role, help?: string) => <RolePicker key={role} role={role} help={help} own={models[role]} follow={follow(role)} connections={connections} onPick={(ref) => onPick(role, ref)} />;
   return (
     <>
-      <Section title="모델">
-        <Text tone="muted">이 프롬프트로 여는 채팅이 쓰는 모델이에요. 채팅에서 모델을 바꾸면 그 채팅만 바뀌어요. 온도 같은 값은 설정 › 모델 설정에서 정해요.</Text>
+      <Section title="모델" hint="이 프롬프트로 여는 채팅이 쓰는 모델이에요. 채팅에서 모델을 바꾸면 그 채팅만 바뀌어요. 온도 같은 값은 설정 › 모델 설정에서 정해요.">
         <SettingGroup label="본 대화 모델">{picker('main')}</SettingGroup>
       </Section>
       <Section title="보조 모델">

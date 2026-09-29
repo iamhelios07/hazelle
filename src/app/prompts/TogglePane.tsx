@@ -2,7 +2,7 @@ import { Ellipsis, Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { NameDialog } from '../common/NameDialog';
-import { Button, ChoiceGroup, Dialog, Empty, IconButton, Menu, MenuItem, Row, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
+import { Button, ChoiceGroup, Dialog, Empty, IconButton, Menu, MenuItem, Row, Section, SettingGroup, SettingRow, Switch, TextField } from '../ui';
 import { keyProblem } from './edits';
 
 type Props = {
@@ -29,13 +29,13 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
     <Section
       title="토글"
       note={`${toggles.length}개`}
+      hint="채팅에서 켜고 끄면 글 속 조건에 따라 보내는 글이 바뀌어요. 값은 캐릭터마다 따로 기억하고, 여기서 정한 값이 처음 값이에요."
       action={
         <Button variant="ghost" size="sm" icon={Plus} onClick={() => onAdding(true)}>
           새 토글
         </Button>
       }
     >
-      <Text tone="muted">채팅에서 켜고 끄면 글 속 조건에 따라 보내는 글이 바뀌어요. 값은 캐릭터마다 따로 기억하고, 여기서 정한 값이 처음 값이에요.</Text>
       {toggles.length === 0 ? (
         <Empty variant="section">아직 토글이 없어요.</Empty>
       ) : (
@@ -44,7 +44,7 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
             <SettingRow
               key={toggle.key}
               label={toggle.label}
-              help={`${toggle.key} · ${KIND_WORDS[toggle.kind]}`}
+              sub={`${toggle.key} · ${KIND_WORDS[toggle.kind]}`}
               control={
                 <Row kind="toolbar">
                   {toggle.kind === 'check' ? (

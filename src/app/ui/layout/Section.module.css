@@ -10,6 +10,11 @@
   gap: var(--space-8);
 }
 
+.name {
+  display: flex;
+  align-items: center;
+}
+
 .level2 {
   gap: var(--space-8);
 }

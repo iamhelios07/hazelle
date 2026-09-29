@@ -13,7 +13,7 @@ export function Welcome() {
   return (
     <Stack gap="section">
       {chats.length ? (
-        <Intro title="어디서 이어 갈까요?">채팅을 고르거나 새 채팅을 시작해요.</Intro>
+        <Intro title="어디서 이어 갈까요?" />
       ) : (
         <Intro title="아직 비어 있어요">봇을 먼저 가져와도, 연결부터 해도 괜찮아요.</Intro>
       )}

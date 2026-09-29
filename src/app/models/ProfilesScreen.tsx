@@ -2,7 +2,7 @@ import { modelProfile, profileUsers } from '../../runtime/profiles';
 import { useStore, useViews } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Empty, List, ListItem, NavBar, Screen, Section, Text } from '../ui';
+import { Empty, List, ListItem, NavBar, Screen, Section } from '../ui';
 import { valueWords } from './settingWords';
 
 // Models first (user, 2026-09-29): a model opens its own page, where it picks its settings; the settings made so far
@@ -17,10 +17,7 @@ export function ProfilesScreen({ back }: { back: Back | null }) {
 
   return (
     <Screen top={<NavBar title="모델 설정" {...backBar(back)} />}>
-      <Text size="sm" tone="muted">
-        모델을 누르면 그 모델의 정보와 쓰는 설정이 보여요. 새로 별표한 모델은 기본 설정을 써요.
-      </Text>
-      <Section title="모델">
+      <Section title="모델" hint="새로 별표한 모델은 기본 설정을 써요.">
         {models.length > 0 ? (
           <List label="모델">
             {models.map(({ connection, model, choice }) => (

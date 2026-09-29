@@ -51,7 +51,8 @@ export function BackupSection() {
       <SettingGroup label="백업">
         <SettingRow
           label="전체 백업"
-          help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 그 키까지 zip 파일 하나로 받아요. 잠기지 않은 파일이라 비밀번호처럼 보관해 주세요."
+          help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 그 키까지 zip 파일 하나로 받아요."
+          sub="잠기지 않은 파일이라 비밀번호처럼 보관해 주세요."
           control={
             <Button variant="secondary" size="sm" icon={Download} busy={saving} onClick={() => void save()}>
               받기
@@ -60,13 +61,8 @@ export function BackupSection() {
         />
         <SettingRow
           label="백업 불러오기"
-          help={
-            loading
-              ? loading.total
-                ? `불러오는 중 ${loading.done}/${loading.total}`
-                : '불러오는 중…'
-              : '아직 아무것도 저장하지 않은 새 계정에만 불러올 수 있어요.'
-          }
+          help="아직 아무것도 저장하지 않은 새 계정에만 불러올 수 있어요."
+          sub={loading && (loading.total ? `불러오는 중 ${loading.done}/${loading.total}` : '불러오는 중…')}
           control={
             <FileButton accept=".zip" size="sm" icon={Upload} busy={loading !== null} onFile={(file) => void load(file)}>
               불러오기

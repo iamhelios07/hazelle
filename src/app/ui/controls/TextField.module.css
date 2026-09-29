@@ -11,6 +11,11 @@
   gap: var(--space-8);
 }
 
+.name {
+  display: flex;
+  align-items: center;
+}
+
 .label {
   font-size: var(--text-md);
   font-weight: var(--weight-medium);

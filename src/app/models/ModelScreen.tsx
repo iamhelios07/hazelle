@@ -69,6 +69,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
     <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} backLabel={back.label} onBack={() => navigate(back.to)} />}>
       <Section
         title="쓰는 설정"
+        hint="같은 설정을 쓰는 모델은 함께 바뀌어요."
         action={
           <Menu
             place="below-end"
@@ -101,9 +102,6 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
             {sent}
           </Text>
         )}
-        <Text size="sm" tone="muted">
-          같은 설정을 쓰는 모델은 함께 바뀌어요.
-        </Text>
       </Section>
 
       <Section title="모델">

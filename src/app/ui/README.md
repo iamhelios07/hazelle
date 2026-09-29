@@ -50,7 +50,7 @@ and only this folder styles elements.**
 | layout | `PageHead` | `PageHead.module.css` | The head of a page's body: the name of what it shows, its id and a lead |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide |
-| layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note and action by its title |
+| layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
 | layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, its rail, faces; a layer's own sidebar with its title and ×, which Esc closes too |
@@ -72,7 +72,7 @@ and only this folder styles elements.**
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
 | controls | `Stepper` | `Stepper.module.css` | A whole number stepped one at a time between two bounds, such as the story's text size |
 | controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once |
-| controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error |
+| controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error, and an ⓘ explanation by its label |
 | controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
@@ -86,7 +86,7 @@ and only this folder styles elements.**
 | collections | `NavGroup` | `NavGroup.module.css` | Places in the app under a small caption, such as 설정's groups |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |
 | collections | `Outline` | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
-| collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name and what it does beside its control, which goes under them on phones; a row alone in a side panel's list, marked when it differs from its default |
+| collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name, its ⓘ explanation and a line of facts beside its control, which goes under them on phones; a row alone in a side panel's list, marked when it differs from its default |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
 | collections | `Tiles` (`Tile`) | `Tiles.module.css` | A few items to pick again, two to a row |
@@ -95,6 +95,7 @@ and only this folder styles elements.**
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
+| overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark; a small form opened the same way (kind dialog) |
 | overlays | `Toast` | `Toast.module.css` | A short notice, above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |

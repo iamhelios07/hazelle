@@ -121,7 +121,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       actions={
         <Stack gap="related">
           <Text size="sm" tone="muted">
-            별표 {starred.length}개 · 별표한 모델은 프롬프트와 기본값에서 고를 수 있어요
+            별표 {starred.length}개
           </Text>
           <Button onClick={() => navigate({ kind: 'connections' })}>완료</Button>
         </Stack>

@@ -4,7 +4,7 @@ import type { Receipt } from '../../model/chat';
 import type { Role } from '../../model/prompt';
 import type { Sent } from '../../runtime/talk';
 import { ROLE_WORDS, SLOT_NAMES, textName } from '../common/prompt-words';
-import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
+import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack } from '../ui';
 import { tokens } from '../common/receipt';
 
 type Lore = NonNullable<Assembled['lore']>[number];
@@ -59,10 +59,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
         onChange={setView}
       />
       {view === 'parts' ? (
-        <Section level={3} title="보낸 순서대로" note={`약 ${tokens(total)} 토큰 · 추정`}>
-          <Text size="sm" tone="muted">
-            토큰 수는 o200k 기준으로 센 추정이에요. 모델에 맞춰 바꾼 모양은 ‘본문’에 있어요.
-          </Text>
+        <Section level={3} title="보낸 순서대로" note={`약 ${tokens(total)} 토큰 · 추정`} hint="토큰 수는 o200k 기준으로 센 추정이에요. 모델에 맞춰 바꾼 모양은 ‘본문’에 있어요.">
           <Stack gap="related">
             {prompt.messages.map((message, index) => {
               const part = prompt.parts[index]!;
@@ -79,12 +76,9 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
           <Section level={3} title="주소">
             <CodeBlock>{request.url}</CodeBlock>
           </Section>
-          <Section level={3} title="본문">
+          <Section level={3} title="본문" hint="인증 정보는 헤더에 실려 가서 여기에 담지 않아요.">
             {request.body && <CodeBlock>{JSON.stringify(JSON.parse(request.body), null, 2)}</CodeBlock>}
           </Section>
-          <Text size="sm" tone="muted">
-            인증 정보는 헤더에 실려 가서 여기에 담지 않아요.
-          </Text>
         </>
       ) : (
         <Empty variant="section">요청을 만들기 전에 멈춰서 보낸 본문이 없어요.</Empty>

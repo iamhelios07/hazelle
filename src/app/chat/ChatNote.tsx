@@ -88,7 +88,7 @@ function NoteEditor({ chat }: { chat: OpenChat }) {
         value={text}
         onChange={change}
         placeholder="예: 이번 장면은 짧게 끝내요."
-        hint="이 채팅에만 들어가요. 프롬프트의 ‘작가의 노트’ 자리에 놓여요."
+        help="이 채팅에만 들어가요. 프롬프트의 ‘작가의 노트’ 자리에 놓여요."
         action={
           <Text size="sm" tone="muted">
             {status}

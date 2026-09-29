@@ -108,7 +108,7 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
       )}
       {block.kind === 'slot' && block.slot === 'chat' && <RangeChoice block={block} onRange={(range) => onRange(block, range)} />}
       {block.kind === 'slot' && block.slot === 'authorNote' && (
-        <Section title="채팅에 노트가 없을 때 쓰는 글" level={3} note="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
+        <Section title="채팅에 노트가 없을 때 쓰는 글" level={3} hint="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
           <MarkupArea label="채팅에 노트가 없을 때 쓰는 글" variant="field" value={authorNote} onChange={onAuthorNote} />
         </Section>
       )}

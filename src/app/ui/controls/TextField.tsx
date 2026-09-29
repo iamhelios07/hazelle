@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react';
+import { Hint } from '../overlays/Hint';
 import styles from './TextField.module.css';
 
 // Each kind carries the input attributes that belong together, so screens cannot mix them up.
@@ -18,7 +19,10 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  // Shown under the field, for what the person typing needs now, such as what a rename changes.
   hint?: string;
+  // What the reader who does not know it needs, behind an ⓘ beside the label.
+  help?: string;
   error?: string;
   // Makes the field a text area of this many lines.
   lines?: number;
@@ -26,16 +30,19 @@ type Props = {
   action?: ReactNode;
 };
 
-export function TextField({ label, kind = 'text', value, onChange, placeholder, hint, error, lines, action }: Props) {
+export function TextField({ label, kind = 'text', value, onChange, placeholder, hint, help, error, lines, action }: Props) {
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
   return (
     <div className={styles.field}>
       <div className={styles.head}>
-        <label className={styles.label} htmlFor={id}>
-          {label}
-        </label>
+        <span className={styles.name}>
+          <label className={styles.label} htmlFor={id}>
+            {label}
+          </label>
+          {help && <Hint label={label}>{help}</Hint>}
+        </span>
         {action}
       </div>
       {lines ? (

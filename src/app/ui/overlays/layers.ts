@@ -8,7 +8,7 @@ type Layer = {
   close: (refocus: boolean) => void;
 };
 
-// Every open menu and dialog, newest last. Esc and a press outside reach the newest one only, so Esc in a menu
+// Every open menu, dialog and pinned hint, newest last. Esc and a press outside reach the newest one only, so Esc in a menu
 // over a dialog closes the menu and leaves the dialog open. These are the kit's only document listeners for keys
 // and presses: a component adding its own would reach every layer again.
 const open: Layer[] = [];

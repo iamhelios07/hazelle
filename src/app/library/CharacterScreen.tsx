@@ -24,7 +24,7 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatIte
   if (shelf === null) {
     return (
       <Screen align="center">
-        <Intro title="캐릭터 없이">모델과 바로 이야기하는 채팅이 여기 모여요. 모델은 채팅마다 오른쪽 위에서 바꿀 수 있어요.</Intro>
+        <Intro title="캐릭터 없이" />
         {start}
       </Screen>
     );

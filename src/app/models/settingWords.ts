@@ -6,8 +6,8 @@ import { count } from './typedNumber';
 export const UNSET = '모델 원래 값';
 
 export type Field = NumberSetting | 'context';
-export const NUMBER: Record<Field, { label: string; help: string; unit?: string; unset?: string }> = {
-  maxOutput: { label: '답장 최대 길이', help: '한 번의 답장에 쓸 수 있는 최대 토큰', unit: '토큰' },
+export const NUMBER: Record<Field, { label: string; help?: string; unit?: string; unset?: string }> = {
+  maxOutput: { label: '답장 최대 길이', unit: '토큰' },
   context: { label: '컨텍스트 한도', help: '대화가 이보다 길면 오래된 메시지부터 덜어 내요', unit: '토큰', unset: '모델 한도' },
   temperature: { label: '온도', help: '높을수록 답이 들쭉날쭉해져요' },
   topP: { label: 'top_p', help: '확률 높은 후보부터 이 비율만큼만 골라요' },

@@ -182,7 +182,6 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       <SettingRow
         key="reasoning"
         label="생각"
-        help="답하기 전에 얼마나 생각할지 정해요"
         changed={reasoning !== undefined}
         error={typed && !typed.ok ? typed.error : undefined}
         note={noteFor('reasoning')}
@@ -317,9 +316,6 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
             </Button>
           </Row>
         )}
-        <Text size="sm" tone="muted">
-          비워 둔 값은 보내지 않아요. 모델이 받지 않는 값은 그 모델에만 빼거나 맞춰서 보내요.
-        </Text>
       </Stack>
 
       <Section
@@ -364,7 +360,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         )}
       </Section>
 
-      <Section title="자주 쓰는 설정">
+      <Section title="자주 쓰는 설정" hint="비워 둔 값은 보내지 않아요. 모델이 받지 않는 값은 그 모델에만 빼거나 맞춰서 보내요.">
         <SettingGroup label="자주 쓰는 설정">
           {MAIN.map(numberRow)}
           {reasoningRow()}

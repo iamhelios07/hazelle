@@ -37,6 +37,11 @@
   min-width: 0;
 }
 
+.name {
+  display: flex;
+  align-items: center;
+}
+
 .label {
   color: var(--color-text);
   font-size: var(--text-md);
@@ -58,7 +63,7 @@
   vertical-align: middle;
 }
 
-.help {
+.sub {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
   line-height: var(--leading-normal);

@@ -33,7 +33,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       place="panel"
       label={toggle.label}
       changed={changed}
-      help={changed ? defaultOf(toggle) : undefined}
+      sub={changed ? defaultOf(toggle) : undefined}
       control={
         toggle.kind === 'check' ? (
           <Switch label={toggle.label} checked={value === '1'} onChange={(on) => actions.flip(toggle.key, on ? '1' : '0')} />

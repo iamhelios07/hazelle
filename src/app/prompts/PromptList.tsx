@@ -6,7 +6,7 @@ import { noResults } from '../common/search';
 import { ago } from '../common/time';
 import { useStore, useViews } from '../session';
 import { useToast } from '../toast';
-import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Text, Tile, Tiles, type NavBarProps } from '../ui';
+import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles, type NavBarProps } from '../ui';
 import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, promptName, usePromptUse, type PromptUse } from './usePromptUse';
 
@@ -98,9 +98,6 @@ export function PromptList({ onPick, inUse, frame }: Props) {
     <>
       <Stack gap="related">
         <SearchField label="이름으로 찾기" value={query} onChange={setQuery} />
-        <Text size="sm" tone="muted">
-          Risu 프리셋(.risup) 파일을 이 화면에 끌어 놓아도 새 프롬프트로 가져와요.
-        </Text>
       </Stack>
       {words ? (
         found.length ? (
