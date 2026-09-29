@@ -139,12 +139,11 @@ describe('assemble', () => {
     expect(renderChat('display', scope({ card: card({ regex }), messages })).texts[2]).toBe('She nods slowly. [OOC] ignore');
   });
 
-  it('marks the message before a 캐시 지점, the last one before the chat, and the chat’s last message rather than a block after it', () => {
+  it('marks the message a block marked 여기까지 캐시 ends on, the last one before the chat, and the chat’s last message rather than a block after it', () => {
     const prompt: Prompt = {
       ...starter,
       blocks: [
-        { id: 'rules', name: null, kind: 'text', role: 'system', mark: null, text: 'Rules.' },
-        { id: 'point', name: null, kind: 'slot', slot: 'cache' },
+        { id: 'rules', name: null, kind: 'text', role: 'system', mark: null, text: 'Rules.', cache: true },
         { id: 'more', name: null, kind: 'text', role: 'system', mark: null, text: 'More.' },
         { id: 'chat', name: null, kind: 'slot', slot: 'chat', range: { from: 0, to: null } },
         { id: 'after', name: null, kind: 'text', role: 'system', mark: null, text: 'After.' },

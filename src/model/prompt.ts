@@ -12,8 +12,6 @@ export const SLOTS = {
   authorNote: { wrapped: true, repeats: false },
   postEverything: { wrapped: false, repeats: false },
   chat: { wrapped: false, repeats: true },
-  // Sends nothing: it makes the message before it a cache point (design §4.4).
-  cache: { wrapped: false, repeats: true },
 } as const;
 export type SlotKind = keyof typeof SLOTS;
 type Wrapped = { [K in SlotKind]: (typeof SLOTS)[K]['wrapped'] extends true ? K : never }[SlotKind];
@@ -22,7 +20,8 @@ type Wrapped = { [K in SlotKind]: (typeof SLOTS)[K]['wrapped'] extends true ? K 
 // Past chat is {from: 0, to: -1}; the last message is {from: -1, to: null}.
 export type ChatRange = { from: number; to: number | null };
 
-type Named = { id: string; name: string | null };
+// cache: 여기까지 캐시, a cache point on the last message sent up to and including this block (design §4.4).
+type Named = { id: string; name: string | null; cache?: true };
 // mark: the text a card replaces, main by its system prompt and globalNote by its post-history
 // instructions, with {{original}} in the card's text standing for this block's text.
 export type TextBlock = Named & { kind: 'text'; role: Role; text: string; mark: 'main' | 'globalNote' | null };

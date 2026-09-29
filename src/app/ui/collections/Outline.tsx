@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronRight, Plus, X, type LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bookmark, ChevronRight, Plus, X, type LucideIcon } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
@@ -20,6 +20,8 @@ export type OutlineStop = {
   badge?: string;
   // The gold dot: the block holds toggle conditions.
   flagged?: boolean;
+  // A cache point after the stop, drawn as a dashed line under it: one set on it, or one the app sets itself.
+  cache?: 'set' | 'auto';
   // What a screen reader reads for the row.
   label: string;
 };
@@ -40,6 +42,8 @@ type Props = {
   onMove: (from: number, to: number) => void;
   // The menu behind each "+", for a new stop at that index; the last one is 맨 끝에 추가.
   insert: (index: number) => ReactNode;
+  // Sets or takes off the cache point after a stop, from a toggle beside 빼기. A point the app sets has none.
+  onCache: (id: string) => void;
   // drag: drag and Alt+↑/↓. buttons: ↑/↓ on each row instead, where there is no drag (the phone's 순서 바꾸기).
   reorder?: 'drag' | 'buttons';
   // A chevron on each row: it opens a page of its own (phone).
@@ -49,7 +53,7 @@ type Props = {
 // A subway map of what is sent, top to bottom (design §4.2, outline variant C). The line between two stops takes the
 // upper stop's color, so it changes color at the stop where the section changes, and a section change leaves a wider
 // gap. Stops are one grid: number, node, title, meta.
-export function Outline({ label, help, start, end, stops, current, onPick, onOpen, onRemove, onMove, insert, reorder = 'drag', drill = false }: Props) {
+export function Outline({ label, help, start, end, stops, current, onPick, onOpen, onRemove, onMove, insert, onCache, reorder = 'drag', drill = false }: Props) {
   const list = useRef<HTMLDivElement>(null);
   const helpId = useId();
   const [drag, setDrag] = useState<{ from: number; at: number } | null>(null);
@@ -120,6 +124,17 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
     </span>
   );
 
+  const cut = (stop: OutlineStop | undefined) =>
+    stop?.cache && (
+      <span className={`${styles.cut} ${styles[stop.cache]}`} aria-hidden>
+        <span className={styles.cutLabel}>
+          <Icon icon={Bookmark} size="xs" />
+          {stop.cache === 'set' ? '여기까지 캐시' : '자동 캐시'}
+        </span>
+      </span>
+    );
+  const lastStop = stops.at(-1);
+
   return (
     <div className={[styles.outline, reorder === 'buttons' && styles.buttons, drill && styles.drill].filter(Boolean).join(' ')} ref={list}>
       <span id={helpId} className={styles.help}>
@@ -129,16 +144,17 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
         <span className={`${styles.end} ${styles.open}`} />
         <span className={styles.capLabel}>{start}</span>
       </div>
-      <div role="list" aria-label={label} onDragOver={(event) => drag && event.preventDefault()} onDrop={drop}>
+      <div role="list" aria-label={label} className={lastStop?.cache ? `${styles.stops} ${styles.cutEnd}` : styles.stops} onDragOver={(event) => drag && event.preventDefault()} onDrop={drop}>
         {stops.map((stop, index) => {
           const above = stops[index - 1];
           const turn = above !== undefined && above.kind !== stop.kind;
-          const classes = [styles.stop, turn && styles.turn, index === 0 && styles.first, drag?.from === index && styles.dragged].filter(Boolean).join(' ');
+          const classes = [styles.stop, turn && styles.turn, above?.cache && styles.cutAbove, index === 0 && styles.first, drag?.from === index && styles.dragged].filter(Boolean).join(' ');
           return (
             <div key={stop.id} role="listitem" className={classes} onDragOver={(event) => over(event, index)}>
               <span className={`${styles.segment} ${styles[above?.kind ?? stop.kind]}`} aria-hidden />
               {index === stops.length - 1 && <span className={`${styles.segment} ${styles.last} ${styles[stop.kind]}`} aria-hidden />}
               <div className={styles.gap}>
+                {cut(above)}
                 {drag?.at === index && <span className={styles.drop} />}
                 {reorder === 'drag' && plus(index, `${index + 1}번째 자리에 추가`)}
               </div>
@@ -173,7 +189,17 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
                   {drill && reorder === 'drag' && <Icon icon={ChevronRight} size="xs" />}
                 </button>
                 {reorder === 'drag' ? (
-                  <span className={styles.remove}>
+                  <span className={styles.tools}>
+                    {stop.cache !== 'auto' && (
+                      <IconButton
+                        icon={Bookmark}
+                        size="xs"
+                        label={`‘${stop.title}’까지 캐시`}
+                        title={stop.cache ? '캐시 지점 빼기' : '여기까지 캐시'}
+                        pressed={stop.cache === 'set'}
+                        onClick={() => onCache(stop.id)}
+                      />
+                    )}
                     <IconButton icon={X} size="xs" label={`‘${stop.title}’ 빼기`} title="빼기" onClick={() => onRemove(stop.id)} />
                   </span>
                 ) : (
@@ -186,7 +212,10 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
             </div>
           );
         })}
-        <div className={styles.tail}>{drag?.at === stops.length && <span className={styles.drop} />}</div>
+        <div className={styles.tail}>
+          {cut(lastStop)}
+          {drag?.at === stops.length && <span className={styles.drop} />}
+        </div>
       </div>
       <div className={styles.cap} aria-hidden>
         <span className={`${styles.end} ${styles.closed}`} />

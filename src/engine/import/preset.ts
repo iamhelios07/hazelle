@@ -40,7 +40,7 @@ const SKIPPED = new Map<unknown, PresetUnsupportedKind>([
 ]);
 // A slot placed again where the model allows it once keeps its first place; SLOTS decides which repeat.
 type Repeating = { [K in SlotKind]: (typeof SLOTS)[K]['repeats'] extends true ? K : never }[SlotKind];
-const REPEATING: Record<Repeating, true> = { chat: true, cache: true };
+const REPEATING: Record<Repeating, true> = { chat: true };
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const fail = (kind: PresetFailure['kind']): PresetResult => ({ ok: false, failure: { kind } });
@@ -85,9 +85,15 @@ function convert(preset: Json, template: unknown[]): { prompt: Prompt; unsupport
       count('unread-item');
       continue;
     }
-    // Risu's cache item marks the last `depth` messages before it, of one role or of all; a 캐시 지점 marks the one
-    // message before it, which is Risu's depth 1 over all roles.
-    if (item.type === 'cache' && !(item.depth === 1 && item.role === 'all')) count('cache-narrowed');
+    // Risu's cache item marks the last `depth` messages before it, of one role or of all; 여기까지 캐시 on the block
+    // before it marks the one message before it, which is Risu's depth 1 over all roles. One at the top marks nothing
+    // in Risu either.
+    if (item.type === 'cache') {
+      if (!(item.depth === 1 && item.role === 'all')) count('cache-narrowed');
+      const before = blocks.at(-1);
+      if (before) blocks[blocks.length - 1] = { ...before, cache: true };
+      continue;
+    }
     const read = block(item);
     if (typeof read === 'string') {
       count(read);
@@ -139,7 +145,6 @@ function block(item: Json): Block | PresetUnsupportedKind {
     }
     case 'lorebook':
     case 'postEverything':
-    case 'cache':
       return { ...named, kind: 'slot', slot: item.type };
     case 'chat': {
       const range = chatRange(item.rangeStart, item.rangeEnd);

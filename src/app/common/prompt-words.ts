@@ -8,7 +8,6 @@ export const SLOT_NAMES: Record<SlotKind, string> = {
   authorNote: '작가의 노트',
   postEverything: '최종 삽입',
   chat: '채팅',
-  cache: '캐시 지점',
 };
 
 export const ROLE_WORDS: Record<Role, string> = { system: '시스템', user: '사용자', assistant: 'AI' };

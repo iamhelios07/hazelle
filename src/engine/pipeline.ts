@@ -98,34 +98,30 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
     if (content.trim()) out({ message: { role: block.role, content: render(block.wrapper === null ? content : block.wrapper.replace('{{slot}}', () => content), block.id) }, from: blockFrom(block) });
   };
   for (const block of prompt.blocks) {
-    if (block.kind === 'text') {
-      out({ message: { role: block.role, content: render(injected(ownText(block, card), block.mark === null ? [] : (injections.get(block.mark) ?? [])), block.id) }, from: blockFrom(block) });
-      continue;
-    }
-    switch (block.slot) {
-      case 'description':
-        wrapped(block, [...sides.before, ...describe(card), ...sides.after].filter((part) => part.trim()).join('\n\n'));
-        break;
-      case 'persona':
-        wrapped(block, scope.persona.description);
-        break;
-      case 'authorNote':
-        wrapped(block, authorNote(scope.note, prompt));
-        break;
-      case 'lorebook':
-        out(...throughSlot(lorebook, 'lorebook'));
-        break;
-      // 최종 삽입 (design §4.2): where it stands, and at the very end when the prompt has none (below).
-      case 'postEverything':
-        out(...throughSlot(last, 'postEverything'));
-        break;
-      case 'chat':
-        template.push({ range: block.range, from: blockFrom(block) });
-        break;
-      case 'cache':
-        template.push({ cache: true });
-        break;
-    }
+    if (block.kind === 'text') out({ message: { role: block.role, content: render(injected(ownText(block, card), block.mark === null ? [] : (injections.get(block.mark) ?? [])), block.id) }, from: blockFrom(block) });
+    else
+      switch (block.slot) {
+        case 'description':
+          wrapped(block, [...sides.before, ...describe(card), ...sides.after].filter((part) => part.trim()).join('\n\n'));
+          break;
+        case 'persona':
+          wrapped(block, scope.persona.description);
+          break;
+        case 'authorNote':
+          wrapped(block, authorNote(scope.note, prompt));
+          break;
+        case 'lorebook':
+          out(...throughSlot(lorebook, 'lorebook'));
+          break;
+        // 최종 삽입 (design §4.2): where it stands, and at the very end when the prompt has none (below).
+        case 'postEverything':
+          out(...throughSlot(last, 'postEverything'));
+          break;
+        case 'chat':
+          template.push({ range: block.range, from: blockFrom(block) });
+          break;
+      }
+    if (block.cache) template.push({ cache: true });
   }
   if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(last, 'postEverything'));
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
@@ -164,9 +160,9 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
 type ChatPart = { range: ChatRange; from: From };
 type CachePart = { cache: true };
 
-// The cache points (design §4.4): the message before each 캐시 지점 block, and two the app sets itself. One ends the part
-// before the chat, which stays the same from turn to turn; the other is the chat's last message, which the next turn's
-// request repeats. Not the request's last message: a block after the chat (글로벌 노트, 최종 삽입, the continue
+// The cache points (design §4.4): the last message sent up to each block marked 여기까지 캐시, and two the app sets
+// itself, which the editor's cacheMarks draws (keep the two in step). One ends the part before the chat, which stays
+// the same from turn to turn; the other is the chat's last message, which the next turn's request repeats. Not the request's last message: a block after the chat (글로벌 노트, 최종 삽입, the continue
 // instruction) moves on every turn, so a point there is never met again.
 function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
   const sent: Sent[] = [];

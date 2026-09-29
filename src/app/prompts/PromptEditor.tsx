@@ -11,7 +11,7 @@ import { useShortcut } from '../shortcuts';
 import { useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
-import { blockIcon, blockKind, blockMeta, blockTitle, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
+import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
 import { conditionSnippet, countUses, draftOf, newBlock, withMark, type Draft, type NewBlock } from './edits';
 import {
   addBlock,
@@ -24,6 +24,7 @@ import {
   removeBlock,
   removeToggle,
   renameKey,
+  setCache,
   setMark,
   setRange,
   setRole,
@@ -44,6 +45,8 @@ const DEFAULT_REFUSED = '기본 프롬프트는 지울 수 없어요. 다른 프
 const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 누르면 순서를 바꿔요. Enter로 글을 고치고, Delete로 빼요. 맨 위가 맨 처음 보내는 블록, 맨 아래가 답장 직전이에요.';
 
 type Pane = 'toggles' | null;
+
+const CACHE_WORDS = { set: '여기까지 캐시', auto: '자동 캐시' } as const;
 
 const TEXT_INPUTS = new Set(['text', 'search', 'password']);
 // Ctrl+Z in a text field is the browser's own undo of what was typed there; the editor's steps are everything else.
@@ -239,13 +242,20 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     });
   };
 
+  const cacheAt = (id: string) => {
+    const target = latest.current.blocks.find((each) => each.id === id);
+    if (target) perform(setCache(target, !target.cache));
+  };
+
+  const marks = cacheMarks(draft.blocks);
   const stops: OutlineStop[] = draft.blocks.map((each, at) => {
     const { title, dim } = blockTitle(each);
     const meta = blockMeta(each);
     const badge = each.kind === 'text' && each.mark ? MARKS[each.mark].label : undefined;
     const flagged = hasConditions(each);
-    const words = [`${at + 1}. ${title}`, badge, meta, flagged && '토글 조건 있음'].filter(Boolean).join(', ');
-    return { id: each.id, kind: blockKind(each), icon: blockIcon(each), title, dim, meta, badge, flagged, label: words };
+    const cache = marks.get(each.id);
+    const words = [`${at + 1}. ${title}`, badge, meta, flagged && '토글 조건 있음', cache && CACHE_WORDS[cache]].filter(Boolean).join(', ');
+    return { id: each.id, kind: blockKind(each), icon: blockIcon(each), title, dim, meta, badge, flagged, cache, label: words };
   });
   const placed = new Set(draft.blocks.flatMap((each) => (each.kind === 'slot' ? [each.slot] : [])));
   const addMenu = (at: number) => (
@@ -306,6 +316,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           onRemove={remove}
           onMove={move}
           insert={addMenu}
+          onCache={cacheAt}
           reorder={reordering ? 'buttons' : 'drag'}
           drill={!split}
         />
@@ -342,6 +353,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           onWrapper={wrap}
           onAuthorNote={(authorNote) => update(() => ({ authorNote }))}
           onMark={mark}
+          cache={marks.get(block.id)}
+          onCache={() => cacheAt(block.id)}
           onMove={(to) => move(index, to)}
           onRemove={() => remove(block.id)}
           onCondition={condition}

@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUp, Ellipsis, GitBranch, Plus, X } from 'lucide-react';
 import type { Ref } from 'react';
 import type { Block, ChatRange, ChatSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
-import { Button, ChoiceGroup, Divider, Empty, IconButton, MarkupArea, Menu, MenuHeading, MenuItem, Row, Section, Stack, Tag, Text, TitleField } from '../ui';
-import { blockTitle, describeRange, MARKS, RANGES, rangeKey, ROLES, SLOT } from './blocks';
+import { Button, ChoiceGroup, Divider, Empty, IconButton, MarkupArea, Menu, MenuHeading, MenuItem, Row, Section, SettingRow, Stack, Switch, Tag, Text, TitleField } from '../ui';
+import { blockTitle, describeRange, MARKS, RANGES, rangeKey, ROLES, SLOT, type CacheMark } from './blocks';
 
 type Props = {
   block: Block;
@@ -17,6 +17,8 @@ type Props = {
   onWrapper: (block: WrappedSlot, wrapper: string | null) => void;
   onAuthorNote: (text: string) => void;
   onMark: (block: TextBlock, mark: TextBlock['mark']) => void;
+  cache: CacheMark | undefined;
+  onCache: () => void;
   onMove: (to: number) => void;
   onRemove: () => void;
   onCondition: (toggle: Toggle) => void;
@@ -27,10 +29,15 @@ type Props = {
 
 const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 
+const CACHE_HELP = {
+  own: '이 블록까지 보낸 내용을 캐시해 두고 다음 요청에서 싸게 다시 읽어요. 모델 설정에서 캐시를 켠 모델에만 보내요. 앱이 채팅 앞과 끝에 지점을 알아서 두니, 그 밖에 더 두고 싶을 때만 켜요. 한 요청에 지점은 4개까지라, 넘으면 맨 뒤 지점과 앞쪽 지점 셋만 남겨요.',
+  auto: '앱이 여기에 캐시 지점을 알아서 둬요. 모델 설정에서 캐시를 켠 모델에만 보내요.',
+};
+
 // The block picked in the outline, and only it (design §4.2): where it goes, its name, its role, and what it holds.
-export function BlockPane({ block, index, count, toggles, authorNote, onChange, onRole, onRange, onWrapper, onAuthorNote, onMark, onMove, onRemove, onCondition, onNewToggle, textRef, nameRef }: Props) {
+export function BlockPane({ block, index, count, toggles, authorNote, onChange, onRole, onRange, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
-  const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : block.slot === 'cache' ? SLOT.cache.name : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
+  const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
   const placeholder = block.kind === 'slot' ? SLOT[block.slot].name : firstLine(block.text) || '이름 붙이기';
 
   return (
@@ -126,6 +133,12 @@ export function BlockPane({ block, index, count, toggles, authorNote, onChange, 
             <MarkupArea label="감싸는 글" variant="field" value={block.wrapper} onChange={(wrapper) => onChange({ ...block, wrapper })} />
           </Section>
         ))}
+      <SettingRow
+        place="panel"
+        label="여기까지 캐시"
+        help={cache === 'auto' ? CACHE_HELP.auto : CACHE_HELP.own}
+        control={cache === 'auto' ? <Text tone="muted">자동</Text> : <Switch label="여기까지 캐시" checked={cache === 'set'} onChange={onCache} />}
+      />
     </Stack>
   );
 }

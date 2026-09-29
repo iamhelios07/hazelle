@@ -80,6 +80,17 @@ export function setRange(block: ChatSlot, range: ChatRange): Step {
   return { label: titled(block, '들어갈 메시지 바꾸기'), block: block.id, undo: to(block.range), redo: to(range) };
 }
 
+export function setCache(block: Block, on: boolean): Step {
+  const to = (value: boolean) =>
+    onBlock(block.id, (each) => {
+      const next = { ...each };
+      if (value) next.cache = true;
+      else delete next.cache;
+      return next;
+    });
+  return { label: titled(block, on ? '여기까지 캐시' : '캐시 지점 빼기'), block: block.id, undo: to(!on), redo: to(on) };
+}
+
 // Trades the 감싸는 글 there for the one the step holds, so one function is both ways: each apply puts back what the one
 // before took out, text typed into it since included.
 export function setWrapper(block: WrappedSlot, wrapper: string | null): Step {

@@ -61,6 +61,11 @@
   --gap: var(--outline-gap-kind);
 }
 
+/* Room for the cache line under the stop above. */
+.cutAbove {
+  --gap: var(--outline-gap-cut);
+}
+
 .dragged .row {
   opacity: 0.4;
 }
@@ -83,7 +88,7 @@
 /* From the last node down to the end cap. */
 .segment.last {
   top: calc(var(--gap) + var(--outline-row) / 2);
-  height: calc(var(--outline-row) / 2 + var(--space-8) + var(--outline-cap-row) / 2);
+  height: calc(var(--outline-row) / 2 + var(--tail) + var(--outline-cap-row) / 2);
 }
 
 .segment.text {
@@ -111,9 +116,54 @@
   height: var(--gap);
 }
 
+.stops {
+  --tail: var(--space-8);
+}
+
+.cutEnd {
+  --tail: var(--outline-gap-cut);
+}
+
 .tail {
   position: relative;
-  height: var(--space-8);
+  height: var(--tail);
+}
+
+/* A cache point: a dashed line from the rail across, halfway down the gap under the stop it follows. */
+.cut {
+  position: absolute;
+  top: 50%;
+  left: var(--rail-x);
+  right: var(--space-8);
+  border-top: var(--border-thin) dashed var(--cut);
+  pointer-events: none;
+}
+
+.cut.set {
+  --cut: var(--color-accent);
+}
+
+.cut.auto {
+  --cut: var(--color-text-faint);
+}
+
+.cutLabel {
+  position: absolute;
+  top: 0;
+  left: calc(var(--outline-node-chat) / 2 + var(--space-4));
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-inline: var(--space-4);
+  translate: 0 -50%;
+  background: var(--color-bg);
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  color: var(--cut);
+}
+
+.auto .cutLabel {
+  color: var(--color-text-muted);
 }
 
 .drop {
@@ -306,7 +356,7 @@
   color: var(--color-text-soft);
 }
 
-.remove {
+.tools {
   position: absolute;
   top: 50%;
   right: var(--space-4);
@@ -315,13 +365,13 @@
   opacity: 0;
 }
 
-.row:hover .remove,
-.remove:focus-within {
+.row:hover .tools,
+.tools:focus-within {
   opacity: 1;
 }
 
 .row:hover .meta,
-.row:has(.remove:focus-within) .meta {
+.row:has(.tools:focus-within) .meta {
   visibility: hidden;
 }
 

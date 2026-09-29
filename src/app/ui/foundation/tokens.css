@@ -226,6 +226,7 @@
   --outline-dot: 9px;
   --outline-gap: 4px;
   --outline-gap-kind: 14px;
+  --outline-gap-cut: 20px;
   --editor-max-width: 760px;
   --editor-header: 68px;
   --editor-foot: 140px;
