@@ -2,7 +2,8 @@ import type { Change, ModelSettings, NumberSetting } from '../../connectors/sett
 import { count } from './typedNumber';
 
 // An empty field is unset: nothing is sent, and the provider's default applies. It is never shown as a number (design §4.4).
-export const UNSET = '기본값';
+// Not 기본값, which read as the default 설정 named 기본 (user, 2026-09-29).
+export const UNSET = '모델 원래 값';
 
 export type Field = NumberSetting | 'context';
 export const NUMBER: Record<Field, { label: string; help: string; unit?: string; unset?: string }> = {

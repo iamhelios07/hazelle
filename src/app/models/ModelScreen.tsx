@@ -88,7 +88,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
             <ListItem
               title={current.value.name}
               badge={current.id === settings.profile ? '기본' : undefined}
-              description={words?.length ? words.join(' · ') : '정한 값이 없어요. 모두 모델 쪽 기본값으로 보내요.'}
+              description={words?.length ? words.join(' · ') : '정한 값이 없어요. 모두 모델 원래 값으로 보내요.'}
               aside="열기"
               onClick={() => navigate({ kind: 'profile', id: current.id })}
             />
