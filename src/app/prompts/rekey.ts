@@ -1,10 +1,6 @@
+import { blockHead, conditionSteps, separatorOf, whenArgs } from '../../engine/cbs/evaluate';
 import { parse, type Node, type Tag } from '../../engine/cbs/parse';
-import { normalize } from '../../engine/cbs/tags';
-
-// The #when operators, kept in step with UNARY and BINARY in engine/cbs/evaluate.
-const UNARY = new Set(['not', 'var', 'toggle']);
-const BINARY = new Set(['and', 'or', 'is', 'isnot', '>', '<', '>=', '<=', 'vis', 'visnot', 'tis', 'tisnot']);
-const MODES = new Set(['keep', 'legacy']);
+import { normalize, TOGGLE_GLOBAL } from '../../engine/cbs/tags';
 
 // A toggle key written in the text, and where it stands.
 export type ToggleUse = { key: string; at: number };
@@ -45,48 +41,27 @@ function source(tag: Tag): { content: string; start: number } | null {
   return typeof content === 'string' && rest.length === 0 ? { content, start: tag.at + 2 } : null;
 }
 
-// engine/cbs/evaluate splitArgs: `::` when the first colon is doubled, else `:`.
-function separator(content: string): string | null {
-  const colon = content.indexOf(':');
-  return colon === -1 ? null : content[colon + 1] === ':' ? '::' : ':';
-}
-
 function global(tag: Tag, uses: ToggleUse[]) {
   const written = source(tag);
-  const sep = written && separator(written.content);
+  const sep = written && separatorOf(written.content);
   if (!written || !sep) return;
   const [name, argument] = written.content.split(sep);
-  if (normalize(name!) !== 'getglobalvar' || !argument?.startsWith('toggle_')) return;
-  uses.push({ key: argument.slice('toggle_'.length), at: written.start + name!.length + sep.length + 'toggle_'.length });
+  if (normalize(name!) !== 'getglobalvar' || !argument?.startsWith(TOGGLE_GLOBAL)) return;
+  uses.push({ key: argument.slice(TOGGLE_GLOBAL.length), at: written.start + name!.length + sep.length + TOGGLE_GLOBAL.length });
 }
 
 function when(head: Tag, uses: ToggleUse[]) {
   const written = source(head);
-  const match = written && /^\s*#([^\s:]*)([\s\S]*)$/.exec(written.content);
-  if (!written || !match || normalize(match[1]!) !== 'when') return;
-  const rest = match[2]!;
-  if (!rest.startsWith(':')) return;
-  const sep = rest[1] === ':' ? '::' : ':';
-  const args = rest.split(sep).slice(1);
-  const places: number[] = [];
-  let at = written.start + written.content.length - rest.length + sep.length;
-  for (const arg of args) {
-    places.push(at);
-    at += arg.length + sep.length;
-  }
-  const use = (index: number) => uses.push({ key: args[index]!, at: places[index]! });
-  let first = 0;
-  while (MODES.has(args[first]!)) first += 1;
-  // As evaluate's fold reads it, right to left: the value is a written literal until an operator has applied.
-  let literal = true;
-  for (let i = args.length - 2; i >= first; i--) {
-    const op = args[i]!;
-    if (UNARY.has(op)) {
-      if (op === 'toggle' && literal) use(args.length - 1);
-    } else if (BINARY.has(op) && i > first) {
-      i -= 1;
-      if (op === 'tis' || op === 'tisnot') use(i);
-    } else return;
-    literal = false;
-  }
+  const block = written && blockHead(written.content);
+  const sep = block && separatorOf(block.rest);
+  if (!written || block?.name !== 'when' || !sep) return;
+  const { modes, condition } = whenArgs(block.rest);
+  const start = written.start + written.content.length - block.rest.length + sep.length;
+  const at = (index: number) => [...modes, ...condition.slice(0, index)].reduce((place, arg) => place + arg.length + sep.length, start);
+  const use = (index: number) => uses.push({ key: condition[index]!, at: at(index) });
+  // Only the first step's operand is the key as written; a later one is an operator's result.
+  conditionSteps(condition).steps.forEach(({ op, left }, step) => {
+    if (op === 'toggle' && step === 0) use(condition.length - 1);
+    if (op === 'tis' || op === 'tisnot') use(left!);
+  });
 }

@@ -83,9 +83,21 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
 const asWritten = (content: string) => `{{${content}}}`;
 
 // At `::`, or at `:` when the first colon is single, so {{getvar:x}} works.
-function splitArgs(content: string): string[] {
+// `::` when the first colon is doubled, else `:`. null: no arguments.
+export function separatorOf(content: string): string | null {
   const colon = content.indexOf(':');
-  return colon === -1 ? [content] : content.split(content[colon + 1] === ':' ? '::' : ':');
+  return colon === -1 ? null : content[colon + 1] === ':' ? '::' : ':';
+}
+
+function splitArgs(content: string): string[] {
+  const sep = separatorOf(content);
+  return sep === null ? [content] : content.split(sep);
+}
+
+// A block's name and what follows it.
+export function blockHead(content: string): { name: string; rest: string } | null {
+  const match = /^\s*#([^\s:]*)([\s\S]*)$/.exec(content);
+  return match && { name: normalize(match[1]!), rest: match[2]! };
 }
 
 // The inner tags are evaluated first and the tag's name and arguments read from their output, which is how
@@ -127,10 +139,9 @@ function env(frame: Frame, place: string): Env {
 
 function evaluateBlock(block: Block, frame: Frame): string {
   const head = evaluateNodes(block.head.parts, frame);
-  const match = /^\s*#([^\s:]*)([\s\S]*)$/.exec(head)!;
-  const rest = match[2]!;
+  const { name, rest } = blockHead(head)!;
   const unknown = () => asWritten(head) + evaluateNodes(block.body, frame) + asWritten(evaluateNodes(block.close.parts, frame));
-  switch (normalize(match[1]!)) {
+  switch (name) {
     case 'when':
       return when(block, rest, frame);
     case 'if':
@@ -162,15 +173,12 @@ function evaluateBlock(block: Block, frame: Frame): string {
 
 // Only the branch taken is evaluated. Risu evaluates both and keeps one, so a setvar in the other ran too.
 function when(block: Block, rest: string, frame: Frame): string {
-  const condition = rest.trim();
-  const args = rest.startsWith(':') ? splitArgs(rest).slice(1) : condition ? [condition] : [];
-  const modes = new Set<string>();
-  while (args[0] === 'keep' || args[0] === 'legacy') modes.add(args.shift()!);
-  const holds = args.length > 0 && fold(args, frame.run.context);
-  if (modes.has('legacy')) return holds ? evaluateNodes(trimLines(block.body), frame) : '';
+  const { modes, condition } = whenArgs(rest);
+  const holds = condition.length > 0 && fold(condition, frame.run.context);
+  if (modes.includes('legacy')) return holds ? evaluateNodes(trimLines(block.body), frame) : '';
   const split = block.body.findIndex(isElse);
   const branch = holds ? (split === -1 ? block.body : block.body.slice(0, split)) : split === -1 ? [] : block.body.slice(split + 1);
-  return evaluateNodes(modes.has('keep') ? branch : blankEnds(branch), frame);
+  return evaluateNodes(modes.includes('keep') ? branch : blankEnds(branch), frame);
 }
 
 // Anywhere on the block's own level; Risu wants it alone on a line in a body of several lines.
@@ -196,17 +204,34 @@ const BINARY = new Map<string, (left: string, right: string, context: CbsContext
   ['tisnot', (key, value, context) => readToggle(context, key) !== value],
 ]);
 
-// Operators apply right to left, each to everything on its right: not::a::and::b is not (a and b). A value
-// where an operator belongs makes the condition false.
-function fold(args: string[], context: CbsContext): boolean {
-  let value = args.at(-1)!;
-  for (let i = args.length - 2; i >= 0; i--) {
-    const unary = UNARY.get(args[i]!);
-    const binary = BINARY.get(args[i]!);
-    if (unary) value = bool(unary(value, context));
-    else if (binary && i > 0) value = bool(binary(args[--i]!, value, context));
-    else return false;
+// #when's arguments after its name: the modes it opens with, then the condition.
+export function whenArgs(rest: string): { modes: string[]; condition: string[] } {
+  const trimmed = rest.trim();
+  const args = rest.startsWith(':') ? splitArgs(rest).slice(1) : trimmed ? [trimmed] : [];
+  let first = 0;
+  while (args[first] === 'keep' || args[first] === 'legacy') first += 1;
+  return { modes: args.slice(0, first), condition: args.slice(first) };
+}
+
+// A condition's operators in the order they apply, each with the index of its left operand when it takes one; the
+// first step's operand is the last argument as written. Operators apply right to left, each to everything on its
+// right: not::a::and::b is not (a and b). A value where an operator belongs ends the steps, and the condition is false.
+export function conditionSteps(condition: string[]): { steps: { op: string; left?: number }[]; valid: boolean } {
+  const steps: { op: string; left?: number }[] = [];
+  for (let i = condition.length - 2; i >= 0; i--) {
+    const op = condition[i]!;
+    if (UNARY.has(op)) steps.push({ op });
+    else if (BINARY.has(op) && i > 0) steps.push({ op, left: --i });
+    else return { steps, valid: false };
   }
+  return { steps, valid: true };
+}
+
+function fold(condition: string[], context: CbsContext): boolean {
+  const { steps, valid } = conditionSteps(condition);
+  if (!valid) return false;
+  let value = condition.at(-1)!;
+  for (const { op, left } of steps) value = bool(left === undefined ? UNARY.get(op)!(value, context) : BINARY.get(op)!(condition[left]!, value, context));
   return truthy(value);
 }
 

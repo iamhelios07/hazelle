@@ -111,7 +111,8 @@ export const truthy = (value: string) => value === '1' || value === 'true';
 export const readVar = (context: CbsContext, name: string) => context.variables.get(name) ?? '';
 export const readToggle = (context: CbsContext, key: string) => context.toggle(key) ?? '';
 // risu-alpha keeps no global variables: a toggle reads as `toggle_<key>`, and every other name is unset.
-const readGlobal = (context: CbsContext, name: string) => (name.startsWith('toggle_') ? readToggle(context, name.slice('toggle_'.length)) : '');
+export const TOGGLE_GLOBAL = 'toggle_';
+const readGlobal = (context: CbsContext, name: string) => (name.startsWith(TOGGLE_GLOBAL) ? readToggle(context, name.slice(TOGGLE_GLOBAL.length)) : '');
 
 const messageIndex = (context: CbsContext) => ('message' in context.source ? context.source.message : null);
 // A bot reads the greeting as message -1 and the first message after it as 0, so a message's number is its index

@@ -1,4 +1,5 @@
 import { ArrowDownToLine, BookOpen, IdCard, Languages, MessageSquare, MessagesSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
+import { autoCachePoints } from '../../engine/pipeline';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { ROLE_WORDS, SLOT_NAMES, textName } from '../common/prompt-words';
 import type { OutlineKind } from '../ui';
@@ -89,13 +90,9 @@ export const isText = (block: Block): block is TextBlock => block.kind === 'text
 
 export type CacheMark = 'set' | 'auto';
 
-// The cache point after each block: its own, or one the engine sets itself before the first chat block and after the
-// last (keep in step with cachePoints in engine/pipeline.ts).
+// The cache point after each block: its own, or one the engine sets itself.
 export function cacheMarks(blocks: readonly Block[]): Map<string, CacheMark> {
-  const chat = (block: Block) => block.kind === 'slot' && block.slot === 'chat';
-  const first = blocks.findIndex(chat);
-  const last = blocks.findLastIndex(chat);
-  const auto = [first > 0 ? blocks[first - 1]!.id : null, last === -1 ? null : blocks[last]!.id];
+  const auto = autoCachePoints(blocks.map((block) => (block.kind === 'slot' && block.slot === 'chat' ? 'chat' : null))).map((index) => blocks[index]!.id);
   const marks = new Map<string, CacheMark>();
   for (const block of blocks) {
     if (block.cache) marks.set(block.id, 'set');

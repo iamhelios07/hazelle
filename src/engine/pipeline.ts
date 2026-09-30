@@ -258,10 +258,19 @@ export function assembleTranslation({ scope, prompt, translations, request, lang
 type ChatPart = { range: ChatRange; from: From };
 type CachePart = { cache: true };
 
-// The cache points: the last message sent up to each block marked 여기까지 캐시, and two the app sets itself, which the
-// editor's cacheMarks draws (keep the two in step): the end of the part before the chat, which stays the same from turn
-// to turn, and the chat's last message, which the next turn repeats. Not the request's last message: a block after the
-// chat moves on every turn, so a point there is never met again.
+export type CacheRole = 'chat' | 'depth' | null;
+
+// The two cache points the app sets itself, as indexes: the end of the part before the chat, which stays the same from
+// turn to turn, and the chat's last item, which the next turn repeats. Not the request's last message: a block after
+// the chat moves on every turn, so a point there is never met again. An entry at @@depth is placed among the chat's
+// messages, so it starts the chat's part as much as a message does.
+export function autoCachePoints(roles: readonly CacheRole[]): number[] {
+  const first = roles.findIndex((role) => role !== null);
+  const last = roles.lastIndexOf('chat');
+  return [...(first > 0 ? [first - 1] : []), ...(last === -1 ? [] : [last])];
+}
+
+// The cache points: the last message sent up to each block marked 여기까지 캐시, and the app's own.
 function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
   const sent: Sent[] = [];
   const point = (index: number) => {
@@ -272,12 +281,8 @@ function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
     if (!('cache' in part)) sent.push(part);
     else if (sent.length) point(sent.length - 1);
   }
-  const chat = (from: From) => from.kind === 'block' && from.slot === 'chat';
-  // An entry at @@depth is placed among the chat's messages, so it starts the chat's part as much as a message does.
-  const first = sent.findIndex(({ from }) => chat(from) || from.kind === 'depth');
-  if (first > 0) point(first - 1);
-  const last = sent.findLastIndex(({ from }) => chat(from));
-  if (last !== -1) point(last);
+  const role = ({ from }: Sent): CacheRole => (from.kind === 'depth' ? 'depth' : from.kind === 'block' && from.slot === 'chat' ? 'chat' : null);
+  for (const index of autoCachePoints(sent.map(role))) point(index);
   return sent;
 }
 
