@@ -47,6 +47,8 @@ export function useLayer(active: boolean, layer: Layer) {
 
 // Shifts a popover sideways, through --nudge, back inside the screen's sides less the --menu-edge gutter.
 export function keepOnScreen(element: HTMLElement) {
+  // Measured unshifted: --nudge inherits, so a popover inside another would otherwise start from the outer one's shift.
+  element.style.setProperty('--nudge', '0px');
   const box = element.getBoundingClientRect();
   const edge = parseFloat(getComputedStyle(element).getPropertyValue('--menu-edge'));
   const room = document.documentElement.clientWidth;

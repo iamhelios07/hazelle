@@ -82,6 +82,17 @@ describe('addDefaults', () => {
     await addDefaults(store);
     expect(names()).toEqual(['내 번역', '내 프롬프트']);
   });
+
+  it('gives an account made before translation prompts its default translation prompt, keeping its own default prompt', async () => {
+    const { store } = await server.account();
+    const mine = await addPrompt(store, '내 프롬프트', 'conversation');
+    if (!mine.ok) throw new Error('not saved');
+    await setDefaultPrompt(store, mine.data.id);
+    await addDefaults(store);
+    const settings = store.get('settings', SETTINGS_ID)?.value;
+    expect([settings?.prompt, settings?.translatePrompt]).toEqual([mine.data.id, TRANSLATOR_ID]);
+    expect(store.get('prompt', STARTER_ID)).toBeNull();
+  });
 });
 
 describe('prompts', () => {
