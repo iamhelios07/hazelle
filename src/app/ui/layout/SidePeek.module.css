@@ -1,0 +1,78 @@
+/* Between the header and the composer, over the story; only the tab and a shown drawer take the pointer. */
+.peek {
+  position: absolute;
+  inset: var(--header-height) 0 var(--footer-space) 0;
+  z-index: var(--layer-menu);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.tab {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  padding: var(--space-12) var(--space-4);
+  border: var(--border-thin) solid var(--color-border);
+  border-right: 0;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  writing-mode: vertical-rl;
+  pointer-events: auto;
+  transform: translateY(-50%);
+}
+
+.tab:hover,
+.open .tab {
+  color: var(--color-text);
+}
+
+/* As wide as the story's text, so a bot's box lays out as it does in its message. It leaves a moment after the
+   pointer does, so a pointer passing from the tab to it does not close it. */
+.drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  width: min(calc(var(--read-width) - 2 * var(--read-gutter) + 2 * var(--space-20)), calc(100% - 2 * var(--space-12)));
+  max-height: 100%;
+  margin-right: var(--space-12);
+  padding: var(--space-16) var(--space-20) var(--space-20);
+  overflow-y: auto;
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-popover);
+  visibility: hidden;
+  transform: translateX(calc(100% + var(--space-12)));
+  transition:
+    transform var(--duration-slow) var(--ease-enter) var(--duration-fast),
+    visibility var(--duration-instant) linear calc(var(--duration-slow) + var(--duration-fast));
+}
+
+.tab:hover + .drawer,
+.drawer:hover,
+.drawer:focus-within,
+.open .drawer {
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition:
+    transform var(--duration-slow) var(--ease-enter),
+    visibility var(--duration-instant);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.title {
+  flex-grow: 1;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}

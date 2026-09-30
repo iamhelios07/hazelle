@@ -32,7 +32,7 @@ import { describeUnused } from '../common/unused';
 import { useAssetUrl, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, usePanelCovers, useViewport } from '../ui';
+import { useMenuHandle, useViewport } from '../ui';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
@@ -101,7 +101,6 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const scriptName = (script: number) => card?.regex[script]?.name.trim() || `표시 스크립트 ${script + 1}`;
   const status = besideBoxes(view, messages, beside).map((box) => ({ ...box, name: scriptName(box.script) }));
   const offered = view.drawn.map((scripts) => (bot ? scripts.filter((script) => !beside.includes(script)).map((script) => ({ script, name: scriptName(script) })) : []));
-  const covers = usePanelCovers();
   const url = useAssetUrl();
   const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
@@ -117,9 +116,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
   // 정보, 토글, 상태 and the persona and prompt lists take the same place beside the story, so one closes another.
-  // Where that place is beside the story, 상태 holds it while nothing else does.
-  const settled = (): { kind: 'status' } | null => (beside.length && !covers ? { kind: 'status' } : null);
-  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | { kind: 'status' } | Side | null>(settled);
+  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | { kind: 'status' } | Side | null>(null);
+  // 상태 shown over the story by its key or a tap, rather than by pointing at its tab.
+  const [peek, setPeek] = useState(false);
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
   // The versions shown the other way round from their default, the original in place of the translation.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -313,7 +312,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
 
   function pinBox(script: number) {
     if (!chat.character) return;
-    void track(setBeside(store, chat.character, script, true)).then((saved) => (saved.ok ? setPanel({ kind: 'status' }) : toast.failed(saved)));
+    void track(setBeside(store, chat.character, script, true)).then((saved) => (saved.ok ? setPeek(true) : toast.failed(saved)));
   }
 
   async function unpinBox(script: number) {
@@ -321,7 +320,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     if (!character) return;
     const saved = await track(setBeside(store, character, script, false));
     if (!saved.ok) return toast.failed(saved);
-    if (beside.length === 1) setPanel(null);
+    if (beside.length === 1) {
+      setPeek(false);
+      setPanel((current) => (current?.kind === 'status' ? null : current));
+    }
     toast.undoable('옆에 고정을 풀었어요', () => void setBeside(store, character, script, true));
   }
 
@@ -348,6 +350,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     decor: { bot, css: bot ? resolveAssets(css, url) : '', url },
     status,
     offered,
+    peek,
     translate,
     sendLanguage,
     translation,
@@ -398,8 +401,13 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.
       toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
-      closePanel: () => setPanel((current) => (current?.kind === 'status' ? null : settled())),
-      toggleStatus: () => setPanel((current) => (current?.kind === 'status' ? null : { kind: 'status' })),
+      closePanel: () => setPanel(null),
+      setPeek,
+      // 옆에 두기: 상태 as a panel beside the story, for as long as the chat stays open.
+      keepStatus: () => {
+        setPeek(false);
+        setPanel({ kind: 'status' });
+      },
       pinBox,
       unpinBox: (script: number) => void unpinBox(script),
       openDialog: (which: 'rename' | 'reading') => setDialog(which),

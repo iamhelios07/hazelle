@@ -11,7 +11,7 @@ import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
 import { useReading } from './ChatReading';
-import { ChatStatus } from './ChatStatus';
+import { ChatStatus, ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useChat, type Side } from './useChat';
 
@@ -34,6 +34,11 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
   const { id, messages, streaming, panel, scroll, prompt, persona, actions } = chat;
   useShortcut('personas', () => actions.toggleSide('personas'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));
+  useShortcut('status', () => {
+    if (!chat.status.length) return false;
+    if (panel?.kind === 'status') actions.closePanel();
+    else actions.setPeek(!chat.peek);
+  });
   const inUse = { personas: persona.kind === 'persona' ? persona.persona.id : null, prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
   return (
     <>
@@ -55,6 +60,7 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
             panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           )
         }
+        peek={chat.status.length > 0 && panel?.kind !== 'status' && <ChatStatusPeek chat={chat} />}
         reading={reading.value}
         compact={scroll.away}
         scrollRef={scroll.scrollRef}

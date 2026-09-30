@@ -12,6 +12,7 @@ export const SHORTCUTS = {
   prompts: { label: '프롬프트 (채팅에서는 옆 패널)', hint: '프롬프트', keys: [{ key: 'p', mod: true }] },
   shortcutList: { label: '단축키 보기', hint: '단축키', keys: [{ key: '/', mod: true }] },
   sidebar: { label: '사이드바 접기 · 펴기', hint: '사이드바', keys: [{ key: 'b', mod: true }] },
+  status: { label: '상태 보기 · 닫기 (옆에 고정한 상자가 있는 채팅)', hint: '상태', keys: [{ key: '.', mod: true }] },
   send: { label: '보내기', hint: '보내기', keys: [{ key: 'Enter', shift: false }] },
   newline: { label: '줄바꿈', hint: '줄바꿈', keys: [{ key: 'Enter', shift: true }] },
   stop: { label: '답장 멈추기', hint: '멈추기', keys: [{ key: 'Escape' }] },
@@ -28,7 +29,7 @@ type Name = keyof typeof SHORTCUTS;
 
 // Where each shortcut works, in the order 단축키 lists them.
 export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: readonly Name[] }[] = [
-  { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar'] },
+  { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status'] },
   { title: '채팅', note: '입력창에서 동작해요. 화살표는 입력창이 비어 있을 때만 써요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit'] },
   { title: '프롬프트 편집', note: '블록과 토글을 고친 것을 되돌려요. 글 칸 안에서는 글자를 되돌려요.', names: ['undo', 'redo'] },
 ];
