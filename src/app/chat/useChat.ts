@@ -24,7 +24,7 @@ import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
-import { blocked, displayChat, takeTurn, togglesOf, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, displayChat, takeTurn, togglesOf, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
@@ -118,17 +118,11 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
 
   useEffect(preloadTokenizer, []);
 
-  // 답장 번역: the latest reply awaits its translation from its first text, and is translated once it is whole,
-  // whichever way it came, and when the switch goes on. One that failed is left for 다시 번역.
-  const latest = last?.role === 'assistant' ? shown(last) : null;
-  const awaited =
-    translate.replies && latest && latest.receipt?.state !== 'failed' && !latest.translation && !translating.held.has(latest.id) && !translating.failed.has(latest.id) && texts.at(-1)!.trim()
-      ? latest.id
-      : null;
-  const waiting = awaited && last!.live === null && !translating.live.has(awaited) ? awaited : null;
+  // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateLatest's.
+  const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
   useEffect(() => {
-    if (waiting) translateMessage(last!);
-  }, [waiting]);
+    translateLatest(session, chatId, id === null ? { chat, messages: unstarted ? [unstarted] : [] } : undefined);
+  }, [item, turn, translating, translate.replies, greeting]);
 
   // A reply starting here while 정보 is open shows its own information.
   const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
@@ -139,7 +133,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   function report(failure: TurnFailure | null) {
     if (!failure) return;
     if (blocks(failure)) return setStopped(true);
-    toast.show(describeTurnFailure(failure), failure.kind === 'unsaved' ? { label: '다시 저장', onClick: () => void talk.saveAgain().then(report) } : undefined);
+    toast.show(describeTurnFailure(failure), failure.kind === 'unsaved' ? { label: '다시 저장', onClick: () => void talk.saveAgain(failure.reply).then(report) } : undefined);
   }
 
   // Back to the foot of the story, which also puts away tools a tap pinned open.

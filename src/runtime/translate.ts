@@ -7,12 +7,13 @@ import type { ApiFailure } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { translateSwitches } from './characters';
 import { appendTranslation } from './chat-log';
+import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate } from './generate';
 import { modelProfile } from './profiles';
 import { translationPrompt } from './prompts';
 import type { ObjectStore } from './store';
-import { receiptOf, type Talk } from './talk';
+import { receiptOf } from './talk';
 import { tokenizer } from './tokenizer';
 
 // What one translation is made from: the chat, whose character's 번역 picks the prompt and the language and whose
@@ -87,6 +88,7 @@ export type Translating = { live: ReadonlyMap<string, string>; failed: ReadonlyM
 // The translations of the chats' messages. Unlike replies, several run at once, one per version, and each goes
 // on when its chat is left.
 export class Translator {
+  private closed = false;
   private state: Translating = { live: new Map(), failed: new Map(), held: new Map() };
   private readonly aborts = new Map<string, AbortController>();
   private readonly listeners = new Set<() => void>();
@@ -94,7 +96,7 @@ export class Translator {
   constructor(
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
-    private readonly talk: Talk,
+    private readonly costs: Costs,
   ) {}
 
   readonly subscribe = (listener: () => void) => {
@@ -116,14 +118,14 @@ export class Translator {
   }
 
   // chat: its id, saved or not yet; a translation for a chat not saved when it ends is held.
+  // closed: a reply stopped by a lock is still saved, and its follow-up must not start a call.
   translate(chat: string, version: string, input: TranslateInput) {
-    if (this.aborts.has(version)) return;
+    if (this.closed || this.aborts.has(version)) return;
     const abort = new AbortController();
     this.aborts.set(version, abort);
     this.change(version, { live: '', failed: null });
     const deps = { store: this.store, credentials: this.credentials };
     void translate(deps, input, abort.signal, (text) => this.change(version, { live: text }))
-      .finally(() => this.aborts.delete(version))
       .then(
         async (made) => {
           if (!made.ok) return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
@@ -131,16 +133,18 @@ export class Translator {
           const saved = await appendTranslation(this.store, chat, version, made.translation);
           // The live text goes once the store holds the translation, so the original never shows in between.
           this.change(version, { live: null, failed: saved.ok ? null : { kind: 'unsaved', failure: saved } });
-          if (saved.ok) this.talk.settle(chat, made.translation.receipt!);
+          if (saved.ok) this.costs.settle(chat, made.translation.receipt!);
         },
         (error: unknown) => {
           this.change(version, { live: null });
           throw error;
         },
-      );
+      )
+      .finally(() => this.aborts.delete(version));
   }
 
   close() {
+    this.closed = true;
     for (const abort of this.aborts.values()) abort.abort();
   }
 }

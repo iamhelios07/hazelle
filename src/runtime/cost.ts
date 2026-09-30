@@ -1,5 +1,8 @@
 import { resolveConnection } from '../connectors/registry';
 import type { Connection, Cost } from '../connectors/types';
+import type { Receipt } from '../model/chat';
+import { appendCost } from './chat-log';
+import type { ObjectStore } from './store';
 import { pause } from './pause';
 import { relayJson, type RelayFailure } from './relay';
 
@@ -23,5 +26,31 @@ export async function settleCost(connection: Connection, replyId: string, signal
     const booked = !(answer.failure.kind === 'provider' && answer.failure.status === 404);
     if (booked || attempt === WAITS_MS.length) return answer;
     if (!(await pause(WAITS_MS[attempt]!, signal))) return { ok: false, failure: { kind: 'stopped' } };
+  }
+}
+
+export class Costs {
+  private readonly abort = new AbortController();
+  private readonly settling = new Set<string>();
+
+  constructor(private readonly store: ObjectStore) {}
+
+  // Asked again when a reply shows 확인 중 after a reload, since the page that wrote it may have closed before
+  // the cost came.
+  settle(chat: string, receipt: Receipt) {
+    const connection = this.store.get('connection', receipt.connection);
+    if (this.abort.signal.aborted || receipt.cost !== 'pending' || !receipt.replyId || !connection || this.settling.has(receipt.replyId)) return;
+    const replyId = receipt.replyId;
+    this.settling.add(replyId);
+    void settleCost(connection.value, replyId, this.abort.signal)
+      .then(async (settled) => {
+        if (this.abort.signal.aborted) return;
+        await appendCost(this.store, chat, replyId, settled.ok ? settled.cost : null);
+      })
+      .finally(() => this.settling.delete(replyId));
+  }
+
+  close() {
+    this.abort.abort();
   }
 }
