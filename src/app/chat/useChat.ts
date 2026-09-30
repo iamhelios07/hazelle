@@ -75,7 +75,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const greetings = card?.greetings.filter((text) => text.trim()) ?? [];
   // The ids the greetings are saved under, so their random tags roll the same before and after the first send.
   const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
-  const opening: Shown | null =
+  const unstarted: Shown | null =
     item === null && card && greetings.length > 0
       ? {
           id: 'opening',
@@ -87,7 +87,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
         }
       : null;
   // A new chat shows its turn while it is saved, under the id it is saved as.
-  const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, chatId);
+  const messages: Shown[] = withTurn(item?.messages ?? (unstarted ? [unstarted] : []), turn, chatId);
+  // withTurn copies every message, so the greeting is the copy the screen holds, or no press on it matches.
+  const opening = unstarted && messages[0]!;
   const texts = displayChat(session, chatId, chat, messages);
   const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
