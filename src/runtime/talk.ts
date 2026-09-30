@@ -3,8 +3,8 @@ import type { Assembled } from '../engine/pipeline';
 import type { Message, Receipt, ReceiptError } from '../model/chat';
 import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
-import { appendCost, appendReply, appendUserMessage, type Said, type Written } from './chat-log';
-import { settleCost } from './cost';
+import { appendReply, appendUserMessage, type Said, type Written } from './chat-log';
+import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate, type Reply } from './generate';
 import type { ObjectStore } from './store';
@@ -32,8 +32,8 @@ export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; sa
 export type Sent = { request: Reply['request']; prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
-// but not saved; saveAgain tries once more.
-export type TalkFailure = RouteFailure | { kind: 'unsent'; failure: ApiFailure } | { kind: 'unsaved'; failure: ApiFailure };
+// but not saved; saveAgain(reply) tries it again.
+export type TalkFailure = RouteFailure | { kind: 'unsent'; failure: ApiFailure } | { kind: 'unsaved'; reply: string; failure: ApiFailure };
 
 // The chat's messages with the turn laid over them, until its entries are saved.
 export function withTurn(messages: Message[], turn: Turn | null, chat: string): Shown[] {
@@ -63,9 +63,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
 export class Talk {
   private turn: Turn | null = null;
   private abort: AbortController | null = null;
-  private unsaved: { chat: string; reply: Written } | null = null;
-  private readonly lookups = new AbortController();
-  private readonly settling = new Set<string>();
+  private readonly unsaved = new Map<string, { chat: string; reply: Written }>();
   private readonly listeners = new Set<() => void>();
   // By the id of the version each reply wrote.
   private readonly sentBy = new Map<string, Sent>();
@@ -73,6 +71,8 @@ export class Talk {
   constructor(
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
+    private readonly costs: Costs,
+    private readonly saved: (chat: string) => void,
   ) {}
 
   readonly subscribe = (listener: () => void) => {
@@ -93,33 +93,25 @@ export class Talk {
 
   close() {
     this.stop();
-    this.lookups.abort();
+    this.unsaved.clear();
     this.sentBy.clear();
   }
 
-  // A reply whose save failed is kept in memory for one more try.
-  async saveAgain(): Promise<TalkFailure | null> {
-    const unsaved = this.unsaved;
-    if (!unsaved) return null;
-    const saved = await appendReply(this.store, unsaved.chat, unsaved.reply);
-    if (!saved.ok) return { kind: 'unsaved', failure: saved };
-    this.unsaved = null;
-    this.settle(unsaved.chat, unsaved.reply.receipt);
-    return null;
+  async saveAgain(reply: string): Promise<TalkFailure | null> {
+    const unsaved = this.unsaved.get(reply);
+    return unsaved ? this.save(unsaved.chat, unsaved.reply) : null;
   }
 
-  // Looks up a cost the provider books after the reply. Asked again when a reply shows 확인 중 after a
-  // reload, since the page that wrote it may have closed before the cost came.
-  settle(chat: string, receipt: Receipt) {
-    const connection = this.store.get('connection', receipt.connection);
-    if (receipt.cost !== 'pending' || !receipt.replyId || !connection || this.settling.has(receipt.replyId)) return;
-    const replyId = receipt.replyId;
-    this.settling.add(replyId);
-    void settleCost(connection.value, replyId, this.lookups.signal).then(async (settled) => {
-      if (this.lookups.signal.aborted) return;
-      await appendCost(this.store, chat, replyId, settled.ok ? settled.cost : null);
-      this.settling.delete(replyId);
-    });
+  private async save(chat: string, reply: Written): Promise<TalkFailure | null> {
+    const saved = await appendReply(this.store, chat, reply);
+    if (!saved.ok) {
+      this.unsaved.set(reply.id, { chat, reply });
+      return { kind: 'unsaved', reply: reply.id, failure: saved };
+    }
+    this.unsaved.delete(reply.id);
+    this.costs.settle(chat, reply.receipt);
+    this.saved(chat);
+    return null;
   }
 
   private set(turn: Turn | null) {
@@ -163,13 +155,7 @@ export class Talk {
       const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed };
       // Kept before the save, whose store change is what shows the reply's 정보.
       this.sentBy.set(reply.id, { request: answer.request, prompt });
-      const saved = await appendReply(this.store, chat, written);
-      if (!saved.ok) {
-        this.unsaved = { chat, reply: written };
-        return { kind: 'unsaved', failure: saved };
-      }
-      this.settle(chat, receipt);
-      return null;
+      return await this.save(chat, written);
     } finally {
       // On a throw too: a turn left set turns every later send away, and a reply still streaming would write into the next.
       abort.abort();

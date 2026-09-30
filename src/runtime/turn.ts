@@ -18,7 +18,7 @@ import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
 import { startChat, type Greetings, type Said } from './chat-log';
-import type { Ask, TalkFailure, Turn } from './talk';
+import { withTurn, type Ask, type TalkFailure, type Turn } from './talk';
 import { tokenizer } from './tokenizer';
 import { translate, type TranslateFailure, type TranslateInput } from './translate';
 
@@ -123,6 +123,20 @@ export const displayChat = (reader: Reader, id: string | null, chat: Chat, messa
 // What a translation in this chat is made from: one of messages, or the user's message after them.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
   return { chat, scope: scopeOf(reader, id, chat, messages), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
+}
+
+export function translateLatest(session: Pick<Session, 'store' | 'talk' | 'translator'>, id: string, opening?: { chat: Chat; messages: Message[] }) {
+  const stored = session.store.get('chat', id);
+  const chat = stored?.value ?? opening?.chat;
+  if (!chat || !translateSwitches(session.store, chat.character).replies) return;
+  const messages = withTurn(stored ? fold(session.store.children('entry', id)) : opening!.messages, session.talk.snapshot(), id);
+  const last = messages.at(-1);
+  if (!last || last.role !== 'assistant' || last.live !== null) return;
+  const version = shown(last);
+  const { live, held, failed } = session.translator.snapshot();
+  if (version.receipt?.state === 'failed' || version.translation || live.has(version.id) || held.has(version.id) || failed.has(version.id)) return;
+  if (!displayChat(session, id, chat, messages).at(-1)!.trim()) return;
+  session.translator.translate(id, version.id, translationInput(session, id, chat, messages, { kind: 'message', index: messages.length - 1 }));
 }
 
 // A scope a turn can send from, or why not.

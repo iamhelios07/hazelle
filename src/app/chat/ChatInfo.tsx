@@ -4,7 +4,7 @@ import { calls, shown, type Receipt } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
-import { useTalk } from '../session';
+import { useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentRequest } from './ChatSent';
 import { cost, seconds, speed, tokens, UNKNOWN } from '../common/receipt';
@@ -43,7 +43,7 @@ const timeFacts = (receipt: Receipt) => [
 ];
 
 export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
-  const talk = useTalk();
+  const { talk, costs } = useSession();
   const [tab, setTab] = useState<(typeof TABS)[number]['value']>('reply');
   const replies = messages.filter((message) => message.role === 'assistant');
   const reply = replies.find((message) => message.id === id) ?? replies.at(-1);
@@ -56,8 +56,8 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
   // A cost still 확인 중 after a reload is looked up again, for every call a continued reply took and its translation.
   useEffect(() => {
     if (!chat) return;
-    for (const call of [...(receipt ? calls(receipt) : []), ...(translated ? [translated] : [])]) if (call.cost === 'pending') talk.settle(chat, call);
-  }, [chat, receipt, translated, talk]);
+    for (const call of [...(receipt ? calls(receipt) : []), ...(translated ? [translated] : [])]) costs.settle(chat, call);
+  }, [chat, receipt, translated, costs]);
 
   const stepper = (
     <>
