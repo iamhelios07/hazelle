@@ -29,7 +29,7 @@ export function useCharacterActions() {
     const copied = await copyCharacter(store, id, `${character.card.name} (사본)`, (step) => setBusy({ id, label: describeStep(step) }));
     setBusy(null);
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
-    toast.show('사본을 만들었어요. 사본을 고쳐도 원본은 그대로예요.');
+    toast.show('사본을 만들었어요.', { detail: '사본을 고쳐도 원본은 그대로예요.' });
     navigate({ kind: 'edit', character: copied.data });
   }
 
@@ -37,7 +37,7 @@ export function useCharacterActions() {
   async function remove(shelf: Shelf): Promise<boolean> {
     const { id, character } = shelf;
     if (!(await mark(id, Date.now()))) return false;
-    toast.undoable(`‘${character.card.name}’ ${withChats(shelf)} 지웠어요. ${KEEP_DAYS}일 안에는 ‘지운 캐릭터’에서 되살릴 수 있어요.`, () => void mark(id, null));
+    toast.undoable(`‘${character.card.name}’ ${withChats(shelf)} 지웠어요.`, () => void mark(id, null), `${KEEP_DAYS}일 안에는 ‘지운 캐릭터’에서 되살릴 수 있어요.`);
     return true;
   }
 

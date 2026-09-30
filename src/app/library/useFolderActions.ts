@@ -31,8 +31,9 @@ export function useFolderActions() {
     const { folders: gone, up } = removed.data;
     const inside = gone.length > 1 ? `와 안의 폴더 ${gone.length - 1}개` : '';
     toast.undoable(
-      `‘${folder.value.name}’ 폴더${inside}를 지웠어요. 캐릭터는 ${up ? `‘${up.value.name}’ 폴더로` : '폴더 밖으로'} 옮겼어요.`,
+      `‘${folder.value.name}’ 폴더${inside}를 지웠어요.`,
       () => void restoreFolder(store, removed.data).then((restored) => restored.ok || toast.failed(restored)),
+      `캐릭터는 ${up ? `‘${up.value.name}’ 폴더로` : '폴더 밖으로'} 옮겼어요.`,
     );
     return removed.data;
   }

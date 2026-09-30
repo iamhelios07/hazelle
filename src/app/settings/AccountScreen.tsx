@@ -32,7 +32,7 @@ export function AccountScreen({ back }: { back: Back | null }) {
           label="로그아웃"
           help="이 기기에서 나가요. 저장한 것은 서버에 잠긴 채로 남아요."
           control={
-            <Button variant="secondary" size="sm" onClick={() => void onLogout().then((failure) => failure && toast.show(failure))}>
+            <Button variant="secondary" size="sm" onClick={() => void onLogout().then((failure) => failure && toast.error(failure))}>
               로그아웃
             </Button>
           }

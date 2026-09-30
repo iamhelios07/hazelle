@@ -35,7 +35,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
 
   async function picture(file: File) {
     const made = await thumbnail({ bytes: new Uint8Array(await file.arrayBuffer()), type: file.type }).catch(() => null);
-    if (made === null) return toast.show('이 그림은 열 수 없어요.');
+    if (made === null) return toast.error('이 그림은 열 수 없어요.');
     setPersona((current) => ({ ...current, picture: made }));
     await save({ picture: made });
   }
@@ -49,7 +49,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     await flush();
     const removed = await removePersona(store, id);
     if (!removed.ok) {
-      if (removed.error === 'default') return toast.show('기본 페르소나는 지울 수 없어요. 다른 페르소나를 기본으로 정한 뒤 지워 주세요.');
+      if (removed.error === 'default') return toast.error('기본 페르소나는 지울 수 없어요.', { detail: '다른 페르소나를 기본으로 정한 뒤 지워 주세요.' });
       return toast.failed(removed, '지우지 못했어요.');
     }
     onRemoved();

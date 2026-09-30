@@ -266,13 +266,13 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
     if (!removed.ok) return toast.failed(removed);
     const stored = removed.data;
     navigate({ kind: 'shelf', character: stored.value.character });
-    toast.undoable('채팅을 지웠어요', () => void restoreChat(store, stored).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })));
+    toast.undoable('채팅을 지웠어요', () => void restoreChat(store, stored).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })), item.title);
   }
 
   function copy(text: string) {
     navigator.clipboard.writeText(text).then(
       () => toast.show('복사했어요'),
-      () => toast.show('복사하지 못했어요. 브라우저가 클립보드를 막았어요.'),
+      () => toast.error('복사하지 못했어요.', { detail: '브라우저가 클립보드를 막았어요.' }),
     );
   }
 
@@ -326,7 +326,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
     const saved = await track(setStatusScript(store, character, script, on));
     if (!saved.ok) return toast.failed(saved);
     if (!on && statusScripts.length === 1) setPeek(false);
-    toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, script, !on));
+    toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, script, !on), [scriptName(script), card?.name].filter(Boolean).join(' · '));
   }
 
   // 옆에 두기, or on false 탭으로 접기, for every chat of the character.

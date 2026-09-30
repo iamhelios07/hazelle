@@ -235,12 +235,12 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     await flush();
     const removed = await removeProfile(store, id);
     if (!removed.ok) {
-      if (removed.error === 'default') return toast.show('기본 설정은 지울 수 없어요. 다른 설정을 기본으로 정한 뒤 지워 주세요.');
+      if (removed.error === 'default') return toast.error('기본 설정은 지울 수 없어요.', { detail: '다른 설정을 기본으로 정한 뒤 지워 주세요.' });
       return toast.failed(removed, '지우지 못했어요.');
     }
     navigate({ kind: 'profiles' });
-    const note = users.length ? ` 이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 골라야 보낼 수 있어요.` : '';
-    toast.undoable(`${removed.data.value.name} 설정을 지웠어요.${note}`, () => void restoreProfile(store, removed.data));
+    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 골라야 보낼 수 있어요.` : undefined;
+    toast.undoable(`${removed.data.value.name} 설정을 지웠어요.`, () => void restoreProfile(store, removed.data), note);
   }
 
   const detailSet = DETAIL.filter((field) => shown[field] !== undefined).length + (shown.stop ? 1 : 0) + (shown.systemAsUser ? 1 : 0);

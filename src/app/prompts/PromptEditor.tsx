@@ -5,7 +5,6 @@ import type { Stored } from '../../model/kinds';
 import { slotsOf, SLOTS, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
-import { describeFailure } from '../common/failure';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useConnections, useSettings, useStore } from '../session';
 import { typing, useShortcut } from '../shortcuts';
@@ -42,13 +41,13 @@ import { EMPTY_USE, promptName, usePromptUse } from './usePromptUse';
 const MODEL = 'model';
 const TOGGLES = 'toggles';
 const SORT_WORDS = {
-  conversation: { default: '새 채팅의 기본', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: '기본 프롬프트는 지울 수 없어요. 다른 프롬프트를 기본으로 정한 뒤 지워 주세요.' },
+  conversation: { default: '새 채팅의 기본', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: ['기본 프롬프트는 지울 수 없어요.', '다른 프롬프트를 기본으로 정한 뒤 지워 주세요.'] },
   translate: {
     default: '기본 번역 프롬프트',
     makeDefault: '번역 프롬프트를 따로 고르지 않은 채팅이 이 프롬프트로 번역해요',
-    refused: '기본 번역 프롬프트는 지울 수 없어요. 다른 번역 프롬프트를 기본으로 정한 뒤 지워 주세요.',
+    refused: ['기본 번역 프롬프트는 지울 수 없어요.', '다른 번역 프롬프트를 기본으로 정한 뒤 지워 주세요.'],
   },
-} satisfies Record<PromptSort, { default: string; makeDefault: string; refused: string }>;
+} satisfies Record<PromptSort, { default: string; makeDefault: string; refused: [string, string] }>;
 const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 누르면 순서를 바꿔요. Enter로 글을 고치고, Delete로 빼요. 맨 위가 맨 처음 보내는 블록, 맨 아래가 답장 직전이에요.';
 
 type Pane = 'toggles' | null;
@@ -210,12 +209,12 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const gone = latest.current.toggles[at];
     if (!gone) return;
     const step = perform(removeToggle(gone, at));
-    toast.undoable(`‘${gone.label}’ 토글을 지웠어요. 글 속 조건은 그대로예요.`, () => undo(step));
+    toast.undoable(`‘${gone.label}’ 토글을 지웠어요.`, () => undo(step), '글 속 조건은 그대로예요.');
   };
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);
     perform(renameKey(toggle, to));
-    toast.show(count ? `이름을 바꾸고 글 속 조건 ${count}곳도 함께 바꿨어요.` : '이름을 바꿨어요.');
+    toast.show('이름을 바꿨어요.', count ? { detail: `글 속 조건 ${count}곳도 함께 바꿨어요.` } : undefined);
   };
   const pickModel = async (role: Role, ref: ModelRef | null) => {
     const saved = await setPromptModel(store, stored.id, role, ref);
@@ -232,7 +231,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const copied = await copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`);
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
     onCopied(copied.data.id);
-    toast.show('사본을 만들었어요. 이름부터 바꿔 보세요.');
+    toast.show('사본을 만들었어요.', { detail: '이름부터 바꿔 보세요.' });
   };
   const makeDefault = async () => {
     const saved = await setDefaultPrompt(store, stored.id);
@@ -241,10 +240,10 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const erase = async () => {
     await save.flush();
     const removed = await removePrompt(store, stored.id);
-    if (!removed.ok) return removed.error === 'default' ? toast.show(words.refused) : toast.failed(removed, '지우지 못했어요.');
+    if (!removed.ok) return removed.error === 'default' ? toast.error(words.refused[0], { detail: words.refused[1] }) : toast.failed(removed, '지우지 못했어요.');
     onErased();
     toast.undoable(`‘${promptName(removed.data.value.name)}’을(를) 지웠어요.`, () => {
-      void restorePrompt(store, removed.data).then((restored) => restored.ok || toast.show(`되돌리지 못했어요. ${describeFailure(restored)}`));
+      void restorePrompt(store, removed.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
     });
   };
 
