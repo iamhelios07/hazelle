@@ -34,13 +34,13 @@ const CONTEXT = 'Context of the chat, for reference only. Never translate or out
 
 // The account's default translation prompt, added once (runtime/prompts).
 export function translatorPrompt(): TranslatePrompt {
-  const named = () => ({ id: crypto.randomUUID(), name: null });
+  const named = (name: string | null = null) => ({ id: crypto.randomUUID(), name });
   return {
     task: 'translate',
     name: '기본 번역',
     toggles: [],
     blocks: [
-      { ...named(), kind: 'text', role: 'system', text: INSTRUCTIONS, mark: null },
+      { ...named('번역 지시'), kind: 'text', role: 'system', text: INSTRUCTIONS, mark: null },
       { ...named(), kind: 'slot', slot: 'description', role: 'system', wrapper: `${CONTEXT}\n---\nThe character: {{char}}.\n{{slot}}` },
       { ...named(), kind: 'slot', slot: 'persona', role: 'system', wrapper: `${CONTEXT}\n---\nThe user's character: {{user}}.\n{{slot}}` },
       {

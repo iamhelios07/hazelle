@@ -71,7 +71,7 @@ and only this folder styles elements.**
 | controls | `SearchField` | `SearchField.module.css` | A search box |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
 | controls | `Stepper` | `Stepper.module.css` | A whole number stepped one at a time between two bounds, such as the story's text size |
-| controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once |
+| controls | `Switch` | `Switch.module.css` | An on/off setting that takes effect at once, dimmed while it has no effect |
 | controls | `TextField` | `TextField.module.css` | A labeled input or text area with its hint or error, and an ⓘ explanation by its label |
 | controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
@@ -96,7 +96,7 @@ and only this folder styles elements.**
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
-| overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark; a small form opened the same way (kind dialog) |
+| overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark; a small form opened the same way (kind dialog), and a menu opened inside it |
 | overlays | `Toast` | `Toast.module.css` | A short notice, above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
 | feedback | `Callout` | `Callout.module.css` | A warning or success note, with an optional action under it |

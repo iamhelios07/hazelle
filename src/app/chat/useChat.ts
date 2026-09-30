@@ -88,8 +88,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, chatId);
   const texts = displayChat(session, chatId, chat, messages);
   const translate = translateSwitches(store, chat.character);
-  // 보낼 언어: the engine sends in English until the switches hold the language (§6.3).
-  const sendLanguage = languageLabel('English');
+  const sendLanguage = languageLabel(translate.send);
   const translateModel = chatModel(store, chat, 'translate');
   const busy = turn !== null;
   const streaming = busy && turn.chat === chatId;

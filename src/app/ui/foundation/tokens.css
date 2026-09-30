@@ -241,6 +241,7 @@
   /* The gap a menu keeps from the screen's sides, the phone gutter. layers.ts reads it too. */
   --menu-edge: var(--space-16);
   --menu-max-height: 70vh;
+  --menu-inner-max-height: 45vh;
   --chip-max-width: 240px;
   --field-choice-width: 220px;
   --chip-max-width-narrow: 132px;

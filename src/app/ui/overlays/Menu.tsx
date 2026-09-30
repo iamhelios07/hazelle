@@ -1,5 +1,5 @@
 import { Check, type LucideIcon } from 'lucide-react';
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { Item } from '../collections/Item';
 import { Icon } from '../foundation/Icon';
 import { keepOnScreen, useLayer } from './layers';
@@ -57,9 +57,11 @@ type Props = {
 
 const CloseMenu = createContext(() => {});
 
-// One menu is open at a time: opening one closes the other, as a press outside it would. Only keys reach another
-// menu's button while one is open.
-let shown: (() => void) | null = null;
+// One menu is open at a time, apart from the menus a menu opens inside itself, such as a choice in a small form:
+// opening one closes every other that does not hold it, as a press outside would. Only keys reach another menu's
+// button while one is open.
+let shown: (() => void)[] = [];
+const Holders = createContext<readonly (() => void)[]>([]);
 
 // Every menu opened from a button. An item closes it. Esc and an item give the focus back to the button that opened
 // it, or to the menu's own button when that one has gone.
@@ -85,16 +87,18 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
     if (open) panel.current?.querySelector<HTMLElement>('input, textarea, [role^="menuitem"], button')?.focus();
   }, [open]);
 
+  const holders = useContext(Holders);
+  const hide = useMemo(() => () => menu.set(CLOSED), [menu]);
+  const held = useMemo(() => [...holders, hide], [holders, hide]);
   // Before paint, so two menus are never drawn at once.
   useLayoutEffect(() => {
     if (!open) return;
-    shown?.();
-    const hide = () => menu.set(CLOSED);
-    shown = hide;
+    for (const other of shown.filter((each) => !holders.includes(each))) other();
+    shown = [...shown, hide];
     return () => {
-      if (shown === hide) shown = null;
+      shown = shown.filter((each) => each !== hide);
     };
-  }, [open, menu]);
+  }, [open, holders, hide]);
 
   useLayoutEffect(() => {
     if (panel.current) keepOnScreen(panel.current);
@@ -105,7 +109,9 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
       {trigger({ ...opener, popup: kind })}
       {open && (
         <div ref={panel} className={`${styles.menu} ${styles[place]} ${styles[size]} ${kind === 'dialog' ? styles.dialog : ''}`} role={kind} aria-label={label}>
-          <CloseMenu.Provider value={() => close(true)}>{children}</CloseMenu.Provider>
+          <Holders.Provider value={held}>
+            <CloseMenu.Provider value={() => close(true)}>{children}</CloseMenu.Provider>
+          </Holders.Provider>
         </div>
       )}
     </div>

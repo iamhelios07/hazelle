@@ -36,6 +36,16 @@
   padding: var(--space-14) var(--space-16);
 }
 
+/* A menu opened inside another, such as a choice in a small form: the outer one stops clipping while it is open, and
+   the inner one stays short enough to fit beside it. */
+.menu:has(.menu) {
+  overflow-y: visible;
+}
+
+.menu .menu {
+  max-height: var(--menu-inner-max-height);
+}
+
 .below-start {
   top: calc(100% + var(--space-8));
   left: 0;

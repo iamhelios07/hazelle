@@ -32,3 +32,12 @@
   inset-inline-start: calc(100% - var(--control-sm) + 2px);
   background: var(--color-on-accent);
 }
+
+.switch:disabled {
+  border-color: var(--color-border);
+  cursor: default;
+}
+
+.switch:disabled::before {
+  background: var(--color-text-faint);
+}
