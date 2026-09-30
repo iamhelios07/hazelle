@@ -219,6 +219,8 @@ const TAIL_CHARS = 1500;
 export type TranslationInput = {
   // The chat's, its messages as shown.
   scope: ChatScope;
+  // The display scripts whose boxes are pinned beside the story (옆에 고정), which a message's source leaves out.
+  take: ReadonlySet<number>;
   prompt: TranslatePrompt;
   // Each of scope.messages' translation text, or null.
   translations: (string | null)[];
@@ -233,8 +235,8 @@ export type TranslationInput = {
 // A translation prompt's blocks as the messages sent. source is what goes out to be translated: a message as it is
 // displayed (after its CBS and display scripts), which is what the reader would otherwise read, or the user's input.
 // A translation holds no chat, so entries placed at a depth, or into a text a card replaces, are not sent in it.
-export function assembleTranslation({ scope, prompt, translations, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
-  const { texts, variables } = renderChat('display', scope);
+export function assembleTranslation({ scope, take, prompt, translations, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
+  const { texts, variables } = renderChat('display', scope, take);
   const before = request.kind === 'message' ? request.index : texts.length;
   const source = request.kind === 'message' ? texts[request.index]! : request.text;
   const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, seed, role: 'user' as const, text: request.text, time: null }];

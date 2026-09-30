@@ -18,7 +18,8 @@ import { tokenizer } from './tokenizer';
 
 // What one translation is made from: the chat, whose character's 번역 picks the prompt and the language and whose
 // layers the 보조 모델 a prompt without a model takes, its scope with each message's translation text or null, and what to translate.
-export type TranslateInput = { chat: Chat; scope: ChatScope; translations: (string | null)[]; request: TranslationRequest };
+// take: the display scripts whose boxes are pinned beside the story, which the source leaves out.
+export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest };
 
 // prompt-missing: the translation prompt chosen (own) or the default is gone. failed: the call's receipt says why, and
 // a cut one that wrote nothing is failed too.
@@ -37,7 +38,7 @@ type Deps = { store: ObjectStore; credentials: Credentials };
 // wrote, and its receipt says it was cut.
 export async function translate(
   { store, credentials }: Deps,
-  { chat, scope, translations, request }: TranslateInput,
+  { chat, scope, take, translations, request }: TranslateInput,
   signal: AbortSignal,
   onText: (text: string) => void,
 ): Promise<{ ok: true; translation: Translation } | { ok: false; failure: TranslateFailure }> {
@@ -56,7 +57,7 @@ export async function translate(
     connection: route.connection.value,
     model: route.model,
     settings: profile.profile.value.settings,
-    messages: assembleTranslation({ scope, prompt, translations, request, language, seed: crypto.randomUUID(), countTokens }).messages,
+    messages: assembleTranslation({ scope, take, prompt, translations, request, language, seed: crypto.randomUUID(), countTokens }).messages,
     signal,
     onText: (phase, chunk) => {
       if (phase !== 'text') return;

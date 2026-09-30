@@ -44,12 +44,14 @@ const scope: ChatScope = {
   pick: 'luna:chat',
 };
 const translate = (input: Pick<Parameters<typeof assembleTranslation>[0], 'request' | 'language'> & Partial<Parameters<typeof assembleTranslation>[0]>) =>
-  assembleTranslation({ scope, prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], seed: 'seed', countTokens: (text) => text.length, ...input });
+  assembleTranslation({ scope, take: new Set(), prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], seed: 'seed', countTokens: (text) => text.length, ...input });
 
 describe('the default translation prompt', () => {
   it('translates a displayed message into Korean, with the character, the persona and the messages before it with their translations', () => {
     const { source, messages } = translate({ request: { kind: 'message', index: 1 }, language: 'Korean' });
     expect(source).toBe('The LAMP is lit, jin.');
+    // A box pinned beside the story is not translated with its message.
+    expect(translate({ request: { kind: 'message', index: 1 }, language: 'Korean', take: new Set([0]) }).source).toBe('The  is lit, jin.');
     expect(messages.map(({ role }) => role)).toEqual(['system', 'system', 'system', 'system', 'user']);
     const instructions = messages[0]!.content.split('\n');
     expect(instructions[1]).toBe('Target language: Korean.');

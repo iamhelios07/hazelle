@@ -126,11 +126,14 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
 
 // Each message's text as the chat shows it, for its log, its title and its preview, and the bot's CSS for its log.
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
-// The boxes the character pinned beside the story leave every message, unless 봇 꾸밈 is off.
-export function displayChat(reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null): Display {
-  const character = chat.character === null ? null : reader.store.get('character', chat.character)?.value;
-  const take = new Set(character?.decor === false ? [] : (character?.beside ?? []));
-  return display({ ...scopeOf(reader, id, chat, messages), screen }, take);
+export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null): Display =>
+  display({ ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat));
+
+// The boxes the character pinned beside the story (옆에 고정), which leave every message and what is translated of
+// it, unless 봇 꾸밈 is off.
+function pinned({ store }: Reader, chat: Chat): ReadonlySet<number> {
+  const character = chat.character === null ? null : store.get('character', chat.character)?.value;
+  return new Set(character?.decor === false ? [] : (character?.beside ?? []));
 }
 
 // 상태: each pinned script's box from the latest message that drew one. A reply still being written is passed
@@ -148,7 +151,7 @@ export function besideBoxes(shown: Display, messages: Shown[], beside: readonly 
 
 // What a translation in this chat is made from: one of messages, or the user's message after them.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
-  return { chat, scope: scopeOf(reader, id, chat, messages), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
+  return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
 }
 
 export function translateLatest(session: Pick<Session, 'store' | 'talk' | 'translator'>, id: string, opening?: { chat: Chat; messages: Message[] }) {
