@@ -224,7 +224,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     toast.undoable('메시지를 지웠어요', () => void restoreMessage(store, id, message.id));
   }
 
-  // The copy is saved one entry after another, so a long chat takes a while.
+  // A long chat is saved in several requests, so the copy takes a moment.
   async function branch(message: Shown) {
     if (!item || branching) return;
     setBranching(true);
