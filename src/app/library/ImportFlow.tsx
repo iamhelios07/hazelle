@@ -7,6 +7,7 @@ import { importCharacter } from '../../runtime/characters';
 import { thumbnail } from '../../runtime/picture';
 import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
+import { COMMAND } from '../common/words';
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Callout, Dialog, DropOverlay, Section, Stack, Text, useFileDrop } from '../ui';
@@ -36,7 +37,7 @@ const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   'prebuilt-asset-command': () => '에셋 명령',
   'depth-prompt': () => '깊이 프롬프트',
   'disable-ui-prompt': (count) => `@@disable_ui_prompt ${count}곳`,
-  'cbs-tag': (count) => `지원하지 않는 CBS 태그 ${count}개`,
+  'cbs-tag': (count) => `지원하지 않는 ${COMMAND} ${count}개`,
   'regex-stage': (count) => `지원하지 않는 단계의 정규식 ${count}개`,
   module: () => '읽지 못한 모듈',
   'toggle-line': (count) => `읽지 못한 토글 줄 ${count}개`,

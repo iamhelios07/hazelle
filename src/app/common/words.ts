@@ -13,6 +13,9 @@ export const AUX_HELP = '번역처럼 대화 밖에서 하는 일에 써요. 번
 
 export const SETTINGS = '설정';
 
+// A {{…}} tag in a prompt or a card's text.
+export const COMMAND = '명령어';
+
 // 설정's pages, which SettingsNav lists and a sentence points to.
 export const PAGES = { prompts: '프롬프트', personas: '페르소나', connections: '연결', profiles: '모델 설정', defaults: '기본값', account: '계정' };
 

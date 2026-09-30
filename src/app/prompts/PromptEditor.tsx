@@ -12,6 +12,7 @@ import { useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
+import { commandSnippet } from './commands';
 import { conditionSnippet, countUses, draftOf, newBlock, withMark, type Draft, type NewBlock } from './edits';
 import {
   addBlock,
@@ -113,7 +114,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   const textRef = useRef<HTMLTextAreaElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  // A selection to set once the text it falls in is on the page: after 조건 넣기, or Enter from the outline.
+  // A selection to set once the text it falls in is on the page: after 조건 넣기 or 명령어 넣기, or Enter from the outline.
   const select = useRef<[number, number] | 'name' | 'text' | null>(null);
   const applySelect = () => {
     const want = select.current;
@@ -197,12 +198,12 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const step = perform(setWrapper(target, wrapper));
     if (wrapper === null) toast.undoable('감싸는 글을 뺐어요.', () => undo(step));
   };
-  const condition = (toggle: Toggle) => {
+  const typeSnippet = (snippet: (selected: string) => { text: string; select: [number, number] }) => {
     const area = textRef.current!;
     const { selectionStart: start, selectionEnd: end } = area;
-    const snippet = conditionSnippet(toggle, area.value.slice(start, end));
-    select.current = [start + snippet.select[0], start + snippet.select[1]];
-    typeInto(area, [start, end], snippet.text);
+    const { text, select: [from, to] } = snippet(area.value.slice(start, end));
+    select.current = [start + from, start + to];
+    typeInto(area, [start, end], text);
   };
   const dropToggle = (key: string) => {
     const at = latest.current.toggles.findIndex((toggle) => toggle.key === key);
@@ -373,7 +374,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           onCache={() => cacheAt(block.id)}
           onMove={(to) => move(index, to)}
           onRemove={() => remove(block.id)}
-          onCondition={condition}
+          onCondition={(toggle) => typeSnippet((selected) => conditionSnippet(toggle, selected))}
+          onCommand={(command) => typeSnippet(() => commandSnippet(command))}
           onNewToggle={() => {
             setAddingToggle(true);
             pick(TOGGLES);

@@ -40,6 +40,7 @@ function define(names: string, min: number, run: Run) {
 
 export const normalize = (name: string) => name.toLowerCase().replace(/[\s_-]/g, '');
 export const handlerFor = (name: string) => HANDLERS.get(normalize(name));
+export const tagNames = () => [...HANDLERS.keys()];
 
 // Tags Risu has that risu-alpha does not evaluate, normalized. They stay as written, and import counts them.
 const UNSUPPORTED = new Set([
