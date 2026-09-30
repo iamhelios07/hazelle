@@ -4,8 +4,7 @@ import type { Block, ChatRange, ChatSlot, PromptSort, RecentSlot, Role, TextBloc
 import { Button, ChoiceGroup, Divider, Empty, IconButton, MarkupArea, Menu, MenuHeading, MenuItem, Row, Section, SettingRow, Stack, Stepper, Switch, Tag, Text, TitleField } from '../ui';
 import { blockTitle, describeRange, firstLine, MARKS, RANGES, rangeKey, ROLES, SLOT, type CacheMark } from './blocks';
 import { CommandMenu } from './CommandMenu';
-import type { Command } from './commands';
-import { RECENT_MAX } from './edits';
+import { RECENT_MAX, type Snippet } from './edits';
 
 type Props = {
   block: Block;
@@ -29,7 +28,7 @@ type Props = {
   onMove: (to: number) => void;
   onRemove: () => void;
   onCondition: (toggle: Toggle) => void;
-  onCommand: (command: Command) => void;
+  onInsert: (snippet: Snippet) => void;
   onNewToggle: () => void;
   textRef: Ref<HTMLTextAreaElement>;
   nameRef: Ref<HTMLInputElement>;
@@ -40,7 +39,7 @@ const CACHE_HELP = {
   auto: '앱이 여기에 캐시 지점을 알아서 둬요. 모델 설정에서 캐시를 켠 모델에만 보내요.',
 };
 
-export function BlockPane({ block, sort, index, count, toggles, authorNote, onChange, onRole, onRange, onCount, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onCommand, onNewToggle, textRef, nameRef }: Props) {
+export function BlockPane({ block, sort, index, count, toggles, authorNote, onChange, onRole, onRange, onCount, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onInsert, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
   const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
   const placeholder = block.kind === 'slot' ? SLOT[block.slot].name : firstLine(block.text) || '이름 붙이기';
@@ -79,7 +78,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
               <MenuItem icon={Plus} label="새 토글 만들기" onClick={onNewToggle} />
             </Menu>
           )}
-          {block.kind === 'text' && <CommandMenu sort={sort} onInsert={onCommand} />}
+          {block.kind === 'text' && <CommandMenu sort={sort} onInsert={onInsert} />}
           <Menu label={`‘${title}’ 더 보기`} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`‘${title}’ 더 보기`} title="더 보기" {...opener} />}>
             {block.kind === 'text' && sort === 'conversation' && (
               <>

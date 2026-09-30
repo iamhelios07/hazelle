@@ -12,8 +12,7 @@ import { useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
-import { commandSnippet } from './commands';
-import { conditionSnippet, countUses, draftOf, newBlock, withMark, type Draft, type NewBlock } from './edits';
+import { conditionSnippet, countUses, draftOf, newBlock, withMark, type Draft, type NewBlock, type Snippet } from './edits';
 import {
   addBlock,
   addToggle,
@@ -198,7 +197,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const step = perform(setWrapper(target, wrapper));
     if (wrapper === null) toast.undoable('감싸는 글을 뺐어요.', () => undo(step));
   };
-  const typeSnippet = (snippet: (selected: string) => { text: string; select: [number, number] }) => {
+  const typeSnippet = (snippet: (selected: string) => Snippet) => {
     const area = textRef.current!;
     const { selectionStart: start, selectionEnd: end } = area;
     const { text, select: [from, to] } = snippet(area.value.slice(start, end));
@@ -375,7 +374,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           onMove={(to) => move(index, to)}
           onRemove={() => remove(block.id)}
           onCondition={(toggle) => typeSnippet((selected) => conditionSnippet(toggle, selected))}
-          onCommand={(command) => typeSnippet(() => commandSnippet(command))}
+          onInsert={(snippet) => typeSnippet(() => snippet)}
           onNewToggle={() => {
             setAddingToggle(true);
             pick(TOGGLES);

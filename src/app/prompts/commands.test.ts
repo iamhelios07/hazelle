@@ -1,30 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { unescapeCbs } from '../../engine/cbs/escape';
-import { evaluate, type CbsContext } from '../../engine/cbs/evaluate';
 import { normalize, tagNames } from '../../engine/cbs/tags';
 import { commandSnippet, COMMANDS } from './commands';
+import { tryExample } from './guides';
 
 const commands = COMMANDS.flatMap((group) => group.commands);
 
-const context: CbsContext = {
-  stage: 'prompt',
-  card: null,
-  persona: null,
-  prompt: null,
-  lore: [],
-  messages: [],
-  source: { seed: 'request-1' },
-  greeting: null,
-  variables: new Map(),
-  toggle: () => null,
-  model: null,
-  screen: null,
-  clock: { now: Date.UTC(2026, 9, 1), timeZone: 'UTC' },
-  language: 'Korean',
-  assets: [],
-  faces: { char: null, user: null },
-  pickSeed: 'pick-1',
-};
 
 describe('COMMANDS', () => {
   it('describes every tag the engine evaluates, once, under the name its form writes', () => {
@@ -34,7 +14,7 @@ describe('COMMANDS', () => {
   });
 
   it('gives the result each example shows', () => {
-    for (const { example } of commands.filter((command) => command.example)) expect(unescapeCbs(evaluate(example![0], context))).toBe(example![1]);
+    for (const { example } of commands.filter((command) => command.example)) expect(tryExample(example![0])).toBe(example![1]);
   });
 });
 

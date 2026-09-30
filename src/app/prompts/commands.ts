@@ -1,23 +1,34 @@
 import type { PromptSort } from '../../model/prompt';
+import type { Snippet } from './edits';
+import type { GuideId } from './guides';
 
 // names: the tag's names as src/engine/cbs/tags.ts defines them, the first the one written in form; empty for a block,
 // whose name the evaluator reads (evaluateBlock). commands.test.ts holds the two lists equal, and runs every example.
 // form: what 넣기 types, with its first Korean word as the place to write next.
-export type Command = { names: readonly string[]; form: string; what: string; example?: readonly [written: string, result: string] };
+// uses: why a prompt of that sort often holds it, for 여기서 자주 쓰는.
+export type Command = {
+  names: readonly string[];
+  form: string;
+  what: string;
+  example?: readonly [written: string, result: string];
+  uses?: Partial<Record<PromptSort, string>>;
+};
 // sorts: the prompts it works in, when not every one.
-export type CommandGroup = { title: string; sorts?: readonly PromptSort[]; commands: readonly Command[] };
+export type CommandGroup = { title: string; guide?: GuideId; sorts?: readonly PromptSort[]; commands: readonly Command[] };
 
 export const COMMANDS: readonly CommandGroup[] = [
   {
     title: '번역',
     sorts: ['translate'],
-    commands: [{ names: ['language'], form: '{{language}}', what: '번역할 언어의 영어 이름이에요.', example: ['Target: {{language}}', 'Target: Korean'] }],
+    commands: [
+      { names: ['language'], form: '{{language}}', what: '번역할 언어의 영어 이름이에요.', example: ['Target: {{language}}', 'Target: Korean'], uses: { translate: '지시문에 번역할 언어를 적을 때 써요. 캐릭터의 번역 설정에서 고른 언어가 들어가요.' } },
+    ],
   },
   {
     title: '캐릭터와 페르소나',
     commands: [
-      { names: ['char', 'bot'], form: '{{char}}', what: '캐릭터 이름이에요. 카드에 별명이 있으면 별명이에요.' },
-      { names: ['user'], form: '{{user}}', what: '페르소나 이름이에요.' },
+      { names: ['char', 'bot'], form: '{{char}}', what: '캐릭터 이름이에요. 카드에 별명이 있으면 별명이에요.', uses: { conversation: '지시문에서 캐릭터를 이름으로 부를 때 써요.', translate: '이름을 옮기지 말고 그대로 두라고 할 때 써요: Keep {{char}} and {{user}} as written.' } },
+      { names: ['user'], form: '{{user}}', what: '페르소나 이름이에요.', uses: { conversation: '지시문에서 나를 이름으로 부를 때 써요.', translate: '번역문 속 내 이름과 호칭이 흔들리지 않게 알려 줄 때 써요.' } },
       { names: ['persona', 'userpersona'], form: '{{persona}}', what: '페르소나 설명이에요.' },
       { names: ['description', 'chardesc'], form: '{{description}}', what: '카드의 캐릭터 설명이에요.' },
       { names: ['personality', 'charpersona'], form: '{{personality}}', what: '카드의 성격이에요.' },
@@ -49,36 +60,31 @@ export const COMMANDS: readonly CommandGroup[] = [
   },
   {
     title: '변수',
+    guide: 'vars',
     commands: [
-      { names: ['getvar'], form: '{{getvar::이름}}', what: '채팅 변수의 값이에요. 없으면 빈 글이에요.' },
+      { names: ['getvar'], form: '{{getvar::이름}}', what: '채팅 변수의 값이에요. 없으면 빈 글이에요.', uses: { conversation: '봇이 기록한 호감도나 날짜 같은 변수를 지시에 넣을 때 써요.' } },
       { names: ['getglobalvar'], form: '{{getglobalvar::toggle_키}}', what: '토글 값이에요. 이름은 toggle_ 뒤에 토글 키를 붙여요.' },
       { names: ['settempvar'], form: '{{settempvar::이름::값}}', what: '이 글 안에서만 쓰는 임시 변수에 값을 넣어요.', example: ['{{settempvar::n::3}}{{tempvar::n}}', '3'] },
       { names: ['tempvar', 'gettempvar'], form: '{{tempvar::이름}}', what: '임시 변수의 값이에요.' },
     ],
   },
   {
-    title: '조건과 반복',
+    title: '조건',
+    guide: 'when',
     commands: [
       {
         names: [],
         form: '{{#when::조건}}맞을 때 글{{:else}}아닐 때 글{{/when}}',
         what: '조건이 맞으면 앞의 글을, 아니면 {{:else}} 뒤의 글을 넣어요. 조건에 쓰는 말: is, isnot, >, <, >=, <=, and, or, not, var 변수, toggle 키, vis, visnot, tis, tisnot. 뒤에서부터 묶여요.',
         example: ['{{#when::3::>::2}}커요{{:else}}작아요{{/when}}', '커요'],
+        uses: { conversation: '토글에 따라 지시를 켜고 끌 때 써요. 조건 넣기가 토글 조건을 대신 써 줘요.' },
       },
       { names: [], form: '{{#if 조건}}글{{/if}}', what: '조건이 1이나 true면 글을 넣어요. 줄 앞 빈칸은 지워요. 빈칸을 두려면 #ifpure를 써요.', example: ['{{#if {{equal::a::a}}}}같아요{{/if}}', '같아요'] },
-      { names: [], form: '{{#each 배열 as 이름}}글{{/each}}', what: '배열의 항목마다 글을 한 번씩 넣어요. 글 속 {{slot::이름}}이 그 항목이에요.', example: ['{{#each ["가","나"] as x}}[{{slot::x}}]{{/each}}', '[가][나]'] },
-      { names: ['slot'], form: '{{slot::이름}}', what: '#each가 지금 도는 항목이에요.' },
-      { names: [], form: '{{#func 이름}}글{{/func}}', what: '글을 이름 붙인 함수로 둬요. {{call}}로 불러요.', example: ['{{#func 인사}}안녕, {{arg::1}}{{/func}}{{call::인사::미라}}', '안녕, 미라'] },
-      { names: ['call'], form: '{{call::이름::값}}', what: '함수를 부르고 값을 넘겨요.' },
-      { names: ['arg'], form: '{{arg::1}}', what: '함수 안에서, 넘겨받은 값이에요. 첫 값이 1번이에요.' },
-      { names: ['return'], form: '{{return::값}}', what: '함수를 여기서 끝내고 값을 돌려줘요.', example: ['{{#func 확인}}{{return::끝}}남은 글{{/func}}{{call::확인}}', '끝'] },
-      { names: [], form: '{{#pure}}글{{/pure}}', what: '안의 글을 명령어로 읽지 않고 쓴 그대로 넣어요.', example: ['{{#pure}}{{user}}{{/pure}}', '{{user}}'] },
-      { names: [], form: '{{#escape}}글{{/escape}}', what: '안의 글을 쓴 그대로 넣고, 뒤따르는 정규식에서도 명령어로 읽히지 않게 해요. 앞뒤 빈 줄까지 그대로 두려면 #puredisplay를 써요.', example: ['{{#escape}}{{user}}{{/escape}}', '{{user}}'] },
-      { names: [], form: '{{#code}}글{{/code}}', what: '줄바꿈과 탭을 지우고, \\n이나 \\u0041 같은 표기를 그 문자로 바꿔요.', example: ['{{#code}}\\u0041{{/code}}', 'A'] },
     ],
   },
   {
     title: '비교와 논리',
+    guide: 'when',
     commands: [
       { names: ['equal'], form: '{{equal::가::나}}', what: '두 글이 같으면 1, 다르면 0이에요.', example: ['{{equal::a::a}}', '1'] },
       { names: ['notequal'], form: '{{notequal::가::나}}', what: '두 글이 다르면 1이에요.', example: ['{{notequal::a::b}}', '1'] },
@@ -116,8 +122,9 @@ export const COMMANDS: readonly CommandGroup[] = [
   },
   {
     title: '무작위',
+    guide: 'random',
     commands: [
-      { names: ['random'], form: '{{random::가::나::다}}', what: '하나를 무작위로 골라요. 요청마다 새로 골라요.' },
+      { names: ['random'], form: '{{random::가::나::다}}', what: '하나를 무작위로 골라요. 요청마다 새로 골라요.', uses: { conversation: '보낼 때마다 다른 사건이나 분위기를 고르게 할 때 써요.' } },
       { names: ['pick'], form: '{{pick::가::나::다}}', what: '하나를 무작위로 고르되, 같은 채팅의 같은 차례에서는 늘 같은 것을 골라요.' },
       { names: ['randint'], form: '{{randint::1::10}}', what: '두 수 사이의 정수 하나예요. 두 수도 나올 수 있어요.' },
       { names: ['dice'], form: '{{dice::2d6}}', what: '주사위를 굴린 합이에요. 2d6은 6면체 둘이에요.' },
@@ -157,8 +164,11 @@ export const COMMANDS: readonly CommandGroup[] = [
     ],
   },
   {
-    title: '배열과 사전',
+    title: '배열과 반복',
+    guide: 'lists',
     commands: [
+      { names: [], form: '{{#each 배열 as 이름}}글{{/each}}', what: '배열의 항목마다 글을 한 번씩 넣어요. 글 속 {{slot::이름}}이 그 항목이에요.', example: ['{{#each ["가","나"] as x}}[{{slot::x}}]{{/each}}', '[가][나]'] },
+      { names: ['slot'], form: '{{slot::이름}}', what: '#each가 지금 도는 항목이에요.' },
       { names: ['makearray', 'array', 'a'], form: '{{makearray::가::나}}', what: '값들로 배열을 만들어요.', example: ['{{makearray::가::나}}', '["가","나"]'] },
       { names: ['makedict', 'dict', 'object', 'o', 'd'], form: '{{makedict::키=값}}', what: '키=값들로 사전을 만들어요.', example: ['{{makedict::이름=미라::나이=20}}', '{"이름":"미라","나이":"20"}'] },
       { names: ['arraylength'], form: '{{arraylength::배열}}', what: '배열의 항목 수예요.', example: ['{{arraylength::["가","나"]}}', '2'] },
@@ -174,6 +184,16 @@ export const COMMANDS: readonly CommandGroup[] = [
     ],
   },
   {
+    title: '함수',
+    guide: 'func',
+    commands: [
+      { names: [], form: '{{#func 이름}}글{{/func}}', what: '글을 이름 붙인 함수로 둬요. {{call}}로 불러요.', example: ['{{#func 인사}}안녕, {{arg::1}}{{/func}}{{call::인사::미라}}', '안녕, 미라'] },
+      { names: ['call'], form: '{{call::이름::값}}', what: '함수를 부르고 값을 넘겨요.' },
+      { names: ['arg'], form: '{{arg::1}}', what: '함수 안에서, 넘겨받은 값이에요. 첫 값이 1번이에요.' },
+      { names: ['return'], form: '{{return::값}}', what: '함수를 여기서 끝내고 값을 돌려줘요.', example: ['{{#func 확인}}{{return::끝}}남은 글{{/func}}{{call::확인}}', '끝'] },
+    ],
+  },
+  {
     title: '모델',
     commands: [
       { names: ['model'], form: '{{model}}', what: '이 요청을 받는 모델의 id예요.' },
@@ -182,22 +202,32 @@ export const COMMANDS: readonly CommandGroup[] = [
     ],
   },
   {
-    title: '줄바꿈과 특수 문자',
+    title: '글자 그대로',
+    guide: 'literal',
     commands: [
-      { names: ['br', 'newline'], form: '{{br}}', what: '줄바꿈이에요.' },
-      { names: ['blank', 'none'], form: '{{blank}}', what: '아무것도 넣지 않아요.' },
-      { names: ['cbr'], form: '{{cbr}}', what: '줄바꿈이 아니라 \\n 두 글자를 넣어요. {{cbr::3}}은 세 번이에요.' },
+      { names: [], form: '{{#pure}}글{{/pure}}', what: '안의 글을 명령어로 읽지 않고 쓴 그대로 넣어요.', example: ['{{#pure}}{{user}}{{/pure}}', '{{user}}'] },
+      { names: [], form: '{{#escape}}글{{/escape}}', what: '안의 글을 쓴 그대로 넣고, 뒤따르는 정규식에서도 명령어로 읽히지 않게 해요. 앞뒤 빈 줄까지 그대로 두려면 #puredisplay를 써요.', example: ['{{#escape}}{{user}}{{/escape}}', '{{user}}'] },
+      { names: [], form: '{{#code}}글{{/code}}', what: '줄바꿈과 탭을 지우고, \\n이나 \\u0041 같은 표기를 그 문자로 바꿔요.', example: ['{{#code}}\\u0041{{/code}}', 'A'] },
       { names: ['bo'], form: '{{bo}}', what: '{{를 명령어로 읽히지 않게 넣어요.', example: ['{{bo}}user{{bc}}', '{{user}}'] },
       { names: ['bc'], form: '{{bc}}', what: '}}를 명령어로 읽히지 않게 넣어요.' },
       { names: ['decbo'], form: '{{decbo}}', what: '{를 넣어요.' },
       { names: ['decbc'], form: '{{decbc}}', what: '}를 넣어요.' },
       { names: [':', '(', ')', '<', '>', ';'], form: '{{:}}', what: '그 문자를 명령어로 읽히지 않게 넣어요. ( ) < > ; 도 같아요.' },
-      { names: [], form: '{{// 메모}}', what: '모델에 보내지 않는 메모예요.', example: ['안녕{{// 메모}}', '안녕'] },
+    ],
+  },
+  {
+    title: '줄바꿈과 메모',
+    commands: [
+      { names: ['br', 'newline'], form: '{{br}}', what: '줄바꿈이에요.' },
+      { names: ['blank', 'none'], form: '{{blank}}', what: '아무것도 넣지 않아요.' },
+      { names: ['cbr'], form: '{{cbr}}', what: '줄바꿈이 아니라 \\n 두 글자를 넣어요. {{cbr::3}}은 세 번이에요.' },
+      { names: [], form: '{{// 메모}}', what: '모델에 보내지 않는 메모예요.', example: ['안녕{{// 메모}}', '안녕'], uses: { conversation: '지시문 곳곳에 왜 이렇게 썼는지 메모해 둘 때 써요.', translate: '지시문 곳곳에 왜 이렇게 썼는지 메모해 둘 때 써요.' } },
       { names: ['hiddenkey'], form: '{{hiddenkey::키}}', what: '로어북 글에 두면 다른 항목을 부르는 키로만 읽히고, 보내는 글에는 남지 않아요.' },
     ],
   },
   {
     title: '메시지와 화면에서만',
+    guide: 'vars',
     commands: [
       { names: ['setvar'], form: '{{setvar::이름::값}}', what: '채팅 변수에 값을 넣어요.' },
       { names: ['addvar'], form: '{{addvar::이름::숫자}}', what: '채팅 변수에 숫자를 더해요.' },
@@ -222,7 +252,7 @@ export const COMMANDS: readonly CommandGroup[] = [
 ];
 
 // The command as typed, and the selection after it: its first placeholder, else the caret after it.
-export function commandSnippet({ form }: Command): { text: string; select: [number, number] } {
+export function commandSnippet({ form }: Command): Snippet {
   const placeholder = /[가-힣]+(?: [가-힣]+)*/.exec(form);
   return { text: form, select: placeholder ? [placeholder.index, placeholder.index + placeholder[0].length] : [form.length, form.length] };
 }

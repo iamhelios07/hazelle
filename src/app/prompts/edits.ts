@@ -82,7 +82,10 @@ export function keyProblem(key: string, toggles: readonly Toggle[], own: string 
 
 // What 조건 넣기 puts in place of the selection: selected text becomes the first branch, not replaced by it.
 // select: the placeholder to type over next, the first branch's or, after a selection, the second's.
-export function conditionSnippet(toggle: Toggle, selected: string): { text: string; select: [number, number] } {
+// What an insert types over the selection, and the selection it leaves.
+export type Snippet = { text: string; select: [number, number] };
+
+export function conditionSnippet(toggle: Toggle, selected: string): Snippet {
   const branches =
     toggle.kind === 'check'
       ? [
