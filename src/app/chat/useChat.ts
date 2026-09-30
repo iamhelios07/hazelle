@@ -24,6 +24,7 @@ import { withTurn, type Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { blocked, displayChat, takeTurn, togglesOf, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
+import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
@@ -87,6 +88,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, chatId);
   const texts = displayChat(session, chatId, chat, messages);
   const translate = translateSwitches(store, chat.character);
+  // 보낼 언어: the engine sends in English until the switches hold the language (§6.3).
+  const sendLanguage = languageLabel('English');
   const translateModel = chatModel(store, chat, 'translate');
   const busy = turn !== null;
   const streaming = busy && turn.chat === chatId;
@@ -112,13 +115,14 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
 
   useEffect(preloadTokenizer, []);
 
-  // 답장 번역: the latest reply is translated once it is whole, whichever way it came, and when the switch goes on. One
-  // that failed is left for 다시 번역.
-  const latest = last?.role === 'assistant' && last.live === null ? shown(last) : null;
-  const waiting =
-    translate.replies && latest && latest.receipt?.state !== 'failed' && !latest.translation && !translating.held.has(latest.id) && !translating.live.has(latest.id) && !translating.failed.has(latest.id) && texts.at(-1)!.trim()
+  // 답장 번역: the latest reply awaits its translation from its first text, and is translated once it is whole,
+  // whichever way it came, and when the switch goes on. One that failed is left for 다시 번역.
+  const latest = last?.role === 'assistant' ? shown(last) : null;
+  const awaited =
+    translate.replies && latest && latest.receipt?.state !== 'failed' && !latest.translation && !translating.held.has(latest.id) && !translating.failed.has(latest.id) && texts.at(-1)!.trim()
       ? latest.id
       : null;
+  const waiting = awaited && last!.live === null && !translating.live.has(awaited) ? awaited : null;
   useEffect(() => {
     if (waiting) translateMessage(last!);
   }, [waiting]);
@@ -318,8 +322,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     messages,
     texts,
     translate,
+    sendLanguage,
     translateModel,
     translating,
+    awaited,
     flipped,
     opening,
     last,

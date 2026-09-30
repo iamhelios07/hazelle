@@ -4,6 +4,7 @@ import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
+import { withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
@@ -18,6 +19,10 @@ type Props = {
   // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
   // other way round from its default.
   translating: Translating;
+  // 답장 번역 will translate this version, being written or just written.
+  awaited: boolean;
+  // The label of the language a message is sent translated in.
+  sendLanguage: string;
   flipped: boolean;
   isLast: boolean;
   // The user's message right before the last reply, which 저장하고 답장 다시 받기 answers again.
@@ -44,7 +49,7 @@ type Props = {
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export function ChatMessage(props: Props) {
-  const { message, text: original, translating, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
+  const { message, text: original, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
@@ -56,6 +61,8 @@ export function ChatMessage(props: Props) {
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
   const text = flipped ? original : translatingText || (translation?.text ?? original);
+  // What shows until a translation's first text comes stays faded, and the translation then streams in its place.
+  const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live);
   const failed = receipt?.state === 'failed';
   const empty = original === '';
@@ -129,25 +136,28 @@ export function ChatMessage(props: Props) {
       </>
     );
   } else if (!empty || live) {
-    body = <Prose text={reveal.text} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />;
+    body = <Prose text={reveal.text} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />;
   }
 
   const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => actions.translate(message) };
   const translationMark =
-    translatingText === '' ? (
-      <Marker reason="translation" label="번역하는 중…" />
+    pending ? (
+      <Marker reason="translation" label="번역 기다리는 중" />
     ) : untranslated ? (
       <Marker reason="translation" label={`번역하지 못했어요. ${describeTranslateFailure(untranslated)}`} action={again} />
     ) : translatingText === null && !flipped && translation?.receipt?.state === 'cut' ? (
       <Marker reason="translation" label="번역이 여기서 잘렸어요" action={again} />
     ) : null;
-  const translateTool = mine ? (
-    translation && <IconButton icon={Languages} size="xs" label={flipped ? '내가 쓴 말 보기' : '모델에게 보낸 말 보기'} onClick={() => actions.flipTranslation(message)} />
-  ) : translation ? (
-    <IconButton icon={Languages} size="xs" label={flipped ? '번역 보기' : '원문 보기'} onClick={() => actions.flipTranslation(message)} />
-  ) : (
-    !empty && !failed && <IconButton icon={Languages} size="xs" label="번역" disabled={translatingText !== null} onClick={() => actions.translate(message)} />
+  const translateTool = !mine && !empty && !failed && (
+    <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => actions.translate(message)} />
   );
+  const flip = () => actions.flipTranslation(message);
+  const mark =
+    !translation || editing !== null
+      ? undefined
+      : mine
+        ? { label: `${withRo(sendLanguage)} 보냄`, action: flipped ? '내가 쓴 말 보기' : '보낸 말 보기', onClick: flip }
+        : { label: flipped ? '원문' : '번역', action: flipped ? '번역 보기' : '원문 보기', onClick: flip };
 
   const count = message.versions.length;
   const nextLabel = message.selected === count - 1 && !opening ? '새 답장 받기' : '다음';
@@ -208,6 +218,7 @@ export function ChatMessage(props: Props) {
       name={mine ? username : (character?.name ?? receipt?.modelName ?? modelName ?? '모델')}
       time={timeOfDay(version.at)}
       mine={mine && editing === null}
+      mark={mark}
       after={after}
       tools={tools}
       pinned={pinned}
