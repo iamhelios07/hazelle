@@ -2,6 +2,7 @@ import { FileText } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, ofSort } from '../../runtime/prompts';
 import { useChats, useSession, useSettings, useViews } from '../session';
+import { useToast } from '../toast';
 import { ChipButton, Divider, Icon, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
 
@@ -33,6 +34,8 @@ function PromptChoices({ chat }: { chat: OpenChat }) {
   const prompts = useViews().prompts.filter((each) => ofSort(each, 'conversation'));
   const chats = useChats();
   const settings = useSettings();
+  const toast = useToast();
+  const choose = (value: string | null) => void actions.setOwn('prompt', value).then((saved) => saved.ok || toast.failed(saved));
   const fallback = settings.prompt === undefined ? null : (prompts.find(({ id }) => id === settings.prompt) ?? null);
 
   const used = new Map<string, number>();
@@ -46,14 +49,14 @@ function PromptChoices({ chat }: { chat: OpenChat }) {
   return (
     <>
       <MenuHeading>이 채팅만 바뀌어요 · 최근 사용</MenuHeading>
-      <MenuItem label="기본 프롬프트 따르기" sub={fallback?.value.name ?? '기본 프롬프트가 없어요'} checked={!prompt.own} onClick={() => void actions.setOwn('prompt', null)} />
+      <MenuItem label="기본 프롬프트 따르기" sub={fallback?.value.name ?? '기본 프롬프트가 없어요'} checked={!prompt.own} onClick={() => choose(null)} />
       {[...prompts].sort(order).map((item) => (
         <MenuItem
           key={item.id}
           label={item.value.name}
           tag={item.id === settings.prompt ? <Tag tone="accent">기본</Tag> : undefined}
           checked={item.id === own}
-          onClick={() => void actions.setOwn('prompt', item.id)}
+          onClick={() => choose(item.id)}
         />
       ))}
     </>

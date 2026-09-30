@@ -4,8 +4,9 @@ import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { slotsOf, SLOTS, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel } from '../../runtime/assignment';
-import { copyPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
+import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
+import { useAutosave } from '../common/useAutosave';
 import { useStore, useViews } from '../session';
 import { useShortcut } from '../shortcuts';
 import { useToast } from '../toast';
@@ -36,7 +37,6 @@ import {
 import { ModelPane, modelWords } from './ModelPane';
 import { chatWarning } from './ranges';
 import { TogglePane } from './TogglePane';
-import { useAutosave } from './useAutosave';
 import { EMPTY_USE, promptName, usePromptUse } from './usePromptUse';
 
 const MODEL = 'model';
@@ -91,7 +91,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const { settings, connections } = useViews();
   const uses = usePromptUse().get(stored.id) ?? EMPTY_USE;
   const split = layout === 'split';
-  const save = useAutosave(stored.id);
+  const save = useAutosave<PromptPatch>((patch) => editPrompt(store, stored.id, patch));
   const sort = sortOf(stored.value);
   const words = SORT_WORDS[sort];
   const models = stored.value.task === undefined ? stored.value.models : null;
@@ -100,7 +100,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const latest = useRef(draft);
   // Another device's edit comes in while nothing here waits to be saved.
   useEffect(() => {
-    if (!save.idle()) return;
+    if (Object.keys(save.unsaved).length) return;
     latest.current = draftOf(stored.value);
     setDraft(latest.current);
   }, [stored]);
@@ -108,7 +108,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const patch = change(latest.current);
     latest.current = { ...latest.current, ...patch };
     setDraft(latest.current);
-    save.queue(patch);
+    save.change(patch);
   };
 
   const firstText = () => latest.current.blocks.find(isText)?.id ?? (models ? MODEL : latest.current.blocks[0]?.id) ?? MODEL;
@@ -380,7 +380,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   if (!split && drilled) {
     const title = open === MODEL ? '모델' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
-    return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_WORDS[save.state] }, body: page, open });
+    return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_WORDS[save.status ?? 'saved'] }, body: page, open });
   }
 
   const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `‘${promptName(stored.value.origin.name)}’의 사본` : null;
@@ -403,7 +403,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     subtitle,
     onBack,
     backLabel,
-    status: SAVE_WORDS[save.state],
+    status: SAVE_WORDS[save.status ?? 'saved'],
     actions: (
       <>
         {split && (

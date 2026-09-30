@@ -16,7 +16,7 @@ export function CharacterEditScreen({ id, initial, back }: { id: string; initial
 
   function change<K extends keyof Card>(field: K, value: Card[K]) {
     setCard((current) => ({ ...current, [field]: value }));
-    queue(field, value, field !== 'name' || !!(value as string).trim());
+    queue({ [field]: value }, field !== 'name' || !!(value as string).trim());
   }
 
   return (

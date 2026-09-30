@@ -3,6 +3,7 @@ import type { ModelRef } from '../../connectors/assignment';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem, type TranslateSwitches } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
+import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
 import { resetToggles, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import {
@@ -273,8 +274,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     void track(setChatModel(store, id, ref)).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  // null: follow the default again. A new chat holds it until its first send.
-  async function setOwn(field: Own, value: string | null): Promise<void> {
+  // null: follow the default again. A new chat holds it until its first send. The caller reports a failure.
+  async function setOwn(field: Own, value: string | null): Promise<{ ok: true } | ApiFailure> {
     if (!id) {
       setUnsaved((current) => {
         const next = { ...current };
@@ -282,10 +283,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
         else next[field] = value;
         return next;
       });
-      return;
+      return { ok: true };
     }
-    const saved = await track(WRITE_OWN[field](store, id, value));
-    if (!saved.ok) toast.failed(saved);
+    return track(WRITE_OWN[field](store, id, value));
   }
 
   // A value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat.

@@ -32,7 +32,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
 
   function change(field: 'name' | 'nickname' | 'description', value: string) {
     setPersona((current) => ({ ...current, [field]: value }));
-    queue(field, value, field !== 'name' || !!value.trim());
+    queue({ [field]: value }, field !== 'name' || !!value.trim());
   }
 
   async function picture(file: File) {
