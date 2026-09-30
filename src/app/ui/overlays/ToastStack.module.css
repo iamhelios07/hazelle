@@ -1,0 +1,61 @@
+.stack {
+  --toward: -1;
+  position: fixed;
+  z-index: var(--layer-toast);
+  right: var(--space-24);
+  bottom: var(--space-24);
+  width: min(var(--toast-width), calc(100% - 2 * var(--space-16)));
+  height: var(--front);
+}
+
+/* Open, the stack's box covers every notice and the gaps between them, so moving between them keeps it open. */
+.open {
+  height: calc(var(--total) + (var(--count) - 1) * var(--space-8));
+}
+
+.item {
+  composes: riseIn from '../foundation/motion.module.css';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateY(calc(var(--toward) * var(--index) * var(--toast-peek))) scale(calc(1 - var(--index) * var(--toast-shrink)));
+  /* The front one paints over those behind it, which come after it. */
+  z-index: calc(var(--count) - var(--index));
+  transform-origin: bottom center;
+  transition:
+    transform var(--duration-slow) var(--ease-enter),
+    filter var(--duration-slow) var(--ease-enter);
+}
+
+.open .item {
+  transform: translateY(calc(var(--toward) * (var(--lift) + var(--index) * var(--space-8))));
+}
+
+/* Behind the front one, a notice shows as a card's edge: the front one's height, its words hidden. */
+.behind {
+  height: var(--front);
+  overflow: hidden;
+  filter: brightness(calc(1 - 2 * var(--index) * var(--toast-shrink)));
+}
+
+.behind > * > * > * {
+  opacity: 0;
+}
+
+@media (max-width: 959px) {
+  .stack {
+    --toward: 1;
+    top: calc(var(--header-height) + var(--space-8));
+    bottom: auto;
+    left: var(--space-16);
+    right: var(--space-16);
+    width: auto;
+  }
+
+  .item {
+    top: 0;
+    bottom: auto;
+    transform-origin: top center;
+  }
+}

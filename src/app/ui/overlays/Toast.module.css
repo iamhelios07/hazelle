@@ -1,34 +1,95 @@
-/* Relative, so the toast keeps its layer in a page's slot too (ToastSlot), not only when floating.
-   A card rather than a capsule, so it never reads as one more button beside the chat's pill. */
+/* A light card on the dark app, so it is seen at a glance. The kit's colors are turned for this surface here, so the
+   button and key caps inside keep their own styles. */
 .toast {
-  composes: dropIn from '../foundation/motion.module.css';
+  --color-text: var(--palette-ink-800);
+  --color-text-muted: var(--palette-lilac-600);
+  --color-bg: var(--palette-cream-100);
+  --color-border: var(--palette-ink-line);
+  --color-surface-hover: var(--palette-ink-wash);
+  --color-accent: var(--palette-ink-800);
+  --color-accent-hover: var(--palette-ink-600);
+  --color-on-accent: var(--palette-cream-100);
+  --color-focus: var(--palette-ink-800);
   position: relative;
-  z-index: var(--layer-toast);
-  max-width: var(--screen-narrow);
+  overflow: hidden;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  color: var(--color-text);
+  box-shadow: var(--shadow-toast);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+.row {
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  min-height: var(--control-md);
-  padding: var(--space-8) var(--space-16);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  box-shadow: var(--shadow-popover);
-  font-size: var(--text-sm);
+  padding: var(--space-12) var(--space-10) var(--space-14) var(--space-16);
 }
 
-.toast:has(> button) {
-  padding-right: var(--space-8);
-}
-
-.floating {
-  position: fixed;
-  left: 50%;
-  top: var(--space-16);
-  transform: translateX(-50%);
-  width: calc(100% - var(--space-32));
+.text {
+  flex-grow: 1;
+  min-width: 0;
 }
 
 .message {
-  flex-grow: 1;
+  font-weight: var(--weight-semibold);
+}
+
+.detail {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.action {
+  flex-shrink: 0;
+}
+
+.action button {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+/* A touch screen has no keys to press. */
+@media (hover: none) {
+  .action kbd {
+    display: none;
+  }
+}
+
+.error .action button {
+  color: var(--color-on-accent);
+}
+
+.band {
+  padding: var(--space-10) var(--space-16);
+  background: var(--color-warn);
+  font-weight: var(--weight-semibold);
+}
+
+.error .row {
+  align-items: flex-start;
+}
+
+.error .detail {
+  color: var(--color-text);
+  font-size: var(--text-md);
+}
+
+/* The time left: it runs down with the notice's life and stops with it. */
+.time {
+  composes: runDown from '../foundation/motion.module.css';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: var(--border-medium);
+  background: var(--palette-ink-trace);
+  transform-origin: left;
+  animation-duration: var(--life);
+}
+
+.paused .time {
+  animation-play-state: paused;
 }

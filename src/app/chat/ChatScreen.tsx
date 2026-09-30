@@ -4,7 +4,6 @@ import type { CharacterShelf } from '../../model/library';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useShortcut } from '../shortcuts';
-import { ToastSlot } from '../toast';
 import { ChatFrame, Pill } from '../ui';
 import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
@@ -46,7 +45,6 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
         title={<ChatHeading chat={chat} />}
         actions={<ChatHeaderActions chat={chat} reading={reading} />}
         above={scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
-        notice={<ToastSlot />}
         footer={<ChatComposer chat={chat} />}
         panel={
           panel?.kind === 'info' ? (

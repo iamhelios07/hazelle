@@ -157,7 +157,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   function report(failure: TurnFailure | null) {
     if (!failure) return;
     if (blocks(failure)) return setStopped(true);
-    toast.show(describeTurnFailure(failure), failure.kind === 'unsaved' ? { label: '다시 저장', onClick: () => void talk.saveAgain(failure.reply).then(report) } : undefined);
+    toast.error(describeTurnFailure(failure), failure.kind === 'unsaved' ? { action: { label: '다시 저장', onClick: () => void talk.saveAgain(failure.reply).then(report) } } : undefined);
   }
 
   // Back to the foot of the story, which also puts away tools a tap pinned open.

@@ -21,6 +21,7 @@ export const SHORTCUTS = {
   swipe: { label: '답장 넘기기 · 끝에서 새 답장 받기', hint: '답장 넘기기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
   saveEdit: { label: '수정 저장', hint: '저장', keys: [{ key: 'Enter', mod: true }] },
   cancelEdit: { label: '수정 취소', hint: '취소', keys: [{ key: 'Escape' }] },
+  undoToast: { label: '알림의 되돌리기 누르기', hint: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
   undo: { label: '되돌리기', hint: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
   redo: { label: '다시 하기', hint: '다시 하기', keys: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
 } as const satisfies Record<string, Shortcut>;
@@ -29,10 +30,17 @@ type Name = keyof typeof SHORTCUTS;
 
 // Where each shortcut works, in the order 단축키 lists them.
 export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: readonly Name[] }[] = [
-  { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status'] },
+  { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'undoToast'] },
   { title: '채팅', note: '입력창에서 동작해요. 화살표는 입력창이 비어 있을 때만 써요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit'] },
   { title: '프롬프트 편집', note: '블록과 토글을 고친 것을 되돌려요. 글 칸 안에서는 글자를 되돌려요.', names: ['undo', 'redo'] },
 ];
+
+const TEXT_INPUTS = new Set(['text', 'search', 'password']);
+// Ctrl+Z in a text field is the browser's own undo of what was typed there, which no shortcut takes.
+export function typing(event?: KeyboardEvent): boolean {
+  const target = event?.target;
+  return target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && TEXT_INPUTS.has(target.type)) || (target instanceof HTMLElement && target.isContentEditable);
+}
 
 // false passes the key on, to the handler mounted before this one and then to the browser. Without an event it
 // was run from a button or menu.

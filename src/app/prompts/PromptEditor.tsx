@@ -8,7 +8,7 @@ import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, s
 import { describeFailure } from '../common/failure';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useStore, useViews } from '../session';
-import { useShortcut } from '../shortcuts';
+import { typing, useShortcut } from '../shortcuts';
 import { useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
@@ -54,13 +54,6 @@ const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 �
 type Pane = 'toggles' | null;
 
 const CACHE_WORDS = { set: '여기까지 캐시', auto: '자동 캐시' } as const;
-
-const TEXT_INPUTS = new Set(['text', 'search', 'password']);
-// Ctrl+Z in a text field is the browser's own undo of what was typed there; the editor's steps are everything else.
-function typing(event?: KeyboardEvent): boolean {
-  const target = event?.target;
-  return target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && TEXT_INPUTS.has(target.type)) || (target instanceof HTMLElement && target.isContentEditable);
-}
 
 // side: the outline, beside the open part, in the split layout only. open: the part open, which a frame scrolls back
 // to the top of when it changes.
@@ -173,6 +166,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (split && step.block !== null && latest.current.blocks.some((each) => each.id === step.block)) pick(step.block);
     toast.show(`${words}: ${step.label}`);
   };
+  // The editor's steps are everything but what is typed in a text field.
   useShortcut('undo', (event) => (typing(event) ? false : report(undo(), '되돌렸어요')));
   useShortcut('redo', (event) => (typing(event) ? false : report(redo(), '다시 했어요')));
 

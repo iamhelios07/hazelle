@@ -15,6 +15,11 @@
   animation: drop var(--duration-fast) var(--ease-enter);
 }
 
+/* Its duration is the user's: the class that composes it sets animation-duration. */
+.runDown {
+  animation: runDown var(--duration-instant) linear forwards;
+}
+
 .spin {
   animation: spin var(--duration-spin) linear infinite;
 }
@@ -78,5 +83,11 @@
 
   40% {
     opacity: 1;
+  }
+}
+
+@keyframes runDown {
+  to {
+    transform: scaleX(0);
   }
 }

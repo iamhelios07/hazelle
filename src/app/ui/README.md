@@ -97,7 +97,8 @@ and only this folder styles elements.**
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark; a small form opened the same way (kind dialog), and a menu opened inside it |
-| overlays | `Toast` | `Toast.module.css` | A short notice, above every layer but the file drop |
+| overlays | `Toast` | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys) or error (a warn band, why, where to fix it). Its action's time runs down as a line |
+| overlays | `ToastStack` | `ToastStack.module.css` | Notices, newest in front, bottom right (under the header on a phone); pointing at it opens it and holds their time. Above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
 | feedback | `Callout` | `Callout.module.css` | A warning or success note, with an optional action under it |
 | feedback | `CodeBlock` | `CodeBlock.module.css` | Text as a program sent it, such as a request's address and body in 요청 원문 |

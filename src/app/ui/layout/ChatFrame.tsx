@@ -28,8 +28,6 @@ type Props = {
   children: ReactNode;
   // Floats above the composer: the 새 답장 pill.
   above: ReactNode;
-  // Floats under the header, apart from the pill: toasts.
-  notice: ReactNode;
   footer: ReactNode;
   panel?: ReactNode;
   // Over the story at its right edge: a SidePeek, such as 상태.
@@ -46,7 +44,7 @@ type Props = {
 // The chat page: a header, the story column that scrolls, the composer, and the 정보 panel beside it. The header and
 // the composer float over the story: the header hides while the story is read down, and comes back when it is scrolled
 // up, reached at its top or pointed at the page's top edge.
-export function ChatFrame({ back, title, actions, children, above, notice, footer, panel, peek, aside, reading, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, compact, scrollRef, onScroll }: Props) {
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -105,7 +103,6 @@ export function ChatFrame({ back, title, actions, children, above, notice, foote
             <div className={styles.actions}>{actions}</div>
           </header>
         </div>
-        <div className={styles.notice}>{notice}</div>
         <div className={styles.scroll} ref={scrollRef} onScroll={scrolled}>
           <div className={styles.content}>{children}</div>
         </div>

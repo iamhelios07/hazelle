@@ -4,4 +4,5 @@ export { DropOverlay } from './DropOverlay';
 export { Hint } from './Hint';
 export { Menu, MenuHeading, MenuItem, useMenuClose, useMenuHandle, useMenuOpener, type MenuHandle } from './Menu';
 export { useFileDrop } from './useFileDrop';
-export { Toast } from './Toast';
+export { Toast, type ToastAction } from './Toast';
+export { ToastStack } from './ToastStack';
