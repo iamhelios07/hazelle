@@ -46,21 +46,26 @@ const REPEATING: Record<Repeating, true> = { chat: true };
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const fail = (kind: PresetFailure['kind']): PresetResult => ({ ok: false, failure: { kind } });
 
-// Risu's preset container (compat spec, out-of-scope formats): RPack, gzip, then MessagePack
-// {type: 'preset', preset}, where preset is MessagePack under AES-GCM. The key is SHA-256 of a fixed string
-// and the IV is zero: the format hides the preset from casual reading, it does not protect it.
-export async function importPreset(bytes: Uint8Array): Promise<PresetResult> {
+// Risu's preset container (compat spec, out-of-scope formats), told apart by extension as Risu does: a .risup is
+// RPack over gzip, a .risupreset gzip alone. Inside is MessagePack {type: 'preset', preset}, where preset is
+// MessagePack under AES-GCM; presetVersion 0 names the field pres. The key is SHA-256 of a fixed string and the IV
+// is zero: the format hides the preset from casual reading, it does not protect it.
+export async function importPreset(fileName: string, bytes: Uint8Array): Promise<PresetResult> {
+  const name = fileName.toLowerCase();
+  const packed = name.endsWith('.risup');
+  if (!packed && !name.endsWith('.risupreset')) return fail('unreadable');
   let outer: unknown;
   try {
-    outer = readMsgpack(gunzipSync(unpack(bytes)));
+    outer = readMsgpack(gunzipSync(packed ? unpack(bytes) : bytes));
   } catch {
     return fail('unreadable');
   }
-  if (!isRecord(outer) || outer.type !== 'preset' || !(outer.preset instanceof Uint8Array)) return fail('not-preset');
+  const sealed = isRecord(outer) ? (outer.preset ?? outer.pres) : null;
+  if (!isRecord(outer) || outer.type !== 'preset' || !(sealed instanceof Uint8Array)) return fail('not-preset');
   let opened: ArrayBuffer;
   try {
     const key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode('risupreset')), 'AES-GCM', false, ['decrypt']);
-    opened = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(12) }, key, outer.preset.slice());
+    opened = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(12) }, key, sealed.slice());
   } catch {
     return fail('decrypt-failed');
   }

@@ -96,7 +96,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
 
   const actions = (
     <Row kind="actions">
-      <FileButton accept=".risup" size="sm" icon={Import} onFile={(file) => preset.take([file])}>
+      <FileButton accept=".risup,.risupreset" size="sm" icon={Import} onFile={(file) => preset.take([file])}>
         Risu 프리셋 가져오기
       </FileButton>
       <Button size="sm" icon={Plus} busy={adding === 'conversation'} onClick={() => void add('conversation')}>

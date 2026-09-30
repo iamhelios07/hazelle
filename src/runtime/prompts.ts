@@ -65,9 +65,9 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): P
 
 export type ImportPromptResult = { ok: true; id: string; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure | { kind: 'save'; failure: ApiFailure } };
 
-// A dropped .risup becomes a new conversation prompt; unsupported is what the summary counts.
-export async function importPrompt(store: ObjectStore, bytes: Uint8Array): Promise<ImportPromptResult> {
-  const read = await importPreset(bytes);
+// A dropped Risu preset becomes a new conversation prompt; unsupported is what the summary counts.
+export async function importPrompt(store: ObjectStore, fileName: string, bytes: Uint8Array): Promise<ImportPromptResult> {
+  const read = await importPreset(fileName, bytes);
   if (!read.ok) return read;
   const saved = await store.create('prompt', read.prompt);
   return saved.ok ? { ok: true, id: saved.data.id, unsupported: read.unsupported } : { ok: false, failure: { kind: 'save', failure: saved } };
@@ -91,7 +91,7 @@ export async function addDefaults(store: ObjectStore): Promise<void> {
 
 // The user's own Risu preset "🏓 핑퐁 간소화", through the one preset converter.
 async function starter(): Promise<ConversationPrompt | null> {
-  const read = await importPreset(await starterBytes());
+  const read = await importPreset('starter-prompt.risup', await starterBytes());
   return read.ok ? read.prompt : null;
 }
 

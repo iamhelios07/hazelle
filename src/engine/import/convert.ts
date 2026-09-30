@@ -73,7 +73,12 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
   const icon = pickIcon(assets);
   add(tally, 'asset', assets.length - (icon ? 1 : 0));
   if (spec === 'v2') add(tally, 'asset', list(risu.emotions).length + list(risu.additionalAssets).length + Object.keys(record(risu.vits)).length);
-  for (const trigger of module ? list(module.trigger) : list(risu.triggerscript)) add(tally, isLua(trigger) ? 'lua' : 'trigger');
+  for (const trigger of module ? list(module.trigger) : list(risu.triggerscript)) {
+    const effects = list(record(trigger).effect).map(record);
+    const lua = effects[0]?.type === 'triggerlua';
+    if (lua && text(effects[0]!.code).trim()) add(tally, 'lua');
+    else if (!lua && effects.some((effect) => !INERT.has(effect.type))) add(tally, 'trigger');
+  }
   if (text(risu.backgroundHTML).trim()) add(tally, 'background-html');
   if (text(risu.additionalText).trim()) add(tally, 'additional-text');
   if (risu.prebuiltAssetCommand === true) add(tally, 'prebuilt-asset-command');
@@ -138,7 +143,8 @@ function pickIcon(assets: unknown[]): Json | null {
   return icons.find((asset) => asset.name === 'main') ?? icons[0] ?? null;
 }
 
-const isLua = (trigger: unknown) => isRecord(trigger) && record(list(trigger.effect)[0]).type === 'triggerlua';
+// Header, comment and indent blocks do nothing on their own; most bots carry an empty pair of such triggers.
+const INERT = new Set<unknown>(['v2Header', 'v2Comment', 'v2EndIndent']);
 
 // Each line splits at its first '='; Risu cuts the value at a second '='. `key=` keeps '' as the
 // default, where Risu drops the line.

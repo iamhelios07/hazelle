@@ -192,7 +192,7 @@ describe('importCard', () => {
     expect(counts(imported)).toEqual({ module: 1 });
   });
 
-  it('counts what it cannot run and leaves it in the text', () => {
+  it('counts what it cannot run, but not a trigger that does nothing, and leaves it in the text', () => {
     const imported = json(
       v3({
         description: '{{img::x}} {{getvar::y}} {{ Trigger_ID }}',
@@ -207,7 +207,12 @@ describe('importCard', () => {
             additionalText: 'extra',
             prebuiltAssetCommand: true,
             toggles: 'sims=시뮬레이터 모드\n모드 고르기',
-            triggerscript: [{ effect: [{ type: 'triggerlua', code: '' }] }, { effect: [{ type: 'setvar' }] }],
+            triggerscript: [
+              { effect: [{ type: 'triggerlua', code: 'setChatVar("hp", "1")' }] },
+              { effect: [{ type: 'setvar' }] },
+              { effect: [{ type: 'triggerlua', code: ' ' }] },
+              { effect: [{ type: 'v2Header' }, { type: 'v2EndIndent' }] },
+            ],
             customScripts: [
               { comment: 't', in: 'a', out: 'b', type: 'edittrans' },
               { comment: 'off', in: 'a', out: 'b', type: 'disabled' },

@@ -9,7 +9,7 @@ import { Button, Callout, Dialog, DropOverlay, Outcome, Section, Stack, Text, us
 import { promptName } from './usePromptUse';
 
 const FAILURE: Record<PresetFailure['kind'], string> = {
-  unreadable: '파일을 읽지 못했어요. 깨졌거나 Risu 프리셋(.risup)이 아니에요.',
+  unreadable: '파일을 읽지 못했어요. 깨졌거나 Risu 프리셋(.risup, .risupreset)이 아니에요.',
   'not-preset': 'Risu 파일이지만 프리셋이 아니에요. 캐릭터와 모듈은 여기서 가져올 수 없어요.',
   'decrypt-failed': '프리셋을 열지 못했어요. 파일이 깨졌을 수 있어요.',
   'no-template': '프롬프트 템플릿을 쓰지 않는 옛 프리셋이라 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
@@ -34,7 +34,7 @@ const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: str
 type Opened = { file: string; id: string; prompt: ConversationPrompt; unsupported: PresetUnsupported[] };
 type Result = Opened | { file: string; failure: string };
 
-// A .risup picked or dropped on the prompt list becomes a new prompt. While the list is open, its drop takes files
+// A Risu preset picked or dropped on the prompt list becomes a new prompt. While the list is open, its drop takes files
 // from the app's character import.
 export function usePresetImport(onOpen: (id: string) => void): { take: (files: File[]) => void; view: ReactNode } {
   const store = useStore();
@@ -42,7 +42,7 @@ export function usePresetImport(onOpen: (id: string) => void): { take: (files: F
   const [results, setResults] = useState<Result[] | null>(null);
 
   async function read(file: File): Promise<Result> {
-    const imported = await importPrompt(store, new Uint8Array(await file.arrayBuffer()));
+    const imported = await importPrompt(store, file.name, new Uint8Array(await file.arrayBuffer()));
     if (!imported.ok) {
       const { failure } = imported;
       return { file: file.name, failure: failure.kind === 'save' ? `저장하지 못했어요. ${describeFailure(failure.failure)}` : FAILURE[failure.kind] };

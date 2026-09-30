@@ -25,7 +25,7 @@ function outline(block: Block) {
 
 describe('importPreset', () => {
   it('reads the starter preset into its 13 blocks and its toggle, and counts what it does not take', async () => {
-    const read = await importPreset(bytes);
+    const read = await importPreset('starter.risup', bytes);
     if (!read.ok) throw new Error(read.failure.kind);
     const { prompt, unsupported } = read;
     expect(prompt.name).toBe('🏓 핑퐁 간소화');
@@ -53,13 +53,21 @@ describe('importPreset', () => {
     ]);
   });
 
+  it('reads a .risupreset, the same container without RPack, and refuses another extension', async () => {
+    const plain = unpack(bytes);
+    const [bare, packed] = [await importPreset('starter.risupreset', plain), await importPreset('starter.risup', bytes)];
+    if (!bare.ok || !packed.ok) throw new Error('unread');
+    expect([bare.prompt.name, bare.prompt.blocks.map(outline), bare.unsupported]).toEqual([packed.prompt.name, packed.prompt.blocks.map(outline), packed.unsupported]);
+    expect(await importPreset('starter.json', plain)).toEqual({ ok: false, failure: { kind: 'unreadable' } });
+  });
+
   it('fails as decrypt-failed when the sealed preset was altered, and as unreadable when the file is cut', async () => {
     const pack = new Uint8Array(256);
     unpack(Uint8Array.from({ length: 256 }, (_, byte) => byte)).forEach((plain, packed) => (pack[plain] = packed));
     const inflated = gunzipSync(unpack(bytes));
     inflated[inflated.length - 1]! ^= 1;
-    expect(await importPreset(gzipSync(inflated).map((byte) => pack[byte]!))).toEqual({ ok: false, failure: { kind: 'decrypt-failed' } });
-    expect(await importPreset(bytes.subarray(0, 100))).toEqual({ ok: false, failure: { kind: 'unreadable' } });
+    expect(await importPreset('altered.risup', gzipSync(inflated).map((byte) => pack[byte]!))).toEqual({ ok: false, failure: { kind: 'decrypt-failed' } });
+    expect(await importPreset('cut.risup', bytes.subarray(0, 100))).toEqual({ ok: false, failure: { kind: 'unreadable' } });
   });
 });
 
@@ -98,7 +106,7 @@ describe('addDefaults', () => {
 describe('prompts', () => {
   it('copies a prompt as the user’s own, remembering its origin', async () => {
     const { store } = await server.account();
-    const imported = await importPrompt(store, bytes);
+    const imported = await importPrompt(store, 'starter.risup', bytes);
     const id = imported.ok ? imported.id : '';
     const copied = await copyPrompt(store, id, '핑퐁 (사본)');
     const original = store.get('prompt', id)!.value;
