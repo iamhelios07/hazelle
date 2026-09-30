@@ -75,7 +75,7 @@ const ENTRIES = {
 
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(shape({ key: str, label: str, kind: str })) });
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
-const translate = shape({ task: (value) => value === 'translate' });
+const translate = shape({ task: (value) => value === 'translate', model: (value) => value === undefined || isRecord(value) });
 
 // Each kind's required fields, and one level into what screens index.
 const SHAPES = {

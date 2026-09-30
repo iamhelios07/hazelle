@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { slotsOf, SLOTS, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
-import { setPromptModel } from '../../runtime/assignment';
+import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
@@ -34,7 +34,7 @@ import {
   undoing,
   type Step,
 } from './history';
-import { ModelPane, modelWords } from './ModelPane';
+import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPane';
 import { chatWarning } from './ranges';
 import { TogglePane } from './TogglePane';
 import { EMPTY_USE, promptName, usePromptUse } from './usePromptUse';
@@ -93,7 +93,6 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const save = useAutosave<PromptPatch>((patch) => editPrompt(store, stored.id, patch));
   const sort = sortOf(stored.value);
   const words = SORT_WORDS[sort];
-  const models = stored.value.task === undefined ? stored.value.models : null;
 
   const [draft, setDraft] = useState<Draft>(() => draftOf(stored.value));
   const latest = useRef(draft);
@@ -110,7 +109,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     save.change(patch);
   };
 
-  const firstText = () => latest.current.blocks.find(isText)?.id ?? (models ? MODEL : latest.current.blocks[0]?.id) ?? MODEL;
+  const firstText = () => latest.current.blocks.find(isText)?.id ?? MODEL;
   const [picked, setPicked] = useState<string>(firstText);
   const [drilled, setDrilled] = useState(pane === TOGGLES);
   const [reordering, setReordering] = useState(false);
@@ -227,6 +226,10 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const saved = await setPromptModel(store, stored.id, role, ref);
     if (!saved.ok) toast.failed(saved, '모델을 바꾸지 못했어요.');
   };
+  const pickTaskModel = async (ref: ModelRef | null) => {
+    const saved = await setTaskModel(store, stored.id, ref);
+    if (!saved.ok) toast.failed(saved, '모델을 바꾸지 못했어요.');
+  };
 
   const isDefault = isDefaultPrompt(settings, stored);
   const copy = async () => {
@@ -290,7 +293,13 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const outline = (
     <>
       <Stack gap="related">
-        {models && <NavRow icon={Cpu} label="모델" meta={modelWords(models, connections)} current={split && open === MODEL} onClick={() => pick(MODEL)} />}
+        <NavRow
+          icon={Cpu}
+          label="모델"
+          meta={stored.value.task === undefined ? modelWords(stored.value.models, connections) : taskModelWords(stored.value.model, connections)}
+          current={split && open === MODEL}
+          onClick={() => pick(MODEL)}
+        />
         <NavRow icon={SlidersHorizontal} label="토글" meta={`${draft.toggles.length}개`} current={split && open === TOGGLES} onClick={() => pick(TOGGLES)} />
       </Stack>
       <Section
@@ -333,7 +342,11 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   const page: ReactNode =
     open === MODEL ? (
-      models && <ModelPane models={models} defaults={settings.models} connections={connections} onPick={(role, ref) => void pickModel(role, ref)} />
+      stored.value.task === undefined ? (
+        <ModelPane models={stored.value.models} defaults={settings.models} connections={connections} onPick={(role, ref) => void pickModel(role, ref)} />
+      ) : (
+        <TaskModelPane own={stored.value.model} connections={connections} onPick={(ref) => void pickTaskModel(ref)} />
+      )
     ) : open === TOGGLES ? (
       <TogglePane
         toggles={draft.toggles}

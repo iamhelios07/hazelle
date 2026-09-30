@@ -11,13 +11,11 @@ describe('model assignment', () => {
     expect(resolveRole('main', [{}, {}])).toBeNull();
   });
 
-  it('falls back from a task role to 기본 보조, then to 본 대화, only after every layer is asked', () => {
+  it('falls back from 보조 to 본 대화 only after every layer is asked', () => {
     const main = { connection: 'c1', model: 'claude' };
     const aux = { connection: 'c1', model: 'haiku' };
-    const translate = { connection: 'c2', model: 'gemini' };
-    expect(resolveRole('translate', [{ main }, { aux }])).toEqual(aux);
-    expect(resolveRole('translate', [{ main }, {}])).toEqual(main);
-    expect(resolveRole('translate', [{ aux }, { translate }])).toEqual(translate);
+    expect(resolveRole('aux', [{ main }, { aux }])).toEqual(aux);
+    expect(resolveRole('aux', [{ main }, {}])).toEqual(main);
   });
 
   it('offers a model whose output is unknown, not one that cannot write text', () => {

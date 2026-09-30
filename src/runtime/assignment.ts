@@ -19,7 +19,15 @@ export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' };
 export function chatModel(store: ObjectStore, chat: Chat, role: Role): Route | RouteFailure {
   const prompt = chatPrompt(store, chat);
   const ref = resolveRole(role, [chat.models, ...(prompt.kind === 'prompt' ? [prompt.prompt.value.models] : []), store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
-  if (!ref) return { kind: 'no-model' };
+  return ref ? routeOf(store, ref) : { kind: 'no-model' };
+}
+
+// A task's model: the one its prompt holds, else the chat's 보조.
+export function taskModel(store: ObjectStore, chat: Chat, own: ModelRef | undefined): Route | RouteFailure {
+  return own ? routeOf(store, own) : chatModel(store, chat, 'aux');
+}
+
+function routeOf(store: ObjectStore, ref: ModelRef): Route | RouteFailure {
   const connection = store.get('connection', ref.connection);
   const model = connection?.value.starred.find((starred) => starred.id === ref.model);
   return connection && model ? { connection, model } : { kind: 'model-gone' };
@@ -37,6 +45,10 @@ function assign(models: Assignment, role: Role, ref: ModelRef | null): Assignmen
 
 export function setPromptModel(store: ObjectStore, prompt: string, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'prompt'>>> {
   return store.update('prompt', prompt, (current) => (current.task === undefined ? { ...current, models: assign(current.models, role, ref) } : current));
+}
+
+export function setTaskModel(store: ObjectStore, prompt: string, ref: ModelRef | null): Promise<ApiResult<Stored<'prompt'>>> {
+  return store.update('prompt', prompt, (current) => (current.task === undefined ? current : ref === null ? without(current, 'model') : { ...current, model: ref }));
 }
 
 export function setDefaultModel(store: ObjectStore, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'settings'>>> {

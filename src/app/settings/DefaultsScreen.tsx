@@ -1,15 +1,15 @@
-import { ROLES, type ModelRef, type Role } from '../../connectors/assignment';
+import type { ModelRef, Role } from '../../connectors/assignment';
 import type { ApiFailure } from '../../runtime/api';
 import { setDefaultModel } from '../../runtime/assignment';
 import { setDefaultPersona } from '../../runtime/personas';
 import { ofSort, setDefaultPrompt } from '../../runtime/prompts';
 import { aliased } from '../common/alias';
-import { findStarred, HelperPickers, ROLE_WORDS, RolePicker } from '../common/RolePicker';
+import { findStarred, RolePicker } from '../common/RolePicker';
 import { useSettings, useStore, useViews } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Callout, ChipButton, Empty, Menu, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
+import { Callout, ChipButton, Empty, Menu, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow } from '../ui';
 
 type Choice = { key: string; label: string; sub?: string; checked: boolean; pick: () => Promise<{ ok: true } | ApiFailure> };
 
@@ -32,8 +32,6 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
     if (!result.ok) toast.failed(result, '기본값을 바꾸지 못했어요.');
   };
   const pickModel = (role: Role, ref: ModelRef | null) => void setDefaultModel(store, role, ref).then(report);
-  // An unset helper role is the same as the role it falls back to.
-  const follow = (role: Role) => `${ROLE_WORDS[ROLES[role].fallsBackTo!]}와 같게`;
 
   const choose = (label: string, current: string, choices: Choice[], empty: string) => (
     <Menu place="below-end" label={label} trigger={(opener) => <ChipButton variant="field" label={current} title={label} {...opener} />}>
@@ -85,17 +83,16 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
             connections={connections}
             onPick={(ref) => ref && pickModel('main', ref)}
           />
+          <RolePicker
+            role="aux"
+            help="번역처럼 대화 밖에서 하는 일에 써요. 번역 프롬프트에서 모델을 고르면 번역은 그 모델로 해요."
+            own={settings.models.aux}
+            follow="본 대화와 같게"
+            connections={connections}
+            onPick={(ref) => pickModel('aux', ref)}
+          />
         </SettingGroup>
         {main && !findStarred(main, connections) && <Callout tone="warn">본 대화로 정했던 모델이 별표 목록에 없어요. 다시 골라 주세요.</Callout>}
-      </Section>
-      <Section title="보조 모델" hint="프롬프트마다 따로 정할 수도 있어요.">
-        <Text tone="muted">장기 기억·감정 에셋 기능은 아직 없어요. 기능이 들어오면 여기서 고른 모델을 써요.</Text>
-        <HelperPickers
-          models={settings.models}
-          picker={(role, help) => (
-            <RolePicker key={role} role={role} help={help} own={settings.models[role]} follow={follow(role)} connections={connections} onPick={(ref) => pickModel(role, ref)} />
-          )}
-        />
       </Section>
     </Screen>
   );

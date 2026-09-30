@@ -23,6 +23,7 @@ import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
+import { translatorOf } from '../../runtime/translate';
 import { blocked, displayChat, takeTurn, togglesOf, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
@@ -90,7 +91,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const texts = displayChat(session, chatId, chat, messages);
   const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
-  const translateModel = chatModel(store, chat, 'translate');
+  const translation = translatorOf(store, chat);
   const busy = turn !== null;
   const streaming = busy && turn.chat === chatId;
   const last = messages.at(-1);
@@ -322,7 +323,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     texts,
     translate,
     sendLanguage,
-    translateModel,
+    translation,
     translating,
     awaited,
     flipped,

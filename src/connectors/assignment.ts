@@ -1,21 +1,19 @@
 import type { Model, Modality } from './types';
 
-// A role that no layer sets takes the role it falls back to, so every chain ends at 본 대화.
-export type Role = 'main' | 'aux' | 'memory' | 'translate' | 'emotion';
+// A role that no layer sets takes the role it falls back to, so every chain ends at 본 대화. A task (번역) has no
+// role: its prompt holds its own model, and without one the task takes 보조.
+export type Role = 'main' | 'aux';
 
 export const ROLES: Record<Role, { needs: Modality; fallsBackTo: Role | null }> = {
   main: { needs: 'text', fallsBackTo: null },
   aux: { needs: 'text', fallsBackTo: 'main' },
-  memory: { needs: 'text', fallsBackTo: 'aux' },
-  translate: { needs: 'text', fallsBackTo: 'aux' },
-  emotion: { needs: 'text', fallsBackTo: 'aux' },
 };
 
 export type ModelRef = { connection: string; model: string };
 export type Assignment = Partial<Record<Role, ModelRef>>;
 
 // Layers run from the most specific to 전체 기본값. Every layer is asked for the role before the chain
-// moves on, so a 번역 set in 전체 기본값 outranks a 보조 set in the chat.
+// moves on, so a 보조 set in 전체 기본값 outranks a 본 대화 set in the chat.
 export function resolveRole(role: Role, layers: Assignment[]): ModelRef | null {
   for (const layer of layers) {
     const choice = layer[role];

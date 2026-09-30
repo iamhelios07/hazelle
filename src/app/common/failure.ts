@@ -160,9 +160,9 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 번역해 주세요.';
     case 'no-model':
-      return '번역 모델이 정해지지 않았어요.';
+      return '번역 모델이 정해지지 않았어요. 번역 프롬프트나 기본값에서 골라 주세요.';
     case 'model-gone':
-      return '번역에 쓸 모델이 별표 목록에 없어요. 기본값이나 프롬프트에서 다시 골라 주세요.';
+      return '번역에 쓸 모델이 별표 목록에 없어요. 번역 프롬프트나 기본값에서 다시 골라 주세요.';
     case 'profile-missing':
       return failure.own ? '번역 모델이 쓰던 설정이 지워졌어요. 모델 설정에서 다른 설정을 골라 주세요.' : '기본 설정이 없어요. 모델 설정에서 다른 설정을 기본으로 골라 주세요.';
     case 'failed':

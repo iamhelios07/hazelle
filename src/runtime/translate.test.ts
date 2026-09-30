@@ -3,7 +3,9 @@ import { fold, shown } from '../model/chat';
 import { appendUserMessage, startChat } from './chat-log';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { setTranslate } from './characters';
-import { translate } from './translate';
+import { SETTINGS_ID } from '../model/settings';
+import { setDefaultModel, setTaskModel } from './assignment';
+import { translate, translatorOf } from './translate';
 import { takeTurn, translationInput } from './turn';
 
 const server = testServer();
@@ -57,5 +59,23 @@ describe('Translator', () => {
       const made = await translate(session, translationInput(session, chat, opened, [], { kind: 'input', text: 'Hi' }), new AbortController().signal, () => {});
       expect(made).toEqual({ ok: false, failure: { kind: 'prompt-missing', own: true } });
       expect(log).toHaveLength(0);
+    }));
+
+  it('translates with the translation prompt’s own model, and without one with the chat’s 보조', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const [connection] = session.store.list('connection');
+      const starred = (id: string) => ({ ...connection!.value.starred[0]!, id, name: id });
+      await session.store.update('connection', connection!.id, (current) => ({ ...current, starred: [...current.starred, starred('aux'), starred('tr')] }));
+      const chat = { title: null, character: null, models: {} };
+      const model = () => {
+        const translator = translatorOf(session.store, chat);
+        return translator.ok ? translator.route.model.id : translator.failure.kind;
+      };
+      expect(model()).toBe('m');
+      await setDefaultModel(session.store, 'aux', { connection: connection!.id, model: 'aux' });
+      expect(model()).toBe('aux');
+      await setTaskModel(session.store, session.store.get('settings', SETTINGS_ID)!.value.translatePrompt!, { connection: connection!.id, model: 'tr' });
+      expect(model()).toBe('tr');
     }));
 });

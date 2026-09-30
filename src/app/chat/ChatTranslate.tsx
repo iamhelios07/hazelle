@@ -4,12 +4,11 @@ import { ofSort, translationPrompt } from '../../runtime/prompts';
 import { describeTranslateFailure } from '../common/failure';
 import { LANGUAGES, languageLabel, withRo } from '../common/languages';
 import { useSession, useSettings, useViews } from '../session';
-import { navigate } from '../shell/router';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, Row, SettingRow, Stack, Switch, Tag, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
-  const { translate, translateModel, card, actions } = chat;
+  const { translate, translation, card, actions } = chat;
   const on = [translate.replies && '답장 번역', translate.input && '보낼 말 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
   return (
     <Menu
@@ -44,10 +43,11 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
         <SettingRow
           place="panel"
           label="번역 모델"
+          help="번역 프롬프트에서 골라요. 고르지 않았으면 보조 모델을 써요."
           control={
-            <Button variant="link" size="sm" onClick={() => navigate({ kind: 'defaults' })}>
-              {'kind' in translateModel ? describeTranslateFailure(translateModel) : translateModel.model.name}
-            </Button>
+            <Text size="sm" tone={translation.ok ? 'default' : 'muted'}>
+              {translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}
+            </Text>
           }
         />
         <Text size="sm" tone="muted">

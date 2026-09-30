@@ -1,4 +1,4 @@
-import type { Assignment } from '../connectors/assignment';
+import type { Assignment, ModelRef } from '../connectors/assignment';
 
 export type Role = 'system' | 'user' | 'assistant';
 
@@ -63,11 +63,12 @@ export type ConversationPrompt = {
   imported?: 'risu-preset';
 };
 
-// No model layer: the task's role is the one place its model is chosen. Its text blocks carry no mark, since a
-// card never replaces a translator's text.
+// model: the one place a translation's model is chosen; without one, the chat's 보조. Its text blocks carry no mark,
+// since a card never replaces a translator's text.
 export type TranslatePrompt = {
   task: 'translate';
   name: string;
+  model?: ModelRef;
   blocks: Block[];
   toggles: Toggle[];
   origin?: { id: string; name: string };
