@@ -21,15 +21,24 @@ const INERT = 'button, [risu-btn], [risu-trigger]';
 // parse and applied through CSSOM, which the CSP allows.
 const STYLE_ATTRIBUTE = /(<[a-z][^>]*?\s)style(?=\s*=)/gi;
 const SET_ASIDE = 'data-style';
-// No form: the CSP does not limit where one posts.
-const CONFIG = { RETURN_DOM_FRAGMENT: true as const, FORBID_TAGS: ['form', 'style'], FORBID_ATTR: ['style'], ADD_ATTR: ['risu-btn', 'risu-trigger', 'risu-mark'] };
+// No form: the CSP does not limit where one posts. DOMPurify's own URL rule, with blob: added for the bots' pictures;
+// sanitize then keeps only the app's own sources and web links.
+const CONFIG = {
+  RETURN_DOM_FRAGMENT: true as const,
+  FORBID_TAGS: ['form', 'style'],
+  FORBID_ATTR: ['style'],
+  ADD_ATTR: ['risu-btn', 'risu-trigger', 'risu-mark'],
+  ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+};
 const VOID = new Set(['BR', 'HR', 'IMG', 'INPUT', 'WBR']);
-const OUTSIDE_URL = /url\(\s*(?!['"]?data:)[^)]*\)/gi;
+const OUTSIDE_URL = /url\(\s*(?!['"]?(?:data|blob):)[^)]*\)/gi;
+// data: pictures, and blob: ones, which only the app itself can make: the chat puts its bots' pictures there.
+const OWN_SOURCE = /^(?:data|blob):/;
 const IMPORT = /@import[^;]*;?/gi;
 
 // For a stylesheet and a style attribute alike. Risu prefixes every class with x-risu- in the HTML and in the CSS, so
-// a bot may write either, and both lose it. Only data: URLs load until a bot's assets do: the CSP refuses the others
-// anyway, and a constructed stylesheet refuses @import.
+// a bot may write either, and both lose it. Only the app's own URLs load: the CSP refuses the others anyway, and a
+// constructed stylesheet refuses @import.
 const cleanCss = (css: string) => css.replaceAll('.x-risu-', '.').replace(IMPORT, '').replace(OUTSIDE_URL, 'none');
 
 let base: CSSStyleSheet | null = null;
@@ -61,10 +70,10 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
       link.setAttribute('rel', 'noopener noreferrer');
     }
   }
-  // Only data: pictures load until a bot's assets do.
   for (const element of fragment.querySelectorAll('[src], [srcset]')) {
-    if (element.tagName === 'IMG' && !element.getAttribute('src')?.startsWith('data:')) element.remove();
-    else if (!element.getAttribute('src')?.startsWith('data:')) element.removeAttribute('src');
+    const own = OWN_SOURCE.test(element.getAttribute('src') ?? '');
+    if (element.tagName === 'IMG' && !own) element.remove();
+    else if (!own) element.removeAttribute('src');
     element.removeAttribute('srcset');
   }
   if (cursor) {

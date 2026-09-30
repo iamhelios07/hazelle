@@ -89,6 +89,9 @@ const scope = (over: Partial<PromptInput['scope']> = {}): PromptInput['scope'] =
   toggle: (key) => (key === 'sims' ? '1' : null),
   model: { id: 'model', maxContext: null, prefill: null },
   clock: { now: Date.UTC(2026, 8, 28), timeZone: 'UTC' },
+  assets: [],
+  faces: { char: null, user: null },
+  screen: null,
   pick: 'luna:chat',
   ...over,
 });

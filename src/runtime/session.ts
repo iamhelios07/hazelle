@@ -4,6 +4,7 @@ import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import type { VaultKey } from '../vault/keys';
 import { api, type ApiResult } from './api';
+import { AssetUrls } from './assets';
 import { Catalogs } from './catalog';
 import { purgeExpired } from './characters';
 import { Costs } from './cost';
@@ -36,6 +37,7 @@ export type Session = {
   username: string;
   store: ObjectStore;
   files: Files;
+  assets: AssetUrls;
   talk: Talk;
   costs: Costs;
   translator: Translator;
@@ -54,7 +56,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const store = await ObjectStore.open(accountId, vaultKey, api);
   const pulled = await store.pull();
   if (pulled) return pulled;
-  const files = await Files.open(accountId, vaultKey, api);
+  const files = new Files(api);
+  const assets = new AssetUrls(store, files);
   // Awaited rather than started, so the first screen and every turn already see the default prompts, persona and 묶음.
   await Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store)]);
   if (signal.aborted) return { ok: false, error: 'stopped' };
@@ -66,7 +69,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const talk = new Talk(store, credentials, costs, (chat) => translateLatest({ store, talk, translator }, chat));
   const stopSync = keepSynced(store);
   const closing = new AbortController();
-  void purgeExpired(store, files, Date.now(), closing.signal);
+  void purgeExpired(store, Date.now(), closing.signal);
 
   let cached: { version: number; views: Views } | null = null;
   const displayed = new Map<string, Displayed>();
@@ -83,15 +86,16 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     costs.close();
     catalogs.close();
     credentials.close();
+    assets.close();
   };
-  return { ok: true, data: { username, store, files, talk, costs, translator, credentials, catalogs, views, close } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, translator, credentials, catalogs, views, close } };
 }
 
 // A chat's shown texts as last rendered, and the key of what they were rendered from.
 type Displayed = { key: string; texts: string[] };
 
 // What any chat's display reads besides the chat itself and its entries.
-const SHARED: readonly Kind[] = ['character', 'lore', 'prompt', 'persona', 'settings', 'connection', 'profile'];
+const SHARED: readonly Kind[] = ['character', 'lore', 'avatar', 'asset', 'prompt', 'persona', 'settings', 'connection', 'profile'];
 // Every write takes the account's next rev, so the count and highest rev of a set of objects
 // change with any write to it, a deletion included.
 const written = (objects: Stored<Kind>[]) => `${objects.length}:${objects.reduce((max, { rev }) => Math.max(max, rev), 0)}`;

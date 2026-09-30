@@ -1,66 +1,98 @@
+import { imageType } from '../engine/import/card';
 import type { Card, Imported } from '../engine/import/types';
 import type { TranslateSwitches } from '../model/chat';
-import type { Stored } from '../model/kinds';
-import { daysLeft, holds, nest, type Character, type Lore } from '../model/library';
+import type { Stored, Values } from '../model/kinds';
+import { daysLeft, holds, nest, type Asset, type Avatar, type Character, type Lore } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
 import { removeOwned } from './removal';
 import { without, type ObjectStore, type Write } from './store';
 
-// The picture of a new character: the original goes to its sealed blob, the thumbnail into the avatar
-// object beside it.
+// The picture of a new character: the original is stored as a file, the thumbnail goes into the avatar object.
 export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string; thumb: string };
-export type Progress = (step: { kind: 'picture' } | { kind: 'lore'; saved: number; total: number }) => void;
+export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 
-// The character goes last with its picture and lorebook (store.batch), so a failure midway leaves pieces nothing
-// points at, never a character missing some of its own.
-export async function addCharacter(store: ObjectStore, files: Files, character: Character, lore: Lore[], picture: Picture | null, progress: Progress): Promise<ApiResult<string>> {
+// What a character owns, its files stored already.
+type Owned = { avatar: Avatar | null; assets: Asset[]; lore: Lore[] };
+
+// Files are read and sent this many at a time, so a bot of thousands never holds them all at once.
+const FILE_WINDOW = 32;
+
+// The character goes last with what it owns (store.batch), so a failure midway leaves pieces nothing points at, never
+// a character missing some of its own.
+export async function addCharacter(store: ObjectStore, character: Character, { avatar, assets, lore }: Owned, progress: Progress): Promise<ApiResult<string>> {
   const id = crypto.randomUUID();
-  const writes: Write[] = [{ type: 'create', kind: 'character', id, parent: null, value: character }];
-  if (picture) {
-    const blob = crypto.randomUUID();
-    writes.push({
-      type: 'create', kind: 'avatar', id: blob, parent: id,
-      value: { type: picture.type, size: picture.bytes.length, thumb: picture.thumb },
-      file: () => {
-        progress({ kind: 'picture' });
-        return files.put(blob, picture.bytes);
-      },
-    });
-  }
-  writes.push(...lore.map((value): Write => ({ type: 'create', kind: 'lore', id: crypto.randomUUID(), parent: id, value })));
-  let saved = 0;
-  progress({ kind: 'lore', saved, total: lore.length });
-  const result = await store.batch(writes, (write) => {
-    if (write.type !== 'remove' && write.kind === 'lore') progress({ kind: 'lore', saved: ++saved, total: lore.length });
-  });
+  const owned = <K extends 'avatar' | 'asset' | 'lore'>(kind: K, value: Values[K]): Write => ({ type: 'create', kind, id: crypto.randomUUID(), parent: id, value });
+  const writes: Write[] = [
+    { type: 'create', kind: 'character', id, parent: null, value: character },
+    ...(avatar ? [owned('avatar', avatar)] : []),
+    ...assets.map((asset) => owned('asset', asset)),
+    ...lore.map((entry) => owned('lore', entry)),
+  ];
+  let done = 0;
+  progress({ kind: 'saving', done, total: writes.length });
+  const result = await store.batch(writes, () => progress({ kind: 'saving', done: ++done, total: writes.length }));
   return result.ok ? { ok: true, data: id } : result;
 }
 
-// A card as the importer read it, in no library folder. Its lorebook folders get ids,
-// and each entry names its folder by that id instead of the importer's index.
-export function importCharacter(store: ObjectStore, files: Files, { card, lore, loreFolders }: Pick<Imported, 'card' | 'lore' | 'loreFolders'>, picture: Picture | null, progress: Progress): Promise<ApiResult<string>> {
+// What an import kept. skipped: assets not kept, as not a picture this app reads or too large to store. faceless: a
+// picture that was too large to store.
+export type ImportedCharacter = { id: string; skipped: number; faceless: boolean };
+
+// A card as the importer read it, in no library folder. Its picture and assets are stored first; its lorebook folders
+// get ids, and each entry names its folder by that id instead of the importer's index.
+export async function importCharacter(
+  store: ObjectStore,
+  files: Files,
+  { card, lore, loreFolders, assets }: Pick<Imported, 'card' | 'lore' | 'loreFolders' | 'assets'>,
+  picture: Picture | null,
+  progress: Progress,
+): Promise<ApiResult<ImportedCharacter>> {
+  let avatar: Avatar | null = null;
+  if (picture) {
+    progress({ kind: 'picture' });
+    const saved = await files.save([picture.bytes]);
+    if (!saved.ok) return saved;
+    const [file] = saved.data;
+    if (file) avatar = { type: picture.type, size: picture.bytes.length, thumb: picture.thumb, file };
+  }
+  const kept: Asset[] = [];
+  let skipped = 0;
+  for (let start = 0; start < assets.length; start += FILE_WINDOW) {
+    progress({ kind: 'assets', done: start, total: assets.length });
+    const read = assets.slice(start, start + FILE_WINDOW).flatMap(({ name, read }) => {
+      const bytes = read();
+      const type = bytes && imageType(bytes);
+      if (!type) skipped++;
+      return type ? [{ name, type, bytes: bytes! }] : [];
+    });
+    const saved = await files.save(read.map(({ bytes }) => bytes));
+    if (!saved.ok) return saved;
+    read.forEach(({ name, type, bytes }, index) => {
+      const file = saved.data[index];
+      if (file) kept.push({ name, type, size: bytes.length, file });
+      else skipped++;
+    });
+  }
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const entries = lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id }));
-  return addCharacter(store, files, { card, folder: null, loreFolders: folders }, entries, picture, progress);
+  const added = await addCharacter(store, { card, folder: null, loreFolders: folders }, { avatar, assets: kept, lore: entries }, progress);
+  return added.ok ? { ok: true, data: { id: added.data, skipped, faceless: picture !== null && avatar === null } } : added;
 }
 
-// A copy that goes its own way (사본 만들기): the card under a new name, the lorebook and the picture,
-// in the original's folder. Chats stay with the original, and so does the alias, which tells the two apart. The
-// picture is copied, not shared, because a blob is sealed to its own id.
-export async function copyCharacter(store: ObjectStore, files: Files, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
+// A copy that goes its own way (사본 만들기): the card under a new name, the lorebook, the picture and the assets, in
+// the original's folder. Chats stay with the original, and so does the alias, which tells the two apart. The copy
+// names the same stored files.
+export function copyCharacter(store: ObjectStore, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
   const original = store.get('character', id)?.value;
-  if (!original) return { ok: false, error: 'gone' };
-  const [avatar] = store.children('avatar', id);
-  let picture: Picture | null = null;
-  if (avatar) {
-    const bytes = await files.get(avatar.id);
-    if (!bytes.ok) return bytes;
-    picture = { bytes: bytes.data, type: avatar.value.type, thumb: avatar.value.thumb };
-  }
-  const lore = store.children('lore', id).map((entry) => entry.value);
-  return addCharacter(store, files, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, lore, picture, progress);
+  if (!original) return Promise.resolve({ ok: false, error: 'gone' });
+  const owned = {
+    avatar: store.children('avatar', id)[0]?.value ?? null,
+    assets: store.children('asset', id).map((asset) => asset.value),
+    lore: store.children('lore', id).map((entry) => entry.value),
+  };
+  return addCharacter(store, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, owned, progress);
 }
 
 // at is when it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good
@@ -69,15 +101,15 @@ export function setDeleted(store: ObjectStore, id: string, at: number | null): P
   return store.update('character', id, (current) => (at === null ? without(current, 'deleted') : { ...current, deleted: at }));
 }
 
-export const purgeCharacter = (store: ObjectStore, files: Files, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
-  removeOwned(store, files, { kind: 'character', id }, progress);
+export const purgeCharacter = (store: ObjectStore, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
+  removeOwned(store, { kind: 'character', id }, progress);
 
 // The session runs it when it opens, on whichever device opens first. One that fails is tried again next
 // time. A stop (the vault closing) lets the character under way finish and leaves the rest for next time.
-export async function purgeExpired(store: ObjectStore, files: Files, now: number, signal: AbortSignal): Promise<void> {
+export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
   for (const { id, value } of store.list('character')) {
     if (signal.aborted) return;
-    if (value.deleted !== undefined && daysLeft(value, now) <= 0) await purgeCharacter(store, files, id, () => {});
+    if (value.deleted !== undefined && daysLeft(value, now) <= 0) await purgeCharacter(store, id, () => {});
   }
 }
 

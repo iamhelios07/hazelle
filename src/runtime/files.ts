@@ -1,34 +1,41 @@
-import { openBlob, sealBlob } from '../vault/blobs';
-import type { VaultKey } from '../vault/keys';
-import { objectKey } from '../vault/objects';
+import { openFile, sealFile, type FileRef } from '../vault/files';
 import type { ApiResult, api as realApi } from './api';
 
 type Api = typeof realApi;
 
+const UPLOADS = 4;
+
+// The stored files (server/files). A file is sealed by its content, so one the server already holds, from this
+// account or any other, is never sent again; an import cut short and tried again sends only what did not arrive.
 export class Files {
-  private constructor(
-    private readonly accountId: string,
-    private readonly key: CryptoKey,
-    private readonly request: Api,
-  ) {}
+  constructor(private readonly request: Api) {}
 
-  static async open(accountId: string, vaultKey: VaultKey, request: Api): Promise<Files> {
-    return new Files(accountId, await objectKey(vaultKey), request);
-  }
-
-  async put(id: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<undefined>> {
-    return this.request<undefined>('PUT', `blobs/${id}`, await sealBlob(this.key, this.accountId, id, bytes));
+  // Each file's reference, in order; null for one the server refuses as too large.
+  async save(files: Uint8Array<ArrayBuffer>[]): Promise<ApiResult<(FileRef | null)[]>> {
+    const sealed = await Promise.all(files.map(sealFile));
+    const asked = await this.request<{ missing: string[] }>('POST', 'files/missing', { ids: [...new Set(sealed.map(({ ref }) => ref.id))] });
+    if (!asked.ok) return asked;
+    const missing = [...new Set(asked.data.missing)];
+    const refused = new Set<string>();
+    for (let start = 0; start < missing.length; start += UPLOADS) {
+      const puts = await Promise.all(
+        missing.slice(start, start + UPLOADS).map(async (id) => {
+          const put = await this.request('PUT', `files/${id}`, sealed.find(({ ref }) => ref.id === id)!.body);
+          if (!put.ok && put.error === 'too-large') refused.add(id);
+          return put;
+        }),
+      );
+      const failed = puts.find((put) => !put.ok && put.error !== 'too-large');
+      if (failed && !failed.ok) return failed;
+    }
+    return { ok: true, data: sealed.map(({ ref }) => (refused.has(ref.id) ? null : ref)) };
   }
 
   // A body that does not open answers 'unreadable', never empty bytes.
-  async get(id: string): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
-    const result = await this.request<Uint8Array<ArrayBuffer>>('GET', `blobs/${id}`);
+  async read(ref: FileRef): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
+    const result = await this.request<Uint8Array<ArrayBuffer>>('GET', `files/${ref.id}`);
     if (!result.ok) return result;
-    const bytes = await openBlob(this.key, this.accountId, id, result.data);
+    const bytes = await openFile(ref, result.data);
     return bytes ? { ok: true, data: bytes } : { ok: false, error: 'unreadable' };
-  }
-
-  remove(id: string): Promise<ApiResult<undefined>> {
-    return this.request<undefined>('DELETE', `blobs/${id}`);
   }
 }

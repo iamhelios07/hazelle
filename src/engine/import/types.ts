@@ -50,6 +50,8 @@ export type Imported = {
   lore: LoreEntry[];
   loreFolders: string[];
   avatar: { bytes: Uint8Array<ArrayBuffer>; type: string } | null;
+  // The bot's own pictures, read one at a time when they are stored; read answers null for one the file lacks.
+  assets: { name: string; read: () => Uint8Array<ArrayBuffer> | null }[];
   report: ImportReport;
 };
 

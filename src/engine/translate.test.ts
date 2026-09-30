@@ -38,6 +38,9 @@ const scope: ChatScope = {
   toggle: () => null,
   model: null,
   clock: { now: 0, timeZone: 'UTC' },
+  assets: [],
+  faces: { char: null, user: null },
+  screen: null,
   pick: 'luna:chat',
 };
 const translate = (input: Pick<Parameters<typeof assembleTranslation>[0], 'request' | 'language'> & Partial<Parameters<typeof assembleTranslation>[0]>) =>

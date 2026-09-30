@@ -135,13 +135,17 @@ test('a new account imports a card, chats through the fake provider and finds th
     expect(violations).toEqual([]);
   });
 
-  await test.step('a bot’s HTML is drawn in its message with its CSS, and nothing in it runs, posts, loads from outside or covers the app', async () => {
+  await test.step('a bot’s HTML is drawn in its message with its CSS and pictures, and nothing in it runs, posts, loads from outside or covers the app', async () => {
     await page.goto('/');
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
     await (await chooser).setFiles(HOSTILE);
     await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
     const greeting = messages.first();
+    // The message is drawn again once its picture loads, so the rest is measured after.
+    await expect(greeting.locator('#pic img')).toHaveAttribute('src', /^blob:/);
+    await expect(greeting.locator('#pic img')).toHaveJSProperty('naturalWidth', 1);
+    await expect(greeting.locator('#backdrop')).toHaveCSS('background-image', /^url\("blob:/);
     await expect(greeting.locator('#tone')).toHaveCSS('color', 'rgb(0, 128, 0)');
     await expect(greeting.locator('#cover')).toHaveCSS('background-color', 'rgb(200, 0, 0)');
     const [cover, message] = await Promise.all([greeting.locator('#cover').boundingBox(), greeting.boundingBox()]);

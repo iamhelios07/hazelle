@@ -1,6 +1,6 @@
 import type { Connection } from '../connectors/types';
 import type { Chat, Entry } from './chat';
-import type { Avatar, Character, Folder, Lore } from './library';
+import type { Asset, Avatar, Character, Folder, Lore } from './library';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
 import type { Prompt } from './prompt';
@@ -12,6 +12,7 @@ export type Values = {
   folder: Folder;
   lore: Lore;
   avatar: Avatar;
+  asset: Asset;
   chat: Chat;
   entry: Entry;
   connection: Connection;
@@ -25,7 +26,7 @@ export type Kind = keyof Values;
 // parent: the kind an object's parent must be, or null for a top-level object. The server sees this
 // link, and an update never changes it.
 // id: the one id a singleton kind lives at. appendOnly: written once, never updated.
-// file: the object's id is also the id of the sealed file it holds.
+// file: the body names a stored file (`file`, vault/files), whose id the server is told.
 // owner: a body field naming the object that owns this one, for a link the server must not see. The
 // parent cannot carry it: it is bound into each object's sealing (vault/objects) and sent in the clear.
 export type Rule = { parent: Kind | null; id?: string; appendOnly?: true; file?: true; owner?: { field: string; kind: Kind } };
@@ -39,6 +40,7 @@ export const KINDS = {
   folder: { parent: null },
   lore: { parent: 'character' },
   avatar: { parent: 'character', file: true },
+  asset: { parent: 'character', file: true },
   chat: { parent: null, owner: { field: 'character', kind: 'character' } },
   entry: { parent: 'chat', appendOnly: true },
   connection: { parent: null },
@@ -107,7 +109,8 @@ const SHAPES = {
     position: orNull(str),
     folder: orNull(str),
   }),
-  avatar: shape({ type: str, size: num, thumb: str }),
+  avatar: shape({ type: str, size: num, thumb: str, file: shape({ id: str, key: str }) }),
+  asset: shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) }),
   chat: shape({ title: orNull(str), character: orNull(str), models: isRecord }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   connection: shape({ type: str, label: str, baseUrl: orNull(str), protocol: orNull(str), secret: str, starred: listOf(shape({ id: str, name: str })) }),

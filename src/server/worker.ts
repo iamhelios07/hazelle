@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { accounts } from './accounts';
-import { blobs } from './blobs';
+import { files } from './files';
 import { fail, type AppEnv } from './http';
 import { objects } from './objects';
 import { createRelay } from './relay';
@@ -26,7 +26,7 @@ app.use(async (c, next) => {
 app.route('/', accounts);
 app.route('/vault', vaults);
 app.route('/objects', objects);
-app.route('/blobs', blobs);
+app.route('/files', files);
 app.post('/relay', requireSession, (c) => relay(c.req.raw));
 app.notFound((c) => fail(c, 404, 'not-found'));
 

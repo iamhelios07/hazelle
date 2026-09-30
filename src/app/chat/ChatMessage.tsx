@@ -1,5 +1,6 @@
 import { Bot, Copy, GitBranch, Info, Languages, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { useMemo, type KeyboardEvent } from 'react';
+import { resolveAssets } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
@@ -17,8 +18,8 @@ type Props = {
   message: Shown;
   // The shown version's text as it is displayed. Editing starts from the stored text.
   text: string;
-  // 봇 꾸밈: whether the bot's HTML is drawn, and its CSS for the chat.
-  decor: { bot: boolean; css: string };
+  // 봇 꾸밈: whether the bot's HTML is drawn, its CSS for the chat, and its pictures' URLs.
+  decor: { bot: boolean; css: string; url: (id: string) => string | undefined };
   // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
   // other way round from its default.
   translating: Translating;
@@ -67,7 +68,7 @@ export function ChatMessage(props: Props) {
   // What shows until a translation's first text comes stays faded, and the translation then streams in its place.
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live);
-  const html = useMemo(() => storyHtml(reveal.text, decor.bot), [reveal.text, decor.bot]);
+  const html = useMemo(() => shownHtml(reveal.text, decor), [reveal.text, decor.bot, decor.url]);
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
@@ -121,7 +122,7 @@ export function ChatMessage(props: Props) {
     body = (
       <>
         {/* A continuation that failed still holds the text it continued, and 다시 시도 continues it again. */}
-        {receipt.continues && <Story html={storyHtml(original, decor.bot)} css={decor.css} onInert={actions.inert} />}
+        {receipt.continues && <Story html={shownHtml(original, decor)} css={decor.css} onInert={actions.inert} />}
         <Failure
           title="답장을 받지 못했어요"
           actions={
@@ -232,3 +233,5 @@ export function ChatMessage(props: Props) {
     </StoryMessage>
   );
 }
+
+const shownHtml = (text: string, { bot, url }: Props['decor']) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));

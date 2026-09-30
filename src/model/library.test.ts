@@ -8,7 +8,7 @@ const chat = (id: string, character: string | null, order: number) => ({ id, cha
 
 describe('shelve', () => {
   it('groups chats under their character, most recent character first, and keeps characterless chats apart', () => {
-    const avatar: Stored<'avatar'> = { id: 'blob', kind: 'avatar', parent: 'b', rev: 3, value: { type: 'image/png', size: 1, thumb: 'data:thumb' } };
+    const avatar: Stored<'avatar'> = { id: 'blob', kind: 'avatar', parent: 'b', rev: 3, value: { type: 'image/png', size: 1, thumb: 'data:thumb', file: { id: 'f', key: 'k' } } };
     // Newest first, as chatItems gives them.
     const chats = [chat('c3', null, 9), chat('c2', 'a', 8), chat('c1', 'a', 5)];
     const { characters, none } = shelve([character('a', 1), character('b', 2), character('c', 7)], [avatar], chats);

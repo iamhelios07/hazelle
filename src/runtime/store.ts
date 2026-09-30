@@ -1,5 +1,6 @@
 import { KINDS, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
 import { objectKey, openObject, sealObject } from '../vault/objects';
+import type { FileRef } from '../vault/files';
 import type { VaultKey } from '../vault/keys';
 import type { ApiFailure, ApiResult, api as realApi } from './api';
 import { orderOwned } from './removal';
@@ -9,10 +10,10 @@ type Change = { id: string; kind: string; parent: string | null; rev: number; bo
 type Limits = { items: number; bytes: number; body: number };
 type Page = { changes: Change[]; cursor: number; more: boolean; limits: Limits };
 type ObjectValue = Omit<Stored<Kind>, 'rev'>;
-export type Write = (ObjectValue & { type: 'create' | 'restore'; file?: () => Promise<ApiResult<unknown>> }) | { type: 'remove'; id: string };
+export type Write = (ObjectValue & { type: 'create' | 'restore' }) | { type: 'remove'; id: string };
 type Pending = { id: string; kind: string; parent: string | null; value: unknown; baseRev: number | null };
 type Resolved = { pending: Pending | null; held: Held | null };
-type Step = { resolve: () => ApiResult<Resolved>; file?: () => Promise<ApiResult<unknown>> };
+type Step = { resolve: () => ApiResult<Resolved> };
 
 // value is undefined for a body that did not open. Such an object is counted, never
 // shown as if it were empty, and never overwritten. kind may be one a newer version wrote.
@@ -140,7 +141,6 @@ export class ObjectStore {
 
   private step(write: Write): Step {
     return {
-      ...('file' in write && { file: write.file }),
       resolve: () => {
         const held = this.live.get(write.id);
         if (write.type === 'remove') {
@@ -180,7 +180,7 @@ export class ObjectStore {
       const start = saved.length;
       const result = await this.retry(async (): Promise<ApiResult<(Held | null)[]>> => {
         const resolved: Resolved[] = [];
-        const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null }[] = [];
+        const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null; file: string | null }[] = [];
         let bytes = new TextEncoder().encode(JSON.stringify({ writes: [] })).length;
         for (const step of steps.slice(start, start + limits.items)) {
           const ready = step.resolve();
@@ -190,7 +190,9 @@ export class ObjectStore {
             const { id, kind, parent, baseRev, value } = pending;
             const body = value === undefined ? null : await sealObject(this.key, this.accountId, { id, kind, parent }, value);
             if (body !== null && body.length > limits.body) return { ok: false, error: 'too-large' };
-            const write = { id, kind, parent, baseRev, body };
+            // The server is told which stored file the object names; the file itself went up before (runtime/files).
+            const file = body !== null && 'file' in KINDS[kind as Kind] ? (value as { file: FileRef }).file.id : null;
+            const write = { id, kind, parent, baseRev, body, file };
             const size = new TextEncoder().encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
             if (bytes + size > limits.bytes) {
               if (!resolved.length) return { ok: false, error: 'too-large' };
@@ -200,11 +202,6 @@ export class ObjectStore {
             writes.push(write);
           }
           resolved.push(ready.data);
-        }
-        // Files precede their referencing objects, and owners follow their descendants even across batches.
-        for (const step of steps.slice(start, start + resolved.length)) {
-          const put = await step.file?.();
-          if (put && !put.ok) return put;
         }
         if (writes.length) {
           const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { writes });

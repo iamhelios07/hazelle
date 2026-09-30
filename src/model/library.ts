@@ -1,3 +1,4 @@
+import type { FileRef } from '../vault/files';
 import type { Card, LoreEntry } from '../engine/import/types';
 import type { TranslateSwitches } from './chat';
 import type { Stored } from './kinds';
@@ -45,9 +46,13 @@ export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 export type Folder = { name: string; parent?: string };
 export type FolderTree = Stored<'folder'> & { children: FolderTree[] };
 
-// Kind `avatar`, whose parent is the character: the original picture is the sealed blob that has the
-// object's id, and thumb is a small copy that syncs with the objects, so lists need no blob fetch.
-export type Avatar = { type: string; size: number; thumb: string };
+// Kind `avatar`, whose parent is the character: file is the original picture, and thumb a small copy that syncs with
+// the objects, so lists need no file fetch.
+export type Avatar = { type: string; size: number; thumb: string; file: FileRef };
+
+// Kind `asset`, whose parent is the character: a picture of the bot's own, which its text reaches by name
+// ({{raw::name}}, design §6.4). type is what the bytes are, read from them.
+export type Asset = { name: string; type: string; size: number; file: FileRef };
 
 // A character with its chats, or (id null) the chats that have no character: 캐릭터 없이.
 export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; chats: C[]; order: number };

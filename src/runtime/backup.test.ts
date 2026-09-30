@@ -1,4 +1,4 @@
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, type Chat } from '../model/chat';
@@ -6,7 +6,7 @@ import { KINDS, type Kind } from '../model/kinds';
 import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
 import { exportBackup, readBackup, restoreBackup } from './backup';
-import { addCharacter } from './characters';
+import { importCharacter } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
@@ -70,8 +70,13 @@ async function oldAccount({ profile = true } = {}) {
   const { store, files } = await open('jin', { profile });
   if (profile) await setProfileSettings(store, FIRST_PROFILE_ID, { temperature: 0.4 });
   const image = randomBytes(256);
-  const added = await addCharacter(store, files, { card, folder: null, loreFolders: [] }, [lore], { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
-  const character = added.ok ? added.data : '';
+  const smile = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
+  const assets = [
+    { name: 'smile', read: () => smile },
+    { name: 'grin', read: () => smile },
+  ];
+  const added = await importCharacter(store, files, { card, lore: [{ ...lore, folder: null }], loreFolders: [], assets }, { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
+  const character = added.ok ? added.data.id : '';
   const chat = crypto.randomUUID();
   const opened: Chat = { title: null, character, models: {} };
   const greetings = { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['안녕', '반가워', '어서 와'], selected: 1, translations: new Map() };
@@ -82,7 +87,7 @@ async function oldAccount({ profile = true } = {}) {
   await appendUserMessage(store, gone, { id: crypto.randomUUID(), text: '지울 채팅' });
   await removeChat(store, gone);
   await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
-  return { store, files, image, chat, gone };
+  return { store, files, image, smile, chat, gone };
 }
 
 describe('backup', () => {
@@ -101,7 +106,9 @@ describe('backup', () => {
     expect(held(store)).toEqual(expected);
     expect(fold(store.children('entry', old.chat))).toEqual(fold(old.store.children('entry', old.chat)));
     const [avatar] = store.list('avatar');
-    expect(await files.get(avatar!.id)).toEqual({ ok: true, data: old.image });
+    expect(await files.read(avatar!.value.file)).toEqual({ ok: true, data: old.image });
+    const zipped = unzipSync(made.ok ? made.data.zip : new Uint8Array());
+    expect(Object.keys(zipped).filter((name) => name.startsWith('files/'))).toHaveLength(2);
   });
 
   it('takes a backup from before 설정 묶음 into an account that opened with one', async () => {
@@ -119,7 +126,7 @@ describe('backup', () => {
 
   it('refuses a file with a body its kind cannot hold', () => {
     const line = { kind: 'character', id: crypto.randomUUID(), parent: null, rev: 1, value: { card: { ...card, name: undefined }, folder: null, loreFolders: [] } };
-    const zip = zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 1 })), 'objects.jsonl': strToU8(JSON.stringify(line)) });
+    const zip = zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })), 'objects.jsonl': strToU8(JSON.stringify(line)) });
     expect(readBackup(zip)).toEqual({ ok: false, error: 'not-backup' });
   });
 

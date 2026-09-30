@@ -2,5 +2,6 @@ import type { Progress } from '../../runtime/characters';
 
 // What a busy button or dialog says while a character is being saved (import and 사본 만들기).
 export function describeStep(step: Parameters<Progress>[0]): string {
-  return step.kind === 'picture' ? '그림 올리는 중' : `로어북 저장 중 · ${step.saved} / ${step.total}`;
+  if (step.kind === 'picture') return '그림 올리는 중';
+  return `${step.kind === 'assets' ? '에셋 올리는 중' : '저장 중'} · ${step.done} / ${step.total}`;
 }

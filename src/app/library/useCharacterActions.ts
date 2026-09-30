@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ChatItem } from '../../model/chat';
 import { KEEP_DAYS, type CharacterShelf } from '../../model/library';
 import { copyCharacter, purgeCharacter, setDeleted } from '../../runtime/characters';
-import { useFiles, useStore } from '../session';
+import { useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { describeStep } from './saving';
@@ -15,7 +15,6 @@ export type CharacterActions = ReturnType<typeof useCharacterActions>;
 // the character being copied or removed for good, and the step it is at.
 export function useCharacterActions() {
   const store = useStore();
-  const files = useFiles();
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
 
@@ -27,7 +26,7 @@ export function useCharacterActions() {
 
   async function copy({ id, character }: Shelf) {
     setBusy({ id, label: '사본 만드는 중' });
-    const copied = await copyCharacter(store, files, id, `${character.card.name} (사본)`, (step) => setBusy({ id, label: describeStep(step) }));
+    const copied = await copyCharacter(store, id, `${character.card.name} (사본)`, (step) => setBusy({ id, label: describeStep(step) }));
     setBusy(null);
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
     toast.show('사본을 만들었어요. 사본을 고쳐도 원본은 그대로예요.');
@@ -48,7 +47,7 @@ export function useCharacterActions() {
 
   async function purge({ id, character }: Shelf) {
     setBusy({ id, label: '지우는 중' });
-    const removed = await purgeCharacter(store, files, id, (done, total) => setBusy({ id, label: `지우는 중 · ${done} / ${total}` }));
+    const removed = await purgeCharacter(store, id, (done, total) => setBusy({ id, label: `지우는 중 · ${done} / ${total}` }));
     setBusy(null);
     if (removed.ok) toast.show(`‘${character.card.name}’ 캐릭터를 완전히 지웠어요.`);
     else toast.failed(removed, '다 지우지 못했어요.');

@@ -10,13 +10,13 @@ const CRC = Array.from({ length: 256 }, (_, n) => {
 });
 const crc32 = (bytes: Uint8Array) => (bytes.reduce((c, byte) => CRC[(c ^ byte) & 0xff]! ^ (c >>> 8), 0xffffffff) ^ 0xffffffff) >>> 0;
 
-function concat(...parts: Uint8Array[]): Uint8Array {
+function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   parts.reduce((at, part) => (out.set(part, at), at + part.length), 0);
   return out;
 }
 
-function chunk(type: string, data: Uint8Array): Uint8Array {
+function chunk(type: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(12 + data.length);
   const view = new DataView(out.buffer);
   view.setUint32(0, data.length);
@@ -31,7 +31,7 @@ const base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const cardText = (card: unknown) => base64(strToU8(JSON.stringify(card)));
 
 // A 1x1 PNG; its IDAT is not a valid image, which the importer never inspects.
-function png(...chunks: Uint8Array[]): Uint8Array {
+function png(...chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const ihdr = chunk('IHDR', new Uint8Array([0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]));
   return concat(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), ihdr, chunk('IDAT', new Uint8Array([1, 2, 3])), ...chunks, chunk('IEND', new Uint8Array()));
 }
@@ -43,8 +43,10 @@ function ok(result: ImportResult): Imported {
   if (!result.ok) throw new Error(`import failed: ${JSON.stringify(result.failure)}`);
   return result.card;
 }
-const json = (card: unknown) => ok(importCard('card.json', strToU8(JSON.stringify(card))));
-const charx = (files: Record<string, Uint8Array>) => ok(importCard('card.charx', zipSync(files)));
+// fflate's types leave the buffer open; the importer takes what a File's arrayBuffer gives.
+const own = (bytes: Uint8Array) => new Uint8Array(bytes);
+const json = (card: unknown) => ok(importCard('card.json', own(strToU8(JSON.stringify(card)))));
+const charx = (files: Record<string, Uint8Array>) => ok(importCard('card.charx', own(zipSync(files))));
 const counts = (imported: Imported) => Object.fromEntries(imported.report.unsupported.map(({ kind, count }) => [kind, count]));
 
 describe('importCard', () => {
@@ -80,6 +82,35 @@ describe('importCard', () => {
     });
     expect(imported.avatar).toEqual({ bytes: main, type: 'image/png' });
     expect(counts(imported)).toEqual({ asset: 2 });
+  });
+
+  it('reads a charx’s x-risu-asset files when asked, and counts the ones no file holds', () => {
+    const smile = png(tEXt('Title', 'smile'));
+    const imported = charx({
+      'card.json': strToU8(
+        JSON.stringify(
+          v3({
+            assets: [
+              { type: 'x-risu-asset', uri: 'embeded://assets/other/image/smile.png', name: 'Smile.png', ext: 'png' },
+              { type: 'x-risu-asset', uri: 'embeded://assets/other/image/lost.png', name: 'lost', ext: 'png' },
+              { type: 'x-risu-asset', uri: 'https://example.com/far.png', name: 'far', ext: 'png' },
+            ],
+          }),
+        ),
+      ),
+      'assets/other/image/smile.png': smile,
+    });
+    expect(imported.assets.map(({ name, read }) => [name, read()])).toEqual([
+      ['Smile.png', smile],
+      ['lost', null],
+    ]);
+    expect(counts(imported)).toEqual({ asset: 1 });
+  });
+
+  it('reads a PNG’s v2 additionalAssets from its asset chunks', () => {
+    const picture = png(tEXt('Title', 'wave'));
+    const file = png(tEXt('chara', cardText(v2({ extensions: { risuai: { additionalAssets: [['wave', '__asset:0', 'png']] } } }))), tEXt('chara-ext-asset_:0', base64(picture)));
+    expect(ok(importCard('Mira.png', file)).assets.map(({ name, read }) => [name, read()])).toEqual([['wave', picture]]);
   });
 
   it('reads a zip appended to a JPEG and keeps the JPEG as the avatar', () => {
@@ -195,7 +226,7 @@ describe('importCard', () => {
   it('counts what it cannot run, but not a trigger that does nothing, and leaves it in the text', () => {
     const imported = json(
       v3({
-        description: '{{img::x}} {{getvar::y}} {{ Trigger_ID }}',
+        description: '{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}',
         assets: [
           { type: 'icon', uri: 'ccdefault:', name: 'main', ext: 'png' },
           { type: 'emotion', uri: 'data:image/png;base64,AAAA', name: 'smile', ext: 'png' },
@@ -219,10 +250,10 @@ describe('importCard', () => {
             ],
           },
         },
-        character_book: { entries: [{ keys: ['k'], content: '@@disable_ui_prompt x\n@@depth 1\nbody {{raw::a}}', enabled: true, insertion_order: 1 }] },
+        character_book: { entries: [{ keys: ['k'], content: '@@disable_ui_prompt x\n@@depth 1\nbody {{bgm::a}}', enabled: true, insertion_order: 1 }] },
       }),
     );
-    expect(imported.card.description).toBe('{{img::x}} {{getvar::y}} {{ Trigger_ID }}');
+    expect(imported.card.description).toBe('{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}');
     expect(imported.avatar).toBeNull();
     expect(imported.report.unsupported).toEqual([
       { kind: 'trigger', count: 1 },
@@ -243,9 +274,9 @@ describe('importCard', () => {
     expect(importCard('Mira.png', png(tEXt('chara', 'rcc||rccv1||abc||def||ghi')))).toEqual({ ok: false, failure: { kind: 'encrypted' } });
     expect(importCard('Mira.webp', new Uint8Array())).toEqual({ ok: false, failure: { kind: 'unknown-format' } });
     expect(importCard('Mira.risum', new Uint8Array([111, 0]))).toEqual({ ok: false, failure: { kind: 'module-file' } });
-    expect(importCard('Mira.png', strToU8('not a png'))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
-    expect(importCard('Mira.json', strToU8('{'))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
-    expect(importCard('Mira.charx', strToU8('PK'))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
+    expect(importCard('Mira.png', own(strToU8('not a png')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
+    expect(importCard('Mira.json', own(strToU8('{')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
+    expect(importCard('Mira.charx', own(strToU8('PK')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
   });
 });
 

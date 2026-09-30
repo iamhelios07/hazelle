@@ -44,6 +44,8 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => ({
   screen: null,
   clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
   language: null,
+  assets: [],
+  faces: { char: null, user: null },
   pickSeed: 'pick-1',
   ...over,
 });

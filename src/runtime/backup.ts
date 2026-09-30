@@ -3,6 +3,7 @@ import { isRecord } from '../connectors/values';
 import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import type { FileRef } from '../vault/files';
 import type { Files } from './files';
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
@@ -10,23 +11,26 @@ import { STARTER_ID, TRANSLATOR_ID } from './prompts';
 import type { ObjectStore, Write } from './store';
 
 // version is the file format's one version key: a file of any other version is refused, never read as this one.
-const FORMAT = { format: 'risu-alpha-backup', version: 1 };
+const FORMAT = { format: 'risu-alpha-backup', version: 2 };
 const MANIFEST = 'manifest.json';
 const OBJECTS = 'objects.jsonl';
 const FILES = 'files/';
-const FILE_READS = 8;
+// Files are read, and sent back on a restore, this many at a time.
+const FILE_WINDOW = 8;
 
 // What opening an account adds by itself.
 const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
 
 const ALL = Object.keys(KINDS) as Kind[];
-const holdsFile = (kind: Kind) => 'file' in KINDS[kind];
+// The stored file an object names, for the kinds that name one.
+const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 
+// files: each stored file's bytes, by its id.
 export type Backup = { objects: Stored<Kind>[]; files: Map<string, Uint8Array<ArrayBuffer>> };
 export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' };
 
-// Every object the account reaches, decrypted, with the file each holds; connection keys are kept. Pieces
-// nothing reaches are left out: a deleted chat's entries, and the lore and picture of an
+// Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. Pieces
+// nothing reaches are left out: a deleted chat's entries, and the lore and pictures of an
 // import cut short. left counts the objects that did not open, which no backup can hold.
 export async function exportBackup(store: ObjectStore, files: Files): Promise<ApiResult<{ zip: Uint8Array<ArrayBuffer>; left: number }>> {
   const objects = ALL.flatMap((kind) => store.list(kind)).filter(({ kind, parent }) => {
@@ -34,12 +38,12 @@ export async function exportBackup(store: ObjectStore, files: Files): Promise<Ap
     return owner === null || (parent !== null && store.get(owner, parent) !== null);
   });
   const zip: Zippable = {};
-  const pictures = objects.filter(({ kind }) => holdsFile(kind));
-  for (let start = 0; start < pictures.length; start += FILE_READS) {
-    const fetched = await Promise.all(pictures.slice(start, start + FILE_READS).map(async ({ id }) => {
-      const bytes = await files.get(id);
+  const named = [...new Map(objects.flatMap((object) => fileOf(object) ?? []).map((ref) => [ref.id, ref])).values()];
+  for (let start = 0; start < named.length; start += FILE_WINDOW) {
+    const fetched = await Promise.all(named.slice(start, start + FILE_WINDOW).map(async (ref) => {
+      const bytes = await files.read(ref);
       // Pictures are compressed already.
-      if (bytes.ok) zip[FILES + id] = [bytes.data, { level: 0 }];
+      if (bytes.ok) zip[FILES + ref.id] = [bytes.data, { level: 0 }];
       return bytes;
     }));
     const failure = fetched.find((result) => !result.ok);
@@ -72,11 +76,12 @@ export function readBackup(bytes: Uint8Array): { ok: true; backup: Backup } | Ba
     const object = parse(line);
     if (!isStored(object)) return damaged;
     objects.push(object);
-    if (!holdsFile(object.kind)) continue;
+    const ref = fileOf(object);
+    if (!ref) continue;
     // fflate writes every entry into a fresh ArrayBuffer; its types do not say so.
-    const file = entries[FILES + object.id] as Uint8Array<ArrayBuffer> | undefined;
+    const file = entries[FILES + ref.id] as Uint8Array<ArrayBuffer> | undefined;
     if (!file) return damaged;
-    held.set(object.id, file);
+    held.set(ref.id, file);
   }
   return { ok: true, backup: { objects, files: held } };
 }
@@ -91,13 +96,19 @@ export async function restoreBackup(store: ObjectStore, files: Files, backup: Ba
   if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
 
   const todo = backup.objects.filter(({ id }) => SEEDED.has(id) || !present.has(id));
+  const held = [...backup.files.values()];
+  const total = held.length + todo.length;
   let done = 0;
+  // Each file seals to the id its objects name, and one the server holds already is not sent again.
+  for (let start = 0; start < held.length; start += FILE_WINDOW) {
+    const saved = await files.save(held.slice(start, start + FILE_WINDOW));
+    if (!saved.ok) return saved;
+    done += saved.data.length;
+    progress(done, total);
+  }
   // In their old rev order, so each chat's entries fold as they did.
-  const writes = todo.sort((a, b) => a.rev - b.rev).map((object): Write => {
-    const file = backup.files.get(object.id);
-    return { ...object, type: 'restore', ...(file && { file: () => files.put(object.id, file) }) };
-  });
-  const restored = await store.batch(writes, () => progress(++done, todo.length));
+  const writes = todo.sort((a, b) => a.rev - b.rev).map((object): Write => ({ ...object, type: 'restore' }));
+  const restored = await store.batch(writes, () => progress(++done, total));
   if (!restored.ok) return restored;
   return store.batch([...SEEDED].filter((id) => !ids.has(id)).map((id) => ({ type: 'remove', id })));
 }

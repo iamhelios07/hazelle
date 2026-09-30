@@ -73,6 +73,12 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     toggle: togglesOf(store, chat, prompt).value,
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    assets: chat.character === null ? [] : store.children('asset', chat.character).map(({ id, value }) => ({ id, name: value.name })),
+    faces: {
+      char: chat.character === null ? null : (store.children('avatar', chat.character)[0]?.value.thumb ?? null),
+      user: persona.kind === 'persona' ? persona.persona.value.picture : null,
+    },
+    screen: null,
     pick: `${chat.character ?? ''}:${chat.seed ?? id ?? ''}`,
   };
 }
@@ -119,7 +125,9 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
 }
 
 // Each message's text as the chat shows it, for its log, its title and its preview, and the bot's CSS for its log.
-export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[]) => display(scopeOf(reader, id, chat, messages));
+// screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
+export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null) =>
+  display({ ...scopeOf(reader, id, chat, messages), screen });
 
 // What a translation in this chat is made from: one of messages, or the user's message after them.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {

@@ -87,15 +87,7 @@ export function testServer() {
       const { accountId } = body;
       const vaultKey = randomBytes(32);
       const open = (key: VaultKey = vaultKey) => ObjectStore.open(accountId, key, api);
-      // The sealed bytes R2 holds under an id.
-      const blobs = {
-        get: async (id: string) => {
-          const object = await app.env.BLOBS.get(`${accountId}/${id}`);
-          return object && new Uint8Array(await object.arrayBuffer());
-        },
-        put: (id: string, bytes: Uint8Array<ArrayBuffer>) => app.env.BLOBS.put(`${accountId}/${id}`, bytes),
-      };
-      return { accountId, vaultKey, store: await open(), files: await Files.open(accountId, vaultKey, api), open, blobs };
+      return { accountId, vaultKey, store: await open(), files: new Files(api), open };
     },
     // The operator deletes the account on the server, which opens signup again (server/accounts): how a user
     // who lost both the password and the recovery key starts over.

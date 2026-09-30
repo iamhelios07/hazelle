@@ -35,3 +35,11 @@ export const useSplit = watch(MEDIA.split);
 
 // Whether things show on hover; without it they show on a tap.
 export const useHover = watch(MEDIA.hover);
+
+// The window's size as `width x height`, for bots that lay out by it ({{screen_width}}). A string, so an unchanged size
+// is the same snapshot.
+const subscribeResize = (listener: () => void) => {
+  window.addEventListener('resize', listener);
+  return () => window.removeEventListener('resize', listener);
+};
+export const useViewport = () => useSyncExternalStore(subscribeResize, () => `${innerWidth}x${innerHeight}`);

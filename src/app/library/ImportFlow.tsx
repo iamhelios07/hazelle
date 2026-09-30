@@ -14,7 +14,8 @@ import { describeStep } from './saving';
 
 const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum';
 
-type Done = { file: string; id: string; imported: Imported; faceless: boolean; lore: number };
+// skipped: assets the import could not keep.
+type Done = { file: string; id: string; imported: Imported; faceless: boolean; lore: number; skipped: number };
 type Result = Done | { file: string; failure: string };
 type State = { busy: string | null; results: Result[] };
 
@@ -64,7 +65,8 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     const picture = avatar && thumb !== null ? { ...avatar, thumb } : null;
     const saved = await importCharacter(store, files, parsed.card, picture, (step) => progress(describeStep(step)));
     if (!saved.ok) return { file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
-    return { file: file.name, id: saved.data, imported: parsed.card, faceless: avatar !== null && thumb === null, lore: parsed.card.lore.length };
+    const { id, skipped, faceless } = saved.data;
+    return { file: file.name, id, imported: parsed.card, faceless: faceless || (avatar !== null && thumb === null), lore: parsed.card.lore.length, skipped };
   }
 
   async function take(files: File[]) {
@@ -127,8 +129,12 @@ function Summary({ result }: { result: Done }) {
     card.regex.length > 0 && `정규식 ${card.regex.length}개`,
     card.variables.length > 0 && `기본 변수 ${card.variables.length}개`,
     card.toggles.trim() && '토글',
+    result.imported.assets.length - result.skipped > 0 && `에셋 ${result.imported.assets.length - result.skipped}개`,
   ].filter(Boolean);
-  const missed = report.unsupported.map((item) => UNSUPPORTED[item.kind](item.count));
+  // Assets the file names but does not hold, and those it holds that could not be kept, are one count.
+  const assetsMissed = (report.unsupported.find((item) => item.kind === 'asset')?.count ?? 0) + result.skipped;
+  const missed = report.unsupported.filter((item) => item.kind !== 'asset').map((item) => UNSUPPORTED[item.kind](item.count));
+  if (assetsMissed) missed.push(UNSUPPORTED.asset(assetsMissed));
   if (result.faceless) missed.unshift('그림: 읽지 못함');
   const notUsed = describeUnused(unused(card));
   return (

@@ -1,4 +1,4 @@
-import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatItem } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { CharacterShelf } from '../model/library';
@@ -29,6 +29,14 @@ export const useStore = (): ObjectStore => useSession().store;
 export const useFiles = (): Files => useSession().files;
 export const useTalk = (): Talk => useSession().talk;
 export const useTranslator = (): Translator => useSession().translator;
+
+// A bot asset's picture URL as the session has it (runtime/assets). The function is a new one when a picture has
+// loaded, so what shows pictures renders again.
+export function useAssetUrl(): (id: string) => string | undefined {
+  const { assets } = useSession();
+  const version = useSyncExternalStore(assets.subscribe, assets.snapshot);
+  return useCallback((id: string) => assets.url(id), [assets, version]);
+}
 
 // Every snapshot below is either one the session built for this store version or an object the store
 // holds as it is: a selector that built a fresh array or object each time would make React re-render forever.

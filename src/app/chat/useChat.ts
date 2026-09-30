@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
+import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem, type TranslateSwitches } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
@@ -28,10 +29,10 @@ import { blocked, displayChat, takeTurn, togglesOf, translateLatest, translation
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
-import { useSession, useTranslating, useTurn } from '../session';
+import { useAssetUrl, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle } from '../ui';
+import { useMenuHandle, useViewport } from '../ui';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
@@ -90,9 +91,11 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const messages: Shown[] = withTurn(item?.messages ?? (unstarted ? [unstarted] : []), turn, chatId);
   // withTurn copies every message, so the greeting is the copy the screen holds, or no press on it matches.
   const opening = unstarted && messages[0]!;
-  const { texts, css } = displayChat(session, chatId, chat, messages);
+  const [width, height] = useViewport().split('x').map(Number);
+  const { texts, css } = displayChat(session, chatId, chat, messages, { width: width!, height: height! });
   // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
   const bot = shelf?.character.decor !== false;
+  const url = useAssetUrl();
   const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);
@@ -319,7 +322,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
-    decor: { bot, css: bot ? css : '' },
+    decor: { bot, css: bot ? resolveAssets(css, url) : '', url },
     translate,
     sendLanguage,
     translation,

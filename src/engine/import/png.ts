@@ -1,5 +1,6 @@
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 const CARD_KEYS = new Set(['chara', 'ccv3']);
+const ASSET = 'chara-ext-asset_';
 const decoder = new TextDecoder();
 
 export type Png = {
@@ -7,6 +8,9 @@ export type Png = {
   card: string | null;
   // The file without the card's tEXt chunks, ending at IEND: the stored avatar is the image alone.
   image: Uint8Array<ArrayBuffer>;
+  // The base64 files a card names `__asset:N`, by N: Risu writes each in a chunk `chara-ext-asset_:N` (older
+  // cards: `chara-ext-asset_N`).
+  assets: Map<string, string>;
 };
 
 // Only tEXt chunks carry a card; iTXt and zTXt are image metadata and stay in the image.
@@ -14,6 +18,7 @@ export function readPng(bytes: Uint8Array): Png | null {
   if (bytes.length < SIGNATURE.length || SIGNATURE.some((byte, i) => bytes[i] !== byte)) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const text = new Map<string, string>();
+  const assets = new Map<string, string>();
   const kept = [bytes.subarray(0, SIGNATURE.length)];
   let pos = SIGNATURE.length;
   while (pos + 12 <= bytes.length) {
@@ -30,10 +35,13 @@ export function readPng(bytes: Uint8Array): Png | null {
         text.set(key, decoder.decode(data.subarray(nul + 1)));
         continue;
       }
-      if (key.startsWith('chara-ext-asset_')) continue;
+      if (key.startsWith(ASSET)) {
+        assets.set(key.slice(ASSET.length).replace(/^:/, ''), decoder.decode(data.subarray(nul + 1)));
+        continue;
+      }
     }
     kept.push(chunk);
-    if (type === 'IEND') return { card: text.get('ccv3') || text.get('chara') || null, image: concat(kept) };
+    if (type === 'IEND') return { card: text.get('ccv3') || text.get('chara') || null, image: concat(kept), assets };
   }
   return null;
 }

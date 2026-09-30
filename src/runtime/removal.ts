@@ -1,28 +1,22 @@
 import { KINDS, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
-import type { Files } from './files';
 import type { ObjectStore } from './store';
-
-// A sealed file or a stored object, by id.
-export type Removal = { from: 'files' | 'store'; id: string };
 
 const KIND_NAMES = Object.keys(KINDS) as Kind[];
 
-// Everything that goes when root is removed for good, as rounds to run one after another; the removals
-// in one round may run together. The invariant: an object is removed only after everything it owns and
-// after its files, so a removal that fails midway leaves the owner in place and can be tried again.
-export function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }): Removal[][] {
-  const files: Removal[] = [];
-  const rounds: Removal[][] = [];
+// The ids of everything that goes when root is removed for good, as rounds to run one after another; the removals
+// in one round may run together. The invariant: an object is removed only after everything it owns, so a removal
+// that fails midway leaves the owner in place and can be tried again. Stored files stay: other objects, in this
+// account or another, may name the same one (runtime/files).
+export function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }): string[][] {
+  const rounds: string[][] = [];
   const visit = ({ kind, id }: { kind: Kind; id: string }): number => {
-    const rule: Rule = KINDS[kind];
-    if (rule.file) files.push({ from: 'files', id });
     const round = owned(store, kind, id).reduce((last, object) => Math.max(last, visit(object)), -1) + 1;
-    (rounds[round] ??= []).push({ from: 'store', id });
+    (rounds[round] ??= []).push(id);
     return round;
   };
   visit(root);
-  return files.length ? [files, ...rounds] : rounds;
+  return rounds;
 }
 
 // What an object owns by either link KINDS declares: the parent, or a body field.
@@ -46,23 +40,13 @@ export function orderOwned<T extends { kind: Kind }>(objects: T[]): T[] {
   return [...objects].sort((a, b) => depth(b.kind) - depth(a.kind));
 }
 
-export async function removeOwned(store: ObjectStore, files: Files, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
+export async function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
   const rounds = planRemoval(store, root);
   const total = rounds.reduce((sum, round) => sum + round.length, 0);
   let done = 0;
   progress(done, total);
   for (const round of rounds) {
-    const objects = [];
-    for (const removal of round) {
-      if (removal.from === 'store') objects.push({ type: 'remove' as const, id: removal.id });
-      else {
-        const removed = await files.remove(removal.id);
-        if (!removed.ok) return removed;
-        progress(++done, total);
-      }
-    }
-    if (!objects.length) continue;
-    const removed = await store.batch(objects, () => progress(++done, total));
+    const removed = await store.batch(round.map((id) => ({ type: 'remove', id })), () => progress(++done, total));
     if (!removed.ok) return removed;
   }
   return { ok: true, data: null };

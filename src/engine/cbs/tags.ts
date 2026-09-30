@@ -1,4 +1,5 @@
 import { isRecord } from '../../connectors/values';
+import { assetUrl, findAsset } from '../assets';
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
@@ -46,7 +47,6 @@ const UNSUPPORTED = new Set([
   // is left out, since normalizing empties its name.
   'triggerid',
   'emotionlist',
-  'assetlist',
   'chardisplayasset',
   'moduleenabled',
   'moduleassetlist',
@@ -66,18 +66,12 @@ const UNSUPPORTED = new Set([
   'caesar',
   'encrypt',
   'decrypt',
-  'raw',
-  'path',
-  'img',
-  'image',
   'video',
   'audio',
   'bgm',
   'bg',
   'emotion',
-  'asset',
   'videoimg',
-  'source',
   'inlay',
   'inlayed',
   'inlayeddata',
@@ -161,6 +155,25 @@ define('lorebook worldinfo', 0, (_, { context }) => serialize(context.lore));
 
 // Risu's markup, which the display dims until a bot's buttons can run (design §6.4).
 define('button', 2, ([label, trigger]) => `<button class="button-default" risu-trigger="${trigger}">${label}</button>`);
+
+// A bot's pictures show on screen only; the prompt keeps these tags as written, as in Risu (design §6.4). A name that
+// finds no asset shows nothing.
+const assetTag = (render: (url: string) => string): Run => ([name], { context, random }) => {
+  if (context.stage !== 'display') return null;
+  const asset = findAsset(context.assets, name!, random);
+  return asset ? render(assetUrl(asset.id)) : '';
+};
+define('raw path', 1, assetTag((url) => url));
+define('img', 1, assetTag((url) => `<img src="${url}">`));
+define('image', 1, assetTag((url) => `<div class="risu-inlay-image"><img src="${url}"></div>\n`));
+define('asset', 1, assetTag((url) => `<img src="${url}">\n`));
+define('source', 1, ([name], { context: { stage, faces } }) => {
+  if (stage !== 'display') return null;
+  const face = name!.toLowerCase();
+  return (face === 'char' ? faces.char : face === 'user' ? faces.user : null) ?? '';
+});
+// The names a bot's prompt lists, so the model can pick pictures by name.
+define('assetlist', 0, (_, { context: { card, assets } }) => (card ? serialize(assets.map(({ name }) => name)) : ''));
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
 define('setvar', 2, ([name, value], { context, writes }) => {

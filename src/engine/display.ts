@@ -7,7 +7,8 @@ import { contexts, renderChat, type ChatScope } from './render';
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
 export type Display = { texts: string[]; css: string };
 
-const STYLE = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
+// A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
+const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 
 export function display(scope: ChatScope): Display {
   const { texts, variables } = renderChat('display', scope);

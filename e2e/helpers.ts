@@ -22,6 +22,9 @@ export const CARD = {
 };
 
 // A bot's HTML at its worst: nothing in it may run, post, load from outside or cover the app (design §6.4).
+// A 1x1 PNG.
+const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
 export const HOSTILE = {
   name: 'hostile.json',
   mimeType: 'application/json',
@@ -41,7 +44,10 @@ export const HOSTILE = {
           '{{button::누르기::go}}',
           '',
           '*nods* "hello"',
+          '',
+          '<div id="pic">{{img::smile}}</div><div id="backdrop" style="background-image: url({{raw::smile}})">backdrop</div>',
         ].join('\n'),
+        assets: [{ type: 'x-risu-asset', uri: `data:image/png;base64,${PIXEL}`, name: 'smile', ext: 'png' }],
         extensions: { risuai: { backgroundHTML: '<style>.tone { color: rgb(0, 128, 0) }</style>' } },
       },
     }),

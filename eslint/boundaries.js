@@ -21,8 +21,8 @@ const AREAS = {
   },
   model: {
     paths: ['src/model'],
-    types: ['connectors', 'engine'],
-    why: 'the model is pure domain, saved values and what is computed from them with no I/O, and takes only types from connectors and the engine.',
+    types: ['connectors', 'engine', 'vault'],
+    why: 'the model is pure domain, saved values and what is computed from them with no I/O, and takes only types from connectors, the engine and the vault (a stored file\'s reference).',
   },
   vault: { paths: ['src/vault'], why: 'the vault is crypto and device storage only; it never reaches the network.' },
   server: { paths: ['src/server'], why: 'the server knows nothing about the client or providers.' },

@@ -28,6 +28,8 @@ export type Converted = {
   spec: ImportReport['spec'];
   // The uri of the card's icon asset, when it names one.
   icon: string | null;
+  // The bot's own pictures, each by the name its text reaches it by and the uri that holds it.
+  assets: { name: string; uri: string }[];
 };
 
 const SPECS = new Map<unknown, ImportReport['spec']>([
@@ -69,10 +71,16 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
   const risu = record(extensions.risuai);
   const book = record(data.character_book);
 
-  const assets = spec === 'v3' ? list(data.assets) : [];
-  const icon = pickIcon(assets);
-  add(tally, 'asset', assets.length - (icon ? 1 : 0));
-  if (spec === 'v2') add(tally, 'asset', list(risu.emotions).length + list(risu.additionalAssets).length + Object.keys(record(risu.vits)).length);
+  const listed = spec === 'v3' ? list(data.assets) : [];
+  const icon = pickIcon(listed);
+  // Risu's own assets: CCv3's x-risu-asset, and v2's additionalAssets as [name, uri, extension]. Emotions, voices and
+  // other asset types are not read.
+  const assets =
+    spec === 'v3'
+      ? listed.filter((asset): asset is Json => isRecord(asset) && asset.type === 'x-risu-asset').map((asset) => ({ name: text(asset.name), uri: text(asset.uri) }))
+      : list(risu.additionalAssets).filter(Array.isArray).map(([name, uri]) => ({ name: text(name), uri: text(uri) }));
+  add(tally, 'asset', listed.length - (icon ? 1 : 0) - (spec === 'v3' ? assets.length : 0));
+  if (spec === 'v2') add(tally, 'asset', list(risu.emotions).length + Object.keys(record(risu.vits)).length);
   for (const trigger of module ? list(module.trigger) : list(risu.triggerscript)) {
     const effects = list(record(trigger).effect).map(record);
     const lua = effects[0]?.type === 'triggerlua';
@@ -120,7 +128,7 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
   const { lore, loreFolders } =
     module && Array.isArray(module.lorebook) ? lorebook(module.lorebook, RISU_LORE) : lorebook(list(book.entries), BOOK_LORE);
   countInText(card, lore, tally);
-  return { card, lore, loreFolders, spec, icon: icon && text(icon.uri) };
+  return { card, lore, loreFolders, spec, icon: icon && text(icon.uri), assets };
 }
 
 // Tavern v1, including the char_* names of older exports that Risu's JSON check accepts.

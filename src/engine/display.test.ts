@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { resolveAssets } from './assets';
+import { evaluate } from './cbs/evaluate';
 import { display, storyHtml } from './display';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
-import type { ChatScope } from './render';
+import { contexts, type ChatScope } from './render';
 
 const card: Card = {
   name: 'Luna',
@@ -26,7 +28,7 @@ const card: Card = {
     { name: 'hp', find: '\\[HP (\\d+)\\]', replace: '{{setvar::hp::$1}}<style>.x-risu-box { color: red }</style><div class="box">HP $1</div>', stage: 'output', flags: null },
     { name: 'box', find: 'BOX', replace: '<style>.x-risu-box { color: red }</style><div class="box">box</div>', stage: 'display', flags: null },
   ],
-  background: '<style>.hp::after { content: "{{getvar::hp}}" }</style>',
+  background: '<style>.hp::after { content: "{{getvar::hp}}" }',
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
@@ -41,14 +43,36 @@ const scope: ChatScope = {
   toggle: () => null,
   model: null,
   clock: { now: 0, timeZone: 'UTC' },
+  assets: [],
+  faces: { char: null, user: null },
+  screen: null,
   pick: 'luna:chat',
 };
 
 describe('display', () => {
-  it('takes every <style> out of the texts into one stylesheet for the chat, the backgroundHTML’s first, read with the last variables', () => {
+  it('takes every <style>, one left open too, out of the texts into one stylesheet for the chat, the backgroundHTML’s first, read with the last variables', () => {
     const { texts, css } = display(scope);
     expect(texts).toEqual(['<div class="box">box</div>\n', 'The lamp. <div class="box">HP 7</div>\n']);
     expect(css.split('\n')).toEqual(['.hp::after { content: "7" }', '.x-risu-box { color: red }']);
+  });
+});
+
+describe('asset tags', () => {
+  const smile = '11111111-1111-4111-8111-111111111111';
+  const wave = '22222222-2222-4222-8222-222222222222';
+  const withAssets: ChatScope = { ...scope, assets: [{ id: smile, name: 'Smile.png' }, { id: wave, name: 'wave' }], faces: { char: 'data:char', user: null } };
+  const run = (text: string, stage: 'display' | 'prompt') => evaluate(text, contexts(withAssets, stage, null)({ seed: 's' }, new Map()));
+
+  it('show a picture by name in any case, or the nearest name, on screen only, and list the names everywhere', () => {
+    expect(run('{{img::smile.png}}|{{raw::smiling}}|{{image::none of these}}|{{source::char}}{{source::user}}', 'display')).toBe(
+      `<img src="asset:${smile}">|asset:${smile}||data:char`,
+    );
+    expect(run('{{img::smile.png}} {{assetlist}}', 'prompt')).toBe('{{img::smile.png}} ["Smile.png","wave"]');
+  });
+
+  it('take the picture’s URL once the chat has it, and nothing before', () => {
+    const shown = `<img src="asset:${smile}"><div style="background: url(asset:${wave})">`;
+    expect(resolveAssets(shown, (id) => (id === smile ? 'blob:smile' : undefined))).toBe('<img src="blob:smile"><div style="background: url()">');
   });
 });
 
