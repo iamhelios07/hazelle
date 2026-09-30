@@ -1,6 +1,7 @@
 import { PenLine } from 'lucide-react';
 import { useState } from 'react';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { follows } from '../common/words';
 import { Button, Menu, Row, Stack, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
 
@@ -88,7 +89,7 @@ function NoteEditor({ chat }: { chat: OpenChat }) {
         )}
         {own && (
           <Button variant="ghost" size="sm" onClick={follow}>
-            기본 노트 따르기
+            {follows('기본 노트')}
           </Button>
         )}
         <Button variant="secondary" size="sm" onClick={close}>

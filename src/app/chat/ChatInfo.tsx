@@ -90,7 +90,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
         {earlier.length > 0 && tab !== 'reply' && <Text tone="muted">이어 쓴 답장이에요. 아래는 마지막 이어 쓰기가 보낸 요청이에요.</Text>}
         {tab === 'reply' && (
           <>
-            {version.edited && <Text tone="muted">직접 고친 답장이에요. 아래는 고치기 전 답장을 받았을 때의 정보예요.</Text>}
+            {version.edited && <Text tone="muted">직접 수정한 답장이에요. 아래는 수정하기 전 답장을 받았을 때의 정보예요.</Text>}
             {earlier.length > 0 && (
               <Text tone="muted">{`이어 쓴 답장이에요. 호출 ${earlier.length + 1}번으로 만들었고, 비용은 호출마다 따로 들어요. 아래는 마지막 호출이고, 앞선 호출은 맨 아래에 있어요.`}</Text>
             )}

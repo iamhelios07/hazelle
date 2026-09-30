@@ -25,7 +25,7 @@ type Props = {
   sendLanguage: string;
   flipped: boolean;
   isLast: boolean;
-  // The user's message right before the last reply, which 저장하고 답장 다시 받기 answers again.
+  // The user's message right before the last reply, which 저장하고 새 답장 받기 answers again.
   beforeLastReply: boolean;
   // Who replies: the chat's character, or with none, the model named on each reply.
   character: { name: string; image: string | null } | null;
@@ -101,7 +101,7 @@ export function ChatMessage(props: Props) {
             </Button>
             {beforeLastReply && (
               <Button variant="secondary" size="sm" disabled={busy} onClick={() => void actions.saveEdit(message, true)}>
-                저장하고 답장 다시 받기
+                저장하고 새 답장 받기
               </Button>
             )}
             <Button size="sm" onClick={() => void actions.saveEdit(message, false)}>
@@ -173,7 +173,7 @@ export function ChatMessage(props: Props) {
             !empty
               ? { label: '이어 쓰기', disabled: busy, onClick: () => actions.continue(message) }
               : cut === 'stopped'
-                ? { label: '다시 받기', disabled: busy, onClick: () => actions.retry(message) }
+                ? { label: '다시 시도', disabled: busy, onClick: () => actions.retry(message) }
                 : undefined
           }
         />
@@ -200,7 +200,7 @@ export function ChatMessage(props: Props) {
     </>
   ) : (
     <>
-      {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 생성" onClick={() => actions.regenerate(message)} />}
+      {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="새 답장 받기" onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 시도" onClick={() => actions.retry(message)} />}
       {translateTool}
       {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message)} />}
@@ -208,7 +208,7 @@ export function ChatMessage(props: Props) {
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 갈라지기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="답장 정보" onClick={() => actions.info(message.id)} />}
       <Divider variant="tools" />
-      <IconButton icon={Trash2} size="xs" label="삭제 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
+      <IconButton icon={Trash2} size="xs" label="지우기 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
     </>
   );
 

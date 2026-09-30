@@ -61,7 +61,7 @@ describe('Translator', () => {
       expect(log).toHaveLength(0);
     }));
 
-  it('translates with the translation prompt’s own model, and without one with the chat’s 보조', () =>
+  it('translates with the translation prompt’s own model, and without one with the chat’s 보조 모델', () =>
     server.withSession(async (session) => {
       await answerable(session);
       const [connection] = session.store.list('connection');

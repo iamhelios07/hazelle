@@ -23,7 +23,7 @@ import { tokenizer } from './tokenizer';
 import { translate, type TranslateFailure, type TranslateInput } from './translate';
 
 // What the user asks for: their new message and a reply to it, a reply to the last message sending
-// nothing new (답장 받기), another version of a reply (다시 생성), one in place of a failed version
+// nothing new (답장 받기), another version of a reply (새 답장 받기), one in place of a failed version
 // (다시 시도), or the rest of a cut version, which takes its place (이어 쓰기).
 export type Target =
   | { kind: 'send'; text: string }

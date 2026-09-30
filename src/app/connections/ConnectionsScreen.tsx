@@ -3,6 +3,7 @@ import { resolveConnection } from '../../connectors/registry';
 import { useConnections, useUnreadable } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
+import { PAGES } from '../common/words';
 import { Button, Callout, Empty, Icon, List, ListItem, NavBar, Screen } from '../ui';
 
 // The default model is chosen in 설정's 기본값, not here.
@@ -15,7 +16,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
     <Screen
       top={
         <NavBar
-          title="연결"
+          title={PAGES.connections}
           {...backBar(back)}
           actions={
             <Button variant="secondary" size="sm" icon={Plus} onClick={() => navigate({ kind: 'add-connection' })}>

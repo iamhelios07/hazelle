@@ -8,6 +8,7 @@ import { noResults } from '../common/search';
 import { ago } from '../common/time';
 import { useStore, useViews } from '../session';
 import { useToast } from '../toast';
+import { PAGES } from '../common/words';
 import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles } from '../ui';
 import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, promptName, usePromptUse, type PromptUse } from './usePromptUse';
@@ -106,7 +107,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   const body = (
     <>
       <Stack gap="related">
-        <SearchField label="이름으로 찾기" value={query} onChange={setQuery} />
+        <SearchField label="프롬프트 검색" value={query} onChange={setQuery} />
       </Stack>
       {words ? (
         found.length ? (
@@ -159,5 +160,5 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       {preset.view}
     </>
   );
-  return frame({ head: { title: '프롬프트', actions }, body });
+  return frame({ head: { title: PAGES.prompts, actions }, body });
 }

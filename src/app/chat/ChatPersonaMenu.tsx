@@ -1,5 +1,6 @@
 import { UserRound } from 'lucide-react';
 import { aliased } from '../common/alias';
+import { follows } from '../common/words';
 import { useSettings, useViews } from '../session';
 import { useToast } from '../toast';
 import { Avatar, ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
@@ -46,7 +47,7 @@ function PersonaChoices({ chat }: { chat: OpenChat }) {
   return (
     <>
       <MenuHeading>이 채팅에서 나는</MenuHeading>
-      <MenuItem label="기본 페르소나 따르기" sub={fallback ? aliased(fallback.value.name, fallback.value.alias) : '기본 페르소나가 지워졌어요'} checked={!persona.own} onClick={() => choose(null)} />
+      <MenuItem label={follows('기본 페르소나')} sub={fallback ? aliased(fallback.value.name, fallback.value.alias) : '기본 페르소나가 지워졌어요'} checked={!persona.own} onClick={() => choose(null)} />
       {personas.map(({ id, value }) => (
         <MenuItem
           key={id}

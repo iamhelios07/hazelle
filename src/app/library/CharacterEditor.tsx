@@ -23,9 +23,9 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
   const body = (
     <>
       <Text tone="muted">로어북과 정규식은 아직 여기서 고칠 수 없어요.</Text>
-      <Section title="기본">
+      <Section title="기본 정보">
         <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 적어 주세요.'} />
-        <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 보는 이름이에요. AI에게는 보내지 않아요." />
+        <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 보는 이름이에요. 모델에게는 보내지 않아요." />
         <TextField
           label="부르는 이름"
           value={text.nickname ?? ''}

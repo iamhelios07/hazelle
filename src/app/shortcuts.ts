@@ -17,7 +17,7 @@ export const SHORTCUTS = {
   stop: { label: '답장 멈추기', hint: '멈추기', keys: [{ key: 'Escape' }] },
   editLast: { label: '내 마지막 메시지 수정', hint: '내 메시지 수정', keys: [{ key: 'ArrowUp' }] },
   // The first key steps back, the second forward, and from the last version asks for a new one.
-  swipe: { label: '답장 넘기기 · 끝에서 새로 받기', hint: '답장 넘기기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
+  swipe: { label: '답장 넘기기 · 끝에서 새 답장 받기', hint: '답장 넘기기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
   saveEdit: { label: '수정 저장', hint: '저장', keys: [{ key: 'Enter', mod: true }] },
   cancelEdit: { label: '수정 취소', hint: '취소', keys: [{ key: 'Escape' }] },
   undo: { label: '되돌리기', hint: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },

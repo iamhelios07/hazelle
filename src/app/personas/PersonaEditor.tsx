@@ -74,7 +74,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
         )}
       </FaceRow>
       <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 적어 주세요.'} />
-      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요. AI에게는 보내지 않아요." />
+      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요. 모델에게는 보내지 않아요." />
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} help="프롬프트의 ‘페르소나’ 자리에 이 설명이 들어가요." />
       <Row kind="actions">
         <Button variant="danger" size="sm" onClick={() => void remove()}>

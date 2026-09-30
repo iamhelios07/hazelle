@@ -12,7 +12,7 @@ export const SLOT_NAMES: Record<SlotKind, string> = {
   source: '원문',
 };
 
-export const ROLE_WORDS: Record<Role, string> = { system: '시스템', user: '사용자', assistant: 'AI' };
+export const MESSAGE_ROLES: Record<Role, string> = { system: '시스템', user: '사용자', assistant: 'AI' };
 
 // A text block with no name of its own.
-export const textName = (role: Role) => `${ROLE_WORDS[role]} 글`;
+export const textName = (role: Role) => `${MESSAGE_ROLES[role]} 글`;

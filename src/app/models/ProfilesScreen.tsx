@@ -1,6 +1,7 @@
 import { modelProfile, profileUsers } from '../../runtime/profiles';
 import { useStore, useViews } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
+import { noStarred, PAGES } from '../common/words';
 import type { Back } from '../shell/routes';
 import { Empty, List, ListItem, NavBar, Screen, Section } from '../ui';
 import { defaultFirst, valueWords } from './settingWords';
@@ -16,7 +17,7 @@ export function ProfilesScreen({ back }: { back: Back | null }) {
   const sorted = defaultFirst(profiles, settings.profile);
 
   return (
-    <Screen top={<NavBar title="모델 설정" {...backBar(back)} />}>
+    <Screen top={<NavBar title={PAGES.profiles} {...backBar(back)} />}>
       <Section title="모델" hint="새로 별표한 모델은 기본 설정을 써요.">
         {models.length > 0 ? (
           <List label="모델">
@@ -32,7 +33,7 @@ export function ProfilesScreen({ back }: { back: Back | null }) {
             ))}
           </List>
         ) : (
-          <Empty variant="section">별표한 모델이 없어요. 연결에서 모델에 별표를 찍으면 여기서 설정할 수 있어요.</Empty>
+          <Empty variant="section">{noStarred('설정할 수 있어요')}</Empty>
         )}
       </Section>
       <Section title="만들어 둔 설정">

@@ -5,6 +5,7 @@ import { setDefaultPersona } from '../../runtime/personas';
 import { ofSort, setDefaultPrompt } from '../../runtime/prompts';
 import { aliased } from '../common/alias';
 import { findStarred, RolePicker } from '../common/RolePicker';
+import { AUX_HELP, follows, MODEL_ROLES, PAGES } from '../common/words';
 import { useSettings, useStore, useViews } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -14,10 +15,10 @@ import { Callout, ChipButton, Empty, Menu, MenuItem, NavBar, Screen, Section, Se
 type Choice = { key: string; label: string; sub?: string; checked: boolean; pick: () => Promise<{ ok: true } | ApiFailure> };
 
 // A chosen id that is no longer there reads as missing, never as another choice.
-const MISSING = '없어졌어요';
+const MISSING = '지워졌어요';
 const UNSET = '정하지 않음';
 
-// The 전체 기본값 layer and the defaults a new chat starts from. This is the only place they are chosen.
+// The 기본값 layer of the model assignment and the defaults a new chat starts from. This is the only place they are chosen.
 export function DefaultsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
@@ -52,7 +53,7 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
   );
 
   return (
-    <Screen width="form" top={<NavBar title="기본값" {...backBar(back)} />}>
+    <Screen width="form" top={<NavBar title={PAGES.defaults} {...backBar(back)} />}>
       <Section title="새 채팅의 기본값">
         <SettingGroup label="새 채팅의 기본값">
           <SettingRow
@@ -85,14 +86,14 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
           />
           <RolePicker
             role="aux"
-            help="번역처럼 대화 밖에서 하는 일에 써요. 번역 프롬프트에서 모델을 고르면 번역은 그 모델로 해요."
+            help={AUX_HELP}
             own={settings.models.aux}
-            follow="본 대화와 같게"
+            follow={follows(MODEL_ROLES.main)}
             connections={connections}
             onPick={(ref) => pickModel('aux', ref)}
           />
         </SettingGroup>
-        {main && !findStarred(main, connections) && <Callout tone="warn">본 대화로 정했던 모델이 별표 목록에 없어요. 다시 골라 주세요.</Callout>}
+        {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정했던 모델이 별표한 모델에 없어요. 다시 골라 주세요.`}</Callout>}
       </Section>
     </Screen>
   );

@@ -11,7 +11,7 @@ describe('model assignment', () => {
     expect(resolveRole('main', [{}, {}])).toBeNull();
   });
 
-  it('falls back from 보조 to 본 대화 only after every layer is asked', () => {
+  it('falls back from 보조 모델 to 대화 모델 only after every layer is asked', () => {
     const main = { connection: 'c1', model: 'claude' };
     const aux = { connection: 'c1', model: 'haiku' };
     expect(resolveRole('aux', [{ main }, { aux }])).toEqual(aux);

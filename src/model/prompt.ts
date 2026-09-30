@@ -63,7 +63,7 @@ export type ConversationPrompt = {
   imported?: 'risu-preset';
 };
 
-// model: the one place a translation's model is chosen; without one, the chat's 보조. Its text blocks carry no mark,
+// model: the one place a translation's model is chosen; without one, the chat's 보조 모델. Its text blocks carry no mark,
 // since a card never replaces a translator's text.
 export type TranslatePrompt = {
   task: 'translate';

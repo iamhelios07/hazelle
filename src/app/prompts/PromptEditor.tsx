@@ -309,7 +309,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
         action={
           !split && (
             <Button variant="link" size="xs" onClick={() => setReordering(!reordering)}>
-              {reordering ? '다 했어요' : '순서 바꾸기'}
+              {reordering ? '완료' : '순서 바꾸기'}
             </Button>
           )
         }

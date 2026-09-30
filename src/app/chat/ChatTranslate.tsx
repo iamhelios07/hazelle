@@ -3,9 +3,12 @@ import { useState } from 'react';
 import { ofSort, translationPrompt } from '../../runtime/prompts';
 import { describeTranslateFailure } from '../common/failure';
 import { LANGUAGES, languageLabel, withRo } from '../common/languages';
+import { follows, MODEL_ROLES } from '../common/words';
 import { useSession, useSettings, useViews } from '../session';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, Row, SettingRow, Stack, Switch, Tag, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
+
+const appliesTo = (card: OpenChat['card']) => (card ? `${card.name}의 모든 채팅에 적용돼요.` : '캐릭터 없이 하는 모든 채팅에 적용돼요.');
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
   const { translate, translation, card, actions } = chat;
@@ -43,7 +46,7 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
         <SettingRow
           place="panel"
           label="번역 모델"
-          help="번역 프롬프트에서 골라요. 고르지 않았으면 보조 모델을 써요."
+          help={`번역 프롬프트에서 골라요. 고르지 않았으면 ${MODEL_ROLES.aux}을 따라요.`}
           control={
             <Text size="sm" tone={translation.ok ? 'default' : 'muted'}>
               {translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}
@@ -51,7 +54,7 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
           }
         />
         <Text size="sm" tone="muted">
-          {card ? `${card.name}의 모든 채팅에 적용돼요.` : '캐릭터 없이 하는 모든 채팅에 적용돼요.'}
+          {appliesTo(card)}
         </Text>
       </Stack>
     </Menu>
@@ -99,7 +102,7 @@ function LanguageChoices({ value, onPick }: { value: string; onPick: (name: stri
 // Without its own choice the character follows the default translation prompt live, and a deleted one shows as
 // missing, never as another prompt.
 function PromptMenu({ chat }: { chat: OpenChat }) {
-  const { translate, actions } = chat;
+  const { translate, card, actions } = chat;
   const { store } = useSession();
   const settings = useSettings();
   const prompts = useViews()
@@ -114,8 +117,8 @@ function PromptMenu({ chat }: { chat: OpenChat }) {
       label="번역 프롬프트"
       trigger={(opener) => <ChipButton variant="field" opens="up" label={label} title="번역 프롬프트" tone={choice.kind === 'missing' ? 'warn' : 'default'} {...opener} />}
     >
-      <MenuHeading>이 캐릭터의 모든 채팅에 적용돼요</MenuHeading>
-      <MenuItem label="기본 번역 프롬프트 따르기" sub={fallback?.value.name ?? '기본 번역 프롬프트가 없어요'} checked={translate.prompt === undefined} onClick={() => actions.setTranslate({ prompt: undefined })} />
+      <MenuHeading>{appliesTo(card)}</MenuHeading>
+      <MenuItem label={follows('기본 번역 프롬프트')} sub={fallback?.value.name ?? '기본 번역 프롬프트가 없어요'} checked={translate.prompt === undefined} onClick={() => actions.setTranslate({ prompt: undefined })} />
       {prompts.map((item) => (
         <MenuItem
           key={item.id}
@@ -126,7 +129,7 @@ function PromptMenu({ chat }: { chat: OpenChat }) {
         />
       ))}
       <Divider variant="menu" />
-      {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 고치기…" onClick={() => actions.side({ kind: 'prompts', id: choice.prompt.id, pane: null })} />}
+      {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => actions.side({ kind: 'prompts', id: choice.prompt.id, pane: null })} />}
       <MenuItem label="프롬프트 관리…" onClick={() => actions.side({ kind: 'prompts', id: null, pane: null })} />
     </Menu>
   );

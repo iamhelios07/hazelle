@@ -2,6 +2,7 @@ import { useAccount, useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
+import { PAGES } from '../common/words';
 import { Avatar, Button, FaceRow, NavBar, Screen, SettingGroup, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 
@@ -10,7 +11,7 @@ export function AccountScreen({ back }: { back: Back | null }) {
   const { onLock, onLogout } = useAccount();
   const toast = useToast();
   return (
-    <Screen width="form" top={<NavBar title="계정" {...backBar(back)} />}>
+    <Screen width="form" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
       <FaceRow face={<Avatar face={username} tone="you" />}>
         <Text>{username}</Text>
         <Text size="sm" tone="muted">

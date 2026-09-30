@@ -14,7 +14,7 @@ import { without, type ObjectStore } from './store';
 export type Route = { connection: Stored<'connection'>; model: Model };
 export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' };
 
-// A chat's model for a role: its own layer, its prompt's, then 전체 기본값. A missing prompt has no layer;
+// A chat's model for a role: its own layer, its prompt's, then 기본값. A missing prompt has no layer;
 // the turn stops on it before the model matters.
 export function chatModel(store: ObjectStore, chat: Chat, role: Role): Route | RouteFailure {
   const prompt = chatPrompt(store, chat);
@@ -22,7 +22,7 @@ export function chatModel(store: ObjectStore, chat: Chat, role: Role): Route | R
   return ref ? routeOf(store, ref) : { kind: 'no-model' };
 }
 
-// A task's model: the one its prompt holds, else the chat's 보조.
+// A task's model: the one its prompt holds, else the chat's 보조 모델.
 export function taskModel(store: ObjectStore, chat: Chat, own: ModelRef | undefined): Route | RouteFailure {
   return own ? routeOf(store, own) : chatModel(store, chat, 'aux');
 }

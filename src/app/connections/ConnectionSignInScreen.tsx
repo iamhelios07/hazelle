@@ -66,7 +66,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
         top={top}
         actions={
           <Button icon={RotateCw} onClick={() => setAttempt((count) => count + 1)}>
-            다시 하기
+            다시 시도
           </Button>
         }
       >

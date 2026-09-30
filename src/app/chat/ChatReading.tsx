@@ -57,7 +57,7 @@ function ReadingForm({ reading }: { reading: ReadingControl }) {
       />
       <Row kind="actions">
         <Button variant="ghost" size="sm" onClick={() => set(initial)}>
-          처음대로
+          처음 값으로 되돌리기
         </Button>
       </Row>
     </Stack>

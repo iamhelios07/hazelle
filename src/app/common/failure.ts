@@ -6,6 +6,7 @@ import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
 import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
+import { inSettings, MODEL_ROLES } from './words';
 
 const MESSAGES: Record<string, string> = {
   'bad-username': '아이디는 2–32자의 글자, 숫자, _ . - 로만 만들 수 있어요.',
@@ -128,20 +129,20 @@ export function describeAddFailure(failure: AddFailure): string {
 export function describeTurnFailure(failure: TurnFailure): string {
   switch (failure.kind) {
     case 'no-model':
-      return '본 대화 모델이 정해지지 않았어요. 모델 버튼에서 골라 주세요.';
+      return `${MODEL_ROLES.main}이 정해지지 않았어요. 모델 버튼에서 골라 주세요.`;
     case 'model-gone':
-      return '고른 모델이 별표 목록에 없어요. 모델 버튼에서 다시 골라 주세요.';
+      return '고른 모델이 별표한 모델에 없어요. 모델 버튼에서 다시 골라 주세요.';
     case 'prompt-missing':
-      return failure.own ? '이 채팅의 프롬프트가 지워졌어요. 다른 프롬프트를 골라 주세요.' : '기본 프롬프트가 없어요.';
+      return failure.own ? '이 채팅의 프롬프트가 지워졌어요. 다른 프롬프트를 골라 주세요.' : `기본 프롬프트가 없어요. ${inSettings('defaults')}에서 골라 주세요.`;
     case 'persona-missing':
-      return failure.own ? '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.' : '기본 페르소나가 지워졌어요. 다른 페르소나를 기본으로 골라 주세요.';
+      return failure.own ? '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.' : `기본 페르소나가 지워졌어요. ${inSettings('defaults')}에서 다른 페르소나를 골라 주세요.`;
     case 'profile-missing':
-      return failure.own ? '이 모델이 쓰던 설정이 지워졌어요. 모델 설정에서 다른 설정을 골라 주세요.' : '기본 설정이 없어요. 모델 설정에서 다른 설정을 기본으로 골라 주세요.';
+      return failure.own ? `이 모델이 쓰던 설정이 지워졌어요. ${inSettings('profiles')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('profiles')}에서 다른 설정을 기본으로 정해 주세요.`;
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 보내 주세요.';
     case 'too-long':
-      if (failure.budget <= 0) return '이 모델의 답장 길이가 컨텍스트만큼 커서 프롬프트가 들어갈 자리가 없어요. 모델 설정에서 이 모델의 답장 길이를 줄여 주세요.';
-      return `마지막 메시지만 남겨도 프롬프트가 약 ${failure.tokens.toLocaleString('ko-KR')} 토큰이라, 답장 길이를 뺀 이 모델의 자리 ${failure.budget.toLocaleString('ko-KR')} 토큰에 들어가지 않아요. 프롬프트나 로어북을 줄이거나 모델 설정에서 이 모델의 설정을 바꿔 주세요.`;
+      if (failure.budget <= 0) return `이 모델의 답장 최대 길이가 컨텍스트만큼 커서 프롬프트가 들어갈 자리가 없어요. ${inSettings('profiles')}에서 이 모델의 답장 최대 길이를 줄여 주세요.`;
+      return `마지막 메시지만 남겨도 프롬프트가 약 ${failure.tokens.toLocaleString('ko-KR')} 토큰이라, 답장 최대 길이를 뺀 이 모델의 자리 ${failure.budget.toLocaleString('ko-KR')} 토큰에 들어가지 않아요. 프롬프트나 로어북을 줄이거나 ${inSettings('profiles')}에서 이 모델의 설정을 바꿔 주세요.`;
     case 'unstarted':
       return `${failure.step === 'chat' ? '채팅을 만들지 못했어요.' : '첫인사를 저장하지 못했어요.'} ${describeFailure(failure.failure)}`;
     case 'unsent':
@@ -156,15 +157,15 @@ export function describeTurnFailure(failure: TurnFailure): string {
 export function describeTranslateFailure(failure: Exclude<TranslateFailure, { kind: 'stopped' }> | TranslatorFailure): string {
   switch (failure.kind) {
     case 'prompt-missing':
-      return failure.own ? '고른 번역 프롬프트가 지워졌어요. 번역에서 다른 프롬프트를 골라 주세요.' : '기본 번역 프롬프트가 없어요. 프롬프트 화면에서 번역 프롬프트 하나를 기본으로 정해 주세요.';
+      return failure.own ? '고른 번역 프롬프트가 지워졌어요. 채팅의 번역 메뉴에서 다른 프롬프트를 골라 주세요.' : `기본 번역 프롬프트가 없어요. ${inSettings('prompts')}에서 번역 프롬프트 하나를 기본으로 정해 주세요.`;
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 번역해 주세요.';
     case 'no-model':
-      return '번역 모델이 정해지지 않았어요. 번역 프롬프트나 기본값에서 골라 주세요.';
+      return `번역 모델이 정해지지 않았어요. 번역 프롬프트나 ${inSettings('defaults')}에서 골라 주세요.`;
     case 'model-gone':
-      return '번역에 쓸 모델이 별표 목록에 없어요. 번역 프롬프트나 기본값에서 다시 골라 주세요.';
+      return `번역에 쓸 모델이 별표한 모델에 없어요. 번역 프롬프트나 ${inSettings('defaults')}에서 다시 골라 주세요.`;
     case 'profile-missing':
-      return failure.own ? '번역 모델이 쓰던 설정이 지워졌어요. 모델 설정에서 다른 설정을 골라 주세요.' : '기본 설정이 없어요. 모델 설정에서 다른 설정을 기본으로 골라 주세요.';
+      return failure.own ? `번역 모델이 쓰던 설정이 지워졌어요. ${inSettings('profiles')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('profiles')}에서 다른 설정을 기본으로 정해 주세요.`;
     case 'failed':
       return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 빈 번역을 보냈어요.';
     case 'unsaved':

@@ -218,8 +218,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
   async function copy() {
     await flush();
-    const made = await addProfile(store, { name: `${name.trim() || stored.value.name} 사본`, settings: shown });
-    if (!made.ok) return toast.failed(made, '복제하지 못했어요.');
+    const made = await addProfile(store, { name: `${name.trim() || stored.value.name} (사본)`, settings: shown });
+    if (!made.ok) return toast.failed(made, '사본을 만들지 못했어요.');
     navigate({ kind: 'profile', id: made.data.id });
   }
 
@@ -331,7 +331,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
       <Row kind="actions">
         <Button variant="secondary" size="sm" onClick={() => void copy()}>
-          복제
+          사본 만들기
         </Button>
         <Button variant="secondary" size="sm" disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()}>
           모두 비우기

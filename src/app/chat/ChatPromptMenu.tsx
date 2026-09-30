@@ -1,6 +1,7 @@
 import { FileText } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, ofSort } from '../../runtime/prompts';
+import { follows } from '../common/words';
 import { useChats, useSession, useSettings, useViews } from '../session';
 import { useToast } from '../toast';
 import { ChipButton, Divider, Icon, Menu, MenuHeading, MenuItem, Tag } from '../ui';
@@ -22,7 +23,7 @@ export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
       <PromptChoices chat={chat} />
       <Divider variant="menu" />
       <MenuItem label="프롬프트 관리…" onClick={() => chat.actions.side({ kind: 'prompts', id: null, pane: null })} />
-      {prompt.kind === 'prompt' && <MenuItem label="이 프롬프트 고치기…" onClick={() => chat.actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null })} />}
+      {prompt.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => chat.actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null })} />}
     </Menu>
   );
 }
@@ -49,7 +50,7 @@ function PromptChoices({ chat }: { chat: OpenChat }) {
   return (
     <>
       <MenuHeading>이 채팅만 바뀌어요 · 최근 사용</MenuHeading>
-      <MenuItem label="기본 프롬프트 따르기" sub={fallback?.value.name ?? '기본 프롬프트가 없어요'} checked={!prompt.own} onClick={() => choose(null)} />
+      <MenuItem label={follows('기본 프롬프트')} sub={fallback?.value.name ?? '기본 프롬프트가 없어요'} checked={!prompt.own} onClick={() => choose(null)} />
       {[...prompts].sort(order).map((item) => (
         <MenuItem
           key={item.id}

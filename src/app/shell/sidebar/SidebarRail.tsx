@@ -3,6 +3,7 @@ import type { ChatItem } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { useImport } from '../../library/ImportFlow';
 import { ShelfFace, shelfName } from '../../library/shelf';
+import { SETTINGS } from '../../common/words';
 import { FaceButton, IconButton, Rail } from '../../ui';
 import { navigate } from '../router';
 import { HOME } from '../routes';
@@ -27,7 +28,7 @@ export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Pro
           <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" onClick={() => navigate(HOME)} />
         </>
       }
-      footer={<IconButton icon={Settings} label="설정" onClick={() => navigate(settingsEntry(true))} />}
+      footer={<IconButton icon={Settings} label={SETTINGS} onClick={() => navigate(settingsEntry(true))} />}
     >
       {shelves.map((shelf) => (
         <FaceButton key={shelf.id ?? 'none'} label={shelfName(shelf)} current={shelf === current} dot={typing(shelf) ? 'accent' : undefined} onClick={() => onEnter(shelf)}>

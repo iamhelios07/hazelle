@@ -35,10 +35,10 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByLabel('주소', { exact: true }).fill('https://fake-provider.test/v1');
     await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();
     await page.getByRole('button', { name: '모델 고르기', exact: true }).click();
-    await page.getByRole('button', { name: `${FAKE_MODEL} 별표 찍기` }).click();
+    await page.getByRole('button', { name: `${FAKE_MODEL} 별표하기` }).click();
     await page.getByRole('button', { name: '완료', exact: true }).click();
     await page.getByRole('button', { name: '기본값', exact: true }).click();
-    const main = page.getByRole('button', { name: /^본 대화 모델 · / });
+    const main = page.getByRole('button', { name: /^대화 모델 · / });
     await main.click();
     await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();
     await expect(main).toContainText(FAKE_MODEL);
@@ -70,7 +70,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     expect((await tokenizer).status()).toBe(200);
     await expect(messages.nth(2)).toHaveText(/Mira smiles\. \(bows\)/);
     // Shown once the reply is saved and the turn is over.
-    await expect(page.getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
+    await expect(page.getByRole('button', { name: '새 답장 받기', exact: true })).toBeAttached();
     expect(violations).toEqual([]);
   });
 

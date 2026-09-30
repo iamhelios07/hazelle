@@ -3,7 +3,7 @@ import type { Assembled, From } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
 import type { Role } from '../../model/prompt';
 import type { Sent } from '../../runtime/talk';
-import { ROLE_WORDS, SLOT_NAMES, textName } from '../common/prompt-words';
+import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
 import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack } from '../ui';
 import { tokens } from '../common/receipt';
 
@@ -62,7 +62,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
             {prompt.messages.map((message, index) => {
               const part = prompt.parts[index]!;
               return (
-                <Disclosure key={index} label={`${partName(part.from, message.role)} · ${ROLE_WORDS[message.role]} · 약 ${tokens(part.tokens)} 토큰`}>
+                <Disclosure key={index} label={`${partName(part.from, message.role)} · ${MESSAGE_ROLES[message.role]} · 약 ${tokens(part.tokens)} 토큰`}>
                   <CodeBlock>{message.content}</CodeBlock>
                 </Disclosure>
               );

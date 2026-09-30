@@ -83,7 +83,7 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
         {item && (
           <>
             <Divider variant="menu" />
-            <MenuItem label="이 채팅 삭제" tone="warn" onClick={() => void actions.drop()} />
+            <MenuItem label="이 채팅 지우기" tone="warn" onClick={() => void actions.drop()} />
           </>
         )}
       </Menu>

@@ -78,7 +78,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       </Stack>
       {total >= SEARCH_FROM && (
         <Stack gap="related">
-          <SearchField size="sm" label="토글 찾기" value={query} onChange={setQuery} />
+          <SearchField size="sm" label="토글 검색" value={query} onChange={setQuery} />
           <ChoiceGroup
             label="보기"
             options={[

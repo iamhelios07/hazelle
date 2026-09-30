@@ -117,8 +117,8 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         />
       )}
       {block.kind === 'slot' && block.slot === 'authorNote' && authorNote !== null && (
-        <Section title="채팅에 노트가 없을 때 쓰는 글" level={3} hint="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
-          <MarkupArea label="채팅에 노트가 없을 때 쓰는 글" variant="field" value={authorNote} onChange={onAuthorNote} />
+        <Section title="기본 노트" level={3} hint="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">
+          <MarkupArea label="기본 노트" variant="field" value={authorNote} onChange={onAuthorNote} />
         </Section>
       )}
       {'wrapper' in block &&

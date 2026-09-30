@@ -73,7 +73,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
         </Button>
         {!binned && (
           <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
-            {picked ? '고르기 끝' : '골라서 옮기기'}
+            {picked ? '완료' : '골라서 옮기기'}
           </Button>
         )}
       </Row>

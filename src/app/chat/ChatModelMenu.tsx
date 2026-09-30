@@ -3,6 +3,7 @@ import { fitsRole, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
 import { modelProfile } from '../../runtime/profiles';
 import { noResults } from '../common/search';
+import { noStarred } from '../common/words';
 import { useChats, useConnections, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, SearchField, type MenuHandle } from '../ui';
@@ -63,10 +64,10 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
     <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={choice.source} checked={same(choice.ref, current)} onClick={() => onPick(choice.ref)} />
   );
 
-  if (starred.length === 0) return <Empty variant="menu">별표 찍은 모델이 없어요. 연결에서 모델에 별표를 찍으면 여기서 고를 수 있어요.</Empty>;
+  if (starred.length === 0) return <Empty variant="menu">{noStarred('고를 수 있어요')}</Empty>;
   return (
     <>
-      <SearchField size="sm" label="별표 모델 검색" value={query} onChange={setQuery} />
+      <SearchField size="sm" label="별표한 모델 검색" value={query} onChange={setQuery} />
       {words ? (
         found.length ? (
           <>
@@ -74,7 +75,7 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
             {found.map(item)}
           </>
         ) : (
-          <Empty variant="menu">{`${noResults(query.trim())} 별표 찍은 모델만 찾아요.`}</Empty>
+          <Empty variant="menu">{`${noResults(query.trim())} 별표한 모델만 찾아요.`}</Empty>
         )
       ) : (
         <>

@@ -3,6 +3,7 @@ import type { PresetFailure, PresetUnsupported, PresetUnsupportedKind } from '..
 import type { ConversationPrompt } from '../../model/prompt';
 import { importPrompt, ofSort } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
+import { inSettings } from '../common/words';
 import { useStore } from '../session';
 import { Button, Callout, Dialog, DropOverlay, Outcome, Section, Stack, Text, useFileDrop } from '../ui';
 import { promptName } from './usePromptUse';
@@ -27,7 +28,7 @@ const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: str
   'preset-text': (count) => ({ title: `템플릿 밖의 옛 글 ${count}개`, note: '템플릿을 쓰는 프리셋이라 Risu에서도 보내지 않던 글이에요.' }),
   regex: (count) => ({ title: `정규식 ${count}개` }),
   variables: (count) => ({ title: `기본 변수 ${count}개` }),
-  settings: () => ({ title: '모델과 생성 설정', note: '모델 설정은 설정 › 모델 설정에서 해요.' }),
+  settings: () => ({ title: '모델과 생성 설정', note: `모델 설정은 ${inSettings('profiles')}에서 해요.` }),
 };
 
 type Opened = { file: string; id: string; prompt: ConversationPrompt; unsupported: PresetUnsupported[] };
@@ -120,7 +121,7 @@ function Summary({ result }: { result: Result }) {
   const came = [
     { tone: 'done' as const, title: `블록 ${blocks.length}개 · 직접 쓴 글 ${texts}개, 앱이 채우는 자리 ${blocks.length - texts}개` },
     ...(toggles.length ? [{ tone: 'done' as const, title: `토글 ${toggles.length}개 · ${toggles.map((toggle) => toggle.label).join(', ')}` }] : []),
-    ...(authorNote.trim() ? [{ tone: 'done' as const, title: '작가의 노트 기본 글' }] : []),
+    ...(authorNote.trim() ? [{ tone: 'done' as const, title: '기본 노트' }] : []),
   ];
   const missed = result.unsupported.map((item) => ({ tone: 'missed' as const, ...UNSUPPORTED[item.kind](item.count) }));
   return (

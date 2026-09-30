@@ -170,7 +170,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
                 trailing={
                   <Row kind="actions">
                     {settings}
-                    <IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표 찍기`} pressed={on} onClick={() => toggle(model)} />
+                    <IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표하기`} pressed={on} onClick={() => toggle(model)} />
                   </Row>
                 }
               />
