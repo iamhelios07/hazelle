@@ -7,7 +7,7 @@
 }
 
 .marked {
-  gap: var(--space-10);
+  gap: var(--space-8);
   color: var(--color-text-muted);
 }
 
@@ -19,7 +19,7 @@
 
 .menu {
   height: var(--border-thin);
-  margin: var(--space-4) var(--space-6);
+  margin: var(--space-4) var(--space-8);
   background: var(--color-border);
 }
 
@@ -31,7 +31,7 @@
 }
 
 .rail {
-  width: var(--space-28);
+  width: var(--space-32);
   height: var(--border-thin);
   margin: var(--space-4) 0;
   background: var(--color-divider);

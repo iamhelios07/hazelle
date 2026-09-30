@@ -8,7 +8,7 @@
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
-  gap: var(--space-6);
+  gap: var(--space-8);
   min-height: var(--control-tool);
   padding: 0 var(--space-8);
   border-radius: var(--radius-sm);

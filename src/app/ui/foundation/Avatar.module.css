@@ -12,7 +12,7 @@
   width: var(--avatar-sm);
   height: var(--avatar-sm);
   border-radius: var(--radius-sm);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
 }
 
 .md {
@@ -25,8 +25,8 @@
 .lg {
   width: var(--avatar-lg);
   height: var(--avatar-lg);
-  border-radius: var(--radius-xl);
-  font-size: var(--text-2xl);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xl);
 }
 
 .image {

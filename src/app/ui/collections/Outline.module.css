@@ -392,7 +392,7 @@
   grid-template-columns: var(--outline-number) var(--outline-node-chat) minmax(0, 1fr);
   width: 100%;
   height: var(--control-compact);
-  margin-top: var(--space-6);
+  margin-top: var(--space-8);
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   font-size: var(--text-sm);

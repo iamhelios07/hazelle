@@ -1,7 +1,7 @@
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 
 .buttons {
@@ -48,7 +48,7 @@
 
 .segmented .choice {
   min-height: var(--control-tool);
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-8);
   border-color: transparent;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
@@ -71,7 +71,7 @@
   align-items: center;
   gap: var(--space-12);
   min-height: var(--control-md);
-  padding: var(--space-6) var(--space-12);
+  padding: var(--space-8) var(--space-12);
   border: none;
   border-radius: var(--radius-md);
   color: var(--color-text);

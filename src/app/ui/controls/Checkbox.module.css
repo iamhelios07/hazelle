@@ -3,7 +3,7 @@
   align-items: center;
   gap: var(--space-12);
   min-height: var(--control-md);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   cursor: pointer;
 }
 

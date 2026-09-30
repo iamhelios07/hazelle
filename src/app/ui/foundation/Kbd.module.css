@@ -1,6 +1,6 @@
 .key {
-  min-width: var(--space-14);
-  padding: var(--space-2) var(--space-6);
+  min-width: var(--space-16);
+  padding: var(--space-2) var(--space-8);
   border: var(--border-thin) solid var(--color-border);
   border-bottom-width: var(--border-thick);
   border-radius: var(--radius-sm);

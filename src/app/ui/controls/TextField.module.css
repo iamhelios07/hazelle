@@ -23,11 +23,11 @@
 
 .input {
   height: var(--control-lg);
-  padding: 0 var(--space-14);
+  padding: 0 var(--space-16);
   border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
 }
 
 .mono {
@@ -37,7 +37,7 @@
 
 .area {
   height: auto;
-  padding: var(--space-12) var(--space-14);
+  padding: var(--space-12) var(--space-16);
   line-height: var(--leading-relaxed);
   resize: vertical;
 }

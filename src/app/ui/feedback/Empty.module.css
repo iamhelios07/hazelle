@@ -19,9 +19,9 @@
 }
 
 .side {
-  padding: var(--space-8) var(--space-10);
+  padding: var(--space-8) var(--space-8);
 }
 
 .menu {
-  padding: var(--space-12) var(--space-10);
+  padding: var(--space-12) var(--space-8);
 }

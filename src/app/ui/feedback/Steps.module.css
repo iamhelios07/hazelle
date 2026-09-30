@@ -1,6 +1,6 @@
 .steps {
   display: flex;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 
 .step {

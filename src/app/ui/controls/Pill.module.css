@@ -2,9 +2,9 @@
   composes: riseIn from '../foundation/motion.module.css';
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
   height: var(--control-chip);
-  padding: 0 var(--space-14);
+  padding: 0 var(--space-16);
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-full);
   background: var(--color-surface);
@@ -14,8 +14,8 @@
 }
 
 .live {
-  width: var(--space-6);
-  height: var(--space-6);
+  width: var(--dot);
+  height: var(--dot);
   border-radius: var(--radius-full);
   background: var(--color-accent);
 }

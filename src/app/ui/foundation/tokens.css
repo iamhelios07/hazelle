@@ -35,7 +35,6 @@
   --palette-jade-900: #1d3329;
   --palette-rose-400: #e08fb0;
   --palette-rose-900: #3a2230;
-  --palette-ink-880: #1b1a20;
   --palette-sand-100: #dcd6cd;
   --palette-sand-10: #fff8ec;
   --palette-gold-500: #d6b47a;
@@ -43,8 +42,6 @@
   --palette-shadow: rgb(0 0 0 / 45%);
   --palette-shadow-deep: rgb(0 0 0 / 75%);
   --palette-lilac-600: #6a6170;
-  --palette-cream-300: #d9d2c6;
-  --palette-cream-400: #c4bcaf;
   --palette-ink-wash: rgb(29 27 34 / 7%);
   --palette-ink-line: rgb(29 27 34 / 16%);
   --palette-ink-trace: rgb(29 27 34 / 22%);
@@ -86,7 +83,6 @@
   /* A prompt's blocks by kind, on the outline's rail: the line and ring, and the node's fill. */
   --color-kind-text: var(--palette-lilac-450);
   --color-kind-text-line: var(--palette-lilac-400);
-  --color-kind-text-bg: var(--palette-ink-880);
   --color-kind-char: var(--palette-violet-300);
   --color-kind-char-bg: var(--palette-violet-900);
   --color-kind-lore: var(--palette-sky-400);
@@ -125,15 +121,11 @@
   --font-sans: 'IBM Plex Sans KR', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'IBM Plex Sans KR', monospace;
 
-  --text-2xs: 11px;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-md: 14px;
-  --text-base: 15px;
   --text-lg: 16px;
-  --text-xl: 18px;
-  --text-2xl: 20px;
-  --text-display-sm: 22px;
+  --text-xl: 20px;
   --text-display: 30px;
 
   --weight-regular: 400;
@@ -165,27 +157,20 @@
 
   --space-2: 2px;
   --space-4: 4px;
-  --space-6: 6px;
   --space-8: 8px;
-  --space-10: 10px;
   --space-12: 12px;
-  --space-14: 14px;
   --space-16: 16px;
-  --space-18: 18px;
-  --space-20: 20px;
   --space-24: 24px;
-  --space-28: 28px;
   --space-32: 32px;
 
   --radius-xs: 4px;
   --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 14px;
-  --radius-2xl: 18px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --radius-full: 999px;
 
   --control-sm: 20px;
+  --control-xs: 28px;
   --control-chip: 34px;
   --control-md: 44px;
   --control-lg: 50px;
@@ -195,11 +180,12 @@
   --icon-md: 22px;
   --row-min-height: 64px;
   --icon-stroke: 1.8;
+  --dot: 6px;
   --bar-height: 4px;
   --screen-narrow: 440px;
   --toast-width: 380px;
   /* How far each notice behind the front one shows, and how much smaller it is. */
-  --toast-peek: var(--space-10);
+  --toast-peek: var(--space-8);
   --toast-shrink: 0.05;
   --screen-offset-top: 10vh;
   --sidebar-width: 272px;

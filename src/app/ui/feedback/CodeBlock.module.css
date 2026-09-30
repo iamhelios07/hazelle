@@ -1,6 +1,6 @@
 .block {
   margin: 0;
-  padding: var(--space-10) var(--space-12);
+  padding: var(--space-8) var(--space-12);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   font-family: var(--font-mono);

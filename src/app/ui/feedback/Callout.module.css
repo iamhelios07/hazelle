@@ -1,9 +1,9 @@
 .callout {
   display: flex;
   gap: var(--space-12);
-  padding: var(--space-14) var(--space-16);
+  padding: var(--space-16) var(--space-16);
   border: var(--border-thin) solid transparent;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   font-size: var(--text-md);
   line-height: var(--leading-relaxed);
 }

@@ -2,7 +2,7 @@
   composes: riseInSlow from '../foundation/motion.module.css';
   position: relative;
   display: flex;
-  gap: var(--space-14);
+  gap: var(--space-16);
 }
 
 .main {
@@ -17,7 +17,7 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-8);
-  min-height: var(--space-20);
+  min-height: var(--control-sm);
 }
 
 .name,
@@ -38,12 +38,12 @@
   display: inline-flex;
   align-self: center;
   align-items: center;
-  height: var(--space-20);
-  padding: 0 var(--space-6);
+  height: var(--control-sm);
+  padding: 0 var(--space-8);
   border-radius: var(--radius-xs);
   background: var(--color-surface-raised);
   color: var(--color-text-muted);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   white-space: nowrap;
   transition:
     background-color var(--duration-fast),
@@ -67,7 +67,7 @@
   max-width: 100%;
   padding: var(--space-12) var(--space-16);
   border: var(--border-thin) solid var(--color-surface-hover);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
 
@@ -121,13 +121,13 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  height: var(--space-28);
+  height: var(--control-xs);
 }
 
 .dot {
   composes: dot from '../foundation/motion.module.css';
-  width: var(--space-6);
-  height: var(--space-6);
+  width: var(--dot);
+  height: var(--dot);
   border-radius: var(--radius-full);
   background: var(--color-text-muted);
 }
@@ -158,7 +158,7 @@
 .marker {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
@@ -170,10 +170,10 @@
 .failure {
   display: flex;
   flex-direction: column;
-  gap: var(--space-10);
-  padding: var(--space-14) var(--space-16);
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-16);
   border: var(--border-thin) solid var(--color-warn-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-warn-bg);
 }
 

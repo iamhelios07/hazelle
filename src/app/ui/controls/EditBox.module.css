@@ -17,9 +17,9 @@
   width: 100%;
   min-height: var(--edit-min-height);
   max-height: var(--edit-max-height);
-  padding: var(--space-12) var(--space-14);
+  padding: var(--space-12) var(--space-16);
   border: var(--border-thin) solid var(--color-accent-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   outline: none;
   background: var(--color-surface);
   color: var(--color-text);

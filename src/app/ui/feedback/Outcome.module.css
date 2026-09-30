@@ -4,13 +4,13 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-10);
+  gap: var(--space-8);
 }
 
 .item {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-10);
+  gap: var(--space-8);
 }
 
 .icon {

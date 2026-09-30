@@ -2,7 +2,7 @@
   min-height: 100dvh;
   max-width: var(--screen-narrow);
   margin: 0 auto;
-  padding: var(--space-28) var(--space-24) var(--space-32);
+  padding: var(--space-32) var(--space-24) var(--space-32);
   display: flex;
   flex-direction: column;
   gap: var(--space-24);
@@ -43,7 +43,7 @@
   position: sticky;
   bottom: 0;
   margin-bottom: calc(var(--space-32) * -1);
-  padding: var(--space-14) 0 var(--space-24);
+  padding: var(--space-16) 0 var(--space-24);
   border-top: var(--border-thin) solid var(--color-surface-raised);
   background: var(--color-bg);
 }
@@ -64,7 +64,7 @@
 
   .screen.wide,
   .screen.form {
-    padding-top: var(--space-28);
+    padding-top: var(--space-32);
   }
 
   .actions {
@@ -81,7 +81,7 @@
   min-height: 100%;
   max-width: var(--pane-max-width);
   margin: 0;
-  padding-top: var(--space-28);
+  padding-top: var(--space-32);
 }
 
 .screen.pane.form {

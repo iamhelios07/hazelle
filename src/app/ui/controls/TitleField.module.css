@@ -18,7 +18,7 @@
 
 .lg {
   height: var(--control-md);
-  font-size: var(--text-display-sm);
+  font-size: var(--text-xl);
   font-weight: var(--weight-semibold);
 }
 

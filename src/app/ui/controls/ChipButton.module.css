@@ -28,7 +28,7 @@
 }
 
 .ghost {
-  gap: var(--space-6);
+  gap: var(--space-8);
   padding: 0 var(--space-8) 0 var(--space-4);
   border-color: transparent;
   border-radius: var(--radius-md);

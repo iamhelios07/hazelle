@@ -13,8 +13,8 @@
 
 .menu {
   position: absolute;
-  top: var(--space-6);
-  right: var(--space-6);
+  top: var(--space-8);
+  right: var(--space-8);
   border-radius: var(--radius-full);
   background: var(--color-surface-raised);
 }
@@ -36,7 +36,7 @@
   width: var(--portrait-width);
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
 }
 
@@ -48,7 +48,7 @@
   aspect-ratio: 3 / 4;
   margin-bottom: var(--space-4);
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface-raised);
 }
 
@@ -112,11 +112,11 @@
   bottom: var(--space-16);
   display: flex;
   align-items: center;
-  gap: var(--space-10);
+  gap: var(--space-8);
   margin-top: var(--space-24);
-  padding: var(--space-10) var(--space-10) var(--space-10) var(--space-16);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-16);
   border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-popover);
   color: var(--color-text);

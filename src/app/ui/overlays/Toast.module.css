@@ -13,7 +13,7 @@
   position: relative;
   overflow: hidden;
   width: 100%;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-bg);
   color: var(--color-text);
   box-shadow: var(--shadow-toast);
@@ -25,7 +25,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  padding: var(--space-12) var(--space-10) var(--space-14) var(--space-16);
+  padding: var(--space-12) var(--space-8) var(--space-16) var(--space-16);
 }
 
 .text {
@@ -68,7 +68,7 @@
 }
 
 .band {
-  padding: var(--space-10) var(--space-16);
+  padding: var(--space-8) var(--space-16);
   background: var(--color-warn);
   font-weight: var(--weight-semibold);
 }

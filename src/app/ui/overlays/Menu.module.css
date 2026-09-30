@@ -11,10 +11,10 @@
   flex-direction: column;
   gap: var(--space-2);
   max-height: var(--menu-max-height);
-  padding: var(--space-6);
+  padding: var(--space-8);
   overflow-y: auto;
   border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-popover);
   translate: var(--nudge, 0) 0;
@@ -25,7 +25,7 @@
 }
 
 .lg {
-  width: calc(var(--menu-width) + var(--space-20));
+  width: calc(var(--menu-width) + var(--space-24));
 }
 
 .form {
@@ -33,7 +33,7 @@
 }
 
 .dialog {
-  padding: var(--space-14) var(--space-16);
+  padding: var(--space-16) var(--space-16);
 }
 
 /* A menu opened inside another, such as a choice in a small form: the outer one stops clipping while it is open, and
@@ -84,7 +84,7 @@
 }
 
 .heading {
-  padding: var(--space-8) var(--space-10) var(--space-2);
+  padding: var(--space-8) var(--space-8) var(--space-2);
   color: var(--color-text-faint);
   font-size: var(--text-xs);
 }

@@ -6,7 +6,7 @@
   width: var(--control-compact);
   height: var(--control-compact);
   border: var(--border-medium) solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-accent);
   color: var(--color-on-accent);
   transition: background-color var(--duration-fast);

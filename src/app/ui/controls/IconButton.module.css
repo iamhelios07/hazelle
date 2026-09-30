@@ -5,7 +5,7 @@
   width: var(--control-md);
   height: var(--control-md);
   flex-shrink: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   color: var(--color-text-muted);
   transition: background-color var(--duration-fast), color var(--duration-fast);
 }

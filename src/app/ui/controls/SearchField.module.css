@@ -5,14 +5,14 @@
   height: var(--control-md);
   padding: 0 var(--space-12);
   border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text-faint);
 }
 
 .sm {
   height: var(--control-compact);
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-8);
   border-color: transparent;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
