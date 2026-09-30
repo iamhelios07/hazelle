@@ -258,10 +258,8 @@ export function assembleTranslation({ scope, prompt, translations, request, lang
 type ChatPart = { range: ChatRange; from: From };
 type CachePart = { cache: true };
 
-// The two cache points the app sets itself, as indexes: the end of the part before the chat, which stays the same from
-// turn to turn, and the chat's last item, which the next turn repeats. Not the request's last message: a block after
-// the chat moves on every turn, so a point there is never met again. An entry at @@depth is placed among the chat's
-// messages, so it starts the chat's part as much as a message does.
+// Before the chat and at its end, never at the request's end: a block after the chat changes every turn. A @@depth
+// entry sits among the chat's messages, so it opens the chat as a message does.
 export function autoCachePoints(roles: readonly ('chat' | 'depth' | null)[]): number[] {
   const first = roles.findIndex((role) => role !== null);
   const last = roles.lastIndexOf('chat');
