@@ -41,6 +41,7 @@ describe('detection', () => {
     expect(detect('  sk-or-v1-abc  ')).toMatchObject({ kind: 'key', type: { id: 'openrouter' }, secret: 'sk-or-v1-abc' });
     expect(detect('sk-ant-api03-xyz')).toMatchObject({ kind: 'key', type: { id: 'anthropic' } });
     expect(detect('https://openrouter.ai/api/v1/chat/completions')).toMatchObject({ kind: 'url', type: { id: 'openrouter' } });
+    expect(detect('https://ollama.com/v1/chat/completions')).toMatchObject({ kind: 'url', type: { id: 'ollama' } });
   });
 
   it('takes any other address as a generic connection and flags ones the relay cannot reach', () => {
@@ -79,6 +80,7 @@ describe('the 연결 추가 list', () => {
 
   it('finds a name in labels and descriptions, and says when nothing matches without guessing at keys', () => {
     expect(ids('open')).toEqual(['openrouter']);
+    expect(ids('ollama')).toEqual(['ollama']);
     expect(ids('Claude')).toEqual(['anthropic', 'copilot']);
     expect(ids('sk-1234')).toBe('none');
   });

@@ -2,13 +2,14 @@ import { anthropic } from './anthropic';
 import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
 import { copilot } from './copilot';
+import { ollama } from './ollama';
 import { openRouter } from './openrouter';
 import { fit, settingsSchema, type Carries, type SettingsSchema } from './settings';
 import { vercel } from './vercel';
 import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
 // Adding a provider means adding its connection type here. Nothing else names one.
-export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, anthropic, copilot];
+export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, ollama, anthropic, copilot];
 
 // The type of a connection the user described by address and protocol.
 export const GENERIC = 'generic';
