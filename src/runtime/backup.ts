@@ -1,6 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped, type Zippable } from 'fflate';
 import { isRecord } from '../connectors/values';
-import { KINDS, type Kind, type Stored } from '../model/kinds';
+import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import type { Files } from './files';
@@ -54,8 +54,8 @@ export async function exportBackup(store: ObjectStore, files: Files): Promise<Ap
   return { ok: true, data: { zip: zipSync(zip), left: store.unreadable() } };
 }
 
-// The file comes from outside, so its shape is checked before anything is written. Values are taken as
-// the export wrote them.
+// The file comes from outside, so its shape and every body are checked before anything is written; one bad
+// line refuses the whole file.
 export function readBackup(bytes: Uint8Array): { ok: true; backup: Backup } | BackupFailure {
   const damaged = { ok: false, error: 'not-backup' } as const;
   let entries: Unzipped;
@@ -166,6 +166,6 @@ function isStored(line: unknown): line is Stored<Kind> {
     typeof line.id === 'string' &&
     (line.parent === null || typeof line.parent === 'string') &&
     typeof line.rev === 'number' &&
-    isRecord(line.value)
+    isValue(line.kind as Kind, line.value)
   );
 }

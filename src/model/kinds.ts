@@ -51,4 +51,73 @@ export const KINDS = {
 export type Singleton = { [K in Kind]: (typeof KINDS)[K] extends { id: string } ? K : never }[Kind];
 export type AppendOnly = { [K in Kind]: (typeof KINDS)[K] extends { appendOnly: true } ? K : never }[Kind];
 
+type Check = (value: unknown) => boolean;
+const str: Check = (value) => typeof value === 'string';
+const num: Check = (value) => typeof value === 'number';
+const bool: Check = (value) => typeof value === 'boolean';
+// connectors/values isRecord, which the model may not import (eslint/boundaries.js).
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const orNull = (check: Check): Check => (value) => value === null || check(value);
+const listOf = (check: Check): Check => (value) => Array.isArray(value) && value.every(check);
+const shape = (fields: Record<string, Check>): Check => (value) => isRecord(value) && Object.entries(fields).every(([key, check]) => check(value[key]));
+const all = (check: Check, ...fields: string[]) => Object.fromEntries(fields.map((field) => [field, check]));
+
+const text = { at: num, text: str, receipt: orNull(isRecord) };
+const ENTRIES = {
+  message: shape({ role: str, ...text }),
+  version: shape({ message: str, replaces: orNull(str), edit: bool, ...text }),
+  select: shape({ message: str, version: str, at: num }),
+  delete: shape({ message: str, at: num }),
+  restore: shape({ message: str, at: num }),
+  cost: shape({ replyId: str, cost: orNull(isRecord), at: num }),
+  translation: shape({ version: str, ...text }),
+} satisfies Record<Entry['type'], Check>;
+
+const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(shape({ key: str, label: str, kind: str })) });
+const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
+const translate = shape({ task: (value) => value === 'translate' });
+
+// Each kind's required fields, and one level into what screens index. A field joins only if every body ever
+// stored has it: one added later is optional in its type and left unchecked, or old bodies are refused.
+const SHAPES = {
+  character: shape({
+    card: shape({
+      ...all(str, 'name', 'description', 'personality', 'scenario', 'exampleDialogue', 'systemPrompt', 'postHistoryInstructions'),
+      ...all(str, 'creatorNotes', 'creator', 'version', 'toggles'),
+      nickname: orNull(str),
+      greetings: listOf(str),
+      tags: listOf(str),
+      variables: listOf(Array.isArray),
+      bias: listOf(Array.isArray),
+      regex: listOf(isRecord),
+      utility: bool,
+      loreSettings: isRecord,
+    }),
+    folder: orNull(str),
+    loreFolders: listOf(shape({ id: str, name: str })),
+  }),
+  folder: shape({ name: str }),
+  lore: shape({
+    ...all(bool, 'enabled', 'constant', 'selective', 'useRegex', 'caseSensitive'),
+    name: str,
+    keys: listOf(str),
+    secondaryKeys: listOf(str),
+    content: str,
+    insertionOrder: num,
+    priority: orNull(num),
+    position: orNull(str),
+    folder: orNull(str),
+  }),
+  avatar: shape({ type: str, size: num, thumb: str }),
+  chat: shape({ title: orNull(str), character: orNull(str), models: isRecord }),
+  entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
+  connection: shape({ type: str, label: str, baseUrl: orNull(str), protocol: orNull(str), secret: str, starred: listOf(shape({ id: str, name: str })) }),
+  settings: shape({ models: isRecord }),
+  prompt: (value) => prompt(value) && (conversation(value) || translate(value)),
+  persona: shape({ name: str, description: str, picture: orNull(str) }),
+  profile: shape({ name: str, settings: isRecord }),
+} satisfies Record<Kind, Check>;
+
+export const isValue = <K extends Kind>(kind: K, value: unknown): value is Values[K] => SHAPES[kind](value);
+
 export type Stored<K extends Kind> = { id: string; kind: K; parent: string | null; rev: number; value: Values[K] };
