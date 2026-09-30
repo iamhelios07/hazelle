@@ -144,7 +144,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
   // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateLatest's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
   useEffect(() => {
-    translateLatest(session, chatId, id === null ? { chat, messages: openingMessages, display: view } : undefined);
+    translateLatest(session, chatId);
   }, [item, turn, translating, translate.replies, greeting]);
 
   // A reply starting here while 정보 is open shows its own information.

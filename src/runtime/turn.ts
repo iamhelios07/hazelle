@@ -158,17 +158,19 @@ export function translationInput(reader: Reader, id: string, chat: Chat, message
   return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
 }
 
-export function translateLatest(session: Pick<Session, 'store' | 'read' | 'talk' | 'translator'>, id: string, opening?: { chat: Chat; messages: Message[]; display: Display }) {
-  const view = session.read.displayed(id) ?? opening;
-  const chat = view?.chat;
-  if (!chat || !translateSwitches(session.store, chat.character).replies) return;
-  const messages = withTurn(view!.messages, session.talk.snapshot(), id);
+// An unsaved chat is read from its open screen, the only place it exists.
+export function translateLatest(session: Pick<Session, 'store' | 'read' | 'talk' | 'translator'>, id: string) {
+  const view = session.read.displayed(id);
+  if (!view) return;
+  const { chat } = view;
+  if ( !translateSwitches(session.store, chat.character).replies) return;
+  const messages = withTurn(view.messages, session.talk.snapshot(), id);
   const last = messages.at(-1);
   if (!last || last.role !== 'assistant' || last.live !== null) return;
   const version = shown(last);
   const { live, held, failed } = session.translator.snapshot();
   if (version.receipt?.state === 'failed' || version.translation || live.has(version.id) || held.has(version.id) || failed.has(version.id)) return;
-  if (!view!.display.texts.at(-1)!.trim()) return;
+  if (!view.display.texts.at(-1)!.trim()) return;
   session.translator.translate(id, version.id, translationInput(session, id, chat, messages, { kind: 'message', index: messages.length - 1 }));
 }
 
