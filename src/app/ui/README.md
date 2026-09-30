@@ -26,7 +26,7 @@ and only this folder styles elements.**
   import no CSS and pass no `className` or `style`.
 - Only give a palette value a semantic name when its role is visible in an approved mockup.
 - The spacing, type and radius scales are short on purpose: pick the step whose role fits, never add a step between
-  two for one component. A size (a dot, a control) takes a size token, not a spacing one.
+  two for one component. A size several components share, such as a dot or a control's height, takes a size token.
 
 ## Components
 
