@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import { addPersona } from '../../runtime/personas';
 import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
-import { useSettings, useStore, useViews } from '../session';
+import { usePersonas, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { PAGES } from '../common/words';
 import { Avatar, Button, List, ListItem } from '../ui';
@@ -20,7 +20,7 @@ type Props = {
 export function PersonaList({ onPick, current, inUse, frame }: Props) {
   const store = useStore();
   const toast = useToast();
-  const { personas } = useViews();
+  const personas = usePersonas();
   const settings = useSettings();
 
   async function add() {

@@ -7,7 +7,7 @@ import { addProfile, modelProfile, setModelProfile } from '../../runtime/profile
 import { money } from '../common/money';
 import { UNKNOWN } from '../common/receipt';
 import { ago } from '../common/time';
-import { useStore, useViews } from '../session';
+import { useChatMessages, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -37,13 +37,15 @@ function spent({ costs, costUnknown }: ModelUsage): string {
 export function ModelScreen({ connection, model, back }: { connection: Stored<'connection'>; model: Starred; back: Back }) {
   const store = useStore();
   const toast = useToast();
-  const { profiles, settings, chats } = useViews();
+  const profiles = useProfiles();
+  const settings = useSettings();
+  const messages = useChatMessages();
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
   const sorted = defaultFirst(profiles, settings.profile);
   const usage = modelUsage(
-    chats.map((item) => item.messages),
+    messages,
     { connection: connection.id, model: model.id },
   );
 

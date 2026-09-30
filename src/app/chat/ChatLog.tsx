@@ -1,8 +1,8 @@
 import { GitBranch } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { shown } from '../../model/chat';
 import { day } from '../common/time';
-import { useViews } from '../session';
+import { useChatSummary } from '../session';
 import { navigate } from '../shell/router';
 import { Divider, Empty, Text } from '../ui';
 import { ChatMessage } from './ChatMessage';
@@ -10,7 +10,13 @@ import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
   const { item, messages, texts, decor, hosted, offered, translating, awaited, sendLanguage, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, branching, modelMenu, actions } = chat;
-  const { chatById } = useViews();
+  // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
+  const latestActions = useRef(actions);
+  useLayoutEffect(() => { latestActions.current = actions; });
+  const rowActions = useMemo(() => Object.fromEntries(Object.keys(actions).map((key) => [key, (...args: unknown[]) =>
+    Reflect.apply(latestActions.current[key as keyof typeof actions], undefined, args),
+  ])) as typeof actions, []);
+  const originModel = useChatSummary(item?.chat.origin?.id ?? null);
   const origin = item?.chat.origin;
   const character = card && { name: card.nickname || card.name, image: shelf!.face };
   const modelName = 'kind' in route ? null : route.model.name;
@@ -58,12 +64,12 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         pinned={pinned === message.id}
         branching={branching}
         modelMenu={modelMenu}
-        actions={actions}
+        actions={rowActions}
       />,
     );
     // Deleting the message the split comes after takes its divider with it, until 되돌리기.
     if (origin?.after === message.id) {
-      const here = chatById.has(origin.id);
+      const here = originModel !== null;
       rows.push(
         <Divider
           key="split"

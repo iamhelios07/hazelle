@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, chatItems, chatTitle, fold, modelUsage, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, chatTitle, fold, modelUsage, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -99,26 +99,13 @@ describe('chatTitle', () => {
   });
 });
 
-describe('chatItems', () => {
-  it('puts the chat written to last first, and a rename does not move it', () => {
-    const chat = (id: string, at: number, title: string | null = null): Stored<'chat'> => ({ id, kind: 'chat', parent: null, rev: at, value: { title, character: null, models: {} } });
-    const written = (at: number): Stored<'entry'> => ({ ...user(`u${at}`, '안녕'), rev: at });
-    const entries: Record<string, Stored<'entry'>[]> = { a: [written(5)], renamed: [written(3)], empty: [] };
-    const items = chatItems([chat('a', 1), chat('renamed', 10, '새 이름'), chat('empty', 7)], (id) => entries[id]!, (_, messages) => asStored(messages));
-    expect(items.map((item) => [item.id, item.order])).toEqual([
-      ['empty', 7],
-      ['a', 5],
-      ['renamed', 3],
-    ]);
-  });
-});
-
 describe('branchTree', () => {
   it('puts each branch under the chat it came from, and one whose origin is gone at the top', () => {
     const item = (id: string, origin?: string): ChatItem => ({
       id,
       chat: { title: null, character: null, models: {}, ...(origin && { origin: { id: origin, name: origin, after: 'm' } }) },
       messages: [],
+      count: 0,
       title: id,
       preview: '',
       at: null,

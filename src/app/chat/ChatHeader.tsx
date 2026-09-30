@@ -34,7 +34,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
           key={item.id}
           icon={nested ? GitBranch : undefined}
           label={item.title}
-          sub={item.at === null ? `메시지 ${item.messages.length}개` : `메시지 ${item.messages.length}개 · ${ago(item.at)}`}
+          sub={item.at === null ? `메시지 ${item.count}개` : `메시지 ${item.count}개 · ${ago(item.at)}`}
           checked={item.id === id}
           onClick={() => navigate({ kind: 'chat', id: item.id })}
         />

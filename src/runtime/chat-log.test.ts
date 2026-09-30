@@ -65,7 +65,7 @@ describe('branchChat', () => {
     );
     await appendUserMessage(store, source, { id: split, text: '여기서' });
     await appendUserMessage(store, source, { id: crypto.randomUUID(), text: '갈래에 없는 말' });
-    const item: ChatItem = { id: source, chat, messages: folded(), title: '기숙사의 밤', preview: '', at: null, order: 0 };
+    const item: ChatItem = { id: source, chat, messages: folded(), count: folded().length, title: '기숙사의 밤', preview: '', at: null, order: 0 };
     expect(shown(item.messages[1]!).seed).toBe(said);
 
     const requests = vi.spyOn(globalThis, 'fetch');

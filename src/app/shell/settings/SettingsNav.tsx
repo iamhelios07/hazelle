@@ -1,6 +1,6 @@
 import { ChevronRight, FileText, Layers, Lock, Plug, SlidersHorizontal, User, type LucideIcon } from 'lucide-react';
 import { PAGES, SETTINGS } from '../../common/words';
-import { useSession, useViews } from '../../session';
+import { useConnections, usePersonas, usePrompts, useSession } from '../../session';
 import { Icon, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
 import type { Route, SettingsPage } from '../routes';
@@ -51,7 +51,9 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
 
 // 설정 on phones: its pages as a list, each with what it holds.
 export function SettingsList({ onClose }: { onClose: () => void }) {
-  const { prompts, personas, connections } = useViews();
+  const prompts = usePrompts();
+  const personas = usePersonas();
+  const connections = useConnections();
   const { username } = useSession();
   const holds: Record<SettingsPage, string | undefined> = {
     prompts: `${prompts.length}개`,

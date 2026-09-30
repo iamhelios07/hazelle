@@ -1,6 +1,6 @@
 import { FolderInput } from 'lucide-react';
 import { useState } from 'react';
-import type { ChatItem } from '../../../model/chat';
+import type { ChatSummary } from '../../../model/chat';
 import { holds, KEEP_DAYS, matches, shownFolders, type CharacterShelf } from '../../../model/library';
 import { NameDialog } from '../../common/NameDialog';
 import { noResults } from '../../common/search';
@@ -27,7 +27,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
   // The character 지금 지우기 asks about before it goes for good.
-  const [purging, setPurging] = useState<CharacterShelf<ChatItem> | null>(null);
+  const [purging, setPurging] = useState<CharacterShelf<ChatSummary> | null>(null);
 
   const filed = shownFolders(folders);
   const folder = findFolder(folders, filter) ?? null;

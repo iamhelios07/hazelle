@@ -1,0 +1,74 @@
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { expect, it, vi } from 'vitest';
+import type { ChatScope } from '../engine/render';
+import type { Chat } from '../model/chat';
+import type { ApiResult, api } from '../runtime/api';
+import { ReadModels, type Opening, type ScreenChat } from '../runtime/read-model';
+import type { Session } from '../runtime/session';
+import { ObjectStore } from '../runtime/store';
+import type { Turn } from '../runtime/talk';
+import * as display from '../runtime/turn';
+import { randomBytes } from '../vault/aead';
+import { SessionProvider, useChatDisplay } from './session';
+
+it('C: composer and panel re-renders skip display, while streaming recomputes without replacing unchanged rows', async () => {
+  let rev = 0;
+  const request: typeof api = async <T,>(method: string): Promise<ApiResult<T>> => ({ ok: true, data: (method === 'GET'
+    ? { changes: [], cursor: 0, more: false, limits: { items: 100, bytes: 1_000_000, body: 100_000 } }
+    : { revs: [++rev] }) as T });
+  const store = await ObjectStore.open('test', randomBytes(32), request);
+  const chat: Chat = { title: null, character: null, models: {} };
+  await store.create('chat', chat, { id: 'chat' });
+  await store.create('entry', { type: 'message', role: 'user', text: '{{lastmessage}}', at: 0, receipt: null }, { parent: 'chat' });
+  const read = new ReadModels(store);
+  let turn: Turn | null = null;
+  const listeners = new Set<() => void>();
+  const talk = { snapshot: () => turn, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
+  const session = { read, talk } as Session;
+  const opening: Opening = { chat, messages: [] };
+  const screen = { width: 800, height: 600 } satisfies NonNullable<ChatScope['screen']>;
+  let view: ScreenChat;
+  function Probe({ composer, panel }: { composer: string; panel: boolean }) {
+    view = useChatDisplay('chat', { ...opening }, { ...screen });
+    void composer;
+    void panel;
+    return null;
+  }
+  // A null-rendering probe needs only React's host container, not a browser or a DOM implementation.
+  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {}, activeElement: null, defaultView: { HTMLIFrameElement: class {} }, documentElement: { namespaceURI: 'http://www.w3.org/1999/xhtml' } };
+  const container = { nodeType: 1, tagName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: document, addEventListener() {}, removeEventListener() {}, textContent: '' } as unknown as HTMLElement;
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('window', document.defaultView);
+  vi.stubGlobal('document', document);
+  const root = createRoot(container);
+  const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
+  const displayed = vi.spyOn(display, 'displayChat');
+  try {
+    await act(() => render('', false));
+    const initial = view!;
+    displayed.mockClear();
+    await act(() => render('typing', false));
+    await act(() => render('typing', true));
+    expect(view!).toBe(initial);
+    expect(displayed).not.toHaveBeenCalled();
+    turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'one' };
+    await act(() => { for (const listener of listeners) listener(); });
+    const first = view!;
+    turn = { ...turn, text: 'one two' };
+    await act(() => { for (const listener of listeners) listener(); });
+    expect(displayed).toHaveBeenCalledTimes(2);
+    expect(view!.display.texts[0]).toBe('one two');
+    expect(view!.messages[0]).toBe(first.messages[0]);
+    expect(view!.messages[1]).not.toBe(first.messages[1]);
+    const streaming = view!;
+    await act(() => render('more typing', false));
+    expect(view!).toBe(streaming);
+    expect(displayed).toHaveBeenCalledTimes(2);
+  } finally {
+    await act(() => root.unmount());
+    read.close();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});

@@ -1,5 +1,5 @@
 import { Copy, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
-import type { ChatItem } from '../../../model/chat';
+import type { ChatSummary } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
 import { aliased } from '../../common/alias';
 import { navigate } from '../../shell/router';
@@ -9,7 +9,7 @@ import { binCardNote, cardNote } from '../shelf';
 import type { CharacterActions } from '../useCharacterActions';
 
 type Props = {
-  shelf: CharacterShelf<ChatItem>;
+  shelf: CharacterShelf<ChatSummary>;
   // In 지운 캐릭터: it can be brought back or removed for good, and a press opens its menu.
   binned: boolean;
   // The step it is at while it is being copied or removed for good.

@@ -30,33 +30,34 @@ describe('session', () => {
 
   it('opens with the starter prompt and the translation prompt as the defaults', () =>
     server.withSession(async (session) => {
-      const { prompts, settings } = session.views();
+      const prompts = session.read.kind('prompt').snapshot();
+      const settings = session.read.settings.snapshot();
       const named = (id: string | undefined) => prompts.find((prompt) => prompt.id === id)?.value.name;
       expect([prompts.length, named(settings.prompt), named(settings.translatePrompt)]).toEqual([2, '🏓 핑퐁 간소화', '기본 번역']);
     }));
 
-  it('gives the same views until the store changes', () =>
+  it('gives the same summaries until the store changes', () =>
     server.withSession(async (session) => {
-      const first = session.views();
-      expect(session.views()).toBe(first);
+      const first = session.read.chats.snapshot();
+      expect(session.read.chats.snapshot()).toBe(first);
       const chat = await session.store.create('chat', { title: null, character: null, models: {} });
-      const next = session.views();
+      const next = session.read.chats.snapshot();
       expect(next).not.toBe(first);
-      expect(next.chats.map((item) => item.id)).toEqual([chat.ok && chat.data.id]);
-      expect(session.views()).toBe(next);
+      expect(next.map((item) => item.id)).toEqual([chat.ok && chat.data.id]);
+      expect(session.read.chats.snapshot()).toBe(next);
     }));
 
-  it("renders a chat's texts again when its messages change, and when what every chat reads changes", () =>
+  it("updates a chat's preview when its messages or its default persona dependency change", () =>
     server.withSession(async (session) => {
       const { store } = session;
       const chat = crypto.randomUUID();
       await startChat(store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '{{user}}, hello' });
-      expect(session.views().chatById.get(chat)?.preview).toBe('jin, hello');
+      expect(session.read.chat(chat).snapshot()?.preview).toBe('jin, hello');
       const persona = await addPersona(store, { name: 'Mina', description: '', picture: null });
       await setDefaultPersona(store, persona.ok ? persona.data.id : '');
-      expect(session.views().chatById.get(chat)?.preview).toBe('Mina, hello');
+      expect(session.read.chat(chat).snapshot()?.preview).toBe('Mina, hello');
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: 'bye, {{user}}' });
-      expect(session.views().chatById.get(chat)?.preview).toBe('bye, Mina');
+      expect(session.read.chat(chat).snapshot()?.preview).toBe('bye, Mina');
     }));
 });

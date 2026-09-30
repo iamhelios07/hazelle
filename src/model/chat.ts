@@ -182,7 +182,7 @@ export const shown = (message: Message): Version => message.versions[message.sel
 export const calls = (receipt: Receipt): Receipt[] => [...(receipt.continues ? calls(receipt.continues) : []), receipt];
 
 // A bot's HTML shows as the words in it.
-const firstLine = (text: string) =>
+export const firstLine = (text: string) =>
   text
     .replace(/<[^>]*>/g, ' ')
     .split('\n')
@@ -197,38 +197,15 @@ export function chatTitle(chat: Chat, messages: Message[], texts: string[]): str
   return (first !== -1 && firstLine(texts[first]!)) || '새 채팅';
 }
 
-export type ChatItem = { id: string; chat: Chat; messages: Message[]; title: string; preview: string; at: number | null; order: number };
-
-// Every chat with its messages, the one written to last first. Renaming a chat or changing its model
-// does not move it.
-export function chatItems(chats: Stored<'chat'>[], entriesOf: (chat: string) => Stored<'entry'>[], display: (chat: Stored<'chat'>, messages: Message[]) => string[]): ChatItem[] {
-  return chats
-    .map((chat) => {
-      const own = entriesOf(chat.id);
-      const messages = fold(own);
-      const latest = own.reduce<Stored<'entry'> | null>((last, entry) => (last && last.rev > entry.rev ? last : entry), null);
-      // A message is named as the reader reads it: its translation when it has one.
-      const texts = display(chat, messages).map((text, index) => shown(messages[index]!).translation?.text ?? text);
-      const last = texts.at(-1);
-      return {
-        id: chat.id,
-        chat: chat.value,
-        messages,
-        title: chatTitle(chat.value, messages, texts),
-        preview: last === undefined ? '' : firstLine(last),
-        at: latest?.value.at ?? null,
-        order: latest?.rev ?? chat.rev,
-      };
-    })
-    .sort((a, b) => b.order - a.order);
-}
+export type ChatSummary = { id: string; chat: Chat; count: number; title: string; preview: string; at: number | null; order: number };
+export type ChatItem = ChatSummary & { messages: Message[] };
 
 // One shelf's chats with each branch right under the chat it came from, in the order given at each level.
 // A branch whose origin is not among them stands at the top level.
-export function branchTree(items: ChatItem[]): { item: ChatItem; nested: boolean }[] {
+export function branchTree(items: ChatSummary[]): { item: ChatSummary; nested: boolean }[] {
   const ids = new Set(items.map((item) => item.id));
-  const parent = ({ chat }: ChatItem) => (chat.origin && ids.has(chat.origin.id) ? chat.origin.id : null);
-  const under = (origin: string | null): { item: ChatItem; nested: boolean }[] =>
+  const parent = ({ chat }: ChatSummary) => (chat.origin && ids.has(chat.origin.id) ? chat.origin.id : null);
+  const under = (origin: string | null): { item: ChatSummary; nested: boolean }[] =>
     items.filter((item) => parent(item) === origin).flatMap((item) => [{ item, nested: origin !== null }, ...under(item.id)]);
   return under(null);
 }

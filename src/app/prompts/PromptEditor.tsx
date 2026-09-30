@@ -7,7 +7,7 @@ import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { useStore, useViews } from '../session';
+import { useConnections, useSettings, useStore } from '../session';
 import { typing, useShortcut } from '../shortcuts';
 import { useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
@@ -80,7 +80,8 @@ type Props = {
 export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, onCopied, onErased, frame }: Props) {
   const store = useStore();
   const toast = useToast();
-  const { settings, connections } = useViews();
+  const settings = useSettings();
+  const connections = useConnections();
   const uses = usePromptUse().get(stored.id) ?? EMPTY_USE;
   const split = layout === 'split';
   const save = useAutosave<PromptPatch>((patch) => editPrompt(store, stored.id, patch));

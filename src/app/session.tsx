@@ -1,10 +1,9 @@
-import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react';
-import type { ChatItem } from '../model/chat';
-import type { Stored } from '../model/kinds';
-import type { CharacterShelf } from '../model/library';
-import type { Settings } from '../model/settings';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
+import type { ChatScope } from '../engine/render';
+import type { Kind } from '../model/kinds';
 import type { Files } from '../runtime/files';
-import type { Session, Views } from '../runtime/session';
+import type { Session } from '../runtime/session';
+import type { Opening } from '../runtime/read-model';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';
@@ -38,23 +37,70 @@ export function useAssetUrl(): (id: string) => string | undefined {
   return useCallback((id: string) => assets.url(id), [assets, version]);
 }
 
-// Every snapshot below is either one the session built for this store version or an object the store
-// holds as it is: a selector that built a fresh array or object each time would make React re-render forever.
-export function useViews(): Views {
-  const session = useSession();
-  return useSyncExternalStore(session.store.subscribe, session.views);
+// Every snapshot below is held until its own inputs change: fresh selector arrays would make React re-render forever.
+export function useChats() {
+  const { read } = useSession();
+  return useSyncExternalStore(read.chats.subscribe, read.chats.snapshot);
 }
 
-export const useChats = (): ChatItem[] => useViews().chats;
-export const useLibrary = (): Views['library'] => useViews().library;
-export const useConnections = (): Stored<'connection'>[] => useViews().connections;
-export const useProfiles = (): Stored<'profile'>[] => useViews().profiles;
-export const useSettings = (): Settings => useViews().settings;
-export const useUnreadable = (): number => useViews().unreadable;
+export function useChatModel(id: string | null) {
+  const { read } = useSession();
+  const model = id === null ? null : read.chat(id);
+  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
+}
 
-export function useCharacter(id: string | null): CharacterShelf<ChatItem> | null {
-  const { characterById } = useViews();
-  return id === null ? null : (characterById.get(id) ?? null);
+export function useChatSummary(id: string | null) {
+  const { read } = useSession();
+  const model = id === null ? null : read.summary(id);
+  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
+}
+
+export function useChatMessages() {
+  const { read } = useSession();
+  return useSyncExternalStore(read.messages.subscribe, read.messages.snapshot);
+}
+
+export function useLibrary() {
+  const { read } = useSession();
+  return useSyncExternalStore(read.library.subscribe, read.library.snapshot);
+}
+
+function useKind<K extends Kind>(kind: K) {
+  const model = useSession().read.kind(kind);
+  return useSyncExternalStore(model.subscribe, model.snapshot);
+}
+
+export const useConnections = () => useKind('connection');
+export const usePrompts = () => useKind('prompt');
+export const usePersonas = () => useKind('persona');
+export const useProfiles = () => useKind('profile');
+export function useSettings() {
+  const { read } = useSession();
+  return useSyncExternalStore(read.settings.subscribe, read.settings.snapshot);
+}
+export function useUnreadable() {
+  const { read } = useSession();
+  return useSyncExternalStore(read.unreadable.subscribe, read.unreadable.snapshot);
+}
+
+const subscribeNothing = () => () => {};
+const snapshotNull = () => null;
+
+export function useCharacter(id: string | null) {
+  const { read } = useSession();
+  const model = id === null ? null : read.character(id);
+  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
+}
+
+export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['screen']) {
+  const { read, talk } = useSession();
+  const model = useMemo(() => read.screen(id, talk, opening), [read, talk, id]);
+  const [, refresh] = useReducer((version: number) => version + 1, 0);
+  // The first layout runs before the external-store subscription; paint the viewport/greeting update without waiting for it.
+  useLayoutEffect(() => {
+    if (model.setInputs(opening, screen)) refresh();
+  }, [model, opening.chat, opening.messages, screen?.width, screen?.height]);
+  return useSyncExternalStore(model.subscribe, model.snapshot);
 }
 
 export function useTurn(): Turn | null {

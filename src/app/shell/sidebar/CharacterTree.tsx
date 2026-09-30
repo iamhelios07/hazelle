@@ -1,6 +1,6 @@
 import { Import, LayoutGrid } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { ChatItem } from '../../../model/chat';
+import type { ChatSummary } from '../../../model/chat';
 import { holds, matches, shownFolders, type FolderTree, type Shelf } from '../../../model/library';
 import { noResults } from '../../common/search';
 import { ago } from '../../common/time';
@@ -16,9 +16,9 @@ import { SidebarFooter } from './SidebarFooter';
 type Props = {
   page: boolean;
   onCollapse: (() => void) | undefined;
-  current: Shelf<ChatItem> | undefined;
-  typing: (shelf: Shelf<ChatItem>) => boolean;
-  onEnter: (shelf: Shelf<ChatItem>) => void;
+  current: Shelf<ChatSummary> | undefined;
+  typing: (shelf: Shelf<ChatSummary>) => boolean;
+  onEnter: (shelf: Shelf<ChatSummary>) => void;
   query: string;
   onQuery: (query: string) => void;
   openFolders: string[];
@@ -33,7 +33,7 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
   const words = query.trim();
   const filed = shownFolders(folders);
 
-  const row = (shelf: Shelf<ChatItem>) => {
+  const row = (shelf: Shelf<ChatSummary>) => {
     const latest = shelf.chats[0];
     return (
       <ItemRow

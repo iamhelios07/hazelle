@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { ChatItem } from '../../../model/chat';
+import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { usePersisted } from '../../common/usePersisted';
-import { useLibrary, useTurn, useViews } from '../../session';
+import { useChats, useLibrary, useTurn } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { enterShelf, HOME, href, shelfOf } from '../routes';
@@ -27,7 +27,7 @@ type Props = {
 // and the open folders outlast a visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { characters, none } = useLibrary();
-  const { chatById } = useViews();
+  const chatById = new Map(useChats().map((item) => [item.id, item]));
   const turn = useTurn();
   const route = useRoute();
   const at = href(route);
@@ -41,10 +41,10 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const shelves = [...characters, none];
   const here = shelfOf(route, chatById);
   const current = here === undefined ? undefined : shelves.find((shelf) => shelf.id === here);
-  const typing = (shelf: Shelf<ChatItem>) => shelf.chats.some((item) => item.id === turn?.chat);
+  const typing = (shelf: Shelf<ChatSummary>) => shelf.chats.some((item) => item.id === turn?.chat);
 
   // Picking a character goes inside it, even when its latest chat is the page already open.
-  const enter = (shelf: Shelf<ChatItem>) => {
+  const enter = (shelf: Shelf<ChatSummary>) => {
     setUpAt(null);
     navigate(enterShelf(shelf, wide));
   };
