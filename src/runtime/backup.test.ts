@@ -1,3 +1,4 @@
+import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, type Chat } from '../model/chat';
@@ -18,6 +19,44 @@ const server = testServer();
 const held = (store: ObjectStore) =>
   new Map((Object.keys(KINDS) as Kind[]).flatMap((kind) => store.list(kind)).map(({ id, kind, parent, value }) => [id, { kind, parent, value }]));
 
+// Whole bodies, since restore refuses any other.
+const card: Card = {
+  name: '루나',
+  nickname: null,
+  description: '',
+  personality: '',
+  scenario: '',
+  greetings: [],
+  exampleDialogue: '',
+  systemPrompt: '',
+  postHistoryInstructions: '',
+  creatorNotes: '',
+  creator: '',
+  version: '',
+  tags: [],
+  variables: [],
+  toggles: '',
+  utility: false,
+  bias: [],
+  regex: [],
+  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
+};
+const lore: Lore = {
+  name: '등대',
+  keys: ['등대'],
+  secondaryKeys: [],
+  content: '',
+  enabled: true,
+  constant: false,
+  selective: false,
+  useRegex: false,
+  caseSensitive: false,
+  insertionOrder: 100,
+  priority: null,
+  position: null,
+  folder: null,
+};
+
 // What opening an account adds (runtime/session).
 async function open(username: string, { profile = true } = {}) {
   const account = await server.account();
@@ -31,7 +70,7 @@ async function oldAccount({ profile = true } = {}) {
   const { store, files } = await open('jin', { profile });
   if (profile) await setProfileSettings(store, FIRST_PROFILE_ID, { temperature: 0.4 });
   const image = randomBytes(256);
-  const added = await addCharacter(store, files, { card: { name: '루나' } as Card, folder: null, loreFolders: [] }, [{ name: '등대' } as Lore], { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
+  const added = await addCharacter(store, files, { card, folder: null, loreFolders: [] }, [lore], { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
   const character = added.ok ? added.data : '';
   const chat = crypto.randomUUID();
   const opened: Chat = { title: null, character, models: {} };
@@ -76,6 +115,12 @@ describe('backup', () => {
     const expected = held(old.store);
     for (const [id, { parent }] of expected) if (parent === old.gone) expected.delete(id);
     expect(held(store)).toEqual(expected);
+  });
+
+  it('refuses a file with a body its kind cannot hold', () => {
+    const line = { kind: 'character', id: crypto.randomUUID(), parent: null, rev: 1, value: { card: { ...card, name: undefined }, folder: null, loreFolders: [] } };
+    const zip = zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 1 })), 'objects.jsonl': strToU8(JSON.stringify(line)) });
+    expect(readBackup(zip)).toEqual({ ok: false, error: 'not-backup' });
   });
 
   it('refuses an account holding something of its own, and writes nothing', async () => {
