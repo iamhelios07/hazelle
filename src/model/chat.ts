@@ -66,10 +66,10 @@ export type Translation = { text: string; receipt: Receipt | null; at: number };
 
 // Per character, or for every 캐릭터 없이 chat: replies translates each chat's latest reply, input
 // sends the user's messages translated, reverse (반전 모드) sends the model each version's translation in place of
-// its text. read and send are the languages replies and the user's messages are translated into, as the English
-// name the prompt reads. prompt is the translation prompt. Absent fields are read through
+// its text. mine is the user's language, which replies are translated into, and theirs the character's, which the
+// user's messages are translated into, each as the English name the prompt reads. prompt is the translation prompt. Absent fields are read through
 // runtime/characters translateSwitches, the one place that knows their defaults.
-export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: boolean; read?: string; send?: string; prompt?: string };
+export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: boolean; mine?: string; theirs?: string; prompt?: string };
 
 // Chat entries are created and never changed: an edit, a swipe or a deletion is a new
 // entry. at is the writer's clock, for showing times only; order is the server's rev.

@@ -31,7 +31,7 @@ export type TranslateFailure =
 type Deps = { store: ObjectStore; credentials: Credentials };
 
 // One call to the chat's 번역 model, with that model's 설정 묶음, through the character's translation prompt. A reply
-// goes into the 읽을 언어 and the user's message into the 보낼 언어. A translation cut at its length keeps what it
+// goes into the user's language and the user's message into the character's. A translation cut at its length keeps what it
 // wrote, and its receipt says it was cut.
 export async function translate(
   { store, credentials }: Deps,
@@ -48,7 +48,7 @@ export async function translate(
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { ok: false, failure: { kind: 'tokenizer' } };
-  const language = request.kind === 'message' ? switches.read : switches.send;
+  const language = request.kind === 'message' ? switches.mine : switches.theirs;
   let text = '';
   const answer = await generate({
     credentials,

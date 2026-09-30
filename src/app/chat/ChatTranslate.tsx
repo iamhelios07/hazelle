@@ -10,6 +10,8 @@ import type { OpenChat } from './useChat';
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
   const { translate, translateModel, card, actions } = chat;
+  // Without a character the other side is the model itself.
+  const theirs = card ? `${card.name}의 언어` : '모델 언어';
   const on = [translate.replies && '답장 번역', translate.input && '보낼 말 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
   return (
     <Menu
@@ -38,8 +40,8 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
           control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => actions.setTranslate({ reverse })} />}
         />
         <Divider variant="menu" />
-        <SettingRow place="panel" label="읽을 언어" control={<LanguageMenu label="읽을 언어" value={translate.read} onPick={(read) => actions.setTranslate({ read })} />} />
-        <SettingRow place="panel" label="보낼 언어" control={<LanguageMenu label="보낼 언어" value={translate.send} onPick={(send) => actions.setTranslate({ send })} />} />
+        <SettingRow place="panel" label="내 언어" control={<LanguageMenu label="내 언어" value={translate.mine} onPick={(mine) => actions.setTranslate({ mine })} />} />
+        <SettingRow place="panel" label={theirs} control={<LanguageMenu label={theirs} value={translate.theirs} onPick={(language) => actions.setTranslate({ theirs: language })} />} />
         <SettingRow place="panel" label="번역 프롬프트" control={<PromptMenu chat={chat} />} />
         <SettingRow
           place="panel"
