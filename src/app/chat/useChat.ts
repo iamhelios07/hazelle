@@ -6,7 +6,7 @@ import { shown, type Chat, type ChatItem, type TranslateSwitches } from '../../m
 import type { CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { resetToggles, setBeside, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
+import { resetToggles, setBeside, setKeepStatus, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import {
   branchChat,
   editMessage,
@@ -32,7 +32,7 @@ import { describeUnused } from '../common/unused';
 import { useAssetUrl, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, useViewport } from '../ui';
+import { useMenuHandle, usePanelCovers, useViewport } from '../ui';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
@@ -115,8 +115,12 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
-  // 정보, 토글, 상태 and the persona and prompt lists take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | { kind: 'status' } | Side | null>(null);
+  // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another. 상태 kept
+  // there (옆에 두기) takes it whenever none of them does, and only where the panel stands beside the story.
+  const [chosen, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
+  const covers = usePanelCovers();
+  const kept = bot && shelf?.character.keepStatus === true && status.length > 0 && !covers;
+  const panel = chosen ?? (kept ? { kind: 'status' as const } : null);
   // 상태 shown over the story by its key or a tap, rather than by pointing at its tab.
   const [peek, setPeek] = useState(false);
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
@@ -320,11 +324,16 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     if (!character) return;
     const saved = await track(setBeside(store, character, script, false));
     if (!saved.ok) return toast.failed(saved);
-    if (beside.length === 1) {
-      setPeek(false);
-      setPanel((current) => (current?.kind === 'status' ? null : current));
-    }
+    if (beside.length === 1) setPeek(false);
     toast.undoable('옆에 고정을 풀었어요', () => void setBeside(store, character, script, true));
+  }
+
+  // 옆에 두기, or on false 상태 back to its tab, for every chat of the character.
+  function keepStatus(keep: boolean) {
+    if (!chat.character) return;
+    setPeek(false);
+    if (keep) setPanel(null);
+    void track(setKeepStatus(store, chat.character, keep)).then((saved) => saved.ok || toast.failed(saved));
   }
 
   async function rename(name: string) {
@@ -351,6 +360,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     status,
     offered,
     peek,
+    canKeep: !covers,
     translate,
     sendLanguage,
     translation,
@@ -403,11 +413,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
       closePanel: () => setPanel(null),
       setPeek,
-      // 옆에 두기: 상태 as a panel beside the story, for as long as the chat stays open.
-      keepStatus: () => {
-        setPeek(false);
-        setPanel({ kind: 'status' });
-      },
+      keepStatus: () => keepStatus(true),
+      foldStatus: () => keepStatus(false),
       pinBox,
       unpinBox: (script: number) => void unpinBox(script),
       openDialog: (which: 'rename' | 'reading') => setDialog(which),

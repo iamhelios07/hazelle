@@ -24,6 +24,9 @@ export type Character = {
   // 옆에 고정: the display scripts, by place in card.regex, whose boxes show in 상태 beside the story instead of in the
   // messages. Only an import writes card.regex; an editor that reorders it must move these along.
   beside?: number[];
+  // 옆에 두기: 상태 rests in the panel beside the story whenever a chat of it opens with room for one, instead of
+  // peeking from the story's edge.
+  keepStatus?: true;
 };
 export type LoreFolder = { id: string; name: string };
 

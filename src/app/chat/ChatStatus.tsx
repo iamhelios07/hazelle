@@ -4,11 +4,11 @@ import { shownHtml } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 // 상태: the bot's boxes pinned beside the story (옆에 고정), each from the latest message that drew it. It peeks over
-// the story from a tab at its edge, or with 옆에 두기 stays in the panel beside it.
+// the story from a tab at its edge, or with 옆에 두기 rests in the panel beside it, where there is room for one.
 export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
-  const { peek, actions } = chat;
+  const { peek, canKeep, actions } = chat;
   return (
-    <SidePeek label="상태" open={peek} onOpenChange={actions.setPeek} actions={<IconButton icon={PanelRight} size="xs" label="옆에 두기" onClick={actions.keepStatus} />}>
+    <SidePeek label="상태" open={peek} onOpenChange={actions.setPeek} actions={canKeep && <IconButton icon={PanelRight} size="xs" label="옆에 두기" onClick={actions.keepStatus} />}>
       <StatusBoxes chat={chat} />
     </SidePeek>
   );
@@ -16,7 +16,7 @@ export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
 
 export function ChatStatus({ chat }: { chat: OpenChat }) {
   return (
-    <SidePanel title="상태" onClose={chat.actions.closePanel}>
+    <SidePanel title="상태" onClose={chat.actions.foldStatus}>
       <StatusBoxes chat={chat} />
     </SidePanel>
   );
