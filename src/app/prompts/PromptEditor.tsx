@@ -6,7 +6,7 @@ import { slotsOf, SLOTS, sortOf, type Block, type PromptSort, type TextBlock, ty
 import { setPromptModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
-import { useAutosave } from '../common/useAutosave';
+import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useStore, useViews } from '../session';
 import { useShortcut } from '../shortcuts';
 import { useToast } from '../toast';
@@ -41,7 +41,6 @@ import { EMPTY_USE, promptName, usePromptUse } from './usePromptUse';
 
 const MODEL = 'model';
 const TOGGLES = 'toggles';
-const SAVE_WORDS = { saved: '저장됨', saving: '저장 중…', failed: '저장하지 못함' } as const;
 const SORT_WORDS = {
   conversation: { default: '새 채팅의 기본', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: '기본 프롬프트는 지울 수 없어요. 다른 프롬프트를 기본으로 정한 뒤 지워 주세요.' },
   translate: {
@@ -380,7 +379,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   if (!split && drilled) {
     const title = open === MODEL ? '모델' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
-    return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_WORDS[save.status ?? 'saved'] }, body: page, open });
+    return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_STATUS[save.status ?? 'saved'] }, body: page, open });
   }
 
   const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `‘${promptName(stored.value.origin.name)}’의 사본` : null;
@@ -403,7 +402,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     subtitle,
     onBack,
     backLabel,
-    status: SAVE_WORDS[save.status ?? 'saved'],
+    status: SAVE_STATUS[save.status ?? 'saved'],
     actions: (
       <>
         {split && (

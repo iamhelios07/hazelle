@@ -1,11 +1,8 @@
 import { PenLine } from 'lucide-react';
 import { useState } from 'react';
-import type { SaveStatus } from '../common/saveQueue';
-import { useAutosave } from '../common/useAutosave';
+import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { Button, Menu, Row, Stack, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
-
-const SAVE_WORDS: Record<SaveStatus, string> = { saving: '저장 중…', saved: '저장됨', failed: '저장하지 못함' };
 
 // '' is the chat's own choice of no note; following the prompt's default again is a separate choice, never an
 // emptied box.
@@ -54,7 +51,7 @@ function NoteEditor({ chat }: { chat: OpenChat }) {
   }
 
   const own = 'note' in autosave.unsaved ? autosave.unsaved.note !== null : note !== undefined;
-  const status = !id ? (own ? '첫 메시지와 함께 저장돼요' : '') : own || autosave.status === 'failed' ? SAVE_WORDS[autosave.status ?? 'saved'] : '';
+  const status = !id ? (own ? '첫 메시지와 함께 저장돼요' : '') : own || autosave.status === 'failed' ? SAVE_STATUS[autosave.status ?? 'saved'] : '';
   const state = own
     ? text
       ? '이 채팅만의 노트예요'
