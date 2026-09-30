@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { appendCost, appendReply, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
-import { testServer } from './testing';
+import { BATCH_LIMITS, testServer } from './testing';
 import { displayChat } from './turn';
 
 const server = testServer();
@@ -54,24 +54,38 @@ describe('branchChat', () => {
     await appendTranslation(store, source, continued, { text: 'A reply', receipt: pending, at: 3 });
     await appendUserMessage(store, source, { id: deleted, text: '지울 말' });
     await removeMessage(store, source, deleted);
+    await store.batch(
+      Array.from({ length: BATCH_LIMITS.items + 1 }, (_, index) => ({
+        type: 'create' as const,
+        kind: 'entry' as const,
+        id: crypto.randomUUID(),
+        parent: source,
+        value: { type: 'message' as const, role: 'user' as const, at: index, text: `말 ${index} {{random}}`, receipt: null },
+      })),
+    );
     await appendUserMessage(store, source, { id: split, text: '여기서' });
     await appendUserMessage(store, source, { id: crypto.randomUUID(), text: '갈래에 없는 말' });
     const item: ChatItem = { id: source, chat, messages: folded(), title: '기숙사의 밤', preview: '', at: null, order: 0 };
     expect(shown(item.messages[1]!).seed).toBe(said);
 
+    const requests = vi.spyOn(globalThis, 'fetch');
     const branched = await branchChat(store, item, split);
     if (!branched.ok) throw new Error(branched.error);
     const entries = store.children('entry', branched.data);
+    expect(entries.length).toBeGreaterThan(BATCH_LIMITS.items);
+    const batches = requests.mock.calls.filter(([url]) => url === '/api/objects/batch').map(([, init]) => (JSON.parse(init!.body as string) as { writes: { id: string }[] }).writes);
+    expect(batches.map((batch) => batch.length)).toEqual([BATCH_LIMITS.items, entries.length + 1 - BATCH_LIMITS.items]);
+    expect(batches.at(-1)!.at(-1)!.id).toBe(branched.data);
     const copy = fold(entries);
     const withoutIds = (messages: Message[]) =>
       messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ seed, text, receipt, edited, at: written, translation }) => ({ seed, text, receipt, edited, written, translation })) }));
-    expect(withoutIds(copy)).toEqual(withoutIds(item.messages.slice(0, 4)));
+    expect(withoutIds(copy)).toEqual(withoutIds(item.messages.slice(0, -1)));
     expect([copy[0]!.versions.length, shown(copy[1]!).text, shown(copy[1]!).edited]).toEqual([3, '안녕하세요', true]);
     expect([shown(copy[2]!).text, copy[2]!.versions.length, calls(shown(copy[2]!).receipt!).map((call) => call.cost)]).toEqual(['답장', 1, [{ unit: 'usd', amount: 0.01, source: 'reported' }, null]]);
     const stored = store.get('chat', branched.data)!;
-    expect(stored.value).toEqual({ ...chat, title: null, origin: { id: source, name: '기숙사의 밤', after: copy[3]!.id }, seed: source });
+    expect(stored.value).toEqual({ ...chat, title: null, origin: { id: source, name: '기숙사의 밤', after: copy.at(-1)!.id }, seed: source });
     const reader = { store, username: 'jin' };
-    expect(displayChat(reader, branched.data, stored.value, copy)).toEqual(displayChat(reader, source, chat, item.messages.slice(0, 4)));
+    expect(displayChat(reader, branched.data, stored.value, copy)).toEqual(displayChat(reader, source, chat, item.messages.slice(0, -1)));
     expect(stored.rev).toBeGreaterThan(Math.max(...entries.map((entry) => entry.rev)));
   });
 });

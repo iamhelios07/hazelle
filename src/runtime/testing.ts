@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import type { HttpRequest } from '../connectors/types';
+export { BATCH_LIMITS } from '../server/objects';
 import { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';

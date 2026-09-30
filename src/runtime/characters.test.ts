@@ -84,7 +84,7 @@ describe('purgeCharacter', () => {
     await store.create('entry', { type: 'message', role: 'user', at: 1, text: '안녕', receipt: null }, { parent: chatId });
 
     const real = globalThis.fetch;
-    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === `/api/objects/${chatId}` && init?.method === 'DELETE' ? Promise.reject(new TypeError('Failed to fetch')) : real(url, init)));
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === '/api/objects/batch' && (JSON.parse(init?.body as string) as { writes: { id: string; body: string | null }[] }).writes.some((write) => write.id === chatId && write.body === null) ? Promise.reject(new TypeError('Failed to fetch')) : real(url, init)));
     expect(await purgeCharacter(store, files, id, () => {})).toEqual({ ok: false, error: 'offline' });
     const other = await open();
     await other.pull();
@@ -97,6 +97,7 @@ describe('purgeCharacter', () => {
     expect(steps).toEqual([
       [0, 2],
       [1, 2],
+      [2, 2],
     ]);
     expect([store.list('character'), store.list('chat')].map((left) => left.length)).toEqual([0, 0]);
   });

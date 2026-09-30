@@ -2,7 +2,7 @@ import type { Cost } from '../connectors/types';
 import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { ApiFailure, ApiResult } from './api';
-import { without, type ObjectStore } from './store';
+import { without, type ObjectStore, type Write } from './store';
 
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment
 // writes with the other layers, a character's purge, which removes them with the character, and a backup's
@@ -34,30 +34,26 @@ async function addGreetings(store: ObjectStore, chat: string, { ids, texts, sele
   });
   // Adding a version selects it, so without a select the chat would open on the last greeting.
   if (selected !== texts.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
-  for (const [id, entry] of entries) {
-    const saved = await store.create('entry', entry, { id, parent: chat });
-    if (!saved.ok) return saved;
-  }
-  return null;
+  const saved = await store.batch(entries.map(([id, value]) => ({ type: 'create', kind: 'entry', id, parent: chat, value })));
+  return saved.ok ? null : saved;
 }
 
-// 갈라지기: a new chat holding item's messages up to and including message, as they fold. Its entries
-// are saved one at a time, in order, because fold reads them in rev order; the chat goes last, so it appears only
-// once whole, and a copy cut short leaves its entries unreachable, like an import cut short. The spread takes the
+// 갈라지기: a new chat holding item's messages up to and including message, as they fold. The spread takes the
 // original's own choices; nothing links the two chats but origin, so deleting either leaves the other whole.
 export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<string>> {
   const upTo = item.messages.findIndex((candidate) => candidate.id === message);
   if (upTo === -1) return { ok: false, error: 'gone' };
   const id = crypto.randomUUID();
   let after = '';
+  const writes: Write[] = [];
   for (const source of item.messages.slice(0, upTo + 1)) {
     after = crypto.randomUUID();
     for (const [entryId, entry] of copied(after, source)) {
-      const saved = await store.create('entry', entry, { id: entryId, parent: id });
-      if (!saved.ok) return saved;
+      writes.push({ type: 'create', kind: 'entry', id: entryId, parent: id, value: entry });
     }
   }
-  const created = await store.create('chat', { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id }, { id });
+  writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
+  const created = await store.batch(writes);
   return created.ok ? { ok: true, data: id } : created;
 }
 

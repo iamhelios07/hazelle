@@ -5,38 +5,37 @@ import { daysLeft, holds, nest, type Character, type Lore } from '../model/libra
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
-import { planRemoval } from './removal';
-import { without, type ObjectStore } from './store';
+import { removeOwned } from './removal';
+import { without, type ObjectStore, type Write } from './store';
 
 // The picture of a new character: the original goes to its sealed blob, the thumbnail into the avatar
 // object beside it.
 export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string; thumb: string };
 export type Progress = (step: { kind: 'picture' } | { kind: 'lore'; saved: number; total: number }) => void;
 
-// Lorebook entries are saved, and a purge's files and objects removed, this many at a time: one request
-// each, and bots carry hundreds.
-const PARALLEL = 8;
-
-// The character is saved last, so it shows up only once its picture and lorebook are in. A failure
-// midway leaves pieces nothing points at, never a character missing some of its own.
+// The character goes last with its picture and lorebook (store.batch), so a failure midway leaves pieces nothing
+// points at, never a character missing some of its own.
 export async function addCharacter(store: ObjectStore, files: Files, character: Character, lore: Lore[], picture: Picture | null, progress: Progress): Promise<ApiResult<string>> {
   const id = crypto.randomUUID();
+  const writes: Write[] = [{ type: 'create', kind: 'character', id, parent: null, value: character }];
   if (picture) {
-    progress({ kind: 'picture' });
     const blob = crypto.randomUUID();
-    const put = await files.put(blob, picture.bytes);
-    if (!put.ok) return put;
-    const saved = await store.create('avatar', { type: picture.type, size: picture.bytes.length, thumb: picture.thumb }, { id: blob, parent: id });
-    if (!saved.ok) return saved;
+    writes.push({
+      type: 'create', kind: 'avatar', id: blob, parent: id,
+      value: { type: picture.type, size: picture.bytes.length, thumb: picture.thumb },
+      file: () => {
+        progress({ kind: 'picture' });
+        return files.put(blob, picture.bytes);
+      },
+    });
   }
-  for (let start = 0; start < lore.length; start += PARALLEL) {
-    progress({ kind: 'lore', saved: start, total: lore.length });
-    const saved = await Promise.all(lore.slice(start, start + PARALLEL).map((entry) => store.create('lore', entry, { parent: id })));
-    const failure = saved.find((result) => !result.ok);
-    if (failure && !failure.ok) return failure;
-  }
-  const saved = await store.create('character', character, { id });
-  return saved.ok ? { ok: true, data: id } : saved;
+  writes.push(...lore.map((value): Write => ({ type: 'create', kind: 'lore', id: crypto.randomUUID(), parent: id, value })));
+  let saved = 0;
+  progress({ kind: 'lore', saved, total: lore.length });
+  const result = await store.batch(writes, (write) => {
+    if (write.type !== 'remove' && write.kind === 'lore') progress({ kind: 'lore', saved: ++saved, total: lore.length });
+  });
+  return result.ok ? { ok: true, data: id } : result;
 }
 
 // A card as the importer read it, in no library folder. Its lorebook folders get ids,
@@ -70,24 +69,8 @@ export function setDeleted(store: ObjectStore, id: string, at: number | null): P
   return store.update('character', id, (current) => (at === null ? without(current, 'deleted') : { ...current, deleted: at }));
 }
 
-// Removes a character for good with everything it owns, in the order of its removal plan. progress counts
-// every file and object removed.
-export async function purgeCharacter(store: ObjectStore, files: Files, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
-  const rounds = planRemoval(store, { kind: 'character', id });
-  const total = rounds.reduce((sum, round) => sum + round.length, 0);
-  let done = 0;
-  for (const round of rounds) {
-    for (let start = 0; start < round.length; start += PARALLEL) {
-      progress(done, total);
-      const batch = round.slice(start, start + PARALLEL);
-      const removed = await Promise.all(batch.map(({ from, id }) => (from === 'files' ? files.remove(id) : store.remove(id))));
-      const failure = removed.find((result) => !result.ok);
-      if (failure && !failure.ok) return failure;
-      done += batch.length;
-    }
-  }
-  return { ok: true, data: null };
-}
+export const purgeCharacter = (store: ObjectStore, files: Files, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
+  removeOwned(store, files, { kind: 'character', id }, progress);
 
 // The session runs it when it opens, on whichever device opens first. One that fails is tried again next
 // time. A stop (the vault closing) lets the character under way finish and leaves the rest for next time.
