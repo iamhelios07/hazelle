@@ -59,6 +59,7 @@
 @media (hover: hover) {
   .action kbd {
     display: inline;
+    margin-left: var(--space-8);
   }
 }
 
