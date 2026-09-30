@@ -32,7 +32,7 @@ import { describeUnused } from '../common/unused';
 import { useAssetUrl, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, usePanelCovers, useViewport } from '../ui';
+import { useMenuHandle, useViewport } from '../ui';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
@@ -117,19 +117,19 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
   // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another.
-  const [chosen, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
-  // Where the status window stands: in its latest message, or with 옆에 두기 in the panel beside the story, where the
-  // panel stands beside it. There it takes the panel's place whenever no other does and the key has not hidden it.
-  const covers = usePanelCovers();
-  const beside = bot && shelf?.character.keepStatus === true && !covers;
+  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
+  // Where the status window stands: in its latest message, or with 옆에 두기 in the story's margin, while each box
+  // fits there (fitting, which the margin reports whether it is shown or not). The key hides it there for now.
+  const [fitting, setFitting] = useState<ReadonlyMap<number, boolean>>(() => new Map());
+  const fits = status.length > 0 && status.every(({ script, drawn }) => drawn === null || fitting.get(script) === true);
+  const beside = bot && shelf?.character.keepStatus === true && fits;
   const [hidden, setHidden] = useState(false);
-  const panel = chosen ?? (beside && !hidden && status.length > 0 ? { kind: 'status' as const } : null);
   const hosted = messages.map((_, index) => (beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []))));
   const { seen, watch } = useSeen();
   // 상태 shown over the story by its key or a tap, rather than by pointing at its tab. The tab is there while a box
   // is off screen, or never drawn in a message.
   const [peek, setPeek] = useState(false);
-  const peeking = status.length > 0 && panel?.kind !== 'status' && (peek || status.some(({ script }) => !seen.has(script)));
+  const peeking = status.length > 0 && !(beside && !hidden) && (peek || status.some(({ script }) => !seen.has(script)));
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
   // The versions shown the other way round from their default, the original in place of the translation.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -335,19 +335,14 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     if (!chat.character) return;
     setPeek(false);
     setHidden(false);
-    if (keep) setPanel(null);
     void track(setKeepStatus(store, chat.character, keep)).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  // The key shows or hides 상태 for now, stored nothing: the panel beside the story, while it stands there, or else
-  // the drawer over the story.
+  // The key shows or hides 상태 for now, storing nothing: in the margin while it stands there, or else the drawer
+  // over the story.
   function toggleStatus() {
-    if (panel?.kind === 'status') return setHidden(true);
-    if (beside && hidden && chosen === null) {
-      setPeek(false);
-      return setHidden(false);
-    }
-    setPeek(!peek);
+    setPeek(beside ? false : !peek);
+    if (beside) setHidden(!hidden);
   }
 
   async function rename(name: string) {
@@ -376,7 +371,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     offered,
     peek,
     peeking,
-    canKeep: !covers,
+    aside: beside && !hidden,
+    canKeep: fits,
     translate,
     sendLanguage,
     translation,
@@ -432,6 +428,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       keepStatus: () => keepStatus(true),
       foldStatus: () => keepStatus(false),
       toggleStatus,
+      fitStatus: (script: number, fits: boolean) => setFitting((current) => (current.get(script) === fits ? current : new Map(current).set(script, fits))),
       markStatus: (script: number, on: boolean) => void markStatus(script, on),
       watch,
       openDialog: (which: 'rename' | 'reading') => setDialog(which),

@@ -12,3 +12,4 @@ export { FaceButton, FaceStrip, LayerSidebar, Rail, Sidebar } from './Sidebar';
 export { SidePanel } from './SidePanel';
 export { SidePeek } from './SidePeek';
 export { Stack } from './Stack';
+export { StoryAside } from './StoryAside';

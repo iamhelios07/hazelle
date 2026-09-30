@@ -19,10 +19,6 @@
   font-weight: var(--weight-semibold);
 }
 
-.body {
-  overflow: hidden;
-}
-
 .none {
   color: var(--color-text-faint);
   font-size: var(--text-sm);

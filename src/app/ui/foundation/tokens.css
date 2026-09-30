@@ -153,6 +153,7 @@
   --prose-faded-opacity: 0.5;
   /* A bot's button that nothing can run yet (design §6.4). */
   --story-inert-opacity: 0.45;
+  --aside-tools-opacity: 0.35;
 
   --space-2: 2px;
   --space-4: 4px;

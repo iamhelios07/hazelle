@@ -9,6 +9,8 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* A box in the aside, laid out as wide as the story, reaches past the page's edge where it draws nothing. */
+  overflow-x: clip;
 }
 
 /* 읽기 설정: ChatFrame.tsx sets --reading-size and one class of each kind. */

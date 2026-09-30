@@ -33,9 +33,6 @@ export const useWide = watch(MEDIA.wide);
 // Whether list screens show the picked item beside the list (ListDetail).
 export const useSplit = watch(MEDIA.split);
 
-// Whether a side panel covers the page instead of standing beside the story.
-export const usePanelCovers = watch(MEDIA.panelCovers);
-
 // Whether things show on hover; without it they show on a tap.
 export const useHover = watch(MEDIA.hover);
 

@@ -42,7 +42,7 @@ and only this folder styles elements.**
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
-| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock, the header and dock floating over the story (the header hides while it is read down, the dock keeps room for the whole composer); the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties |
+| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock, the header and dock floating over the story (the header hides while it is read down, the dock keeps room for the whole composer); the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties; slots for a `SidePeek` and a `StoryAside` over the story |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
@@ -109,7 +109,9 @@ and only this folder styles elements.**
 | story | `Story` | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons dimmed; the streaming caret; faded while another text will take its place |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its quiet tag by the name (such as 번역, which flips it), its tools bar and markers |
 | layout | `SidePeek` | `SidePeek.module.css` | A tab at the story's right edge, clear of its scrollbar, whose drawer slides over the story once the pointer rests on the tab, or held open (a key, a tap) with its own close, such as 상태; ChatFrame's `peek` slot places it |
-| story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message: its script's name and actions among several, the box drawn smaller until it fits the panel |
+| layout | `StoryAside` | `StoryAside.module.css` | A column in the story's right margin, over the page, its tools faint until pointed at, laid out even while not shown; ChatFrame's `aside` slot places it |
+| story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text: its script's name and actions among several |
+| story | `MarginBox` | `MarginBox.module.css` | A bot's box in `StoryAside`: laid out at the story's text width, drawn smaller to fit the margin by what it visibly draws, whole over the story while pointed at; tells whether it fits at half its size or more |
 
 ## Enforced by `npm run check`
 

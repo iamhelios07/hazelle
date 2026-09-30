@@ -1,0 +1,33 @@
+.room {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The box as drawn in the margin; only it takes the pointer. */
+.slot {
+  position: relative;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.slot:hover {
+  z-index: var(--layer-raised);
+}
+
+/* Laid out at the story's text width, its drawn right edge on the slot's, drawn smaller from there. Pointed at, a
+   moment later, it is drawn whole over the story, growing left and down. */
+.card {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: calc(var(--read-width) - 2 * var(--read-gutter));
+  pointer-events: none;
+  transform: translateX(var(--shift)) scale(var(--scale));
+  transform-origin: var(--origin) 0;
+  transition: transform var(--duration-slow) var(--ease-enter);
+}
+
+.slot:hover .card {
+  transform: translateX(var(--shift));
+  transition-delay: var(--duration-intent);
+}

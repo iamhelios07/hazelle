@@ -11,7 +11,7 @@ import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
 import { useReading } from './ChatReading';
-import { ChatStatus, ChatStatusPeek } from './ChatStatus';
+import { ChatStatusAside, ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useChat, type Side } from './useChat';
 
@@ -53,13 +53,12 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
             <ChatInfo chat={id} messages={messages} id={panel.id} onShow={actions.info} onClose={actions.closePanel} />
           ) : panel?.kind === 'toggles' ? (
             <ChatToggles chat={chat} />
-          ) : panel?.kind === 'status' ? (
-            <ChatStatus chat={chat} />
           ) : (
             panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           )
         }
         peek={chat.peeking && <ChatStatusPeek chat={chat} />}
+        aside={chat.status.length > 0 && <ChatStatusAside chat={chat} />}
         reading={reading.value}
         compact={scroll.away}
         scrollRef={scroll.scrollRef}

@@ -1,13 +1,12 @@
 import { PanelRight, PanelRightClose, PinOff } from 'lucide-react';
-import { IconButton, SidePanel, SidePeek, Stack, StatusBox } from '../ui';
+import { IconButton, MarginBox, SidePeek, Stack, StatusBox, StoryAside } from '../ui';
 import { shownHtml } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 // 상태: the bot's status window (상태창 지정), each box from the latest message that drew it. Away from that message it
-// peeks over the story from a tab at its edge, or with 옆에 두기 rests in the panel beside it, where there is room.
+// peeks over the story from a tab at its edge, or with 옆에 두기 stands in the story's margin, where it fits.
 export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
-  const { peek, canKeep, actions } = chat;
-  const keep = canKeep && <IconButton icon={PanelRight} size="xs" label="옆에 두기" onClick={actions.keepStatus} />;
+  const { status, peek, canKeep, decor, actions } = chat;
   return (
     <SidePeek
       label="상태"
@@ -16,20 +15,46 @@ export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
       actions={
         <>
           {unmarkOnly(chat)}
-          {keep}
+          {canKeep && <IconButton icon={PanelRight} size="xs" label="옆에 두기" onClick={actions.keepStatus} />}
         </>
       }
     >
-      <StatusBoxes chat={chat} />
+      <Stack gap="section">
+        {status.map((box) => (
+          <StatusBox
+            key={box.script}
+            name={box.name}
+            html={box.drawn && shownHtml(box.drawn.html, decor)}
+            css={decor.css}
+            onInert={actions.inert}
+            actions={status.length > 1 && unmark(chat, box)}
+          />
+        ))}
+      </Stack>
     </SidePeek>
   );
 }
 
-export function ChatStatus({ chat }: { chat: OpenChat }) {
+// Laid out whether shown or not, so each box can tell whether it fits the margin, which 옆에 두기 needs.
+export function ChatStatusAside({ chat }: { chat: OpenChat }) {
+  const { status, aside, decor, actions } = chat;
   return (
-    <SidePanel title="상태" actions={unmarkOnly(chat)} close={{ icon: PanelRightClose, label: '탭으로 접기' }} onClose={chat.actions.foldStatus}>
-      <StatusBoxes chat={chat} />
-    </SidePanel>
+    <StoryAside
+      label="상태"
+      shown={aside}
+      actions={
+        <>
+          {unmarkOnly(chat)}
+          <IconButton icon={PanelRightClose} size="xs" label="탭으로 접기" onClick={actions.foldStatus} />
+        </>
+      }
+    >
+      {status.map((box) =>
+        box.drawn ? (
+          <MarginBox key={box.script} html={shownHtml(box.drawn.html, decor)} css={decor.css} onFit={(fits) => actions.fitStatus(box.script, fits)} />
+        ) : null,
+      )}
+    </StoryAside>
   );
 }
 
@@ -37,23 +62,5 @@ const unmark = ({ actions }: OpenChat, { script, name }: OpenChat['status'][numb
   <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${name}`} onClick={() => actions.markStatus(script, false)} />
 );
 
-// One box has no head of its own: its 지정 풀기 sits with the drawer's or the panel's actions.
+// One box has no head of its own: its 지정 풀기 sits with the drawer's or the margin's actions.
 const unmarkOnly = (chat: OpenChat) => chat.status.length === 1 && unmark(chat, chat.status[0]!);
-
-function StatusBoxes({ chat }: { chat: OpenChat }) {
-  const { status, decor, actions } = chat;
-  return (
-    <Stack gap="section">
-      {status.map((box) => (
-        <StatusBox
-          key={box.script}
-          name={box.name}
-          html={box.drawn && shownHtml(box.drawn.html, decor)}
-          css={decor.css}
-          onInert={actions.inert}
-          actions={status.length > 1 && unmark(chat, box)}
-        />
-      ))}
-    </Stack>
-  );
-}
