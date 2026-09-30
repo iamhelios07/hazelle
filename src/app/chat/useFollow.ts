@@ -47,5 +47,5 @@ export function useFollow(count: number, streaming: boolean) {
   // What the pill over the composer says, or null while the view is at the bottom.
   const pill = !away ? null : streaming ? '답장 쓰는 중' : unread ? '새 답장' : '맨 아래로';
 
-  return { scrollRef, onScroll, follow, pill };
+  return { scrollRef, onScroll, follow, pill, away };
 }

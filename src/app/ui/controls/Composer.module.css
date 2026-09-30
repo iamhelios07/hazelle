@@ -1,4 +1,7 @@
 .composer {
+  align-self: center;
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -6,7 +9,19 @@
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-2xl);
   background: var(--color-surface);
-  transition: border-color var(--duration-fast);
+  transition:
+    border-color var(--duration-fast),
+    max-width var(--duration-slow) var(--ease-enter),
+    padding var(--duration-slow) var(--ease-enter),
+    gap var(--duration-slow) var(--ease-enter);
+}
+
+/* Focus anywhere inside, the text or a tool's menu, keeps it whole. */
+.compact:not(:focus-within) {
+  max-width: var(--composer-compact-width);
+  gap: 0;
+  padding: var(--space-8) var(--space-16);
+  cursor: text;
 }
 
 .composer:focus-within {
@@ -20,6 +35,9 @@
 .input {
   min-height: var(--control-lg);
   max-height: var(--composer-max-height);
+  transition:
+    min-height var(--duration-slow) var(--ease-enter),
+    max-height var(--duration-slow) var(--ease-enter);
   padding: 0 var(--space-6) 0 0;
   border: 0;
   outline: none;
@@ -34,7 +52,38 @@
   outline: none;
 }
 
+.compact:not(:focus-within) .input {
+  min-height: var(--one-line);
+  max-height: var(--one-line);
+  overflow: hidden;
+}
+
+.fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--duration-slow) var(--ease-enter);
+}
+
+/* The bar clips only while folded: open, its tools' menus rise out of it. It shows once the fold has mostly grown, so
+   the moment it spills below the fold is not seen. */
+.compact:not(:focus-within) .fold {
+  grid-template-rows: 0fr;
+}
+
+.compact:not(:focus-within) .bar {
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast),
+    visibility var(--duration-fast);
+}
+
 .bar {
+  min-height: 0;
+  transition:
+    opacity var(--duration-fast) var(--duration-fast),
+    visibility var(--duration-fast) var(--duration-fast);
   display: flex;
   align-items: center;
   gap: var(--space-6);

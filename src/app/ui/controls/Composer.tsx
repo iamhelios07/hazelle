@@ -14,13 +14,15 @@ type Props = {
   tools?: ReactNode;
   actions: ReactNode;
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  // One line while nothing in it has focus; pressing it brings it back whole.
+  compact: boolean;
 };
 
-export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placeholder, hint, tools, actions, inputRef }: Props) {
+export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placeholder, hint, tools, actions, inputRef, compact }: Props) {
   const id = useId();
   useAutosize(inputRef, value);
   return (
-    <div className={styles.composer}>
+    <div className={`${styles.composer} ${compact ? styles.compact : ''}`}>
       <label className={styles.label} htmlFor={id}>
         메시지
       </label>
@@ -36,10 +38,12 @@ export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placehol
         onFocus={onFocus}
         onBlur={onBlur}
       />
-      <div className={styles.bar}>
-        {tools}
-        <span className={styles.hint}>{hint}</span>
-        {actions}
+      <div className={styles.fold}>
+        <div className={styles.bar}>
+          {tools}
+          <span className={styles.hint}>{hint}</span>
+          {actions}
+        </div>
       </div>
     </div>
   );

@@ -53,6 +53,7 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
           )
         }
         reading={reading.value}
+        compact={scroll.away}
         scrollRef={scroll.scrollRef}
         onScroll={scroll.onScroll}
       >

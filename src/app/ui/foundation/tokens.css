@@ -209,6 +209,10 @@
   --hint-width: 280px;
   --dialog-width: 440px;
   --composer-max-height: 240px;
+  /* The composer while the story is read above its end: one line, until it is pressed. */
+  --composer-compact-width: 280px;
+  /* One line of the element's own text: a custom property keeps 1lh as written, so it is read where used. */
+  --one-line: 1lh;
   /* Prompt text in the editor (MarkupArea) and the outline beside it. */
   --markup-size: 15.5px;
   --markup-leading: 1.72;

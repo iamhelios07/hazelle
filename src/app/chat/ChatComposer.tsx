@@ -20,7 +20,7 @@ const FIX = {
 } as const satisfies Record<Blocked['kind'], { label: string; chip: Chip }>;
 
 export function ChatComposer({ chat }: { chat: OpenChat }) {
-  const { draft, messages, last, busy, streaming, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, actions } = chat;
+  const { draft, messages, last, busy, streaming, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, scroll, actions } = chat;
   const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: useMenuOpener(personaMenu) };
   const wide = useWide();
   const [focused, setFocused] = useState(false);
@@ -63,6 +63,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
       )}
       <Composer
         inputRef={input}
+        compact={scroll.away}
         value={draft.text}
         onChange={draft.set}
         onKeyDown={onKey}

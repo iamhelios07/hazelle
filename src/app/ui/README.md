@@ -42,7 +42,7 @@ and only this folder styles elements.**
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
 | foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
-| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock; the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties |
+| layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock, the header and dock floating over the story (the header hides while it is read down, the dock keeps room for the whole composer); the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
@@ -59,7 +59,7 @@ and only this folder styles elements.**
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, shaped like a field for a setting, or borderless in the composer; with a leading icon or face |
 | controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, or a list with a line under each, for one choice |
-| controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar |
+| controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar; `compact` folds it to one line until focus goes inside |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` | — | A `Button` that opens a file picker |
 | controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가 |

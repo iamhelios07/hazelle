@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronLeft } from 'lucide-react';
-import type { CSSProperties, ReactNode, Ref, RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import styles from './ChatFrame.module.css';
@@ -33,28 +33,68 @@ type Props = {
   footer: ReactNode;
   panel?: ReactNode;
   reading: Reading;
+  // The story is read above its end: the composer folds to one line (Composer's compact).
+  compact: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   onScroll: () => void;
 };
 
-// The chat page: a header, the story column that scrolls, the composer, and the 정보 panel beside it.
-export function ChatFrame({ back, title, actions, children, above, notice, footer, panel, reading, scrollRef, onScroll }: Props) {
+// The chat page: a header, the story column that scrolls, the composer, and the 정보 panel beside it. The header and
+// the composer float over the story: the header hides while the story is read down, and comes back when it is scrolled
+// up, reached at its top or pointed at the page's top edge.
+export function ChatFrame({ back, title, actions, children, above, notice, footer, panel, reading, compact, scrollRef, onScroll }: Props) {
+  const [shown, setShown] = useState(true);
+  const lastTop = useRef(0);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const folded = useRef(compact);
+  // The story ends above the composer as it is whole, folded or not: space that shrank with the fold would move the
+  // story's end, which would unfold it again at once.
+  const [space, setSpace] = useState(0);
+
+  useLayoutEffect(() => {
+    folded.current = compact;
+  });
+
+  useLayoutEffect(() => {
+    const element = footerRef.current!;
+    const measure = () => {
+      if (!folded.current || element.matches(':focus-within')) setSpace(element.offsetHeight);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // A move that ends at the story's end is the view following it (the story shrank as its font loaded, a reply
+  // grew), not the reader going up.
+  function scrolled() {
+    const element = scrollRef.current!;
+    const top = element.scrollTop;
+    const end = element.scrollHeight - top - element.clientHeight < 1;
+    if (top !== lastTop.current) setShown(top === 0 || (top < lastTop.current && !end));
+    lastTop.current = top;
+    onScroll();
+  }
+
   return (
     <div className={styles.frame}>
       <main
         className={`${styles.column} ${styles[reading.font]} ${LEADING[reading.leading]} ${WIDTH[reading.width]}`}
-        style={{ '--reading-size': `${reading.size}px` } as CSSProperties}
+        style={{ '--reading-size': `${reading.size}px`, '--footer-space': `${space}px` } as CSSProperties}
       >
-        <header className={styles.header}>
-          {back && <IconButton icon={ChevronLeft} label={back.label} onClick={back.onClick} />}
-          <div className={styles.title}>{title}</div>
-          <div className={styles.actions}>{actions}</div>
-        </header>
+        <div className={`${styles.top} ${shown ? styles.shown : ''}`}>
+          <header className={styles.header}>
+            {back && <IconButton icon={ChevronLeft} label={back.label} onClick={back.onClick} />}
+            <div className={styles.title}>{title}</div>
+            <div className={styles.actions}>{actions}</div>
+          </header>
+        </div>
         <div className={styles.notice}>{notice}</div>
-        <div className={styles.scroll} ref={scrollRef} onScroll={onScroll}>
+        <div className={styles.scroll} ref={scrollRef} onScroll={scrolled}>
           <div className={styles.content}>{children}</div>
         </div>
-        <div className={styles.footer}>
+        <div ref={footerRef} className={`${styles.footer} ${compact ? styles.compact : ''}`}>
           <div className={styles.above}>{above}</div>
           <div className={styles.dock}>{footer}</div>
         </div>
