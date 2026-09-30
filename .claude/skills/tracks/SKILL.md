@@ -10,6 +10,7 @@ Parallel tracks save time only when the parts touch different files. For a small
 1. Split by file ownership. Each track owns a set of files and does not edit the others' files. Shared pieces, such as a new type or a common helper, go in first, done by you on master, before the tracks start.
 2. Start every track with the Agent tool, `isolation: "worktree"`, all in one message so they run at once. Each brief carries:
    - First command: `scripts/worktree.sh`. It fast-forwards to master (worktrees have been created at old commits) and links `node_modules`, so no install runs.
+   - Run git as `/usr/bin/git`. The rtk hook rewrites a plain `git` to `rtk git`, and the worktree guard refuses that.
    - The files it owns, and the files it must not touch.
    - The comment rules and structure rules from CLAUDE.md, in full or by path.
    - Validation: `npm run check` and one focused test per changed behavior. No browser runs inside a track.
