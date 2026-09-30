@@ -83,7 +83,7 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
 const asWritten = (content: string) => `{{${content}}}`;
 
 // At `::`, or at `:` when the first colon is single, so {{getvar:x}} works.
-// `::` when the first colon is doubled, else `:`. null: no arguments.
+// `::` when the first colon is doubled, else `:`.
 export function separatorOf(content: string): string | null {
   const colon = content.indexOf(':');
   return colon === -1 ? null : content[colon + 1] === ':' ? '::' : ':';
@@ -94,7 +94,6 @@ function splitArgs(content: string): string[] {
   return sep === null ? [content] : content.split(sep);
 }
 
-// A block's name and what follows it.
 export function blockHead(content: string): { name: string; rest: string } | null {
   const match = /^\s*#([^\s:]*)([\s\S]*)$/.exec(content);
   return match && { name: normalize(match[1]!), rest: match[2]! };
@@ -204,7 +203,6 @@ const BINARY = new Map<string, (left: string, right: string, context: CbsContext
   ['tisnot', (key, value, context) => readToggle(context, key) !== value],
 ]);
 
-// #when's arguments after its name: the modes it opens with, then the condition.
 export function whenArgs(rest: string): { modes: string[]; condition: string[] } {
   const trimmed = rest.trim();
   const args = rest.startsWith(':') ? splitArgs(rest).slice(1) : trimmed ? [trimmed] : [];
