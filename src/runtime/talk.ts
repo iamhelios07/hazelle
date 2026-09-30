@@ -135,45 +135,47 @@ export class Talk {
     this.set({ chat, said, reply, text: reply.continues?.text ?? '' });
     const abort = new AbortController();
     this.abort = abort;
-    const ready = await prepare(abort.signal);
-    if ('kind' in ready) {
-      this.set(null);
-      return ready;
-    }
-    const { route, settings, prompt } = ready;
-    // A message sent translated shows as it is saved, marked, from the moment it is translated.
-    if (ready.said?.translation) this.set({ ...this.turn!, said: ready.said });
-    const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
-    const replying = generate({
-      credentials: this.credentials,
-      connection: route.connection.value,
-      model: route.model,
-      settings,
-      messages: prompt.messages,
-      signal: abort.signal,
-      onText: (phase, chunk) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk }),
-    });
-    const sent = await sending;
-    if (sent && !sent.ok) {
-      abort.abort();
-      await replying;
-      this.set(null);
-      return { kind: 'unsent', failure: sent };
-    }
-    const answer = await replying;
+    try {
+      const ready = await prepare(abort.signal);
+      if ('kind' in ready) return ready;
+      const { route, settings, prompt } = ready;
+      // A message sent translated shows as it is saved, marked, from the moment it is translated.
+      if (ready.said?.translation) this.set({ ...this.turn!, said: ready.said });
+      const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
+      const replying = generate({
+        credentials: this.credentials,
+        connection: route.connection.value,
+        model: route.model,
+        settings,
+        messages: prompt.messages,
+        signal: abort.signal,
+        onText: (phase, chunk) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk }),
+      });
+      const sent = await sending;
+      if (sent && !sent.ok) {
+        abort.abort();
+        await replying;
+        return { kind: 'unsent', failure: sent };
+      }
+      const answer = await replying;
 
-    const receipt: Receipt = { ...receiptOf(route, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
-    const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed };
-    // Kept before the save, whose store change is what shows the reply's 정보.
-    this.sentBy.set(reply.id, { request: answer.request, prompt });
-    const saved = await appendReply(this.store, chat, written);
-    this.set(null);
-    if (!saved.ok) {
-      this.unsaved = { chat, reply: written };
-      return { kind: 'unsaved', failure: saved };
+      const receipt: Receipt = { ...receiptOf(route, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
+      const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed };
+      // Kept before the save, whose store change is what shows the reply's 정보.
+      this.sentBy.set(reply.id, { request: answer.request, prompt });
+      const saved = await appendReply(this.store, chat, written);
+      if (!saved.ok) {
+        this.unsaved = { chat, reply: written };
+        return { kind: 'unsaved', failure: saved };
+      }
+      this.settle(chat, receipt);
+      return null;
+    } finally {
+      // On a throw too: a turn left set turns every later send away, and a reply still streaming would write into the next.
+      abort.abort();
+      this.abort = null;
+      this.set(null);
     }
-    this.settle(chat, receipt);
-    return null;
   }
 }
 

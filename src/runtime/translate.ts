@@ -114,15 +114,22 @@ export class Translator {
     this.aborts.set(version, abort);
     this.change(version, { live: '', failed: null });
     const deps = { store: this.store, credentials: this.credentials };
-    void translate(deps, input, abort.signal, (text) => this.change(version, { live: text })).then(async (made) => {
-      this.aborts.delete(version);
-      if (!made.ok) return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
-      if (!this.store.get('chat', chat)) return this.change(version, { live: null, held: made.translation });
-      const saved = await appendTranslation(this.store, chat, version, made.translation);
-      // The live text goes once the store holds the translation, so the original never shows in between.
-      this.change(version, { live: null, failed: saved.ok ? null : { kind: 'unsaved', failure: saved } });
-      if (saved.ok) this.talk.settle(chat, made.translation.receipt!);
-    });
+    void translate(deps, input, abort.signal, (text) => this.change(version, { live: text }))
+      .finally(() => this.aborts.delete(version))
+      .then(
+        async (made) => {
+          if (!made.ok) return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
+          if (!this.store.get('chat', chat)) return this.change(version, { live: null, held: made.translation });
+          const saved = await appendTranslation(this.store, chat, version, made.translation);
+          // The live text goes once the store holds the translation, so the original never shows in between.
+          this.change(version, { live: null, failed: saved.ok ? null : { kind: 'unsaved', failure: saved } });
+          if (saved.ok) this.talk.settle(chat, made.translation.receipt!);
+        },
+        (error: unknown) => {
+          this.change(version, { live: null });
+          throw error;
+        },
+      );
   }
 
   close() {

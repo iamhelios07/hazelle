@@ -28,6 +28,24 @@ describe('Translator', () => {
       expect(JSON.parse(log[1]!.sent.body!).messages.at(-1)).toEqual({ role: 'user', content: 'Hello, traveler.' });
     }));
 
+  it('lets a version be translated again after a translation that threw', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      const opened = { title: null, character: null, models: {} };
+      await startChat(session.store, chat, opened, null);
+      // A 204 has no body, which the stream decoder cannot read.
+      stubRelay(inTurn([new Response(null, { status: 204, headers: { 'x-relay': 'upstream' } }), saying('안녕')]));
+      const thrown = new Promise((resolve) => process.once('unhandledRejection', resolve));
+      const input = translationInput(session, chat, opened, [], { kind: 'input', text: 'Hi' });
+
+      session.translator.translate(chat, 'v', input);
+      expect(await thrown).toBeInstanceOf(TypeError);
+      expect(session.translator.snapshot().live.has('v')).toBe(false);
+      session.translator.translate(chat, 'v', input);
+      expect(session.translator.snapshot().live.get('v')).toBe('');
+    }));
+
   it('stops before any call when the character’s translation prompt is gone', () =>
     server.withSession(async (session) => {
       await answerable(session);

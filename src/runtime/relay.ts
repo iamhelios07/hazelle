@@ -14,6 +14,8 @@ export type RelayFailure =
 
 export type JsonAnswer = { ok: true; data: unknown } | { ok: false; failure: RelayFailure };
 
+const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 'stopped' } : { kind: 'offline' });
+
 // The provider's answer, whatever its status.
 async function send(request: HttpRequest, signal?: AbortSignal): Promise<Response | RelayFailure> {
   let response: Response;
@@ -25,7 +27,7 @@ async function send(request: HttpRequest, signal?: AbortSignal): Promise<Respons
       signal,
     });
   } catch {
-    return signal?.aborted ? { kind: 'stopped' } : { kind: 'offline' };
+    return lost(signal);
   }
   const source = response.headers.get('x-relay');
   if (source === 'upstream') return response;
@@ -42,17 +44,22 @@ export async function relay(request: HttpRequest, signal?: AbortSignal): Promise
 
 // For requests whose whole answer is one JSON document, such as a model list.
 export async function relayJson(request: HttpRequest, signal?: AbortSignal): Promise<JsonAnswer> {
-  return readJson(await relay(request, signal));
+  return readJson(await relay(request, signal), signal);
 }
 
 // OAuth puts its refusals in a JSON body for the caller to read: RFC 8628 answers "not yet" with a 400.
 export async function relayOAuth(request: HttpRequest, signal?: AbortSignal): Promise<JsonAnswer> {
-  return readJson(await send(request, signal));
+  return readJson(await send(request, signal), signal);
 }
 
-async function readJson(response: Response | RelayFailure): Promise<JsonAnswer> {
+async function readJson(response: Response | RelayFailure, signal?: AbortSignal): Promise<JsonAnswer> {
   if (!(response instanceof Response)) return { ok: false, failure: response };
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return { ok: false, failure: lost(signal) };
+  }
   try {
     return { ok: true, data: JSON.parse(text) };
   } catch {

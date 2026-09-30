@@ -53,4 +53,12 @@ describe('Talk', () => {
       session.talk.close();
       expect(session.talk.sent(reply.id)).toBeNull();
     }));
+
+  it('ends a turn whose prepare throws, so the next one runs', () =>
+    server.withSession(async (session) => {
+      const turn = { chat: 'c', said: null, reply: { id: 'r', message: null, replaces: null, continues: null } };
+      await expect(session.talk.run(turn, () => Promise.reject(new Error('prepare broke')))).rejects.toThrow('prepare broke');
+      expect(session.talk.snapshot()).toBeNull();
+      expect(await session.talk.run(turn, async () => ({ kind: 'probe' }))).toEqual({ kind: 'probe' });
+    }));
 });
