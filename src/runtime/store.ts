@@ -176,6 +176,7 @@ export class ObjectStore {
   }
 
   private hold(object: Held) {
+    if (this.stale(object.id, object.rev)) return;
     this.forget(object.id);
     this.deleted.delete(object.id);
     this.live.set(object.id, object);
@@ -186,8 +187,16 @@ export class ObjectStore {
   }
 
   private drop(id: string, rev: number) {
+    if (this.stale(id, rev)) return;
     this.forget(id);
     this.deleted.set(id, rev);
+  }
+
+  // Every write takes the account's next rev, so one not above the rev held for the id is that write or an older
+  // one arriving late. Checked here, after apply's await: a write can land while a pulled body decrypts.
+  private stale(id: string, rev: number): boolean {
+    const known = this.live.get(id)?.rev ?? this.deleted.get(id);
+    return known !== undefined && rev <= known;
   }
 
   private forget(id: string) {

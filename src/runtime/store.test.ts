@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Connection } from '../connectors/types';
 import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
+import { api } from './api';
+import { ObjectStore } from './store';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -62,6 +64,26 @@ describe('object store', () => {
     const other = await open();
     expect(await other.create('connection', connection('a'), { id: created.data.id })).toMatchObject({ ok: true, data: { id: created.data.id } });
     expect(await other.create('connection', connection('b'), { id: created.data.id })).toEqual({ ok: false, error: 'conflict' });
+  });
+
+  it('keeps a write that lands while a pull is still opening an older copy', async () => {
+    const { accountId, vaultKey } = await server.account();
+    let meanwhile: (() => Promise<unknown>) | null = null;
+    const request = async <T,>(...args: Parameters<typeof api>) => {
+      const result = await api<T>(...args);
+      const landing = meanwhile;
+      meanwhile = null;
+      await landing?.();
+      return result;
+    };
+    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const created = await store.create('connection', connection('a'));
+    if (!created.ok) throw new Error(created.error);
+    const { id } = created.data;
+
+    meanwhile = () => store.update('connection', id, renamed('b'));
+    await store.pull();
+    expect(store.get('connection', id)?.value.label).toBe('ab');
   });
 
   it('counts a body it cannot open and refuses to overwrite it', async () => {
