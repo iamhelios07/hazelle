@@ -150,6 +150,7 @@
   /* 고딕 reads larger than 명조 at one size, so the story sets it a pixel smaller and a little tighter. */
   --prose-sans-shrink: 1px;
   --prose-sans-tighten: 0.1;
+  --prose-faded-opacity: 0.5;
 
   --space-2: 2px;
   --space-4: 4px;

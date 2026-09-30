@@ -34,6 +34,22 @@
   color: var(--color-text);
 }
 
+.mark {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  height: var(--space-20);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast),
+    color var(--duration-fast);
+}
+
 .time {
   color: var(--color-text-faint);
   font-size: var(--text-xs);
@@ -93,6 +109,11 @@
     opacity: 1;
     transform: none;
     pointer-events: auto;
+  }
+
+  .mark:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
   }
 }
 

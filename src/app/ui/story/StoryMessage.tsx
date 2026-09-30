@@ -12,6 +12,9 @@ type Props = {
   time: string;
   // The user's own words sit in a box; replies run as the story.
   mine: boolean;
+  // A quiet tag beside the name, always shown, such as 번역 on a reply shown as its translation; action is what a tap
+  // on it does.
+  mark?: { label: string; action: string; onClick: () => void };
   children: ReactNode;
   // Under the body: a cut marker, the version switcher.
   after?: ReactNode;
@@ -21,7 +24,7 @@ type Props = {
   onTap: () => void;
 };
 
-export function StoryMessage({ avatar, name, time, mine, children, after, tools, pinned, onTap }: Props) {
+export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap }: Props) {
   const hover = useHover();
   // Phones have no hover, so a tap on the message itself shows its tools.
   const tap = (event: MouseEvent) => {
@@ -34,6 +37,11 @@ export function StoryMessage({ avatar, name, time, mine, children, after, tools,
       <div className={styles.main}>
         <div className={styles.head}>
           <span className={mine ? styles.me : styles.name}>{name}</span>
+          {mark && (
+            <button type="button" className={styles.mark} aria-label={`${mark.label} · ${mark.action}`} title={mark.action} onClick={mark.onClick}>
+              {mark.label}
+            </button>
+          )}
           <span className={styles.time}>{time}</span>
         </div>
         {mine ? <div className={styles.bubble}>{children}</div> : children}

@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import type { Blocked } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
+import { withRo } from '../common/languages';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
 import { Button, Callout, Composer, pressed, pressedKey, SendButton, useMenuOpener, useWide } from '../ui';
 import { ChatNote } from './ChatNote';
@@ -19,7 +20,7 @@ const FIX = {
 } as const satisfies Record<Blocked['kind'], { label: string; chip: Chip }>;
 
 export function ChatComposer({ chat }: { chat: OpenChat }) {
-  const { draft, messages, last, busy, streaming, problem, modelMenu, promptMenu, personaMenu, actions } = chat;
+  const { draft, messages, last, busy, streaming, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, actions } = chat;
   const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: useMenuOpener(personaMenu) };
   const wide = useWide();
   const [focused, setFocused] = useState(false);
@@ -67,7 +68,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
         onKeyDown={onKey}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder="메시지 · *행동*은 별표로 감싸요"
+        placeholder={`${translate.input ? `${withRo(sendLanguage)} 옮겨 보내요` : '메시지'} · *행동*은 별표로 감싸요`}
         hint={hint}
         tools={
           <>
