@@ -39,25 +39,6 @@ export async function addFirstProfile(store: ObjectStore): Promise<void> {
   await store.upsert('settings', (current) => (current?.profile === undefined ? { models: {}, ...current, profile: FIRST_PROFILE_ID } : current));
 }
 
-// Settings kept on a starred model itself, before 설정 묶음 (2026-09-29), become a 묶음 each, named after the model,
-// which that model then uses. The session runs it on every open.
-// Delete once the live account has opened with this version: nothing writes the old field any more.
-type Kept = Starred & { settings?: ModelSettings };
-export async function adoptModelSettings(store: ObjectStore): Promise<void> {
-  for (const connection of store.list('connection')) {
-    for (const model of connection.value.starred as Kept[]) {
-      if (!model.settings) continue;
-      const created = await store.create('profile', { name: model.name, settings: model.settings });
-      if (!created.ok) return;
-      const moved = await store.update('connection', connection.id, (current) => ({
-        ...current,
-        starred: current.starred.map((entry) => (entry.id === model.id ? without({ ...entry, profile: created.data.id } as Kept, 'settings') : entry)),
-      }));
-      if (!moved.ok) return;
-    }
-  }
-}
-
 export const addProfile = (store: ObjectStore, profile: Profile) => store.create('profile', profile);
 
 export const renameProfile = (store: ObjectStore, id: string, name: string) => store.update('profile', id, (current) => ({ ...current, name }));

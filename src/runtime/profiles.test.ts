@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Connection, Model } from '../connectors/types';
-import { addFirstProfile, addProfile, adoptModelSettings, FIRST_PROFILE_ID, modelProfile, removeProfile, setModelProfile, setProfileSettings } from './profiles';
+import { addFirstProfile, addProfile, FIRST_PROFILE_ID, modelProfile, removeProfile, setModelProfile, setProfileSettings } from './profiles';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -38,18 +38,5 @@ describe('설정 묶음', () => {
     await store.pull();
     await setProfileSettings(store, id, { stop: undefined });
     expect(store.get('profile', id)!.value.settings).toEqual({ temperature: 1, maxOutput: 6000 });
-  });
-
-  it('turns settings kept on a starred model into a 묶음 of its own, once', async () => {
-    const { store } = await server.account();
-    const kept = { ...openRouter, starred: [{ ...model, settings: { temperature: 0.7 } }, { ...model, id: 'other' }] };
-    const created = await store.create('connection', kept);
-    const id = created.ok ? created.data.id : '';
-
-    await adoptModelSettings(store);
-    await adoptModelSettings(store);
-    const [profile] = store.list('profile');
-    expect(store.list('profile').map((stored) => stored.value)).toEqual([{ name: 'M', settings: { temperature: 0.7 } }]);
-    expect(store.get('connection', id)!.value.starred).toEqual([{ ...model, profile: profile!.id }, { ...model, id: 'other' }]);
   });
 });

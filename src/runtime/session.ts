@@ -9,7 +9,7 @@ import { purgeExpired } from './characters';
 import { Credentials } from './credential';
 import { Files } from './files';
 import { addFirstPersona } from './personas';
-import { addFirstProfile, adoptModelSettings } from './profiles';
+import { addFirstProfile } from './profiles';
 import { addDefaults } from './prompts';
 import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
@@ -54,7 +54,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   if (pulled) return pulled;
   const files = await Files.open(accountId, vaultKey, api);
   // Awaited rather than started, so the first screen and every turn already see the default prompts, persona and 묶음.
-  await Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store), adoptModelSettings(store)]);
+  await Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store)]);
   if (signal.aborted) return { ok: false, error: 'stopped' };
 
   const credentials = new Credentials();

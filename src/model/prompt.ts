@@ -51,7 +51,7 @@ export type ToggleValues = Record<string, string>;
 
 // authorNote is the default 작가의 노트, which a chat's own note replaces.
 // origin is a copy's original, named as it was then. imported marks a prompt made from a Risu preset; a copy
-// does not inherit it. Every prompt stored before task prompts is one of these.
+// does not inherit it.
 export type ConversationPrompt = {
   task?: never;
   name: string;

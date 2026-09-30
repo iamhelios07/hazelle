@@ -77,8 +77,7 @@ const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })),
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
 const translate = shape({ task: (value) => value === 'translate' });
 
-// Each kind's required fields, and one level into what screens index. A field joins only if every body ever
-// stored has it: one added later is optional in its type and left unchecked, or old bodies are refused.
+// Each kind's required fields, and one level into what screens index.
 const SHAPES = {
   character: shape({
     card: shape({
