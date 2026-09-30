@@ -21,9 +21,10 @@ export type Character = {
   translate?: TranslateSwitches;
   // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
   decor?: boolean;
-  // 옆에 고정: the display scripts, by place in card.regex, whose boxes show in 상태 beside the story instead of in the
-  // messages. Only an import writes card.regex; an editor that reorders it must move these along.
-  beside?: number[];
+  // 상태창 지정: the display scripts, by place in card.regex, whose boxes are the character's status window, shown once
+  // for the latest message instead of in every one. Only an import writes card.regex; an editor that reorders it must
+  // move these along.
+  statusScripts?: number[];
   // 옆에 두기: 상태 rests in the panel beside the story whenever a chat of it opens with room for one, instead of
   // peeking from the story's edge.
   keepStatus?: true;

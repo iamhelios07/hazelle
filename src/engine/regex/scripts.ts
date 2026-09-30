@@ -3,8 +3,9 @@ import type { RegexScript } from '../import/types';
 
 export type Skipped = { script: RegexScript; reason: { kind: 'invalid'; detail: string } | { kind: 'emotion' } };
 
-// A box a script drew, taken out of the text (옆에 고정, design §6.4). script is its place in the caller's scripts.
-export type Box = { script: number; html: string };
+// A box a script drew, taken out of the text (상태창 지정, design §6.4). script is its place in the caller's scripts.
+// at: which end of the text it stood at, or for a box within the text, the end.
+export type Box = { script: number; html: string; at: 'top' | 'bottom' };
 
 export type Context = {
   // In the caller's source order (spec §c); <order N> reorders them here.
@@ -87,7 +88,7 @@ export function applyScripts(
       continue;
     } else if (kind === 'move_top' || kind === 'move_bottom') {
       const { block, rest } = cut(result, once, argument);
-      if (take.has(place)) boxes.push({ script: place, html: cbs(block) });
+      if (take.has(place)) boxes.push({ script: place, html: cbs(block), at: kind === 'move_top' ? 'top' : 'bottom' });
       if (take.has(place) || BOX_TAG.test(argument)) drawn.push(place);
       result = cbs(take.has(place) ? rest : kind === 'move_top' ? block + rest : rest + block);
     } else if (kind === 'replace' && take.has(place)) {
@@ -99,7 +100,7 @@ export function applyScripts(
           return '';
         }),
       );
-      boxes.push({ script: place, html: cbs(pieces.join('')) });
+      boxes.push({ script: place, html: cbs(pieces.join('')), at: marked.slice(0, marked.indexOf(OPEN)).trim() ? 'bottom' : 'top' });
       drawn.push(place);
     } else {
       // inject: the match leaves this stage's text. Risu also rewrote the stored message; stored text is never

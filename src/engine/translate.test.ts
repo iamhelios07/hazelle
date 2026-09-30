@@ -50,7 +50,7 @@ describe('the default translation prompt', () => {
   it('translates a displayed message into Korean, with the character, the persona and the messages before it with their translations', () => {
     const { source, messages } = translate({ request: { kind: 'message', index: 1 }, language: 'Korean' });
     expect(source).toBe('The LAMP is lit, jin.');
-    // A box pinned beside the story is not translated with its message.
+    // A status window's box is not translated with its message.
     expect(translate({ request: { kind: 'message', index: 1 }, language: 'Korean', take: new Set([0]) }).source).toBe('The  is lit, jin.');
     expect(messages.map(({ role }) => role)).toEqual(['system', 'system', 'system', 'system', 'user']);
     const instructions = messages[0]!.content.split('\n');

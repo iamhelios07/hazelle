@@ -1,20 +1,20 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Story } from './Story';
-import styles from './PinnedBox.module.css';
+import styles from './StatusBox.module.css';
 
 type Props = {
-  // The script that draws it, as the bot named it.
+  // The script that draws it, as the bot named it; shown with actions, which a box among several has of its own.
   name: string;
-  actions: ReactNode;
+  actions?: ReactNode;
   // null: the box was never drawn yet in this chat.
   html: string | null;
   css: string;
   onInert: () => void;
 };
 
-// A bot's box pinned beside the story (옆에 고정). Boxes are built for about the story's width, wider than the panel,
-// so a wider one is drawn smaller until it fits.
-export function PinnedBox({ name, actions, html, css, onInert }: Props) {
+// A box of a bot's status window (상태창 지정) away from its message. Boxes are built for about the story's width,
+// wider than the side panel, so a wider one is drawn smaller until it fits.
+export function StatusBox({ name, actions, html, css, onInert }: Props) {
   const body = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -37,10 +37,12 @@ export function PinnedBox({ name, actions, html, css, onInert }: Props) {
 
   return (
     <section className={styles.box} aria-label={name}>
-      <div className={styles.head}>
-        <h3 className={styles.name}>{name}</h3>
-        {actions}
-      </div>
+      {actions && (
+        <div className={styles.head}>
+          <h3 className={styles.name}>{name}</h3>
+          {actions}
+        </div>
+      )}
       {html === null ? (
         <p className={styles.none}>이 채팅에서 아직 그린 적이 없어요.</p>
       ) : (

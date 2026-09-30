@@ -6,7 +6,7 @@ import { appendUserMessage, startChat } from './chat-log';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
-import { besideBoxes, takeTurn } from './turn';
+import { statusBoxes, takeTurn } from './turn';
 
 const server = testServer();
 
@@ -173,13 +173,14 @@ describe('보낼 말 번역', () => {
 });
 
 describe('상태', () => {
-  it("shows each pinned script's box from the latest message that drew it, passing over a reply being written and an empty box", () => {
+  it("shows each status script's box from the latest message that drew it, passing over a reply being written and an empty box", () => {
     const message = (id: string, live: boolean): Shown => ({ id, role: 'assistant', at: 0, versions: [{ id, seed: id, text: '', receipt: null, edited: false, at: 0 }], selected: 0, live: live ? id : null });
     const messages = [message('a', false), message('b', false), message('c', false), message('d', true)];
-    const boxes = [[{ script: 0, html: 'first' }], [{ script: 0, html: 'second' }], [{ script: 0, html: ' ' }], [{ script: 0, html: 'half' }]];
-    expect(besideBoxes({ texts: [], css: '', drawn: [], boxes }, messages, [0, 2])).toEqual([
-      { script: 0, html: 'second' },
-      { script: 2, html: null },
+    const box = (html: string) => [{ script: 0, html, at: 'top' as const }];
+    const boxes = [box('first'), box('second'), box(' '), box('half')];
+    expect(statusBoxes({ texts: [], css: '', drawn: [], boxes }, messages, [0, 2])).toEqual([
+      { script: 0, drawn: { script: 0, html: 'second', at: 'top', message: 1 } },
+      { script: 2, drawn: null },
     ]);
   });
 });

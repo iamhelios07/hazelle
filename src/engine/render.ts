@@ -58,7 +58,7 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
 // The one pass that turns a chat's stored text into the text shown or sent, oldest message first. The input or
 // output stage is the only one whose CBS writes variables, so a stage chained after it cannot run a setvar twice;
 // the process or display stage reads a copy, so the display never changes what the prompt sees.
-// take: the display scripts, by place in the card's regex, whose boxes leave the messages (옆에 고정). drawn and
+// take: the display scripts, by place in the card's regex, whose boxes leave the messages (상태창 지정). drawn and
 // boxes are each message's; only the display reads them.
 export function renderChat(
   stage: Stage,

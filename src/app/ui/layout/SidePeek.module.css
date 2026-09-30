@@ -1,7 +1,8 @@
-/* Between the header and the composer, over the story; only the tab and a shown drawer take the pointer. */
+/* Between the header and the composer, over the story and left of its scrollbar; only the tab and a shown drawer
+   take the pointer. */
 .peek {
   position: absolute;
-  inset: var(--header-height) 0 var(--footer-space) 0;
+  inset: var(--header-height) var(--story-scrollbar) var(--footer-space) 0;
   z-index: var(--layer-menu);
   display: flex;
   align-items: center;
@@ -30,8 +31,9 @@
   color: var(--color-text);
 }
 
-/* As wide as the story's text, so a bot's box lays out as it does in its message. It leaves a moment after the
-   pointer does, so a pointer passing from the tab to it does not close it. */
+/* As wide as the story's text, so a bot's box lays out as it does in its message. It comes once the pointer rests on
+   the tab, so a pointer crossing the edge does not bring it, and leaves a moment after the pointer does, so a pointer
+   passing from the tab to it does not close it. */
 .drawer {
   position: relative;
   display: flex;
@@ -53,7 +55,15 @@
     visibility var(--duration-instant) linear calc(var(--duration-slow) + var(--duration-fast));
 }
 
-.tab:hover + .drawer,
+.tab:hover + .drawer {
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition:
+    transform var(--duration-slow) var(--ease-enter) var(--duration-intent),
+    visibility var(--duration-instant) linear var(--duration-intent);
+}
+
 .drawer:hover,
 .drawer:focus-within,
 .open .drawer {

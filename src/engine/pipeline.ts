@@ -219,7 +219,7 @@ const TAIL_CHARS = 1500;
 export type TranslationInput = {
   // The chat's, its messages as shown.
   scope: ChatScope;
-  // The display scripts whose boxes are pinned beside the story (옆에 고정), which a message's source leaves out.
+  // The display scripts that draw the status window (상태창 지정), whose boxes a message's source leaves out.
   take: ReadonlySet<number>;
   prompt: TranslatePrompt;
   // Each of scope.messages' translation text, or null.

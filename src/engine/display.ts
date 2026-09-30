@@ -7,7 +7,7 @@ import { contexts, renderChat, type ChatScope } from './render';
 // texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the card's
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
 // drawn: the display scripts, by place in the card's regex, that drew a box in each message; boxes: each message's
-// boxes taken out of it (옆에 고정), their <style> blocks in css too.
+// boxes taken out of it (상태창 지정), their <style> blocks in css too.
 export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][] };
 
 // A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.

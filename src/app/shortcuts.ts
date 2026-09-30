@@ -12,7 +12,7 @@ export const SHORTCUTS = {
   prompts: { label: '프롬프트 (채팅에서는 옆 패널)', hint: '프롬프트', keys: [{ key: 'p', mod: true }] },
   shortcutList: { label: '단축키 보기', hint: '단축키', keys: [{ key: '/', mod: true }] },
   sidebar: { label: '사이드바 접기 · 펴기', hint: '사이드바', keys: [{ key: 'b', mod: true }] },
-  status: { label: '상태 보기 · 닫기 (옆에 고정한 상자가 있는 채팅)', hint: '상태', keys: [{ key: '.', mod: true }] },
+  status: { label: '상태 보기 · 닫기 (상태창을 지정한 채팅)', hint: '상태', keys: [{ key: '.', mod: true }] },
   send: { label: '보내기', hint: '보내기', keys: [{ key: 'Enter', shift: false }] },
   newline: { label: '줄바꿈', hint: '줄바꿈', keys: [{ key: 'Enter', shift: true }] },
   stop: { label: '답장 멈추기', hint: '멈추기', keys: [{ key: 'Escape' }] },

@@ -77,7 +77,7 @@ describe('applyScripts', () => {
     expect(apply([script('\\[\\w\\]', 'kept?', { flags: '<inject>' })], 'a [x] b [y]').text).toBe('a  b ');
   });
 
-  it('takes a pinned box out of the text, runs the later scripts over it too, and says which scripts drew a box', () => {
+  it('takes a status box out of the text, notes which end it stood at, runs the later scripts over it too, and says which scripts drew a box', () => {
     const scripts = [
       script('\\[hp=(\\d+)\\]', '<div class="status">HP $1 <img src="face"></div>', { flags: '<order 1>' }),
       script('<img src="(\\w+)">', '<img src="pic:$1">'),
@@ -88,14 +88,15 @@ describe('applyScripts', () => {
     expect(kept.boxes).toEqual([]);
     const taken = apply(scripts, 'hi [hp=3]', { take: new Set([0]) });
     expect(taken.text).toBe('<span>hi</span>\n ');
-    expect(taken.boxes).toEqual([{ script: 0, html: '<div class="status">HP 3 <img src="pic:face">\n</div>\n' }]);
+    expect(taken.boxes).toEqual([{ script: 0, html: '<div class="status">HP 3 <img src="pic:face">\n</div>\n', at: 'bottom' }]);
+    expect(apply(scripts, '[hp=3] hi', { take: new Set([0]) }).boxes).toMatchObject([{ at: 'top' }]);
     expect(taken.drawn).toEqual([0]);
   });
 
   it('takes a block a script moves as its box', () => {
     const scripts = [script('\\[hp=(\\d+)\\]', '@@move_top <div>HP $1</div>')];
     expect(apply(scripts, 'hi [hp=3]').drawn).toEqual([0]);
-    expect(apply(scripts, 'hi [hp=3]', { take: new Set([0]) })).toMatchObject({ text: 'hi ', boxes: [{ script: 0, html: '<div>HP 3</div>\n' }] });
+    expect(apply(scripts, 'hi [hp=3]', { take: new Set([0]) })).toMatchObject({ text: 'hi ', boxes: [{ script: 0, html: '<div>HP 3</div>\n', at: 'top' }] });
   });
 
   it('skips a script with an invalid pattern and says why, and runs the rest', () => {

@@ -108,8 +108,8 @@ and only this folder styles elements.**
 | feedback | `Steps` | `Steps.module.css` | Progress through steps |
 | story | `Story` | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons dimmed; the streaming caret; faded while another text will take its place |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its quiet tag by the name (such as 번역, which flips it), its tools bar and markers |
-| layout | `SidePeek` | `SidePeek.module.css` | A tab at the story's right edge whose drawer slides over the story while pointed at, or held open (a key, a tap), such as 상태; ChatFrame's `peek` slot places it |
-| story | `PinnedBox` | `PinnedBox.module.css` | A bot's box pinned beside the story (옆에 고정): its script's name and actions, the box drawn smaller until it fits the panel |
+| layout | `SidePeek` | `SidePeek.module.css` | A tab at the story's right edge, clear of its scrollbar, whose drawer slides over the story once the pointer rests on the tab, or held open (a key, a tap) with its own close, such as 상태; ChatFrame's `peek` slot places it |
+| story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message: its script's name and actions among several, the box drawn smaller until it fits the panel |
 
 ## Enforced by `npm run check`
 

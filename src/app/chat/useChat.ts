@@ -6,7 +6,7 @@ import { shown, type Chat, type ChatItem, type TranslateSwitches } from '../../m
 import type { CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { resetToggles, setBeside, setKeepStatus, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
+import { resetToggles, setKeepStatus, setStatusScript, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import {
   branchChat,
   editMessage,
@@ -25,7 +25,7 @@ import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
-import { besideBoxes, blocked, displayChat, takeTurn, togglesOf, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, displayChat, takeTurn, togglesOf, statusBoxes, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
@@ -36,6 +36,7 @@ import { useMenuHandle, usePanelCovers, useViewport } from '../ui';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
+import { useSeen } from './useSeen';
 
 type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
@@ -96,11 +97,11 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const { texts, css } = view;
   // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
   const bot = shelf?.character.decor !== false;
-  // 옆에 고정 (design §6.4): the boxes shown in 상태, and each message's others, which it offers.
-  const beside = bot ? (shelf?.character.beside ?? []) : [];
+  // 상태창 지정 (design §6.4): the status window's boxes, and each message's boxes, which its tools offer to make one.
+  const statusScripts = bot ? (shelf?.character.statusScripts ?? []) : [];
   const scriptName = (script: number) => card?.regex[script]?.name.trim() || `표시 스크립트 ${script + 1}`;
-  const status = besideBoxes(view, messages, beside).map((box) => ({ ...box, name: scriptName(box.script) }));
-  const offered = view.drawn.map((scripts) => (bot ? scripts.filter((script) => !beside.includes(script)).map((script) => ({ script, name: scriptName(script) })) : []));
+  const status = statusBoxes(view, messages, statusScripts).map((box) => ({ ...box, name: scriptName(box.script) }));
+  const offered = view.drawn.map((scripts) => (bot ? scripts.map((script) => ({ script, name: scriptName(script), marked: statusScripts.includes(script) })) : []));
   const url = useAssetUrl();
   const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
@@ -115,14 +116,20 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
-  // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another. 상태 kept
-  // there (옆에 두기) takes it whenever none of them does, and only where the panel stands beside the story.
+  // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another.
   const [chosen, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
+  // Where the status window stands: in its latest message, or with 옆에 두기 in the panel beside the story, where the
+  // panel stands beside it. There it takes the panel's place whenever no other does and the key has not hidden it.
   const covers = usePanelCovers();
-  const kept = bot && shelf?.character.keepStatus === true && status.length > 0 && !covers;
-  const panel = chosen ?? (kept ? { kind: 'status' as const } : null);
-  // 상태 shown over the story by its key or a tap, rather than by pointing at its tab.
+  const beside = bot && shelf?.character.keepStatus === true && !covers;
+  const [hidden, setHidden] = useState(false);
+  const panel = chosen ?? (beside && !hidden && status.length > 0 ? { kind: 'status' as const } : null);
+  const hosted = messages.map((_, index) => (beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []))));
+  const { seen, watch } = useSeen();
+  // 상태 shown over the story by its key or a tap, rather than by pointing at its tab. The tab is there while a box
+  // is off screen, or never drawn in a message.
   const [peek, setPeek] = useState(false);
+  const peeking = status.length > 0 && panel?.kind !== 'status' && (peek || status.some(({ script }) => !seen.has(script)));
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
   // The versions shown the other way round from their default, the original in place of the translation.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -314,26 +321,33 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     toast.show(`토글 ${count}개를 처음 값으로 되돌렸어요`);
   }
 
-  function pinBox(script: number) {
-    if (!chat.character) return;
-    void track(setBeside(store, chat.character, script, true)).then((saved) => (saved.ok ? setPeek(true) : toast.failed(saved)));
-  }
-
-  async function unpinBox(script: number) {
+  async function markStatus(script: number, on: boolean) {
     const character = chat.character;
     if (!character) return;
-    const saved = await track(setBeside(store, character, script, false));
+    const saved = await track(setStatusScript(store, character, script, on));
     if (!saved.ok) return toast.failed(saved);
-    if (beside.length === 1) setPeek(false);
-    toast.undoable('옆에 고정을 풀었어요', () => void setBeside(store, character, script, true));
+    if (!on && statusScripts.length === 1) setPeek(false);
+    toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, script, !on));
   }
 
-  // 옆에 두기, or on false 상태 back to its tab, for every chat of the character.
+  // 옆에 두기, or on false 탭으로 접기, for every chat of the character.
   function keepStatus(keep: boolean) {
     if (!chat.character) return;
     setPeek(false);
+    setHidden(false);
     if (keep) setPanel(null);
     void track(setKeepStatus(store, chat.character, keep)).then((saved) => saved.ok || toast.failed(saved));
+  }
+
+  // The key shows or hides 상태 for now, stored nothing: the panel beside the story, while it stands there, or else
+  // the drawer over the story.
+  function toggleStatus() {
+    if (panel?.kind === 'status') return setHidden(true);
+    if (beside && hidden && chosen === null) {
+      setPeek(false);
+      return setHidden(false);
+    }
+    setPeek(!peek);
   }
 
   async function rename(name: string) {
@@ -358,8 +372,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     texts,
     decor: { bot, css: bot ? resolveAssets(css, url) : '', url },
     status,
+    hosted,
     offered,
     peek,
+    peeking,
     canKeep: !covers,
     translate,
     sendLanguage,
@@ -415,8 +431,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       setPeek,
       keepStatus: () => keepStatus(true),
       foldStatus: () => keepStatus(false),
-      pinBox,
-      unpinBox: (script: number) => void unpinBox(script),
+      toggleStatus,
+      markStatus: (script: number, on: boolean) => void markStatus(script, on),
+      watch,
       openDialog: (which: 'rename' | 'reading') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,

@@ -18,7 +18,7 @@ import { tokenizer } from './tokenizer';
 
 // What one translation is made from: the chat, whose character's 번역 picks the prompt and the language and whose
 // layers the 보조 모델 a prompt without a model takes, its scope with each message's translation text or null, and what to translate.
-// take: the display scripts whose boxes are pinned beside the story, which the source leaves out.
+// take: the display scripts that draw the status window (상태창 지정), whose boxes the source leaves out.
 export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest };
 
 // prompt-missing: the translation prompt chosen (own) or the default is gone. failed: the call's receipt says why, and

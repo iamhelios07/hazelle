@@ -126,11 +126,11 @@ export function setDecor(store: ObjectStore, id: string, decor: boolean): Promis
   return store.update('character', id, (current) => ({ ...current, decor }));
 }
 
-// 옆에 고정 for one display script of the character's card, or on false its 고정 풀기.
-export function setBeside(store: ObjectStore, id: string, script: number, on: boolean): Promise<ApiResult<Stored<'character'>>> {
+// 상태창으로 지정 for one display script of the character's card, or on false its 지정 풀기.
+export function setStatusScript(store: ObjectStore, id: string, script: number, on: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => {
-    const rest = (current.beside ?? []).filter((place) => place !== script);
-    return { ...current, beside: on ? [...rest, script] : rest };
+    const rest = (current.statusScripts ?? []).filter((place) => place !== script);
+    return { ...current, statusScripts: on ? [...rest, script] : rest };
   });
 }
 

@@ -1,7 +1,8 @@
-import { Bot, Copy, GitBranch, Info, Languages, Pencil, Pin, RotateCcw, Trash2 } from 'lucide-react';
+import { Bot, Copy, GitBranch, Info, Languages, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
 import { useMemo, type KeyboardEvent } from 'react';
 import { resolveAssets } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
+import type { Box } from '../../engine/regex/scripts';
 import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
@@ -20,8 +21,10 @@ type Props = {
   text: string;
   // 봇 꾸밈: whether the bot's HTML is drawn, its CSS for the chat, and its pictures' URLs.
   decor: { bot: boolean; css: string; url: (id: string) => string | undefined };
-  // The boxes the bot drew in this message that 옆에 고정 can take beside the story, by the script that draws each.
-  offered: { script: number; name: string }[];
+  // The status window's boxes this message draws, being the latest to draw them, at the end each stood at.
+  hosted: Box[];
+  // The boxes the bot drew in this message, by the script that draws each, and whether it is the status window's.
+  offered: { script: number; name: string; marked: boolean }[];
   // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
   // other way round from its default.
   translating: Translating;
@@ -55,7 +58,7 @@ type Props = {
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export function ChatMessage(props: Props) {
-  const { message, text: original, decor, offered, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
+  const { message, text: original, decor, hosted, offered, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
@@ -143,7 +146,18 @@ export function ChatMessage(props: Props) {
       </>
     );
   } else if (!empty || live) {
-    body = <Story html={html} css={decor.css} onInert={actions.inert} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />;
+    const box = ({ script, html }: Box) => (
+      <div key={script} ref={actions.watch(script)}>
+        <Story html={shownHtml(html, decor)} css={decor.css} onInert={actions.inert} />
+      </div>
+    );
+    body = (
+      <>
+        {hosted.filter(({ at }) => at === 'top').map(box)}
+        <Story html={html} css={decor.css} onInert={actions.inert} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />
+        {hosted.filter(({ at }) => at === 'bottom').map(box)}
+      </>
+    );
   }
 
   const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => actions.translate(message) };
@@ -200,14 +214,20 @@ export function ChatMessage(props: Props) {
     </>
   );
 
-  const pinTool =
+  const [only] = offered;
+  const statusTool =
     offered.length === 1 ? (
-      <IconButton icon={Pin} size="xs" label={`옆에 고정 · ${offered[0]!.name}`} onClick={() => actions.pinBox(offered[0]!.script)} />
+      <IconButton
+        icon={only!.marked ? PinOff : Pin}
+        size="xs"
+        label={`${only!.marked ? '상태창 지정 풀기' : '상태창으로 지정'} · ${only!.name}`}
+        onClick={() => actions.markStatus(only!.script, !only!.marked)}
+      />
     ) : offered.length > 1 ? (
-      <Menu place="below-end" label="옆에 고정" trigger={(opener) => <IconButton icon={Pin} size="xs" label="옆에 고정" {...opener} />}>
-        <MenuHeading>이야기 옆에 둘 상자</MenuHeading>
-        {offered.map(({ script, name }) => (
-          <MenuItem key={script} label={name} onClick={() => actions.pinBox(script)} />
+      <Menu place="below-end" label="상태창으로 지정" trigger={(opener) => <IconButton icon={Pin} size="xs" label="상태창으로 지정" {...opener} />}>
+        <MenuHeading>상태창으로 지정할 상자</MenuHeading>
+        {offered.map(({ script, name, marked }) => (
+          <MenuItem key={script} label={name} checked={marked} onClick={() => actions.markStatus(script, !marked)} />
         ))}
       </Menu>
     ) : null;
@@ -216,7 +236,7 @@ export function ChatMessage(props: Props) {
     <>
       {translateTool}
       <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />
-      {pinTool}
+      {statusTool}
     </>
   ) : (
     <>
@@ -227,7 +247,7 @@ export function ChatMessage(props: Props) {
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 갈라지기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="답장 정보" onClick={() => actions.info(message.id)} />}
-      {pinTool}
+      {statusTool}
       <Divider variant="tools" />
       <IconButton icon={Trash2} size="xs" label="지우기 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
     </>
@@ -250,5 +270,5 @@ export function ChatMessage(props: Props) {
   );
 }
 
-// A shown text as the story draws it, in a message or pinned beside the story.
+// A shown text as the story draws it, in a message or in 상태.
 export const shownHtml = (text: string, { bot, url }: Props['decor']) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));

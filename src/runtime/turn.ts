@@ -5,6 +5,7 @@ import type { Card } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
 import { assemble, type PromptInput, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
+import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import { fold, shown, type Chat, type Message } from '../model/chat';
@@ -129,23 +130,26 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
 export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null): Display =>
   display({ ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat));
 
-// The boxes the character pinned beside the story (옆에 고정), which leave every message and what is translated of
-// it, unless 봇 꾸밈 is off.
+// The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
+// 봇 꾸밈 is off; the chat draws the latest box itself.
 function pinned({ store }: Reader, chat: Chat): ReadonlySet<number> {
   const character = chat.character === null ? null : store.get('character', chat.character)?.value;
-  return new Set(character?.decor === false ? [] : (character?.beside ?? []));
+  return new Set(character?.decor === false ? [] : (character?.statusScripts ?? []));
 }
 
-// 상태: each pinned script's box from the latest message that drew one. A reply still being written is passed
-// over, since half a box would show; so is a box its script left empty, as bots do on older messages.
-export function besideBoxes(shown: Display, messages: Shown[], beside: readonly number[]): { script: number; html: string | null }[] {
-  return beside.map((script) => {
+// The status window: each of its scripts' box from the latest message that drew one, with that message's place. A
+// reply still being written is passed over, since half a box would show; so is a box its script left empty, as bots
+// do on older messages. null: no message drew one yet.
+export type StatusBox = { script: number; drawn: (Box & { message: number }) | null };
+
+export function statusBoxes(shown: Display, messages: Shown[], scripts: readonly number[]): StatusBox[] {
+  return scripts.map((script) => {
     for (let index = messages.length - 1; index >= 0; index--) {
       if (messages[index]!.live !== null) continue;
       const box = shown.boxes[index]!.find((each) => each.script === script);
-      if (box?.html.trim()) return { script, html: box.html };
+      if (box?.html.trim()) return { script, drawn: { ...box, message: index } };
     }
-    return { script, html: null };
+    return { script, drawn: null };
   });
 }
 

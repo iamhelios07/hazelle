@@ -52,6 +52,8 @@ export function ChatFrame({ back, title, actions, children, above, notice, foote
   // The story ends above the composer as it is whole, folded or not: space that shrank with the fold would move the
   // story's end, which would unfold it again at once.
   const [space, setSpace] = useState(0);
+  // The story's scrollbar, which the peek keeps clear of.
+  const [scrollbar, setScrollbar] = useState(0);
 
   useLayoutEffect(() => {
     folded.current = compact;
@@ -68,6 +70,15 @@ export function ChatFrame({ back, title, actions, children, above, notice, foote
     return () => observer.disconnect();
   }, []);
 
+  useLayoutEffect(() => {
+    const element = scrollRef.current!;
+    const measure = () => setScrollbar(element.offsetWidth - element.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [scrollRef]);
+
   // A move that ends at the story's end is the view following it (the story shrank as its font loaded, a reply
   // grew), not the reader going up.
   function scrolled() {
@@ -83,7 +94,7 @@ export function ChatFrame({ back, title, actions, children, above, notice, foote
     <div className={styles.frame}>
       <main
         className={`${styles.column} ${styles[reading.font]} ${LEADING[reading.leading]} ${WIDTH[reading.width]}`}
-        style={{ '--reading-size': `${reading.size}px`, '--footer-space': `${space}px` } as CSSProperties}
+        style={{ '--reading-size': `${reading.size}px`, '--footer-space': `${space}px`, '--story-scrollbar': `${scrollbar}px` } as CSSProperties}
       >
         <div className={`${styles.top} ${shown ? styles.shown : ''}`}>
           <header className={styles.header}>

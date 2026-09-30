@@ -36,8 +36,7 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
   useShortcut('prompts', () => actions.toggleSide('prompts'));
   useShortcut('status', () => {
     if (!chat.status.length) return false;
-    if (panel?.kind === 'status') actions.foldStatus();
-    else actions.setPeek(!chat.peek);
+    actions.toggleStatus();
   });
   const inUse = { personas: persona.kind === 'persona' ? persona.persona.id : null, prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
   return (
@@ -60,7 +59,7 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
             panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           )
         }
-        peek={chat.status.length > 0 && panel?.kind !== 'status' && <ChatStatusPeek chat={chat} />}
+        peek={chat.peeking && <ChatStatusPeek chat={chat} />}
         reading={reading.value}
         compact={scroll.away}
         scrollRef={scroll.scrollRef}
