@@ -12,7 +12,7 @@
     "css-types": "tcm -s -a -p \"src/app/**/*.module.css\"",
     "build": "wrangler types && npm run css-types && tsc -b && vite build",
     "test": "vitest run",
-    "check": "wrangler types && npm run css-types && tsc -b && eslint . && stylelint \"src/**/*.css\" && vitest run",
+    "check": "wrangler types >/dev/null && npm run -s css-types && tsc -b && eslint . && stylelint \"src/**/*.css\" && vitest run --reporter=dot",
     "db:migrate:local": "wrangler d1 migrations apply risu-alpha --local",
     "db:migrate:remote": "wrangler d1 migrations apply risu-alpha --remote",
     "deploy": "npm run build && wrangler deploy",
