@@ -14,7 +14,7 @@ import type { ObjectStore } from './store';
 // of the cut one it continues on 이어 쓰기). A continuation's text starts as the text it continues.
 export type Turn = {
   chat: string;
-  said: { id: string; text: string } | null;
+  said: Said | null;
   reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string } | null };
   text: string;
 };
@@ -42,7 +42,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   const { said, reply } = turn;
   const now = Date.now();
   if (said && !out.some((message) => message.id === said.id)) {
-    out.push({ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0, live: null });
+    out.push({ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now, ...(said.translation && { translation: said.translation }) }], selected: 0, live: null });
   }
   const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now };
   if (reply.message === null) {
@@ -141,7 +141,8 @@ export class Talk {
       return ready;
     }
     const { route, settings, prompt } = ready;
-
+    // A message sent translated shows as it is saved, marked, from the moment it is translated.
+    if (ready.said?.translation) this.set({ ...this.turn!, said: ready.said });
     const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
     const replying = generate({
       credentials: this.credentials,

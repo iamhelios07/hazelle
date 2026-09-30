@@ -1,6 +1,6 @@
 import { gunzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
-import type { Block, ChatRange, Prompt, Role, SLOTS, SlotKind, TextBlock, WrappedSlot } from '../../model/prompt';
+import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
 import { add, counted, type Tally } from './convert';
 import { readMsgpack } from './msgpack';
 import { unpack } from './risum';
@@ -16,7 +16,7 @@ export type PresetUnsupported = { kind: PresetUnsupportedKind; count: number };
 // unreadable: not RPack'd gzip'd MessagePack. not-preset: a Risu container of another type. decrypt-failed:
 // the preset inside does not open. no-template: a legacy preset, which risu-alpha does not assemble.
 export type PresetFailure = { kind: 'unreadable' | 'not-preset' | 'decrypt-failed' | 'no-template' };
-export type PresetResult = { ok: true; prompt: Prompt; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure };
+export type PresetResult = { ok: true; prompt: ConversationPrompt; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure };
 
 const ROLES = new Map<unknown, Role>([
   ['system', 'system'],
@@ -28,7 +28,7 @@ const MARKS = new Map<unknown, TextBlock['mark']>([
   ['main', 'main'],
   ['globalNote', 'globalNote'],
 ]);
-const WRAPPED = new Map<unknown, WrappedSlot['slot']>([
+const WRAPPED = new Map<unknown, 'description' | 'persona' | 'authorNote'>([
   ['description', 'description'],
   ['persona', 'persona'],
   ['authornote', 'authorNote'],
@@ -75,7 +75,7 @@ export async function importPreset(bytes: Uint8Array): Promise<PresetResult> {
   return { ok: true, ...convert(preset, preset.promptTemplate) };
 }
 
-function convert(preset: Json, template: unknown[]): { prompt: Prompt; unsupported: PresetUnsupported[] } {
+function convert(preset: Json, template: unknown[]): { prompt: ConversationPrompt; unsupported: PresetUnsupported[] } {
   const counts: Tally<PresetUnsupportedKind> = new Map();
   const count = (kind: PresetUnsupportedKind, amount = 1) => add(counts, kind, amount);
   const blocks: Block[] = [];

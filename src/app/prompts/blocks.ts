@@ -1,4 +1,4 @@
-import { ArrowDownToLine, BookOpen, IdCard, MessageSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowDownToLine, BookOpen, IdCard, Languages, MessageSquare, MessagesSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { ROLE_WORDS, SLOT_NAMES, textName } from '../common/prompt-words';
 import type { OutlineKind } from '../ui';
@@ -17,6 +17,14 @@ export const SLOT = {
   authorNote: { name: SLOT_NAMES.authorNote, hint: '채팅마다 따로 쓰는 메모', line: '채팅마다 따로 쓰는 작가의 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
   postEverything: { name: SLOT_NAMES.postEverything, hint: '맨 끝으로 정한 로어북 항목이 여기 붙어요', line: '로어북에서 맨 끝으로 정한 항목이 여기 붙어요.', kind: 'lore', icon: ArrowDownToLine },
   chat: { name: SLOT_NAMES.chat, hint: '지금까지 주고받은 메시지', line: '지금까지 주고받은 메시지 가운데 아래 범위가 여기에 들어가요.', kind: 'chat', icon: MessageSquare },
+  recent: {
+    name: SLOT_NAMES.recent,
+    hint: '번역할 메시지 바로 앞의 메시지와 그 번역',
+    line: '번역할 메시지 바로 앞의 메시지들이 이미 만든 번역과 함께 여기에 들어가요. 이름과 말투가 앞 번역과 이어져요.',
+    kind: 'chat',
+    icon: MessagesSquare,
+  },
+  source: { name: SLOT_NAMES.source, hint: '번역할 글', line: '번역할 글이 여기에 들어가요. 답장은 화면에 보이는 글, 보낼 말은 내가 쓴 글이에요.', kind: 'chat', icon: Languages },
 } satisfies Record<SlotKind, { name: string; hint: string; line: string; kind: OutlineKind; icon: LucideIcon }>;
 
 export const ROLES: { value: Role; label: string }[] = (['system', 'user', 'assistant'] as const).map((value) => ({ value, label: ROLE_WORDS[value] }));
@@ -68,6 +76,7 @@ export const blockIcon = (block: Block): LucideIcon => (block.kind === 'text' ? 
 export function blockMeta(block: Block): string {
   if (block.kind === 'text') return block.text ? `${block.text.length.toLocaleString('ko-KR')}자` : '비어 있음';
   if (block.slot === 'chat') return describeRange(block.range).meta;
+  if (block.slot === 'recent') return `${block.count}개 · ${ROLE_WORDS[block.role]}`;
   return 'role' in block ? ROLE_WORDS[block.role] : '';
 }
 

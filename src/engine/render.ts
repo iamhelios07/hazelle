@@ -1,4 +1,4 @@
-import type { Prompt, TextBlock } from '../model/prompt';
+import type { ConversationPrompt, TextBlock } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, type CbsContext } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -12,7 +12,7 @@ export type ChatScope = {
   card: Card | null;
   // Each null when the chat's is gone: the display still renders, and a turn stops before sending.
   persona: CbsContext['persona'];
-  prompt: Prompt | null;
+  prompt: ConversationPrompt | null;
   // The chat's own 작가의 노트; null follows the prompt's.
   note: string | null;
   lore: LoreInput['entries'];
@@ -26,11 +26,11 @@ export type ChatScope = {
   pick: string;
 };
 
-export const authorNote = (note: string | null, prompt: Prompt) => note ?? prompt.authorNote;
-const marked = (prompt: Prompt, mark: 'main' | 'globalNote') => prompt.blocks.find((block): block is TextBlock => block.kind === 'text' && block.mark === mark)?.text ?? '';
+export const authorNote = (note: string | null, prompt: ConversationPrompt) => note ?? prompt.authorNote;
+const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prompt.blocks.find((block): block is TextBlock => block.kind === 'text' && block.mark === mark)?.text ?? '';
 
-// One chat's CBS contexts for a stage, by the text's source and the variables it reads.
-export function contexts(scope: ChatScope, stage: Stage): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
+// One chat's CBS contexts for a stage, by the text's source and the variables it reads. language: a translation's.
+export function contexts(scope: ChatScope, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
   const { card, persona, prompt, note, messages, greeting, toggle, model, clock, pick } = scope;
   const fixed = {
     stage,
@@ -44,6 +44,7 @@ export function contexts(scope: ChatScope, stage: Stage): (source: CbsContext['s
     model,
     screen: null,
     clock,
+    language,
   };
   return (source, variables) => ({ ...fixed, source, variables, pickSeed: `${pick}:${'message' in source ? source.message : messages.length}` });
 }
@@ -52,7 +53,7 @@ export function contexts(scope: ChatScope, stage: Stage): (source: CbsContext['s
 // output stage is the only one whose CBS writes variables, so a stage chained after it cannot run a setvar twice;
 // the process or display stage reads a copy, so the display never changes what the prompt sees.
 export function renderChat(stage: Stage, scope: ChatScope): { texts: string[]; variables: Map<string, string> } {
-  const context = contexts(scope, stage);
+  const context = contexts(scope, stage, null);
   const scripts = scope.card?.regex ?? [];
   const variables = new Map(scope.card?.variables);
   const texts = scope.messages.map(({ role, text }, index) => {

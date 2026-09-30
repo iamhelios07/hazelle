@@ -378,6 +378,7 @@ define('comment', 1, ([text], { context }) => (context.stage === 'display' ? tex
 // The lorebook track scans the entry's raw text, so the key still chains entries.
 define('hiddenkey', 1, () => '');
 
+define('language', 0, (_, { context: { language } }) => language);
 define('model', 0, (_, { context: { model } }) => model && model.id);
 define('maxcontext', 0, (_, { context: { model } }) => (model && model.maxContext !== null ? String(model.maxContext) : null));
 define('prefillsupported prefill', 0, (_, { context: { model } }) => (model && model.prefill !== null ? bool(model.prefill) : null));

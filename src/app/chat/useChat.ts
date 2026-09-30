@@ -21,7 +21,8 @@ import {
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
-import { blocked, displayChat, preloadTokenizer, takeTurn, togglesOf, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { preloadTokenizer } from '../../runtime/tokenizer';
+import { blocked, displayChat, takeTurn, togglesOf, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { useSession, useTranslating, useTurn } from '../session';
@@ -203,8 +204,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     setFlipped(next);
   }
 
-  function setSwitches(switches: TranslateSwitches) {
-    void track(setTranslate(store, chat.character, switches)).then((saved) => saved.ok || toast.failed(saved));
+  function setSwitches(change: Partial<TranslateSwitches>) {
+    void track(setTranslate(store, chat.character, change)).then((saved) => saved.ok || toast.failed(saved));
   }
 
   async function saveEdit(message: Shown, andReply: boolean) {

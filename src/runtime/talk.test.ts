@@ -2,9 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
 import { appendUserMessage, startChat } from './chat-log';
 import { answerable, saying, stubRelay, testServer } from './testing';
+import { withTurn } from './talk';
 import { takeTurn } from './turn';
 
 const server = testServer();
+
+describe('withTurn', () => {
+  it('shows a message sent translated with its translation before it is saved', () => {
+    const translation = { text: '안녕', receipt: null, at: 0 };
+    const said = { id: 'said', text: 'Hello', translation };
+    const [message] = withTurn([], { chat: 'c', said, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '' }, 'c');
+    expect(message!.versions[0]).toMatchObject({ text: 'Hello', translation });
+  });
+});
 
 describe('Talk', () => {
   it('keeps a reply whose save failed, and saveAgain saves it', () =>

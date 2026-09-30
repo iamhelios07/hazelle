@@ -3,10 +3,15 @@ import type { PromptPatch } from '../../runtime/prompts';
 import { blockSource } from './blocks';
 import { renameToggle, toggleUses } from './rekey';
 
-export type Draft = Pick<Prompt, 'name' | 'blocks' | 'toggles' | 'authorNote'>;
-export const draftOf = ({ name, blocks, toggles, authorNote }: Prompt): Draft => ({ name, blocks, toggles, authorNote });
+// authorNote: null for a sort of prompt that has none.
+export type Draft = Pick<Prompt, 'name' | 'blocks' | 'toggles'> & { authorNote: string | null };
+export const draftOf = (prompt: Prompt): Draft => ({ name: prompt.name, blocks: prompt.blocks, toggles: prompt.toggles, authorNote: prompt.task === undefined ? prompt.authorNote : null });
 
 export type NewBlock = { text: Role } | { slot: SlotKind };
+
+// How many messages a new 앞 메시지 holds, and at most.
+const RECENT_COUNT = 4;
+export const RECENT_MAX = 20;
 
 export function newBlock(kind: NewBlock): Block {
   const named = { id: crypto.randomUUID(), name: null };
@@ -16,6 +21,10 @@ export function newBlock(kind: NewBlock): Block {
     case 'persona':
     case 'authorNote':
       return { ...named, kind: 'slot', slot: kind.slot, role: 'system', wrapper: null };
+    case 'recent':
+      return { ...named, kind: 'slot', slot: 'recent', role: 'system', wrapper: null, count: RECENT_COUNT };
+    case 'source':
+      return { ...named, kind: 'slot', slot: 'source', role: 'user', wrapper: null };
     case 'chat':
       return { ...named, kind: 'slot', slot: 'chat', range: { from: 0, to: null } };
     default:
@@ -46,19 +55,17 @@ export function withMark(blocks: readonly Block[], id: string, mark: TextBlock['
 }
 
 // Every text a condition can stand in: text blocks, 감싸는 글 and the default 작가의 노트.
-function rewrite(draft: Draft, change: (text: string) => string): Pick<Draft, 'blocks' | 'authorNote'> {
-  return {
-    blocks: draft.blocks.map((block) => {
-      if (block.kind === 'text') return { ...block, text: change(block.text) };
-      if ('wrapper' in block && block.wrapper !== null) return { ...block, wrapper: change(block.wrapper) };
-      return block;
-    }),
-    authorNote: change(draft.authorNote),
-  };
+function rewrite(draft: Draft, change: (text: string) => string): PromptPatch {
+  const blocks = draft.blocks.map((block) => {
+    if (block.kind === 'text') return { ...block, text: change(block.text) };
+    if ('wrapper' in block && block.wrapper !== null) return { ...block, wrapper: change(block.wrapper) };
+    return block;
+  });
+  return draft.authorNote === null ? { blocks } : { blocks, authorNote: change(draft.authorNote) };
 }
 
 export const countUses = (draft: Draft, key: string) =>
-  [...draft.blocks.map(blockSource), draft.authorNote].reduce((count, text) => count + toggleUses(text).filter((use) => use.key === key).length, 0);
+  [...draft.blocks.map(blockSource), draft.authorNote ?? ''].reduce((count, text) => count + toggleUses(text).filter((use) => use.key === key).length, 0);
 
 // Changing a key rewrites its conditions; changing only the label never touches them.
 export function rekey(draft: Draft, from: string, to: string): PromptPatch {

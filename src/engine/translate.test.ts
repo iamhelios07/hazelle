@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
+import { assembleTranslation } from './pipeline';
 import type { ChatScope } from './render';
-import { translationMessages } from './translate';
+import { translatorPrompt } from './translate';
 
 const card: Card = {
   name: 'Luna',
@@ -12,7 +13,7 @@ const card: Card = {
   scenario: '',
   greetings: [],
   exampleDialogue: '',
-  systemPrompt: '',
+  systemPrompt: 'Act as {{char}}.',
   postHistoryInstructions: '',
   creatorNotes: '',
   creator: '',
@@ -28,7 +29,7 @@ const card: Card = {
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
 const scope: ChatScope = {
   card,
-  persona: { name: 'jin', description: '' },
+  persona: { name: 'jin', description: 'A sailor.' },
   prompt: null,
   note: null,
   lore: [],
@@ -39,22 +40,41 @@ const scope: ChatScope = {
   clock: { now: 0, timeZone: 'UTC' },
   pick: 'luna:chat',
 };
+const translate = (input: Pick<Parameters<typeof assembleTranslation>[0], 'request' | 'language'> & Partial<Parameters<typeof assembleTranslation>[0]>) =>
+  assembleTranslation({ scope, prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], seed: 'seed', countTokens: (text) => text.length, ...input });
 
-describe('translationMessages', () => {
-  it('translates a message as it is displayed into Korean, with the character and the earlier messages and their translations as context', () => {
-    const { source, messages } = translationMessages(scope, ['등불 켜졌어?', null], { kind: 'message', index: 1 });
+describe('the default translation prompt', () => {
+  it('translates a displayed message into Korean, with the character, the persona and the messages before it with their translations', () => {
+    const { source, messages } = translate({ request: { kind: 'message', index: 1 }, language: 'Korean' });
     expect(source).toBe('The LAMP is lit, jin.');
-    expect(messages.map(({ role }) => role)).toEqual(['system', 'system', 'user']);
-    expect(messages[0]!.content).toContain('Target language: 한국어.');
-    expect(messages[1]!.content).toContain('The character: Luna.\nLuna keeps the lighthouse.');
-    expect(messages[1]!.content).toContain('[jin]\nIs the LAMP lit?\nIts translation:\n등불 켜졌어?');
-    expect(messages[2]).toEqual({ role: 'user', content: 'The LAMP is lit, jin.' });
+    expect(messages.map(({ role }) => role)).toEqual(['system', 'system', 'system', 'system', 'user']);
+    const instructions = messages[0]!.content.split('\n');
+    expect(instructions[1]).toBe('Target language: Korean.');
+    expect(instructions.slice(-3)).toEqual([
+      'Keep Markdown heading lines that begin with #, ##, ###, or more # characters followed by a space unchanged.',
+      'For Korean output, default to written plain style (평어체, e.g. "~했다", "~이다" endings) for narration and descriptive prose. For dialogue, choose 존댓말 or 반말 from context, following each speaker.',
+      'Output ONLY the final rewritten text. Do not add titles, explanations, notes, language labels, quotation marks around the whole result, or the original text.',
+    ]);
+    expect(messages[0]!.content).toContain('{{img::asset}}');
+    expect(messages[1]!.content).toBe('Context of the chat, for reference only. Never translate or output any of it.\n---\nThe character: Luna.\nLuna keeps the lighthouse.');
+    expect(messages[2]!.content).toContain("The user's character: jin.\nA sailor.");
+    expect(messages[3]!.content).toContain('oldest first, with the translations already made:\n\n[jin]\nIs the LAMP lit?\nIts translation:\n등불 켜졌어?');
+    expect(messages[4]).toEqual({ role: 'user', content: 'The LAMP is lit, jin.' });
   });
 
-  it('translates the user’s new message into English after every message of the chat', () => {
-    const { messages } = translationMessages(scope, [null, null], { kind: 'input', text: '응, 고마워.' });
-    expect(messages[0]!.content).toContain('Target language: English.');
-    expect(messages[1]!.content).toContain('[Luna]\nThe LAMP is lit, jin.');
-    expect(messages.at(-1)).toEqual({ role: 'user', content: '응, 고마워.' });
+  it('leaves the Korean-only line out for another language, and sends the user’s input as typed after every message', () => {
+    const { messages } = translate({ request: { kind: 'input', text: '응, {{user}}.' }, language: 'English' });
+    const instructions = messages[0]!.content.split('\n');
+    expect(instructions[1]).toBe('Target language: English.');
+    expect(instructions.at(-2)).toMatch(/^Keep Markdown heading lines/);
+    expect(messages[3]!.content).toContain('[jin]\nIs the LAMP lit?\nIts translation:\n등불 켜졌어?\n\n[Luna]\nThe LAMP is lit, jin.');
+    expect(messages.at(-1)).toEqual({ role: 'user', content: '응, {{user}}.' });
+  });
+
+  it('holds as many earlier messages in 앞 메시지 as its count says', () => {
+    const prompt = translatorPrompt();
+    const recent = prompt.blocks.map((block) => (block.kind === 'slot' && block.slot === 'recent' ? { ...block, count: 1 } : block));
+    const { messages } = translate({ request: { kind: 'input', text: 'Hi' }, language: 'English', prompt: { ...prompt, blocks: recent } });
+    expect(messages[3]!.content).toMatch(/:\n\n\[Luna\]\nThe LAMP is lit, jin\.$/);
   });
 });

@@ -155,6 +155,10 @@ export function describeTurnFailure(failure: TurnFailure): string {
 
 export function describeTranslateFailure(failure: Exclude<TranslateFailure, { kind: 'stopped' }> | TranslatorFailure): string {
   switch (failure.kind) {
+    case 'prompt-missing':
+      return failure.own ? '고른 번역 프롬프트가 지워졌어요. 번역에서 다른 프롬프트를 골라 주세요.' : '기본 번역 프롬프트가 없어요. 프롬프트 화면에서 번역 프롬프트 하나를 기본으로 정해 주세요.';
+    case 'tokenizer':
+      return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 번역해 주세요.';
     case 'no-model':
       return '번역 모델이 정해지지 않았어요.';
     case 'model-gone':

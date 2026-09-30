@@ -36,6 +36,8 @@ export type CbsContext = {
   screen: { width: number; height: number } | null;
   // now in ms since the epoch; timeZone an IANA name, since the engine reads no zone of the device it runs on.
   clock: { now: number; timeZone: string };
+  // The language a translation prompt translates into, as the English name the model reads; null outside one.
+  language: string | null;
   // pick and rollp keep Risu's seed: the character, the chat and its message count.
   pickSeed: string;
 };

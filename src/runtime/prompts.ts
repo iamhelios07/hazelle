@@ -1,33 +1,55 @@
 import { importPreset, type PresetFailure, type PresetUnsupported } from '../engine/import/preset';
+import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
-import type { Block, Prompt } from '../model/prompt';
-import { SETTINGS_ID } from '../model/settings';
+import { sortOf, type Block, type ConversationPrompt, type Prompt, type PromptOf, type PromptSort, type Toggle } from '../model/prompt';
+import { SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiFailure, ApiResult } from './api';
 import { without, type ObjectStore } from './store';
 
-// Every write of `prompt` objects and of the default prompt, except a prompt's `models` layer, which
+// Every write of `prompt` objects and of the default prompts, except a conversation prompt's `models` layer, which
 // runtime/assignment writes with the other layers, and a backup's restore.
 
-// Fixed, so two devices adding the starter prompt at once meet in a version conflict instead of making two.
+// Fixed, so two devices adding a default prompt at once meet in a version conflict instead of making two.
 export const STARTER_ID = '00000000-0000-4000-8000-000000000001';
+export const TRANSLATOR_ID = '00000000-0000-4000-8000-000000000004';
 
-// Which prompt a chat uses: its own, else the default. A deleted one, or a default not added
-// yet, reads as missing and never as another prompt; a turn stops on it ("기본 프롬프트가 없어요").
-export type PromptChoice = { kind: 'prompt'; prompt: Stored<'prompt'>; own: boolean } | { kind: 'missing'; own: boolean };
+// Each sort's default prompt: the settings field naming it, and the prompt an account gets once, at a fixed id.
+const DEFAULTS = {
+  conversation: { setting: 'prompt', id: STARTER_ID, make: starter },
+  translate: { setting: 'translatePrompt', id: TRANSLATOR_ID, make: () => Promise.resolve(translatorPrompt()) },
+} as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null> } };
 
-export function chatPrompt(store: ObjectStore, chat: Chat): PromptChoice {
-  const own = chat.prompt !== undefined;
-  const id = chat.prompt ?? store.get('settings', SETTINGS_ID)?.value.prompt;
+export type StoredPrompt<S extends PromptSort> = Stored<'prompt'> & { value: PromptOf<S> };
+export const ofSort = <S extends PromptSort>(prompt: Stored<'prompt'>, sort: S): prompt is StoredPrompt<S> => sortOf(prompt.value) === sort;
+
+// A sort's prompt in use: the one chosen, else the default. A deleted one, one of another sort, or a default not
+// added yet reads as missing and never as another prompt; a turn stops on it ("기본 프롬프트가 없어요").
+export type PromptChoice<S extends PromptSort = 'conversation'> = { kind: 'prompt'; prompt: StoredPrompt<S>; own: boolean } | { kind: 'missing'; own: boolean };
+
+function choose<S extends PromptSort>(store: ObjectStore, sort: S, chosen: string | undefined): PromptChoice<S> {
+  const own = chosen !== undefined;
+  const id = chosen ?? store.get('settings', SETTINGS_ID)?.value[DEFAULTS[sort].setting];
   const prompt = id === undefined ? null : store.get('prompt', id);
-  return prompt ? { kind: 'prompt', prompt, own } : { kind: 'missing', own };
+  return prompt && ofSort(prompt, sort) ? { kind: 'prompt', prompt, own } : { kind: 'missing', own };
 }
 
-// A new prompt holds every slot once, the context before the chat and the notes after it, and the two texts
-// a card replaces, empty, so a card's system prompt and post-history instructions have their places.
-export function addPrompt(store: ObjectStore, name: string): Promise<ApiResult<Stored<'prompt'>>> {
+export const chatPrompt = (store: ObjectStore, chat: Chat) => choose(store, 'conversation', chat.prompt);
+
+// chosen: the translation prompt a character's 번역 names.
+export const translationPrompt = (store: ObjectStore, chosen: string | undefined) => choose(store, 'translate', chosen);
+
+// A new conversation prompt holds every slot once, the context before the chat and the notes after it, and the two
+// texts a card replaces, empty, so a card's system prompt and post-history instructions have their places. A new
+// translation prompt starts as the account's default translation prompt is, or the built-in one while that is gone.
+export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): Promise<ApiResult<Stored<'prompt'>>> {
   const named = () => ({ id: crypto.randomUUID(), name: null });
+  if (sort === 'translate') {
+    const base = translationPrompt(store, undefined);
+    const { blocks, toggles } = base.kind === 'prompt' ? base.prompt.value : translatorPrompt();
+    return store.create('prompt', { task: 'translate', name, blocks: blocks.map((block) => ({ ...block, id: crypto.randomUUID() })), toggles });
+  }
   const blocks: Block[] = [
     { ...named(), kind: 'text', role: 'system', text: '', mark: 'main' },
     { ...named(), kind: 'slot', slot: 'description', role: 'system', wrapper: null },
@@ -43,7 +65,7 @@ export function addPrompt(store: ObjectStore, name: string): Promise<ApiResult<S
 
 export type ImportPromptResult = { ok: true; id: string; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure | { kind: 'save'; failure: ApiFailure } };
 
-// A dropped .risup becomes a new prompt; unsupported is what the summary counts.
+// A dropped .risup becomes a new conversation prompt; unsupported is what the summary counts.
 export async function importPrompt(store: ObjectStore, bytes: Uint8Array): Promise<ImportPromptResult> {
   const read = await importPreset(bytes);
   if (!read.ok) return read;
@@ -51,17 +73,26 @@ export async function importPrompt(store: ObjectStore, bytes: Uint8Array): Promi
   return saved.ok ? { ok: true, id: saved.data.id, unsupported: read.unsupported } : { ok: false, failure: { kind: 'save', failure: saved } };
 }
 
-// An account that has never had a default prompt gets the bundled starter prompt as its default, once. The
+// An account that has never had a sort's default prompt gets that sort's bundled prompt as its default, once. The
 // session awaits it when it opens; a failure is tried again next time.
-export async function addStarter(store: ObjectStore): Promise<void> {
-  if (store.get('settings', SETTINGS_ID)?.value.prompt !== undefined) return;
-  if (!store.get('prompt', STARTER_ID)) {
-    const read = await importPreset(await starterBytes());
-    if (!read.ok) return;
-    const saved = await store.create('prompt', read.prompt, { id: STARTER_ID });
-    if (!saved.ok) return;
-  }
-  await store.upsert('settings', (current) => (current?.prompt === undefined ? { models: {}, ...current, prompt: STARTER_ID } : current));
+// The settings are written once for every default added, since opening writes them from several places at once.
+export async function addDefaults(store: ObjectStore): Promise<void> {
+  const added = await Promise.all(
+    Object.values(DEFAULTS).map(async (entry) => {
+      if (store.get('settings', SETTINGS_ID)?.value[entry.setting] !== undefined) return [];
+      if (store.get('prompt', entry.id)) return [entry];
+      const made = await entry.make();
+      return made && (await store.create('prompt', made, { id: entry.id })).ok ? [entry] : [];
+    }),
+  );
+  if (added.flat().length === 0) return;
+  await store.upsert('settings', (current) => added.flat().reduce((next, { setting, id }) => (next[setting] === undefined ? { ...next, [setting]: id } : next), { models: {}, ...current }));
+}
+
+// The user's own Risu preset "🏓 핑퐁 간소화", through the one preset converter.
+async function starter(): Promise<ConversationPrompt | null> {
+  const read = await importPreset(await starterBytes());
+  return read.ok ? read.prompt : null;
 }
 
 // Vite hands an ?inline asset over as a base64 data: URL, in the browser and in tests alike. It is decoded
@@ -72,24 +103,34 @@ async function starterBytes(): Promise<Uint8Array<ArrayBuffer>> {
 }
 
 // Only the fields given, merged into the current prompt, so an edit to another field on another device survives.
-export type PromptPatch = Partial<Pick<Prompt, 'name' | 'blocks' | 'toggles' | 'authorNote'>>;
+// authorNote is a conversation prompt's only.
+export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: Toggle[]; authorNote: string }>;
 
-export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current) => ({ ...current, ...patch }));
+export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current): Prompt => ({ ...current, ...patch }));
 
 // A fork that goes its own way, model layer and toggles included. It remembers its origin, and is the user's
 // own rather than an imported preset.
 export function copyPrompt(store: ObjectStore, id: string, name: string): Promise<ApiResult<Stored<'prompt'>>> {
   const original = store.get('prompt', id)?.value;
   if (!original) return Promise.resolve({ ok: false, error: 'gone' });
-  return store.create('prompt', without({ ...original, name, origin: { id, name: original.name } }, 'imported'));
+  const origin = { id, name: original.name };
+  return store.create('prompt', original.task === undefined ? without({ ...original, name, origin }, 'imported') : { ...original, name, origin });
 }
 
-// The default prompt cannot be deleted until another prompt is made the default.
+// A sort's default prompt cannot be deleted until another prompt of its sort is made the default.
 export async function removePrompt(store: ObjectStore, id: string): Promise<ApiResult<Stored<'prompt'>> | { ok: false; error: 'default' }> {
-  if (store.get('settings', SETTINGS_ID)?.value.prompt === id) return { ok: false, error: 'default' };
+  const settings = store.get('settings', SETTINGS_ID)?.value;
+  if (Object.values(DEFAULTS).some(({ setting }) => settings?.[setting] === id)) return { ok: false, error: 'default' };
   return store.take('prompt', id);
 }
 
 export const restorePrompt = (store: ObjectStore, removed: Stored<'prompt'>) => store.restore(removed);
 
-export const setDefaultPrompt = (store: ObjectStore, id: string) => store.upsert('settings', (current) => ({ models: {}, ...current, prompt: id }));
+export const isDefaultPrompt = (settings: Settings, prompt: Stored<'prompt'>) => settings[DEFAULTS[sortOf(prompt.value)].setting] === prompt.id;
+
+// The default of the prompt's own sort.
+export function setDefaultPrompt(store: ObjectStore, id: string): Promise<ApiResult<Stored<'settings'>>> {
+  const prompt = store.get('prompt', id);
+  if (!prompt) return Promise.resolve({ ok: false, error: 'gone' });
+  return store.upsert('settings', (current) => ({ models: {}, ...current, [DEFAULTS[sortOf(prompt.value)].setting]: id }));
+}

@@ -2,9 +2,9 @@ import { Copy, Cpu, Ellipsis, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
-import { SLOTS, type Block, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
+import { slotsOf, SLOTS, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel } from '../../runtime/assignment';
-import { copyPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
+import { copyPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
 import { useStore, useViews } from '../session';
 import { useShortcut } from '../shortcuts';
@@ -25,6 +25,7 @@ import {
   removeToggle,
   renameKey,
   setCache,
+  setCount,
   setMark,
   setRange,
   setRole,
@@ -41,7 +42,14 @@ import { EMPTY_USE, promptName, usePromptUse } from './usePromptUse';
 const MODEL = 'model';
 const TOGGLES = 'toggles';
 const SAVE_WORDS = { saved: '저장됨', saving: '저장 중…', failed: '저장하지 못함' } as const;
-const DEFAULT_REFUSED = '기본 프롬프트는 지울 수 없어요. 다른 프롬프트를 기본으로 정한 뒤 지워 주세요.';
+const SORT_WORDS = {
+  conversation: { default: '새 채팅의 기본', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: '기본 프롬프트는 지울 수 없어요. 다른 프롬프트를 기본으로 정한 뒤 지워 주세요.' },
+  translate: {
+    default: '기본 번역 프롬프트',
+    makeDefault: '번역 프롬프트를 따로 고르지 않은 채팅이 이 프롬프트로 번역해요',
+    refused: '기본 번역 프롬프트는 지울 수 없어요. 다른 번역 프롬프트를 기본으로 정한 뒤 지워 주세요.',
+  },
+} satisfies Record<PromptSort, { default: string; makeDefault: string; refused: string }>;
 const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 누르면 순서를 바꿔요. Enter로 글을 고치고, Delete로 빼요. 맨 위가 맨 처음 보내는 블록, 맨 아래가 답장 직전이에요.';
 
 type Pane = 'toggles' | null;
@@ -84,6 +92,9 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const uses = usePromptUse().get(stored.id) ?? EMPTY_USE;
   const split = layout === 'split';
   const save = useAutosave(stored.id);
+  const sort = sortOf(stored.value);
+  const words = SORT_WORDS[sort];
+  const models = stored.value.task === undefined ? stored.value.models : null;
 
   const [draft, setDraft] = useState<Draft>(() => draftOf(stored.value));
   const latest = useRef(draft);
@@ -100,7 +111,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     save.queue(patch);
   };
 
-  const firstText = () => latest.current.blocks.find(isText)?.id ?? MODEL;
+  const firstText = () => latest.current.blocks.find(isText)?.id ?? (models ? MODEL : latest.current.blocks[0]?.id) ?? MODEL;
   const [picked, setPicked] = useState<string>(firstText);
   const [drilled, setDrilled] = useState(pane === TOGGLES);
   const [reordering, setReordering] = useState(false);
@@ -218,7 +229,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (!saved.ok) toast.failed(saved, '모델을 바꾸지 못했어요.');
   };
 
-  const isDefault = settings.prompt === stored.id;
+  const isDefault = isDefaultPrompt(settings, stored);
   const copy = async () => {
     await save.flush();
     const copied = await copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`);
@@ -233,7 +244,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const erase = async () => {
     await save.flush();
     const removed = await removePrompt(store, stored.id);
-    if (!removed.ok) return removed.error === 'default' ? toast.show(DEFAULT_REFUSED) : toast.failed(removed, '지우지 못했어요.');
+    if (!removed.ok) return removed.error === 'default' ? toast.show(words.refused) : toast.failed(removed, '지우지 못했어요.');
     onErased();
     toast.undoable(`‘${promptName(removed.data.value.name)}’을(를) 지웠어요.`, () => {
       void restorePrompt(store, removed.data).then((restored) => restored.ok || toast.show(`되돌리지 못했어요. ${describeFailure(restored)}`));
@@ -264,7 +275,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       ))}
       <Divider variant="menu" />
       <MenuHeading>앱이 채우는 자리</MenuHeading>
-      {(Object.keys(SLOT) as (keyof typeof SLOT)[]).map((slot) => {
+      {slotsOf(sort).map((slot) => {
         const taken = !SLOTS[slot].repeats && placed.has(slot);
         const there = draft.blocks.find((each) => each.kind === 'slot' && each.slot === slot);
         return taken && there ? (
@@ -276,12 +287,11 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     </>
   );
 
-  const warning = chatWarning(draft.blocks);
-  const model = modelWords(stored.value.models, connections);
+  const warning = sort === 'conversation' ? chatWarning(draft.blocks) : null;
   const outline = (
     <>
       <Stack gap="related">
-        <NavRow icon={Cpu} label="모델" meta={model} current={split && open === MODEL} onClick={() => pick(MODEL)} />
+        {models && <NavRow icon={Cpu} label="모델" meta={modelWords(models, connections)} current={split && open === MODEL} onClick={() => pick(MODEL)} />}
         <NavRow icon={SlidersHorizontal} label="토글" meta={`${draft.toggles.length}개`} current={split && open === TOGGLES} onClick={() => pick(TOGGLES)} />
       </Stack>
       <Section
@@ -324,7 +334,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   const page: ReactNode =
     open === MODEL ? (
-      <ModelPane models={stored.value.models} defaults={settings.models} connections={connections} onPick={(role, ref) => void pickModel(role, ref)} />
+      models && <ModelPane models={models} defaults={settings.models} connections={connections} onPick={(role, ref) => void pickModel(role, ref)} />
     ) : open === TOGGLES ? (
       <TogglePane
         toggles={draft.toggles}
@@ -341,6 +351,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
         <BlockPane
           key={block.id}
           block={block}
+          sort={sort}
           index={index}
           count={draft.blocks.length}
           toggles={draft.toggles}
@@ -348,6 +359,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           onChange={change}
           onRole={(target, role) => role !== target.role && perform(setRole(target, role))}
           onRange={(target, range) => rangeKey(range) !== rangeKey(target.range) && perform(setRange(target, range))}
+          onCount={(target, count) => perform(setCount(target, count))}
           onWrapper={wrap}
           onAuthorNote={(authorNote) => update(() => ({ authorNote }))}
           onMark={mark}
@@ -371,17 +383,17 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_WORDS[save.state] }, body: page, open });
   }
 
-  const origin = stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `‘${promptName(stored.value.origin.name)}’의 사본` : null;
+  const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `‘${promptName(stored.value.origin.name)}’의 사본` : null;
   const subtitle = (
     <>
-      {isDefault && <Tag tone="accent">새 채팅의 기본</Tag>}
-      <span>{[uses.chats ? `채팅 ${uses.chats}개가 쓰는 중` : '쓰는 채팅 없음', origin].filter(Boolean).join(' · ')}</span>
+      {isDefault && <Tag tone="accent">{words.default}</Tag>}
+      <span>{[sort === 'conversation' && (uses.chats ? `채팅 ${uses.chats}개가 쓰는 중` : '쓰는 채팅 없음'), origin].filter(Boolean).join(' · ')}</span>
     </>
   );
   const more = (
     <Menu label="프롬프트 더 보기" place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} label="프롬프트 더 보기" title="더 보기" {...opener} />}>
       {!split && <MenuItem icon={Copy} label="사본 만들기" onClick={() => void copy()} />}
-      {!isDefault && <MenuItem label="기본으로 정하기" sub="새 채팅이 이 프롬프트로 시작해요" onClick={() => void makeDefault()} />}
+      {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
       <MenuItem label="지우기" tone="warn" onClick={() => void erase()} />
     </Menu>
   );

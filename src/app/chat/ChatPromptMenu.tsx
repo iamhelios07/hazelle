@@ -1,6 +1,6 @@
 import { FileText } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
-import { chatPrompt } from '../../runtime/prompts';
+import { chatPrompt, ofSort } from '../../runtime/prompts';
 import { useChats, useSession, useSettings, useViews } from '../session';
 import { ChipButton, Divider, Icon, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
@@ -26,11 +26,11 @@ export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
   );
 }
 
-// Mounted only while the menu is open. The prompts go by their latest use in any chat, then by name.
+// Mounted only while the menu is open. The conversation prompts go by their latest use in any chat, then by name.
 function PromptChoices({ chat }: { chat: OpenChat }) {
   const { prompt, actions } = chat;
   const { store } = useSession();
-  const { prompts } = useViews();
+  const prompts = useViews().prompts.filter((each) => ofSort(each, 'conversation'));
   const chats = useChats();
   const settings = useSettings();
   const fallback = settings.prompt === undefined ? null : (prompts.find(({ id }) => id === settings.prompt) ?? null);

@@ -123,6 +123,25 @@ describe('이어 쓰기', () => {
     }));
 });
 
+describe('반전 모드', () => {
+  it('sends each message’s translation in place of its text, and the user’s new message as typed', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Hello there', translation: { text: '안녕', receipt: null, at: 0 } });
+      await setTranslate(session.store, null, { input: true, reverse: true });
+      const log = stubRelay(inTurn([saying('Hi!')]));
+
+      expect(await takeTurn(session, chat, { kind: 'send', text: '반가워' })).toBeNull();
+      expect(log).toHaveLength(1);
+      expect(lastTwo(log[0]!.sent.body)).toEqual([
+        { role: 'user', content: '안녕' },
+        { role: 'user', content: '반가워' },
+      ]);
+    }));
+});
+
 describe('보낼 말 번역', () => {
   it('translates the message first, sends the translation and saves it, with what the user typed as its translation', () =>
     server.withSession(async (session) => {

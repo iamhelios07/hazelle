@@ -7,7 +7,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import { chatModel, setPromptModel } from './assignment';
 import { setChatPrompt } from './chat-log';
-import { addPrompt, addStarter, chatPrompt, copyPrompt, importPrompt, removePrompt, restorePrompt, setDefaultPrompt } from './prompts';
+import { addDefaults, addPrompt, chatPrompt, copyPrompt, importPrompt, removePrompt, restorePrompt, setDefaultPrompt, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import starter from './starter-prompt.risup?inline';
 import { testServer } from './testing';
 
@@ -63,21 +63,24 @@ describe('importPreset', () => {
   });
 });
 
-describe('addStarter', () => {
-  it('adds the starter prompt as the default once, even from two devices at the same time', async () => {
+describe('addDefaults', () => {
+  it('adds the starter prompt and the translation prompt as the defaults once, even from two devices at the same time', async () => {
     const { store, open } = await server.account();
     const other = await open();
-    await Promise.all([addStarter(store), addStarter(other)]);
+    await Promise.all([addDefaults(store), addDefaults(other)]);
     await store.pull();
-    const [prompt, ...more] = store.list('prompt');
-    expect([prompt?.value.name, more.length]).toEqual(['🏓 핑퐁 간소화', 0]);
-    expect(store.get('settings', SETTINGS_ID)?.value.prompt).toBe(prompt!.id);
+    const names = () => store.list('prompt').map((kept) => kept.value.name).sort();
+    expect(names()).toEqual(['기본 번역', '🏓 핑퐁 간소화']);
+    const settings = store.get('settings', SETTINGS_ID)?.value;
+    expect([settings?.prompt, settings?.translatePrompt]).toEqual([STARTER_ID, TRANSLATOR_ID]);
 
-    const mine = await addPrompt(store, '내 프롬프트');
+    const [mine, translator] = await Promise.all([addPrompt(store, '내 프롬프트', 'conversation'), addPrompt(store, '내 번역', 'translate')]);
+    expect(await removePrompt(store, TRANSLATOR_ID)).toEqual({ ok: false, error: 'default' });
     await setDefaultPrompt(store, mine.ok ? mine.data.id : '');
-    await removePrompt(store, prompt!.id);
-    await addStarter(store);
-    expect(store.list('prompt').map((kept) => kept.value.name)).toEqual(['내 프롬프트']);
+    await setDefaultPrompt(store, translator.ok ? translator.data.id : '');
+    await Promise.all([removePrompt(store, STARTER_ID), removePrompt(store, TRANSLATOR_ID)]);
+    await addDefaults(store);
+    expect(names()).toEqual(['내 번역', '내 프롬프트']);
   });
 });
 
@@ -94,7 +97,7 @@ describe('prompts', () => {
 
   it('refuses to delete the default prompt, and brings back another deleted one', async () => {
     const { store } = await server.account();
-    const [first, second] = await Promise.all([addPrompt(store, '하나'), addPrompt(store, '둘')]);
+    const [first, second] = await Promise.all([addPrompt(store, '하나', 'conversation'), addPrompt(store, '둘', 'conversation')]);
     const [one, two] = [first, second].map((added) => (added.ok ? added.data.id : ''));
     await setDefaultPrompt(store, one!);
     expect(await removePrompt(store, one!)).toEqual({ ok: false, error: 'default' });
@@ -108,7 +111,7 @@ describe('prompts', () => {
     const { store } = await server.account();
     const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
     const connection = await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [model] });
-    const [byDefault, own] = await Promise.all([addPrompt(store, '기본'), addPrompt(store, '따로')]);
+    const [byDefault, own] = await Promise.all([addPrompt(store, '기본', 'conversation'), addPrompt(store, '따로', 'conversation')]);
     const [defaultId, ownId] = [byDefault, own].map((added) => (added.ok ? added.data.id : ''));
     await setDefaultPrompt(store, defaultId!);
     await setPromptModel(store, defaultId!, 'main', { connection: connection.ok ? connection.data.id : '', model: 'm' });

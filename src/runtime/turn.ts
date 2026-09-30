@@ -19,6 +19,7 @@ import type { Session } from './session';
 import type { ApiFailure } from './api';
 import { startChat, type Greetings, type Said } from './chat-log';
 import type { Ask, TalkFailure, Turn } from './talk';
+import { tokenizer } from './tokenizer';
 import { translate, type TranslateFailure, type TranslateInput } from './translate';
 
 // What the user asks for: their new message and a reply to it, a reply to the last message sending
@@ -166,8 +167,10 @@ function gatherTurn(session: Session, chat: string, target: Target, ids = { said
   const said: Said | null = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
   const now = Date.now();
   const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
-  // A continuation's prompt ends with the version it continues.
-  const history = continues ? [...messages.slice(0, at), { ...messages[at]!, selected: index }] : [...messages.slice(0, at), ...sending];
+  // 반전 모드 sends the messages before the target as the reader reads them. A continuation's prompt ends with the
+  // version it continues, as its text, which the continuation is written after.
+  const before = translateSwitches(session.store, stored.value.character).reverse ? messages.slice(0, at).map(reversed) : messages.slice(0, at);
+  const history = continues ? [...before, { ...messages[at]!, selected: index }] : [...before, ...sending];
   const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);
   if ('kind' in scope) return scope;
   return {
@@ -181,12 +184,12 @@ function gatherTurn(session: Session, chat: string, target: Target, ids = { said
   };
 }
 
-// o200k_base counts for every model, loaded when a chat opens rather than with the page. Text
-// that spells a special token counts as text.
-const tokenizer = () => import('gpt-tokenizer/encoding/o200k_base').then(({ countTokens }) => (text: string) => countTokens(text, { disallowedSpecial: new Set() }));
-
-// A load that fails here is reported by the send that needs it.
-export const preloadTokenizer = () => void tokenizer().catch(() => {});
+// A message whose shown version has a translation, with that translation as its text: a reply's, or what the user
+// typed for a message sent translated.
+function reversed(message: Message): Message {
+  const version = shown(message);
+  return version.translation ? { ...message, versions: message.versions.with(message.selected, { ...version, text: version.translation.text }) } : message;
+}
 
 // start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.
 export function takeTurn(session: Session, chat: string, target: Target, start: { chat: Chat; greetings: Greetings | null; started: () => void } | null = null): Promise<TurnFailure | null> {

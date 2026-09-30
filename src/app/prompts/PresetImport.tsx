@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { PresetFailure, PresetUnsupported, PresetUnsupportedKind } from '../../engine/import/preset';
-import type { Prompt } from '../../model/prompt';
-import { importPrompt } from '../../runtime/prompts';
+import type { ConversationPrompt } from '../../model/prompt';
+import { importPrompt, ofSort } from '../../runtime/prompts';
 import { describeFailure } from '../common/failure';
 import { useStore } from '../session';
 import { Button, Callout, Dialog, DropOverlay, Outcome, Section, Stack, Text, useFileDrop } from '../ui';
@@ -30,7 +30,7 @@ const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: str
   settings: () => ({ title: '모델과 생성 설정', note: '모델 설정은 설정 › 모델 설정에서 해요.' }),
 };
 
-type Opened = { file: string; id: string; prompt: Prompt; unsupported: PresetUnsupported[] };
+type Opened = { file: string; id: string; prompt: ConversationPrompt; unsupported: PresetUnsupported[] };
 type Result = Opened | { file: string; failure: string };
 
 // A .risup picked or dropped on the prompt list becomes a new prompt. While the list is open, its drop takes files
@@ -46,8 +46,8 @@ export function usePresetImport(onOpen: (id: string) => void): { take: (files: F
       const { failure } = imported;
       return { file: file.name, failure: failure.kind === 'save' ? `저장하지 못했어요. ${describeFailure(failure.failure)}` : FAILURE[failure.kind] };
     }
-    const prompt = store.get('prompt', imported.id)?.value;
-    return prompt ? { file: file.name, id: imported.id, prompt, unsupported: imported.unsupported } : { file: file.name, failure: '다른 곳에서 지워졌어요.' };
+    const prompt = store.get('prompt', imported.id);
+    return prompt && ofSort(prompt, 'conversation') ? { file: file.name, id: imported.id, prompt: prompt.value, unsupported: imported.unsupported } : { file: file.name, failure: '다른 곳에서 지워졌어요.' };
   }
 
   async function take(files: File[]) {

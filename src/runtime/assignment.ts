@@ -36,7 +36,7 @@ function assign(models: Assignment, role: Role, ref: ModelRef | null): Assignmen
 }
 
 export function setPromptModel(store: ObjectStore, prompt: string, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'prompt'>>> {
-  return store.update('prompt', prompt, (current) => ({ ...current, models: assign(current.models, role, ref) }));
+  return store.update('prompt', prompt, (current) => (current.task === undefined ? { ...current, models: assign(current.models, role, ref) } : current));
 }
 
 export function setDefaultModel(store: ObjectStore, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'settings'>>> {

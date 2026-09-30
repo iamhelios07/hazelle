@@ -1,7 +1,8 @@
 import { ChevronDown, ChevronRight, Import, Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
-import { addPrompt } from '../../runtime/prompts';
+import type { PromptSort } from '../../model/prompt';
+import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import { noResults } from '../common/search';
 import { ago } from '../common/time';
 import { useStore, useViews } from '../session';
@@ -11,6 +12,7 @@ import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, promptName, usePromptUse, type PromptUse } from './usePromptUse';
 
 const RECENT = 4;
+const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트' } satisfies Record<PromptSort, string>;
 
 const useWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '쓰는 채팅 없음');
 const used = (use: PromptUse) => (use.at === null ? useWords(use) : `${useWords(use)} · ${ago(use.at)} 씀`);
@@ -30,18 +32,20 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   const uses = usePromptUse();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<PromptSort | null>(null);
   const preset = usePresetImport(onPick);
 
   const use = (id: string) => uses.get(id) ?? EMPTY_USE;
-  const badge = (id: string) => (id === settings.prompt ? '기본' : undefined);
+  const badge = (prompt: Stored<'prompt'>) => (isDefaultPrompt(settings, prompt) ? '기본' : undefined);
   const tags = (id: string) => (id === inUse ? ['사용 중'] : []);
+  // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역.
+  const description = (prompt: Stored<'prompt'>) => (ofSort(prompt, 'conversation') ? used(use(prompt.id)) : undefined);
   const byName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => a.value.name.localeCompare(b.value.name, 'ko');
 
-  async function add() {
-    setAdding(true);
-    const added = await addPrompt(store, '새 프롬프트');
-    setAdding(false);
+  async function add(sort: PromptSort) {
+    setAdding(sort);
+    const added = await addPrompt(store, NEW_NAME[sort], sort);
+    setAdding(null);
     if (!added.ok) return toast.failed(added, '프롬프트를 만들지 못했어요.');
     onPick(added.data.id);
   }
@@ -49,8 +53,13 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   const ids = new Set(prompts.map((prompt) => prompt.id));
   // A copy sits under its original while that is still here.
   const copiesOf = (id: string) => prompts.filter((prompt) => prompt.value.origin?.id === id).sort(byName);
-  const top = prompts.filter((prompt) => !prompt.value.origin || !ids.has(prompt.value.origin.id)).sort((a, b) => Number(b.id === settings.prompt) - Number(a.id === settings.prompt) || byName(a, b));
-  const recent = prompts
+  const topOf = (sort: PromptSort) =>
+    prompts
+      .filter((prompt) => ofSort(prompt, sort) && (!prompt.value.origin || !ids.has(prompt.value.origin.id)))
+      .sort((a, b) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byName(a, b));
+  const conversations = prompts.filter((prompt) => ofSort(prompt, 'conversation'));
+  const translators = prompts.filter((prompt) => ofSort(prompt, 'translate'));
+  const recent = conversations
     .filter((prompt) => use(prompt.id).at !== null)
     .sort((a, b) => use(b.id).at! - use(a.id).at!)
     .slice(0, RECENT);
@@ -63,9 +72,9 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       <ListItem
         key={prompt.id}
         title={promptName(prompt.value.name)}
-        badge={badge(prompt.id)}
+        badge={badge(prompt)}
         tags={tags(prompt.id)}
-        description={used(use(prompt.id))}
+        description={description(prompt)}
         onClick={() => onPick(prompt.id)}
         control={
           copies.length > 0 && (
@@ -88,7 +97,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       <FileButton accept=".risup" size="sm" icon={Import} onFile={(file) => preset.take([file])}>
         Risu 프리셋 가져오기
       </FileButton>
-      <Button size="sm" icon={Plus} busy={adding} onClick={() => void add()}>
+      <Button size="sm" icon={Plus} busy={adding === 'conversation'} onClick={() => void add('conversation')}>
         새 프롬프트
       </Button>
     </Row>
@@ -102,7 +111,14 @@ export function PromptList({ onPick, inUse, frame }: Props) {
         found.length ? (
           <List label="검색 결과">
             {found.map((prompt) => (
-              <ListItem key={prompt.id} title={promptName(prompt.value.name)} badge={badge(prompt.id)} tags={tags(prompt.id)} description={used(use(prompt.id))} onClick={() => onPick(prompt.id)} />
+              <ListItem
+                key={prompt.id}
+                title={promptName(prompt.value.name)}
+                badge={badge(prompt)}
+                tags={[...(ofSort(prompt, 'translate') ? ['번역'] : []), ...tags(prompt.id)]}
+                description={description(prompt)}
+                onClick={() => onPick(prompt.id)}
+              />
             ))}
           </List>
         ) : (
@@ -114,13 +130,28 @@ export function PromptList({ onPick, inUse, frame }: Props) {
             <Section title="최근 사용">
               <Tiles label="최근 사용">
                 {recent.map((prompt) => (
-                  <Tile key={prompt.id} title={promptName(prompt.value.name)} badge={badge(prompt.id)} meta={used(use(prompt.id))} onClick={() => onPick(prompt.id)} />
+                  <Tile key={prompt.id} title={promptName(prompt.value.name)} badge={badge(prompt)} meta={used(use(prompt.id))} onClick={() => onPick(prompt.id)} />
                 ))}
               </Tiles>
             </Section>
           )}
-          <Section title={`모든 프롬프트 ${prompts.length}개`}>
-            {prompts.length ? <List label="모든 프롬프트">{top.map(row)}</List> : <Empty variant="section">아직 프롬프트가 없어요. 새로 만들거나 Risu 프리셋을 가져와 보세요.</Empty>}
+          <Section title={`대화 프롬프트 ${conversations.length}개`}>
+            {conversations.length ? (
+              <List label="대화 프롬프트">{topOf('conversation').map(row)}</List>
+            ) : (
+              <Empty variant="section">아직 대화 프롬프트가 없어요. 새로 만들거나 Risu 프리셋을 가져와 보세요.</Empty>
+            )}
+          </Section>
+          <Section
+            title={`번역 프롬프트 ${translators.length}개`}
+            hint="답장 번역과 보낼 말 번역이 쓰는 프롬프트예요. 글 속 {{language}}에는 번역할 언어가 들어가요."
+            action={
+              <Button variant="ghost" size="xs" icon={Plus} busy={adding === 'translate'} onClick={() => void add('translate')}>
+                새 번역 프롬프트
+              </Button>
+            }
+          >
+            {translators.length ? <List label="번역 프롬프트">{topOf('translate').map(row)}</List> : <Empty variant="section">번역 프롬프트가 없어요. 새로 만들어 보세요.</Empty>}
           </Section>
         </>
       )}

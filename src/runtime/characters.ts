@@ -110,16 +110,26 @@ export function setToggle(store: ObjectStore, character: string | null, key: str
   return store.update('character', character, (current) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
 }
 
-// A character's 번역, in every chat of it, or that of every 캐릭터 없이 chat, as toggle values are. Nothing saved
-// is both off.
-export function translateSwitches(store: ObjectStore, character: string | null): TranslateSwitches {
+// What a switch not stored reads as. Switches stored before 반전 모드, the languages and the prompt choice existed
+// hold none of those, and read as these.
+const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, read: 'Korean', send: 'English' };
+
+// The switches in effect. input is off under reverse, whatever is stored, since 반전 모드 sends what the user typed.
+// prompt absent follows the account's default translation prompt.
+export type TranslateSetup = typeof TRANSLATE_DEFAULTS & Pick<TranslateSwitches, 'prompt'>;
+
+// A character's 번역, in every chat of it, or that of every 캐릭터 없이 chat, as toggle values are.
+export function translateSwitches(store: ObjectStore, character: string | null): TranslateSetup {
   const saved = character === null ? store.get('settings', SETTINGS_ID)?.value.translate : store.get('character', character)?.value.translate;
-  return saved ?? { replies: false, input: false };
+  const switches = { ...TRANSLATE_DEFAULTS, ...saved };
+  return { ...switches, input: switches.input && !switches.reverse };
 }
 
-export function setTranslate(store: ObjectStore, character: string | null, switches: TranslateSwitches): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
-  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, translate: switches }));
-  return store.update('character', character, (current) => ({ ...current, translate: switches }));
+// Only the switches given, merged into the stored ones; prompt given as undefined goes back to the default.
+export function setTranslate(store: ObjectStore, character: string | null, change: Partial<TranslateSwitches>): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
+  const merged = (saved: TranslateSwitches | undefined): TranslateSwitches => ({ replies: TRANSLATE_DEFAULTS.replies, input: TRANSLATE_DEFAULTS.input, ...saved, ...change });
+  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, translate: merged(current?.translate) }));
+  return store.update('character', character, (current) => ({ ...current, translate: merged(current.translate) }));
 }
 
 // 기본값으로 되돌리기: the chats go back to the toggles' declared defaults.

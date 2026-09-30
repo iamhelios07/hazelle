@@ -1,4 +1,4 @@
-import type { Block, ChatRange, ChatSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
+import type { Block, ChatRange, ChatSlot, RecentSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockTitle, MARKS } from './blocks';
 import { moved, rekey, withMark, type Draft } from './edits';
@@ -77,6 +77,11 @@ export function setRole(block: Extract<Block, { role: Role }>, role: Role): Step
 export function setRange(block: ChatSlot, range: ChatRange): Step {
   const to = (value: ChatRange) => onBlock(block.id, (each) => (each.kind === 'slot' && each.slot === 'chat' ? { ...each, range: value } : each));
   return { label: titled(block, '들어갈 메시지 바꾸기'), block: block.id, undo: to(block.range), redo: to(range) };
+}
+
+export function setCount(block: RecentSlot, count: number): Step {
+  const to = (value: number) => onBlock(block.id, (each) => (each.kind === 'slot' && each.slot === 'recent' ? { ...each, count: value } : each));
+  return { label: titled(block, '메시지 수 바꾸기'), block: block.id, undo: to(block.count), redo: to(count) };
 }
 
 export function setCache(block: Block, on: boolean): Step {

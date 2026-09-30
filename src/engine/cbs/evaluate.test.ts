@@ -43,6 +43,7 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => ({
   model: { id: 'model', maxContext: null, prefill: null },
   screen: null,
   clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
+  language: null,
   pickSeed: 'pick-1',
   ...over,
 });

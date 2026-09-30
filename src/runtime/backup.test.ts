@@ -9,7 +9,7 @@ import { addCharacter } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
-import { addStarter } from './prompts';
+import { addDefaults } from './prompts';
 import type { ObjectStore } from './store';
 import { testServer } from './testing';
 
@@ -21,7 +21,7 @@ const held = (store: ObjectStore) =>
 // What opening an account adds (runtime/session).
 async function open(username: string, { profile = true } = {}) {
   const account = await server.account();
-  await addStarter(account.store);
+  await addDefaults(account.store);
   await addFirstPersona(account.store, username);
   if (profile) await addFirstProfile(account.store);
   return account;

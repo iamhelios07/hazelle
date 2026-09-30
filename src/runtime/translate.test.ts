@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
 import { appendUserMessage, startChat } from './chat-log';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
+import { setTranslate } from './characters';
+import { translate } from './translate';
 import { takeTurn, translationInput } from './turn';
 
 const server = testServer();
@@ -24,5 +26,19 @@ describe('Translator', () => {
       await vi.waitFor(() => expect(shown(messages()[1]!).translation).toMatchObject({ text: '안녕, 여행자.', receipt: { state: 'done' } }));
       expect(session.translator.snapshot().live.size).toBe(0);
       expect(JSON.parse(log[1]!.sent.body!).messages.at(-1)).toEqual({ role: 'user', content: 'Hello, traveler.' });
+    }));
+
+  it('stops before any call when the character’s translation prompt is gone', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      const opened = { title: null, character: null, models: {} };
+      await startChat(session.store, chat, opened, null);
+      await setTranslate(session.store, null, { prompt: crypto.randomUUID() });
+      const log = stubRelay(inTurn([saying('안녕')]));
+
+      const made = await translate(session, translationInput(session, chat, opened, [], { kind: 'input', text: 'Hi' }), new AbortController().signal, () => {});
+      expect(made).toEqual({ ok: false, failure: { kind: 'prompt-missing', own: true } });
+      expect(log).toHaveLength(0);
     }));
 });

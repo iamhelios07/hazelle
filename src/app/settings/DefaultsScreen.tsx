@@ -2,7 +2,7 @@ import { ROLES, type ModelRef, type Role } from '../../connectors/assignment';
 import type { ApiFailure } from '../../runtime/api';
 import { setDefaultModel } from '../../runtime/assignment';
 import { setDefaultPersona } from '../../runtime/personas';
-import { setDefaultPrompt } from '../../runtime/prompts';
+import { ofSort, setDefaultPrompt } from '../../runtime/prompts';
 import { personaTitle } from '../common/persona-words';
 import { findStarred, HelperPickers, ROLE_WORDS, RolePicker } from '../common/RolePicker';
 import { useSettings, useStore, useViews } from '../session';
@@ -22,7 +22,8 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
-  const { prompts, personas, connections } = useViews();
+  const { prompts: all, personas, connections } = useViews();
+  const prompts = all.filter((each) => ofSort(each, 'conversation'));
 
   const prompt = settings.prompt === undefined ? null : prompts.find(({ id }) => id === settings.prompt);
   const persona = settings.persona === undefined ? null : personas.find(({ id }) => id === settings.persona);
