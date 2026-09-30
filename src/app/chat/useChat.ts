@@ -88,7 +88,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const messages: Shown[] = withTurn(item?.messages ?? (opening ? [opening] : []), turn, chatId);
   const texts = displayChat(session, chatId, chat, messages);
   const translate = translateSwitches(store, chat.character);
-  const sendLanguage = languageLabel(translate.theirs);
+  const sendLanguage = languageLabel(translate.inputLanguage);
   const translateModel = chatModel(store, chat, 'translate');
   const busy = turn !== null;
   const streaming = busy && turn.chat === chatId;

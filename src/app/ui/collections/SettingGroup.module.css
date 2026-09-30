@@ -48,6 +48,13 @@
   font-weight: var(--weight-medium);
 }
 
+.sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .panel .label {
   font-size: var(--text-sm);
   font-weight: var(--weight-regular);

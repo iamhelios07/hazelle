@@ -13,6 +13,9 @@ export function SettingGroup({ label, children }: { label: string; children: Rea
 
 type RowProps = {
   label: string;
+  // The label as a sentence with a control inside it, such as the language in 답장을 한국어로 번역해서 보기, shown in the
+  // label's place; label stays the row's name.
+  sentence?: ReactNode;
   // panel: one of a side panel's list, such as a chat's toggles, with no box and its control beside it on phones too.
   place?: 'group' | 'panel';
   // Differs from its default, marked by a dot before the label; sub may say what the default is.
@@ -31,16 +34,16 @@ type RowProps = {
   note?: string;
 };
 
-export function SettingRow({ label, place = 'group', changed = false, help, sub, control, wide = false, error, note }: RowProps) {
+export function SettingRow({ label, sentence, place = 'group', changed = false, help, sub, control, wide = false, error, note }: RowProps) {
   const id = useId();
   const className = [styles.row, place === 'panel' && styles.panel, wide && styles.wide].filter(Boolean).join(' ');
   return (
-    <div className={className} role="group" aria-labelledby={id}>
+    <div className={className} role="group" aria-labelledby={sentence ? undefined : id} aria-label={sentence ? label : undefined}>
       <div className={styles.words}>
         <span className={styles.name}>
-          <span id={id} className={styles.label}>
+          <span id={id} className={sentence ? `${styles.label} ${styles.sentence}` : styles.label}>
             {changed && <span className={styles.changed} aria-hidden />}
-            {label}
+            {sentence ?? label}
           </span>
           {help && <Hint label={label}>{help}</Hint>}
         </span>

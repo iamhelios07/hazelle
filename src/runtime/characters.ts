@@ -112,7 +112,7 @@ export function setToggle(store: ObjectStore, character: string | null, key: str
 
 // What a switch not stored reads as. Switches stored before 반전 모드, the languages and the prompt choice existed
 // hold none of those, and read as these.
-const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, mine: 'Korean', theirs: 'English' };
+const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, replyLanguage: 'Korean', inputLanguage: 'English' };
 
 // The switches in effect. input is off under reverse, whatever is stored, since 반전 모드 sends what the user typed.
 // prompt absent follows the account's default translation prompt.

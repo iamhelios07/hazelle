@@ -2,7 +2,7 @@ import { Languages } from 'lucide-react';
 import { useState } from 'react';
 import { ofSort, translationPrompt } from '../../runtime/prompts';
 import { describeTranslateFailure } from '../common/failure';
-import { LANGUAGES, languageLabel } from '../common/languages';
+import { LANGUAGES, languageLabel, withRo } from '../common/languages';
 import { useSession, useSettings, useViews } from '../session';
 import { navigate } from '../shell/router';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, Row, SettingRow, Stack, Switch, Tag, Text, TextField, ToolButton, useMenuClose } from '../ui';
@@ -10,8 +10,6 @@ import type { OpenChat } from './useChat';
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
   const { translate, translateModel, card, actions } = chat;
-  // Without a character the other side is the model itself.
-  const theirs = card ? `${card.name}의 언어` : '모델 언어';
   const on = [translate.replies && '답장 번역', translate.input && '보낼 말 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
   return (
     <Menu
@@ -25,11 +23,13 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
         <SettingRow
           place="panel"
           label="답장 번역"
+          sentence={<Into before="답장을" after="번역해서 보기" label="답장 번역 언어" value={translate.replyLanguage} onPick={(replyLanguage) => actions.setTranslate({ replyLanguage })} />}
           control={<Switch label="답장 번역" checked={translate.replies} onChange={(replies) => actions.setTranslate({ replies })} />}
         />
         <SettingRow
           place="panel"
           label="보낼 말 번역"
+          sentence={<Into before="내 말을" after="번역해서 보내기" label="보낼 말 번역 언어" value={translate.inputLanguage} onPick={(inputLanguage) => actions.setTranslate({ inputLanguage })} />}
           sub={translate.reverse ? '반전 모드에서는 쓴 말 그대로 보내요' : undefined}
           control={<Switch label="보낼 말 번역" checked={translate.input} disabled={translate.reverse} onChange={(input) => actions.setTranslate({ input })} />}
         />
@@ -40,8 +40,6 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
           control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => actions.setTranslate({ reverse })} />}
         />
         <Divider variant="menu" />
-        <SettingRow place="panel" label="내 언어" control={<LanguageMenu label="내 언어" value={translate.mine} onPick={(mine) => actions.setTranslate({ mine })} />} />
-        <SettingRow place="panel" label={theirs} control={<LanguageMenu label={theirs} value={translate.theirs} onPick={(language) => actions.setTranslate({ theirs: language })} />} />
         <SettingRow place="panel" label="번역 프롬프트" control={<PromptMenu chat={chat} />} />
         <SettingRow
           place="panel"
@@ -60,16 +58,22 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
   );
 }
 
-function LanguageMenu({ label, value, onPick }: { label: string; value: string; onPick: (name: string) => void }) {
+// The language a switch translates into, inside its sentence: 답장을 [한국어]로 번역해서 보기.
+function Into({ before, after, label, value, onPick }: { before: string; after: string; label: string; value: string; onPick: (name: string) => void }) {
+  const word = languageLabel(value);
   return (
-    <Menu kind="dialog" place="above-end" label={label} trigger={(opener) => <ChipButton variant="field" opens="up" label={languageLabel(value)} title={label} {...opener} />}>
-      <LanguageChoices label={label} value={value} onPick={onPick} />
-    </Menu>
+    <>
+      {before}
+      <Menu kind="dialog" place="above-start" label={label} trigger={(opener) => <ChipButton opens="up" label={word} title={label} {...opener} />}>
+        <LanguageChoices value={value} onPick={onPick} />
+      </Menu>
+      {`${withRo(word).slice(word.length)} ${after}`}
+    </>
   );
 }
 
 // Mounted only while the menu is open, so a language typed and left starts empty again.
-function LanguageChoices({ label, value, onPick }: { label: string; value: string; onPick: (name: string) => void }) {
+function LanguageChoices({ value, onPick }: { value: string; onPick: (name: string) => void }) {
   const close = useMenuClose();
   const [typed, setTyped] = useState('');
   const pick = (name: string) => {
@@ -85,7 +89,7 @@ function LanguageChoices({ label, value, onPick }: { label: string; value: strin
       <TextField label="다른 언어" value={typed} onChange={setTyped} placeholder="예: Ukrainian" help={`목록에 없는 언어는 영어 이름으로 써요. 번역 프롬프트의 {{language}}에 그대로 들어가요.`} />
       <Row kind="actions">
         <Button size="sm" disabled={!typed.trim()} onClick={() => pick(typed.trim())}>
-          {`${label}로 쓰기`}
+          이 언어로 쓰기
         </Button>
       </Row>
     </>

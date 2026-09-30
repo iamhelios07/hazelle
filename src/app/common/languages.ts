@@ -1,4 +1,4 @@
-// The languages offered for 내 언어 and the character's language. name is what is stored and what the translation prompt's
+// The languages a reply or the user's message is translated into. name is what is stored and what the translation prompt's
 // {{language}} receives; label is how the app shows it.
 export const LANGUAGES = [
   { name: 'Korean', label: '한국어' },
