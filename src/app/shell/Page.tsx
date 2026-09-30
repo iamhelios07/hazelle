@@ -67,7 +67,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         if (at.character === null) return <CharacterScreen key="none" shelf={null} back={sideBack(at)} />;
         return withCharacter(at, at.character, (shelf) => <CharacterScreen key={shelf.id} shelf={shelf} back={sideBack(at)} />);
       case 'edit':
-        return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} initial={shelf.character.card} back={back(at)} />);
+        return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} initial={shelf.character} back={back(at)} />);
       case 'new-chat':
         if (at.character === null) return <ChatScreen key="new" item={null} shelf={null} back={sideBack(at)} side={side} />;
         return withCharacter(at, at.character, (shelf) => <ChatScreen key={`new-${shelf.id}`} item={null} shelf={shelf} back={sideBack(at)} side={side} />);

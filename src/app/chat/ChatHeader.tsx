@@ -1,4 +1,4 @@
-import { GitBranch, MessageSquare, MoreHorizontal, PanelRight, Plus, SlidersHorizontal } from 'lucide-react';
+import { GitBranch, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
 import { branchTree } from '../../model/chat';
 import { NameDialog } from '../common/NameDialog';
 import { ago } from '../common/time';
@@ -24,7 +24,7 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
 
 // Mounted only while the menu is open.
 function ChatChoices({ chat }: { chat: OpenChat }) {
-  const { id, card, shelf } = chat;
+  const { id, card, shelf, actions } = chat;
   const { none } = useLibrary();
   return (
     <>
@@ -41,6 +41,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
       ))}
       <Divider variant="menu" />
       <MenuItem icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />
+      {shelf && <MenuItem icon={Pencil} label="캐릭터 편집" onClick={() => actions.side({ kind: 'character', id: shelf.id })} />}
     </>
   );
 }

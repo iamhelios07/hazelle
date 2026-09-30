@@ -2,6 +2,7 @@ import { Copy, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
 import { unused } from '../../engine/pipeline';
 import type { ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
+import { aliased } from '../common/alias';
 import { describeUnused } from '../common/unused';
 import { useCharacter } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -30,15 +31,16 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatIte
     );
   }
 
-  const { card, origin } = shelf.character;
+  const { card, origin, alias } = shelf.character;
+  const title = aliased(card.name, alias);
   const notUsed = describeUnused(unused(card));
   const originHere = original !== null;
   const copying = busy?.id === shelf.id ? busy.label : null;
 
   return (
-    <Screen top={back && <NavBar title={card.name} {...backBar(back)} />}>
+    <Screen top={back && <NavBar title={title} {...backBar(back)} />}>
       <Portrait image={shelf.face} name={card.name} />
-      <Intro title={card.name}>{card.creator ? `만든 사람 ${card.creator}` : undefined}</Intro>
+      <Intro title={title}>{card.creator ? `만든 사람 ${card.creator}` : undefined}</Intro>
       {origin && (
         <Row kind="actions">
           <Text tone="muted">

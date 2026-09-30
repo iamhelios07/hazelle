@@ -48,8 +48,8 @@ export function importCharacter(store: ObjectStore, files: Files, { card, lore, 
 }
 
 // A copy that goes its own way (사본 만들기): the card under a new name, the lorebook and the picture,
-// in the original's folder. Chats stay with the original. The picture is copied, not shared, because a
-// blob is sealed to its own id.
+// in the original's folder. Chats stay with the original, and so does the alias, which tells the two apart. The
+// picture is copied, not shared, because a blob is sealed to its own id.
 export async function copyCharacter(store: ObjectStore, files: Files, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
   const original = store.get('character', id)?.value;
   if (!original) return { ok: false, error: 'gone' };
@@ -61,7 +61,7 @@ export async function copyCharacter(store: ObjectStore, files: Files, id: string
     picture = { bytes: bytes.data, type: avatar.value.type, thumb: avatar.value.thumb };
   }
   const lore = store.children('lore', id).map((entry) => entry.value);
-  return addCharacter(store, files, { ...original, card: { ...original.card, name }, origin: { id, name: original.card.name } }, lore, picture, progress);
+  return addCharacter(store, files, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, lore, picture, progress);
 }
 
 // at is when it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good
@@ -98,10 +98,13 @@ export async function purgeExpired(store: ObjectStore, files: Files, now: number
   }
 }
 
-// Only the fields given, merged into the current card, so an edit to another field on another device
+// What 캐릭터 편집 changes: the card's text and the alias beside it.
+export type CharacterText = Card & { alias: string };
+
+// Only the fields given, the card's merged into the current card, so an edit to another field on another device
 // survives.
-export function editCard(store: ObjectStore, id: string, patch: Partial<Card>): Promise<ApiResult<Stored<'character'>>> {
-  return store.update('character', id, (current) => ({ ...current, card: { ...current.card, ...patch } }));
+export function editCharacter(store: ObjectStore, id: string, { alias, ...card }: Partial<CharacterText>): Promise<ApiResult<Stored<'character'>>> {
+  return store.update('character', id, (current) => ({ ...current, ...(alias === undefined ? {} : { alias }), card: { ...current.card, ...card } }));
 }
 
 // A toggle's value for a character's chats, or with character null for 캐릭터 없이's.

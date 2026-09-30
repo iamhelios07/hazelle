@@ -14,7 +14,7 @@ import { useReading } from './ChatReading';
 import { ChatToggles } from './ChatToggles';
 import { useChat, type Side } from './useChat';
 
-// What the shell draws for a Side: the persona and prompt screens are other features, which only the shell composes.
+// What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
 // inUse is the one this chat uses, marked in the list.
 export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Side) => void; onClose: () => void };
 
@@ -33,7 +33,7 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
   const { id, messages, streaming, panel, scroll, prompt, persona, actions } = chat;
   useShortcut('personas', () => actions.toggleSide('personas'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));
-  const inUse = { personas: persona.kind === 'persona' ? persona.persona.id : null, prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null };
+  const inUse = { personas: persona.kind === 'persona' ? persona.persona.id : null, prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
   return (
     <>
       <ChatFrame

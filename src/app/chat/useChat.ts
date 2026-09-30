@@ -44,8 +44,8 @@ const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failur
 
 export type OpenChat = ReturnType<typeof useChat>;
 
-// A persona or prompt list beside the chat, or one of them open from it.
-export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; id: string | null; pane: 'toggles' | null };
+// A persona or prompt list beside the chat, or one of them open from it, or the chat's character in 캐릭터 편집.
+export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; id: string | null; pane: 'toggles' | null } | { kind: 'character'; id: string };
 // Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
 export type ChatActions = OpenChat['actions'];
 
@@ -368,7 +368,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       showToggles: () => setPanel({ kind: 'toggles' }),
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.
-      toggleSide: (kind: Side['kind']) => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
+      toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
       closePanel: () => setPanel(null),
       openDialog: (which: 'rename' | 'reading') => setDialog(which),
       closeDialog: () => setDialog(null),

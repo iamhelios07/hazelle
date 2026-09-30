@@ -57,10 +57,11 @@ describe('daysLeft', () => {
 });
 
 describe('matches', () => {
-  it('finds the query, trimmed and in any case, in the name or the nickname', () => {
+  it('finds the query, trimmed and in any case, in the name, the nickname or the alias', () => {
     const luna = character('Luna', 1).value;
     luna.card.nickname = '달토끼';
-    expect(['  lu ', 'LUNA', '토끼', ''].map((query) => matches(luna, query))).toEqual([true, true, true, true]);
+    luna.alias = '겨울 버전';
+    expect(['  lu ', 'LUNA', '토끼', '겨울', ''].map((query) => matches(luna, query))).toEqual([true, true, true, true, true]);
     expect(matches(luna, 'kael')).toBe(false);
   });
 });

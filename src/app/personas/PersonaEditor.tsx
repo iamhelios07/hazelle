@@ -1,17 +1,15 @@
 import { ImageUp } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { Persona } from '../../model/persona';
 import { editPersona, removePersona, restorePersona, setDefaultPersona } from '../../runtime/personas';
 import { thumbnail } from '../../runtime/picture';
 import { useSettings, useStore } from '../session';
-import { personaTitle } from '../common/persona-words';
+import { aliased } from '../common/alias';
+import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useToast } from '../toast';
-import { Avatar, Button, FaceRow, FileButton, Row, Text, TextField, type NavBarProps } from '../ui';
-
-// A page or a side panel: the editor or list says what its head holds, the caller how it looks.
-export type Frame = (parts: { head: NavBarProps; body: ReactNode }) => ReactNode;
+import { Avatar, Button, FaceRow, FileButton, Row, Text, TextField } from '../ui';
 
 type Props = {
   stored: Stored<'persona'>;
@@ -30,7 +28,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   const [persona, setPersona] = useState(stored.value);
   const { status, save, flush, change: queue } = useAutosave<Persona>((patch) => editPersona(store, id, patch));
 
-  function change(field: 'name' | 'nickname' | 'description', value: string) {
+  function change(field: 'name' | 'alias' | 'description', value: string) {
     setPersona((current) => ({ ...current, [field]: value }));
     queue({ [field]: value }, field !== 'name' || !!value.trim());
   }
@@ -76,7 +74,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
         )}
       </FaceRow>
       <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 적어 주세요.'} />
-      <TextField label="별명" value={persona.nickname ?? ''} onChange={(value) => change('nickname', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요. AI에게는 보내지 않아요." />
+      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요. AI에게는 보내지 않아요." />
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} help="프롬프트의 ‘페르소나’ 자리에 이 설명이 들어가요." />
       <Row kind="actions">
         <Button variant="danger" size="sm" onClick={() => void remove()}>
@@ -85,5 +83,5 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       </Row>
     </>
   );
-  return frame({ head: { title: personaTitle(persona), backLabel, onBack, actions: status && <Text tone="muted">{SAVE_STATUS[status]}</Text> }, body });
+  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, actions: status && <Text tone="muted">{SAVE_STATUS[status]}</Text> }, body });
 }

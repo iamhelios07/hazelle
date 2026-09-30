@@ -7,8 +7,11 @@ import type { ToggleValues } from './prompt';
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
 // deleted is when it went to 지운 캐릭터; it and its chats are removed for good KEEP_DELETED later.
 // toggles holds the values set for it, over the declared defaults; translate, its chats' 번역.
+// alias: 별명, the user's own note to tell apart characters (or personas) of one name. It is never sent, unlike the
+// card's nickname (부르는 이름), which CCv3 puts in {{char}}'s place.
 export type Character = {
   card: Card;
+  alias?: string;
   folder: string | null;
   loreFolders: LoreFolder[];
   origin?: { id: string; name: string };
@@ -28,8 +31,9 @@ export const KEEP_DAYS = KEEP_DELETED / DAY;
 // Whole days a character in 지운 캐릭터 has left. At 0 or less it is due, and purgeExpired removes it.
 export const daysLeft = (character: Character, now: number) => Math.ceil((character.deleted! + KEEP_DELETED - now) / DAY);
 
-// The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name or nickname.
-export const matches = ({ card }: Character, query: string) => `${card.name} ${card.nickname ?? ''}`.toLowerCase().includes(query.trim().toLowerCase());
+// The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name, nickname or alias.
+export const matches = ({ card, alias }: Character, query: string) =>
+  `${card.name} ${card.nickname ?? ''} ${alias ?? ''}`.toLowerCase().includes(query.trim().toLowerCase());
 
 // Kind `lore`, whose parent is the character. folder is the id of one of its loreFolders.
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };

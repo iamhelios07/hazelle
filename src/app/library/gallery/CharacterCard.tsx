@@ -1,6 +1,7 @@
 import { Copy, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
 import type { ChatItem } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
+import { aliased } from '../../common/alias';
 import { navigate } from '../../shell/router';
 import { enterShelf } from '../../shell/routes';
 import { FaceCard, IconButton, Menu, MenuItem, useMenuHandle, useMenuOpener, useWide } from '../../ui';
@@ -23,7 +24,7 @@ type Props = {
 
 export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, onPurge }: Props) {
   const wide = useWide();
-  const { name } = shelf.character.card;
+  const name = aliased(shelf.character.card.name, shelf.character.alias);
   const handle = useMenuHandle();
   const card = useMenuOpener(handle);
   const shows = picked === null && busy === null;

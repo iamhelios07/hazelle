@@ -1,10 +1,10 @@
 import { Plus } from 'lucide-react';
 import { addPersona } from '../../runtime/personas';
-import { personaTitle } from '../common/persona-words';
+import { aliased } from '../common/alias';
+import type { Frame } from '../common/frame';
 import { useSettings, useStore, useViews } from '../session';
 import { useToast } from '../toast';
 import { Avatar, Button, List, ListItem } from '../ui';
-import type { Frame } from './PersonaEditor';
 
 type Props = {
   // A new persona is picked as soon as it is made.
@@ -39,7 +39,7 @@ export function PersonaList({ onPick, current, inUse, frame }: Props) {
         <ListItem
           key={id}
           leading={<Avatar face={value.name} image={value.picture} tone="you" />}
-          title={personaTitle(value)}
+          title={aliased(value.name, value.alias)}
           tags={[...(settings.persona === id ? ['기본'] : []), ...(inUse === id ? ['사용 중'] : [])]}
           description={value.description}
           current={current === id}

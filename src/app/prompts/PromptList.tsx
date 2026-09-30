@@ -1,13 +1,14 @@
 import { ChevronDown, ChevronRight, Import, Plus } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
 import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
+import type { Frame } from '../common/frame';
 import { noResults } from '../common/search';
 import { ago } from '../common/time';
 import { useStore, useViews } from '../session';
 import { useToast } from '../toast';
-import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles, type NavBarProps } from '../ui';
+import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles } from '../ui';
 import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, promptName, usePromptUse, type PromptUse } from './usePromptUse';
 
@@ -22,7 +23,7 @@ type Props = {
   onPick: (id: string) => void;
   // The one a chat uses, marked 사용 중.
   inUse?: string;
-  frame: (parts: { head: NavBarProps; body: ReactNode }) => ReactNode;
+  frame: Frame;
 };
 
 export function PromptList({ onPick, inUse, frame }: Props) {

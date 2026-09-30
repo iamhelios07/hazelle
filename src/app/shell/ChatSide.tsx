@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { SideAt } from '../chat/ChatScreen';
+import { CharacterEditor } from '../library/CharacterEditor';
 import { PersonaEditor } from '../personas/PersonaEditor';
 import { PersonaList } from '../personas/PersonaList';
 import { PromptEditor } from '../prompts/PromptEditor';
@@ -7,10 +8,11 @@ import { PromptList } from '../prompts/PromptList';
 import { useViews } from '../session';
 import { NavBar, SidePanel, type NavBarProps } from '../ui';
 
-// Ctrl+E and Ctrl+P beside the chat: the list first, and the one picked opens in its place. Each editor is keyed by
-// its id and saves as it unmounts, so going back to the list or closing the panel saves what was typed.
+// Ctrl+E and Ctrl+P beside the chat: the list first, and the one picked opens in its place. 캐릭터 편집 opens the
+// chat's character alone. Each editor is keyed by its id and saves as it unmounts, so going back to the list or
+// closing the panel saves what was typed.
 export function ChatSide({ open, inUse, onOpen, onClose }: SideAt) {
-  const { personas, prompts } = useViews();
+  const { personas, prompts, characterById } = useViews();
   const panel =
     (title: string) =>
     ({ head, body, open: page }: { head: NavBarProps; body: ReactNode; open?: string }) => (
@@ -19,6 +21,11 @@ export function ChatSide({ open, inUse, onOpen, onClose }: SideAt) {
       </SidePanel>
     );
 
+  if (open.kind === 'character') {
+    // The chat is gone from the page with its character, so the character is there while this is.
+    const { character } = characterById.get(open.id)!;
+    return <CharacterEditor key={open.id} id={open.id} initial={character} frame={panel('캐릭터')} />;
+  }
   if (open.kind === 'personas') {
     const toList = () => onOpen({ kind: 'personas', id: null });
     const stored = personas.find((persona) => persona.id === open.id);
