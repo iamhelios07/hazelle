@@ -1,4 +1,4 @@
-import { Bot, Copy, GitBranch, Info, Languages, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Bot, Copy, GitBranch, Info, Languages, Pencil, Pin, RotateCcw, Trash2 } from 'lucide-react';
 import { useMemo, type KeyboardEvent } from 'react';
 import { resolveAssets } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
@@ -10,7 +10,7 @@ import { withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, pressed, Story, StoryMessage, Switcher, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
 import { useReveal } from './useReveal';
 
@@ -20,6 +20,8 @@ type Props = {
   text: string;
   // 봇 꾸밈: whether the bot's HTML is drawn, its CSS for the chat, and its pictures' URLs.
   decor: { bot: boolean; css: string; url: (id: string) => string | undefined };
+  // The boxes the bot drew in this message that 옆에 고정 can take beside the story, by the script that draws each.
+  offered: { script: number; name: string }[];
   // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
   // other way round from its default.
   translating: Translating;
@@ -53,7 +55,7 @@ type Props = {
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export function ChatMessage(props: Props) {
-  const { message, text: original, decor, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
+  const { message, text: original, decor, offered, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
@@ -198,10 +200,23 @@ export function ChatMessage(props: Props) {
     </>
   );
 
+  const pinTool =
+    offered.length === 1 ? (
+      <IconButton icon={Pin} size="xs" label={`옆에 고정 · ${offered[0]!.name}`} onClick={() => actions.pinBox(offered[0]!.script)} />
+    ) : offered.length > 1 ? (
+      <Menu place="below-end" label="옆에 고정" trigger={(opener) => <IconButton icon={Pin} size="xs" label="옆에 고정" {...opener} />}>
+        <MenuHeading>이야기 옆에 둘 상자</MenuHeading>
+        {offered.map(({ script, name }) => (
+          <MenuItem key={script} label={name} onClick={() => actions.pinBox(script)} />
+        ))}
+      </Menu>
+    ) : null;
+
   const tools = live || editing !== null ? undefined : opening ? (
     <>
       {translateTool}
       <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />
+      {pinTool}
     </>
   ) : (
     <>
@@ -212,6 +227,7 @@ export function ChatMessage(props: Props) {
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 갈라지기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="답장 정보" onClick={() => actions.info(message.id)} />}
+      {pinTool}
       <Divider variant="tools" />
       <IconButton icon={Trash2} size="xs" label="지우기 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
     </>
@@ -234,4 +250,5 @@ export function ChatMessage(props: Props) {
   );
 }
 
-const shownHtml = (text: string, { bot, url }: Props['decor']) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));
+// A shown text as the story draws it, in a message or pinned beside the story.
+export const shownHtml = (text: string, { bot, url }: Props['decor']) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));

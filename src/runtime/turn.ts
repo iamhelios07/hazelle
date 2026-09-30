@@ -4,7 +4,7 @@ import type { Starred } from '../connectors/types';
 import type { Card } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
 import { assemble, type PromptInput, type TooLong } from '../engine/pipeline';
-import { display } from '../engine/display';
+import { display, type Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import { fold, shown, type Chat, type Message } from '../model/chat';
@@ -19,7 +19,7 @@ import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
 import { startChat, type Greetings, type Said } from './chat-log';
-import { withTurn, type Ask, type TalkFailure, type Turn } from './talk';
+import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
 import { tokenizer } from './tokenizer';
 import { translate, type TranslateFailure, type TranslateInput } from './translate';
 
@@ -126,8 +126,25 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
 
 // Each message's text as the chat shows it, for its log, its title and its preview, and the bot's CSS for its log.
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
-export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null) =>
-  display({ ...scopeOf(reader, id, chat, messages), screen });
+// The boxes the character pinned beside the story leave every message, unless 봇 꾸밈 is off.
+export function displayChat(reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null): Display {
+  const character = chat.character === null ? null : reader.store.get('character', chat.character)?.value;
+  const take = new Set(character?.decor === false ? [] : (character?.beside ?? []));
+  return display({ ...scopeOf(reader, id, chat, messages), screen }, take);
+}
+
+// 상태: each pinned script's box from the latest message that drew one. A reply still being written is passed
+// over, since half a box would show; so is a box its script left empty, as bots do on older messages.
+export function besideBoxes(shown: Display, messages: Shown[], beside: readonly number[]): { script: number; html: string | null }[] {
+  return beside.map((script) => {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      if (messages[index]!.live !== null) continue;
+      const box = shown.boxes[index]!.find((each) => each.script === script);
+      if (box?.html.trim()) return { script, html: box.html };
+    }
+    return { script, html: null };
+  });
+}
 
 // What a translation in this chat is made from: one of messages, or the user's message after them.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {

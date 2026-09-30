@@ -15,7 +15,7 @@ describe('applyScripts', () => {
     expect(apply([script('a', 'b', { flags: 'iz' })], 'AaA').text).toBe('baA');
     expect(apply([script('a', 'b', { flags: '<no_end_nl>' })], 'aa').text).toBe('bb');
     // No valid letter means no flags, not Risu's `u`, under which `\-` does not compile.
-    expect(apply([script('\\-', '+', { flags: 'z' })], 'a-b-')).toEqual({ text: 'a+b-', skipped: [] });
+    expect(apply([script('\\-', '+', { flags: 'z' })], 'a-b-')).toMatchObject({ text: 'a+b-', skipped: [] });
   });
 
   it('stable-sorts by <order N>, highest first, with scripts that have none at 0', () => {
@@ -40,7 +40,7 @@ describe('applyScripts', () => {
 
   it('skips a script whose pattern is empty, also after CBS', () => {
     const blank = (text: string) => text.replaceAll('{{unset}}', '');
-    expect(apply([script('', 'X'), script('{{unset}}', 'X', { flags: '<cbs>' })], 'ab', { cbs: blank })).toEqual({ text: 'ab', skipped: [] });
+    expect(apply([script('', 'X'), script('{{unset}}', 'X', { flags: '<cbs>' })], 'ab', { cbs: blank })).toMatchObject({ text: 'ab', skipped: [] });
   });
 
   it('keeps no result cache, so a random tag in a replacement rolls on each call (design §5 row 11)', () => {
@@ -77,13 +77,34 @@ describe('applyScripts', () => {
     expect(apply([script('\\[\\w\\]', 'kept?', { flags: '<inject>' })], 'a [x] b [y]').text).toBe('a  b ');
   });
 
+  it('takes a pinned box out of the text, runs the later scripts over it too, and says which scripts drew a box', () => {
+    const scripts = [
+      script('\\[hp=(\\d+)\\]', '<div class="status">HP $1 <img src="face"></div>', { flags: '<order 1>' }),
+      script('<img src="(\\w+)">', '<img src="pic:$1">'),
+      script('hi', '<span>hi</span>'),
+    ];
+    const kept = apply(scripts, 'hi [hp=3]');
+    expect(kept.drawn).toEqual([0, 1]);
+    expect(kept.boxes).toEqual([]);
+    const taken = apply(scripts, 'hi [hp=3]', { take: new Set([0]) });
+    expect(taken.text).toBe('<span>hi</span>\n ');
+    expect(taken.boxes).toEqual([{ script: 0, html: '<div class="status">HP 3 <img src="pic:face">\n</div>\n' }]);
+    expect(taken.drawn).toEqual([0]);
+  });
+
+  it('takes a block a script moves as its box', () => {
+    const scripts = [script('\\[hp=(\\d+)\\]', '@@move_top <div>HP $1</div>')];
+    expect(apply(scripts, 'hi [hp=3]').drawn).toEqual([0]);
+    expect(apply(scripts, 'hi [hp=3]', { take: new Set([0]) })).toMatchObject({ text: 'hi ', boxes: [{ script: 0, html: '<div>HP 3</div>\n' }] });
+  });
+
   it('skips a script with an invalid pattern and says why, and runs the rest', () => {
     const scripts = [script('(', 'x'), script('a', 'b')];
-    expect(apply(scripts, 'a(')).toEqual({ text: 'b(', skipped: [{ script: scripts[0], reason: { kind: 'invalid', detail: expect.stringContaining('Invalid regular expression') } }] });
+    expect(apply(scripts, 'a(')).toMatchObject({ text: 'b(', skipped: [{ script: scripts[0], reason: { kind: 'invalid', detail: expect.stringContaining('Invalid regular expression') } }] });
   });
 
   it('skips an emotion script, since emotion images are not supported, and leaves the text', () => {
     const scripts = [script('a', '@@emo happy')];
-    expect(apply(scripts, 'a')).toEqual({ text: 'a', skipped: [{ script: scripts[0], reason: { kind: 'emotion' } }] });
+    expect(apply(scripts, 'a')).toMatchObject({ text: 'a', skipped: [{ script: scripts[0], reason: { kind: 'emotion' } }] });
   });
 });

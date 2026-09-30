@@ -21,6 +21,9 @@ export type Character = {
   translate?: TranslateSwitches;
   // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
   decor?: boolean;
+  // 옆에 고정: the display scripts, by place in card.regex, whose boxes show in 상태 beside the story instead of in the
+  // messages. Only an import writes card.regex; an editor that reorders it must move these along.
+  beside?: number[];
 };
 export type LoreFolder = { id: string; name: string };
 

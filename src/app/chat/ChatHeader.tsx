@@ -1,4 +1,4 @@
-import { GitBranch, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
+import { GitBranch, MessageSquare, MoreHorizontal, PanelRight, Pencil, Pin, Plus, SlidersHorizontal } from 'lucide-react';
 import { branchTree } from '../../model/chat';
 import { NameDialog } from '../common/NameDialog';
 import { ago } from '../common/time';
@@ -47,7 +47,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
 }
 
 export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
-  const { item, route, toggles, panel, modelMenu, actions } = chat;
+  const { item, route, toggles, status, panel, modelMenu, actions } = chat;
   const wide = useWide();
   const label = 'kind' in route ? '모델 고르기' : route.model.name;
   const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
@@ -64,6 +64,7 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
         expanded={panel?.kind === 'toggles'}
         onClick={() => (panel?.kind === 'toggles' ? actions.closePanel() : actions.showToggles())}
       />
+      {status.length > 0 && <ToolButton icon={Pin} label="상태" phone="icon" expanded={panel?.kind === 'status'} onClick={actions.toggleStatus} />}
       {/* A phone's header has no room left beside the chat's title, so there 읽기 설정 opens from ⋯. */}
       {wide && <ReadingMenu reading={reading} />}
       {/* A phone opens 정보 from a tapped message's tools. */}

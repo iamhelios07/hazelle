@@ -9,7 +9,7 @@ import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, decor, translating, awaited, sendLanguage, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, decor, offered, translating, awaited, sendLanguage, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, branching, modelMenu, actions } = chat;
   const { chatById } = useViews();
   const origin = item?.chat.origin;
   const character = card && { name: card.nickname || card.name, image: shelf!.face };
@@ -42,6 +42,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         message={message}
         text={texts[index]!}
         decor={decor}
+        offered={offered[index]!}
         translating={translating}
         awaited={awaited === shown(message).id}
         sendLanguage={sendLanguage}

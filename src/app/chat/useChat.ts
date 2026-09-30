@@ -6,7 +6,7 @@ import { shown, type Chat, type ChatItem, type TranslateSwitches } from '../../m
 import type { CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { resetToggles, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
+import { resetToggles, setBeside, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import {
   branchChat,
   editMessage,
@@ -25,14 +25,14 @@ import { chatPrompt } from '../../runtime/prompts';
 import { withTurn, type Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
-import { blocked, displayChat, takeTurn, togglesOf, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { besideBoxes, blocked, displayChat, takeTurn, togglesOf, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useAssetUrl, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, useViewport } from '../ui';
+import { useMenuHandle, usePanelCovers, useViewport } from '../ui';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
@@ -92,9 +92,16 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   // withTurn copies every message, so the greeting is the copy the screen holds, or no press on it matches.
   const opening = unstarted && messages[0]!;
   const [width, height] = useViewport().split('x').map(Number);
-  const { texts, css } = displayChat(session, chatId, chat, messages, { width: width!, height: height! });
+  const view = displayChat(session, chatId, chat, messages, { width: width!, height: height! });
+  const { texts, css } = view;
   // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
   const bot = shelf?.character.decor !== false;
+  // 옆에 고정 (design §6.4): the boxes shown in 상태, and each message's others, which it offers.
+  const beside = bot ? (shelf?.character.beside ?? []) : [];
+  const scriptName = (script: number) => card?.regex[script]?.name.trim() || `표시 스크립트 ${script + 1}`;
+  const status = besideBoxes(view, messages, beside).map((box) => ({ ...box, name: scriptName(box.script) }));
+  const offered = view.drawn.map((scripts) => (bot ? scripts.filter((script) => !beside.includes(script)).map((script) => ({ script, name: scriptName(script) })) : []));
+  const covers = usePanelCovers();
   const url = useAssetUrl();
   const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
@@ -109,8 +116,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
-  // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
+  // 정보, 토글, 상태 and the persona and prompt lists take the same place beside the story, so one closes another.
+  // Where that place is beside the story, 상태 holds it while nothing else does.
+  const settled = (): { kind: 'status' } | null => (beside.length && !covers ? { kind: 'status' } : null);
+  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | { kind: 'status' } | Side | null>(settled);
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
   // The versions shown the other way round from their default, the original in place of the translation.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -302,6 +311,20 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     toast.show(`토글 ${count}개를 처음 값으로 되돌렸어요`);
   }
 
+  function pinBox(script: number) {
+    if (!chat.character) return;
+    void track(setBeside(store, chat.character, script, true)).then((saved) => (saved.ok ? setPanel({ kind: 'status' }) : toast.failed(saved)));
+  }
+
+  async function unpinBox(script: number) {
+    const character = chat.character;
+    if (!character) return;
+    const saved = await track(setBeside(store, character, script, false));
+    if (!saved.ok) return toast.failed(saved);
+    if (beside.length === 1) setPanel(null);
+    toast.undoable('옆에 고정을 풀었어요', () => void setBeside(store, character, script, true));
+  }
+
   async function rename(name: string) {
     if (!id) return;
     const saved = await renameChat(store, id, name);
@@ -323,6 +346,8 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     messages,
     texts,
     decor: { bot, css: bot ? resolveAssets(css, url) : '', url },
+    status,
+    offered,
     translate,
     sendLanguage,
     translation,
@@ -373,7 +398,10 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.
       toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
-      closePanel: () => setPanel(null),
+      closePanel: () => setPanel((current) => (current?.kind === 'status' ? null : settled())),
+      toggleStatus: () => setPanel((current) => (current?.kind === 'status' ? null : { kind: 'status' })),
+      pinBox,
+      unpinBox: (script: number) => void unpinBox(script),
       openDialog: (which: 'rename' | 'reading') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,

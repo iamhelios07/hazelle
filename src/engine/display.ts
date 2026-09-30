@@ -1,27 +1,31 @@
 import MarkdownIt, { type StateCore, type Token } from 'markdown-it';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate } from './cbs/evaluate';
+import type { Box } from './regex/scripts';
 import { contexts, renderChat, type ChatScope } from './render';
 
 // texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the card's
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
-export type Display = { texts: string[]; css: string };
+// drawn: the display scripts, by place in the card's regex, that drew a box in each message; boxes: each message's
+// boxes taken out of it (옆에 고정), their <style> blocks in css too.
+export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][] };
 
 // A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
 const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 
-export function display(scope: ChatScope): Display {
-  const { texts, variables } = renderChat('display', scope);
+export function display(scope: ChatScope, take: ReadonlySet<number> = new Set()): Display {
+  const { texts, variables, drawn, boxes } = renderChat('display', scope, take);
   const blocks: string[] = [];
-  const take = (text: string) =>
+  const strip = (text: string) =>
     text.replace(STYLE, (_, css: string) => {
       blocks.push(css);
       return '';
     });
   // Read with the variables as the last message left them, as Risu reads it with the chat's current ones.
-  if (scope.card?.background) take(unescapeCbs(evaluate(scope.card.background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
-  const shown = texts.map(take);
-  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n') };
+  if (scope.card?.background) strip(unescapeCbs(evaluate(scope.card.background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
+  const shown = texts.map(strip);
+  const taken = boxes.map((list) => list.map((box) => ({ ...box, html: strip(box.html) })));
+  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n'), drawn, boxes: taken };
 }
 
 // Markdown as Risu parses it (markdown-it, soft breaks kept, no indented code), so a bot's HTML blocks and the prose

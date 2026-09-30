@@ -11,6 +11,7 @@ import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
 import { useReading } from './ChatReading';
+import { ChatStatus } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useChat, type Side } from './useChat';
 
@@ -48,6 +49,8 @@ export function ChatScreen({ item, shelf, back, side }: Props) {
             <ChatInfo chat={id} messages={messages} id={panel.id} onShow={actions.info} onClose={actions.closePanel} />
           ) : panel?.kind === 'toggles' ? (
             <ChatToggles chat={chat} />
+          ) : panel?.kind === 'status' ? (
+            <ChatStatus chat={chat} />
           ) : (
             panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           )
