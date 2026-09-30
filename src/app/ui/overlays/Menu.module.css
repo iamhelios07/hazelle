@@ -20,6 +20,11 @@
   translate: var(--nudge, 0) 0;
 }
 
+/* A menu longer than its height scrolls; its rows keep their own height instead of squeezing into it. */
+.menu > * {
+  flex-shrink: 0;
+}
+
 .md {
   width: var(--menu-width);
 }
