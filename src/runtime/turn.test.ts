@@ -68,7 +68,7 @@ describe('a new chat', () => {
         {
           chat: { title: null, character: character.ok ? character.data.id : null, models: {} },
           greetings: { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0, translations: new Map() },
-          started: () => (preview = session.views().chatById.get(chat)?.preview),
+          started: () => (preview = session.read.chat(chat).snapshot()?.preview),
         },
       );
       expect(session.talk.snapshot()).toMatchObject({ chat, said: { text: '안녕' } });

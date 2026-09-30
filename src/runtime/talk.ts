@@ -35,14 +35,28 @@ export type Sent = { request: Reply['request']; prompt: Assembled };
 // but not saved; saveAgain(reply) tries it again.
 export type TalkFailure = RouteFailure | { kind: 'unsent'; failure: ApiFailure } | { kind: 'unsaved'; reply: string; failure: ApiFailure };
 
+const saidMessages = new WeakMap<Said, Shown>();
+const rested = new WeakMap<Message, Shown>();
+const resting = (message: Message): Shown => {
+  if ('live' in message) return message as Shown;
+  let held = rested.get(message);
+  if (!held) { held = { ...message, live: null }; rested.set(message, held); }
+  return held;
+};
+
 // The chat's messages with the turn laid over them, until its entries are saved.
 export function withTurn(messages: Message[], turn: Turn | null, chat: string): Shown[] {
-  const out = messages.map((message) => ({ ...message, live: null as string | null }));
+  const out = messages.map((message) => resting(message));
   if (turn?.chat !== chat) return out;
   const { said, reply } = turn;
   const now = Date.now();
   if (said && !out.some((message) => message.id === said.id)) {
-    out.push({ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now, ...(said.translation && { translation: said.translation }) }], selected: 0, live: null });
+    let message = saidMessages.get(said);
+    if (!message) {
+      message = { id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now, ...(said.translation && { translation: said.translation }) }], selected: 0, live: null };
+      saidMessages.set(said, message);
+    }
+    out.push(message);
   }
   const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now };
   if (reply.message === null) {

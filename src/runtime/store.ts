@@ -7,6 +7,12 @@ import { orderOwned } from './removal';
 
 type Api = typeof realApi;
 type Change = { id: string; kind: string; parent: string | null; rev: number; body: string | null };
+export type StoreChange = { kind: string; id: string; parent: string | null };
+export type StoreRead = { kind: Kind; id: string } | { kind: Kind; list: true } | { kind: Kind; parent: string };
+
+export const readsChanged = (reads: StoreRead[], changes: readonly StoreChange[]) =>
+  reads.some((read) => changes.some((change) => read.kind === change.kind && ('list' in read || ('id' in read ? read.id === change.id : read.parent === change.parent))));
+
 type Limits = { items: number; bytes: number; body: number };
 type Page = { changes: Change[]; cursor: number; more: boolean; limits: Limits };
 type ObjectValue = Omit<Stored<Kind>, 'rev'>;
@@ -28,11 +34,12 @@ export class ObjectStore {
   private readonly live = new Map<string, Held>();
   private readonly deleted = new Map<string, number>();
   private readonly byParent = new Map<string, Set<string>>();
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<(changes: readonly StoreChange[]) => void>();
+  private readonly changes: StoreChange[] = [];
+  private reading: StoreRead[] | null = null;
   private cursor = 0;
   private limits: Limits | null = null;
   private pulling: Promise<ApiFailure | null> | null = null;
-  private version = 0;
 
   private constructor(
     private readonly accountId: string,
@@ -44,23 +51,37 @@ export class ObjectStore {
     return new ObjectStore(accountId, await objectKey(vaultKey), request);
   }
 
-  readonly subscribe = (listener: () => void) => {
+  readonly subscribe = (listener: (changes: readonly StoreChange[]) => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
 
-  readonly snapshot = () => this.version;
+  // Capture is synchronous: every missing read counts too, so a later create invalidates it.
+  capture<T>(read: () => T): { value: T; reads: StoreRead[] } {
+    const previous = this.reading;
+    const reads: StoreRead[] = [];
+    this.reading = reads;
+    try {
+      return { value: read(), reads };
+    } finally {
+      this.reading = previous;
+      previous?.push(...reads);
+    }
+  }
 
   get<K extends Kind>(kind: K, id: string): Stored<K> | null {
+    this.reading?.push({ kind, id });
     const held = this.live.get(id);
     return held && held.kind === kind && held.value !== undefined ? (held as Stored<K>) : null;
   }
 
   list<K extends Kind>(kind: K): Stored<K>[] {
+    this.reading?.push({ kind, list: true });
     return [...this.live.values()].filter((held): held is Stored<K> => held.kind === kind && held.value !== undefined);
   }
 
   children<K extends Kind>(kind: K, parent: string): Stored<K>[] {
+    this.reading?.push({ kind, parent });
     return [...(this.byParent.get(parent) ?? [])].flatMap((id) => this.get(kind, id) ?? []);
   }
 
@@ -211,7 +232,7 @@ export class ObjectStore {
             if (!ready.pending) continue;
             const { id, kind, parent, value } = ready.pending;
             const rev = answer.data.revs[index++]!;
-            if (value === undefined) this.drop(id, rev);
+            if (value === undefined) this.drop(id, rev, { kind, id, parent });
             else {
               ready.held = { id, kind, parent, value, rev };
               this.hold(ready.held);
@@ -252,12 +273,15 @@ export class ObjectStore {
   }
 
   private async apply({ id, kind, parent, rev, body }: Change) {
-    if (body === null) return this.drop(id, rev);
+    if (body === null) return this.drop(id, rev, { kind, id, parent });
     this.hold({ id, kind, parent, rev, value: await openObject(this.key, this.accountId, { id, kind, parent }, body) });
   }
 
   private hold(object: Held) {
     if (this.stale(object.id, object.rev)) return;
+    const previous = this.live.get(object.id);
+    if (previous && (previous.kind !== object.kind || previous.parent !== object.parent)) this.changes.push({ kind: previous.kind, id: previous.id, parent: previous.parent });
+    this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });
     this.forget(object.id);
     this.deleted.delete(object.id);
     this.live.set(object.id, object);
@@ -267,8 +291,10 @@ export class ObjectStore {
     else this.byParent.set(object.parent, new Set([object.id]));
   }
 
-  private drop(id: string, rev: number) {
+  private drop(id: string, rev: number, change: StoreChange) {
     if (this.stale(id, rev)) return;
+    const previous = this.live.get(id);
+    this.changes.push(previous ? { kind: previous.kind, id, parent: previous.parent } : change);
     this.forget(id);
     this.deleted.set(id, rev);
   }
@@ -287,8 +313,9 @@ export class ObjectStore {
   }
 
   private changed() {
-    this.version++;
-    for (const listener of this.listeners) listener();
+    if (!this.changes.length) return;
+    const changes = this.changes.splice(0);
+    for (const listener of this.listeners) listener(changes);
   }
 }
 

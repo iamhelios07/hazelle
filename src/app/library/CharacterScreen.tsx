@@ -1,7 +1,7 @@
 import { Copy, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
-import type { ChatItem } from '../../model/chat';
+import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { aliased } from '../common/alias';
 import { describeUnused } from '../common/unused';
@@ -12,7 +12,7 @@ import { Button, Callout, Intro, NavBar, Portrait, Row, Screen, Section, Story, 
 import { useCharacterActions } from './useCharacterActions';
 
 // A character's own page beside its chats, or with shelf null, 캐릭터 없이.
-export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatItem> | null; back: Back | null }) {
+export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatSummary> | null; back: Back | null }) {
   const id = shelf?.id ?? null;
   const original = useCharacter(shelf?.character.origin?.id ?? null);
   const { busy, copy, remove } = useCharacterActions();

@@ -1,5 +1,5 @@
 import { Import, LayoutGrid, Settings } from 'lucide-react';
-import type { ChatItem } from '../../../model/chat';
+import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { useImport } from '../../library/ImportFlow';
 import { ShelfFace, shelfName } from '../../library/shelf';
@@ -10,10 +10,10 @@ import { HOME } from '../routes';
 import { settingsEntry } from '../settings/SettingsNav';
 
 type Props = {
-  shelves: Shelf<ChatItem>[];
-  current: Shelf<ChatItem> | undefined;
-  typing: (shelf: Shelf<ChatItem>) => boolean;
-  onEnter: (shelf: Shelf<ChatItem>) => void;
+  shelves: Shelf<ChatSummary>[];
+  current: Shelf<ChatSummary> | undefined;
+  typing: (shelf: Shelf<ChatSummary>) => boolean;
+  onEnter: (shelf: Shelf<ChatSummary>) => void;
   onExpand: () => void;
 };
 

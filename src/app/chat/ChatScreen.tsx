@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ChatItem } from '../../model/chat';
+import type { ChatItem, ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -23,7 +23,7 @@ type Props = {
   // null for a new chat, which is saved with its first message.
   item: ChatItem | null;
   // The chat's character, or null for 캐릭터 없이.
-  shelf: CharacterShelf<ChatItem> | null;
+  shelf: CharacterShelf<ChatSummary> | null;
   back: Back | null;
   side: (at: SideAt) => ReactNode;
 };

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
-import { shown, type Chat, type ChatItem, type TranslateSwitches } from '../../model/chat';
+import { shown, type Chat, type ChatItem, type ChatSummary, type TranslateSwitches } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
@@ -22,14 +22,14 @@ import {
 } from '../../runtime/chat-log';
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
-import { withTurn, type Shown } from '../../runtime/talk';
+import type { Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
-import { blocked, displayChat, takeTurn, togglesOf, statusBoxes, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, takeTurn, togglesOf, statusBoxes, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
-import { useAssetUrl, useSession, useTranslating, useTurn } from '../session';
+import { useAssetUrl, useChatDisplay, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, useViewport } from '../ui';
@@ -53,7 +53,7 @@ export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; 
 export type ChatActions = OpenChat['actions'];
 
 // item null is a new chat, saved with its first message; shelf null is 캐릭터 없이.
-export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> | null) {
+export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null) {
   const session = useSession();
   const { store, talk, translator } = session;
   const turn = useTurn();
@@ -65,7 +65,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const chatId = id ?? newId;
   // A new chat's own model, prompt, persona and note, saved with it on the first send.
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
-  const chat: Chat = item?.chat ?? { title: null, character: shelf?.id ?? null, ...unsaved };
+  const chat: Chat = useMemo(() => item ? item.chat : { title: null, character: shelf?.id ?? null, ...unsaved }, [item?.chat, shelf?.id, unsaved]);
   const route = chatModel(store, chat, 'main');
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
@@ -77,7 +77,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const greetings = card?.greetings.filter((text) => text.trim()) ?? [];
   // The ids the greetings are saved under, so their random tags roll the same before and after the first send.
   const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
-  const unstarted: Shown | null =
+  const unstarted: Shown | null = useMemo(() =>
     item === null && card && greetings.length > 0
       ? {
           id: 'opening',
@@ -87,13 +87,12 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
           selected: greeting,
           live: null,
         }
-      : null;
+      : null, [item === null, card, openedAt, openingIds, greeting]);
   // A new chat shows its turn while it is saved, under the id it is saved as.
-  const messages: Shown[] = withTurn(item?.messages ?? (unstarted ? [unstarted] : []), turn, chatId);
-  // withTurn copies every message, so the greeting is the copy the screen holds, or no press on it matches.
-  const opening = unstarted && messages[0]!;
+  const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
-  const view = displayChat(session, chatId, chat, messages, { width: width!, height: height! });
+  const { messages, display: view } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
+  const opening = unstarted && messages[0]!;
   const { texts, css } = view;
   // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
   const bot = shelf?.character.decor !== false;
@@ -145,7 +144,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateLatest's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
   useEffect(() => {
-    translateLatest(session, chatId, id === null ? { chat, messages: unstarted ? [unstarted] : [] } : undefined);
+    translateLatest(session, chatId, id === null ? { chat, messages: openingMessages, display: view } : undefined);
   }, [item, turn, translating, translate.replies, greeting]);
 
   // A reply starting here while 정보 is open shows its own information.

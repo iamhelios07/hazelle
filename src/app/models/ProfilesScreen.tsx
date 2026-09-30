@@ -1,5 +1,5 @@
 import { modelProfile, profileUsers } from '../../runtime/profiles';
-import { useStore, useViews } from '../session';
+import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import { noStarred, PAGES } from '../common/words';
 import type { Back } from '../shell/routes';
@@ -11,7 +11,9 @@ import { defaultFirst, valueWords } from './settingWords';
 export function ProfilesScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const route = useRoute();
-  const { profiles, connections, settings } = useViews();
+  const profiles = useProfiles();
+  const connections = useConnections();
+  const settings = useSettings();
 
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
   const sorted = defaultFirst(profiles, settings.profile);

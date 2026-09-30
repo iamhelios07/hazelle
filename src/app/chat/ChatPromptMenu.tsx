@@ -2,7 +2,7 @@ import { FileText } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, ofSort } from '../../runtime/prompts';
 import { follows } from '../common/words';
-import { useChats, useSession, useSettings, useViews } from '../session';
+import { useChats, useSession, useSettings, usePrompts } from '../session';
 import { useToast } from '../toast';
 import { ChipButton, Divider, Icon, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
@@ -32,7 +32,7 @@ export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
 function PromptChoices({ chat }: { chat: OpenChat }) {
   const { prompt, actions } = chat;
   const { store } = useSession();
-  const prompts = useViews().prompts.filter((each) => ofSort(each, 'conversation'));
+  const prompts = usePrompts().filter((each) => ofSort(each, 'conversation'));
   const chats = useChats();
   const settings = useSettings();
   const toast = useToast();

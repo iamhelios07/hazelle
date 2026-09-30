@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ChatItem } from '../../model/chat';
+import type { ChatSummary } from '../../model/chat';
 import { KEEP_DAYS, type CharacterShelf } from '../../model/library';
 import { copyCharacter, purgeCharacter, setDeleted } from '../../runtime/characters';
 import { useStore } from '../session';
@@ -8,7 +8,7 @@ import { useToast } from '../toast';
 import { describeStep } from './saving';
 import { withChats } from './shelf';
 
-type Shelf = CharacterShelf<ChatItem>;
+type Shelf = CharacterShelf<ChatSummary>;
 export type CharacterActions = ReturnType<typeof useCharacterActions>;
 
 // 사본 만들기, 지우기, 되살리기 and 지금 지우기, from the character page and from 캐릭터 둘러보기. busy is

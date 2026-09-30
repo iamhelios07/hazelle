@@ -6,7 +6,7 @@ import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import type { Frame } from '../common/frame';
 import { noResults } from '../common/search';
 import { ago } from '../common/time';
-import { useStore, useViews } from '../session';
+import { usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { PAGES } from '../common/words';
 import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles } from '../ui';
@@ -30,7 +30,8 @@ type Props = {
 export function PromptList({ onPick, inUse, frame }: Props) {
   const store = useStore();
   const toast = useToast();
-  const { prompts, settings } = useViews();
+  const prompts = usePrompts();
+  const settings = useSettings();
   const uses = usePromptUse();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());

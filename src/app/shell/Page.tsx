@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ChatItem } from '../../model/chat';
+import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { ChatScreen, type SideAt } from '../chat/ChatScreen';
 import { Missing, type Absent } from '../common/Missing';
@@ -20,7 +20,7 @@ import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
-import { useViews } from '../session';
+import { useChatModel, useChats, useConnections, useLibrary, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { DefaultsScreen } from '../settings/DefaultsScreen';
 import { Empty, ListDetail, useSplit, useWide } from '../ui';
@@ -41,7 +41,14 @@ const EMPTY = {
 // The chat, character or connection a route names is looked up here, so each screen is given what it
 // shows, and Missing stands in when that is not there.
 export function Page({ route, closeSettings }: { route: Route; closeSettings: () => void }) {
-  const { chatById, characterById, library, connections, prompts, personas, profiles } = useViews();
+  const chatById = new Map(useChats().map((item) => [item.id, item]));
+  const library = useLibrary();
+  const characterById = new Map(library.characters.map((shelf) => [shelf.id, shelf]));
+  const connections = useConnections();
+  const prompts = usePrompts();
+  const personas = usePersonas();
+  const profiles = useProfiles();
+  const chatModel = useChatModel(route.kind === 'chat' ? route.id : null);
   const wide = useWide();
   const split = useSplit();
 
@@ -49,7 +56,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   // On wide screens the sidebar beside the library's pages, or 설정's, is their way back.
   const sideBack = (at: Below) => (wide ? null : back(at));
   const missing = (at: Route, what: Absent) => <Missing what={what} back={backTo(upFromMissing(at), wide)} />;
-  const withCharacter = (at: Route, id: string, show: (shelf: CharacterShelf<ChatItem>) => ReactNode) => {
+  const withCharacter = (at: Route, id: string, show: (shelf: CharacterShelf<ChatSummary>) => ReactNode) => {
     const shelf = characterById.get(id);
     if (shelf) return show(shelf);
     return missing(at, library.deleted.some((candidate) => candidate.id === id) ? 'deleted-character' : 'character');
@@ -72,7 +79,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         if (at.character === null) return <ChatScreen key="new" item={null} shelf={null} back={sideBack(at)} side={side} />;
         return withCharacter(at, at.character, (shelf) => <ChatScreen key={`new-${shelf.id}`} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
       case 'chat': {
-        const item = chatById.get(at.id);
+        const item = chatModel;
         if (!item) return missing(at, 'chat');
         const { character } = item.chat;
         const shelf = character === null ? null : characterById.get(character);

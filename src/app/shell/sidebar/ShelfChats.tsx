@@ -1,5 +1,5 @@
 import { ChevronLeft, Plus } from 'lucide-react';
-import type { ChatItem } from '../../../model/chat';
+import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
@@ -15,9 +15,9 @@ const STRIP = 5;
 type Props = {
   page: boolean;
   onCollapse: (() => void) | undefined;
-  shelf: Shelf<ChatItem>;
-  typing: (shelf: Shelf<ChatItem>) => boolean;
-  onEnter: (shelf: Shelf<ChatItem>) => void;
+  shelf: Shelf<ChatSummary>;
+  typing: (shelf: Shelf<ChatSummary>) => boolean;
+  onEnter: (shelf: Shelf<ChatSummary>) => void;
   onUp: () => void;
 };
 

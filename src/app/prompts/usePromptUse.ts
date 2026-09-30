@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
 import { chatPrompt } from '../../runtime/prompts';
-import { useStore, useViews } from '../session';
+import { useChats, usePrompts, useSettings, useStore } from '../session';
 
 // How many chats use each prompt, their own or the default, and when one of them was last written to.
 export type PromptUse = { chats: number; at: number | null };
 
 export function usePromptUse(): ReadonlyMap<string, PromptUse> {
   const store = useStore();
-  const { chats, settings } = useViews();
+  const chats = useChats();
+  const prompts = usePrompts();
+  const settings = useSettings();
   return useMemo(() => {
     const uses = new Map<string, PromptUse>();
     for (const item of chats) {
@@ -19,7 +21,7 @@ export function usePromptUse(): ReadonlyMap<string, PromptUse> {
     }
     return uses;
     // settings: the default prompt, which chats without their own follow.
-  }, [store, chats, settings]);
+  }, [store, chats, settings, prompts]);
 }
 
 export const EMPTY_USE: PromptUse = { chats: 0, at: null };

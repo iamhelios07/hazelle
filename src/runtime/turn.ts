@@ -8,7 +8,7 @@ import { display, type Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
-import { fold, shown, type Chat, type Message } from '../model/chat';
+import { shown, type Chat, type Message } from '../model/chat';
 import type { Toggle } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
@@ -158,17 +158,17 @@ export function translationInput(reader: Reader, id: string, chat: Chat, message
   return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
 }
 
-export function translateLatest(session: Pick<Session, 'store' | 'talk' | 'translator'>, id: string, opening?: { chat: Chat; messages: Message[] }) {
-  const stored = session.store.get('chat', id);
-  const chat = stored?.value ?? opening?.chat;
+export function translateLatest(session: Pick<Session, 'store' | 'read' | 'talk' | 'translator'>, id: string, opening?: { chat: Chat; messages: Message[]; display: Display }) {
+  const view = session.read.displayed(id) ?? opening;
+  const chat = view?.chat;
   if (!chat || !translateSwitches(session.store, chat.character).replies) return;
-  const messages = withTurn(stored ? fold(session.store.children('entry', id)) : opening!.messages, session.talk.snapshot(), id);
+  const messages = withTurn(view!.messages, session.talk.snapshot(), id);
   const last = messages.at(-1);
   if (!last || last.role !== 'assistant' || last.live !== null) return;
   const version = shown(last);
   const { live, held, failed } = session.translator.snapshot();
   if (version.receipt?.state === 'failed' || version.translation || live.has(version.id) || held.has(version.id) || failed.has(version.id)) return;
-  if (!displayChat(session, id, chat, messages).texts.at(-1)!.trim()) return;
+  if (!view!.display.texts.at(-1)!.trim()) return;
   session.translator.translate(id, version.id, translationInput(session, id, chat, messages, { kind: 'message', index: messages.length - 1 }));
 }
 
@@ -201,7 +201,7 @@ function gatherTurn(session: Session, chat: string, target: Target, ids = { said
   if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
   const { settings } = profile.profile.value;
 
-  const messages = fold(session.store.children('entry', chat));
+  const messages = session.read.chat(chat).snapshot()!.messages;
   const message = 'message' in target ? target.message : null;
   const at = message === null ? messages.length : messages.findIndex((candidate) => candidate.id === message);
   if (at === -1) return null;
@@ -271,7 +271,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
 // what the user typed as its translation. The chat's messages before it are the translation's context.
 async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
   const typed = turn.said!;
-  const messages = fold(session.store.children('entry', chat));
+  const messages = session.read.chat(chat).snapshot()!.messages;
   const made = await translate(session, translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text }), signal, () => {});
   if (!made.ok) return { kind: 'untranslated', failure: made.failure };
   const sent = made.translation.text;

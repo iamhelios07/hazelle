@@ -74,10 +74,11 @@ describe('Translator', () => {
       const version = crypto.randomUUID();
       const messages: Message[] = [{ id: version, role: 'assistant', at: 0, selected: 0, versions: [{ id: version, seed: version, text: 'Hello', receipt: null, edited: false, at: 0 }] }];
       const log = stubRelay(() => saying('안녕'));
-      translateLatest(session, chat, { chat: opened, messages });
+      const display = session.read.screen(chat, session.talk, { chat: opened, messages }).snapshot().display;
+      translateLatest(session, chat, { chat: opened, messages, display });
       await vi.waitFor(() => expect(session.translator.snapshot().held.get(version)?.text).toBe('안녕'));
       expect(session.store.children('entry', chat)).toEqual([]);
-      translateLatest(session, chat, { chat: opened, messages });
+      translateLatest(session, chat, { chat: opened, messages, display });
       expect(log).toHaveLength(1);
       await startChat(session.store, chat, opened, { ids: [version], texts: ['Hello'], selected: 0, translations: session.translator.snapshot().held });
       expect(shown(fold(session.store.children('entry', chat))[0]!).translation?.text).toBe('안녕');

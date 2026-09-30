@@ -1,7 +1,7 @@
 import { UserRound } from 'lucide-react';
 import { aliased } from '../common/alias';
 import { follows } from '../common/words';
-import { useSettings, useViews } from '../session';
+import { usePersonas, useSettings } from '../session';
 import { useToast } from '../toast';
 import { Avatar, ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
@@ -38,7 +38,7 @@ export function ChatPersonaMenu({ chat }: { chat: OpenChat }) {
 // Mounted only while the menu is open.
 function PersonaChoices({ chat }: { chat: OpenChat }) {
   const { persona, actions } = chat;
-  const { personas } = useViews();
+  const personas = usePersonas();
   const settings = useSettings();
   const toast = useToast();
   const choose = (value: string | null) => void actions.setOwn('persona', value).then((saved) => saved.ok || toast.failed(saved));

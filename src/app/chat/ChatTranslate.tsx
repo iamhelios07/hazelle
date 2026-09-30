@@ -4,7 +4,7 @@ import { ofSort, translationPrompt } from '../../runtime/prompts';
 import { describeTranslateFailure } from '../common/failure';
 import { LANGUAGES, languageLabel, withRo } from '../common/languages';
 import { follows, MODEL_ROLES } from '../common/words';
-import { useSession, useSettings, useViews } from '../session';
+import { useSession, useSettings, usePrompts } from '../session';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, Row, SettingRow, Stack, Switch, Tag, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
 
@@ -105,8 +105,8 @@ function PromptMenu({ chat }: { chat: OpenChat }) {
   const { translate, card, actions } = chat;
   const { store } = useSession();
   const settings = useSettings();
-  const prompts = useViews()
-    .prompts.filter((each) => ofSort(each, 'translate'))
+  const prompts = usePrompts()
+    .filter((each) => ofSort(each, 'translate'))
     .sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
   const choice = translationPrompt(store, translate.prompt);
   const fallback = prompts.find(({ id }) => id === settings.translatePrompt);

@@ -6,7 +6,7 @@ import { ofSort, setDefaultPrompt } from '../../runtime/prompts';
 import { aliased } from '../common/alias';
 import { findStarred, RolePicker } from '../common/RolePicker';
 import { AUX_HELP, follows, MODEL_ROLES, PAGES } from '../common/words';
-import { useSettings, useStore, useViews } from '../session';
+import { useConnections, usePersonas, usePrompts, useSettings, useStore } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -23,7 +23,9 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();
   const settings = useSettings();
-  const { prompts: all, personas, connections } = useViews();
+  const all = usePrompts();
+  const personas = usePersonas();
+  const connections = useConnections();
   const prompts = all.filter((each) => ofSort(each, 'conversation'));
 
   const prompt = settings.prompt === undefined ? null : prompts.find(({ id }) => id === settings.prompt);
