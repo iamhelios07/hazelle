@@ -1,10 +1,11 @@
 import { PenLine } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import type { SaveStatus } from '../common/saveQueue';
+import { useAutosave } from '../common/useAutosave';
 import { Button, Menu, Row, Stack, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
 
-// A saved chat's note is written this long after the last key, and at once when the box closes.
-const SAVE_AFTER = 600;
+const SAVE_WORDS: Record<SaveStatus, string> = { saving: '저장 중…', saved: '저장됨', failed: '저장하지 못함' };
 
 // '' is the chat's own choice of no note; following the prompt's default again is a separate choice, never an
 // emptied box.
@@ -37,39 +38,23 @@ function NoteEditor({ chat }: { chat: OpenChat }) {
   const close = useMenuClose();
   const fallback = prompt.kind === 'prompt' ? prompt.prompt.value.authorNote : null;
   const [text, setText] = useState(note ?? fallback ?? '');
-  const [saving, setSaving] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const unsaved = useRef('');
-
-  function flush() {
-    if (timer.current === null) return;
-    clearTimeout(timer.current);
-    timer.current = null;
-    void actions.setOwn('note', unsaved.current).then(() => setSaving(false));
-  }
-  const flushLatest = useRef(flush);
-  flushLatest.current = flush;
-  useEffect(() => () => flushLatest.current(), []);
+  // An unsaved chat holds the note itself until its first send, so only a saved one goes through autosave.
+  const autosave = useAutosave<{ note: string | null }>((patch) => actions.setOwn('note', patch.note as string | null));
 
   function change(value: string) {
     setText(value);
     if (!id) return void actions.setOwn('note', value);
-    unsaved.current = value;
-    setSaving(true);
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, SAVE_AFTER);
+    autosave.change({ note: value });
   }
 
   function follow() {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
-    setSaving(false);
     setText(fallback ?? '');
-    void actions.setOwn('note', null);
+    if (!id) return void actions.setOwn('note', null);
+    void autosave.save({ note: null });
   }
 
-  const own = note !== undefined || saving;
-  const status = !own ? '' : !id ? '첫 메시지와 함께 저장돼요' : saving ? '저장 중…' : '저장됨';
+  const own = 'note' in autosave.unsaved ? autosave.unsaved.note !== null : note !== undefined;
+  const status = !id ? (own ? '첫 메시지와 함께 저장돼요' : '') : own || autosave.status === 'failed' ? SAVE_WORDS[autosave.status ?? 'saved'] : '';
   const state = own
     ? text
       ? '이 채팅만의 노트예요'

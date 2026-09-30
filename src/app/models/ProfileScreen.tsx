@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit, WHOLE, type Cache, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
 import type { Stored } from '../../model/kinds';
-import type { ApiResult } from '../../runtime/api';
 import {
   addProfile,
-  clearProfileSettings,
   profileUsers,
   removeProfile,
   renameProfile,
@@ -13,9 +11,10 @@ import {
   setDefaultProfile,
   setModelProfile,
   setProfileSettings,
+  withSettings,
   type ProfileUser,
 } from '../../runtime/profiles';
-import { PAUSE, SAVE_STATUS, type SaveStatus } from '../common/useAutosave';
+import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -33,6 +32,10 @@ const choiceOf = (reasoning: Reasoning | undefined): Choice => (!reasoning ? 'un
 // A model that uses the 묶음, with what it is sent of it. schema null: this version cannot call it.
 type User = ProfileUser & { schema: SettingsSchema | null; changes: Change[] };
 
+// The name rides in the settings' patch, so one queue orders both writes.
+type Saved = ModelSettings & { name: string };
+const split = ({ name, ...settings }: Partial<Saved>): { name?: string; settings: ModelSettings } => ({ name, settings });
+
 export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; back: Back }) {
   const store = useStore();
   const toast = useToast();
@@ -42,75 +45,33 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   const { id } = stored;
   const isDefault = settings.profile === id;
 
-  // Writes wait for the server, so what they will leave shows at once and the stored copy takes over once none is left.
-  const [local, setLocal] = useState<ModelSettings | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget', string>>>({});
   const [name, setName] = useState(stored.value.name);
-  const [status, setStatus] = useState<SaveStatus | null>(null);
-  const writes = useRef(0);
-  const waiting = useRef<{ settings: ModelSettings; name?: string }>({ settings: {} });
-  const timer = useRef<number | undefined>(undefined);
-  const shown = local ?? stored.value.settings;
-  const latest = useRef(shown);
-  latest.current = shown;
-
-  async function saved<T>(run: Promise<ApiResult<T>>): Promise<ApiResult<T>> {
-    setStatus('saving');
-    writes.current++;
-    const result = await run;
-    writes.current--;
-    if (!result.ok) {
-      setLocal(null);
-      setStatus('failed');
-      toast.failed(result, '저장하지 못했어요.');
-    } else if (writes.current === 0) {
-      setLocal(null);
-      setStatus('saved');
+  const { status, unsaved, change, save, flush } = useAutosave<Saved>(async (patch) => {
+    const { name: renamed, settings: values } = split(patch);
+    if (renamed !== undefined) {
+      const done = await renameProfile(store, id, renamed);
+      if (!done.ok) return done;
     }
-    return result;
-  }
-
-  function set(values: ModelSettings) {
-    const next: ModelSettings = { ...latest.current, ...values };
-    for (const key of Object.keys(next) as (keyof ModelSettings)[]) if (next[key] === undefined) delete next[key];
-    setLocal(next);
-    return saved(setProfileSettings(store, id, values));
-  }
-
-  function flush() {
-    window.clearTimeout(timer.current);
-    const { settings: patch, name: renamed } = waiting.current;
-    waiting.current = { settings: {} };
-    if (Object.keys(patch).length) void set(patch);
-    if (renamed !== undefined) void saved(renameProfile(store, id, renamed));
-  }
-  const leave = useRef(flush);
-  leave.current = flush;
-  useEffect(() => () => leave.current(), []);
-
-  function later() {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(flush, PAUSE);
-  }
+    return Object.keys(values).length ? setProfileSettings(store, id, values) : { ok: true };
+  });
+  // What waits to be saved shows at once, over the stored copy.
+  const shown = withSettings(stored.value.settings, split(unsaved).settings);
+  const set = (values: ModelSettings) => void save(values);
 
   // An invalid draft shows its error and is never saved, and takes back a valid one still waiting; an empty one unsets.
   function type(field: Field | 'budget', draft: string, value: (number: number) => ModelSettings) {
     setDrafts((current) => ({ ...current, [field]: draft }));
     const key = field === 'budget' ? 'reasoning' : field;
-    const rest = { ...waiting.current.settings };
-    delete rest[key];
     const typed = readTyped(draft, whole(field));
-    if (draft.trim() === '' && field !== 'budget') waiting.current.settings = { ...rest, [key]: undefined };
-    else waiting.current.settings = typed.ok ? { ...rest, ...value(typed.value) } : rest;
-    later();
+    if (draft.trim() === '' && field !== 'budget') change({ [key]: undefined });
+    else change(typed.ok ? value(typed.value) : { [key]: undefined }, typed.ok);
   }
 
   function rename(next: string) {
     setName(next);
     // A blank name is never saved; the field shows its placeholder until one is typed.
-    if (next.trim()) waiting.current.name = next.trim();
-    else delete waiting.current.name;
-    later();
+    change({ name: next.trim() }, !!next.trim());
   }
 
   const users: User[] = profileUsers(connections, settings.profile, id).map((user) => {
@@ -166,10 +127,10 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
     const pick = (choice: Choice) => {
       setDrafts((drafted) => ({ ...drafted, budget: undefined }));
-      if (choice === 'budget') return void set({ reasoning: { kind: 'budget', tokens: reasoning?.kind === 'budget' ? reasoning.tokens : BUDGET_START } });
+      if (choice === 'budget') return set({ reasoning: { kind: 'budget', tokens: reasoning?.kind === 'budget' ? reasoning.tokens : BUDGET_START } });
       const next: Reasoning | undefined =
         choice === 'unset' ? undefined : choice === 'off' ? { kind: 'off' } : choice === 'adaptive' ? { kind: 'adaptive', level: null } : { kind: 'level', level: choice.slice('level:'.length) };
-      void set({ reasoning: next });
+      set({ reasoning: next });
     };
     const draft = drafts.budget ?? (reasoning?.kind === 'budget' ? String(reasoning.tokens) : '');
     const typed = reasoning?.kind === 'budget' ? readTyped(draft, true) : null;
@@ -206,7 +167,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           label="캐시"
           options={[{ value: 'off' as const, label: '끔' }, ...(Object.keys(CACHE) as Cache[]).map((value) => ({ value, label: CACHE[value] }))]}
           value={shown.cache ?? 'off'}
-          onChange={(value) => void set({ cache: value === 'off' ? undefined : value })}
+          onChange={(value) => set({ cache: value === 'off' ? undefined : value })}
         />
       }
     />
@@ -219,7 +180,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       help="이 글이 나오면 답장을 거기서 끝내요"
       changed={shown.stop !== undefined}
       note={noteFor('stop')}
-      control={<PhraseField label="멈춤 문구" phrases={shown.stop ?? []} onChange={(next) => void set({ stop: next.length ? next : undefined })} />}
+      control={<PhraseField label="멈춤 문구" phrases={shown.stop ?? []} onChange={(next) => set({ stop: next.length ? next : undefined })} />}
     />
   );
 
@@ -238,7 +199,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
             { value: 'user', label: '사용자 메시지로' },
           ]}
           value={shown.systemAsUser ? 'user' : 'as-is'}
-          onChange={(value) => void set({ systemAsUser: value === 'user' ? true : undefined })}
+          onChange={(value) => set({ systemAsUser: value === 'user' ? true : undefined })}
         />
       }
     />
@@ -253,27 +214,25 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   };
   const others = connections.map((connection) => ({ connection, models: connection.value.starred.filter((model) => !using.has(`${connection.id}/${model.id}`)) })).filter((group) => group.models.length > 0);
   // The default 묶음 is what a model without its own uses, so taking a model onto it clears the model's own.
-  const attach = (connection: string, model: string) => void saved(setModelProfile(store, connection, model, isDefault ? null : id));
+  const attach = (connection: string, model: string) => void setModelProfile(store, connection, model, isDefault ? null : id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
 
   async function copy() {
-    flush();
-    const made = await addProfile(store, { name: `${name.trim() || stored.value.name} 사본`, settings: latest.current });
+    await flush();
+    const made = await addProfile(store, { name: `${name.trim() || stored.value.name} 사본`, settings: shown });
     if (!made.ok) return toast.failed(made, '복제하지 못했어요.');
     navigate({ kind: 'profile', id: made.data.id });
   }
 
   async function clearAll() {
-    window.clearTimeout(timer.current);
-    const previous = { ...latest.current, ...waiting.current.settings };
-    waiting.current.settings = {};
+    const previous = shown;
+    const cleared: ModelSettings = {};
+    for (const key of Object.keys(shown) as (keyof ModelSettings)[]) cleared[key] = undefined;
     setDrafts({});
-    setLocal({});
-    const cleared = await saved(clearProfileSettings(store, id));
-    if (cleared.ok) toast.undoable(`${stored.value.name}의 값을 모두 비웠어요.`, () => void setProfileSettings(store, id, previous));
+    if (await save(cleared)) toast.undoable(`${stored.value.name}의 값을 모두 비웠어요.`, () => void setProfileSettings(store, id, previous));
   }
 
   async function remove() {
-    flush();
+    await flush();
     const removed = await removeProfile(store, id);
     if (!removed.ok) {
       if (removed.error === 'default') return toast.show('기본 설정은 지울 수 없어요. 다른 설정을 기본으로 정한 뒤 지워 주세요.');
@@ -305,7 +264,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           </Text>
         ) : (
           <Row kind="actions">
-            <Button variant="link" size="xs" onClick={() => void saved(setDefaultProfile(store, id))}>
+            <Button variant="link" size="xs" onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}>
               기본 설정으로 정하기
             </Button>
           </Row>

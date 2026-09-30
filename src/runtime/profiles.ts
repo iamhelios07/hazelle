@@ -67,14 +67,13 @@ const updateSettings = (store: ObjectStore, id: string, change: (settings: Model
   store.update('profile', id, (current) => ({ ...current, settings: change(current.settings) }));
 
 // A setting given as undefined is cleared: nothing is sent for it.
-export const setProfileSettings = (store: ObjectStore, id: string, values: ModelSettings) =>
-  updateSettings(store, id, (settings) => {
-    const next = { ...settings, ...values };
-    for (const key of Object.keys(next) as (keyof ModelSettings)[]) if (next[key] === undefined) delete next[key];
-    return next;
-  });
+export function withSettings(settings: ModelSettings, values: ModelSettings): ModelSettings {
+  const next = { ...settings, ...values };
+  for (const key of Object.keys(next) as (keyof ModelSettings)[]) if (next[key] === undefined) delete next[key];
+  return next;
+}
 
-export const clearProfileSettings = (store: ObjectStore, id: string) => updateSettings(store, id, () => ({}));
+export const setProfileSettings = (store: ObjectStore, id: string, values: ModelSettings) => updateSettings(store, id, (settings) => withSettings(settings, values));
 
 // As with prompts, the default goes only once another 묶음 is the default. A model that used a deleted 묶음 reads
 // as missing until it is given another, or the 묶음 comes back with 되돌리기.
