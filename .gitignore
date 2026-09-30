@@ -8,8 +8,9 @@ dist/
 worker-configuration.d.ts
 .vitest/
 *.module.d.css.ts
-.claude/
+.claude/*
+!.claude/skills/
 test-results/
 # Design notes live in their own private repo (jiniill/risu-alpha-docs), cloned here.
 docs/
-shots/
+/shots/

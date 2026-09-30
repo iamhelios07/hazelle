@@ -5,6 +5,17 @@ import { CARD } from './helpers';
 // script signs in instead of signing up. On an empty dev database the first run makes it, with the test card.
 export const SHOTS = { username: 'shots', password: 'shots-password' };
 
+// The layouts worth showing: a side panel sits beside the page from 1280px, covers it below, and the phone layout
+// starts under 960px. Crossing 960px remounts the page (a new chat rolls its greeting again), so set the size before
+// opening what is shown.
+export const SIZES = { wide: { width: 1440, height: 900 }, medium: { width: 1100, height: 800 }, phone: { width: 390, height: 844 } };
+
+// Saved as shots/out/<name>.png once menus and panels have faded in.
+export async function snap(page: Page, name: string) {
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `shots/out/${name}.png` });
+}
+
 export async function enterShots(page: Page) {
   await page.goto('/');
   const signup = page.getByLabel('한 번 더', { exact: true });
