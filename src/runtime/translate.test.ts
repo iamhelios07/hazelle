@@ -34,8 +34,7 @@ describe('Translator', () => {
       const chat = crypto.randomUUID();
       const opened = { title: null, character: null, models: {} };
       await startChat(session.store, chat, opened, null);
-      // A 204 has no body, which the stream decoder cannot read.
-      stubRelay(inTurn([new Response(null, { status: 204, headers: { 'x-relay': 'upstream' } }), saying('안녕')]));
+      vi.spyOn(session.credentials, 'get').mockRejectedValueOnce(new TypeError('lost'));
       const thrown = new Promise((resolve) => process.once('unhandledRejection', resolve));
       const input = translationInput(session, chat, opened, [], { kind: 'input', text: 'Hi' });
 

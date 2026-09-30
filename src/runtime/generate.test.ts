@@ -36,6 +36,11 @@ describe('generate', () => {
     expect(log[0]!.sent).toMatchObject({ url: 'https://openrouter.ai/api/v1/chat/completions', method: 'POST', headers: { authorization: 'Bearer sk-or-x' } });
   });
 
+  it('reads an answer with no body as a stream that ended before its end marker', async () => {
+    stubRelay(() => new Response(null, { status: 204, headers: { 'x-relay': 'upstream' } }));
+    expect((await run()).reply).toMatchObject({ state: 'cut', cut: 'no-terminal', error: null });
+  });
+
   it("tells the provider's refusal, the relay's and the app's apart", async () => {
     answer(401, '{"error":{"message":"No auth credentials found","code":401}}', { 'x-relay': 'upstream' });
     expect((await run()).reply).toMatchObject({ state: 'failed', error: { kind: 'provider', status: 401, detail: 'No auth credentials found' } });

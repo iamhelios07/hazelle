@@ -64,7 +64,9 @@ export async function generate({ credentials, connection, model, settings, messa
   if (!credential.ok) return failed(credential.failure);
   const response = await relay(withCredential(route, request, credential.credential), signal);
   if (!(response instanceof Response)) return failed(response);
-  const outcome = await decodeStream(route, model, response.body!, signal, (phase, text) => {
+  // A 204 carries no body: the same as a stream that closed before anything came.
+  const body = response.body ?? new ReadableStream<Uint8Array>({ start: (controller) => controller.close() });
+  const outcome = await decodeStream(route, model, body, signal, (phase, text) => {
     firstText ??= performance.now();
     onText(phase, text);
   });
