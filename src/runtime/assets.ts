@@ -1,10 +1,13 @@
 import type { Files } from './files';
 import type { ObjectStore } from './store';
 
+const PERMANENT = new Set(['not-found', 'unreadable']);
+
 // Bots' pictures as the chat shows them: each file read, opened and made a blob URL once a session, and let go when
 // the session closes.
 export class AssetUrls {
-  // By file id; null while one is read, and for one that could not be, which is not tried again this session.
+  // By file id; null while one is read, and for one that is gone or does not open, which is not tried again this
+  // session. One that failed on the way is forgotten, so the next draw tries it again.
   private readonly urls = new Map<string, string | null>();
   private readonly listeners = new Set<() => void>();
   private version = 0;
@@ -31,7 +34,11 @@ export class AssetUrls {
     if (!this.urls.has(file.id)) {
       this.urls.set(file.id, null);
       void this.files.read(file).then((read) => {
-        if (!read.ok || this.closed) return;
+        if (this.closed) return;
+        if (!read.ok) {
+          if (!PERMANENT.has(read.error)) this.urls.delete(file.id);
+          return;
+        }
         this.urls.set(file.id, URL.createObjectURL(new Blob([read.data], { type })));
         this.version++;
         for (const listener of this.listeners) listener();

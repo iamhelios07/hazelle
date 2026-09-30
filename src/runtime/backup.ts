@@ -90,7 +90,12 @@ export function readBackup(bytes: Uint8Array): { ok: true; backup: Backup } | Ba
 // backup already wrote, so loading the file again after a stop carries on from there.
 // The backup's copies replace what opening added, and what it added that the backup lacks goes, so the
 // account ends as the backup was.
-export async function restoreBackup(store: ObjectStore, files: Files, backup: Backup, progress: (done: number, total: number) => void): Promise<ApiResult<null> | { ok: false; error: 'not-new' }> {
+export async function restoreBackup(
+  store: ObjectStore,
+  files: Files,
+  backup: Backup,
+  progress: (done: number, total: number) => void,
+): Promise<ApiResult<null> | { ok: false; error: 'not-new' | 'not-backup' }> {
   const ids = new Set(backup.objects.map(({ id }) => id));
   const present = new Set(ALL.flatMap((kind) => store.list(kind)).map(({ id }) => id));
   if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
@@ -100,12 +105,17 @@ export async function restoreBackup(store: ObjectStore, files: Files, backup: Ba
   const total = held.length + todo.length;
   let done = 0;
   // Each file seals to the id its objects name, and one the server holds already is not sent again.
+  const sealed = new Map<string, string>();
   for (let start = 0; start < held.length; start += FILE_WINDOW) {
     const saved = await files.save(held.slice(start, start + FILE_WINDOW));
     if (!saved.ok) return saved;
+    for (const ref of saved.data) if (ref) sealed.set(ref.id, ref.key);
     done += saved.data.length;
     progress(done, total);
   }
+  // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
+  // would restore a picture that never opens.
+  if (backup.objects.some((object) => { const ref = fileOf(object); return ref && sealed.get(ref.id) !== ref.key; })) return { ok: false, error: 'not-backup' };
   // In their old rev order, so each chat's entries fold as they did.
   const writes = todo.sort((a, b) => a.rev - b.rev).map((object): Write => ({ ...object, type: 'restore' }));
   const restored = await store.batch(writes, () => progress(++done, total));

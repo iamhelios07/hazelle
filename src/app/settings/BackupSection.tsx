@@ -43,6 +43,7 @@ export function BackupSection() {
     setLoading(null);
     if (loaded.ok) return toast.show('백업을 불러왔어요.');
     if (loaded.error === 'not-new') return toast.show('이미 저장한 것이 있는 계정이에요. 백업은 새 계정에만 불러올 수 있어요.');
+    if (loaded.error === 'not-backup') return toast.show(UNREAD['not-backup']);
     toast.show(`불러오다 멈췄어요. ${describeFailure(loaded)} 같은 파일을 다시 불러오면 멈춘 곳부터 이어가요.`);
   }
 

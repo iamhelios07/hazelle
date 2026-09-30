@@ -130,6 +130,21 @@ describe('backup', () => {
     expect(readBackup(zip)).toEqual({ ok: false, error: 'not-backup' });
   });
 
+  it('refuses a file whose picture was changed, before writing any object', async () => {
+    const old = await oldAccount();
+    const made = await exportBackup(old.store, old.files);
+    const read = readBackup(made.ok ? made.data.zip : new Uint8Array());
+    const backup = read.ok ? read.backup : { objects: [], files: new Map() };
+    const [id] = backup.files.keys();
+    backup.files.set(id!, randomBytes(64));
+
+    await server.wipe();
+    const { store, files } = await open('someone');
+    const before = held(store);
+    expect(await restoreBackup(store, files, backup, () => {})).toEqual({ ok: false, error: 'not-backup' });
+    expect(held(store)).toEqual(before);
+  });
+
   it('refuses an account holding something of its own, and writes nothing', async () => {
     const old = await oldAccount();
     const made = await exportBackup(old.store, old.files);

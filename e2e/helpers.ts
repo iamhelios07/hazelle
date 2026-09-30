@@ -45,7 +45,7 @@ export const HOSTILE = {
           '',
           '*nods* "hello"',
           '',
-          '<div id="pic">{{img::smile}}</div><div id="backdrop" style="background-image: url({{raw::smile}})">backdrop</div>',
+          '<div id="pic">{{img::smile}}</div><div id="backdrop" style="background-image: url( &quot;{{raw::smile}}&quot; )">backdrop</div>',
         ].join('\n'),
         assets: [{ type: 'x-risu-asset', uri: `data:image/png;base64,${PIXEL}`, name: 'smile', ext: 'png' }],
         extensions: { risuai: { backgroundHTML: '<style>.tone { color: rgb(0, 128, 0) }</style>' } },

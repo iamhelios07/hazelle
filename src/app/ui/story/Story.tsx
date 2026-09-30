@@ -31,7 +31,8 @@ const CONFIG = {
   ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 };
 const VOID = new Set(['BR', 'HR', 'IMG', 'INPUT', 'WBR']);
-const OUTSIDE_URL = /url\(\s*(?!['"]?(?:data|blob):)[^)]*\)/gi;
+// The look-ahead takes the spaces itself: \s* giving one back would let url( "blob:…" ) past it.
+const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*\)/gi;
 // data: pictures, and blob: ones, which only the app itself can make: the chat puts its bots' pictures there.
 const OWN_SOURCE = /^(?:data|blob):/;
 const IMPORT = /@import[^;]*;?/gi;
