@@ -69,7 +69,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
         onKeyDown={onKey}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder={`${translate.input ? `${withRo(sendLanguage)} 옮겨 보내요` : '메시지'} · *행동*은 별표로 감싸요`}
+        placeholder={translate.input ? `${withRo(sendLanguage)} 옮겨 보내요` : '메시지'}
         hint={hint}
         tools={
           <>
