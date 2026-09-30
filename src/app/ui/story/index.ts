@@ -1,2 +1,2 @@
-export { Prose } from './Prose';
+export { Story } from './Story';
 export { Failure, Marker, StoryMessage, Switcher, Waiting } from './StoryMessage';

@@ -19,6 +19,8 @@ export type Card = {
   utility: boolean;
   bias: [string, number][];
   regex: RegexScript[];
+  // The card's backgroundHTML, absent when it has none. Only its <style> blocks are shown (design §6.4).
+  background?: string;
   // Each setting stands alone, as in CCv3; null leaves it to the global default.
   loreSettings: { scanDepth: number | null; tokenBudget: number | null; recursive: boolean | null; fullWordMatching: boolean | null };
 };

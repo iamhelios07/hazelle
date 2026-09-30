@@ -79,7 +79,8 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
     if (lua && text(effects[0]!.code).trim()) add(tally, 'lua');
     else if (!lua && effects.some((effect) => !INERT.has(effect.type))) add(tally, 'trigger');
   }
-  if (text(risu.backgroundHTML).trim()) add(tally, 'background-html');
+  const background = text(risu.backgroundHTML);
+  if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
   if (text(risu.additionalText).trim()) add(tally, 'additional-text');
   if (risu.prebuiltAssetCommand === true) add(tally, 'prebuilt-asset-command');
   if (text(record(extensions.depth_prompt).prompt).trim()) add(tally, 'depth-prompt');
@@ -108,6 +109,7 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
       .filter((pair): pair is [string, number] => Array.isArray(pair) && typeof pair[0] === 'string' && typeof pair[1] === 'number')
       .map(([key, value]): [string, number] => [key, value]),
     regex: regexScripts(module ? list(module.regex) : list(risu.customScripts), tally),
+    ...(background.trim() ? { background } : {}),
     loreSettings: {
       scanDepth: count(book.scan_depth),
       tokenBudget: count(book.token_budget),
@@ -279,6 +281,7 @@ function countInText(card: Card, lore: LoreEntry[], tally: Tally) {
     card.postHistoryInstructions,
     ...card.bias.map(([key]) => key),
     ...card.regex.flatMap((script) => [script.find, script.replace]),
+    card.background ?? '',
     ...lore.map((entry) => entry.content),
   ];
   for (const value of texts) {

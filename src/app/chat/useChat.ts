@@ -90,7 +90,9 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
   const messages: Shown[] = withTurn(item?.messages ?? (unstarted ? [unstarted] : []), turn, chatId);
   // withTurn copies every message, so the greeting is the copy the screen holds, or no press on it matches.
   const opening = unstarted && messages[0]!;
-  const texts = displayChat(session, chatId, chat, messages);
+  const { texts, css } = displayChat(session, chatId, chat, messages);
+  // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
+  const bot = shelf?.character.decor !== false;
   const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);
@@ -317,6 +319,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
+    decor: { bot, css: bot ? css : '' },
     translate,
     sendLanguage,
     translation,
@@ -358,6 +361,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatItem> |
       setTranslate: setSwitches,
       remove,
       copy,
+      inert: () => toast.show('봇의 버튼은 아직 동작하지 않아요.'),
       branch,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,

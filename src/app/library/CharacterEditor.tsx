@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import type { Character } from '../../model/library';
-import { editCharacter, type CharacterText } from '../../runtime/characters';
+import { editCharacter, setDecor, type CharacterText } from '../../runtime/characters';
 import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useStore } from '../session';
-import { Section, Text, TextField } from '../ui';
+import { useToast } from '../toast';
+import { Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
 
 // 캐릭터 편집: the card's text and the alias, on its own page or beside the chat. Only the fields changed here go to
 // editCharacter. A caller leaves by unmounting it, which saves.
@@ -14,6 +15,17 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
   const store = useStore();
   const [text, setText] = useState<CharacterText>({ ...initial.card, alias: initial.alias ?? '' });
   const { status, change: queue } = useAutosave<CharacterText>((patch) => editCharacter(store, id, patch));
+  const toast = useToast();
+  const [decor, setDecorShown] = useState(initial.decor !== false);
+
+  function changeDecor(on: boolean) {
+    setDecorShown(on);
+    void setDecor(store, id, on).then((saved) => {
+      if (saved.ok) return;
+      setDecorShown(!on);
+      toast.failed(saved, '저장하지 못했어요.');
+    });
+  }
 
   function change<K extends keyof CharacterText>(field: K, value: CharacterText[K]) {
     setText((current) => ({ ...current, [field]: value }));
@@ -66,6 +78,11 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
           onChange={(value) => change('postHistoryInstructions', value)}
           help="대화 기록 바로 뒤에 붙어요."
         />
+      </Section>
+      <Section title="표시">
+        <SettingGroup label="표시">
+          <SettingRow label="봇 꾸밈" help="봇이 만든 상태창, 꾸밈과 버튼을 그려요. 끄면 글만 보여요." control={<Switch label="봇 꾸밈" checked={decor} onChange={changeDecor} />} />
+        </SettingGroup>
       </Section>
     </>
   );

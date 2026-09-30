@@ -1,0 +1,19 @@
+/* Positioned boxes in a bot's HTML stay inside the message, never over the app. The bot's :host rules reach the
+   element inside this one, not this one. */
+.story {
+  contain: layout paint;
+}
+
+.faded {
+  opacity: var(--prose-faded-opacity);
+}
+
+.cursor {
+  composes: blink from '../foundation/motion.module.css';
+  display: inline-block;
+  width: var(--caret-width);
+  height: var(--caret-height);
+  margin-left: var(--space-2);
+  vertical-align: -0.16em;
+  background: var(--color-accent);
+}

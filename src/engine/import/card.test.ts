@@ -219,7 +219,7 @@ describe('importCard', () => {
             ],
           },
         },
-        character_book: { entries: [{ keys: ['k'], content: '@@disable_ui_prompt x\n@@depth 1\nbody {{button::a::b}}', enabled: true, insertion_order: 1 }] },
+        character_book: { entries: [{ keys: ['k'], content: '@@disable_ui_prompt x\n@@depth 1\nbody {{raw::a}}', enabled: true, insertion_order: 1 }] },
       }),
     );
     expect(imported.card.description).toBe('{{img::x}} {{getvar::y}} {{ Trigger_ID }}');

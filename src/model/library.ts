@@ -18,6 +18,8 @@ export type Character = {
   deleted?: number;
   toggles?: ToggleValues;
   translate?: TranslateSwitches;
+  // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
+  decor?: boolean;
 };
 export type LoreFolder = { id: string; name: string };
 

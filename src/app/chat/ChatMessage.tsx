@@ -1,5 +1,6 @@
 import { Bot, Copy, GitBranch, Info, Languages, Pencil, RotateCcw, Trash2 } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
+import { useMemo, type KeyboardEvent } from 'react';
+import { storyHtml } from '../../engine/display';
 import { shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
@@ -8,7 +9,7 @@ import { withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, pressed, Prose, StoryMessage, Switcher, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, pressed, Story, StoryMessage, Switcher, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
 import { useReveal } from './useReveal';
 
@@ -16,6 +17,8 @@ type Props = {
   message: Shown;
   // The shown version's text as it is displayed. Editing starts from the stored text.
   text: string;
+  // 봇 꾸밈: whether the bot's HTML is drawn, and its CSS for the chat.
+  decor: { bot: boolean; css: string };
   // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
   // other way round from its default.
   translating: Translating;
@@ -49,7 +52,7 @@ type Props = {
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export function ChatMessage(props: Props) {
-  const { message, text: original, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
+  const { message, text: original, decor, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
@@ -64,6 +67,7 @@ export function ChatMessage(props: Props) {
   // What shows until a translation's first text comes stays faded, and the translation then streams in its place.
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live);
+  const html = useMemo(() => storyHtml(reveal.text, decor.bot), [reveal.text, decor.bot]);
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
@@ -117,7 +121,7 @@ export function ChatMessage(props: Props) {
     body = (
       <>
         {/* A continuation that failed still holds the text it continued, and 다시 시도 continues it again. */}
-        {receipt.continues && <Prose text={original} cursor={false} />}
+        {receipt.continues && <Story html={storyHtml(original, decor.bot)} css={decor.css} onInert={actions.inert} />}
         <Failure
           title="답장을 받지 못했어요"
           actions={
@@ -136,7 +140,7 @@ export function ChatMessage(props: Props) {
       </>
     );
   } else if (!empty || live) {
-    body = <Prose text={reveal.text} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />;
+    body = <Story html={html} css={decor.css} onInert={actions.inert} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />;
   }
 
   const again = { label: '다시 번역', disabled: translatingText !== null, onClick: () => actions.translate(message) };

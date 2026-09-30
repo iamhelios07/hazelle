@@ -90,6 +90,10 @@ export function editCharacter(store: ObjectStore, id: string, { alias, ...card }
   return store.update('character', id, (current) => ({ ...current, ...(alias === undefined ? {} : { alias }), card: { ...current.card, ...card } }));
 }
 
+export function setDecor(store: ObjectStore, id: string, decor: boolean): Promise<ApiResult<Stored<'character'>>> {
+  return store.update('character', id, (current) => ({ ...current, decor }));
+}
+
 // A toggle's value for a character's chats, or with character null for 캐릭터 없이's.
 export function setToggle(store: ObjectStore, character: string | null, key: string, value: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
   if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, toggles: { ...current?.toggles, [key]: value } }));

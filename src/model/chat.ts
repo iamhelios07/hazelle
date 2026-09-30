@@ -181,7 +181,13 @@ export const shown = (message: Message): Version => message.versions[message.sel
 // The calls a reply took, the first one first: one, or more when it was continued (이어 쓰기).
 export const calls = (receipt: Receipt): Receipt[] => [...(receipt.continues ? calls(receipt.continues) : []), receipt];
 
-const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
+// A bot's HTML shows as the words in it.
+const firstLine = (text: string) =>
+  text
+    .replace(/<[^>]*>/g, ' ')
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line !== '') ?? '';
 
 // texts: each message's text as it is displayed (engine/render, which the model cannot call).
 export function chatTitle(chat: Chat, messages: Message[], texts: string[]): string {

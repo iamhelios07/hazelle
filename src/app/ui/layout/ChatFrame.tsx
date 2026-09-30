@@ -9,7 +9,7 @@ type Spacing = 'narrow' | 'normal' | 'wide';
 // How the story reads (읽기 설정). tokens.css holds each choice's look.
 export type Reading = { font: 'serif' | 'sans'; size: number; leading: Spacing; width: Spacing };
 
-// The look before any reading setting. The size is read from tokens.css, not repeated here, since Prose keeps it
+// The look before any reading setting. The size is read from tokens.css, not repeated here, since Story keeps it
 // outside the chat.
 export const readingDefault = (): Reading => ({
   font: 'serif',

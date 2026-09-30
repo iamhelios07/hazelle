@@ -1,4 +1,5 @@
 import { Copy, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
+import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatItem } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
@@ -7,7 +8,7 @@ import { describeUnused } from '../common/unused';
 import { useCharacter } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, HOME, type Back } from '../shell/routes';
-import { Button, Callout, Intro, NavBar, Portrait, Prose, Row, Screen, Section, Tag, Text, useWide } from '../ui';
+import { Button, Callout, Intro, NavBar, Portrait, Row, Screen, Section, Story, Tag, Text, useWide } from '../ui';
 import { useCharacterActions } from './useCharacterActions';
 
 // A character's own page beside its chats, or with shelf null, 캐릭터 없이.
@@ -75,7 +76,7 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatIte
       </Row>
       {card.creatorNotes.trim() && (
         <Section title="만든 사람의 말">
-          <Prose text={card.creatorNotes} />
+          <Story html={storyHtml(card.creatorNotes, true)} />
         </Section>
       )}
     </Screen>

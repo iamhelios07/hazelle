@@ -44,7 +44,6 @@ export const handlerFor = (name: string) => HANDLERS.get(normalize(name));
 const UNSUPPORTED = new Set([
   // Marked X in risu-compat-spec §d, with their aliases in src/ts/cbs.ts at ca1345fc. The internal-only `__`
   // is left out, since normalizing empties its name.
-  'button',
   'triggerid',
   'emotionlist',
   'assetlist',
@@ -87,8 +86,7 @@ const UNSUPPORTED = new Set([
   'jb',
   'jailbreak',
   'jbtoggled',
-  // Marked N, but nothing to read: no auxiliary model is assigned yet, the spec gives the rest no semantics, and
-  // messages are shown as plain text, so display markup has no reader.
+  // Marked N, but nothing to read: no auxiliary model is assigned yet, and the spec gives the rest no semantics.
   'axmodel',
   'metadata',
   'declare',
@@ -160,6 +158,9 @@ define('mainprompt systemprompt', 0, promptText('main'));
 define('globalnote systemnote ujb', 0, promptText('globalNote'));
 define('authornote', 0, promptText('authorNote'));
 define('lorebook worldinfo', 0, (_, { context }) => serialize(context.lore));
+
+// Risu's markup, which the display dims until a bot's buttons can run (design §6.4).
+define('button', 2, ([label, trigger]) => `<button class="button-default" risu-trigger="${trigger}">${label}</button>`);
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
 define('setvar', 2, ([name, value], { context, writes }) => {

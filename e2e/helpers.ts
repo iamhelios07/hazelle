@@ -21,6 +21,33 @@ export const CARD = {
   ),
 };
 
+// A bot's HTML at its worst: nothing in it may run, post, load from outside or cover the app (design §6.4).
+export const HOSTILE = {
+  name: 'hostile.json',
+  mimeType: 'application/json',
+  buffer: Buffer.from(
+    JSON.stringify({
+      spec: 'chara_card_v3',
+      spec_version: '3.0',
+      data: {
+        name: 'Hostile',
+        description: '',
+        first_mes: [
+          '<div id="cover" style="position: fixed; inset: 0; background: rgb(200, 0, 0)">cover</div>',
+          '<img id="outside" src="https://example.com/a.png" onerror="window.ran = 1"><script>window.ran = 1</script>',
+          '<form action="https://example.com/post"><input id="field"></form>',
+          '<a id="out" href="https://example.com">out</a> <a id="js" href="javascript:window.ran = 1">js</a>',
+          '<div id="tone" class="x-risu-tone">tone</div>',
+          '{{button::누르기::go}}',
+          '',
+          '*nods* "hello"',
+        ].join('\n'),
+        extensions: { risuai: { backgroundHTML: '<style>.tone { color: rgb(0, 128, 0) }</style>' } },
+      },
+    }),
+  ),
+};
+
 const REPLY = ['{{char}} smiles. ', '[[bow]]'];
 
 // route.fulfill hands the browser the whole stream in one body: this exercises SSE parsing, not text arriving

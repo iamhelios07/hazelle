@@ -4,7 +4,8 @@ import type { Starred } from '../connectors/types';
 import type { Card } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
 import { assemble, type PromptInput, type TooLong } from '../engine/pipeline';
-import { renderChat, type ChatScope } from '../engine/render';
+import { display } from '../engine/display';
+import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import { fold, shown, type Chat, type Message } from '../model/chat';
 import type { Toggle } from '../model/prompt';
@@ -117,8 +118,8 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
   return context === null ? null : context - (replyOf(model, settings) ?? 0);
 }
 
-// Each message's text as the chat shows it, for its log, its title and its preview.
-export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[]) => renderChat('display', scopeOf(reader, id, chat, messages)).texts;
+// Each message's text as the chat shows it, for its log, its title and its preview, and the bot's CSS for its log.
+export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[]) => display(scopeOf(reader, id, chat, messages));
 
 // What a translation in this chat is made from: one of messages, or the user's message after them.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
@@ -135,7 +136,7 @@ export function translateLatest(session: Pick<Session, 'store' | 'talk' | 'trans
   const version = shown(last);
   const { live, held, failed } = session.translator.snapshot();
   if (version.receipt?.state === 'failed' || version.translation || live.has(version.id) || held.has(version.id) || failed.has(version.id)) return;
-  if (!displayChat(session, id, chat, messages).at(-1)!.trim()) return;
+  if (!displayChat(session, id, chat, messages).texts.at(-1)!.trim()) return;
   session.translator.translate(id, version.id, translationInput(session, id, chat, messages, { kind: 'message', index: messages.length - 1 }));
 }
 

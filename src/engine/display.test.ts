@@ -1,0 +1,71 @@
+import { describe, expect, it } from 'vitest';
+import { display, storyHtml } from './display';
+import type { HistoryMessage } from './history';
+import type { Card } from './import/types';
+import type { ChatScope } from './render';
+
+const card: Card = {
+  name: 'Luna',
+  nickname: null,
+  description: '',
+  personality: '',
+  scenario: '',
+  greetings: [],
+  exampleDialogue: '',
+  systemPrompt: '',
+  postHistoryInstructions: '',
+  creatorNotes: '',
+  creator: '',
+  version: '',
+  tags: [],
+  variables: [],
+  toggles: '',
+  utility: false,
+  bias: [],
+  regex: [
+    { name: 'hp', find: '\\[HP (\\d+)\\]', replace: '{{setvar::hp::$1}}<style>.x-risu-box { color: red }</style><div class="box">HP $1</div>', stage: 'output', flags: null },
+    { name: 'box', find: 'BOX', replace: '<style>.x-risu-box { color: red }</style><div class="box">box</div>', stage: 'display', flags: null },
+  ],
+  background: '<style>.hp::after { content: "{{getvar::hp}}"; background: url(https://example.com/a.png) }</style><style>@import url(x.css); .bg { background: url(data:image/png;base64,AA) }</style>',
+  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
+};
+const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
+const scope: ChatScope = {
+  card,
+  persona: { name: 'jin', description: '' },
+  prompt: null,
+  note: null,
+  lore: [],
+  messages: [message('a1', 'assistant', 'BOX'), message('a2', 'assistant', 'The lamp. [HP 7]')],
+  greeting: null,
+  toggle: () => null,
+  model: null,
+  clock: { now: 0, timeZone: 'UTC' },
+  pick: 'luna:chat',
+};
+
+describe('display', () => {
+  it('takes every <style> out of the texts into one stylesheet for the chat, the backgroundHTML’s first, read with the last variables', () => {
+    const { texts, css } = display(scope);
+    expect(texts).toEqual(['<div class="box">box</div>\n', 'The lamp. <div class="box">HP 7</div>\n']);
+    expect(css.split('\n')).toEqual(['.hp::after { content: "7"; background: none }', '.bg { background: url(data:image/png;base64,AA) }', '.box { color: red }']);
+  });
+});
+
+describe('storyHtml', () => {
+  it('shows each line as its own paragraph, with actions, bold and dialogue marked, and Korean marks read', () => {
+    expect(storyHtml('*고개를 끄덕였다.*그리고 **굵게**\n"좋아."그리고 “네” 했다.', true)).toBe(
+      '<p><em>고개를 끄덕였다.</em>그리고 <strong>굵게</strong></p>\n<p><mark risu-mark="quote2">&quot;좋아.&quot;</mark>그리고 <mark risu-mark="quote2">“네”</mark> 했다.</p>\n',
+    );
+  });
+
+  it('runs a mark left open to the end of its line, and closes and reopens one a closing mark cuts through', () => {
+    expect(storyHtml('*그녀가 "안녕\n다음 줄', true)).toBe('<p><em>그녀가 <mark risu-mark="quote2">&quot;안녕</mark></em></p>\n<p>다음 줄</p>\n');
+    expect(storyHtml('*a "b* c"', true)).toBe('<p><em>a <mark risu-mark="quote2">&quot;b</mark></em><mark risu-mark="quote2"> c&quot;</mark></p>\n');
+  });
+
+  it('keeps a bot’s HTML block as written and escapes it without bot', () => {
+    expect(storyHtml('<div class="box">\n*raw*\n</div>\n\n*act*', true)).toBe('<div class="box">\n*raw*\n</div>\n<p><em>act</em></p>\n');
+    expect(storyHtml('<b>x</b> \\*y\\*', false)).toBe('<p>&lt;b&gt;x&lt;/b&gt; *y*</p>\n');
+  });
+});

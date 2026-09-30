@@ -107,7 +107,7 @@ function derive(store: ObjectStore, displayed: Map<string, Displayed>): Views {
       const key = `${shared}|${chat.rev}|${written(store.children('entry', chat.id))}`;
       const held = displayed.get(chat.id);
       if (held?.key === key) return held.texts;
-      const texts = displayChat({ store }, chat.id, chat.value, messages);
+      const { texts } = displayChat({ store }, chat.id, chat.value, messages);
       displayed.set(chat.id, { key, texts });
       return texts;
     },

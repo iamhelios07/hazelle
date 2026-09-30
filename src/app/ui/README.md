@@ -106,7 +106,7 @@ and only this folder styles elements.**
 | feedback | `Intro` | `Intro.module.css` | A screen's large title and lead |
 | feedback | `Outcome` | `Outcome.module.css` | What an import brought and did not, a line each with why under it |
 | feedback | `Steps` | `Steps.module.css` | Progress through steps |
-| story | `Prose` (`prose.ts`) | `Prose.module.css` | Story text: narration, dialogue, actions, the streaming caret; faded while another text will take its place |
+| story | `Story` | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons dimmed; the streaming caret; faded while another text will take its place |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its quiet tag by the name (such as 번역, which flips it), its tools bar and markers |
 
 ## Enforced by `npm run check`

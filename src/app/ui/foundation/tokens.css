@@ -139,7 +139,7 @@
 
   --tracking-wide: 0.06em;
 
-  /* Story text at the reading settings' defaults: 명조, 17, line spacing 보통. Prose keeps these outside the
+  /* Story text at the reading settings' defaults: 명조, 17, line spacing 보통. Story keeps these outside the
      chat; ChatFrame.tsx's readingDefault names the same choices and reads --prose-size, so change them together. */
   --prose-font: var(--font-serif);
   --prose-size: 17px;
@@ -151,6 +151,8 @@
   --prose-sans-shrink: 1px;
   --prose-sans-tighten: 0.1;
   --prose-faded-opacity: 0.5;
+  /* A bot's button that nothing can run yet (design §6.4). */
+  --story-inert-opacity: 0.45;
 
   --space-2: 2px;
   --space-4: 4px;

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { strFromU8, unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
-import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider } from './helpers';
+import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE } from './helpers';
 
 const CSP = /Content-Security-Policy: (.+)/.exec(readFileSync(new URL('../public/_headers', import.meta.url), 'utf8'))![1];
 const PASSWORD = 'e2e-password';
@@ -132,6 +132,31 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: '불러오기', exact: true }).click();
     await (await chooser).setFiles(file);
     await expect(page.getByText('백업을 불러왔어요.', { exact: true })).toBeVisible();
+    expect(violations).toEqual([]);
+  });
+
+  await test.step('a bot’s HTML is drawn in its message with its CSS, and nothing in it runs, posts, loads from outside or covers the app', async () => {
+    await page.goto('/');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
+    await (await chooser).setFiles(HOSTILE);
+    await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
+    const greeting = messages.first();
+    await expect(greeting.locator('#tone')).toHaveCSS('color', 'rgb(0, 128, 0)');
+    await expect(greeting.locator('#cover')).toHaveCSS('background-color', 'rgb(200, 0, 0)');
+    const [cover, message] = await Promise.all([greeting.locator('#cover').boundingBox(), greeting.boundingBox()]);
+    expect(cover!.y).toBeGreaterThanOrEqual(message!.y);
+    expect(cover!.y + cover!.height).toBeLessThanOrEqual(message!.y + message!.height);
+    await expect(greeting.locator('#outside')).toHaveCount(0);
+    await expect(greeting.locator('form')).toHaveCount(0);
+    await expect(greeting.locator('#field')).toHaveCount(1);
+    await expect(greeting.locator('#out')).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(greeting.locator('#js')).not.toHaveAttribute('href', /./);
+    await expect(greeting.locator('em')).toHaveText('nods');
+    await expect(greeting.locator('mark')).toHaveText('"hello"');
+    await greeting.getByRole('button', { name: '누르기', exact: true }).click();
+    await expect(page.getByText('봇의 버튼은 아직 동작하지 않아요.', { exact: true })).toBeVisible();
+    expect(await page.evaluate('window.ran')).toBeUndefined();
     expect(violations).toEqual([]);
   });
 });
