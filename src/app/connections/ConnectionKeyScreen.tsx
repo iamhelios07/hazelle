@@ -28,7 +28,7 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
       onSubmit={submit}
       actions={
         <>
-          <Text size="sm" tone="muted">
+          <Text variant="note">
             키는 금고 안에 암호화해서 저장해요. 모델을 부를 때만 중계 서버를 지나가고, 서버에 남지 않아요.
           </Text>
           <Button type="submit" busy={busy} disabled={!secret}>

@@ -120,7 +120,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       stickyActions
       actions={
         <Stack gap="related">
-          <Text size="sm" tone="muted">
+          <Text variant="note">
             별표 {starred.length}개
           </Text>
           <Button onClick={() => navigate({ kind: 'connections' })}>완료</Button>

@@ -48,12 +48,12 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
           label="번역 모델"
           help={`번역 프롬프트에서 골라요. 고르지 않았으면 ${MODEL_ROLES.aux}을 따라요.`}
           control={
-            <Text size="sm" tone={translation.ok ? 'default' : 'muted'}>
+            <Text variant="note">
               {translation.ok ? translation.route.model.name : describeTranslateFailure(translation.failure)}
             </Text>
           }
         />
-        <Text size="sm" tone="muted">
+        <Text variant="note">
           {appliesTo(card)}
         </Text>
       </Stack>

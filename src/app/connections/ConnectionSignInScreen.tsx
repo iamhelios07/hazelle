@@ -85,7 +85,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
         top={top}
         actions={
           <>
-            <Text size="sm" tone="muted">
+            <Text variant="note">
               승인을 기다리고 있어요. 코드는 {Math.round(code.expiresIn / 60)}분 동안 쓸 수 있어요.
             </Text>
             <Button icon={ExternalLink} onClick={() => openSite(code)}>

@@ -43,7 +43,7 @@ and only this folder styles elements.**
 | foundation | `Icon` | `Icon.module.css` | Icon sizes and stroke |
 | foundation | `Kbd` | `Kbd.module.css` | One key cap |
 | foundation | `Tag` | `Tag.module.css` | A small label, such as a model's or a character's tag, or 기본 on the default |
-| foundation | `Text` | `Text.module.css` | A paragraph's size, tone and alignment |
+| foundation | `Text` | `Text.module.css` | A paragraph by its role: body, a note (보조 설명: a status, a limit, a caption under a thing) or a highlighted line, such as the one marking a default; its alignment |
 | layout | `ChatFrame` (`ChatTitle`, `Reading`, `readingDefault`) | `ChatFrame.module.css` | The chat page: header, story column, composer dock, the header and dock floating over the story (the header hides while it is read down, the dock keeps room for the whole composer); the chat's title, which opens the list of its chats; the reading settings, handed to the story's text and width as custom properties; slots for a `SidePeek` and a `StoryAside` over the story |
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |

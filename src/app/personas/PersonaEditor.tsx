@@ -64,7 +64,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
           사진 바꾸기
         </FileButton>
         {isDefault ? (
-          <Text size="sm" tone="accent">
+          <Text variant="highlight">
             새 채팅의 기본 페르소나예요
           </Text>
         ) : (
@@ -83,5 +83,5 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       </Row>
     </>
   );
-  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, actions: status && <Text tone="muted">{SAVE_STATUS[status]}</Text> }, body });
+  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: status ? SAVE_STATUS[status] : undefined }, body });
 }

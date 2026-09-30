@@ -45,7 +45,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
   return (
     <Stack gap="section">
       <Stack gap="related">
-        <Text size="sm" tone="muted">
+        <Text variant="note">
           {where}
         </Text>
         <TitleField ref={nameRef} label="블록 이름" value={block.name ?? ''} placeholder={placeholder} onChange={(name) => onChange({ ...block, name: name || null })} />
@@ -94,7 +94,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         </Row>
       </Stack>
       {block.kind === 'text' && block.mark && (
-        <Text size="sm" tone="muted">
+        <Text variant="note">
           {`캐릭터 카드에 ‘${MARKS[block.mark].card}’가 있으면 이 글 대신 그 글이 들어가요. 카드 글 속 {{original}}에는 이 글이 들어가요.`}
         </Text>
       )}
@@ -146,7 +146,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         place="panel"
         label="여기까지 캐시"
         help={cache === 'auto' ? CACHE_HELP.auto : CACHE_HELP.own}
-        control={cache === 'auto' ? <Text tone="muted">자동</Text> : <Switch label="여기까지 캐시" checked={cache === 'set'} onChange={onCache} />}
+        control={cache === 'auto' ? <Text variant="note">자동</Text> : <Switch label="여기까지 캐시" checked={cache === 'set'} onChange={onCache} />}
       />
     </Stack>
   );

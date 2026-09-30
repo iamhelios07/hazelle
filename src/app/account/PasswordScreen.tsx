@@ -32,7 +32,7 @@ export function PasswordScreen({ mode, username: initialUsername, onDone }: Prop
         <>
           <Brand />
           {signup && (
-            <Text size="sm" tone="muted">
+            <Text variant="note">
               1 / 2
             </Text>
           )}

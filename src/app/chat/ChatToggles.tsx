@@ -63,7 +63,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       }
     >
       <Stack gap="related">
-        <Text size="sm" tone="muted">
+        <Text variant="note">
           {card
             ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요. 처음 값은 프롬프트와 캐릭터 카드가 정해요.`
             : '여기서 바꾼 값은 캐릭터 없이 하는 모든 채팅에 적용돼요. 처음 값은 프롬프트가 정해요.'}

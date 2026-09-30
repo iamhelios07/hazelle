@@ -68,7 +68,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
 
   let body;
   if (!version) body = <Empty>이 채팅에는 아직 답장이 없어요.</Empty>;
-  else if (live) body = <Text tone="muted">답장을 쓰는 중이에요. 끝나면 토큰과 비용이 채워져요.</Text>;
+  else if (live) body = <Text variant="note">답장을 쓰는 중이에요. 끝나면 토큰과 비용이 채워져요.</Text>;
   else if (!receipt) {
     body = (
       <>
@@ -87,12 +87,12 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
             <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => setTab(each.value)} />
           ))}
         </Tabs>
-        {earlier.length > 0 && tab !== 'reply' && <Text tone="muted">이어 쓴 답장이에요. 아래는 마지막 이어 쓰기가 보낸 요청이에요.</Text>}
+        {earlier.length > 0 && tab !== 'reply' && <Text variant="note">이어 쓴 답장이에요. 아래는 마지막 이어 쓰기가 보낸 요청이에요.</Text>}
         {tab === 'reply' && (
           <>
-            {version.edited && <Text tone="muted">직접 수정한 답장이에요. 아래는 수정하기 전 답장을 받았을 때의 정보예요.</Text>}
+            {version.edited && <Text variant="note">직접 수정한 답장이에요. 아래는 수정하기 전 답장을 받았을 때의 정보예요.</Text>}
             {earlier.length > 0 && (
-              <Text tone="muted">{`이어 쓴 답장이에요. 호출 ${earlier.length + 1}번으로 만들었고, 비용은 호출마다 따로 들어요. 아래는 마지막 호출이고, 앞선 호출은 맨 아래에 있어요.`}</Text>
+              <Text variant="note">{`이어 쓴 답장이에요. 호출 ${earlier.length + 1}번으로 만들었고, 비용은 호출마다 따로 들어요. 아래는 마지막 호출이고, 앞선 호출은 맨 아래에 있어요.`}</Text>
             )}
             <Call receipt={receipt} />
             {translated && <TranslationCall receipt={translated} />}
@@ -100,7 +100,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
               <Section level={3} title="앞선 호출">
                 {earlier.map((call, index) => (
                   <Stack key={index} gap="related">
-                    <Text size="sm" tone="muted">{`${index === 0 ? '처음 답장' : `이어 쓰기 ${index}`} · ${call.modelName} · ${call.source}`}</Text>
+                    <Text variant="note">{`${index === 0 ? '처음 답장' : `이어 쓰기 ${index}`} · ${call.modelName} · ${call.source}`}</Text>
                     <Facts
                       variant="tiles"
                       items={[...tokenFacts(call), costFact(call), finish(call), ...timeFacts(call)]}
@@ -127,7 +127,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
 function TranslationCall({ receipt }: { receipt: Receipt }) {
   return (
     <Section level={3} title="번역">
-      <Text size="sm" tone="muted">{`${receipt.modelName} · ${receipt.source}`}</Text>
+      <Text variant="note">{`${receipt.modelName} · ${receipt.source}`}</Text>
       <Facts
         variant="tiles"
         items={[...tokenFacts(receipt), costFact(receipt), finish(receipt)]}
@@ -147,7 +147,7 @@ function Call({ receipt }: { receipt: Receipt }) {
     <>
       <Section level={3} title="모델">
         <Text>{receipt.modelName}</Text>
-        <Text size="sm" tone="muted">
+        <Text variant="note">
           {receipt.source}
         </Text>
       </Section>

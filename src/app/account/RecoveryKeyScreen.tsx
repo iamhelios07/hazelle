@@ -41,7 +41,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
       top={
         <>
           <IconButton icon={ChevronLeft} label="이전" onClick={onBack} />
-          <Text size="sm" tone="muted">
+          <Text variant="note">
             2 / 2
           </Text>
         </>
@@ -51,7 +51,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
           <Button disabled={!downloaded || !saved} busy={busy} onClick={() => void run(onStart)}>
             시작하기
           </Button>
-          <Text size="sm" tone="muted" align="center">
+          <Text variant="note" align="center">
             이 단계는 건너뛸 수 없어요.
           </Text>
         </>

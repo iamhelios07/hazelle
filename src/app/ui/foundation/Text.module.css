@@ -1,16 +1,14 @@
-.sm {
-  font-size: var(--text-sm);
-}
-
-.md {
+.body {
   font-size: var(--text-md);
 }
 
-.muted {
+.note {
+  font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
 
-.accent {
+.highlight {
+  font-size: var(--text-sm);
   color: var(--color-accent);
 }
 

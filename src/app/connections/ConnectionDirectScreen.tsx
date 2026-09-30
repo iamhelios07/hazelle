@@ -62,7 +62,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
           <ChoiceGroup label="연결 방식" layout="buttons" options={PROTOCOLS} value={protocol} onChange={setProtocol} />
         )}
         {address.trim() && place?.kind !== 'url' && place?.kind !== 'generic-url' && (
-          <Text tone="muted">https:// 로 시작하는 주소를 넣어 주세요.</Text>
+          <Text variant="note">https:// 로 시작하는 주소를 넣어 주세요.</Text>
         )}
         {(place?.kind === 'url' || (place?.kind === 'generic-url' && !place.problem)) && (
           <TextField

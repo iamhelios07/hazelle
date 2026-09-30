@@ -102,7 +102,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         <Dialog title={state.busy ? '가져오는 중' : done.length ? '가져왔어요' : '가져오지 못했어요'} onClose={() => state.busy || setState(null)}>
           <Stack>
             {state.results.map((result, index) => ('id' in result ? <Summary key={index} result={result} /> : <Failed key={index} file={result.file} failure={result.failure} />))}
-            {state.busy && <Text tone="muted">{state.busy}</Text>}
+            {state.busy && <Text variant="note">{state.busy}</Text>}
             {!state.busy && done.length === 1 && (
               <Button
                 icon={MessageSquarePlus}
@@ -141,7 +141,7 @@ function Summary({ result }: { result: Done }) {
     <Section title={card.name}>
       <Text>{came.join(' · ')}</Text>
       {missed.length > 0 && <Callout tone="warn">못 가져온 것: {missed.join(' · ')}</Callout>}
-      {notUsed && <Text tone="muted">{notUsed}</Text>}
+      {notUsed && <Text variant="note">{notUsed}</Text>}
     </Section>
   );
 }

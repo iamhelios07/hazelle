@@ -78,7 +78,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
         )}
       </Row>
       <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />
-      {binned && <Text tone="muted">{`지운 캐릭터는 ${KEEP_DAYS}일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
+      {binned && <Text variant="note">{`지운 캐릭터는 ${KEEP_DAYS}일이 지나면 채팅과 함께 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
       {shown.length > 0 ? (
         <CardGrid label="캐릭터">
           {shown.map((shelf) => (

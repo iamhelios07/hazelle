@@ -23,7 +23,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const rows: ReactNode[] = [];
   if (notUsed) {
     rows.push(
-      <Text key="unused" tone="muted" align="center">
+      <Text key="unused" variant="note" align="center">
         {notUsed}
       </Text>,
     );

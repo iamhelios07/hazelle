@@ -39,7 +39,7 @@ export function ConnectionMeters({ connection }: { connection: Connection }) {
   return (
     <Section title="사용량과 한도">
       {!result ? (
-        <Text size="sm" tone="muted">
+        <Text variant="note">
           불러오는 중…
         </Text>
       ) : !result.ok ? (

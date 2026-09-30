@@ -51,7 +51,7 @@ function ShortcutList({ onClose }: { onClose: () => void }) {
         {SHORTCUT_GROUPS.map(({ title, note, names }) => (
           <Section key={title} title={title} level={3}>
             {note && (
-              <Text size="sm" tone="muted">
+              <Text variant="note">
                 {note}
               </Text>
             )}

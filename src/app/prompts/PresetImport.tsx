@@ -70,7 +70,7 @@ export function usePresetImport(onOpen: (id: string) => void): { take: (files: F
       {dragging && <DropOverlay>여기에 놓으면 새 프롬프트로 가져와요</DropOverlay>}
       {busy && (
         <Dialog title="가져오는 중" onClose={() => {}}>
-          <Text tone="muted">{busy}</Text>
+          <Text variant="note">{busy}</Text>
         </Dialog>
       )}
       {results && (
@@ -126,7 +126,7 @@ function Summary({ result }: { result: Result }) {
   const missed = result.unsupported.map((item) => ({ tone: 'missed' as const, ...UNSUPPORTED[item.kind](item.count) }));
   return (
     <Stack gap="group">
-      <Text tone="muted">{`${promptName(name)} · Risu 프리셋`}</Text>
+      <Text variant="note">{`${promptName(name)} · Risu 프리셋`}</Text>
       <Section title="가져온 것">
         <Outcome label="가져온 것" items={came} />
       </Section>

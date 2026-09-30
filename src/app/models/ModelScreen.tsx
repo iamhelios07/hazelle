@@ -100,7 +100,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
           <Callout tone="warn">쓰던 설정이 지워졌어요. 다른 설정을 골라야 이 모델로 보낼 수 있어요.</Callout>
         )}
         {sent && (
-          <Text size="sm" tone="muted">
+          <Text variant="note">
             {sent}
           </Text>
         )}

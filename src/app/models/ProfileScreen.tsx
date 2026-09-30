@@ -253,13 +253,13 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           title={name}
           rename={{ label: '설정 이름', placeholder: stored.value.name, onChange: rename }}
           {...backBar(back)}
-          actions={status && <Text tone="muted">{SAVE_STATUS[status]}</Text>}
+          status={status ? SAVE_STATUS[status] : undefined}
         />
       }
     >
       <Stack gap="related">
         {isDefault ? (
-          <Text size="sm" tone="accent">
+          <Text variant="highlight">
             기본 설정이에요. 새로 별표한 모델과 설정을 따로 고르지 않은 모델이 이 설정을 써요.
           </Text>
         ) : (
@@ -307,7 +307,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
             ))}
           </List>
         ) : (
-          <Text size="sm" tone="muted">
+          <Text variant="note">
             아직 이 설정을 쓰는 모델이 없어요. 모델 추가로 골라 주세요.
           </Text>
         )}

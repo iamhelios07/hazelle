@@ -44,7 +44,7 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatSum
       <Intro title={title}>{card.creator ? `만든 사람 ${card.creator}` : undefined}</Intro>
       {origin && (
         <Row kind="actions">
-          <Text tone="muted">
+          <Text variant="note">
             ‘{origin.name}’에서 만든 사본{originHere ? '' : ' · 원본은 지워졌어요'}
           </Text>
           {originHere && (

@@ -14,7 +14,7 @@ export function AccountScreen({ back }: { back: Back | null }) {
     <Screen width="form" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
       <FaceRow face={<Avatar face={username} tone="you" />}>
         <Text>{username}</Text>
-        <Text size="sm" tone="muted">
+        <Text variant="note">
           지금 로그인한 계정
         </Text>
       </FaceRow>
