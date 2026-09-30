@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Connection } from '../connectors/types';
 import type { Lore } from '../model/library';
-import { randomBytes } from '../vault/aead';
+import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
-import { ObjectStore } from './store';
-import { testServer } from './testing';
+import { ObjectStore, type Write } from './store';
+import { BATCH_LIMITS, testServer } from './testing';
 
 const server = testServer();
 
@@ -96,5 +96,50 @@ describe('object store', () => {
     expect(mine.list('connection')).toEqual([]);
     expect(mine.unreadable()).toBe(1);
     expect(await mine.update('connection', id, renamed('y'))).toEqual({ ok: false, error: 'unreadable' });
+  });
+
+  it('retries the whole batch after a later removal conflicts, without spending revs on the refused attempt', async () => {
+    const { store: laptop, open } = await server.account();
+    const a = await laptop.create('connection', connection('a'));
+    const b = await laptop.create('connection', connection('b'));
+    if (!a.ok || !b.ok) throw new Error('create failed');
+    const phone = await open();
+    await phone.pull();
+    await laptop.update('connection', b.data.id, renamed('c'));
+
+    expect(await phone.batch([
+      { ...a.data, type: 'restore', value: connection('changed') },
+      { type: 'remove', id: b.data.id },
+    ])).toEqual({ ok: true, data: null });
+    expect(phone.get('connection', a.data.id)).toMatchObject({ rev: 4, value: connection('changed') });
+    await laptop.pull();
+    expect(laptop.get('connection', a.data.id)).toEqual(phone.get('connection', a.data.id));
+    expect(laptop.get('connection', b.data.id)).toBeNull();
+  });
+
+  it('splits by sealed request bytes, with the owner last and progress after each acknowledged object', async () => {
+    const { accountId, vaultKey } = await server.account();
+    const batches: { writes: { id: string; body: string }[] }[] = [];
+    const request = async <T,>(...args: Parameters<typeof api>) => {
+      if (args[1] === 'objects/batch') batches.push(args[2] as (typeof batches)[number]);
+      return api<T>(...args);
+    };
+    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const id = crypto.randomUUID();
+    const text = Array.from({ length: 16 }, () => toBase64(randomBytes(65_535))).join('');
+    const writes: Write[] = [
+      { type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } },
+      ...Array.from({ length: 3 }, (_, at): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: id, value: { type: 'message', role: 'user', at, text, receipt: null } })),
+    ];
+    const progress: string[] = [];
+    expect(await store.batch(writes, (write) => progress.push(write.id))).toEqual({ ok: true, data: null });
+    expect(batches.map(({ writes }) => writes.length)).toEqual([2, 2]);
+    expect(progress).toEqual([...writes.slice(1), writes[0]!].map(({ id }) => id));
+    for (const batch of batches) {
+      expect(new TextEncoder().encode(JSON.stringify(batch)).length).toBeLessThanOrEqual(BATCH_LIMITS.bytes);
+      expect(batch.writes.every(({ body }) => body.length <= BATCH_LIMITS.body)).toBe(true);
+    }
+    expect(store.children('entry', id).map(({ value }) => value)).toEqual(writes.slice(1).map((write) => write.type !== 'remove' && write.value));
+    expect(store.get('chat', id)?.rev).toBe(4);
   });
 });

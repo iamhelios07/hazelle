@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { BATCH_LIMITS } from './objects';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -18,21 +19,23 @@ async function signedIn() {
 }
 
 async function sync(cookie: string, since = 0): Promise<Page> {
-  return (await (await t.get(`objects?since=${since}`, cookie)).json()) as Page;
+  const { limits, ...page } = (await (await t.get(`objects?since=${since}`, cookie)).json()) as Page & { limits: typeof BATCH_LIMITS };
+  expect(limits).toEqual(BATCH_LIMITS);
+  return page;
 }
 
 async function write(cookie: string, id: string, input: Record<string, unknown>) {
-  const response = await t.put(`objects/${id}`, input, cookie);
-  return { status: response.status, json: (await response.json()) as { rev?: number; error?: string } };
+  const response = await t.post('objects/batch', { writes: [{ id, parent: null, baseRev: null, ...input }] }, cookie);
+  return { status: response.status, json: (await response.json()) as { revs?: number[]; error?: string } };
 }
 
 describe('objects', () => {
   it('creates, updates with a version check, and syncs from a cursor', async () => {
     const cookie = await signedIn();
-    expect(await write(cookie, A, { kind: 'settings', body: 'b25l' })).toEqual({ status: 200, json: { rev: 1 } });
-    expect(await write(cookie, B, { kind: 'connection', parent: A, body: 'dHdv' })).toEqual({ status: 200, json: { rev: 2 } });
+    expect(await write(cookie, A, { kind: 'settings', body: 'b25l' })).toEqual({ status: 200, json: { revs: [1] } });
+    expect(await write(cookie, B, { kind: 'connection', parent: A, body: 'dHdv' })).toEqual({ status: 200, json: { revs: [2] } });
 
-    expect(await write(cookie, A, { kind: 'settings', body: 'bmV3', baseRev: 1 })).toEqual({ status: 200, json: { rev: 3 } });
+    expect(await write(cookie, A, { kind: 'settings', body: 'bmV3', baseRev: 1 })).toEqual({ status: 200, json: { revs: [3] } });
     expect(await write(cookie, A, { kind: 'settings', body: 'c3RhbGU=', baseRev: 1 })).toEqual({ status: 409, json: { error: 'conflict' } });
     expect(await write(cookie, A, { kind: 'settings', body: 'YWdhaW4=' })).toEqual({ status: 409, json: { error: 'conflict' } });
     expect(await write(cookie, A, { kind: 'connection', body: 'a2luZA==', baseRev: 3 })).toEqual({ status: 409, json: { error: 'conflict' } });
@@ -52,12 +55,12 @@ describe('objects', () => {
   it('deletes to a bodiless row that syncs, and restores by writing it again', async () => {
     const cookie = await signedIn();
     await write(cookie, A, { kind: 'connection', body: 'a2V5' });
-    expect((await t.delete(`objects/${A}`, { kind: 'connection', baseRev: 2 }, cookie)).status).toBe(409);
-    const deleted = await t.delete(`objects/${A}`, { kind: 'connection', baseRev: 1 }, cookie);
-    expect(await deleted.json()).toEqual({ rev: 2 });
+    expect((await t.post('objects/batch', { writes: [{ id: A, kind: 'connection', parent: null, body: null, baseRev: 2 }] }, cookie)).status).toBe(409);
+    const deleted = await t.post('objects/batch', { writes: [{ id: A, kind: 'connection', parent: null, body: null, baseRev: 1 }] }, cookie);
+    expect(await deleted.json()).toEqual({ revs: [2] });
     expect((await sync(cookie, 1)).changes).toEqual([{ id: A, kind: 'connection', parent: null, rev: 2, body: null }]);
 
-    expect(await write(cookie, A, { kind: 'connection', body: 'a2V5', baseRev: 2 })).toEqual({ status: 200, json: { rev: 3 } });
+    expect(await write(cookie, A, { kind: 'connection', body: 'a2V5', baseRev: 2 })).toEqual({ status: 200, json: { revs: [3] } });
     expect((await sync(cookie, 2)).changes).toEqual([{ id: A, kind: 'connection', parent: null, rev: 3, body: 'a2V5' }]);
   });
 
@@ -66,14 +69,14 @@ describe('objects', () => {
     const C = '33333333-3333-4333-8333-333333333333';
     await write(cookie, A, { kind: 'chat', body: 'YQ==' });
     await write(cookie, B, { kind: 'chat', body: 'Yg==' });
-    expect(await write(cookie, C, { kind: 'entry', parent: A, body: 'Yw==' })).toEqual({ status: 200, json: { rev: 3 } });
+    expect(await write(cookie, C, { kind: 'entry', parent: A, body: 'Yw==' })).toEqual({ status: 200, json: { revs: [3] } });
     expect(await write(cookie, C, { kind: 'entry', parent: B, body: 'ZA==', baseRev: 3 })).toEqual({ status: 400, json: { error: 'bad-input' } });
     expect(await write(cookie, C, { kind: 'entry', body: 'ZA==', baseRev: 3 })).toEqual({ status: 400, json: { error: 'bad-input' } });
 
-    const deleted = await t.delete(`objects/${C}`, { kind: 'entry', baseRev: 3 }, cookie);
-    expect(await deleted.json()).toEqual({ rev: 4 });
+    const deleted = await t.post('objects/batch', { writes: [{ id: C, kind: 'entry', parent: A, body: null, baseRev: 3 }] }, cookie);
+    expect(await deleted.json()).toEqual({ revs: [4] });
     expect(await write(cookie, C, { kind: 'entry', parent: B, body: 'Yw==', baseRev: 4 })).toEqual({ status: 400, json: { error: 'bad-input' } });
-    expect(await write(cookie, C, { kind: 'entry', parent: A, body: 'Yw==', baseRev: 4 })).toEqual({ status: 200, json: { rev: 5 } });
+    expect(await write(cookie, C, { kind: 'entry', parent: A, body: 'Yw==', baseRev: 4 })).toEqual({ status: 200, json: { revs: [5] } });
     expect((await sync(cookie, 4)).changes).toEqual([{ id: C, kind: 'entry', parent: A, rev: 5, body: 'Yw==' }]);
   });
 
@@ -97,12 +100,43 @@ describe('objects', () => {
 
   it('refuses malformed writes, an oversized body and a missing session', async () => {
     const cookie = await signedIn();
-    expect((await t.put('objects/not-a-uuid', { kind: 'settings', body: 'eA==' }, cookie)).status).toBe(400);
-    expect((await t.put(`objects/${A}`, { kind: 'Settings', body: 'eA==' }, cookie)).status).toBe(400);
-    expect((await t.put(`objects/${A}`, { kind: 'lore', parent: 'x', body: 'eA==' }, cookie)).status).toBe(400);
-    expect((await t.put(`objects/${A}`, { kind: 'settings', body: 'eA==', baseRev: 0 }, cookie)).status).toBe(400);
-    expect((await t.put(`objects/${A}`, { kind: 'settings', body: 'x'.repeat(1_500_001) }, cookie)).status).toBe(413);
+    expect((await write(cookie, 'not-a-uuid', { kind: 'settings', body: 'eA==' })).status).toBe(400);
+    expect((await write(cookie, A, { kind: 'Settings', body: 'eA==' })).status).toBe(400);
+    expect((await write(cookie, A, { kind: 'lore', parent: 'x', body: 'eA==' })).status).toBe(400);
+    expect((await write(cookie, A, { kind: 'settings', body: 'eA==', baseRev: 0 })).status).toBe(400);
+    expect((await write(cookie, A, { kind: 'settings', body: 'x'.repeat(1_500_001) })).status).toBe(413);
     expect((await t.get('objects?since=-1', cookie)).status).toBe(400);
     expect((await t.get('objects?since=0')).status).toBe(401);
+  });
+
+  it('refuses a later conflict or invalid item without writing earlier items or advancing the account rev', async () => {
+    const cookie = await signedIn();
+    await write(cookie, A, { kind: 'chat', body: 'original' });
+    const first = { id: B, kind: 'entry', parent: A, body: 'new', baseRev: null };
+    const send = (last: unknown) => t.post('objects/batch', { writes: [first, last] }, cookie);
+    const current = { id: A, kind: 'chat', parent: null, body: 'changed', baseRev: 2 };
+    expect((await send(current)).status).toBe(409);
+    expect((await send({ ...current, parent: B, baseRev: 1 })).status).toBe(400);
+    expect((await send({ ...current, body: '' })).status).toBe(400);
+    expect((await send(first)).status).toBe(400);
+    expect((await sync(cookie)).changes).toEqual([{ id: A, kind: 'chat', parent: null, rev: 1, body: 'original' }]);
+    expect(await t.env.DB.prepare('SELECT rev FROM accounts').first('rev')).toBe(1);
+    const response = await send({ ...current, baseRev: 1 });
+    expect(await response.json()).toEqual({ revs: [2, 3] });
+    expect((await sync(cookie)).changes.map(({ id, rev }) => [id, rev])).toEqual([[B, 2], [A, 3]]);
+  });
+
+  it('enforces item and UTF-8 body budgets, including a streamed request without content-length', async () => {
+    const cookie = await signedIn();
+    const item = () => ({ id: crypto.randomUUID(), kind: 'entry', parent: null, body: 'x', baseRev: null });
+    expect((await t.post('objects/batch', { writes: [] }, cookie)).status).toBe(400);
+    expect((await t.post('objects/batch', { writes: Array.from({ length: BATCH_LIMITS.items + 1 }, item) }, cookie)).status).toBe(413);
+    expect((await t.post('objects/batch', { writes: [{ ...item(), body: '한'.repeat(500_001) }] }, cookie)).status).toBe(413);
+    const body = JSON.stringify({ writes: Array.from({ length: 3 }, () => ({ ...item(), body: 'x'.repeat(1_400_000) })) });
+    expect((await t.raw('objects/batch', { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body })).status).toBe(413);
+    expect(await t.env.DB.prepare('SELECT rev FROM accounts').first('rev')).toBe(0);
+    const accepted = await t.post('objects/batch', { writes: Array.from({ length: BATCH_LIMITS.items }, item) }, cookie);
+    expect(await accepted.json()).toEqual({ revs: Array.from({ length: BATCH_LIMITS.items }, (_, index) => index + 1) });
+    expect((await t.post('objects/batch', { writes: [item()] })).status).toBe(401);
   });
 });

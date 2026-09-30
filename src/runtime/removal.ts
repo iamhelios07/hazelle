@@ -1,4 +1,6 @@
 import { KINDS, type Kind, type Rule } from '../model/kinds';
+import type { ApiResult } from './api';
+import type { Files } from './files';
 import type { ObjectStore } from './store';
 
 // A sealed file or a stored object, by id.
@@ -32,4 +34,36 @@ function owned(store: ObjectStore, owner: Kind, id: string): { kind: Kind; id: s
     const byBody = link?.kind === owner ? store.list(kind).filter(({ value }) => (value as Record<string, unknown>)[link.field] === id) : [];
     return [...byParent, ...byBody];
   });
+}
+
+// Stable within each depth: entries retain their input order, while every owner follows its children.
+export function orderOwned<T extends { kind: Kind }>(objects: T[]): T[] {
+  const depth = (kind: Kind): number => {
+    const rule: Rule = KINDS[kind];
+    const owner = rule.parent ?? rule.owner?.kind;
+    return owner ? depth(owner) + 1 : 0;
+  };
+  return [...objects].sort((a, b) => depth(b.kind) - depth(a.kind));
+}
+
+export async function removeOwned(store: ObjectStore, files: Files, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
+  const rounds = planRemoval(store, root);
+  const total = rounds.reduce((sum, round) => sum + round.length, 0);
+  let done = 0;
+  progress(done, total);
+  for (const round of rounds) {
+    const objects = [];
+    for (const removal of round) {
+      if (removal.from === 'store') objects.push({ type: 'remove' as const, id: removal.id });
+      else {
+        const removed = await files.remove(removal.id);
+        if (!removed.ok) return removed;
+        progress(++done, total);
+      }
+    }
+    if (!objects.length) continue;
+    const removed = await store.batch(objects, () => progress(++done, total));
+    if (!removed.ok) return removed;
+  }
+  return { ok: true, data: null };
 }
