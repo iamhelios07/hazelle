@@ -8,9 +8,6 @@ import { contexts, renderChat, type ChatScope } from './render';
 export type Display = { texts: string[]; css: string };
 
 const STYLE = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
-// Only data: URLs load. The CSP refuses the others anyway, and @import is refused in a constructed stylesheet.
-const OUTSIDE_URL = /url\(\s*(?!['"]?data:)[^)]*\)/gi;
-const IMPORT = /@import[^;]*;?/gi;
 
 export function display(scope: ChatScope): Display {
   const { texts, variables } = renderChat('display', scope);
@@ -23,9 +20,7 @@ export function display(scope: ChatScope): Display {
   // Read with the variables as the last message left them, as Risu reads it with the chat's current ones.
   if (scope.card?.background) take(unescapeCbs(evaluate(scope.card.background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
   const shown = texts.map(take);
-  // Risu prefixes every class with x-risu- in the HTML and in the CSS, so a bot may write either; both lose it here.
-  const css = new Set(blocks.map((block) => block.replaceAll('.x-risu-', '.').replace(IMPORT, '').replace(OUTSIDE_URL, 'none').trim()));
-  return { texts: shown, css: [...css].join('\n') };
+  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n') };
 }
 
 // Markdown as Risu parses it (markdown-it, soft breaks kept, no indented code), so a bot's HTML blocks and the prose

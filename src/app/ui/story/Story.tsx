@@ -24,6 +24,13 @@ const SET_ASIDE = 'data-style';
 // No form: the CSP does not limit where one posts.
 const CONFIG = { RETURN_DOM_FRAGMENT: true as const, FORBID_TAGS: ['form', 'style'], FORBID_ATTR: ['style'], ADD_ATTR: ['risu-btn', 'risu-trigger', 'risu-mark'] };
 const VOID = new Set(['BR', 'HR', 'IMG', 'INPUT', 'WBR']);
+const OUTSIDE_URL = /url\(\s*(?!['"]?data:)[^)]*\)/gi;
+const IMPORT = /@import[^;]*;?/gi;
+
+// For a stylesheet and a style attribute alike. Risu prefixes every class with x-risu- in the HTML and in the CSS, so
+// a bot may write either, and both lose it. Only data: URLs load until a bot's assets do: the CSP refuses the others
+// anyway, and a constructed stylesheet refuses @import.
+const cleanCss = (css: string) => css.replaceAll('.x-risu-', '.').replace(IMPORT, '').replace(OUTSIDE_URL, 'none');
 
 let base: CSSStyleSheet | null = null;
 const sheets = new Map<string, CSSStyleSheet>();
@@ -32,7 +39,7 @@ function sheetFor(css: string): CSSStyleSheet {
   let sheet = sheets.get(css);
   if (!sheet) {
     sheet = new CSSStyleSheet();
-    sheet.replaceSync(css);
+    sheet.replaceSync(cleanCss(css));
     sheets.set(css, sheet);
     if (sheets.size > 8) sheets.delete(sheets.keys().next().value!);
   }
@@ -42,10 +49,9 @@ function sheetFor(css: string): CSSStyleSheet {
 function sanitize(html: string, cursor: boolean): DocumentFragment {
   const fragment = DOMPurify.sanitize(html.replace(STYLE_ATTRIBUTE, `$1${SET_ASIDE}`), CONFIG);
   for (const element of fragment.querySelectorAll<HTMLElement | SVGElement>(`[${SET_ASIDE}]`)) {
-    element.style.cssText = element.getAttribute(SET_ASIDE)!;
+    element.style.cssText = cleanCss(element.getAttribute(SET_ASIDE)!);
     element.removeAttribute(SET_ASIDE);
   }
-  // Risu prefixes every class with x-risu-, so a bot may write either; the CSS loses it too (engine/display).
   for (const element of fragment.querySelectorAll('[class]')) element.setAttribute('class', element.getAttribute('class')!.replace(/(^|\s)x-risu-/g, '$1'));
   for (const link of fragment.querySelectorAll('a[href]')) {
     if (!/^https?:/i.test(link.getAttribute('href')!)) {

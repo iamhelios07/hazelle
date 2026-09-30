@@ -37,7 +37,7 @@ export const HOSTILE = {
           '<img id="outside" src="https://example.com/a.png" onerror="window.ran = 1"><script>window.ran = 1</script>',
           '<form action="https://example.com/post"><input id="field"></form>',
           '<a id="out" href="https://example.com">out</a> <a id="js" href="javascript:window.ran = 1">js</a>',
-          '<div id="tone" class="x-risu-tone">tone</div>',
+          '<div id="tone" class="x-risu-tone" style="background: url(https://example.com/b.png)">tone</div>',
           '{{button::누르기::go}}',
           '',
           '*nods* "hello"',

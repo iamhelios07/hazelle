@@ -26,7 +26,7 @@ const card: Card = {
     { name: 'hp', find: '\\[HP (\\d+)\\]', replace: '{{setvar::hp::$1}}<style>.x-risu-box { color: red }</style><div class="box">HP $1</div>', stage: 'output', flags: null },
     { name: 'box', find: 'BOX', replace: '<style>.x-risu-box { color: red }</style><div class="box">box</div>', stage: 'display', flags: null },
   ],
-  background: '<style>.hp::after { content: "{{getvar::hp}}"; background: url(https://example.com/a.png) }</style><style>@import url(x.css); .bg { background: url(data:image/png;base64,AA) }</style>',
+  background: '<style>.hp::after { content: "{{getvar::hp}}" }</style>',
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
@@ -48,7 +48,7 @@ describe('display', () => {
   it('takes every <style> out of the texts into one stylesheet for the chat, the backgroundHTML’s first, read with the last variables', () => {
     const { texts, css } = display(scope);
     expect(texts).toEqual(['<div class="box">box</div>\n', 'The lamp. <div class="box">HP 7</div>\n']);
-    expect(css.split('\n')).toEqual(['.hp::after { content: "7"; background: none }', '.bg { background: url(data:image/png;base64,AA) }', '.box { color: red }']);
+    expect(css.split('\n')).toEqual(['.hp::after { content: "7" }', '.x-risu-box { color: red }']);
   });
 });
 
