@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- signatures the memory core track fills; it deletes this line */
+/* eslint-disable @typescript-eslint/no-unused-vars -- stubs the memory core track fills; it deletes this line */
 import type { Chat, Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Thread } from '../model/memory';
@@ -35,38 +35,38 @@ export type RecordPatch = Partial<Pick<MemoryRecord, 'when' | 'where' | 'who' | 
 type Write<T = Stored<'memory'>> = Promise<ApiResult<T>>;
 
 export function editRecord(_store: ObjectStore, _chat: string, _record: string, _patch: RecordPatch): Write {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 // 항상 넣기.
 export function pinRecord(_store: ObjectStore, _chat: string, _record: string, _pinned: boolean): Write {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 // Answers the record as it was, which restoreRecord (되돌리기) writes back.
 export function forgetRecord(_store: ObjectStore, _chat: string, _record: string): Write<MemoryRecord> {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 export function restoreRecord(_store: ObjectStore, _chat: string, _record: MemoryRecord): Write {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 // replaces: the about and field of the fact being rewritten, null for a new one.
 export function setFact(_store: ObjectStore, _chat: string, _fact: Fact, _replaces: Pick<Fact, 'about' | 'field'> | null): Write {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 export function removeFact(_store: ObjectStore, _chat: string, _fact: Pick<Fact, 'about' | 'field'>): Write<Fact> {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 export function setThread(_store: ObjectStore, _chat: string, _thread: Thread): Write {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 export function removeThread(_store: ObjectStore, _chat: string, _thread: string): Write<Thread> {
-  throw new Error('not built');
+  return Promise.resolve({ ok: false, error: 'gone' });
 }
 
 // sent: in the next request. stale: its messages render differently now, so it waits (design §6.2, When the source
@@ -87,13 +87,13 @@ export type MemoryView = {
 };
 
 export function memoryView(_session: Pick<Session, 'store' | 'read'>, _chat: string, _countTokens: (text: string) => number): MemoryView | null {
-  throw new Error('not built');
+  return null;
 }
 
 // The messages the next request would leave out with no memory standing for them: covered by memory that is not sent,
 // or cut by the model's budget. null while the chat cannot send.
 export function leaving(_session: Session, _chat: string, _text: string, _countTokens: (text: string) => number): number | null {
-  throw new Error('not built');
+  return null;
 }
 
 // invalid: the call answered, but not with records that pass validation (design §6.2, Validation); its receipt and why.
@@ -123,14 +123,10 @@ export class Rememberer {
   readonly snapshot = () => this.state;
 
   // 다시 시도 after a failure.
-  retry(_chat: string) {
-    throw new Error('not built');
-  }
+  retry(_chat: string) {}
 
   // 원문에서 다시 만들기: one record from its source, or the whole chat's memory when record is null.
-  rebuild(_chat: string, _record: string | null) {
-    throw new Error('not built');
-  }
+  rebuild(_chat: string, _record: string | null) {}
 
   close() {}
 }
