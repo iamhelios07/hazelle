@@ -235,7 +235,10 @@ function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], sp
       if (value === null) state = state.filter((fact) => fact !== held);
       else state = at === -1 ? [...state, { about, field, value, record }] : state.with(at, { about, field, value, record });
     }
-    threads = [...threads.filter((thread) => !draft.closes.includes(threadLabel(thread))), ...draft.opens.map((text) => ({ id: crypto.randomUUID(), text, opened: record }))];
+    const kept = threads.filter((thread) => !draft.closes.includes(threadLabel(thread)));
+    // A thread already open, said again, stays one thread.
+    const known = new Set(kept.map(({ text }) => sameText(text)));
+    threads = [...kept, ...draft.opens.filter((text) => !known.has(sameText(text))).map((text) => ({ id: crypto.randomUUID(), text, opened: record }))];
   });
   return { records, state, threads };
 }
@@ -501,6 +504,8 @@ export class Rememberer {
     return outcome;
   }
 }
+
+const sameText = (text: string) => text.replace(/\s+/g, ' ').trim();
 
 const readKey = (sources: Source[]) => sources.map(({ message, version }) => `${message}/${version}`).join(' ');
 

@@ -92,4 +92,22 @@ describe('Rememberer', () => {
       expect(log).toHaveLength(1);
       expect(chatMemory(session.store, chat).records).toEqual([]);
     }));
+  it('keeps a thread said again as the one thread already open', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      await setDefaultMemory(session.store, { window: 1, batch: 1 });
+      const chat = crypto.randomUUID();
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      const said = crypto.randomUUID();
+      const text = 'Luna waits at the pier.';
+      await appendUserMessage(session.store, chat, { id: said, text });
+      const earlier = { id: 'r0', sources: [{ message: said, version: said }], print: fingerprint([{ role: 'user', text }]), when: null, where: null, who: ['Luna'], what: 'Luna waits.', lines: [], outcome: '', state: [], opens: ['Luna waits for jin.'], closes: [], receipt: null, at: 0 };
+      await session.store.create('memory', { records: [earlier], state: [], threads: [{ id: crypto.randomUUID(), text: 'Luna waits for jin.', opened: 'r0' }] }, { id: memoryId(chat), parent: chat });
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'jin is late again.' });
+      const answer = JSON.stringify({ records: [{ to: 1, when: null, where: null, who: ['jin'], what: 'jin is late.', lines: [], outcome: '', state: [], opens: ['Luna waits  for jin. '], closes: [] }] });
+      stubRelay(inTurn([saying('Luna sighs.'), saying(answer)]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(2));
+      expect(chatMemory(session.store, chat).threads.map(({ opened }) => opened)).toEqual(['r0']);
+    }));
 });
