@@ -69,7 +69,7 @@ describe('Translator', () => {
   it('keeps an unsaved greeting’s automatic translation on its character, which a new chat opens with', () =>
     server.withSession(async (session) => {
       await answerable(session);
-      const card = { name: 'Luna', nickname: null, description: '', personality: '', scenario: '', greetings: ['Hello'], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } };
+      const card = { name: 'Luna', nickname: null, description: '', personality: '', scenario: '', greetings: ['Hello'], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], lua: [], lowLevelAccess: false, loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } };
       const created = await session.store.create('character', { card, folder: null, loreFolders: [] });
       const character = created.ok ? created.data.id : '';
       await setTranslate(session.store, character, { replies: true });

@@ -39,6 +39,8 @@ const card: Card = {
   utility: false,
   bias: [],
   regex: [],
+  lua: [],
+  lowLevelAccess: false,
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 const lore: Lore = {

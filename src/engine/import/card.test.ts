@@ -213,7 +213,8 @@ describe('importCard', () => {
       { name: 'Castle', keys: ['성', 'castle'], caseSensitive: true, insertionOrder: 120, content: '@@probability 40\n{{char}} lives in the castle.', folder: 0 },
       { name: 'Dragon', keys: ['dragon'], content: '@@end\n<user> met a dragon.', folder: null },
     ]);
-    expect(counts(imported)).toEqual({ lua: 1, trigger: 1, 'regex-stage': 1 });
+    expect(imported.card.lua).toHaveLength(1);
+    expect(counts(imported)).toEqual({ trigger: 1, 'regex-stage': 1 });
   });
 
   it('imports the card alone when module.risum is unreadable', () => {
@@ -223,7 +224,7 @@ describe('importCard', () => {
     expect(counts(imported)).toEqual({ module: 1 });
   });
 
-  it('counts what it cannot run, but not a trigger that does nothing, and leaves it in the text', () => {
+  it('counts what it cannot run, but not a trigger that does nothing, leaves it in the text and keeps Lua', () => {
     const imported = json(
       v3({
         description: '{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}',
@@ -238,8 +239,9 @@ describe('importCard', () => {
             additionalText: 'extra',
             prebuiltAssetCommand: true,
             toggles: 'sims=시뮬레이터 모드\n모드 고르기',
+            lowLevelAccess: true,
             triggerscript: [
-              { effect: [{ type: 'triggerlua', code: 'setChatVar("hp", "1")' }] },
+              { comment: 'hp', type: 'start', effect: [{ type: 'triggerlua', code: 'setChatVar("hp", "1")' }] },
               { effect: [{ type: 'setvar' }] },
               { effect: [{ type: 'triggerlua', code: ' ' }] },
               { effect: [{ type: 'v2Header' }, { type: 'v2EndIndent' }] },
@@ -255,9 +257,10 @@ describe('importCard', () => {
     );
     expect(imported.card.description).toBe('{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}');
     expect(imported.avatar).toBeNull();
+    expect(imported.card.lua).toEqual([{ name: 'hp', code: 'setChatVar("hp", "1")' }]);
+    expect(imported.card.lowLevelAccess).toBe(true);
     expect(imported.report.unsupported).toEqual([
       { kind: 'trigger', count: 1 },
-      { kind: 'lua', count: 1 },
       { kind: 'asset', count: 1 },
       { kind: 'background-html', count: 1 },
       { kind: 'additional-text', count: 1 },

@@ -81,11 +81,13 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
       : list(risu.additionalAssets).filter(Array.isArray).map(([name, uri]) => ({ name: text(name), uri: text(uri) }));
   add(tally, 'asset', listed.length - (icon ? 1 : 0) - (spec === 'v3' ? assets.length : 0));
   if (spec === 'v2') add(tally, 'asset', list(risu.emotions).length + Object.keys(record(risu.vits)).length);
-  for (const trigger of module ? list(module.trigger) : list(risu.triggerscript)) {
-    const effects = list(record(trigger).effect).map(record);
-    const lua = effects[0]?.type === 'triggerlua';
-    if (lua && text(effects[0]!.code).trim()) add(tally, 'lua');
-    else if (!lua && effects.some((effect) => !INERT.has(effect.type))) add(tally, 'trigger');
+  const lua: Card['lua'] = [];
+  for (const trigger of (module ? list(module.trigger) : list(risu.triggerscript)).map(record)) {
+    const effects = list(trigger.effect).map(record);
+    const code = effects[0]?.type === 'triggerlua' ? text(effects[0].code) : null;
+    if (code === null) {
+      if (effects.some((effect) => !INERT.has(effect.type))) add(tally, 'trigger');
+    } else if (code.trim()) lua.push({ name: text(trigger.comment), code });
   }
   const background = text(risu.backgroundHTML);
   if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
@@ -117,6 +119,8 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
       .filter((pair): pair is [string, number] => Array.isArray(pair) && typeof pair[0] === 'string' && typeof pair[1] === 'number')
       .map(([key, value]): [string, number] => [key, value]),
     regex: regexScripts(module ? list(module.regex) : list(risu.customScripts), tally),
+    lua,
+    lowLevelAccess: risu.lowLevelAccess === true,
     ...(background.trim() ? { background } : {}),
     loreSettings: {
       scanDepth: count(book.scan_depth),

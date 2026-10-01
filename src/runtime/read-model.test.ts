@@ -39,7 +39,7 @@ async function account() {
 
 const chat: Chat = { title: null, character: null, models: {} };
 const message = (text: string) => ({ type: 'message' as const, role: 'user' as const, text, at: 0, receipt: null });
-const card = (name: string): Card => ({ name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } });
+const card = (name: string): Card => ({ name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], lua: [], lowLevelAccess: false, loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } });
 const liveTalk = () => {
   let turn: Turn | null = null;
   const listeners = new Set<() => void>();

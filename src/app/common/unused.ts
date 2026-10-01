@@ -3,6 +3,7 @@ import type { Unused } from '../../engine/pipeline';
 const LABEL: Record<Unused['kind'], (count: number) => string> = {
   bias: (count) => `바이어스 ${count}개`,
   utility: () => '유틸리티 봇 설정',
+  lua: (count) => `Lua 트리거 ${count}개`,
 };
 
 // What a character brought that its chats do not use yet, or null.

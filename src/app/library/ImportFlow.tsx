@@ -30,7 +30,6 @@ export function useImport() {
 
 const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   trigger: (count) => `트리거 ${count}개`,
-  lua: (count) => `Lua 트리거 ${count}개`,
   asset: (count) => `에셋 ${count}개`,
   'background-html': () => '배경 HTML의 스타일 밖 내용',
   'additional-text': () => '추가 설명(임베딩)',

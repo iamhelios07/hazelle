@@ -19,6 +19,11 @@ export type Card = {
   utility: boolean;
   bias: [string, number][];
   regex: RegexScript[];
+  // The bot's Lua triggers, kept for when Lua runs and not run before. Risu runs a Lua trigger at every event,
+  // whatever its trigger type, so the type is not kept; name is Risu's comment.
+  lua: { name: string; code: string }[];
+  // The bot asks for Risu's lowLevelAccess, which lets its scripts call models; nothing grants it yet.
+  lowLevelAccess: boolean;
   // The card's backgroundHTML, absent when it has none. Only its <style> blocks are shown (design §6.4).
   background?: string;
   // Each setting stands alone, as in CCv3; null leaves it to the global default.
@@ -57,7 +62,6 @@ export type Imported = {
 
 export const UNSUPPORTED_KINDS = [
   'trigger',
-  'lua',
   'asset',
   'background-html',
   'additional-text',
