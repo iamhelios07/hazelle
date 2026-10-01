@@ -61,7 +61,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   });
 
   const opened = record === null ? undefined : memory.records.find((each) => each.id === record);
-  if (opened) return <ChatMemoryRecord chat={id} record={opened} status={view?.records.get(opened.id) ?? null} messages={messages} actions={actions} />;
+  if (opened) return <ChatMemoryRecord chat={id} record={opened} status={view?.records.get(opened.id) ?? null} stale={view?.stale.get(opened.id) ?? null} messages={messages} actions={actions} />;
 
   async function revert() {
     await save.flush();

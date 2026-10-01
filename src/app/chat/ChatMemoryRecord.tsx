@@ -1,4 +1,5 @@
 import type { MemoryRecord } from '../../model/memory';
+import type { Staleness } from '../../engine/memory';
 import { editRecord, forgetRecord, pinRecord, restoreRecord, type RecordPatch, type RecordStatus } from '../../runtime/memory';
 import type { Shown } from '../../runtime/talk';
 import { EntryList } from '../common/EntryList';
@@ -15,12 +16,14 @@ type Props = {
   record: MemoryRecord;
   // null while the panel's view is being worked out.
   status: RecordStatus | null;
+  // Why its messages read differently now; a record the user edited or pinned is still sent while stale.
+  stale: Staleness | null;
   messages: Shown[];
   actions: ChatActions;
 };
 
 // Its fields save as they are typed.
-export function ChatMemoryRecord({ chat, record, status, messages, actions }: Props) {
+export function ChatMemoryRecord({ chat, record, status, stale, messages, actions }: Props) {
   const session = useSession();
   const { store } = session;
   const toast = useToast();
@@ -65,9 +68,9 @@ export function ChatMemoryRecord({ chat, record, status, messages, actions }: Pr
       page={record.id}
       onClose={actions.closePanel}
     >
-      {status === 'stale' && (
-        <Callout tone="warn" action={{ label: '원문에서 다시 만들기', onClick: rebuild }}>
-          원문이 바뀌어서 이 기록은 보내지 않아요. 항상 넣기를 켜면 그대로 보내요.
+      {stale && !record.forgotten && (
+        <Callout tone="warn" action={stale === 'changed' ? { label: '원문에서 다시 만들기', onClick: rebuild } : undefined}>
+          {`${stale === 'changed' ? '원문이 바뀌었어요.' : '원문 메시지가 지워졌어요.'} ${status === 'stale' ? '그래서 이 기록은 보내지 않아요. 항상 넣기를 켜면 그대로 보내요.' : '직접 고치거나 항상 넣기를 켠 기록이라 그대로 보내요.'}`}
         </Callout>
       )}
       {status === 'over' && <Text variant="note">기억 예산을 넘어서 지금은 보내지 않아요.</Text>}

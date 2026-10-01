@@ -100,7 +100,7 @@ export type CacheMark = 'set' | 'auto';
 
 // The cache point after each block: its own, or one the engine sets itself.
 export function cacheMarks(blocks: readonly Block[]): Map<string, CacheMark> {
-  const auto = autoCachePoints(blocks.map((block) => (block.kind === 'slot' && block.slot === 'chat' ? 'chat' : null))).map((index) => blocks[index]!.id);
+  const auto = autoCachePoints(blocks.map((block) => (block.kind === 'slot' && (block.slot === 'chat' || block.slot === 'memory') ? block.slot : null))).map((index) => blocks[index]!.id);
   const marks = new Map<string, CacheMark>();
   for (const block of blocks) {
     if (block.cache) marks.set(block.id, 'set');

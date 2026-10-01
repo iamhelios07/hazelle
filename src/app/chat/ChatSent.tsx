@@ -132,6 +132,7 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
   const records = new Map((memory?.records ?? []).map((record) => [record.id, record]));
   return (
     <>
+      {!used.slot && <Text variant="note">프롬프트에 장기 기억 자리가 없거나 토글로 빠져서 기억을 보내지 않았어요.</Text>}
       <Facts
         variant="tiles"
         items={[

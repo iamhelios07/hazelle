@@ -8,9 +8,8 @@ import { readToggles } from './toggles';
 
 type Json = Record<string, unknown>;
 
-// What a preset holds that the prompt does not take, in the order the summary lists it. Nothing counts memory any more,
-// since a memory item becomes a 장기 기억 slot; it stays listed only until app/prompts/PresetImport drops its row.
-const UNSUPPORTED = ['memory', 'jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
+// What a preset holds that the prompt does not take, in the order the summary lists it.
+const UNSUPPORTED = ['jailbreak', 'cot', 'chatml', 'cache-narrowed', 'unread-item', 'repeated-slot', 'toggle-line', 'preset-text', 'regex', 'variables', 'settings'] as const;
 export type PresetUnsupportedKind = (typeof UNSUPPORTED)[number];
 export type PresetUnsupported = { kind: PresetUnsupportedKind; count: number };
 

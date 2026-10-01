@@ -17,7 +17,6 @@ const FAILURE: Record<PresetFailure['kind'], string> = {
 
 // What a preset held that the prompt did not take.
 const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: string; note?: string }> = {
-  memory: (count) => ({ title: `장기 기억 자리 ${count}개`, note: '장기 기억 자리는 프롬프트에서 직접 놓아 주세요.' }),
   jailbreak: (count) => ({ title: `탈옥 블록 ${count}개` }),
   cot: (count) => ({ title: `생각 유도(CoT) 블록 ${count}개` }),
   chatml: (count) => ({ title: `ChatML 블록 ${count}개` }),
