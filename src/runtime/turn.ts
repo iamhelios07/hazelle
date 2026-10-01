@@ -41,14 +41,17 @@ export type Target =
 
 // Why a chat cannot start a turn: no model, or its prompt, persona or its model's 설정 묶음 is missing; own says whether the missing one was the chat's (the model's) own or the default.
 export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; own: boolean } | { kind: 'profile-missing'; own: boolean };
-// A turn also stops before sending on a new chat that was not saved, a user's message that was not translated, a
-// tokenizer that did not load, or a prompt over the model's budget.
+// A turn also stops before sending on a new chat that was not saved, a pull that failed, a chat or message another
+// device deleted, a user's message that was not translated, a tokenizer that did not load, or a prompt over the
+// model's budget.
 export type TurnFailure =
   | TalkFailure
   | Blocked
   | TooLong
   | { kind: 'tokenizer' }
   | { kind: 'unstarted'; failure: ApiFailure }
+  | { kind: 'unpulled'; failure: ApiFailure }
+  | { kind: 'gone' }
   | { kind: 'untranslated'; failure: TranslateFailure };
 
 // Everything one reply needs, read once when it is asked for: the chat, the model, what the prompt is built from (the
@@ -287,9 +290,18 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
       return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
     });
   }
-  const turn = gatherTurn(session, chat, target);
-  if (turn === null || 'kind' in turn) return Promise.resolve(turn);
-  return session.talk.run({ chat, said: turn.said, reply: turn.reply }, (signal) => prepare(session, chat, turn, signal));
+  const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
+  const showing = gatherTurn(session, chat, target, ids);
+  if (showing === null || 'kind' in showing) return Promise.resolve(showing);
+  return session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
+    // Another device may have written to this chat while this page stood open without focus or a timer's pull, so the
+    // prompt is gathered again after a pull. A turn it cannot pull does not send on what may be stale.
+    const unpulled = await session.store.pull();
+    if (unpulled) return { kind: 'unpulled', failure: unpulled };
+    const turn = gatherTurn(session, chat, target, ids);
+    if (turn === null) return { kind: 'gone' };
+    return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
+  });
 }
 
 async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal): Promise<Ask | TooLong | { kind: 'tokenizer' } | Extract<TurnFailure, { kind: 'untranslated' }>> {

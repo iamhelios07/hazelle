@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
-import { startChat } from './chat-log';
+import { appendUserMessage, startChat } from './chat-log';
 import { openSession, type Session } from './session';
-import { answerable, inTurn, stubRelay, testServer } from './testing';
+import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
 
 const server = testServer();
@@ -102,4 +102,24 @@ describe('a detached call', () => {
       expect(shown(messages(session, chat)[1]!)).toMatchObject({ text: 'Hello, traveler.', receipt: { state: 'done' } });
       await vi.waitFor(() => expect(session.store.list('stream')).toEqual([]));
     }));
+});
+
+describe('a send', () => {
+  it('pulls first, so its prompt has what another device wrote since this page last pulled', async () => {
+    const open = await pages();
+    const here = await open();
+    await answerable(here);
+    const chat = crypto.randomUUID();
+    await startChat(here.store, chat, { title: null, character: null, models: {} }, null);
+    const there = await open();
+    try {
+      await appendUserMessage(there.store, chat, { id: crypto.randomUUID(), text: 'Written there' });
+      const log = stubRelay(inTurn([saying('Hello')]));
+      expect(await takeTurn(here, chat, { kind: 'send', text: 'Hi' })).toBeNull();
+      expect(log[0]!.sent.body).toContain('Written there');
+    } finally {
+      here.close();
+      there.close();
+    }
+  });
 });

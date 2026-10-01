@@ -149,6 +149,10 @@ export function describeTurnFailure(failure: TurnFailure): string {
       return `마지막 메시지만 남겨도 프롬프트가 약 ${failure.tokens.toLocaleString('ko-KR')} 토큰이라, 답장 최대 길이를 뺀 이 모델의 자리 ${failure.budget.toLocaleString('ko-KR')} 토큰에 들어가지 않아요. 프롬프트나 로어북을 줄이거나 ${inSettings('models')}에서 이 모델의 설정을 바꿔 주세요.`;
     case 'unstarted':
       return `채팅을 만들지 못했어요. ${describeFailure(failure.failure)}`;
+    case 'unpulled':
+      return `최신 대화를 확인하지 못해서 보내지 않았어요. ${describeFailure(failure.failure)}`;
+    case 'gone':
+      return '다른 기기에서 지워져서 보내지 않았어요.';
     case 'unsent':
       return `보낸 말을 저장하지 못해서 답장을 멈췄어요. ${describeFailure(failure.failure)}`;
     case 'unsaved':
