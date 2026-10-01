@@ -76,6 +76,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         (filter === 'starred' ? starredIds.has(model.id) : FILTERS[filter].test(model))) &&
       (!needle || model.name.toLowerCase().includes(needle) || model.id.toLowerCase().includes(needle)),
   );
+  const starredShown = shown.filter((model) => starredIds.has(model.id));
+  const restShown = shown.filter((model) => !starredIds.has(model.id));
 
   function toggle(model: Model) {
     const on = starredIds.has(model.id);
@@ -93,6 +95,39 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         setPendingStars(null);
       }
     });
+  }
+
+  function row(model: Model) {
+    const on = starredIds.has(model.id);
+    const listed = !listedIds || listedIds.has(model.id);
+    // Only a star already saved has a page to open; one still saving has none yet.
+    const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
+    const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
+    const opens = choice && (choice.kind === 'profile' ? `설정 · ${choice.profile.value.name}` : '설정 없음');
+    const settings = choice && (
+      <Button
+        variant="ghost"
+        size="sm"
+        label={`${opens} · ${model.name}`}
+        onClick={() => navigate({ kind: 'model', connection: id, model: model.id })}
+      >
+        {opens}
+      </Button>
+    );
+    return (
+      <ListItem
+        key={model.id}
+        title={model.name}
+        code={model.id}
+        tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['아직 못 씀', ...tags(model)] : tags(model)}
+        trailing={
+          <Row kind="actions">
+            {settings}
+            <IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표하기`} pressed={on} onClick={() => toggle(model)} />
+          </Row>
+        }
+      />
+    );
   }
 
   async function remove() {
@@ -143,40 +178,10 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         </Callout>
       )}
       {shown.length > 0 ? (
-        <List label="모델">
-          {shown.map((model) => {
-            const on = starredIds.has(model.id);
-            const listed = !listedIds || listedIds.has(model.id);
-            // Only a star already saved has a page to open; one still saving has none yet.
-            const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
-            const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
-            const opens = choice && (choice.kind === 'profile' ? `설정 · ${choice.profile.value.name}` : '설정 없음');
-            const settings = choice && (
-              <Button
-                variant="ghost"
-                size="sm"
-                label={`${opens} · ${model.name}`}
-                onClick={() => navigate({ kind: 'model', connection: id, model: model.id })}
-              >
-                {opens}
-              </Button>
-            );
-            return (
-              <ListItem
-                key={model.id}
-                title={model.name}
-                code={model.id}
-                tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['아직 못 씀', ...tags(model)] : tags(model)}
-                trailing={
-                  <Row kind="actions">
-                    {settings}
-                    <IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표하기`} pressed={on} onClick={() => toggle(model)} />
-                  </Row>
-                }
-              />
-            );
-          })}
-        </List>
+        <Stack gap="group">
+          {starredShown.length > 0 && <List label="별표한 모델">{starredShown.map(row)}</List>}
+          {restShown.length > 0 && <List label="모델">{restShown.map(row)}</List>}
+        </Stack>
       ) : (
         catalog?.ok && <Empty>{needle || filter !== 'all' ? '맞는 모델이 없어요.' : '이 연결은 모델을 하나도 알려 주지 않았어요.'}</Empty>
       )}

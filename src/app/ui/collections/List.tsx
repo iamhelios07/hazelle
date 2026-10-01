@@ -64,13 +64,11 @@ export function ListItem({ leading, title, badge, code, description, tags = [], 
       meta={meta}
       preview={description}
       trailing={
-        aside ? (
-          <>
-            <span className={styles.aside}>{aside}</span>
+        (aside || trailing) && (
+          <span className={styles.end}>
+            {aside && <span className={styles.aside}>{aside}</span>}
             {trailing}
-          </>
-        ) : (
-          trailing
+          </span>
         )
       }
       pressed={selected}
