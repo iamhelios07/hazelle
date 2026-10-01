@@ -58,6 +58,30 @@ img {
   max-width: 100%;
 }
 
+/* A line that is only a picture, as a bot draws its character's tall portrait, shows its top until it is pointed at (a
+   moment later, so a pointer the story scrolls under opens nothing) or tapped. The line is cut, not the picture, so a
+   small one is never stretched; the pictures in a bot's own boxes keep the bot's sizes. */
+[data-picture] {
+  max-height: var(--story-picture-peek);
+  overflow: hidden;
+  transition: max-height var(--duration-instant) allow-discrete;
+}
+
+[data-picture] > img {
+  display: block;
+}
+
+[data-picture][data-open] {
+  max-height: none;
+}
+
+@media (hover: hover) {
+  [data-picture]:hover {
+    max-height: none;
+    transition-delay: var(--duration-intent);
+  }
+}
+
 /* Until Lua runs, a bot's buttons do nothing; the story says so when one is pressed. */
 button,
 [risu-btn],

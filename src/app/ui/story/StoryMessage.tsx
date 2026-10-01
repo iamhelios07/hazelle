@@ -26,9 +26,9 @@ type Props = {
 
 export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap }: Props) {
   const hover = useHover();
-  // Phones have no hover, so a tap on the message itself shows its tools.
+  // Phones have no hover, so a tap on the message itself shows its tools; not one the story took, such as on a picture.
   const tap = (event: MouseEvent) => {
-    if (hover || (event.target as HTMLElement).closest('button, a, textarea')) return;
+    if (hover || event.defaultPrevented || (event.target as HTMLElement).closest('button, a, textarea')) return;
     onTap();
   };
   return (

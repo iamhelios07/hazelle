@@ -153,6 +153,8 @@
   --prose-faded-opacity: 0.5;
   /* A bot's button that nothing can run yet (design §6.4). */
   --story-inert-opacity: 0.45;
+  /* How much of a picture line shows until it is pointed at or tapped (Story.shadow.css). */
+  --story-picture-peek: min(20rem, 45vh);
   --aside-tools-opacity: 0.35;
 
   --space-2: 2px;

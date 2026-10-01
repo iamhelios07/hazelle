@@ -17,6 +17,11 @@ type Props = {
 };
 
 const INERT = 'button, [risu-btn], [risu-trigger]';
+// Named in Story.shadow.css.
+const PICTURE = 'data-picture';
+const OPEN = 'data-open';
+// Sent from a message when the reader opens or closes one of its pictures, so the chat keeps its view where it is.
+export const READER_RESIZED = 'readerresized';
 // The CSP refuses a style attribute, even in the document the sanitizer parses into, so each is renamed before the
 // parse and applied through CSSOM, which the CSP allows.
 const STYLE_ATTRIBUTE = /(<[a-z][^>]*?\s)style(?=\s*=)/gi;
@@ -77,6 +82,10 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
     else if (!own) element.removeAttribute('src');
     element.removeAttribute('srcset');
   }
+  for (const block of fragment.children) {
+    const only = block.childElementCount === 1 && block.firstElementChild!.tagName === 'IMG' && !block.textContent!.trim();
+    if (only && block.matches('p, .risu-inlay-image')) block.setAttribute(PICTURE, '');
+  }
   if (cursor) {
     // At the end of the last text, inside whatever holds it.
     const last = (node: ParentNode) => {
@@ -111,12 +120,27 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', onInert 
   useEffect(() => {
     const shadow = root();
     const press = (event: Event) => {
+      const picture = (event.target as Element).closest(`[${PICTURE}]`);
+      if (picture) {
+        picture.toggleAttribute(OPEN);
+        event.preventDefault();
+        return;
+      }
       if (!(event.target as Element).closest(INERT)) return;
       event.preventDefault();
       onInert?.();
     };
+    // transitionend, not transitionstart: it lands in the frame of the new size, before that frame's resize observers.
+    const resized = (event: Event) => {
+      if ((event as TransitionEvent).propertyName !== 'max-height' || !(event.target as Element).hasAttribute(PICTURE)) return;
+      host.current!.dispatchEvent(new Event(READER_RESIZED, { bubbles: true }));
+    };
     shadow.addEventListener('click', press);
-    return () => shadow.removeEventListener('click', press);
+    shadow.addEventListener('transitionend', resized);
+    return () => {
+      shadow.removeEventListener('click', press);
+      shadow.removeEventListener('transitionend', resized);
+    };
   }, [onInert]);
 
   return (

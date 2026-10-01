@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { READER_RESIZED } from '../ui';
 
 // The view follows the story while it is at the bottom; scrolled up, it stays, and a new message
 // lights the 새 답장 pill instead. count and streaming are the story's; its scroller takes scrollRef.
@@ -21,13 +22,25 @@ export function useFollow(count: number, streaming: boolean) {
     seen.current = { count, streaming };
   });
 
-  // A reply grows between the renders of the story as it is revealed (useReveal), so the view follows its size too.
+  // A reply grows between the renders of the story as it is revealed (useReveal), so the view follows its size too;
+  // not a size the reader changed (Story sends READER_RESIZED), which moves the bottom without a scroll.
   useEffect(() => {
-    const content = scrollRef.current?.firstElementChild;
-    if (!content) return;
-    const observer = new ResizeObserver(toBottom);
+    const element = scrollRef.current;
+    const content = element?.firstElementChild;
+    if (!element || !content) return;
+    let kept = false;
+    const keep = () => (kept = true);
+    const observer = new ResizeObserver(() => {
+      if (!kept) toBottom();
+      kept = false;
+      onScroll();
+    });
     observer.observe(content);
-    return () => observer.disconnect();
+    element.addEventListener(READER_RESIZED, keep);
+    return () => {
+      observer.disconnect();
+      element.removeEventListener(READER_RESIZED, keep);
+    };
   }, []);
 
   function onScroll() {
