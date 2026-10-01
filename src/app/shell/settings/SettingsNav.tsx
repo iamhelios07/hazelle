@@ -8,7 +8,8 @@ import type { Route, SettingsPage } from '../routes';
 type Place = { page: SettingsPage; label: string; icon: LucideIcon; route: Route };
 
 // 설정's pages. Only built pages are listed.
-const GROUPS: { label: string; places: Place[] }[] = [
+const GROUPS: { label?: string; places: Place[] }[] = [
+  { places: [{ page: 'defaults', label: PAGES.defaults, icon: SlidersHorizontal, route: { kind: 'defaults' } }] },
   {
     label: '모델',
     places: [
@@ -23,13 +24,7 @@ const GROUPS: { label: string; places: Place[] }[] = [
       { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
     ],
   },
-  {
-    label: '일반',
-    places: [
-      { page: 'defaults', label: PAGES.defaults, icon: SlidersHorizontal, route: { kind: 'defaults' } },
-      { page: 'account', label: PAGES.account, icon: Lock, route: { kind: 'account' } },
-    ],
-  },
+  { places: [{ page: 'account', label: PAGES.account, icon: Lock, route: { kind: 'account' } }] },
 ];
 
 // Where the library's 설정 lands: the first page where the sidebar lists them all, the list on phones.
@@ -39,7 +34,7 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
   return (
     <LayerSidebar title={SETTINGS} onClose={onClose}>
       {GROUPS.map((group) => (
-        <NavGroup key={group.label} label={group.label}>
+        <NavGroup key={group.places[0]!.page} label={group.label}>
           {group.places.map((place) => (
             <NavRow key={place.page} icon={place.icon} label={place.label} current={place.page === current} onClick={() => navigate(place.route)} />
           ))}
@@ -66,8 +61,8 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
   return (
     <Screen top={<NavBar title={SETTINGS} close backLabel={`${SETTINGS} 닫기`} onBack={onClose} />}>
       {GROUPS.map((group) => (
-        <NavGroup key={group.label} label={group.label}>
-          <List label={group.label}>
+        <NavGroup key={group.places[0]!.page} label={group.label}>
+          <List label={group.label ?? group.places[0]!.label}>
             {group.places.map((place) => (
               <ListItem key={place.page} title={place.label} aside={holds[place.page]} trailing={<Icon icon={ChevronRight} />} onClick={() => navigate(place.route)} />
             ))}

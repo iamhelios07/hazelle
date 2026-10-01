@@ -58,6 +58,22 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
     <Screen width="form" top={<NavBar title={PAGES.defaults} {...backBar(back)} />}>
       <Section title="새 채팅의 기본값">
         <SettingGroup label="새 채팅의 기본값">
+          <RolePicker
+            role="main"
+            help="프롬프트나 채팅에서 따로 정하지 않았을 때 쓰는 모델이에요."
+            own={main}
+            follow={null}
+            connections={connections}
+            onPick={(ref) => ref && pickModel('main', ref)}
+          />
+          <RolePicker
+            role="aux"
+            help={AUX_HELP}
+            own={settings.models.aux}
+            follow={follows(MODEL_ROLES.main)}
+            connections={connections}
+            onPick={(ref) => pickModel('aux', ref)}
+          />
           <SettingRow
             label="기본 프롬프트"
             help="새 채팅이 이 프롬프트로 시작해요. 채팅 안에서 바꾸면 그 채팅만 바뀌어요."
@@ -77,22 +93,6 @@ export function DefaultsScreen({ back }: { back: Back | null }) {
               personas.map(({ id, value }) => ({ key: id, label: aliased(value.name, value.alias), checked: id === settings.persona, pick: () => setDefaultPersona(store, id) })),
               '페르소나가 없어요.',
             )}
-          />
-          <RolePicker
-            role="main"
-            help="프롬프트나 채팅에서 따로 정하지 않았을 때 쓰는 모델이에요."
-            own={main}
-            follow={null}
-            connections={connections}
-            onPick={(ref) => ref && pickModel('main', ref)}
-          />
-          <RolePicker
-            role="aux"
-            help={AUX_HELP}
-            own={settings.models.aux}
-            follow={follows(MODEL_ROLES.main)}
-            connections={connections}
-            onPick={(ref) => pickModel('aux', ref)}
           />
         </SettingGroup>
         {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정했던 모델이 별표한 모델에 없어요. 다시 골라 주세요.`}</Callout>}
