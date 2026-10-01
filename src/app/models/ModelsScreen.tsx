@@ -1,16 +1,18 @@
 import type { ModelRef, Role } from '../../connectors/assignment';
 import { setDefaultModel } from '../../runtime/assignment';
 import { modelProfile, profileUsers } from '../../runtime/profiles';
+import { ofSort } from '../../runtime/prompts';
 import { findStarred, RolePicker } from '../common/RolePicker';
-import { AUX_HELP, DEFAULT_MODELS, follows, MODEL_ROLES, noStarred, PAGES } from '../common/words';
-import { useConnections, useProfiles, useSettings, useStore } from '../session';
+import { AUX_HELP, DEFAULT_MODELS, follows, MODEL_ROLES, NOT_STARRED, noStarred, PAGES } from '../common/words';
+import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Callout, Empty, List, ListItem, NavBar, Screen, Section, SettingGroup } from '../ui';
 import { defaultFirst, valueWords } from './settingWords';
 
-// The 기본 모델 layer of the model assignment, the one place it is chosen; then the starred models, each opening its
+// The 기본 모델 layer of the model assignment, the one place it is chosen, and the task prompts that pass 보조 모델 by
+// with their own model, which are only shown here and changed in the prompt; then the starred models, each opening its
 // own page where it picks its settings, and the settings made so far. The screens never say 묶음.
 export function ModelsScreen({ back }: { back: Back | null }) {
   const store = useStore();
@@ -19,6 +21,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
   const profiles = useProfiles();
   const connections = useConnections();
   const settings = useSettings();
+  const prompts = usePrompts();
 
   const main = settings.models.main;
   const pickModel = (role: Role, ref: ModelRef | null) =>
@@ -27,6 +30,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
     });
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
   const sorted = defaultFirst(profiles, settings.profile);
+  const ownModels = prompts.filter((prompt) => ofSort(prompt, 'translate')).flatMap((prompt) => (prompt.value.model ? [{ prompt, model: prompt.value.model }] : []));
 
   return (
     <Screen top={<NavBar title={PAGES.models} {...backBar(back)} />}>
@@ -51,6 +55,21 @@ export function ModelsScreen({ back }: { back: Back | null }) {
         </SettingGroup>
         {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정했던 모델이 별표한 모델에 없어요. 다시 골라 주세요.`}</Callout>}
       </Section>
+      {ownModels.length > 0 && (
+        <Section title="프롬프트에서 정한 모델" hint="이 프롬프트로 하는 일은 보조 모델 대신 이 모델을 써요. 눌러서 프롬프트에서 바꿔요.">
+          <List label="프롬프트에서 정한 모델">
+            {ownModels.map(({ prompt, model }) => (
+              <ListItem
+                key={prompt.id}
+                title={prompt.value.name}
+                tags={['번역']}
+                aside={findStarred(model, connections)?.name ?? NOT_STARRED}
+                onClick={() => navigate({ kind: 'prompt', id: prompt.id, pane: null })}
+              />
+            ))}
+          </List>
+        </Section>
+      )}
       <Section title="별표한 모델" hint="새로 별표한 모델은 기본 설정을 써요.">
         {models.length > 0 ? (
           <List label="별표한 모델">
