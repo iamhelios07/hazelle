@@ -1,5 +1,5 @@
 import { gzipSync, strToU8 } from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readBackup } from './backup';
 import type { RisuBackup } from './types';
 
@@ -33,8 +33,8 @@ function pack(value: unknown): number[] {
 const database = (db: unknown) => new Uint8Array([0, ...strToU8('RISUSAVE'), 0, 8, ...gzipSync(new Uint8Array(pack(db)))]);
 
 function bin(entries: [string, Uint8Array][]) {
-  const bytes = new Uint8Array(entries.flatMap(([name, data]) => [...u32(strToU8(name).length, true), ...strToU8(name), ...u32(data.length, true), ...data]));
-  return { size: bytes.length, read: (offset: number, length: number) => Promise.resolve(bytes.slice(offset, offset + length)) };
+  const file = new Blob(entries.flatMap(([name, data]) => [new Uint8Array([...u32(strToU8(name).length, true), ...strToU8(name), ...u32(data.length, true)]), new Uint8Array(data)]));
+  return { size: file.size, read: async (offset: number, length: number) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()) };
 }
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
@@ -132,6 +132,71 @@ async function read(): Promise<RisuBackup> {
 }
 
 describe('readBackup', () => {
+  it('coalesces nearby headers across window boundaries and skips large pictures until requested', async () => {
+    const window = 4 * 1024 * 1024;
+    const picture = new Uint8Array(3 * window);
+    picture.set(PNG);
+    const data = database({ ...db, botPresets: [] });
+    const source = bin([
+      ['padding', new Uint8Array(window - 2 - 8 - 'padding'.length)],
+      ['mira.png', picture],
+      ['map.png', PNG],
+      ['ann.png', PNG],
+      ['database.risudat', data],
+    ]);
+    const read = vi.fn(source.read);
+    const result = await readBackup({ size: source.size, read });
+    const reference = await readBackup(bin([
+      ['mira.png', picture], ['map.png', PNG], ['ann.png', PNG], ['database.risudat', data],
+    ]));
+    expect(JSON.stringify(result)).toBe(JSON.stringify(reference));
+    expect(result.ok).toBe(true);
+    expect(read.mock.calls).toEqual([
+      [0, window],
+      [window - 2, window],
+      [4 * window + 14, source.size - (4 * window + 14)],
+      [source.size - data.length, data.length],
+    ]);
+    if (!result.ok) throw new Error(result.failure.kind);
+    const avatar = await result.backup.characters[0]!.avatar();
+    expect(avatar?.type).toBe('image/png');
+    expect(avatar?.bytes.length).toBe(picture.length);
+    expect(avatar?.bytes.every((byte, i) => byte === picture[i])).toBe(true);
+    expect(read.mock.calls.at(-1)).toEqual([window + 14, picture.length]);
+  });
+
+  it('bounds cold character and nested chat reads together while preserving their order', async () => {
+    const characters = Array.from({ length: 12 }, (_, i) => ({ chaId: `c${i}`, coldstorage: `c${i}` }));
+    const entries: [string, Uint8Array][] = characters.flatMap(({ chaId }) => {
+      const chats = Array.from({ length: 3 }, (_, i) => ({ name: `${chaId}-${i}`, message: [{ role: 'char', data: `${COLD}${chaId}-${i}` }] }));
+      return [
+        [`coldstorage_${chaId}.json`, json({ character: { chaId, name: chaId, chats } })],
+        ...chats.map(({ name }): [string, Uint8Array] => [`coldstorage_${name}.json`, json({ message: [{ role: 'user', data: name, time: 1 }] })]),
+      ];
+    });
+    const source = bin([['database.risudat', database({ characters })], ...entries]);
+    let active = 0;
+    let peak = 0;
+    const result = await readBackup({
+      size: source.size,
+      async read(offset, length) {
+        peak = Math.max(peak, ++active);
+        await new Promise((resolve) => setTimeout(resolve, offset % 3));
+        try {
+          return await source.read(offset, length);
+        } finally {
+          active--;
+        }
+      },
+    });
+    expect(peak).toBe(8);
+    expect(active).toBe(0);
+    if (!result.ok) throw new Error(result.failure.kind);
+    expect(result.backup.characters.map(({ id, chats }) => [id, chats.map((chat) => chat.messages[0]!.text)])).toEqual(
+      characters.map(({ chaId }) => [chaId, [`${chaId}-0`, `${chaId}-1`, `${chaId}-2`]]),
+    );
+  });
+
   it('refuses an encrypted, database-less or undecodable backup', async () => {
     expect(await readBackup(bin([['encryption.risudat', json({ type: 'account' })], ['database.risudat', database(db)]]))).toEqual({ ok: false, failure: { kind: 'encrypted' } });
     expect(await readBackup(bin([['mira.png', PNG]]))).toEqual({ ok: false, failure: { kind: 'no-database' } });

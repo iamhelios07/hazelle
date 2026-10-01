@@ -10,7 +10,7 @@ import { Rememberer } from './memory';
 import { addFirstPersona } from './personas';
 import { addFirstProfile } from './profiles';
 import { addDefaults } from './prompts';
-import { keepSynced, ObjectStore } from './store';
+import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
 import { ReadModels } from './read-model';
@@ -37,9 +37,9 @@ export type Session = {
 
 // Pulls once before the first screen, then keeps the store in sync while the session is open. An open
 // given up while it pulls (signal) starts nothing.
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal): Promise<ApiResult<Session>> {
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void): Promise<ApiResult<Session>> {
   const store = await ObjectStore.open(accountId, vaultKey, api);
-  const pulled = await store.pull();
+  const pulled = await store.pull({ signal, progress });
   if (pulled) return pulled;
   const files = new Files(api);
   const assets = new AssetUrls(store, files);

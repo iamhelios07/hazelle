@@ -9,6 +9,8 @@ type Api = typeof realApi;
 type Change = { id: string; kind: string; parent: string | null; rev: number; body: string | null };
 export type StoreChange = { kind: string; id: string; parent: string | null };
 export type StoreRead = { kind: Kind; id: string } | { kind: Kind; list: true } | { kind: Kind; parent: string };
+export type PullProgress = { objects: number; pages: number };
+type PullOptions = { signal?: AbortSignal; progress?: (progress: PullProgress) => void };
 
 export const readsChanged = (reads: StoreRead[], changes: readonly StoreChange[]) =>
   reads.some((read) => changes.some((change) => read.kind === change.kind && ('list' in read || ('id' in read ? read.id === change.id : read.parent === change.parent))));
@@ -92,8 +94,9 @@ export class ObjectStore {
   }
 
   // One pull at a time: a caller arriving during a pull waits for that pull instead of starting another.
-  pull(): Promise<ApiFailure | null> {
-    this.pulling ??= this.pullPages().finally(() => (this.pulling = null));
+  // The caller starting it owns its signal and progress.
+  pull(options: PullOptions = {}): Promise<ApiFailure | null> {
+    this.pulling ??= this.pullPages(options).finally(() => (this.pulling = null));
     return this.pulling;
   }
 
@@ -263,18 +266,30 @@ export class ObjectStore {
     return !held || held.kind === rule;
   }
 
-  private async pullPages(): Promise<ApiFailure | null> {
+  private async pullPages({ signal, progress }: PullOptions): Promise<ApiFailure | null> {
     let more = true;
+    let objects = 0;
+    let pages = 0;
     while (more) {
-      const result = await this.request<Page>('GET', `objects?since=${this.cursor}`);
+      if (signal?.aborted) return { ok: false, error: 'stopped' };
+      const result = await this.request<Page>('GET', `objects?since=${this.cursor}`, undefined, signal);
+      if (signal?.aborted) return { ok: false, error: 'stopped' };
       if (!result.ok) return result;
+      objects += result.data.changes.length;
+      progress?.({ objects, pages: ++pages });
       this.limits = result.data.limits;
-      for (const change of result.data.changes) await this.apply(change);
+      for (const change of result.data.changes) {
+        if (signal?.aborted) {
+          this.changed();
+          return { ok: false, error: 'stopped' };
+        }
+        await this.apply(change);
+      }
       this.cursor = result.data.cursor;
       more = result.data.more;
       if (result.data.changes.length) this.changed();
     }
-    return null;
+    return signal?.aborted ? { ok: false, error: 'stopped' } : null;
   }
 
   private async apply({ id, kind, parent, rev, body }: Change) {
