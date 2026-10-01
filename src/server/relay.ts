@@ -58,45 +58,44 @@ const DROPPED_RESPONSE_HEADERS = new Set([
 ]);
 
 export function createRelay(upstream: Upstream): (request: Request) => Promise<Response> {
-  return async (request) => {
-    let envelope: Envelope | null;
-    try {
-      envelope = parseEnvelope(await request.json());
-    } catch {
-      envelope = null;
-    }
-    if (!envelope) return refuse(400, 'bad-envelope');
+  return async (request) => forward(upstream, await request.json().catch(() => null), request.signal);
+}
 
-    const refusal = checkTarget(envelope.url);
-    if (refusal) return refuse(403, refusal);
+// The upstream answer to an envelope, as the relay passes it on, or the relay's own refusal. ReplyStream calls it
+// with a signal of its own, so the call outlives the client's request.
+export async function forward(upstream: Upstream, body: unknown, signal: AbortSignal): Promise<Response> {
+  const envelope = parseEnvelope(body);
+  if (!envelope) return refuse(400, 'bad-envelope');
 
-    let response: Response;
-    try {
-      response = await upstream(envelope.url, {
-        method: envelope.method,
-        headers: outboundHeaders(envelope.headers),
-        body: envelope.body,
-        redirect: 'manual',
-        signal: request.signal,
-      });
-    } catch {
-      return refuse(502, 'upstream-unreachable');
-    }
+  const refusal = checkTarget(envelope.url);
+  if (refusal) return refuse(403, refusal);
 
-    // A browser fetch would follow a relayed 3xx on its own, so the redirect is reported instead.
-    if (REDIRECTS.has(response.status)) {
-      await response.body?.cancel();
-      return refuse(502, 'upstream-redirect', { status: response.status, location: response.headers.get('location') });
-    }
-
-    const headers = new Headers();
-    response.headers.forEach((value, name) => {
-      if (!DROPPED_RESPONSE_HEADERS.has(name)) headers.set(name, value);
+  let response: Response;
+  try {
+    response = await upstream(envelope.url, {
+      method: envelope.method,
+      headers: outboundHeaders(envelope.headers),
+      body: envelope.body,
+      redirect: 'manual',
+      signal,
     });
-    headers.set('x-relay', 'upstream');
-    headers.set('cache-control', 'no-store');
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-  };
+  } catch {
+    return refuse(502, 'upstream-unreachable');
+  }
+
+  // A browser fetch would follow a relayed 3xx on its own, so the redirect is reported instead.
+  if (REDIRECTS.has(response.status)) {
+    await response.body?.cancel();
+    return refuse(502, 'upstream-redirect', { status: response.status, location: response.headers.get('location') });
+  }
+
+  const headers = new Headers();
+  response.headers.forEach((value, name) => {
+    if (!DROPPED_RESPONSE_HEADERS.has(name)) headers.set(name, value);
+  });
+  headers.set('x-relay', 'upstream');
+  headers.set('cache-control', 'no-store');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function parseEnvelope(value: unknown): Envelope | null {

@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import type { HttpRequest } from '../connectors/types';
 export { BATCH_LIMITS } from '../server/objects';
+import type { Upstream } from '../server/relay';
 import { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
@@ -16,6 +17,9 @@ type Relay = (sent: HttpRequest) => Response | null;
 
 let server: { app: App; cookie: string | null } | null = null;
 let relay: Relay | null = null;
+// The server's answers not given yet, which a test waits for before its server goes: a call's marker and its drop
+// are written after the result, while the test may already be done.
+const answered = new Set<Promise<Response>>();
 
 // The browser's fetch in runtime tests: /api/relay answers as the test says, and every other API route
 // is the real server, in process, over an in-memory D1 and R2 (server/testing).
@@ -30,8 +34,35 @@ function stubFetch() {
     }
     if (!server) throw new Error(`This test has no server for ${url}.`);
     const headers = { ...(init.headers as Record<string, string>), ...(server.cookie ? { cookie: server.cookie } : {}) };
-    return server.app.raw(url.slice('/api/'.length), { ...init, headers });
+    const answering = Promise.resolve(server.app.raw(url.slice('/api/'.length), { ...init, headers }));
+    answered.add(answering);
+    void answering.finally(() => answered.delete(answering)).catch(() => {});
+    return abortable(await answering, init.signal);
   });
+}
+
+// What ReplyStream calls upstream gets the relay's answers too, so a test says once what the provider answers.
+const viaStreams: Upstream = async (url, { method, headers, body, signal }) => {
+  if (!relay) throw new Error('This test gave the relay no answers.');
+  const answer = relay({ url: url.toString(), method: method as HttpRequest['method'], headers: Object.fromEntries(headers), body });
+  if (!answer) throw new TypeError('Failed to fetch');
+  return abortable(answer, signal);
+};
+
+// An abort errors a response's body, as it does a real fetch's.
+function abortable(response: Response, signal: AbortSignal | null | undefined): Response {
+  if (!response.body || !signal) return response;
+  const reader = response.body.getReader();
+  const aborted = new Promise<never>((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError'))));
+  aborted.catch(() => reader.cancel());
+  const read = new ReadableStream<Uint8Array>({
+    pull: async (controller) => {
+      const { done, value } = await Promise.race([reader.read(), aborted]);
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+  });
+  return new Response(read, { status: response.status, statusText: response.statusText, headers: response.headers });
 }
 
 // Every relay call gets answer's reply. The log holds what each call sent upstream, and when, in
@@ -69,7 +100,7 @@ export async function answerable(session: Session): Promise<void> {
 export function testServer() {
   let app: App;
   beforeAll(async () => {
-    app = await testApp();
+    app = await testApp(viaStreams);
   });
   afterAll(() => app.dispose());
   beforeEach(async () => {
@@ -78,7 +109,10 @@ export function testServer() {
     relay = null;
     stubFetch();
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(async () => {
+    while (answered.size) await Promise.allSettled([...answered]);
+    vi.unstubAllGlobals();
+  });
 
   const harness = {
     async account() {

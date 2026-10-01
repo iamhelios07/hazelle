@@ -1,12 +1,15 @@
 import { getPlatformProxy } from 'wrangler';
+import type { Upstream } from './relay';
+import { StreamBox, type BoxStorage } from './stream-box';
 import app from './worker';
 
 const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
 
-// An in-memory local D1 with every migration applied, and a client that calls the app in-process.
-export async function testApp() {
-  const proxy = await getPlatformProxy<Env>({ persist: false, remoteBindings: false });
-  const env = proxy.env;
+// An in-memory local D1 with every migration applied, and a client that calls the app in-process. upstream answers
+// the calls ReplyStream makes (tech-spec §6, Detached replies).
+export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.'))) {
+  const proxy = await getPlatformProxy<Env>({ configPath: 'wrangler.test.jsonc', persist: false, remoteBindings: false });
+  const env = { ...proxy.env, STREAMS: streamObjects(upstream) };
   for (const name of Object.keys(migrations).sort()) {
     const statements = migrations[name]!.split(';').filter((s) => s.trim());
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
@@ -33,6 +36,26 @@ export async function testApp() {
     delete: (path: string, body?: unknown, cookie?: string) => send('DELETE', path, body, cookie),
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env),
   };
+}
+
+// ReplyStream's namespace, in process: one StreamBox per name over a map, which is all its Durable Object adds.
+function streamObjects(upstream: Upstream) {
+  const boxes = new Map<string, StreamBox>();
+  const storage = (): BoxStorage => {
+    const held = new Map<string, unknown>();
+    return {
+      get: async (key) => held.get(key),
+      put: async (key, value) => void held.set(key, value),
+      list: async ({ prefix }) => new Map([...held].filter(([key]) => key.startsWith(prefix))),
+      deleteAll: async () => held.clear(),
+      setAlarm: async () => {},
+    };
+  };
+  const box = (name: string) => boxes.get(name) ?? boxes.set(name, new StreamBox(storage(), upstream)).get(name)!;
+  return {
+    idFromName: (name: string) => name,
+    get: (name: string) => ({ fetch: (input: string, init?: RequestInit) => box(name).handle(new Request(input, init)) }),
+  } as unknown as Env['STREAMS'];
 }
 
 export const sessionCookie = (response: Response) => response.headers.get('set-cookie')!.split(';')[0]!;

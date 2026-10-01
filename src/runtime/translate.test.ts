@@ -139,7 +139,8 @@ describe('Translator', () => {
       await setTranslate(session.store, null, { prompt: crypto.randomUUID() });
       const log = stubRelay(inTurn([saying('안녕')]));
 
-      const made = await translate(session, translationInput(session, chat, opened, [], { kind: 'input', text: 'Hi' }), new AbortController().signal, () => {});
+      const target = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'input', typed: 'Hi' } } as const;
+      const made = await translate(session, translationInput(session, chat, opened, [], { kind: 'input', text: 'Hi' }), target, new AbortController().signal, () => {});
       expect(made).toEqual({ ok: false, failure: { kind: 'prompt-missing', own: true } });
       expect(log).toHaveLength(0);
     }));

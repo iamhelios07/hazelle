@@ -1,13 +1,18 @@
 import type { ModelSettings } from '../connectors/settings';
+import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
 import type { Message, Receipt, ReceiptError } from '../model/chat';
+import type { Stored } from '../model/kinds';
+import type { Stream } from '../model/stream';
 import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
 import { appendReply, appendUserMessage, type Said, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { generate, type Reply } from './generate';
+import { generate, resume, type Reply } from './generate';
+import { stopStream } from './relay';
 import type { ObjectStore } from './store';
+import { callOf, endCall, newCall } from './streams';
 
 // The reply being written. said is the user's message sent with it, shown until the store has it; reply
 // says where the answer goes: a new message, or a new version of one (in place of a failed one on 다시 시도, or
@@ -73,11 +78,15 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
 }
 
 // One reply is written at a time, app-wide, and it outlives the screen that asked for it: leaving a
-// chat does not stop its reply. close() stops everything, for a locked vault.
+// chat does not stop its reply. The server makes the call (runtime/streams), so close() only stops reading it, for a
+// locked vault; the next load picks it up.
 export class Talk {
   private turn: Turn | null = null;
   private abort: AbortController | null = null;
-  private readonly unsaved = new Map<string, { chat: string; reply: Written }>();
+  // The call the turn reads, once it started.
+  private calling: string | null = null;
+  private closed = false;
+  private readonly unsaved = new Map<string, { chat: string; reply: Written; call: string }>();
   private readonly listeners = new Set<() => void>();
   // By the id of the version each reply wrote.
   private readonly sentBy = new Map<string, Sent>();
@@ -87,6 +96,8 @@ export class Talk {
     private readonly credentials: Credentials,
     private readonly costs: Costs,
     private readonly saved: (chat: string) => void,
+    // The calls this page reads (runtime/streams), shared with Translator and Streams.
+    private readonly reading: Set<string>,
   ) {}
 
   readonly subscribe = (listener: () => void) => {
@@ -101,28 +112,37 @@ export class Talk {
     return this.sentBy.get(version) ?? null;
   }
 
+  // 멈추기: the call ends on the server too, and the text so far is saved as cut. Reading stops first, so the server's
+  // end is never read as the stream's own.
   stop() {
     this.abort?.abort();
+    if (this.calling) stopStream(this.calling);
   }
 
   close() {
-    this.stop();
+    this.closed = true;
+    this.abort?.abort();
     this.unsaved.clear();
     this.sentBy.clear();
   }
 
   async saveAgain(reply: string): Promise<TalkFailure | null> {
     const unsaved = this.unsaved.get(reply);
-    return unsaved ? this.save(unsaved.chat, unsaved.reply) : null;
+    return unsaved ? this.save(unsaved.chat, unsaved.reply, unsaved.call) : null;
   }
 
-  private async save(chat: string, reply: Written): Promise<TalkFailure | null> {
-    const saved = await appendReply(this.store, chat, reply);
-    if (!saved.ok) {
-      this.unsaved.set(reply.id, { chat, reply });
-      return { kind: 'unsaved', reply: reply.id, failure: saved };
+  // A conflict over an entry already there is the same reply saved by another device that read the call. A reply
+  // not saved keeps its call's marker, so a reload saves it too.
+  private async save(chat: string, reply: Written, call: string): Promise<TalkFailure | null> {
+    const appended = await appendReply(this.store, chat, reply);
+    const elsewhere = !appended.ok && appended.error === 'conflict' && this.store.get('entry', reply.id) !== null;
+    if (!appended.ok && !elsewhere) {
+      this.unsaved.set(reply.id, { chat, reply, call });
+      return { kind: 'unsaved', reply: reply.id, failure: appended };
     }
     this.unsaved.delete(reply.id);
+    endCall(this.store, call);
+    if (elsewhere) return null;
     this.costs.settle(chat, reply.receipt);
     this.saved(chat);
     return null;
@@ -148,44 +168,68 @@ export class Talk {
       // A message sent translated shows as it is saved, marked, from the moment it is translated.
       if (ready.said?.translation) this.set({ ...this.turn!, said: ready.said });
       const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
-      const replying = generate({
-        credentials: this.credentials,
-        connection: route.connection.value,
-        model: route.model,
-        settings,
-        messages: prompt.messages,
-        signal: abort.signal,
-        onText: (phase, chunk) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk }),
-      });
+      const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, continues: reply.continues } });
+      this.reading.add(call.id);
+      this.calling = call.id;
+      const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write });
       const sent = await sending;
       if (sent && !sent.ok) {
         abort.abort();
+        endCall(this.store, call.id);
         await replying;
         return { kind: 'unsent', failure: sent };
       }
       const answer = await replying;
-
-      const receipt: Receipt = { ...receiptOf(route, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
-      const written: Written = { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed };
+      if (this.closed) return null;
       // Kept before the save, whose store change is what shows the reply's 정보.
       this.sentBy.set(reply.id, { request: answer.request, prompt });
-      return await this.save(chat, written);
+      return await this.save(chat, this.written(reply, callOf(route), answer), call.id);
     } finally {
       // On a throw too: a turn left set turns every later send away, and a reply still streaming would write into the next.
       abort.abort();
+      if (this.calling) this.reading.delete(this.calling);
+      this.calling = null;
       this.abort = null;
       this.set(null);
     }
   }
+
+  // A reply the server was writing when this page came, which Streams hands over; it waits while another is written.
+  // One not saved is not reported: its marker stays, and the next pick-up saves it again.
+  async resume(stream: Stored<'stream'>) {
+    const purpose = stream.value.for;
+    if (this.turn || this.closed || purpose.kind !== 'reply') return;
+    const chat = stream.parent!;
+    const reply = { id: stream.value.result, message: purpose.message, replaces: purpose.replaces, continues: purpose.continues };
+    this.set({ chat, said: null, reply, text: reply.continues?.text ?? '' });
+    const abort = new AbortController();
+    this.abort = abort;
+    this.reading.add(stream.id);
+    this.calling = stream.id;
+    try {
+      const answer = await resume(this.store, stream, abort.signal, this.write);
+      if (!this.closed) await this.save(chat, this.written(reply, stream.value.call, answer), stream.id);
+    } finally {
+      abort.abort();
+      this.reading.delete(stream.id);
+      this.calling = null;
+      this.abort = null;
+      this.set(null);
+    }
+  }
+
+  private readonly write = (phase: Phase, chunk: string) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk });
+
+  private written(reply: Turn['reply'], call: Stream['call'], answer: Reply): Written {
+    const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
+    return { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed };
+  }
 }
 
 // What a call leaves in a saved chat: a reply's receipt, or a translation's.
-export function receiptOf(route: Route, answer: Reply): Receipt {
+export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
   return {
-    connection: route.connection.id,
-    source: route.connection.value.label,
-    model: route.model.id,
-    modelName: route.model.name,
+    ...call,
     state: answer.state,
     cut: answer.cut,
     error: answer.error && receiptError(answer.error),

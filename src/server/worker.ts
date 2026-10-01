@@ -5,6 +5,7 @@ import { fail, type AppEnv } from './http';
 import { objects } from './objects';
 import { createRelay } from './relay';
 import { requireSession } from './session';
+import { streams } from './streams';
 import { vaults } from './vaults';
 
 const relay = createRelay(fetch);
@@ -28,6 +29,8 @@ app.route('/vault', vaults);
 app.route('/objects', objects);
 app.route('/files', files);
 app.post('/relay', requireSession, (c) => relay(c.req.raw));
+app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 
 export default app;
+export { ReplyStream } from './streams';

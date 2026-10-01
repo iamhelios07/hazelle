@@ -2,14 +2,18 @@ import { assembleTranslation } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import type { Chat, Receipt, Translation, Version } from '../model/chat';
+import type { Stored } from '../model/kinds';
 import type { TranslatePrompt } from '../model/prompt';
-import type { ApiFailure } from './api';
+import type { Stream } from '../model/stream';
+import type { Phase } from '../connectors/types';
+import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { setGreetingTranslation, translateSwitches } from './characters';
 import { appendTranslation } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { generate } from './generate';
+import { generate, resume, type Reply } from './generate';
+import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { modelProfile } from './profiles';
 import { translationPrompt } from './prompts';
 import type { ObjectStore } from './store';
@@ -39,9 +43,10 @@ type Deps = { store: ObjectStore; credentials: Credentials };
 export async function translate(
   { store, credentials }: Deps,
   { chat, scope, take, translations, request }: TranslateInput,
+  target: CallTarget,
   signal: AbortSignal,
   onText: (text: string) => void,
-): Promise<{ ok: true; translation: Translation; language: string } | { ok: false; failure: TranslateFailure }> {
+): Promise<Translated> {
   const switches = translateSwitches(store, chat.character);
   const translator = translatorOf(store, chat);
   if (!translator.ok) return translator;
@@ -51,22 +56,45 @@ export async function translate(
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { ok: false, failure: { kind: 'tokenizer' } };
   const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
-  let text = '';
+  const text = gather(onText);
   const answer = await generate({
     credentials,
     connection: route.connection.value,
     model: route.model,
     settings: profile.profile.value.settings,
     messages: assembleTranslation({ scope, take, prompt, translations, request, language, seed: crypto.randomUUID(), countTokens }).messages,
+    call: await newCall(store, route, target),
     signal,
-    onText: (phase, chunk) => {
+    onText: text.add,
+  });
+  return translated(callOf(route), answer, text.value(), language);
+}
+
+// A translation the server was already making when this page came (tech-spec §6, Detached replies). Only a saved
+// chat's translations are picked up, so no language is needed: a greeting's translation is never one of them.
+export async function resumeTranslation(store: ObjectStore, stream: Stored<'stream'>, signal: AbortSignal, onText: (text: string) => void): Promise<Translated> {
+  const text = gather(onText);
+  const answer = await resume(store, stream, signal, text.add);
+  return translated(stream.value.call, answer, text.value(), null);
+}
+
+type Translated = { ok: true; translation: Translation; language: string | null } | { ok: false; failure: TranslateFailure };
+
+function gather(onText: (text: string) => void) {
+  let text = '';
+  return {
+    add: (phase: Phase, chunk: string) => {
       if (phase !== 'text') return;
       text += chunk;
       onText(text);
     },
-  });
+    value: () => text,
+  };
+}
+
+function translated(call: Stream['call'], answer: Reply, text: string, language: string | null): Translated {
   if (answer.cut === 'stopped') return { ok: false, failure: { kind: 'stopped' } };
-  const receipt = receiptOf(route, answer);
+  const receipt = receiptOf(call, answer);
   if (answer.state === 'failed' || !text.trim()) return { ok: false, failure: { kind: 'failed', receipt } };
   return { ok: true, translation: { text: text.trim(), receipt, at: Date.now() }, language };
 }
@@ -97,6 +125,8 @@ export class Translator {
     private readonly store: ObjectStore,
     private readonly credentials: Credentials,
     private readonly costs: Costs,
+    // The calls this page reads (runtime/streams), shared with Talk and Streams.
+    private readonly reading: Set<string>,
   ) {}
 
   readonly subscribe = (listener: () => void) => {
@@ -121,28 +151,53 @@ export class Translator {
   // closed: a reply stopped by a lock is still saved, and its follow-up must not start a call.
   translate(chat: string, { id: version, text: original }: Version, input: TranslateInput) {
     if (this.closed || this.aborts.has(version)) return;
+    const target: CallTarget = { id: crypto.randomUUID(), chat: this.store.get('chat', chat) ? chat : null, result: crypto.randomUUID(), for: { kind: 'translation', version } };
+    this.run(chat, version, target.id, (signal, onText) => translate({ store: this.store, credentials: this.credentials }, input, target, signal, onText), (made) =>
+      this.store.get('chat', chat)
+        ? appendTranslation(this.store, chat, version, made.translation, target.result)
+        : setGreetingTranslation(this.store, input.chat.character!, original, made.language!, made.translation),
+    );
+  }
+
+  // A translation the server was making when this page came, which Streams hands over.
+  resume(stream: Stored<'stream'>, version: string) {
+    const chat = stream.parent!;
+    if (this.closed || this.aborts.has(version)) return;
+    this.run(chat, version, stream.id, (signal, onText) => resumeTranslation(this.store, stream, signal, onText), (made) =>
+      appendTranslation(this.store, chat, version, made.translation, stream.value.result),
+    );
+  }
+
+  // A failed call ends with its marker, since nothing would make it go otherwise; one stopped by close() keeps it
+  // for the next load.
+  private run(chat: string, version: string, id: string, make: (signal: AbortSignal, onText: (text: string) => void) => Promise<Translated>, save: (made: Extract<Translated, { ok: true }>) => Promise<ApiResult<unknown>>) {
     const abort = new AbortController();
     this.aborts.set(version, abort);
+    this.reading.add(id);
     this.change(version, { live: '', failed: null });
-    const deps = { store: this.store, credentials: this.credentials };
-    void translate(deps, input, abort.signal, (text) => this.change(version, { live: text }))
+    void make(abort.signal, (text) => this.change(version, { live: text }))
       .then(
         async (made) => {
-          if (!made.ok) return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
-          const greeting = !this.store.get('chat', chat);
-          const saved = greeting
-            ? await setGreetingTranslation(this.store, input.chat.character!, original, made.language, made.translation)
-            : await appendTranslation(this.store, chat, version, made.translation);
+          if (!made.ok) {
+            if (made.failure.kind !== 'stopped') endCall(this.store, id);
+            return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
+          }
+          const saved = await save(made);
           // The live text goes once the store holds the translation, so the original never shows in between.
           this.change(version, { live: null, failed: saved.ok ? null : { kind: 'unsaved', failure: saved } });
-          if (saved.ok && !greeting) this.costs.settle(chat, made.translation.receipt!);
+          if (!saved.ok) return;
+          endCall(this.store, id);
+          if (this.store.get('chat', chat)) this.costs.settle(chat, made.translation.receipt!);
         },
         (error: unknown) => {
           this.change(version, { live: null });
           throw error;
         },
       )
-      .finally(() => this.aborts.delete(version));
+      .finally(() => {
+        this.aborts.delete(version);
+        this.reading.delete(id);
+      });
   }
 
   close() {

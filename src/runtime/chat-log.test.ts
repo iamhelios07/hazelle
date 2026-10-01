@@ -51,7 +51,7 @@ describe('branchChat', () => {
     const continued = crypto.randomUUID();
     await appendReply(store, source, { id: continued, message: reply, replaces: reply, at: 2, text: '답장', receipt: { ...pending, cost: null, replyId: null, continues: cut } });
     await appendCost(store, source, 'r1', { unit: 'usd', amount: 0.01, source: 'reported' });
-    await appendTranslation(store, source, continued, { text: 'A reply', receipt: pending, at: 3 });
+    await appendTranslation(store, source, continued, { text: 'A reply', receipt: pending, at: 3 }, crypto.randomUUID());
     await appendUserMessage(store, source, { id: deleted, text: '지울 말' });
     await removeMessage(store, source, deleted);
     await store.batch(

@@ -17,6 +17,8 @@ const MESSAGES: Record<string, string> = {
   gone: '다른 곳에서 지워진 항목이라 고칠 수 없어요.',
   'too-large': '너무 커서 저장할 수 없어요.',
   offline: '서버에 닿지 못했어요. 연결을 확인해 주세요.',
+  'stream-gone': '서버가 이 답을 더 이상 갖고 있지 않아요.',
+  'stream-lost': '서버가 답을 받다가 놓쳤어요.',
 };
 
 const SERVER_TROUBLE = '서버에 문제가 생겼어요. 잠시 뒤 다시 해 주세요.';
@@ -40,6 +42,7 @@ const REFUSED: Record<string, string> = {
   'max-tokens-unknown': '이 모델의 최대 출력 길이를 몰라서 보낼 수 없어요.',
   'unknown-connection-type': '이 버전이 모르는 연결 종류예요. 새로고침해 보세요.',
   'unsupported-protocol': '이 모델이 받는 요청 방식을 이 앱이 아직 몰라요.',
+  'model-gone': '이 답을 받던 모델이 연결에서 빠져서 이어 받을 수 없어요.',
 };
 
 // The relay refuses these, and 직접 연결 says so before it tries.

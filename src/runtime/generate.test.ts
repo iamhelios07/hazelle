@@ -1,33 +1,37 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { ModelSettings } from '../connectors/settings';
 import type { Connection, Model, Starred } from '../connectors/types';
 import { Credentials } from './credential';
 import { generate } from './generate';
-import { stubRelay, upstream } from './testing';
+import { stubRelay, testServer, upstream } from './testing';
+import { streamKey } from '../vault/streams';
 
 const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
 const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] };
+
+const server = testServer();
+beforeEach(() => server.account());
 
 const answer = (status: number, body: string, headers: Record<string, string>) => stubRelay(() => new Response(body, { status, headers }));
 
 async function run(connection = openRouter, target: Starred = model, credentials = new Credentials(), settings: ModelSettings = {}) {
   const texts: string[] = [];
+  const key = await streamKey();
   const reply = await generate({
     credentials,
     connection,
     model: target,
     settings,
     messages: [{ role: 'user', content: '안녕' }],
+    call: { id: crypto.randomUUID(), key: key.private, public: key.public },
     signal: new AbortController().signal,
     onText: (_, text) => texts.push(text),
   });
   return { reply, text: texts.join('') };
 }
 
-afterEach(() => vi.unstubAllGlobals());
-
 describe('generate', () => {
-  it('sends the built request through the relay and streams the reply', async () => {
+  it('sends the built request through the server’s stream and streams the reply', async () => {
     const log = answer(200, 'data: {"choices":[{"delta":{"content":"반가워요"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { 'x-relay': 'upstream' });
     const { reply, text } = await run();
     expect(text).toBe('반가워요');
@@ -44,9 +48,9 @@ describe('generate', () => {
   it("tells the provider's refusal, the relay's and the app's apart", async () => {
     answer(401, '{"error":{"message":"No auth credentials found","code":401}}', { 'x-relay': 'upstream' });
     expect((await run()).reply).toMatchObject({ state: 'failed', error: { kind: 'provider', status: 401, detail: 'No auth credentials found' } });
-    answer(502, '{"error":"upstream-unreachable"}', { 'x-relay': 'error' });
+    stubRelay(() => null);
     expect((await run()).reply).toMatchObject({ state: 'failed', error: { kind: 'relay', code: 'upstream-unreachable' } });
-    answer(401, '{"error":"no-session"}', {});
+    await server.wipe();
     expect((await run()).reply).toMatchObject({ state: 'failed', error: { kind: 'app', code: 'no-session' } });
   });
 

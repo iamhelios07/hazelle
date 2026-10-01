@@ -27,7 +27,7 @@ export function taskModel(store: ObjectStore, chat: Chat, own: ModelRef | undefi
   return own ? routeOf(store, own) : chatModel(store, chat, 'aux');
 }
 
-function routeOf(store: ObjectStore, ref: ModelRef): Route | RouteFailure {
+export function routeOf(store: ObjectStore, ref: ModelRef): Route | RouteFailure {
   const connection = store.get('connection', ref.connection);
   const model = connection?.value.starred.find((starred) => starred.id === ref.model);
   return connection && model ? { connection, model } : { kind: 'model-gone' };

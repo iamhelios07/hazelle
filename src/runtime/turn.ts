@@ -9,6 +9,7 @@ import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import { shown, type Chat, type Message } from '../model/chat';
+import type { Stored } from '../model/kinds';
 import type { Toggle } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
@@ -19,10 +20,11 @@ import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
-import { startChat, type Greetings, type Said } from './chat-log';
+import { appendUserMessage, startChat, type Greetings, type Said } from './chat-log';
 import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
 import { tokenizer } from './tokenizer';
-import { translate, type TranslateFailure, type TranslateInput } from './translate';
+import { endCall, type CallTarget } from './streams';
+import { resumeTranslation, translate, type TranslateFailure, type TranslateInput } from './translate';
 
 // What the user asks for: their new message and a reply to it, a reply to the last message sending
 // nothing new (답장 받기), another version of a reply (새 답장 받기), one in place of a failed version
@@ -269,12 +271,34 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   return 'kind' in prompt ? prompt : { route, settings, prompt, said };
 }
 
+// A message being translated for sending when this page came, which Streams hands over. It is saved translated, or
+// as typed when the translation failed, so what the user wrote is never lost; its reply waits for 답장 받기, since
+// another device may be reading the same call.
+export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, stream: Stored<'stream'>, signal: AbortSignal) {
+  const purpose = stream.value.for;
+  if (purpose.kind !== 'input') return;
+  session.streams.reading.add(stream.id);
+  const made = await resumeTranslation(session.store, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
+  if (!made.ok && made.failure.kind === 'stopped') return;
+  const id = stream.value.result;
+  const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed } } : { id, text: purpose.typed };
+  const saved = await appendUserMessage(session.store, stream.parent!, said);
+  if (saved.ok || session.store.get('entry', id)) endCall(session.store, stream.id);
+}
+
 // The user's message goes out translated, which the prompt sends and the chat saves as its text, with
 // what the user typed as its translation. The chat's messages before it are the translation's context.
+// Its call ends as soon as it is translated: a marker left until the message is saved would let a pick-up save the
+// message a second time, beside Talk's own save.
 async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
   const typed = turn.said!;
   const messages = session.read.chat(chat).snapshot()!.messages;
-  const made = await translate(session, translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text }), signal, () => {});
+  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text } };
+  session.streams.reading.add(target.id);
+  const made = await translate(session, translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text }), target, signal, () => {}).finally(() =>
+    session.streams.reading.delete(target.id),
+  );
+  endCall(session.store, target.id);
   if (!made.ok) return { kind: 'untranslated', failure: made.failure };
   const sent = made.translation.text;
   const last = turn.scope.messages.at(-1)!;

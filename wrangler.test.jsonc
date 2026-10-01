@@ -1,0 +1,11 @@
+// The tests' in-process platform (src/server/testing): wrangler.jsonc without its Durable Object, a class the
+// platform cannot run, whose namespace the tests make in process. Keep the bindings in step with wrangler.jsonc.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "risu-alpha",
+  "compatibility_date": "2026-09-25",
+  "send_metrics": false,
+  "compatibility_flags": ["enable_request_signal"],
+  "d1_databases": [{ "binding": "DB", "database_name": "risu-alpha", "database_id": "abe6fd8a-7c52-4d19-aa8a-b18065dfee1e", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "risu-alpha-blobs" }]
+}

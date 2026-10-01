@@ -13,7 +13,8 @@ import { keepSynced, ObjectStore } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
 import { ReadModels } from './read-model';
-import { translateLatest } from './turn';
+import { Streams } from './streams';
+import { resumeSend, translateLatest } from './turn';
 
 export type Session = {
   username: string;
@@ -23,6 +24,7 @@ export type Session = {
   talk: Talk;
   costs: Costs;
   translator: Translator;
+  streams: Streams;
   credentials: Credentials;
   catalogs: Catalogs;
   read: ReadModels;
@@ -46,17 +48,26 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
   const costs = new Costs(store);
-  const translator = new Translator(store, credentials, costs);
+  const reading = new Set<string>();
+  const translator = new Translator(store, credentials, costs, reading);
   const read = new ReadModels(store);
-  const talk = new Talk(store, credentials, costs, (chat) => translateLatest({ store, read, talk, translator }, chat));
-  const stopSync = keepSynced(store);
+  const talk = new Talk(store, credentials, costs, (chat) => translateLatest({ store, read, talk, translator }, chat), reading);
   const closing = new AbortController();
+  const streams: Streams = new Streams(store, reading, (stream) => {
+    const purpose = stream.value.for;
+    if (purpose.kind === 'reply') void talk.resume(stream);
+    else if (purpose.kind === 'translation') translator.resume(stream, purpose.version);
+    else void resumeSend({ store, streams }, stream, closing.signal);
+  });
+  const stopSync = keepSynced(store);
   void purgeExpired(store, Date.now(), closing.signal);
+  streams.pickUp();
 
   const close = () => {
     closing.abort();
     stopSync();
     read.close();
+    streams.close();
     talk.close();
     translator.close();
     costs.close();
@@ -64,5 +75,5 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     credentials.close();
     assets.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, translator, credentials, catalogs, read, close } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, translator, streams, credentials, catalogs, read, close } };
 }

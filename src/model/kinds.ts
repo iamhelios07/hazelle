@@ -5,6 +5,7 @@ import type { Persona } from './persona';
 import type { Profile } from './profile';
 import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
+import type { Stream } from './stream';
 
 // Every kind of stored object, with the value its sealed body holds.
 export type Values = {
@@ -15,6 +16,7 @@ export type Values = {
   asset: Asset;
   chat: Chat;
   entry: Entry;
+  stream: Stream;
   connection: Connection;
   settings: Settings;
   prompt: Prompt;
@@ -43,6 +45,7 @@ export const KINDS = {
   asset: { parent: 'character', file: true },
   chat: { parent: null, owner: { field: 'character', kind: 'character' } },
   entry: { parent: 'chat', appendOnly: true },
+  stream: { parent: 'chat' },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
   prompt: { parent: null },
@@ -113,6 +116,7 @@ const SHAPES = {
   asset: shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) }),
   chat: shape({ title: orNull(str), character: orNull(str), models: isRecord }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
+  stream: shape({ key: isRecord, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) }),
   connection: shape({ type: str, label: str, baseUrl: orNull(str), protocol: orNull(str), secret: str, starred: listOf(shape({ id: str, name: str })) }),
   settings: shape({ models: isRecord }),
   prompt: (value) => prompt(value) && (conversation(value) || translate(value)),

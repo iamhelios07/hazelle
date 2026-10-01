@@ -4,8 +4,8 @@
   "main": "src/server/worker.ts",
   "compatibility_date": "2026-09-25",
   "send_metrics": false,
-  // Without this flag request.signal never fires on client disconnect, so 멈추기 would not end
-  // the upstream call (tech-spec §6).
+  // Without this flag request.signal never fires on client disconnect, so a closed tab would not end
+  // a relayed call (tech-spec §6).
   "compatibility_flags": ["enable_request_signal"],
   "assets": {
     "not_found_handling": "single-page-application",
@@ -19,6 +19,10 @@
       "migrations_dir": "migrations"
     }
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "STREAMS", "class_name": "ReplyStream" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ReplyStream"] }],
   "r2_buckets": [
     {
       "binding": "BLOBS",

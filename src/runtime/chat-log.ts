@@ -124,7 +124,9 @@ export function editMessage(store: ObjectStore, chat: string, message: Message, 
   return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...kept });
 }
 
-export const appendTranslation = (store: ObjectStore, chat: string, version: string, translation: Translation) => append(store, chat, { type: 'translation', version, ...translation });
+// id: the call's, so a call another device saved too is known as saved (runtime/streams).
+export const appendTranslation = (store: ObjectStore, chat: string, version: string, translation: Translation, id: string) =>
+  append(store, chat, { type: 'translation', version, ...translation }, id);
 
 export const selectVersion = (store: ObjectStore, chat: string, message: string, version: string) => append(store, chat, { type: 'select', message, version, at: Date.now() });
 
