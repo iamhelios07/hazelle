@@ -18,7 +18,7 @@ export function useCache(id: string | null, chat: Chat, messages: Shown[], text:
   const [read, setRead] = useState<Forecast | null>(null);
 
   useEffect(() => {
-    if (id === null || busy || !last || !sent?.cache) return setRead(null);
+    if (id === null || busy || !last || last.until <= Date.now() || !sent?.cache) return setRead(null);
     let live = true;
     const timer = window.setTimeout(() => {
       void tokenizer().then((countTokens) => {
