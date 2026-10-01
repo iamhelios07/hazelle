@@ -2,7 +2,7 @@ import { count, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
 import { parseDecorators } from '../lorebook/decorators';
 import { readToggles } from './toggles';
-import type { Card, ImportReport, LoreEntry, RegexScript, UnsupportedKind } from './types';
+import type { Card, ImportReport, LoreEntry, RegexScript, Trigger, UnsupportedKind } from './types';
 
 type Json = Record<string, unknown>;
 type Entry = Omit<LoreEntry, 'name' | 'folder'>;
@@ -81,13 +81,14 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
       : list(risu.additionalAssets).filter(Array.isArray).map(([name, uri]) => ({ name: text(name), uri: text(uri) }));
   add(tally, 'asset', listed.length - (icon ? 1 : 0) - (spec === 'v3' ? assets.length : 0));
   if (spec === 'v2') add(tally, 'asset', list(risu.emotions).length + Object.keys(record(risu.vits)).length);
-  const lua: Card['lua'] = [];
+  const triggers: Trigger[] = [];
   for (const trigger of (module ? list(module.trigger) : list(risu.triggerscript)).map(record)) {
+    const name = text(trigger.comment);
     const effects = list(trigger.effect).map(record);
     const code = effects[0]?.type === 'triggerlua' ? text(effects[0].code) : null;
     if (code === null) {
-      if (effects.some((effect) => !INERT.has(effect.type))) add(tally, 'trigger');
-    } else if (code.trim()) lua.push({ name: text(trigger.comment), code });
+      if (effects.some((effect) => !INERT.has(effect.type))) triggers.push({ kind: 'blocks', name, on: text(trigger.type), conditions: list(trigger.conditions), effects });
+    } else if (code.trim()) triggers.push({ kind: 'lua', name, code });
   }
   const background = text(risu.backgroundHTML);
   if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
@@ -119,7 +120,7 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
       .filter((pair): pair is [string, number] => Array.isArray(pair) && typeof pair[0] === 'string' && typeof pair[1] === 'number')
       .map(([key, value]): [string, number] => [key, value]),
     regex: regexScripts(module ? list(module.regex) : list(risu.customScripts), tally),
-    lua,
+    triggers,
     lowLevelAccess: risu.lowLevelAccess === true,
     ...(background.trim() ? { background } : {}),
     loreSettings: {

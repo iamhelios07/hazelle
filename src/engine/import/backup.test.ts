@@ -155,7 +155,7 @@ describe('readBackup', () => {
       greetings: ['hi', 'hello', 'yo'],
       postHistoryInstructions: 'stay in character',
       regex: [{ name: 'r', find: 'a', replace: 'b', stage: 'output', flags: null }],
-      lua: [{ name: 'lua', code: 'print(1)' }],
+      triggers: [{ kind: 'lua', name: 'lua', code: 'print(1)' }],
       lowLevelAccess: true,
     });
     expect(card.lore[0]!.content).toBe('@@probability 40\n{{user}} sees\n@@depth 0');

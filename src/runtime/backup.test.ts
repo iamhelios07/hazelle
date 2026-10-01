@@ -39,7 +39,7 @@ const card: Card = {
   utility: false,
   bias: [],
   regex: [],
-  lua: [],
+  triggers: [],
   lowLevelAccess: false,
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };

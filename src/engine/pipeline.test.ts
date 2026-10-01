@@ -68,7 +68,7 @@ const card = (over: Partial<Card> = {}): Card => ({
   utility: false,
   bias: [],
   regex: [],
-  lua: [],
+  triggers: [],
   lowLevelAccess: false,
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
   ...over,
@@ -366,10 +366,15 @@ describe('renderChat', () => {
 
 describe('unused', () => {
   it('counts what chats do not use yet', () => {
-    expect(unused(card({ bias: [['a', 1]], utility: true, lua: [{ name: '', code: 'x()' }] }))).toEqual([
+    const triggers = [
+      { kind: 'lua' as const, name: '', code: 'x()' },
+      { kind: 'blocks' as const, name: '', on: 'manual', conditions: [], effects: [] },
+    ];
+    expect(unused(card({ bias: [['a', 1]], utility: true, triggers }))).toEqual([
       { kind: 'bias', count: 1 },
       { kind: 'utility', count: 1 },
       { kind: 'lua', count: 1 },
+      { kind: 'trigger', count: 1 },
     ]);
   });
 });

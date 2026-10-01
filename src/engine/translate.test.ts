@@ -23,7 +23,7 @@ const card: Card = {
   toggles: '',
   utility: false,
   bias: [],
-  lua: [],
+  triggers: [],
   lowLevelAccess: false,
   regex: [{ name: 'shout', find: 'lamp', replace: 'LAMP', stage: 'display', flags: null }],
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },

@@ -21,16 +21,20 @@ export type Card = {
   utility: boolean;
   bias: [string, number][];
   regex: RegexScript[];
-  // The bot's Lua triggers, kept for when Lua runs and not run before. Risu runs a Lua trigger at every event,
-  // whatever its trigger type, so the type is not kept; name is Risu's comment.
-  lua: { name: string; code: string }[];
-  // The bot asks for Risu's lowLevelAccess, which lets its scripts call models; nothing grants it yet.
+  // The bot's triggers that do something, kept for when triggers run and not run before.
+  triggers: Trigger[];
+  // The bot asks for Risu's lowLevelAccess, which lets its triggers call models; nothing grants it yet.
   lowLevelAccess: boolean;
   // The card's backgroundHTML, absent when it has none. Only its <style> blocks are shown (design §6.4).
   background?: string;
   // Each setting stands alone, as in CCv3; null leaves it to the global default.
   loreSettings: { scanDepth: number | null; tokenBudget: number | null; recursive: boolean | null; fullWordMatching: boolean | null };
 };
+
+// name is Risu's comment. Risu runs a Lua trigger at every event, whatever its trigger type, so a Lua one keeps no
+// `on`. A block trigger keeps Risu's type, conditions and effects verbatim: they are the bot's behavior, like its regex
+// sources, until trigger support gives them a model of their own.
+export type Trigger = { kind: 'lua'; name: string; code: string } | { kind: 'blocks'; name: string; on: string; conditions: unknown[]; effects: unknown[] };
 
 // flags: the custom flag string, <…> meta blocks included; null runs the default `g`.
 export type RegexScript = { name: string; find: string; replace: string; stage: 'input' | 'output' | 'process' | 'display'; flags: string | null };
@@ -63,7 +67,6 @@ export type Imported = {
 };
 
 export const UNSUPPORTED_KINDS = [
-  'trigger',
   'asset',
   'background-html',
   'additional-text',

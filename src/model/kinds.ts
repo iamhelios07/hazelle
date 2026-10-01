@@ -97,7 +97,7 @@ const SHAPES = {
       variables: listOf(Array.isArray),
       bias: listOf(Array.isArray),
       regex: listOf(isRecord),
-      lua: listOf(shape({ name: str, code: str })),
+      triggers: listOf(shape({ kind: str, name: str })),
       utility: bool,
       lowLevelAccess: bool,
       loreSettings: isRecord,

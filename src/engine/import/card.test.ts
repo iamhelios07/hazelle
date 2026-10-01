@@ -213,8 +213,8 @@ describe('importCard', () => {
       { name: 'Castle', keys: ['성', 'castle'], caseSensitive: true, insertionOrder: 120, content: '@@probability 40\n{{char}} lives in the castle.', folder: 0 },
       { name: 'Dragon', keys: ['dragon'], content: '@@end\n<user> met a dragon.', folder: null },
     ]);
-    expect(imported.card.lua).toHaveLength(1);
-    expect(counts(imported)).toEqual({ trigger: 1, 'regex-stage': 1 });
+    expect(imported.card.triggers.map(({ kind }) => kind).sort()).toEqual(['blocks', 'lua']);
+    expect(counts(imported)).toEqual({ 'regex-stage': 1 });
   });
 
   it('imports the card alone when module.risum is unreadable', () => {
@@ -224,7 +224,7 @@ describe('importCard', () => {
     expect(counts(imported)).toEqual({ module: 1 });
   });
 
-  it('counts what it cannot run, but not a trigger that does nothing, leaves it in the text and keeps Lua', () => {
+  it('counts what it cannot run, keeps the triggers that do something, and leaves the text as it was', () => {
     const imported = json(
       v3({
         description: '{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}',
@@ -242,7 +242,7 @@ describe('importCard', () => {
             lowLevelAccess: true,
             triggerscript: [
               { comment: 'hp', type: 'start', effect: [{ type: 'triggerlua', code: 'setChatVar("hp", "1")' }] },
-              { effect: [{ type: 'setvar' }] },
+              { comment: 'set', type: 'manual', conditions: [], effect: [{ type: 'setvar' }] },
               { effect: [{ type: 'triggerlua', code: ' ' }] },
               { effect: [{ type: 'v2Header' }, { type: 'v2EndIndent' }] },
             ],
@@ -257,10 +257,12 @@ describe('importCard', () => {
     );
     expect(imported.card.description).toBe('{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}');
     expect(imported.avatar).toBeNull();
-    expect(imported.card.lua).toEqual([{ name: 'hp', code: 'setChatVar("hp", "1")' }]);
+    expect(imported.card.triggers).toEqual([
+      { kind: 'lua', name: 'hp', code: 'setChatVar("hp", "1")' },
+      { kind: 'blocks', name: 'set', on: 'manual', conditions: [], effects: [{ type: 'setvar' }] },
+    ]);
     expect(imported.card.lowLevelAccess).toBe(true);
     expect(imported.report.unsupported).toEqual([
-      { kind: 'trigger', count: 1 },
       { kind: 'asset', count: 1 },
       { kind: 'background-html', count: 1 },
       { kind: 'additional-text', count: 1 },

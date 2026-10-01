@@ -24,7 +24,7 @@ const card: Card = {
   toggles: '',
   utility: false,
   bias: [],
-  lua: [],
+  triggers: [],
   lowLevelAccess: false,
   regex: [
     { name: 'hp', find: '\\[HP (\\d+)\\]', replace: '{{setvar::hp::$1}}<style>.x-risu-box { color: red }</style><div class="box">HP $1</div>', stage: 'output', flags: null },
