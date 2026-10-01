@@ -98,6 +98,7 @@ const scope = (over: Partial<PromptInput['scope']> = {}): PromptInput['scope'] =
   faces: { char: null, user: null },
   screen: null,
   pick: 'luna:chat',
+  variables: [],
   ...over,
 });
 
@@ -342,6 +343,18 @@ describe('renderChat', () => {
     expect(prompt.variables.get('count')).toBe('3');
     expect(display.variables).toEqual(prompt.variables);
     expect([prompt.texts[1], display.texts[1]]).toEqual(['2', '2']);
+  });
+
+  it('skips the input and output stages on a text already past them, as on the greeting, and runs them on one written here', () => {
+    const regex = [script('output', 'nods', 'smiles'), script('input', 'Good', 'Fine')];
+    const staged = (each: HistoryMessage): HistoryMessage => ({ ...each, staged: true });
+    const messages = [staged(message('a1', 'assistant', 'She nods.')), staged(message('u1', 'user', 'Good.')), message('a2', 'assistant', 'She nods.'), message('u2', 'user', 'Good.')];
+    expect(renderChat('prompt', scope({ card: card({ regex, greetings: [] }), messages, greeting: null })).texts).toEqual(['She nods.', 'Good.', 'She smiles.', 'Fine.']);
+  });
+
+  it("starts from the chat's own variables over the card's defaults", () => {
+    const over = { card: card({ variables: [['count', '0'], ['mood', 'calm']], greetings: [] }), messages: [message('u1', 'user', '{{getvar::count}} {{getvar::mood}}')], greeting: null };
+    expect(renderChat('prompt', scope({ ...over, variables: [['count', '5']] })).texts).toEqual(['5 calm']);
   });
 
   it('rolls a random tag in a message the same on screen as in the prompt', () => {

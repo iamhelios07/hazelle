@@ -1,4 +1,5 @@
 import type { Cost } from '../connectors/types';
+import type { RisuMessage } from '../engine/import/types';
 import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { memoryId, type Memory, type Source } from '../model/memory';
@@ -6,8 +7,8 @@ import type { ApiFailure, ApiResult } from './api';
 import { without, type ObjectStore, type Write } from './store';
 
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment
-// writes with the other layers, a character's purge, which removes them with the character, and a backup's
-// restore, which copies them as they were.
+// writes with the other layers, a character's purge, which removes them with the character, a backup's
+// restore, which copies them as they were, and a move from Risu, which saves chatWrites' writes with the character.
 
 // A new chat is saved in this order: the chat with its greetings, the one shown selected, then the user's first
 // message, sent with its reply. Messages stand in the order they were saved, so the greeting leads only when it is
@@ -15,8 +16,15 @@ import { without, type ObjectStore, type Write } from './store';
 // chat is never there without them: its screen would show it greeting-less until they landed.
 // id is the one the chat was shown under before it was saved, which seeds its greeting's pick and rollp tags.
 export async function startChat(store: ObjectStore, id: string, chat: Chat, greetings: Greetings | null): Promise<ApiFailure | null> {
-  const saved = await store.batch([...(greetings ? greetingWrites(id, greetings) : []), { type: 'create', kind: 'chat', id, parent: null, value: chat }]);
+  const saved = await store.batch(chatWrites(id, chat, greetings, []));
   return saved.ok ? null : saved;
+}
+
+// A new chat's writes for one batch: its greetings, then the messages it already holds (a chat brought from Risu), then
+// the chat.
+export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, messages: RisuMessage[]): Write[] {
+  const held = messages.map(({ role, text, at }): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: id, value: { type: 'message', role, at, text, receipt: null, staged: true } }));
+  return [...(greetings ? greetingWrites(id, greetings) : []), ...held, { type: 'create', kind: 'chat', id, parent: null, value: chat }];
 }
 
 // ids are the ones the greetings were shown under before the chat was saved, which seed their random tags.
@@ -87,7 +95,7 @@ function copied(id: string, { role, at, versions, selected }: Message): { entrie
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
   const held = ({ text, receipt, seed, translation }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }) });
-  const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(first!) }]];
+  const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(first!), ...(first!.staged && { staged: true }) }]];
   const made = new Map(versions.map((version, index) => [version.id, ids[index]!]));
   if (first!.edited || first!.at !== at) {
     const again = crypto.randomUUID();

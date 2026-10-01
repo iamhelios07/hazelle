@@ -44,6 +44,7 @@ const scope: ChatScope = {
   faces: { char: null, user: null },
   screen: null,
   pick: 'luna:chat',
+  variables: [],
 };
 const translate = (input: Pick<Parameters<typeof assembleTranslation>[0], 'request' | 'language'> & Partial<Parameters<typeof assembleTranslation>[0]>) =>
   assembleTranslation({ scope, take: new Set(), prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], seed: 'seed', countTokens: (text) => text.length, ...input });

@@ -18,6 +18,8 @@ export type ChatScope = {
   lore: LoreInput['entries'];
   // Oldest first, each as its shown version.
   messages: HistoryMessage[];
+  // The chat's own starting variables, over the card's defaults.
+  variables: [string, string][];
   greeting: CbsContext['greeting'];
   toggle: CbsContext['toggle'];
   model: CbsContext['model'];
@@ -67,14 +69,15 @@ export function renderChat(
 ): { texts: string[]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][] } {
   const context = contexts(scope, stage, null);
   const scripts = scope.card?.regex ?? [];
-  const variables = new Map(scope.card?.variables);
+  const variables = new Map([...(scope.card?.variables ?? []), ...scope.variables]);
   const drawn: number[][] = [];
   const boxes: Box[][] = [];
-  const texts = scope.messages.map(({ role, text }, index) => {
+  const texts = scope.messages.map(({ role, text, staged }, index) => {
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
     const at = { messages: scope.messages, index };
-    // Neither the user nor the model wrote the greeting, so it skips their stages; its CBS still writes.
-    const written = index === 0 && scope.greeting !== null ? [] : scripts;
+    // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
+    // CBS still writes.
+    const written = (index === 0 && scope.greeting !== null) || staged ? [] : scripts;
     const replayed = applyScripts(role === 'user' ? 'input' : 'output', text, { ...at, scripts: written, cbs: cbs(variables) }).text;
     const shown = applyScripts(stage === 'prompt' ? 'process' : 'display', replayed, { ...at, scripts, take, cbs: cbs(new Map(variables)) });
     drawn.push(shown.drawn);

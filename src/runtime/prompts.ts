@@ -1,4 +1,4 @@
-import { importPreset, type PresetFailure, type PresetUnsupported } from '../engine/import/preset';
+import { importPreset, type PresetFailure, type PresetResult, type PresetUnsupported } from '../engine/import/preset';
 import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
@@ -75,13 +75,15 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): P
 
 export type ImportPromptResult = { ok: true; id: string; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure | { kind: 'save'; failure: ApiFailure } };
 
-// A dropped Risu preset becomes a new conversation prompt; unsupported is what the summary counts.
-export async function importPrompt(store: ObjectStore, fileName: string, bytes: Uint8Array): Promise<ImportPromptResult> {
-  const read = await importPreset(fileName, bytes);
+// A Risu preset, dropped or brought in a backup, becomes a new conversation prompt; unsupported is what the summary
+// counts.
+export async function savePreset(store: ObjectStore, read: PresetResult): Promise<ImportPromptResult> {
   if (!read.ok) return read;
   const saved = await store.create('prompt', read.prompt);
   return saved.ok ? { ok: true, id: saved.data.id, unsupported: read.unsupported } : { ok: false, failure: { kind: 'save', failure: saved } };
 }
+
+export const importPrompt = async (store: ObjectStore, fileName: string, bytes: Uint8Array) => savePreset(store, await importPreset(fileName, bytes));
 
 // An account that has never had a sort's default prompt gets that sort's bundled prompt as its default, once. The
 // session awaits it when it opens; a failure is tried again next time.
