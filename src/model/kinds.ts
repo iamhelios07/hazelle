@@ -120,7 +120,7 @@ const SHAPES = {
   chat: shape({ title: orNull(str), character: orNull(str), models: isRecord }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   stream: shape({ key: isRecord, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) }),
-  memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
+  memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
   connection: shape({ type: str, label: str, baseUrl: orNull(str), protocol: orNull(str), secret: str, starred: listOf(shape({ id: str, name: str })) }),
   settings: shape({ models: isRecord }),
   prompt: (value) => prompt(value) && (conversation(value) || task(value)),

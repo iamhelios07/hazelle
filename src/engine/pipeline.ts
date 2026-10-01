@@ -8,7 +8,7 @@ import type { Card } from './import/types';
 import { activate, merge, type Activation, type Fired, type LoreInput, type Operation } from './lorebook/activate';
 import { parseDecorators } from './lorebook/decorators';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
-import { memoryBefore, memoryBudget, memoryFormat, spanText, standing, type MemoryInput, type MemorySent } from './memory';
+import { memoryBefore, memoryBudget, memoryFormat, spanText, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
@@ -288,9 +288,11 @@ export type MemoryTaskInput = {
   // The chat's, its messages as a request sends them.
   scope: ChatScope;
   prompt: MemoryPrompt;
-  // What the new records follow: the state and open threads, and the record before the span.
+  // What the new records follow: the state and open threads, and the record before the span. budget: the 장기 기억 slot's
+  // in the chat's requests, whose share the state may take.
   memory: Memory;
   before: MemoryRecord | null;
+  budget: number;
   // The messages summarized, by place in scope.messages, from included and to not.
   span: { from: number; to: number };
   seed: string;
@@ -300,13 +302,13 @@ export type MemoryTaskInput = {
 // A memory prompt's blocks as the messages sent, then the app's answer format. span: the span's texts as the prompt
 // renders them, variables replayed, which the answer is validated against and the records' fingerprints are made of.
 // Like a translation, a memory task holds no chat, so entries placed at a depth are not sent in it.
-export function assembleMemory({ scope, prompt, memory, before, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
+export function assembleMemory({ scope, prompt, memory, before, budget, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
   const { texts, variables } = renderChat('prompt', scope);
   const laid = lay(scope, scope.messages.slice(0, to), variables, seed, remembered(countTokens), null);
   const speaker = (role: 'user' | 'assistant') => (role === 'user' ? (scope.persona?.name ?? 'User') : (scope.card?.name ?? 'Assistant'));
   const span = texts.slice(from, to);
   const shown = spanText(span.map((text, offset) => ({ speaker: speaker(scope.messages[from + offset]!.role), text: text.trim() })));
-  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'memory', memory: memoryBefore(memory, before), span: shown });
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'memory', memory: memoryBefore(memory, before, stateLimit(budget), countTokens), span: shown });
   const messages = cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
   return { messages: [...messages, { role: 'user', content: memoryFormat(to - from) }], span };
 }

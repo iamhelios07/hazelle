@@ -105,7 +105,7 @@ describe('branchChat', () => {
     await editMessage(store, source, fold(store.children('entry', source))[1]!, '고친 말', null);
     const messages = fold(store.children('entry', source));
     const sourcesOf = (from: number, to: number) => messages.slice(from, to).map((message) => ({ message: message.id, version: shown(message).id }));
-    const record = (id: string, sources: MemoryRecord['sources']): MemoryRecord => ({ id, sources, print: 'p', when: null, where: null, who: [], what: id, lines: [], outcome: '', receipt: null, at: 0 });
+    const record = (id: string, sources: MemoryRecord['sources']): MemoryRecord => ({ id, sources, print: 'p', when: null, where: null, who: [], what: id, lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 });
     await store.create(
       'memory',
       {

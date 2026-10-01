@@ -1,4 +1,4 @@
-import type { Fact, Line, Memory, MemoryRecord, Source, Thread } from '../model/memory';
+import type { Change, Fact, Line, Memory, MemoryRecord, Source, Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 
 // What the 장기 기억 slot did for one request. sent: the records it sent. covered: the leading messages memory covers,
@@ -29,8 +29,10 @@ export type MemoryInput = { memory: Memory; budget: number; shown: Source[] };
 const MEMORY_SHARE = 0.5;
 export const memoryBudget = (setting: number, prompt: number | null) => (prompt === null ? setting : Math.min(setting, Math.floor(prompt * MEMORY_SHARE)));
 
-// The state's limit, a share of the memory budget. Past it nothing is cut: the panel says so and the user trims it.
+// The state's limit, a share of the memory budget. Past it nothing is cut: the panel says so, a memory task is told,
+// and the user trims it.
 const STATE_SHARE = 0.2;
+export const stateLimit = (budget: number) => Math.floor(budget * STATE_SHARE);
 
 // A 64-bit string hash (cyrb53's mixing), synchronous because a request is assembled synchronously.
 export function fingerprint(messages: { role: string; text: string }[]): string {
@@ -104,7 +106,7 @@ export function standing(memory: Memory, chat: ChatRead, budget: number, countTo
   }
   const threads = memory.threads.map(({ text }) => text);
   const cost = new Map(candidates.map((record) => [record.id, countTokens(recordText(record))]));
-  let room = budget - countTokens(memoryText(memory.state, threads, [], PAST)) - candidates.reduce((sum, record) => sum + (record.pinned ? cost.get(record.id)! : 0), 0);
+  let room = budget - countTokens(memoryText(memory.state, threads, [])) - candidates.reduce((sum, record) => sum + (record.pinned ? cost.get(record.id)! : 0), 0);
   let fits = true;
   for (const record of [...candidates].reverse()) {
     if (!record.pinned && (!fits || cost.get(record.id)! > room)) {
@@ -116,10 +118,10 @@ export function standing(memory: Memory, chat: ChatRead, budget: number, countTo
     status.set(record.id, 'sent');
   }
   const sent = memory.records.filter(({ id }) => status.get(id) === 'sent');
-  const text = memoryText(memory.state, threads, sent, PAST);
+  const text = memoryText(memory.state, threads, sent);
   const covered = coveredBy(memory, places);
   const held = new Set(sent.flatMap(({ sources }) => sources.flatMap(({ message }) => places.get(message) ?? [])));
-  const state = memoryText(memory.state, [], [], PAST);
+  const state = memoryText(memory.state, [], []);
   return {
     covered,
     status,
@@ -127,15 +129,15 @@ export function standing(memory: Memory, chat: ChatRead, budget: number, countTo
     text,
     sent: sent.map(({ id }) => id),
     held: held.size,
-    tokens: { used: text ? countTokens(text) : 0, budget, state: state ? countTokens(state) : 0, stateLimit: Math.floor(budget * STATE_SHARE) },
+    tokens: { used: text ? countTokens(text) : 0, budget, state: state ? countTokens(state) : 0, stateLimit: stateLimit(budget) },
   };
 }
 
-const PAST = 'What happened, in the order of the chat:';
-
-function memoryText(state: Fact[], threads: string[], records: MemoryRecord[], heading: string): string {
+// Rendered from memory alone, in its stored order, with no clock and nothing random, so between two commits the block is
+// the same text on every turn and the cache point before it holds.
+function memoryText(state: Fact[], threads: string[], records: MemoryRecord[], heading = 'What happened, in the order of the chat:', stateHead = 'Current state:'): string {
   return [
-    state.length ? ['Current state:', ...state.map(({ about, field, value }) => `- ${about}, ${field}: ${value}`)].join('\n') : '',
+    state.length ? [stateHead, ...state.map(({ about, field, value }) => `- ${about}, ${field}: ${value}`)].join('\n') : '',
     threads.length ? ['Open threads:', ...threads.map((thread) => `- ${thread}`)].join('\n') : '',
     records.length ? [heading, ...records.map(recordText)].join('\n\n') : '',
   ]
@@ -175,13 +177,16 @@ export function nextSpan(tokens: number[], covered: number, { window, batch }: {
 // A thread as a job names it: its id's first group, which stays the same whichever device reads the answer.
 export const threadLabel = (thread: Thread) => `T-${thread.id.slice(0, 8)}`;
 
-// The 장기 기억 slot of a memory task: what the new records follow.
-export function memoryBefore(memory: Memory, before: MemoryRecord | null): string {
+// The 장기 기억 slot of a memory task: what the new records follow, with the state's size against its limit, so the
+// summarizer keeps it tight.
+export function memoryBefore(memory: Memory, before: MemoryRecord | null, limit: number, countTokens: (text: string) => number): string {
+  const size = countTokens(memoryText(memory.state, [], []));
   return memoryText(
     memory.state,
     memory.threads.map((thread) => `[${threadLabel(thread)}] ${thread.text}`),
     before ? [before] : [],
     'The record just before these messages:',
+    `Current state (${size} of at most ${limit} tokens${size > limit ? '; over the limit, so remove or merge facts' : ''}):`,
   );
 }
 
@@ -192,11 +197,11 @@ export const memoryFormat = (count: number) =>
   [
     'Answer with one JSON object and nothing else: {"records": [...]}.',
     `The records cover the numbered messages in order, without gaps: each record's "to" is the number of its last message, and the last record's "to" is ${count}. Start a new record only at a scene break.`,
-    'Every record has every field: "to" (a number); "when" and "where" (text, or null when the messages do not say); "who" (the names of those present); "what" (what happened); "lines" (key lines, each {"speaker": name, "text": the line copied word for word from the messages}); "outcome" (text); "state" (only the facts this record changes, each {"about": name, "field": what it is, "value": its new value}); "opens" (new unresolved promises, foreshadowing or events, as text); "closes" (the labels of the open threads it resolves, such as "T-1a2b3c4d").',
+    'Every record has every field: "to" (a number); "when" and "where" (text, or null when the messages do not say); "who" (the names of those present); "what" (what happened); "lines" (key lines, each {"speaker": name, "text": the line copied word for word from the messages}); "outcome" (text); "state" (only the facts this record changes, each {"about": name, "field": what it is, "value": its new value, or null when the fact no longer holds, such as a healed injury, an item given away or a place left}; one value per field, so merge duplicates of the same about and field into one); "opens" (new unresolved promises, foreshadowing or events, as text); "closes" (the labels of the open threads it resolves, such as "T-1a2b3c4d").',
   ].join('\n');
 
-export type Change = Pick<Fact, 'about' | 'field' | 'value'>;
-export type Drafted = Pick<MemoryRecord, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome'> & { to: number; state: Change[]; opens: string[]; closes: string[] };
+// closes: the labels of the threads it closes (threadLabel).
+export type Drafted = Pick<MemoryRecord, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome' | 'state' | 'opens'> & { to: number; closes: string[] };
 export type Invalid = 'unreadable' | 'fields' | 'lines';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -233,7 +238,7 @@ function drafted(item: unknown): Drafted | null {
   if (!isRecord(item)) return null;
   const { to, when, where, who, what, lines, outcome, state, opens, closes } = item;
   const line = (value: unknown): value is Line => isRecord(value) && isText(value.speaker) && isText(value.text) && flat(value.text) !== '';
-  const change = (value: unknown): value is Change => isRecord(value) && isText(value.about) && isText(value.field) && isText(value.value);
+  const change = (value: unknown): value is Change => isRecord(value) && isText(value.about) && isText(value.field) && textOrNull(value.value);
   if (typeof to !== 'number' || !textOrNull(when) || !textOrNull(where) || !textsOf(who) || !isText(what) || !flat(what) || !isText(outcome)) return null;
   if (!Array.isArray(lines) || !lines.every(line) || !Array.isArray(state) || !state.every(change) || !textsOf(opens) || !textsOf(closes)) return null;
   return {
@@ -260,7 +265,7 @@ const INSTRUCTIONS = [
   'Keep negations, refusals and conditions exactly: who did not do something, who said no, and what a promise depends on.',
   'Keep who said what, and who knows what: a secret one character learned is not known to the others.',
   'Choose as key lines the ones later turns may need word for word: promises, confessions, threats, names given, and lines that set a relationship or a speech level.',
-  'Write state only where it changed: relationships and speech level (존댓말 or 반말), names and aliases, possessions, injuries, places, and who knows what.',
+  'Write state only where it changed: relationships and speech level (존댓말 or 반말), names and aliases, possessions, injuries, places, and who knows what. Remove a fact that no longer holds, and keep the state within its limit.',
   'Open a thread for a promise, foreshadowing or event left unresolved, and close an open thread when the messages resolve it.',
   'Leave out talk outside the story, such as remarks about the chat, the model or the app.',
   'Be brief: minor detail may fade, but names, relationships, promises and who knows what must never be lost.',

@@ -254,11 +254,14 @@ describe('assemble with memory', () => {
     what,
     lines: [],
     outcome: '',
+    state: [],
+    opens: [],
+    closes: [],
     receipt: null,
     at: 0,
     ...over,
   });
-  const memoryOf = (records: MemoryRecord[]): Memory => ({ records, state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [] });
+  const memoryOf = (records: MemoryRecord[]): Memory => ({ records, state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
   const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}): Assembled =>
     assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: { memory, budget, shown } }));
   const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
@@ -275,6 +278,18 @@ describe('assemble with memory', () => {
     expect(result.messages[at - 1]).toEqual({ role: 'system', content: '# Material 3: Past Events/Prelude Summary', cache: true });
   });
 
+  it('sends the same memory text on the next turn while nothing is committed, so the cache before and through it holds', () => {
+    const memory = memoryOf([record('r1', [0, 1], 'jin and Luna reach the lighthouse.'), record('r2', [2, 3], 'jin promises to come back.')]);
+    const next = [...messages, message('m6', 'user', 'Rain again.'), message('m7', 'assistant', 'Luna lights the lamp at {{time}}.')];
+    const turns = [withMemory(memory), withMemory(memory, 25_000, { messages: next, clock: { now: Date.UTC(2026, 9, 1, 12), timeZone: 'UTC' } })];
+    const [first, second] = turns.map((turn) => {
+      const at = turn.messages.indexOf(memoryOfSent(turn)!);
+      return turn.messages.slice(0, at + 1);
+    });
+    expect(second).toEqual(first);
+    expect(first!.at(-2)!.cache).toBe(true);
+  });
+
   it('sends pinned records always and the newest that fit, holds back stale and forgotten ones, and counts the messages left with no memory', () => {
     const long = 'Luna tells the whole history of the lighthouse. '.repeat(20);
     const result = withMemory(
@@ -289,6 +304,7 @@ describe('assemble with memory', () => {
     );
     expect(result.memory).toEqual({ sent: ['r1', 'r5'], covered: 5, missing: 3, slot: true });
     expect(chatOf(result)).toEqual(['Luna is calm.']);
+    expect(memoryOfSent(result)!.content).toMatch(/^Current state:\n- Luna, mood: wary\n\nOpen threads:\n- jin will come back\./);
     const pinned = withMemory(memoryOf([record('r1', [0], 'They arrive.', { print: 'rendered before', pinned: true })]));
     expect(pinned.memory).toMatchObject({ sent: ['r1'], missing: 0 });
   });

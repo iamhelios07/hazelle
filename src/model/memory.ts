@@ -20,7 +20,9 @@ export type Line = { speaker: string; text: string };
 // rendered it when it was read; a record is stale when the same span renders differently now. receipt: the call that
 // wrote it, null for one the user wrote. edited and pinned (항상 넣기) are the user's, and automatic work never rewrites
 // either. forgotten: the user deleted it; its span stays covered and sends nothing, and is not summarized again until
-// the user asks.
+// the user asks. state: the facts it changed, each with its new value, or null for one it found no longer holds, so
+// automatic work removes a fact only by a change a record names. opens and closes: the threads it opened and closed, as
+// their text.
 export type MemoryRecord = {
   id: string;
   sources: Source[];
@@ -31,12 +33,17 @@ export type MemoryRecord = {
   what: string;
   lines: Line[];
   outcome: string;
+  state: Change[];
+  opens: string[];
+  closes: string[];
   receipt: Receipt | null;
   at: number;
   edited?: true;
   pinned?: true;
   forgotten?: true;
 };
+
+export type Change = { about: string; field: string; value: string | null };
 
 // The current value of one field about someone or something; the old value lives on in the record that changed it.
 // record: the record that last set it, null when the user did.

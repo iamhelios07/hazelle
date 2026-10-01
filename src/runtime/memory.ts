@@ -207,14 +207,17 @@ function applies(memory: Memory, messages: Message[], { sources, redo }: Job): b
   return record !== undefined && record.at === redo.at && (redo.user || (!record.edited && !record.pinned && !record.forgotten));
 }
 
-// The job's records in place of the one it summarized again, or after memory's end, with the state they change and the
-// threads they open and close. A fact a later record or the user set stays as it is. span: the messages read, as the
-// prompt rendered them; first: the id of the first record, which tells a call already saved (Streams).
+// The job's records in place of the one it summarized again, or after memory's end, with the state they change (a null
+// value removes the fact) and the threads they open and close, each kept on the record that made it. A fact a later
+// record or the user set stays as it is. span: the messages read, as the prompt rendered them; first: the id of the first
+// record, which tells a call already saved (Streams).
 function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], span: { role: string; text: string }[], receipt: Receipt, first: string): Memory {
   const at = Date.now();
   let from = 0;
-  const made = drafts.map(({ to, when, where, who, what, lines, outcome }, index): MemoryRecord => {
-    const record = { id: index === 0 ? first : crypto.randomUUID(), sources: sources.slice(from, to), print: fingerprint(span.slice(from, to)), when, where, who, what, lines, outcome, receipt, at };
+  const open = [...memory.threads];
+  const made = drafts.map(({ to, when, where, who, what, lines, outcome, state, opens, closes }, index): MemoryRecord => {
+    const closed = open.filter((thread) => closes.includes(threadLabel(thread))).map(({ text }) => text);
+    const record = { id: index === 0 ? first : crypto.randomUUID(), sources: sources.slice(from, to), print: fingerprint(span.slice(from, to)), when, where, who, what, lines, outcome, state, opens, closes: closed, receipt, at };
     from = to;
     return record;
   });
@@ -225,12 +228,12 @@ function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], sp
   let threads = redo ? memory.threads.filter(({ opened }) => opened !== redo.record) : memory.threads;
   drafts.forEach((draft, index) => {
     const record = made[index]!.id;
-    for (const change of draft.state) {
-      const at = state.findIndex((fact) => sameFact(fact, change));
+    for (const { about, field, value } of draft.state) {
+      const at = state.findIndex((fact) => sameFact(fact, { about, field }));
       const held = state[at];
       if (held && (held.record === null || later.has(held.record))) continue;
-      const fact = { ...change, record };
-      state = at === -1 ? [...state, fact] : state.with(at, fact);
+      if (value === null) state = state.filter((fact) => fact !== held);
+      else state = at === -1 ? [...state, { about, field, value, record }] : state.with(at, { about, field, value, record });
     }
     threads = [...threads.filter((thread) => !draft.closes.includes(threadLabel(thread))), ...draft.opens.map((text) => ({ id: crypto.randomUUID(), text, opened: record }))];
   });
@@ -432,7 +435,8 @@ export class Rememberer {
 
   private async summarize(chat: string, { job, sent, from, to, memory, before, prompt, route, settings }: Planned, countTokens: (text: string) => number): Promise<Outcome> {
     const { store, credentials } = this.session;
-    const { messages, span } = assembleMemory({ scope: sent.scope, prompt, memory, before, span: { from, to }, seed: crypto.randomUUID(), countTokens });
+    const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
+    const { messages, span } = assembleMemory({ scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID(), countTokens });
     const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources } };
     const text = gather();
     const answer = await this.reads(target.id, async (signal) =>

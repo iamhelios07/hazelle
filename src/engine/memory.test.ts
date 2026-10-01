@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fingerprint, memoryBudget, nextSpan, parseRecords, windowStart } from './memory';
+import { fingerprint, memoryBefore, memoryBudget, nextSpan, parseRecords, windowStart } from './memory';
 
 const span = ['Luna: "I will  wait\nfor you until spring."', 'jin leaves the lighthouse.', 'Spring comes. Luna lights the lamp.'];
 const record = (to: number, lines: { speaker: string; text: string }[] = []) => ({
@@ -17,9 +17,10 @@ const record = (to: number, lines: { speaker: string; text: string }[] = []) => 
 const answer = (records: unknown[]) => JSON.stringify({ records });
 
 describe('parseRecords', () => {
-  it('reads records that cover the span in order, with key lines found word for word apart from spacing, inside a fenced answer', () => {
-    const parsed = parseRecords('```json\n' + answer([record(2, [{ speaker: 'Luna', text: 'I will wait for you until spring.' }]), record(3)]) + '\n```', span);
-    expect(parsed).toMatchObject({ ok: true, records: [{ to: 2, lines: [{ speaker: 'Luna' }] }, { to: 3 }] });
+  it('reads records that cover the span in order, with key lines found word for word apart from spacing and a fact that no longer holds, inside a fenced answer', () => {
+    const removed = { ...record(3), state: [{ about: 'Luna', field: 'waiting for', value: null }] };
+    const parsed = parseRecords('```json\n' + answer([record(2, [{ speaker: 'Luna', text: 'I will wait for you until spring.' }]), removed]) + '\n```', span);
+    expect(parsed).toMatchObject({ ok: true, records: [{ to: 2, lines: [{ speaker: 'Luna' }] }, { to: 3, state: [{ value: null }] }] });
   });
 
   it('refuses an answer that is not JSON, one with a field missing or a gap left, and a key line the messages never said', () => {
@@ -54,5 +55,14 @@ describe('the window and the next span', () => {
 
   it('shrinks a memory budget past half of what the model can take, for that request only', () => {
     expect([memoryBudget(25_000, 30_000), memoryBudget(25_000, 100_000), memoryBudget(25_000, null)]).toEqual([15_000, 25_000, 25_000]);
+  });
+});
+
+describe('memoryBefore', () => {
+  it("tells a memory task the state's size against its limit, and that it is over, with each thread's label", () => {
+    const memory = { records: [], state: [{ about: 'Luna', field: 'mood', value: 'calm', record: null }], threads: [{ id: '1a2b3c4d-0000-4000-8000-000000000000', text: 'jin will come back.', opened: null }] };
+    const text = memoryBefore(memory, null, 5, (each) => each.length);
+    expect(text).toMatch(/^Current state \(\d+ of at most 5 tokens; over the limit, so remove or merge facts\):\n- Luna, mood: calm/);
+    expect(text).toContain('- [T-1a2b3c4d] jin will come back.');
   });
 });
