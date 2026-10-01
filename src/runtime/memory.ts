@@ -122,6 +122,9 @@ export class Rememberer {
 
   readonly snapshot = () => this.state;
 
+  // Opening a chat checks whether it has messages to summarize, as a saved reply does.
+  check(_chat: string) {}
+
   // 다시 시도 after a failure.
   retry(_chat: string) {}
 
