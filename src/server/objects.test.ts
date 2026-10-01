@@ -109,6 +109,23 @@ describe('objects', () => {
     expect((await t.get('objects?since=0')).status).toBe(401);
   });
 
+  it('pages many objects by row count with a lookahead and no extra final page', async () => {
+    const cookie = await signedIn();
+    await t.env.DB.prepare(`WITH RECURSIVE revisions(rev) AS (
+      SELECT 1 UNION ALL SELECT rev + 1 FROM revisions WHERE rev < 2000
+    ) INSERT INTO objects (account_id, id, kind, rev, body)
+      SELECT accounts.id, printf('%08d-1111-4111-8111-111111111111', revisions.rev), 'entry', revisions.rev, 'body-' || revisions.rev
+      FROM accounts CROSS JOIN revisions`).run();
+    const changes = (since: number) => Array.from({ length: 500 }, (_, index) => {
+      const rev = since + index + 1;
+      return { id: `${String(rev).padStart(8, '0')}-1111-4111-8111-111111111111`, kind: 'entry', parent: null, rev, body: `body-${rev}` };
+    });
+
+    expect(await sync(cookie, 500)).toEqual({ changes: changes(500), cursor: 1000, more: true });
+    expect(await sync(cookie, 1500)).toEqual({ changes: changes(1500), cursor: 2000, more: false });
+    expect(await sync(cookie, 2000)).toEqual({ changes: [], cursor: 2000, more: false });
+  });
+
   it('refuses a later conflict or invalid item without writing earlier items or advancing the account rev', async () => {
     const cookie = await signedIn();
     await write(cookie, A, { kind: 'chat', body: 'original' });

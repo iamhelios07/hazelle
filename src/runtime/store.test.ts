@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import type { Lore } from '../model/library';
+import { emptyMemory } from '../model/memory';
 import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
 import { ObjectStore, type Write } from './store';
@@ -66,6 +67,64 @@ describe('object store', () => {
     expect(await other.create('connection', connection('b'), { id: created.data.id })).toEqual({ ok: false, error: 'conflict' });
   });
 
+  it('keeps kind and parent reads in order through local and pulled replacements, removals and restores', async () => {
+    const { store, open } = await server.account();
+    const phone = await open();
+    const parent = crypto.randomUUID();
+    const otherParent = crypto.randomUUID();
+    const first = await store.create('entry', { type: 'delete', message: 'first', at: 0 }, { parent });
+    const memory = await store.create('memory', emptyMemory(), { parent });
+    const second = await store.create('entry', { type: 'delete', message: 'second', at: 1 }, { parent });
+    const other = await store.create('entry', { type: 'delete', message: 'other', at: 2 }, { parent: otherParent });
+    if (!first.ok || !memory.ok || !second.ok || !other.ok) throw new Error('create failed');
+    await phone.pull();
+    for (const device of [store, phone]) {
+      expect(device.list('entry')).toEqual([first.data, second.data, other.data]);
+      expect(device.children('entry', parent)).toEqual([first.data, second.data]);
+      expect(device.children('memory', parent)).toEqual([memory.data]);
+      expect(device.children('entry', otherParent)).toEqual([other.data]);
+    }
+
+    expect((await store.restore(first.data)).ok).toBe(true);
+    expect((await store.remove(memory.data.id)).ok).toBe(true);
+    expect((await store.remove(other.data.id)).ok).toBe(true);
+    await phone.pull();
+    for (const device of [store, phone]) {
+      expect(device.list('entry').map(({ id }) => id)).toEqual([second.data.id, first.data.id]);
+      expect(device.children('entry', parent)).toEqual(device.list('entry'));
+      expect(device.list('memory')).toEqual([]);
+      expect(device.children('memory', parent)).toEqual([]);
+      expect(device.children('entry', otherParent)).toEqual([]);
+    }
+
+    const restored = await store.restore(other.data);
+    if (!restored.ok) throw new Error(restored.error);
+    await phone.pull();
+    for (const device of [store, phone]) {
+      expect(device.children('entry', otherParent)).toEqual([restored.data]);
+      expect(device.list('entry').map(({ id }) => id)).toEqual([second.data.id, first.data.id, other.data.id]);
+    }
+  });
+
+  it('decrypts only pulled objects newer than the revisions already held', async () => {
+    const { store, open } = await server.account();
+    const local = await store.create('connection', connection('local'));
+    if (!local.ok) throw new Error(local.error);
+    const phone = await open();
+    await phone.pull();
+    const remote = await phone.create('connection', connection('remote'));
+    if (!remote.ok) throw new Error(remote.error);
+
+    const decrypt = vi.spyOn(crypto.subtle, 'decrypt');
+    try {
+      await store.pull();
+      expect(decrypt).toHaveBeenCalledTimes(1);
+      expect(store.list('connection')).toEqual([local.data, remote.data]);
+    } finally {
+      decrypt.mockRestore();
+    }
+  });
+
   it('keeps a write that lands while a pull is still opening an older copy', async () => {
     const { accountId, vaultKey } = await server.account();
     let meanwhile: (() => Promise<unknown>) | null = null;
@@ -96,6 +155,17 @@ describe('object store', () => {
     expect(mine.list('connection')).toEqual([]);
     expect(mine.unreadable()).toBe(1);
     expect(await mine.update('connection', id, renamed('y'))).toEqual({ ok: false, error: 'unreadable' });
+
+    expect((await stranger.update('connection', id, renamed('z'))).ok).toBe(true);
+    await mine.pull();
+    expect(mine.unreadable()).toBe(1);
+    expect((await stranger.remove(id)).ok).toBe(true);
+    await mine.pull();
+    expect(mine.unreadable()).toBe(0);
+    if (!created.ok) throw new Error(created.error);
+    expect((await mine.restore(created.data)).ok).toBe(true);
+    expect(mine.unreadable()).toBe(0);
+    expect(mine.list('connection').map(({ id }) => id)).toEqual([id]);
   });
 
   it('retries the whole batch after a later removal conflicts, without spending revs on the refused attempt', async () => {
