@@ -3,7 +3,7 @@ import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, type Character, type Lore } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
-import { addCharacter, copyCharacter, importCharacter, purgeCharacter, purgeExpired, resetToggles, setDeleted, setToggle } from './characters';
+import { addCharacter, copyCharacter, importCharacter, purgeCharacter, purgeExpired, resetToggles, setDeleted, setPictures, setToggle } from './characters';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -102,6 +102,19 @@ describe('setToggle', () => {
     expect([store.get('character', id)?.value.toggles, store.get('settings', SETTINGS_ID)?.value.toggles]).toEqual([{ sims: '1', mode: '2' }, { sims: '0' }]);
     await resetToggles(store, id);
     expect(store.get('character', id)?.value.toggles).toBeUndefined();
+  });
+});
+
+describe('setPictures', () => {
+  it('merges the fields given, and a field set back to its default leaves nothing stored', async () => {
+    const { store } = await server.account();
+    const added = await addCharacter(store, bare('루나'), none, () => {});
+    const id = added.ok ? added.data : '';
+    await setPictures(store, id, { peek: 30 });
+    await setPictures(store, id, { fold: false, most: 90 });
+    expect(store.get('character', id)?.value.pictures).toEqual({ peek: 30, fold: false, most: 90 });
+    await setPictures(store, id, { peek: undefined, fold: undefined, most: undefined });
+    expect(store.get('character', id)?.value).not.toHaveProperty('pictures');
   });
 });
 

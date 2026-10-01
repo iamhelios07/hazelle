@@ -121,7 +121,8 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', onInert 
     const shadow = root();
     const press = (event: Event) => {
       const picture = (event.target as Element).closest(`[${PICTURE}]`);
-      if (picture) {
+      // A short picture, or one its character shows whole, has nothing to open, and a tap on it is the message's.
+      if (picture && (picture.hasAttribute(OPEN) || picture.scrollHeight > picture.clientHeight)) {
         picture.toggleAttribute(OPEN);
         event.preventDefault();
         return;

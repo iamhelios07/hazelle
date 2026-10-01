@@ -21,6 +21,8 @@ export type Character = {
   translate?: TranslateSwitches;
   // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
   decor?: boolean;
+  // How its chats draw a line that is only a picture. Absent fields are the defaults.
+  pictures?: Pictures;
   // 상태창 지정: the display scripts, by place in card.regex, whose boxes are the character's status window, shown once
   // for the latest message instead of in every one. Only an import writes card.regex; an editor that reorders it must
   // move these along.
@@ -32,6 +34,10 @@ export type Character = {
   // greeting as the card holds it and the language, so an edited greeting or a changed language translates anew.
   greetingTranslations?: GreetingTranslation[];
 };
+// fold false shows such a picture whole instead of its top until opened. peek is the height its top shows at, most the
+// height no such picture is drawn taller than (shrunk to fit), each in percent of the screen's height.
+export type Pictures = { fold?: false; peek?: number; most?: number };
+export const PICTURE_PERCENT = { min: 10, max: 100 };
 export type GreetingTranslation = { greeting: string; language: string; translation: Translation };
 export type LoreFolder = { id: string; name: string };
 

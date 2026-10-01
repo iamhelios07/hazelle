@@ -2,7 +2,7 @@ import { imageType } from '../engine/import/card';
 import type { Card, Imported } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { Stored, Values } from '../model/kinds';
-import { daysLeft, holds, nest, type Asset, type Avatar, type Character, type Lore } from '../model/library';
+import { daysLeft, holds, nest, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
@@ -120,6 +120,14 @@ export type CharacterText = Card & { alias: string };
 // survives.
 export function editCharacter(store: ObjectStore, id: string, { alias, ...card }: Partial<CharacterText>): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => ({ ...current, ...(alias === undefined ? {} : { alias }), card: { ...current.card, ...card } }));
+}
+
+// Only the fields given; undefined removes one, back to its default.
+export function setPictures(store: ObjectStore, id: string, patch: Partial<Pictures>): Promise<ApiResult<Stored<'character'>>> {
+  return store.update('character', id, (current) => {
+    const pictures = Object.fromEntries(Object.entries({ ...current.pictures, ...patch }).filter(([, value]) => value !== undefined));
+    return Object.keys(pictures).length ? { ...current, pictures } : without(current, 'pictures');
+  });
 }
 
 export function setDecor(store: ObjectStore, id: string, decor: boolean): Promise<ApiResult<Stored<'character'>>> {

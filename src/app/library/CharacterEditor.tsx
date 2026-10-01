@@ -1,13 +1,23 @@
 import { useState } from 'react';
-import type { Character } from '../../model/library';
-import { editCharacter, setDecor, type CharacterText } from '../../runtime/characters';
+import { PICTURE_PERCENT, type Character, type Pictures } from '../../model/library';
+import { editCharacter, setDecor, setPictures, type CharacterText } from '../../runtime/characters';
 import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useStore } from '../session';
 import { useToast } from '../toast';
-import { Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
+import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
+
+type Height = 'peek' | 'most';
+const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 적어 주세요.`;
+const readHeight = (draft: string) => {
+  const value = Number(draft);
+  return Number.isInteger(value) && value >= PICTURE_PERCENT.min && value <= PICTURE_PERCENT.max ? value : null;
+};
+// One status for the editor's two saves: a failure first, then one still saving.
+const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
+  statuses.find((each) => each === 'failed') ?? statuses.find((each) => each === 'saving') ?? statuses.find((each) => each !== null) ?? null;
 
 // 캐릭터 편집: the card's text and the alias, on its own page or beside the chat. Only the fields changed here go to
 // editCharacter. A caller leaves by unmounting it, which saves.
@@ -17,6 +27,9 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
   const { status, change: queue } = useAutosave<CharacterText>((patch) => editCharacter(store, id, patch));
   const toast = useToast();
   const [decor, setDecorShown] = useState(initial.decor !== false);
+  const pictureSave = useAutosave<Pictures>((patch) => setPictures(store, id, patch));
+  const [fold, setFold] = useState(initial.pictures?.fold !== false);
+  const [heights, setHeights] = useState<Record<Height, string>>({ peek: String(initial.pictures?.peek ?? ''), most: String(initial.pictures?.most ?? '') });
 
   function changeDecor(on: boolean) {
     setDecorShown(on);
@@ -25,6 +38,31 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
       setDecorShown(!on);
       toast.failed(saved, '저장하지 못했어요.');
     });
+  }
+
+  function changeFold(on: boolean) {
+    setFold(on);
+    pictureSave.change({ fold: on ? undefined : false });
+  }
+
+  function changeHeight(field: Height, draft: string) {
+    setHeights((current) => ({ ...current, [field]: draft }));
+    const value = readHeight(draft);
+    pictureSave.change({ [field]: value ?? undefined }, draft.trim() === '' || value !== null);
+  }
+
+  function heightRow(field: Height, label: string, help: string, placeholder: string) {
+    const set = heights[field].trim() !== '';
+    const invalid = set && readHeight(heights[field]) === null;
+    return (
+      <SettingRow
+        label={label}
+        help={help}
+        changed={set}
+        error={invalid ? HEIGHT_ERROR : undefined}
+        control={<NumberInput label={label} value={heights[field]} unit="%" placeholder={placeholder} invalid={invalid} onChange={(draft) => changeHeight(field, draft)} />}
+      />
+    );
   }
 
   function change<K extends keyof CharacterText>(field: K, value: CharacterText[K]) {
@@ -82,9 +120,25 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
       <Section title="표시">
         <SettingGroup label="표시">
           <SettingRow label="봇 꾸밈" help="봇이 만든 상태창, 꾸밈과 버튼을 그려요. 끄면 글만 보여요." control={<Switch label="봇 꾸밈" checked={decor} onChange={changeDecor} />} />
+          {decor && (
+            <SettingRow
+              label="긴 그림 접기"
+              help="그림만 있는 줄은 윗부분만 보여요. 마우스를 올려 두거나 누르면 펼쳐져요."
+              control={<Switch label="긴 그림 접기" checked={fold} onChange={changeFold} />}
+            />
+          )}
         </SettingGroup>
+        {decor && (
+          <Disclosure label="그림 크기">
+            <SettingGroup label="그림 크기">
+              {fold && heightRow('peek', '접힌 높이', '화면 높이에 대한 비율이에요.', '40')}
+              {heightRow('most', '최대 높이', '화면 높이에 대한 비율이에요. 이보다 큰 그림은 줄여서 다 보여 줘요.', '원래 크기')}
+            </SettingGroup>
+          </Disclosure>
+        )}
       </Section>
     </>
   );
-  return frame({ head: { title: '캐릭터 편집', subtitle: aliased(text.name, text.alias), status: status ? SAVE_STATUS[status] : undefined }, body });
+  const saved = merged(status, pictureSave.status);
+  return frame({ head: { title: '캐릭터 편집', subtitle: aliased(text.name, text.alias), status: saved ? SAVE_STATUS[saved] : undefined }, body });
 }

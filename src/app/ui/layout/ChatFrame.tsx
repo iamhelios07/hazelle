@@ -35,6 +35,8 @@ type Props = {
   // In the story's right margin: a StoryAside, such as 상태 kept there.
   aside?: ReactNode;
   reading: Reading;
+  // A character's own look for the lines that are only a picture, over the defaults in tokens.css.
+  pictures?: { fold?: false; peek?: number; most?: number };
   // The story is read above its end: the composer folds to one line (Composer's compact).
   compact: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -44,7 +46,7 @@ type Props = {
 // The chat page: a header, the story column that scrolls, the composer, and the 정보 panel beside it. The header and
 // the composer float over the story: the header hides while the story is read down, and comes back when it is scrolled
 // up, reached at its top or pointed at the page's top edge.
-export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, pictures, compact, scrollRef, onScroll }: Props) {
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -94,7 +96,15 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
     <div className={styles.frame}>
       <main
         className={`${styles.column} ${styles[reading.font]} ${LEADING[reading.leading]} ${WIDTH[reading.width]}`}
-        style={{ '--reading-size': `${reading.size}px`, '--footer-space': `${space}px`, '--story-scrollbar': `${scrollbar}px` } as CSSProperties}
+        style={
+          {
+            '--reading-size': `${reading.size}px`,
+            '--footer-space': `${space}px`,
+            '--story-scrollbar': `${scrollbar}px`,
+            '--story-picture-peek': pictures?.fold === false ? 'none' : pictures?.peek && `${pictures.peek}vh`,
+            '--story-picture-most': pictures?.most && `${pictures.most}vh`,
+          } as CSSProperties
+        }
       >
         <div className={`${styles.top} ${shown ? styles.shown : ''}`}>
           <header className={styles.header}>

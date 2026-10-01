@@ -60,6 +60,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
         peek={chat.peeking && <ChatStatusPeek chat={chat} />}
         aside={chat.status.length > 0 && <ChatStatusAside chat={chat} />}
         reading={reading.value}
+        pictures={shelf?.character.pictures}
         compact={scroll.away}
         scrollRef={scroll.scrollRef}
         onScroll={scroll.onScroll}

@@ -60,7 +60,8 @@ img {
 
 /* A line that is only a picture, as a bot draws its character's tall portrait, shows its top until it is pointed at (a
    moment later, so a pointer the story scrolls under opens nothing) or tapped. The line is cut, not the picture, so a
-   small one is never stretched; the pictures in a bot's own boxes keep the bot's sizes. */
+   small one is never stretched; the picture itself is only shrunk to the most it may be. The pictures in a bot's own
+   boxes keep the bot's sizes. */
 [data-picture] {
   max-height: var(--story-picture-peek);
   overflow: hidden;
@@ -69,6 +70,7 @@ img {
 
 [data-picture] > img {
   display: block;
+  max-height: var(--story-picture-most);
 }
 
 [data-picture][data-open] {
