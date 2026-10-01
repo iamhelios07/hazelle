@@ -7,7 +7,7 @@ import { displayChat } from './turn';
 const server = testServer();
 
 describe('startChat', () => {
-  it('opens the chat on the greeting that was shown, first and last included, under the ids it was shown with, so its tags roll the same', async () => {
+  it('opens the chat on the greeting that was shown, first and last included, under the ids it was shown with, so its tags roll the same, and never holds the chat without it', async () => {
     const { store } = await server.account();
     const reader = { store, username: 'jin' };
     const texts = ['하나 {{pick}} {{random}}', '둘', '셋'];
@@ -19,7 +19,13 @@ describe('startChat', () => {
         return { id, seed: id, text, receipt: null, edited: false, at: 0 };
       });
       const before = displayChat(reader, id, chat, [{ id: 'opening', role: 'assistant', at: 0, versions, selected }]);
-      expect(await startChat(store, id, chat, { ids: versions.map((version) => version.id), texts, selected, translations: new Map() })).toEqual({ ok: true });
+      let bare = false;
+      const leave = store.subscribe(() => {
+        bare ||= store.get('chat', id) !== null && store.children('entry', id).length === 0;
+      });
+      expect(await startChat(store, id, chat, { ids: versions.map((version) => version.id), texts, selected, translations: new Map() })).toBeNull();
+      leave();
+      expect(bare).toBe(false);
       const messages = fold(store.children('entry', id));
       expect(messages[0]!.versions.map((version) => version.id)).toEqual(versions.map((version) => version.id));
       expect(displayChat(reader, id, chat, messages)).toEqual(before);

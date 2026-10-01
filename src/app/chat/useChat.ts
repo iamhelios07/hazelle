@@ -52,17 +52,14 @@ export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; 
 // Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
 export type ChatActions = OpenChat['actions'];
 
-// item null is a new chat, saved with its first message; shelf null is 캐릭터 없이.
-export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null) {
+// item null is a new chat, saved under chatId with its first message; shelf null is 캐릭터 없이.
+export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null) {
   const session = useSession();
   const { store, talk, translator } = session;
   const turn = useTurn();
   const translating = useTranslating();
   const toast = useToast();
-  const id = item?.id ?? null;
-  // The id a new chat is shown under and then saved under, so its greeting's pick and rollp tags keep their rolls.
-  const [newId] = useState(() => crypto.randomUUID());
-  const chatId = id ?? newId;
+  const id = item ? chatId : null;
   // A new chat's own model, prompt, persona and note, saved with it on the first send.
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
   const chat: Chat = useMemo(() => item ? item.chat : { title: null, character: shelf?.id ?? null, ...unsaved }, [item?.chat, shelf?.id, unsaved]);
@@ -75,13 +72,14 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
   const [openedAt] = useState(() => Date.now());
   // A blank greeting keeps its place in the card, but a chat never opens on nothing.
   const greetings = card?.greetings.filter((text) => text.trim()) ?? [];
-  // The ids the greetings are saved under, so their random tags roll the same before and after the first send.
+  // The ids the greetings are saved under, so their random tags roll the same before and after the first send, and the
+  // greeting keeps its place in the story rather than being drawn again.
   const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
   const translate = translateSwitches(store, chat.character);
   const unstarted: Shown | null = useMemo(() =>
     item === null && card && greetings.length > 0
       ? {
-          id: 'opening',
+          id: openingIds[0]!,
           role: 'assistant',
           at: openedAt,
           versions: greetings.map((text, index) => {

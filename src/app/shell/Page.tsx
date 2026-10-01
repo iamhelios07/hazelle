@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { ChatScreen, type SideAt } from '../chat/ChatScreen';
@@ -50,6 +50,15 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const chatModel = useChatModel(route.kind === 'chat' ? route.id : null);
   const wide = useWide();
   const split = useSplit();
+  // The id a new chat is shown under and then saved under, so its greeting's pick and rollp tags keep their rolls. Its
+  // screen is keyed by it, so when the first send saves it and the route becomes the chat's, the same screen stays and
+  // the story is not drawn again. Any other route drops it, so a later 새 채팅 never takes an id already spent.
+  const [fresh, setFresh] = useState<{ character: string | null; id: string } | null>(null);
+  let newChat = fresh;
+  if (route.kind === 'new-chat' ? fresh?.character !== route.character : fresh !== null) {
+    newChat = route.kind === 'new-chat' ? { character: route.character, id: crypto.randomUUID() } : null;
+    setFresh(newChat);
+  }
 
   const back = (at: Below) => backTo(up(at, wide, chatById), wide);
   // On wide screens the sidebar beside the library's pages, or 설정's, is their way back.
@@ -75,8 +84,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
       case 'edit':
         return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} initial={shelf.character} back={back(at)} />);
       case 'new-chat':
-        if (at.character === null) return <ChatScreen key="new" item={null} shelf={null} back={sideBack(at)} side={side} />;
-        return withCharacter(at, at.character, (shelf) => <ChatScreen key={`new-${shelf.id}`} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
+        if (at.character === null) return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={null} back={sideBack(at)} side={side} />;
+        return withCharacter(at, at.character, (shelf) => <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
       case 'chat': {
         const item = chatModel;
         if (!item) return missing(at, 'chat');
@@ -84,7 +93,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         const shelf = character === null ? null : characterById.get(character);
         // Its character is in 지운 캐릭터, or gone for good.
         if (shelf === undefined) return missing(at, 'orphaned-chat');
-        return <ChatScreen key={item.id} item={item} shelf={shelf} back={sideBack(at)} side={side} />;
+        return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={sideBack(at)} side={side} />;
       }
       case 'settings':
         return <SettingsList onClose={closeSettings} />;

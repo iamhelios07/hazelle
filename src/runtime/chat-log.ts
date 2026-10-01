@@ -8,15 +8,14 @@ import { without, type ObjectStore, type Write } from './store';
 // writes with the other layers, a character's purge, which removes them with the character, and a backup's
 // restore, which copies them as they were.
 
-// A new chat is saved in this order: the chat, then its greetings with the one shown selected, then the
-// user's first message, sent with its reply. Messages stand in the order they were saved, so the greeting
-// leads only when it is saved before the message; and a chat that failed to save leaves no entries behind.
+// A new chat is saved in this order: the chat with its greetings, the one shown selected, then the user's first
+// message, sent with its reply. Messages stand in the order they were saved, so the greeting leads only when it is
+// saved before the message. The chat and its greetings are one batch, which writes the greetings first, so the
+// chat is never there without them: its screen would show it greeting-less until they landed.
 // id is the one the chat was shown under before it was saved, which seeds its greeting's pick and rollp tags.
-export async function startChat(store: ObjectStore, id: string, chat: Chat, greetings: Greetings | null): Promise<{ ok: true } | { ok: false; step: 'chat' | 'greetings'; failure: ApiFailure }> {
-  const created = await store.create('chat', chat, { id });
-  if (!created.ok) return { ok: false, step: 'chat', failure: created };
-  const greeted = greetings && (await addGreetings(store, id, greetings));
-  return greeted ? { ok: false, step: 'greetings', failure: greeted } : { ok: true };
+export async function startChat(store: ObjectStore, id: string, chat: Chat, greetings: Greetings | null): Promise<ApiFailure | null> {
+  const saved = await store.batch([...(greetings ? greetingWrites(id, greetings) : []), { type: 'create', kind: 'chat', id, parent: null, value: chat }]);
+  return saved.ok ? null : saved;
 }
 
 // ids are the ones the greetings were shown under before the chat was saved, which seed their random tags.
@@ -24,7 +23,7 @@ export async function startChat(store: ObjectStore, id: string, chat: Chat, gree
 export type Greetings = { ids: string[]; texts: string[]; selected: number; translations: ReadonlyMap<string, Translation> };
 
 // A character's chat opens on its greeting, and the other greetings are versions of it. They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
-async function addGreetings(store: ObjectStore, chat: string, { ids, texts, selected, translations }: Greetings): Promise<ApiFailure | null> {
+function greetingWrites(chat: string, { ids, texts, selected, translations }: Greetings): Write[] {
   const at = Date.now();
   const first = ids[0]!;
   const entries: [string, Entry][] = texts.map((text, index) => {
@@ -34,8 +33,7 @@ async function addGreetings(store: ObjectStore, chat: string, { ids, texts, sele
   });
   // Adding a version selects it, so without a select the chat would open on the last greeting.
   if (selected !== texts.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
-  const saved = await store.batch(entries.map(([id, value]) => ({ type: 'create', kind: 'entry', id, parent: chat, value })));
-  return saved.ok ? null : saved;
+  return entries.map(([id, value]) => ({ type: 'create', kind: 'entry', id, parent: chat, value }));
 }
 
 // 갈라지기: a new chat holding item's messages up to and including message, as they fold. The spread takes the

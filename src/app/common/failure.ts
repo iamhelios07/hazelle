@@ -147,7 +147,7 @@ export function describeTurnFailure(failure: TurnFailure): string {
       if (failure.budget <= 0) return `이 모델의 답장 최대 길이가 컨텍스트만큼 커서 프롬프트가 들어갈 자리가 없어요. ${inSettings('models')}에서 이 모델의 답장 최대 길이를 줄여 주세요.`;
       return `마지막 메시지만 남겨도 프롬프트가 약 ${failure.tokens.toLocaleString('ko-KR')} 토큰이라, 답장 최대 길이를 뺀 이 모델의 자리 ${failure.budget.toLocaleString('ko-KR')} 토큰에 들어가지 않아요. 프롬프트나 로어북을 줄이거나 ${inSettings('models')}에서 이 모델의 설정을 바꿔 주세요.`;
     case 'unstarted':
-      return `${failure.step === 'chat' ? '채팅을 만들지 못했어요.' : '첫인사를 저장하지 못했어요.'} ${describeFailure(failure.failure)}`;
+      return `채팅을 만들지 못했어요. ${describeFailure(failure.failure)}`;
     case 'unsent':
       return `보낸 말을 저장하지 못해서 답장을 멈췄어요. ${describeFailure(failure.failure)}`;
     case 'unsaved':

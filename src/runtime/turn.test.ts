@@ -52,7 +52,7 @@ const luna: Card = {
 };
 
 describe('a new chat', () => {
-  it('shows the message at once, then is saved as the chat, its greetings as written with the shown one selected, then the first message; names are filled where shown and sent', () =>
+  it('shows the message at once, then is saved as the chat behind its greetings as written with the shown one selected, then the first message; names are filled where shown and sent', () =>
     server.withSession(async (session) => {
       const { store } = session;
       await answerable(session);
@@ -77,7 +77,8 @@ describe('a new chat', () => {
       expect(preview).toBe('어서 와, jin.');
 
       const entries = store.children('entry', chat).sort((a, b) => a.rev - b.rev);
-      expect(entries[0]!.rev).toBeGreaterThan(store.get('chat', chat)!.rev);
+      const saved = store.get('chat', chat)!.rev;
+      expect(entries.map(({ rev }) => rev > saved)).toEqual([false, false, false, true, true]);
       expect(entries.map(({ value }) => (value.type === 'message' || value.type === 'version' ? [value.type, value.text] : [value.type]))).toEqual([
         ['message', '어서 와, {{user}}.'],
         ['version', '또 왔네, {{char}}야.'],

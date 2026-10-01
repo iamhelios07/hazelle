@@ -45,7 +45,7 @@ export type TurnFailure =
   | Blocked
   | TooLong
   | { kind: 'tokenizer' }
-  | { kind: 'unstarted'; step: 'chat' | 'greetings'; failure: ApiFailure }
+  | { kind: 'unstarted'; failure: ApiFailure }
   | { kind: 'untranslated'; failure: TranslateFailure };
 
 // Everything one reply needs, read once when it is asked for: the chat, the model, what the prompt is built from (the
@@ -248,8 +248,8 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
     const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const said = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
     return session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async (signal) => {
-      const started = await startChat(session.store, chat, start.chat, start.greetings);
-      if (!started.ok) return { kind: 'unstarted', step: started.step, failure: started.failure };
+      const unstarted = await startChat(session.store, chat, start.chat, start.greetings);
+      if (unstarted) return { kind: 'unstarted', failure: unstarted };
       start.started();
       // The chat was just saved and a new chat's target names no message, so it is there.
       const turn = gatherTurn(session, chat, target, ids)!;

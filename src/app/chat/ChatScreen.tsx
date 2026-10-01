@@ -19,6 +19,8 @@ import { useChat, type Side } from './useChat';
 export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Side) => void; onClose: () => void };
 
 type Props = {
+  // The chat's id, which a new chat is saved under.
+  id: string;
   // null for a new chat, which is saved with its first message.
   item: ChatItem | null;
   // The chat's character, or null for 캐릭터 없이.
@@ -27,8 +29,8 @@ type Props = {
   side: (at: SideAt) => ReactNode;
 };
 
-export function ChatScreen({ item, shelf, back, side }: Props) {
-  const chat = useChat(item, shelf);
+export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
+  const chat = useChat(chatId, item, shelf);
   const reading = useReading();
   const { id, messages, streaming, panel, scroll, prompt, persona, actions } = chat;
   useShortcut('personas', () => actions.toggleSide('personas'));
