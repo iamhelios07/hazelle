@@ -18,6 +18,7 @@ async function pages() {
   const open = async () => {
     const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal);
     if (!opened.ok) throw new Error(opened.error);
+    opened.data.startBackground();
     return opened.data;
   };
   return open;
@@ -27,6 +28,7 @@ async function pages() {
 async function streaming(session: Session) {
   await answerable(session);
   const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
   await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
   const provider = new TransformStream<Uint8Array, Uint8Array>();
   stubRelay(inTurn([new Response(provider.readable, { headers: { 'x-relay': 'upstream' } })]));
@@ -46,11 +48,12 @@ describe('a detached call', () => {
     await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
     first.close();
     expect(await turn).toBeNull();
-    expect(messages(first, chat)).toHaveLength(1);
+    expect(first.store.projection(chat)).toBeNull();
 
     await writer.write(delta('traveler.'));
     await writer.write(ending);
     const second = await open();
+    await server.hold(second.store, chat);
     try {
       await vi.waitFor(() => expect(shown(messages(second, chat)[1]!)).toMatchObject({ text: 'Hello, traveler.', receipt: { state: 'done', firstTextMs: null } }));
       await vi.waitFor(() => expect(second.store.list('stream')).toEqual([]));

@@ -4,14 +4,14 @@ import { KEEP_DELETED, type Character, type Lore } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { addCharacter, copyCharacter, importCharacter, purgeCharacter, purgeExpired, resetToggles, setDeleted, setPictures, setToggle } from './characters';
-import { testServer } from './testing';
+import { testCard, testServer } from './testing';
 
 const server = testServer();
 
 // The bytes of a picture as far as the import reads one: a PNG's signature.
 const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
 const picture = () => ({ bytes: randomBytes(64), type: 'image/png', thumb: 'data:thumb' });
-const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: { name } as Card, folder: null, loreFolders: [], ...over });
+const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: testCard(name), folder: null, loreFolders: [], ...over });
 const none = { avatar: null, assets: [], lore: [] };
 
 describe('importCharacter', () => {
@@ -67,7 +67,7 @@ describe('copyCharacter', () => {
 
     const copied = await copyCharacter(store, id, '루나 (사본)', () => {});
     const copy = copied.ok ? copied.data : '';
-    expect(store.get('character', copy)?.value).toEqual({ ...luna, card: { name: '루나 (사본)' }, origin: { id, name: '루나' } });
+    expect(store.get('character', copy)?.value).toEqual({ ...luna, card: { ...luna.card, name: '루나 (사본)' }, origin: { id, name: '루나' } });
     expect(store.children('lore', copy).map((lore) => lore.value)).toEqual([entry]);
     expect(store.children('avatar', copy).map(({ value }) => value)).toEqual([avatar]);
     expect(store.children('asset', copy).map(({ value }) => value)).toEqual(assets);
@@ -78,16 +78,17 @@ describe('purgeExpired', () => {
   it('removes a character deleted a week ago with everything it owns, and keeps one deleted since', async () => {
     const { store, files } = await server.account();
     const now = Date.now();
-    const saved = await importCharacter(store, files, { card: { name: 'old' } as Card, lore: [{ name: 'lore', folder: null } as LoreEntry], loreFolders: [], assets: [{ name: 'smile', read: async () => png() }] }, picture(), () => {});
+    const saved = await importCharacter(store, files, { card: testCard('old'), lore: [{ name: 'lore', folder: null } as LoreEntry], loreFolders: [], assets: [{ name: 'smile', read: async () => png() }] }, picture(), () => {});
     const expired = saved.ok ? saved.data.id : '';
     await setDeleted(store, expired, now - KEEP_DELETED);
     await addCharacter(store, bare('recent', { deleted: now - 1000 }), none, () => {});
     const chat = await store.create('chat', { title: null, character: expired, models: {} });
     await store.create('entry', { type: 'message', role: 'user', at: now, text: '안녕', receipt: null }, { parent: chat.ok ? chat.data.id : '' });
 
+    await server.hold(store, chat.ok ? chat.data.id : '');
     await purgeExpired(store, now, new AbortController().signal);
     expect(store.list('character').map((kept) => kept.value.card.name)).toEqual(['recent']);
-    expect([store.list('chat'), store.list('entry'), store.list('lore'), store.list('avatar'), store.list('asset')].map((left) => left.length)).toEqual([0, 0, 0, 0, 0]);
+    expect([store.list('chat'), store.children('entry', chat.ok ? chat.data.id : ''), store.list('lore'), store.list('avatar'), store.list('asset')].map((left) => left.length)).toEqual([0, 0, 0, 0, 0]);
   });
 });
 
@@ -133,15 +134,17 @@ describe('purgeCharacter', () => {
     const other = await open();
     await other.pull();
     expect([other.get('character', id), other.get('chat', chatId)].map((kept) => kept?.id)).toEqual([id, chatId]);
-    expect([other.list('entry'), other.list('lore')].map((left) => left.length)).toEqual([0, 0]);
+    await server.hold(other, chatId);
+    expect([other.children('entry', chatId), other.list('lore')].map((left) => left.length)).toEqual([0, 0]);
 
     vi.stubGlobal('fetch', real);
     const steps: [number, number][] = [];
     expect(await purgeCharacter(store, id, (removed, total) => steps.push([removed, total]))).toEqual({ ok: true, data: null });
     expect(steps).toEqual([
-      [0, 2],
-      [1, 2],
-      [2, 2],
+      [0, 3],
+      [1, 3],
+      [2, 3],
+      [3, 3],
     ]);
     expect([store.list('character'), store.list('chat')].map((left) => left.length)).toEqual([0, 0]);
   });

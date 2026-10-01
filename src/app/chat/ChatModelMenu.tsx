@@ -4,7 +4,7 @@ import { recentModels } from '../../model/chat';
 import { modelProfile } from '../../runtime/profiles';
 import { noResults } from '../common/search';
 import { noStarred } from '../common/words';
-import { useChatMessages, useConnections, useStore } from '../session';
+import { useSummaries, useConnections, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, SearchField, type MenuHandle } from '../ui';
 
@@ -46,14 +46,14 @@ function ProfileItem({ current }: { current: ModelRef }) {
 // Mounted only while the menu is open, so each opening starts with an empty search.
 function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
   const connections = useConnections();
-  const messages = useChatMessages();
+  const summaries = useSummaries();
   const [query, setQuery] = useState('');
 
   const starred = connections.flatMap((connection) =>
     connection.value.starred.filter((model) => fitsRole(model, 'main')).map((model) => ({ ref: { connection: connection.id, model: model.id }, name: model.name, source: connection.value.label })),
   );
   const recent = recentModels(
-    messages,
+    summaries.map(({ value }) => value.recent),
     RECENT,
   ).flatMap((ref) => starred.filter((choice) => same(choice.ref, ref)));
   const rest = starred.filter((choice) => !recent.includes(choice));

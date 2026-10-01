@@ -5,7 +5,7 @@ import { randomBytes } from '../vault/aead';
 import { importCharacter } from './characters';
 import { MEMORY_DEFAULTS } from './memory';
 import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch, type MovePick } from './move';
-import { testServer } from './testing';
+import { testCard, testServer } from './testing';
 
 const server = testServer();
 
@@ -13,7 +13,7 @@ const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomByte
 
 const luna: RisuCharacter = {
   id: 'risu-luna',
-  card: { name: '루나', greetings: ['', '첫 인사', '둘째 인사'] } as Card,
+  card: { ...testCard('루나'), greetings: ['', '첫 인사', '둘째 인사'] },
   lore: [],
   loreFolders: [],
   assets: [],
@@ -50,6 +50,7 @@ describe('moveFromRisu', () => {
     const [chat] = store.list('chat');
     const jin = store.list('persona').find(({ value }) => value.name === '진')!.id;
     expect(chat!.value).toEqual({ title: '등대', character: id, models: {}, memory: { ...MEMORY_DEFAULTS, on: false }, note: '비가 온다', persona: jin, variables: [['hp', '7']] });
+    await server.hold(store, chat!.id);
     const messages = fold(store.children('entry', chat!.id));
     expect(messages.map((message) => [message.role, shown(message).text, shown(message).staged])).toEqual([
       ['assistant', '둘째 인사', undefined],

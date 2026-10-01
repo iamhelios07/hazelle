@@ -51,6 +51,7 @@ describe('session', () => {
     server.withSession(async (session) => {
       const { store } = session;
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '{{user}}, hello' });
       expect(session.read.chat(chat).snapshot()?.preview).toBe('jin, hello');

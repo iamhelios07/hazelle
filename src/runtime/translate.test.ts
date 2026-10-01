@@ -17,6 +17,7 @@ describe('Translator', () => {
       await answerable(session);
       await setTranslate(session.store, null, { replies: true });
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Hi' });
       const stream = new TransformStream<Uint8Array, Uint8Array>();
@@ -37,8 +38,8 @@ describe('Translator', () => {
 
       const reply = () => shown(fold(session.store.children('entry', chat))[1]!);
       await vi.waitFor(() => expect(reply().translation?.text).toBe('안녕, 여행자.'));
+      await vi.waitFor(() => expect(session.translator.snapshot().live.size).toBe(0));
       expect(screen).not.toHaveBeenCalled();
-      expect(session.translator.snapshot().live.size).toBe(0);
       translateLatest(session, chat);
       expect(log).toHaveLength(2);
     }));
@@ -47,6 +48,7 @@ describe('Translator', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       const opened = { title: null, character: null, models: {} };
       await startChat(session.store, chat, opened, null);
       const log = stubRelay(inTurn([saying('Hello'), upstream(500, { error: { message: 'overloaded' } }), saying('안녕')]));
@@ -74,6 +76,7 @@ describe('Translator', () => {
       const character = created.ok ? created.data.id : '';
       await setTranslate(session.store, character, { replies: true });
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       const opened = { title: null, character, models: {} };
       const version = crypto.randomUUID();
       const messages: Message[] = [{ id: version, role: 'assistant', at: 0, selected: 0, versions: [{ id: version, seed: version, text: 'Hello', receipt: null, edited: false, at: 0 }] }];
@@ -92,6 +95,7 @@ describe('Translator', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       const opened = { title: null, character: null, models: {} };
       await startChat(session.store, chat, opened, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Hi' });
@@ -107,7 +111,7 @@ describe('Translator', () => {
       session.translator.translate(chat, reply, translationInput(session, chat, opened, messages(), { kind: 'message', index: 1 }));
       expect(session.translator.snapshot().live.get(reply.id)).toBe('');
       await vi.waitFor(() => expect(shown(messages()[1]!).translation).toMatchObject({ text: '안녕, 여행자.', receipt: { state: 'done' } }));
-      expect(session.translator.snapshot().live.size).toBe(0);
+      await vi.waitFor(() => expect(session.translator.snapshot().live.size).toBe(0));
       expect(savedWhenLiveClears).toEqual([true]);
       unsubscribe();
       expect(JSON.parse(log[1]!.sent.body!).messages.at(-1)).toEqual({ role: 'user', content: 'Hello, traveler.' });
@@ -117,6 +121,7 @@ describe('Translator', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       const opened = { title: null, character: null, models: {} };
       await startChat(session.store, chat, opened, null);
       vi.spyOn(session.credentials, 'get').mockRejectedValueOnce(new TypeError('lost'));
@@ -134,6 +139,7 @@ describe('Translator', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       const opened = { title: null, character: null, models: {} };
       await startChat(session.store, chat, opened, null);
       await setTranslate(session.store, null, { prompt: crypto.randomUUID() });

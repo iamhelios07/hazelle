@@ -1,12 +1,13 @@
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
-import { chatTitle, firstLine, fold, shown, type Chat, type ChatItem, type ChatSummary, type Message } from '../model/chat';
+import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
 import type { Kind, Stored } from '../model/kinds';
 import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
 import { withTurn, type Shown, type Talk, type Turn } from './talk';
 import { displayChat } from './turn';
+import { summaryId, type ChatModel } from './summary';
 
 class Snapshot<T> {
   private readonly listeners = new Set<() => void>();
@@ -23,16 +24,15 @@ class Snapshot<T> {
   }
 }
 
-export type ChatModel = ChatItem & { display: Display };
 // The characters, each with its chats, most recent first, and the folders by name.
 export type Library = { characters: CharacterShelf<ChatSummary>[]; none: Shelf<ChatSummary>; deleted: CharacterShelf<ChatSummary>[]; folders: FolderTree[] };
-type HeldChat = { model: ChatModel; summary: ChatSummary; reads: StoreRead[] };
+
 const EMPTY_SETTINGS: Settings = { models: {} };
 const sameItems = <T>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 const sameSummary = (a: ChatSummary, b: ChatSummary) => a.chat === b.chat && a.count === b.count && a.title === b.title && a.preview === b.preview && a.at === b.at && a.order === b.order;
 
 export class ReadModels {
-  private readonly held = new Map<string, HeldChat>();
+  private readonly summaries = new Map<string, ChatSummary>();
   private readonly byChat = new Map<string, Snapshot<ChatModel | null>>();
   private readonly bySummary = new Map<string, Snapshot<ChatSummary | null>>();
   private readonly byKind = new Map<Kind, Snapshot<Stored<Kind>[]>>();
@@ -40,7 +40,6 @@ export class ReadModels {
   private folders: FolderTree[];
   private readonly screens = new Map<string, ChatScreenRead>();
   readonly chats = new Snapshot<ChatSummary[]>([]);
-  readonly messages = new Snapshot<Message[][]>([]);
   readonly library: Snapshot<Library>;
   // Until something is saved, nothing is assigned: an empty layer, not a guessed default.
   readonly settings: Snapshot<Settings>;
@@ -51,7 +50,6 @@ export class ReadModels {
     this.folders = nest(store.list('folder'));
     this.settings = new Snapshot(store.get('settings', SETTINGS_ID)?.value ?? EMPTY_SETTINGS);
     this.unreadable = new Snapshot(store.unreadable());
-    for (const chat of store.list('chat')) this.rebuild(chat.id, true);
     this.updateLists();
     this.library = new Snapshot(this.buildLibrary());
     this.leave = store.subscribe((changes) => this.changed(changes));
@@ -60,7 +58,7 @@ export class ReadModels {
   chat(id: string): Snapshot<ChatModel | null> {
     let snapshot = this.byChat.get(id);
     if (!snapshot) {
-      snapshot = new Snapshot(this.held.get(id)?.model ?? null);
+      snapshot = new Snapshot(this.store.projection(id)?.model ?? null);
       this.byChat.set(id, snapshot);
     }
     return snapshot;
@@ -69,7 +67,7 @@ export class ReadModels {
   summary(id: string): Snapshot<ChatSummary | null> {
     let snapshot = this.bySummary.get(id);
     if (!snapshot) {
-      snapshot = new Snapshot(this.held.get(id)?.summary ?? null);
+      snapshot = new Snapshot(this.summaries.get(id) ?? null);
       this.bySummary.set(id, snapshot);
     }
     return snapshot;
@@ -114,41 +112,13 @@ export class ReadModels {
   close() {
     this.leave();
     this.screens.clear();
-  }
-
-  private rebuild(id: string, entriesChanged: boolean) {
-    const stored = this.store.get('chat', id);
-    if (!stored) {
-      this.held.delete(id);
-      this.byChat.get(id)?.set(null);
-      this.bySummary.get(id)?.set(null);
-      return;
-    }
-    const previous = this.held.get(id);
-    const entries = this.store.children('entry', id);
-    const messages = entriesChanged || !previous ? fold(entries) : previous.model.messages;
-    const { value: display, reads } = this.store.capture(() => displayChat({ store: this.store }, id, stored.value, messages));
-    const latest = entries.reduce<Stored<'entry'> | null>((last, entry) => last && last.rev > entry.rev ? last : entry, null);
-    // A message is named as the reader reads it: its translation when it has one.
-    const texts = display.texts.map((text, index) => shown(messages[index]!).translation?.text ?? text);
-    const last = texts.at(-1);
-    const next: ChatSummary = { id, chat: stored.value, count: messages.length, title: chatTitle(stored.value, messages, texts), preview: last === undefined ? '' : firstLine(last), at: latest?.value.at ?? null, order: latest?.rev ?? stored.rev };
-    const summary = previous && sameSummary(previous.summary, next) ? previous.summary : next;
-    const model = { ...summary, messages, display };
-    this.held.set(id, { model, summary, reads });
-    this.byChat.get(id)?.set(model);
-    this.bySummary.get(id)?.set(summary);
+    for (const snapshot of this.byChat.values()) snapshot.set(null);
+    this.byChat.clear();
   }
 
   private changed(changes: readonly StoreChange[]) {
-    const dirty = new Map<string, boolean>();
-    for (const change of changes) {
-      if (change.kind === 'chat') dirty.set(change.id, dirty.get(change.id) ?? false);
-      if (change.kind === 'entry' && change.parent) dirty.set(change.parent, true);
-    }
-    for (const [id, held] of this.held) if (readsChanged(held.reads, changes) && !dirty.has(id)) dirty.set(id, false);
-    for (const [id, entries] of dirty) this.rebuild(id, entries);
-    const listsChanged = this.updateLists();
+    for (const [id, snapshot] of this.byChat) snapshot.set(this.store.projection(id)?.model ?? null);
+    const listsChanged = this.updateLists(changes);
     const kinds = new Set(changes.map((change) => change.kind));
     for (const [kind, snapshot] of this.byKind) {
       if (!kinds.has(kind)) continue;
@@ -165,16 +135,34 @@ export class ReadModels {
     }
   }
 
-  // Every chat with its messages, the one written to last first. Renaming a chat or changing its model
-  // does not move it.
-  private updateLists(): boolean {
-    const held = [...this.held.values()].sort((a, b) => b.summary.order - a.summary.order);
-    const summaries = held.map((chat) => chat.summary);
-    const messages = held.map((chat) => chat.model.messages);
-    if (!sameItems(messages, this.messages.snapshot())) this.messages.set(messages);
-    if (sameItems(summaries, this.chats.snapshot())) return false;
-    this.chats.set(summaries);
-    return true;
+  // Every chat, the one written to last first. Renaming a populated chat or changing its model does not move it.
+  private updateLists(changes?: readonly StoreChange[]): boolean {
+    const ids = changes
+      ? new Set(changes.flatMap((change) => change.kind === 'chat' ? [change.id] : change.kind === 'summary' && change.parent ? [change.parent] : []))
+      : new Set(this.store.list('chat').map(({ id }) => id));
+    let changed = false;
+    for (const id of ids) {
+      const stored = this.store.get('chat', id);
+      const previous = this.summaries.get(id);
+      if (!stored) {
+        if (this.summaries.delete(id)) changed = true;
+        this.bySummary.get(id)?.set(null);
+        continue;
+      }
+      const { value: chat, rev } = stored;
+      const saved = this.store.get('summary', summaryId(id))?.value;
+      const next: ChatSummary = {
+        id, chat, count: saved?.count ?? null,
+        title: chat.title ?? (chat.origin ? `${chat.origin.name} · 갈래` : saved?.title ?? chatTitle(chat, [], [])),
+        preview: saved?.preview ?? null, at: saved?.at ?? null, order: saved?.order ?? rev,
+      };
+      if (previous && sameSummary(previous, next)) continue;
+      this.summaries.set(id, next);
+      this.bySummary.get(id)?.set(next);
+      changed = true;
+    }
+    if (changed) this.chats.set([...this.summaries.values()].sort((a, b) => b.order - a.order));
+    return changed;
   }
 
   private buildLibrary(): Library {
@@ -212,6 +200,7 @@ export class ChatScreenRead {
   readonly snapshot = () => this.state.snapshot();
   readonly subscribe = (listener: () => void) => {
     if (!this.leave) {
+      const lease = this.models.store.retainChat(this.id);
       const detach = this.models.attach(this);
       const store = this.models.store.subscribe((changes) => {
         const model = this.models.chat(this.id).snapshot();
@@ -225,7 +214,7 @@ export class ChatScreenRead {
         this.turn = turn;
         this.refresh();
       });
-      this.leave = () => { detach(); store(); talk(); };
+      this.leave = () => { detach(); store(); talk(); lease.release(); };
       const model = this.models.chat(this.id).snapshot();
       const turn = this.currentTurn();
       if (model !== this.model || turn !== this.turn) {

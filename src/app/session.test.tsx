@@ -18,6 +18,8 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
     ? { changes: [], cursor: 0, more: false, limits: { items: 100, bytes: 1_000_000, body: 100_000 } }
     : { revs: [++rev] }) as T });
   const store = await ObjectStore.open('test', randomBytes(32), request);
+  const lease = store.retainChat('chat');
+  await lease.ready;
   const chat: Chat = { title: null, character: null, models: {} };
   await store.create('chat', chat, { id: 'chat' });
   await store.create('entry', { type: 'message', role: 'user', text: '{{lastmessage}}', at: 0, receipt: null }, { parent: 'chat' });
@@ -68,6 +70,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   } finally {
     await act(() => root.unmount());
     read.close();
+    lease.release();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   }

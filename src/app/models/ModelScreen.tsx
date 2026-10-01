@@ -1,13 +1,15 @@
+import { useEffect, useState } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
-import { modelUsage, type ModelUsage } from '../../model/chat';
+import type { ModelUsage } from '../../model/chat';
+import { readUsage } from '../../runtime/usage';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { money } from '../common/money';
 import { UNKNOWN } from '../common/receipt';
 import { ago } from '../common/time';
-import { useChatMessages, useProfiles, useSettings, useStore } from '../session';
+import { useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -39,15 +41,25 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
   const toast = useToast();
   const profiles = useProfiles();
   const settings = useSettings();
-  const messages = useChatMessages();
+  const [usageAttempt, retryUsage] = useState(0);
+  const [usage, setUsage] = useState<ModelUsage | null>(null);
+  const [usageFailed, setUsageFailed] = useState(false);
+  useEffect(() => {
+    const abort = new AbortController();
+    setUsage(null);
+    setUsageFailed(false);
+    void readUsage(store, { connection: connection.id, model: model.id }, abort.signal).then((result) => {
+      if (abort.signal.aborted) return;
+      if (result.ok) setUsage(result.data);
+      else setUsageFailed(true);
+    });
+    return () => abort.abort();
+  }, [store, connection.id, model.id, usageAttempt]);
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
   const sorted = defaultFirst(profiles, settings.profile);
-  const usage = modelUsage(
-    messages,
-    { connection: connection.id, model: model.id },
-  );
+
 
   // The default is what a model without its own uses, so picking it clears the model's own.
   async function choose(id: string) {
@@ -125,8 +137,8 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
         </Row>
       </Section>
 
-      <Section title="사용량" note="남아 있는 채팅 기준">
-        {usage.last !== null ? (
+      <Section title="사용량" note="남아 있는 채팅 기준 · 마지막 집계" action={<Button variant="secondary" size="sm" onClick={() => retryUsage((attempt) => attempt + 1)}>다시 집계</Button>}>
+        {usage === null ? <Text>{usageFailed ? '사용량을 불러오지 못했어요.' : '사용량을 확인하는 중'}</Text> : usage.last !== null ? (
           <Facts
             variant="tiles"
             items={[

@@ -97,9 +97,11 @@ export async function importCharacter(
 // A copy that goes its own way (사본 만들기): the card under a new name, the lorebook, the picture and the assets, in
 // the original's folder. Chats stay with the original, and so does the alias, which tells the two apart. The copy
 // names the same stored files.
-export function copyCharacter(store: ObjectStore, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
+export async function copyCharacter(store: ObjectStore, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
+  const failed = await store.pull();
+  if (failed) return failed;
   const original = store.get('character', id)?.value;
-  if (!original) return Promise.resolve({ ok: false, error: 'gone' });
+  if (!original) return { ok: false, error: 'gone' };
   const owned = {
     avatar: store.children('avatar', id)[0]?.value ?? null,
     assets: store.children('asset', id).map((asset) => asset.value),

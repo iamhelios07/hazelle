@@ -8,8 +8,8 @@ type Item = { tone: 'done' | 'missed'; title: string; note?: string };
 export function Outcome({ label, items }: { label: string; items: Item[] }) {
   return (
     <ul className={styles.outcome} aria-label={label}>
-      {items.map((item) => (
-        <li key={item.title} className={`${styles.item} ${styles[item.tone]}`}>
+      {items.map((item, index) => (
+        <li key={index} className={`${styles.item} ${styles[item.tone]}`}>
           <span className={styles.icon}>
             <Icon icon={item.tone === 'done' ? Check : Minus} size="xs" />
           </span>

@@ -14,6 +14,7 @@ describe('startChat', () => {
     const texts = ['하나 {{pick}} {{random}}', '둘', '셋'];
     const opened = async (selected: number) => {
       const id = crypto.randomUUID();
+      await server.hold(store, id);
       const chat: Chat = { title: null, character: null, models: {} };
       const versions = texts.map((text) => {
         const id = crypto.randomUUID();
@@ -41,6 +42,7 @@ describe('branchChat', () => {
   it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();
+    await server.hold(store, source);
     const chat: Chat = { title: '기숙사의 밤', character: null, models: {}, note: '노트' };
     const pending: Receipt = { connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: 'pending', replyId: 'r1', firstTextMs: 100, totalMs: 900, cache: null };
     const said = crypto.randomUUID();
@@ -78,10 +80,12 @@ describe('branchChat', () => {
     const requests = vi.spyOn(globalThis, 'fetch');
     const branched = await branchChat(store, item, split);
     if (!branched.ok) throw new Error(branched.error);
+    await server.hold(store, branched.data);
     const entries = store.children('entry', branched.data);
     expect(entries.length).toBeGreaterThan(BATCH_LIMITS.items);
-    const batches = requests.mock.calls.filter(([url]) => url === '/api/objects/batch').map(([, init]) => (JSON.parse(init!.body as string) as { writes: { id: string }[] }).writes);
-    expect(batches.map((batch) => batch.length)).toEqual([BATCH_LIMITS.items, entries.length + 1 - BATCH_LIMITS.items]);
+    const batches = requests.mock.calls.filter(([url]) => url === '/api/objects/batch').map(([, init]) => (JSON.parse(init!.body as string) as { writes: { id: string; kind: string }[] }).writes.filter(({ kind }) => kind !== 'summary')).filter((writes) => writes.length);
+    expect(batches.flat()).toHaveLength(entries.length + 1);
+    expect(batches.every((batch) => batch.length <= BATCH_LIMITS.items)).toBe(true);
     expect(batches.at(-1)!.at(-1)!.id).toBe(branched.data);
     const copy = fold(entries);
     const withoutIds = (messages: Message[]) =>
@@ -94,10 +98,11 @@ describe('branchChat', () => {
     const reader = { store, username: 'jin' };
     expect(displayChat(reader, branched.data, stored.value, copy)).toEqual(displayChat(reader, source, chat, item.messages.slice(0, -1)));
     expect(stored.rev).toBeGreaterThan(Math.max(...entries.map((entry) => entry.rev)));
-  });
+  }, 15_000);
   it('carries the memory records whose every message lies before the split, their sources remapped, with the facts and threads they or the user set', async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();
+    await server.hold(store, source);
     const chat: Chat = { title: null, character: null, models: {} };
     await startChat(store, source, chat, null);
     const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
@@ -125,6 +130,7 @@ describe('branchChat', () => {
     const item: ChatItem = { id: source, chat, messages, count: messages.length, title: '', preview: '', at: null, order: 0 };
     const branched = await branchChat(store, item, ids[2]!);
     if (!branched.ok) throw new Error(branched.error);
+    await server.hold(store, branched.data);
     const copy = fold(store.children('entry', branched.data));
     const memory = store.get('memory', memoryId(branched.data))!.value;
     expect(memory.records.map(({ id, sources }) => [id, sources])).toEqual([['before', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);

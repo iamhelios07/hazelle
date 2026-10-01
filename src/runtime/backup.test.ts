@@ -2,7 +2,6 @@ import { strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, type Chat } from '../model/chat';
-import { KINDS, type Kind } from '../model/kinds';
 import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
 import { exportBackup, readBackup, restoreBackup } from './backup';
@@ -16,8 +15,14 @@ import { testServer } from './testing';
 
 const server = testServer();
 
-const held = (store: ObjectStore) =>
-  new Map((Object.keys(KINDS) as Kind[]).flatMap((kind) => store.list(kind)).map(({ id, kind, parent, value }) => [id, { kind, parent, value }]));
+const held = async (store: ObjectStore) => {
+  const objects = new Map<string, { kind: string; parent: string | null; value: unknown }>();
+  const failure = await store.scan({}, ({ id, kind, parent }, value) => {
+    if (kind !== 'summary') objects.set(id, { kind, parent, value });
+  });
+  if (failure) throw new Error(failure.error);
+  return objects;
+};
 
 // Whole bodies, since restore refuses any other.
 const card: Card = {
@@ -80,6 +85,7 @@ async function oldAccount({ profile = true } = {}) {
   const added = await importCharacter(store, files, { card, lore: [{ ...lore, folder: null }], loreFolders: [], assets }, { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
   const character = added.ok ? added.data.id : '';
   const chat = crypto.randomUUID();
+  await server.hold(store, chat);
   const opened: Chat = { title: null, character, models: {} };
   const greetings = { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['안녕', '반가워', '어서 와'], selected: 1, translations: new Map() };
   await startChat(store, chat, opened, greetings);
@@ -98,14 +104,15 @@ describe('backup', () => {
     const made = await exportBackup(old.store, old.files);
     const read = readBackup(made.ok ? made.data.zip : new Uint8Array());
     expect(read.ok).toBe(true);
-    const expected = held(old.store);
+    const expected = await held(old.store);
     for (const [id, { parent }] of expected) if (parent === old.gone) expected.delete(id);
 
     await server.wipe();
     const { store, files } = await open('someone');
     expect(await restoreBackup(store, files, read.ok ? read.backup : { objects: [], files: new Map() }, () => {})).toEqual({ ok: true, data: null });
 
-    expect(held(store)).toEqual(expected);
+    expect(await held(store)).toEqual(expected);
+    await server.hold(store, old.chat);
     expect(fold(store.children('entry', old.chat))).toEqual(fold(old.store.children('entry', old.chat)));
     const [avatar] = store.list('avatar');
     expect(await files.read(avatar!.value.file)).toEqual({ ok: true, data: old.image });
@@ -118,12 +125,12 @@ describe('backup', () => {
     const made = await exportBackup(old.store, old.files);
     const read = readBackup(made.ok ? made.data.zip : new Uint8Array());
 
+    const expected = await held(old.store);
     await server.wipe();
     const { store, files } = await open('someone');
     expect(await restoreBackup(store, files, read.ok ? read.backup : { objects: [], files: new Map() }, () => {})).toEqual({ ok: true, data: null });
-    const expected = held(old.store);
     for (const [id, { parent }] of expected) if (parent === old.gone) expected.delete(id);
-    expect(held(store)).toEqual(expected);
+    expect(await held(store)).toEqual(expected);
   });
 
   it('refuses a file with a body its kind cannot hold', () => {
@@ -142,9 +149,9 @@ describe('backup', () => {
 
     await server.wipe();
     const { store, files } = await open('someone');
-    const before = held(store);
+    const before = await held(store);
     expect(await restoreBackup(store, files, backup, () => {})).toEqual({ ok: false, error: 'not-backup' });
-    expect(held(store)).toEqual(before);
+    expect(await held(store)).toEqual(before);
   });
 
   it('refuses an account holding something of its own, and writes nothing', async () => {
@@ -155,8 +162,8 @@ describe('backup', () => {
     await server.wipe();
     const { store, files } = await server.account();
     await store.create('persona', { name: '다른 사람', description: '', picture: null });
-    const before = held(store);
+    const before = await held(store);
     expect(await restoreBackup(store, files, read.ok ? read.backup : { objects: [], files: new Map() }, () => {})).toEqual({ ok: false, error: 'not-new' });
-    expect(held(store)).toEqual(before);
+    expect(await held(store)).toEqual(before);
   });
 });

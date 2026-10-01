@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
 import { ChatScreen, type SideAt } from '../chat/ChatScreen';
+import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
 import { ConnectionAddScreen } from '../connections/ConnectionAddScreen';
 import { ConnectionDirectScreen } from '../connections/ConnectionDirectScreen';
@@ -22,8 +23,9 @@ import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
 import { useChatModel, useChats, useConnections, useLibrary, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
-import { Empty, ListDetail, useSplit, useWide } from '../ui';
+import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
+import { backBar } from './router';
 import { backTo, listOf, up, upFromMissing, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
 
@@ -87,8 +89,14 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         if (at.character === null) return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={null} back={sideBack(at)} side={side} />;
         return withCharacter(at, at.character, (shelf) => <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
       case 'chat': {
-        const item = chatModel;
-        if (!item) return missing(at, 'chat');
+        if (!chatById.has(at.id)) return missing(at, 'chat');
+        const item = chatModel.model;
+        if (!item || chatModel.state !== 'loaded') return (
+          <Screen align="center" top={<NavBar title={chatById.get(at.id)!.title} {...backBar(back(at))} />}>
+            <Text>{chatModel.state === 'failed' ? describeFailure(chatModel.error!) : '채팅을 불러오는 중'}</Text>
+            {chatModel.state === 'failed' && <Button onClick={chatModel.retry}>다시 시도</Button>}
+          </Screen>
+        );
         const { character } = item.chat;
         const shelf = character === null ? null : characterById.get(character);
         // Its character is in 지운 캐릭터, or gone for good.

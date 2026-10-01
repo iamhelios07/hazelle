@@ -49,28 +49,33 @@ function greetingWrites(chat: string, { ids, texts, selected, translations }: Gr
 // spread takes the original's own choices; nothing links the two chats but origin, so deleting either leaves the other
 // whole.
 export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<string>> {
-  const upTo = item.messages.findIndex((candidate) => candidate.id === message);
-  if (upTo === -1) return { ok: false, error: 'gone' };
-  const id = crypto.randomUUID();
-  let after = '';
-  const writes: Write[] = [];
-  const messages = new Map<string, string>();
-  const versions = new Map<string, string>();
-  for (const source of item.messages.slice(0, upTo + 1)) {
-    after = crypto.randomUUID();
-    messages.set(source.id, after);
-    const copy = copied(after, source);
-    for (const [old, made] of copy.versions) versions.set(old, made);
-    for (const [entryId, entry] of copy.entries) {
-      writes.push({ type: 'create', kind: 'entry', id: entryId, parent: id, value: entry });
+  return store.withChat(item.id, async () => {
+    const current = store.projection(item.id)?.model;
+    if (!current) return { ok: false, error: 'gone' };
+    item = current;
+    const upTo = item.messages.findIndex((candidate) => candidate.id === message);
+    if (upTo === -1) return { ok: false, error: 'gone' };
+    const id = crypto.randomUUID();
+    let after = '';
+    const writes: Write[] = [];
+    const messages = new Map<string, string>();
+    const versions = new Map<string, string>();
+    for (const source of item.messages.slice(0, upTo + 1)) {
+      after = crypto.randomUUID();
+      messages.set(source.id, after);
+      const copy = copied(after, source);
+      for (const [old, made] of copy.versions) versions.set(old, made);
+      for (const [entryId, entry] of copy.entries) {
+        writes.push({ type: 'create', kind: 'entry', id: entryId, parent: id, value: entry });
+      }
     }
-  }
-  const memory = store.get('memory', memoryId(item.id))?.value;
-  const kept = memory && branchMemory(memory, messages, versions);
-  if (kept) writes.push({ type: 'create', kind: 'memory', id: memoryId(id), parent: id, value: kept });
-  writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
-  const created = await store.batch(writes);
-  return created.ok ? { ok: true, data: id } : created;
+    const memory = store.children('memory', item.id).find((entry) => entry.id === memoryId(item.id))?.value;
+    const kept = memory && branchMemory(memory, messages, versions);
+    if (kept) writes.push({ type: 'create', kind: 'memory', id: memoryId(id), parent: id, value: kept });
+    writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
+    const created = await store.batch(writes);
+    return created.ok ? { ok: true, data: id } : created;
+  });
 }
 
 // The records whose every message lies before the split, their sources remapped to the branch's messages and versions

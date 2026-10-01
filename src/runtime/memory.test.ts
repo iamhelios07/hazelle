@@ -20,6 +20,7 @@ describe('Rememberer', () => {
       // A window of one token holds only the last message, and a batch of one token summarizes one message at a time.
       await setDefaultMemory(session.store, { window: 1, batch: 1 });
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       const said = crypto.randomUUID();
       await appendUserMessage(session.store, chat, { id: said, text: 'We meet at the pier.' });
@@ -51,6 +52,7 @@ describe('Rememberer', () => {
       await answerable(session);
       await setDefaultMemory(session.store, { window: 1, batch: 1 });
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       const said = crypto.randomUUID();
       const text = 'Luna waits at the pier.';
@@ -82,6 +84,7 @@ describe('Rememberer', () => {
       if (!made.ok) throw new Error('not saved');
       await editPrompt(session.store, made.data.id, { blocks: made.data.value.blocks.filter((block) => !(block.kind === 'slot' && block.slot === 'memory')) });
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {}, prompt: made.data.id }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'We meet at the pier.' });
       const log = stubRelay(inTurn([saying('Luna waves.')]));
@@ -97,6 +100,7 @@ describe('Rememberer', () => {
       await answerable(session);
       await setDefaultMemory(session.store, { window: 1, batch: 1 });
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       const said = crypto.randomUUID();
       const text = 'Luna waits at the pier.';

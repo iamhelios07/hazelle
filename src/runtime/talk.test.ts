@@ -21,6 +21,7 @@ describe('Talk', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chats = [crypto.randomUUID(), crypto.randomUUID()];
+      await server.hold(session.store, ...chats);
       for (const chat of chats) {
         await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
         await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
@@ -56,10 +57,12 @@ describe('Talk', () => {
       }
     }));
 
-  it('keeps what each reply sent, its address and body and never its headers, until it closes', () =>
+  it('keeps what each reply sent, its address and body and never its headers, while its chat is held', () =>
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      const lease = session.store.retainChat(chat);
+      await lease.ready;
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
       stubRelay(() => saying('반가워요'));
@@ -67,13 +70,14 @@ describe('Talk', () => {
       await takeTurn(session, chat, { kind: 'answer' });
       const reply = shown(fold(session.store.children('entry', chat))[1]!);
       expect(session.talk.sent(reply.id)?.request).toEqual({ url: 'https://openrouter.ai/api/v1/chat/completions', body: expect.stringContaining('"content":"안녕"') });
-      session.talk.close();
+      lease.release();
+      await vi.waitFor(() => expect(session.store.scopeState(chat)).toBe('unloaded'));
       expect(session.talk.sent(reply.id)).toBeNull();
     }));
 
   it('ends a turn whose prepare throws, so the next one runs', () =>
     server.withSession(async (session) => {
-      const turn = { chat: 'c', said: null, reply: { id: 'r', message: null, replaces: null, continues: null } };
+      const turn = { chat: crypto.randomUUID(), said: null, reply: { id: 'r', message: null, replaces: null, continues: null } };
       await expect(session.talk.run(turn, () => Promise.reject(new Error('prepare broke')))).rejects.toThrow('prepare broke');
       expect(session.talk.snapshot()).toBeNull();
       expect(await session.talk.run(turn, async () => ({ kind: 'probe' }))).toEqual({ kind: 'probe' });

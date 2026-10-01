@@ -145,8 +145,8 @@ export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) 
 
 // Each message's text as the chat shows it, for its log, its title and its preview, and the bot's CSS for its log.
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
-export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null): Display =>
-  display({ ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat));
+export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, clock?: ChatScope['clock']): Display =>
+  display({ ...scopeOf(reader, id, chat, messages), screen, ...(clock && { clock }) }, pinned(reader, chat));
 
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
 // 봇 꾸밈 is off; the chat draws the latest box itself.
@@ -291,18 +291,23 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
       return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
     });
   }
-  const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
-  const showing = gatherTurn(session, chat, target, ids);
-  if (showing === null || 'kind' in showing) return Promise.resolve(showing);
-  return session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
-    // Another device may have written to this chat while this page stood open without focus or a timer's pull, so the
-    // prompt is gathered again after a pull. A turn it cannot pull does not send on what may be stale.
-    const unpulled = await session.store.pull();
-    if (unpulled) return { kind: 'unpulled', failure: unpulled };
-    const turn = gatherTurn(session, chat, target, ids);
-    if (turn === null) return { kind: 'gone' };
-    return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
-  });
+  const lease = session.store.retainChat(chat);
+  const send = (): Promise<TurnFailure | null> => {
+    const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
+    const showing = gatherTurn(session, chat, target, ids);
+    if (showing === null || 'kind' in showing) return Promise.resolve(showing);
+    return session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
+      // Another device may have written to this chat while this page stood open without focus or a timer's pull, so the
+      // prompt is gathered again after a pull. A turn it cannot pull does not send on what may be stale.
+      const unpulled = await session.store.pull();
+      if (unpulled) return { kind: 'unpulled', failure: unpulled };
+      const turn = gatherTurn(session, chat, target, ids);
+      if (turn === null) return { kind: 'gone' };
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
+    });
+  };
+  const sending = session.store.scopeState(chat) === 'loaded' ? send() : lease.ready.then((failure): Promise<TurnFailure | null> => failure ? Promise.resolve({ kind: 'unpulled', failure }) : send());
+  return sending.finally(lease.release);
 }
 
 async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal): Promise<Ask | TooLong | { kind: 'tokenizer' } | Extract<TurnFailure, { kind: 'untranslated' }>> {
@@ -321,13 +326,18 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
 export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, stream: Stored<'stream'>, signal: AbortSignal) {
   const purpose = stream.value.for;
   if (purpose.kind !== 'input') return;
-  session.streams.reading.add(stream.id);
-  const made = await resumeTranslation(session.store, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
-  if (!made.ok && made.failure.kind === 'stopped') return;
-  const id = stream.value.result;
-  const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed } } : { id, text: purpose.typed };
-  const saved = await appendUserMessage(session.store, stream.parent!, said);
-  if (saved.ok || session.store.get('entry', id)) endCall(session.store, stream.id);
+  const lease = session.store.retainChat(stream.parent!);
+  try {
+    if (await lease.ready) return;
+    session.streams.reading.add(stream.id);
+    const made = await resumeTranslation(session.store, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
+    if (!made.ok && made.failure.kind === 'stopped') return;
+    const id = stream.value.result;
+    const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed } } : { id, text: purpose.typed };
+    const saved = await appendUserMessage(session.store, stream.parent!, said);
+    if (!saved.ok && saved.error === 'stopped') return;
+    if (saved.ok || session.store.children('entry', stream.parent!).some((entry) => entry.id === id)) endCall(session.store, stream.id);
+  } finally { lease.release(); }
 }
 
 // The user's message goes out translated, which the prompt sends and the chat saves as its text, with

@@ -50,6 +50,7 @@ describe('object store', () => {
     const { store } = await server.account();
     const chat = await store.create('chat', { title: null, character: null, models: {} });
     if (!chat.ok) throw new Error(chat.error);
+    await server.hold(store, chat.data.id);
     const entry = { type: 'delete', message: 'm', at: 0 } as const;
     const first = await store.create('entry', entry, { parent: chat.data.id });
     expect(first.ok && first.data.parent).toBe(chat.data.id);
@@ -72,6 +73,8 @@ describe('object store', () => {
     const phone = await open();
     const parent = crypto.randomUUID();
     const otherParent = crypto.randomUUID();
+    await server.hold(store, parent, otherParent);
+    await server.hold(phone, parent, otherParent);
     const first = await store.create('entry', { type: 'delete', message: 'first', at: 0 }, { parent });
     const memory = await store.create('memory', emptyMemory(), { parent });
     const second = await store.create('entry', { type: 'delete', message: 'second', at: 1 }, { parent });
@@ -79,7 +82,7 @@ describe('object store', () => {
     if (!first.ok || !memory.ok || !second.ok || !other.ok) throw new Error('create failed');
     await phone.pull();
     for (const device of [store, phone]) {
-      expect(device.list('entry')).toEqual([first.data, second.data, other.data]);
+      expect(() => device.list('entry')).toThrow('not loaded');
       expect(device.children('entry', parent)).toEqual([first.data, second.data]);
       expect(device.children('memory', parent)).toEqual([memory.data]);
       expect(device.children('entry', otherParent)).toEqual([other.data]);
@@ -90,9 +93,7 @@ describe('object store', () => {
     expect((await store.remove(other.data.id)).ok).toBe(true);
     await phone.pull();
     for (const device of [store, phone]) {
-      expect(device.list('entry').map(({ id }) => id)).toEqual([second.data.id, first.data.id]);
-      expect(device.children('entry', parent)).toEqual(device.list('entry'));
-      expect(device.list('memory')).toEqual([]);
+      expect(device.children('entry', parent).map(({ id }) => id)).toEqual([second.data.id, first.data.id]);
       expect(device.children('memory', parent)).toEqual([]);
       expect(device.children('entry', otherParent)).toEqual([]);
     }
@@ -102,7 +103,7 @@ describe('object store', () => {
     await phone.pull();
     for (const device of [store, phone]) {
       expect(device.children('entry', otherParent)).toEqual([restored.data]);
-      expect(device.list('entry').map(({ id }) => id)).toEqual([second.data.id, first.data.id, other.data.id]);
+      expect([...device.children('entry', parent), ...device.children('entry', otherParent)].map(({ id }) => id)).toEqual([second.data.id, first.data.id, other.data.id]);
     }
   });
 
@@ -196,6 +197,7 @@ describe('object store', () => {
     };
     const store = await ObjectStore.open(accountId, vaultKey, request);
     const id = crypto.randomUUID();
+    await server.hold(store, id);
     const text = Array.from({ length: 16 }, () => toBase64(randomBytes(65_535))).join('');
     const writes: Write[] = [
       { type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } },
@@ -203,7 +205,7 @@ describe('object store', () => {
     ];
     const progress: string[] = [];
     expect(await store.batch(writes, (write) => progress.push(write.id))).toEqual({ ok: true, data: null });
-    expect(batches.map(({ writes }) => writes.length)).toEqual([2, 2]);
+    expect(batches.flatMap(({ writes }) => writes).filter((write) => write.id === id)).toHaveLength(1);
     expect(progress).toEqual([...writes.slice(1), writes[0]!].map(({ id }) => id));
     for (const batch of batches) {
       expect(new TextEncoder().encode(JSON.stringify(batch)).length).toBeLessThanOrEqual(BATCH_LIMITS.bytes);

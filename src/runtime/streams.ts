@@ -33,6 +33,7 @@ export function endCall(store: ObjectStore, id: string) {
 // opens and whenever a marker or an entry changes, which is also when a reply waiting for Talk to be free can go.
 export class Streams {
   private closed = false;
+  private readonly checking = new Set<string>();
   private readonly stop: () => void;
 
   constructor(
@@ -48,9 +49,15 @@ export class Streams {
   pickUp() {
     if (this.closed) return;
     for (const stream of this.store.list('stream')) {
-      if (this.reading.has(stream.id)) continue;
-      if (this.saved(stream)) endCall(this.store, stream.id);
-      else this.take(stream);
+      if (this.reading.has(stream.id) || this.checking.has(stream.id)) continue;
+      this.checking.add(stream.id);
+      void this.store.withChat(stream.parent!, async () => {
+        if (!this.closed && !this.reading.has(stream.id)) {
+          if (this.saved(stream)) endCall(this.store, stream.id);
+          else this.take(stream);
+        }
+        return { ok: true, data: null };
+      }).finally(() => this.checking.delete(stream.id));
     }
   }
 
@@ -61,7 +68,7 @@ export class Streams {
 
   // A memory summary's result is not an entry: its first record takes the result's id.
   private saved({ parent, value: { result, for: purpose } }: Stored<'stream'>): boolean {
-    if (purpose.kind !== 'memory') return this.store.get('entry', result) !== null;
-    return this.store.get('memory', memoryId(parent!))?.value.records.some(({ id }) => id === result) ?? false;
+    if (purpose.kind !== 'memory') return this.store.children('entry', parent!).some((entry) => entry.id === result);
+    return this.store.children('memory', parent!).find((memory) => memory.id === memoryId(parent!))?.value.records.some(({ id }) => id === result) ?? false;
   }
 }

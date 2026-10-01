@@ -171,13 +171,21 @@ export class Translator {
   // A failed call ends with its marker, since nothing would make it go otherwise; one stopped by close() keeps it
   // for the next load.
   private run(chat: string, version: string, id: string, make: (signal: AbortSignal, onText: (text: string) => void) => Promise<Translated>, save: (made: Extract<Translated, { ok: true }>) => Promise<ApiResult<unknown>>) {
+    const lease = this.store.retainChat(chat);
     const abort = new AbortController();
     this.aborts.set(version, abort);
     this.reading.add(id);
     this.change(version, { live: '', failed: null });
-    void make(abort.signal, (text) => this.change(version, { live: text }))
+    void lease.ready.then(async (failure) => {
+      if (failure) {
+        this.change(version, { live: null, failed: { kind: 'unsaved', failure } });
+        return null;
+      }
+      return make(abort.signal, (text) => this.change(version, { live: text }));
+    })
       .then(
         async (made) => {
+          if (!made) return;
           if (!made.ok) {
             if (made.failure.kind !== 'stopped') endCall(this.store, id);
             return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
@@ -197,6 +205,7 @@ export class Translator {
       .finally(() => {
         this.aborts.delete(version);
         this.reading.delete(id);
+        lease.release();
       });
   }
 
