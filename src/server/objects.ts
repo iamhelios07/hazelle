@@ -21,6 +21,7 @@ objects.use(requireSession);
 // A page stops at a row count or a body budget, whichever comes first, so a sync of many large
 // objects never has to fit in the Worker's memory at once. The first row always fits. Rows past the
 // budget come back without their bodies, only to tell whether more is waiting.
+// Bound candidates before the window sum; an outer LIMIT still sums the rest of the account.
 objects.get('/', async (c) => {
   const since = Number(c.req.query('since'));
   if (!Number.isSafeInteger(since) || since < 0) return fail(c, 400, 'bad-input');
@@ -28,8 +29,8 @@ objects.get('/', async (c) => {
     `SELECT id, kind, parent_id, rev, deleted_at IS NOT NULL AS deleted, start < ?3 AS fits, CASE WHEN start < ?3 THEN body END AS body
      FROM (
        SELECT *, SUM(COALESCE(LENGTH(body), 0)) OVER (ORDER BY rev) - COALESCE(LENGTH(body), 0) AS start
-       FROM objects WHERE account_id = ?1 AND rev > ?2
-     ) ORDER BY rev LIMIT ?4`,
+       FROM (SELECT * FROM objects WHERE account_id = ?1 AND rev > ?2 ORDER BY rev LIMIT ?4)
+     ) ORDER BY rev`,
   )
     .bind(c.get('account').id, since, PAGE_BODY_LENGTH, PAGE_ROWS + 1)
     .all<Row>();

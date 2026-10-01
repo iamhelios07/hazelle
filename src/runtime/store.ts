@@ -33,7 +33,9 @@ const MAX_ATTEMPTS = 3;
 export class ObjectStore {
   private readonly live = new Map<string, Held>();
   private readonly deleted = new Map<string, number>();
-  private readonly byParent = new Map<string, Set<string>>();
+  private readonly byKind = new Map<string, Set<string>>();
+  private readonly byParent = new Map<string, Map<string, Set<string>>>();
+  private unreadableCount = 0;
   private readonly listeners = new Set<(changes: readonly StoreChange[]) => void>();
   private readonly changes: StoreChange[] = [];
   private reading: StoreRead[] | null = null;
@@ -77,16 +79,16 @@ export class ObjectStore {
 
   list<K extends Kind>(kind: K): Stored<K>[] {
     this.reading?.push({ kind, list: true });
-    return [...this.live.values()].filter((held): held is Stored<K> => held.kind === kind && held.value !== undefined);
+    return [...(this.byKind.get(kind) ?? [])].map((id) => this.live.get(id)!).filter((held): held is Stored<K> => held.value !== undefined);
   }
 
   children<K extends Kind>(kind: K, parent: string): Stored<K>[] {
     this.reading?.push({ kind, parent });
-    return [...(this.byParent.get(parent) ?? [])].flatMap((id) => this.get(kind, id) ?? []);
+    return [...(this.byParent.get(parent)?.get(kind) ?? [])].flatMap((id) => this.get(kind, id) ?? []);
   }
 
   unreadable(): number {
-    return [...this.live.values()].filter((held) => held.value === undefined).length;
+    return this.unreadableCount;
   }
 
   // One pull at a time: a caller arriving during a pull waits for that pull instead of starting another.
@@ -276,6 +278,7 @@ export class ObjectStore {
   }
 
   private async apply({ id, kind, parent, rev, body }: Change) {
+    if (this.stale(id, rev)) return;
     if (body === null) return this.drop(id, rev, { kind, id, parent });
     this.hold({ id, kind, parent, rev, value: await openObject(this.key, this.accountId, { id, kind, parent }, body) });
   }
@@ -288,10 +291,16 @@ export class ObjectStore {
     this.forget(object.id);
     this.deleted.delete(object.id);
     this.live.set(object.id, object);
+    if (object.value === undefined) this.unreadableCount++;
+    const kind = this.byKind.get(object.kind);
+    if (kind) kind.add(object.id);
+    else this.byKind.set(object.kind, new Set([object.id]));
     if (object.parent === null) return;
-    const siblings = this.byParent.get(object.parent);
+    let children = this.byParent.get(object.parent);
+    if (!children) this.byParent.set(object.parent, (children = new Map()));
+    const siblings = children.get(object.kind);
     if (siblings) siblings.add(object.id);
-    else this.byParent.set(object.parent, new Set([object.id]));
+    else children.set(object.kind, new Set([object.id]));
   }
 
   private drop(id: string, rev: number, change: StoreChange) {
@@ -303,7 +312,7 @@ export class ObjectStore {
   }
 
   // Every write takes the account's next rev, so one not above the rev held for the id is that write or an older
-  // one arriving late. Checked here, after apply's await: a write can land while a pulled body decrypts.
+  // one arriving late. Also checked after apply's await: a write can land while a pulled body decrypts.
   private stale(id: string, rev: number): boolean {
     const known = this.live.get(id)?.rev ?? this.deleted.get(id);
     return known !== undefined && rev <= known;
@@ -311,7 +320,18 @@ export class ObjectStore {
 
   private forget(id: string) {
     const held = this.live.get(id);
-    if (held?.parent) this.byParent.get(held.parent)?.delete(id);
+    if (!held) return;
+    if (held.value === undefined) this.unreadableCount--;
+    const kind = this.byKind.get(held.kind)!;
+    kind.delete(id);
+    if (!kind.size) this.byKind.delete(held.kind);
+    if (held.parent !== null) {
+      const children = this.byParent.get(held.parent)!;
+      const siblings = children.get(held.kind)!;
+      siblings.delete(id);
+      if (!siblings.size) children.delete(held.kind);
+      if (!children.size) this.byParent.delete(held.parent);
+    }
     this.live.delete(id);
   }
 
