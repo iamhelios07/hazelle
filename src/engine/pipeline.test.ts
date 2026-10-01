@@ -1,14 +1,16 @@
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '../connectors/types';
+import type { Memory, MemoryRecord } from '../model/memory';
 import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
 import { assemble, unused, type Assembled, type PromptInput, type TooLong } from './pipeline';
+import { printOf, type ChatRead } from './memory';
 import { renderChat } from './render';
 
 // The user's own Risu preset "🏓 핑퐁 간소화" (design §4.2), block for block: its wrappers and marks as written,
-// its long texts cut down around the parts that carry CBS. Its 장기 기억 block has no slot yet, so it is not here.
+// its long texts cut down around the parts that carry CBS.
 const starter: Prompt = {
   name: '🏓 핑퐁 간소화',
   toggles: [{ key: 'sims', label: '시뮬레이터 모드', kind: 'check', default: '0' }],
@@ -29,6 +31,7 @@ const starter: Prompt = {
     { id: 'material-2', name: null, kind: 'text', role: 'system', mark: null, text: '# Material 2: Additional Information/Rules\nThis material is about the world, lore, other characters, internal rules, etc.' },
     { id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' },
     { id: 'material-3', name: null, kind: 'text', role: 'system', mark: null, text: '# Material 3: Past Events/Prelude Summary' },
+    { id: 'memory', name: null, kind: 'slot', slot: 'memory', role: 'system', wrapper: null },
     { id: 'guidelines', name: null, kind: 'text', role: 'system', mark: null, text: '</Role-play Materials>\n\n---\n\n<Guidelines>' },
     { id: 'global-note', name: '글노덮', kind: 'text', role: 'system', mark: 'globalNote', text: '' },
     { id: 'author-note', name: null, kind: 'slot', slot: 'authorNote', role: 'assistant', wrapper: null },
@@ -101,7 +104,7 @@ const assembledOf = (result: Assembled | TooLong) => {
   return result;
 };
 const sentOf = (result: Assembled | TooLong) => assembledOf(result).messages;
-const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false });
+const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: null });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
 describe('assemble', () => {
@@ -214,7 +217,7 @@ describe('assemble', () => {
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));
-    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, continuing: false };
+    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, continuing: false, memory: null };
     const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
     const inChat = ({ content }: ChatMessage) => content.startsWith('Message ');
     const whole = sentOf(assemble({ ...input, budget: null }));
@@ -226,6 +229,83 @@ describe('assemble', () => {
     expect(kept.length).toBeLessThan(messages.length);
     expect(kept).toEqual(whole.filter(inChat).slice(-kept.length));
     expect(assemble({ ...input, budget: 100 })).toMatchObject({ kind: 'too-long', budget: 100 });
+  });
+});
+
+describe('assemble with memory', () => {
+  const messages = [
+    message('m0', 'user', '{{setvar::mood::calm}}We reach the lighthouse.'),
+    message('m1', 'assistant', 'Luna opens the door.'),
+    message('m2', 'user', 'I promise to come back.'),
+    message('m3', 'assistant', 'Luna nods.'),
+    message('m4', 'user', 'Morning comes.'),
+    message('m5', 'assistant', 'Luna is {{getvar::mood}}.'),
+  ];
+  const shown = messages.map(({ id }) => ({ message: `message-${id}`, version: id }));
+  const chatScope = (over: Partial<PromptInput['scope']> = {}) => scope({ messages, greeting: null, ...over });
+  const read = (): ChatRead => ({ shown, roles: messages.map(({ role }) => role), texts: renderChat('prompt', chatScope()).texts });
+  const record = (id: string, indices: number[], what: string, over: Partial<MemoryRecord> = {}): MemoryRecord => ({
+    id,
+    sources: indices.map((index) => shown[index]!),
+    print: printOf(read(), indices),
+    when: null,
+    where: 'the lighthouse',
+    who: ['Luna', 'jin'],
+    what,
+    lines: [],
+    outcome: '',
+    receipt: null,
+    at: 0,
+    ...over,
+  });
+  const memoryOf = (records: MemoryRecord[]): Memory => ({ records, state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [] });
+  const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}): Assembled =>
+    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: { memory, budget, shown } }));
+  const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
+  const memoryOfSent = (result: Assembled) => result.messages.find((_, index) => (result.parts[index]!.from as { slot?: string }).slot === 'memory');
+
+  it('sends the covered messages as memory in its slot, leaves them out of the chat but replays their variables, and anchors a cache point before it', () => {
+    const result = withMemory(memoryOf([record('r1', [0, 1], 'jin and Luna reach the lighthouse.'), record('r2', [2, 3], 'jin promises to come back.')]));
+    expect(result.memory).toEqual({ sent: ['r1', 'r2'], covered: 4, missing: 0, slot: true });
+    expect(chatOf(result)).toEqual(['Morning comes.', 'Luna is calm.']);
+    const sent = memoryOfSent(result)!;
+    expect(sent.content).toContain('- Luna, mood: wary');
+    expect(sent.content.indexOf('jin and Luna reach')).toBeLessThan(sent.content.indexOf('jin promises'));
+    const at = result.messages.indexOf(sent);
+    expect(result.messages[at - 1]).toEqual({ role: 'system', content: '# Material 3: Past Events/Prelude Summary', cache: true });
+  });
+
+  it('sends pinned records always and the newest that fit, holds back stale and forgotten ones, and counts the messages left with no memory', () => {
+    const long = 'Luna tells the whole history of the lighthouse. '.repeat(20);
+    const result = withMemory(
+      memoryOf([
+        record('r1', [0], 'They arrive.', { pinned: true }),
+        record('r2', [1], long),
+        record('r3', [2], 'jin promises.', { print: 'rendered before' }),
+        record('r4', [3], 'Luna nods.', { forgotten: true }),
+        record('r5', [4], 'Morning.'),
+      ]),
+      400,
+    );
+    expect(result.memory).toEqual({ sent: ['r1', 'r5'], covered: 5, missing: 3, slot: true });
+    expect(chatOf(result)).toEqual(['Luna is calm.']);
+    const pinned = withMemory(memoryOf([record('r1', [0], 'They arrive.', { print: 'rendered before', pinned: true })]));
+    expect(pinned.memory).toMatchObject({ sent: ['r1'], missing: 0 });
+  });
+
+  it('counts every covered message as missing when the prompt has no 장기 기억 slot or a toggle leaves it out, and sends nothing for an empty memory', () => {
+    const memory = memoryOf([record('r1', [0, 1], 'They arrive.')]);
+    const without = withMemory(memory, 25_000, { prompt: { ...starter, blocks: starter.blocks.filter(({ id }) => id !== 'memory') } });
+    expect(without.memory).toEqual({ sent: ['r1'], covered: 2, missing: 2, slot: false });
+    expect(chatOf(without)).toHaveLength(4);
+    const toggled = {
+      ...starter,
+      blocks: starter.blocks.map((block) => (block.id === 'memory' ? { ...block, wrapper: '{{#if {{getglobalvar::toggle_sims}}}}{{slot}}{{/if}}' } : block)),
+    } as Prompt & { task?: never };
+    const off = withMemory(memory, 25_000, { prompt: toggled, toggle: () => '0' });
+    expect([off.memory, memoryOfSent(off)]).toEqual([{ sent: ['r1'], covered: 2, missing: 2, slot: false }, undefined]);
+    const empty = withMemory({ records: [], state: [], threads: [] });
+    expect([empty.memory, memoryOfSent(empty), chatOf(empty)]).toEqual([{ sent: [], covered: 0, missing: 0, slot: true }, undefined, messages.map(() => expect.any(String))]);
   });
 });
 

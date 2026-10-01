@@ -53,13 +53,23 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
   const read = new ReadModels(store);
-  const memory = new Rememberer();
-  const talk = new Talk(store, credentials, costs, (chat) => translateLatest({ store, read, talk, translator }, chat), reading);
+  const memory = new Rememberer({ store, read, credentials }, reading);
+  const talk = new Talk(
+    store,
+    credentials,
+    costs,
+    (chat) => {
+      translateLatest({ store, read, talk, translator }, chat);
+      memory.check(chat);
+    },
+    reading,
+  );
   const closing = new AbortController();
   const streams: Streams = new Streams(store, reading, (stream) => {
     const purpose = stream.value.for;
     if (purpose.kind === 'reply') void talk.resume(stream);
     else if (purpose.kind === 'translation') translator.resume(stream, purpose.version);
+    else if (purpose.kind === 'memory') memory.resume(stream);
     else void resumeSend({ store, streams }, stream, closing.signal);
   });
   const stopSync = keepSynced(store);

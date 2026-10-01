@@ -1,4 +1,5 @@
 import type { Stored } from '../model/kinds';
+import { memoryId } from '../model/memory';
 import type { Stream } from '../model/stream';
 import { streamKey } from '../vault/streams';
 import type { Route } from './assignment';
@@ -28,8 +29,8 @@ export function endCall(store: ObjectStore, id: string) {
   if (store.get('stream', id)) void store.remove(id);
 }
 
-// Picks up the calls this page is not reading (reading, which Talk and Translator keep): when the session opens and
-// whenever a marker or an entry changes, which is also when a reply waiting for Talk to be free can go.
+// Picks up the calls this page is not reading (reading, which Talk, Translator and Rememberer keep): when the session
+// opens and whenever a marker or an entry changes, which is also when a reply waiting for Talk to be free can go.
 export class Streams {
   private closed = false;
   private readonly stop: () => void;
@@ -48,7 +49,7 @@ export class Streams {
     if (this.closed) return;
     for (const stream of this.store.list('stream')) {
       if (this.reading.has(stream.id)) continue;
-      if (this.store.get('entry', stream.value.result)) endCall(this.store, stream.id);
+      if (this.saved(stream)) endCall(this.store, stream.id);
       else this.take(stream);
     }
   }
@@ -56,5 +57,11 @@ export class Streams {
   close() {
     this.closed = true;
     this.stop();
+  }
+
+  // A memory summary's result is not an entry: its first record takes the result's id.
+  private saved({ parent, value: { result, for: purpose } }: Stored<'stream'>): boolean {
+    if (purpose.kind !== 'memory') return this.store.get('entry', result) !== null;
+    return this.store.get('memory', memoryId(parent!))?.value.records.some(({ id }) => id === result) ?? false;
   }
 }

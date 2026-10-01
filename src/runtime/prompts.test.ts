@@ -24,7 +24,7 @@ function outline(block: Block) {
 }
 
 describe('importPreset', () => {
-  it('reads the starter preset into its 13 blocks and its toggle, and counts what it does not take', async () => {
+  it('reads the starter preset into its 14 blocks, its memory item as the 장기 기억 slot, and its toggle, and counts what it does not take', async () => {
     const read = await importPreset('starter.risup', bytes);
     if (!read.ok) throw new Error(read.failure.kind);
     const { prompt, unsupported } = read;
@@ -36,6 +36,7 @@ describe('importPreset', () => {
       ['text', null, 'system', null],
       ['lorebook', null],
       ['text', null, 'system', null],
+      ['memory', null, 'system', null],
       ['text', null, 'system', null],
       ['text', '글노덮', 'system', 'globalNote'],
       ['authorNote', null, 'assistant', null],
@@ -47,7 +48,6 @@ describe('importPreset', () => {
     expect(prompt.toggles).toEqual([{ key: 'sims', label: '시뮬레이터 모드', kind: 'check', default: '0' }]);
     expect([prompt.authorNote, prompt.models, prompt.imported]).toEqual(['', {}, 'risu-preset']);
     expect(unsupported).toEqual([
-      { kind: 'memory', count: 1 },
       { kind: 'preset-text', count: 3 },
       { kind: 'settings', count: 1 },
     ]);

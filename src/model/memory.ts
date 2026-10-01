@@ -4,8 +4,10 @@ import type { Receipt } from './chat';
 // chat's messages after them sent raw, is the whole chat; every automatic change is one update of this object, so two
 // devices never both commit the same span.
 
-// on: whether the chat summarizes and sends memory. budget: the tokens the 장기 기억 slot may take. window: the latest
-// messages, always sent raw and never summarized. batch: how many uncovered messages past the window start a summary.
+// on: whether the chat summarizes and sends memory. budget: the tokens the 장기 기억 slot may take. window: the tokens of
+// the latest messages, always sent raw and never summarized, in whole messages: one partly inside is inside, and the last
+// is always raw. batch: the tokens of uncovered messages past the window that start a summary, and about the most one
+// summary reads (at least one whole message). Tokens are counted as the prompt renders the messages.
 export type MemorySettings = { on: boolean; budget: number; window: number; batch: number };
 
 // The message version a record read.

@@ -1,6 +1,7 @@
 import type { Cost } from '../connectors/types';
 import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
 import { without, type ObjectStore, type Write } from './store';
 
@@ -36,42 +37,68 @@ function greetingWrites(chat: string, { ids, texts, selected, translations }: Gr
   return entries.map(([id, value]) => ({ type: 'create', kind: 'entry', id, parent: chat, value }));
 }
 
-// 갈라지기: a new chat holding item's messages up to and including message, as they fold. The spread takes the
-// original's own choices; nothing links the two chats but origin, so deleting either leaves the other whole.
+// 갈라지기: a new chat holding item's messages up to and including message, as they fold, and the memory of them. The
+// spread takes the original's own choices; nothing links the two chats but origin, so deleting either leaves the other
+// whole.
 export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<string>> {
   const upTo = item.messages.findIndex((candidate) => candidate.id === message);
   if (upTo === -1) return { ok: false, error: 'gone' };
   const id = crypto.randomUUID();
   let after = '';
   const writes: Write[] = [];
+  const messages = new Map<string, string>();
+  const versions = new Map<string, string>();
   for (const source of item.messages.slice(0, upTo + 1)) {
     after = crypto.randomUUID();
-    for (const [entryId, entry] of copied(after, source)) {
+    messages.set(source.id, after);
+    const copy = copied(after, source);
+    for (const [old, made] of copy.versions) versions.set(old, made);
+    for (const [entryId, entry] of copy.entries) {
       writes.push({ type: 'create', kind: 'entry', id: entryId, parent: id, value: entry });
     }
   }
+  const memory = store.get('memory', memoryId(item.id))?.value;
+  const kept = memory && branchMemory(memory, messages, versions);
+  if (kept) writes.push({ type: 'create', kind: 'memory', id: memoryId(id), parent: id, value: kept });
   writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
   const created = await store.batch(writes);
   return created.ok ? { ok: true, data: id } : created;
 }
 
+// The records whose every message lies before the split, their sources remapped to the branch's messages and versions
+// (a version the branch does not hold keeps its old id, so the record stays stale there too), with the facts and threads
+// they or the user set. A record across the split stays behind, and its messages stay raw in the branch until its own
+// summarizing reaches them. null: nothing to carry.
+function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, versions: ReadonlyMap<string, string>): Memory | null {
+  const remap = ({ message, version }: Source): Source => ({ message: messages.get(message)!, version: versions.get(version) ?? version });
+  const records = memory.records.filter(({ sources }) => sources.every(({ message }) => messages.has(message))).map((record) => ({ ...record, sources: record.sources.map(remap) }));
+  const carried = new Set(records.map(({ id }) => id));
+  const state = memory.state.filter(({ record }) => record === null || carried.has(record));
+  const threads = memory.threads.filter(({ opened }) => opened === null || carried.has(opened));
+  return records.length || state.length || threads.length ? { records, state, threads } : null;
+}
+
 // The entries that fold back to message under the id given: its first version as the message entry, and that
 // version again in its own place when it is an edit or came later than the message, which a message entry cannot
 // hold; the other versions; and a select when the one shown is not the last, since adding a version selects it.
+// versions: each version's id in the branch, by its id here.
 // A field added to versions or messages must be written here too, or a branch drops it.
-function copied(id: string, { role, at, versions, selected }: Message): [string, Entry][] {
+function copied(id: string, { role, at, versions, selected }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
   const held = ({ text, receipt, seed, translation }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }) });
   const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(first!) }]];
+  const made = new Map(versions.map((version, index) => [version.id, ids[index]!]));
   if (first!.edited || first!.at !== at) {
-    entries.push([crypto.randomUUID(), { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, ...held(first!) }]);
+    const again = crypto.randomUUID();
+    made.set(first!.id, again);
+    entries.push([again, { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, ...held(first!) }]);
   }
   rest.forEach((version, index) => {
     entries.push([ids[index + 1]!, { type: 'version', message: id, replaces: null, edit: version.edited, at: version.at, ...held(version) }]);
   });
   if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
-  return entries;
+  return { entries, versions: made };
 }
 
 // A blank name gives the chat back its first message as its name.

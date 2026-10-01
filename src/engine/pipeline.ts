@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../connectors/types';
-import type { Block, ChatRange, ConversationPrompt, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
+import type { Memory, MemoryRecord } from '../model/memory';
+import type { Block, ChatRange, ConversationPrompt, MemoryPrompt, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -7,7 +8,7 @@ import type { Card } from './import/types';
 import { activate, merge, type Activation, type Fired, type LoreInput, type Operation } from './lorebook/activate';
 import { parseDecorators } from './lorebook/decorators';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
-import type { MemorySent } from './memory';
+import { memoryBefore, memoryBudget, memoryFormat, spanText, standing, type MemoryInput, type MemorySent } from './memory';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
@@ -21,6 +22,8 @@ export type PromptInput = {
   budget: number | null;
   // 이어 쓰기: the chat's messages end with the cut reply, and the continue instruction goes last.
   continuing: boolean;
+  // null while the chat's memory is off.
+  memory: MemoryInput | null;
 };
 
 // Even the last message alone leaves the prompt over its budget.
@@ -113,18 +116,23 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
 }
 
 // What only one sort of prompt fills: a conversation its 작가의 노트, a translation 앞 메시지 (by how many messages it
-// holds) and 원문.
-type Filling = { sort: 'conversation'; note: string } | { sort: 'translate'; recent: (count: number) => string; source: string };
+// holds) and 원문, a memory task 정리할 메시지; 장기 기억 is a conversation's memory as sent, or what a memory task follows.
+type Filling =
+  | { sort: 'conversation'; note: string; memory: string }
+  | { sort: 'translate'; recent: (count: number) => string; source: string }
+  | { sort: 'memory'; memory: string; span: string };
 
 const loreMessage = ({ render }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: render(body, id) });
 const throughSlot = (laid: Laid, entries: Lore[], slot: 'lorebook' | 'postEverything') =>
   entries.map((entry): Sent => ({ message: loreMessage(laid, entry), from: { kind: 'lore', name: laid.named(entry.id), slot } }));
 const filled = (parts: Sent[]) => parts.filter(({ message }) => message.content !== '');
 
-// A prompt's blocks in order, with its chat slots left open and every other block rendered once.
-function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], filling: Filling): Part[] {
+// A prompt's blocks in order, with its chat slots left open and every other block rendered once. memory: whether a
+// 장기 기억 slot reaches the request, its 감싸는 글 keeping {{slot}} once rendered, whether or not memory holds anything.
+function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], filling: Filling): { parts: Part[]; memory: boolean } {
   const { card, render, sides, injections } = laid;
   const parts: Part[] = [];
+  let memory = false;
   const out = (...sent: Sent[]) => parts.push(...filled(sent));
   // What a card or a persona holds is CBS of its own, evaluated inside its 감싸는 글.
   const wrapped = (block: WrappedSlot, content: string) => {
@@ -133,8 +141,10 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
   // Text already rendered, or the user's own, is never evaluated again: only its 감싸는 글 is. {{slot}} survives that
   // evaluation because the slot tag takes an argument (cbs/tags.ts), and one without it stays as written.
   const verbatim = (block: WrappedSlot, content: string) => {
+    const frame = block.wrapper === null ? '{{slot}}' : render(block.wrapper, block.id);
     const text = content.trim();
-    if (text) out({ message: { role: block.role, content: block.wrapper === null ? text : render(block.wrapper, block.id).replace('{{slot}}', () => text) }, from: blockFrom(block) });
+    if (text) out({ message: { role: block.role, content: frame.replace('{{slot}}', () => text) }, from: blockFrom(block) });
+    return frame.includes('{{slot}}');
   };
   for (const block of blocks) {
     if (block.kind === 'text') out({ message: { role: block.role, content: render(injected(ownText(block, card), block.mark === null ? [] : (injections.get(block.mark) ?? [])), block.id) }, from: blockFrom(block) });
@@ -165,26 +175,39 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
         case 'source':
           if (filling.sort === 'translate') verbatim(block, filling.source);
           break;
+        case 'memory':
+          if (filling.sort !== 'translate') memory = verbatim(block, filling.memory);
+          break;
+        case 'span':
+          if (filling.sort === 'memory') verbatim(block, filling.span);
+          break;
       }
     if (block.cache) parts.push({ cache: true });
   }
-  return parts;
+  return { parts, memory };
 }
 
 // A conversation prompt's blocks, in order, as the messages sent. Messages left empty are dropped.
-export function assemble({ scope, seed, countTokens, budget, continuing }: PromptInput): Assembled | TooLong {
+// The messages memory covers leave the chat slots, though their variables are still replayed (renderChat renders them
+// all) and the lorebook still scans them.
+export function assemble({ scope, seed, countTokens, budget, continuing, memory }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const chat = renderChat('prompt', scope);
   const tokens = remembered(countTokens);
   const laid = lay(scope, scope.messages, chat.variables, seed, tokens, null);
   const { activation, named } = laid;
+  const recalled = memory && standing(memory.memory, { shown: memory.shown, roles: scope.messages.map(({ role }) => role), texts: chat.texts }, memoryBudget(memory.budget, budget), tokens);
+  const covered = recalled?.covered ?? 0;
 
-  const template = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt) });
+  const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: recalled?.text ?? '' });
   const out = (...parts: Sent[]) => template.push(...filled(parts));
   if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
 
-  const messages = chat.texts.map((text, index) => ({ role: scope.messages[index]!.role, content: text.trim() })).filter(({ content }) => content !== '');
+  const messages = chat.texts
+    .slice(covered)
+    .map((text, offset) => ({ role: scope.messages[covered + offset]!.role, content: text.trim() }))
+    .filter(({ content }) => content !== '');
   const atDepth = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: { kind: 'depth', name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
   const fill = (kept: ChatMessage[]) => {
     // An entry at @@depth N goes before the message N from the end, wherever that message is.
@@ -202,7 +225,7 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
-      memory: null,
+      memory: recalled && { sent: recalled.sent, covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped: from,
     };
   };
@@ -257,19 +280,49 @@ export function assembleTranslation({ scope, take, prompt, translations, request
       })
       .join('\n\n');
   };
-  const parts = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', recent, source });
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', recent, source });
   return { source, messages: cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message) };
+}
+
+export type MemoryTaskInput = {
+  // The chat's, its messages as a request sends them.
+  scope: ChatScope;
+  prompt: MemoryPrompt;
+  // What the new records follow: the state and open threads, and the record before the span.
+  memory: Memory;
+  before: MemoryRecord | null;
+  // The messages summarized, by place in scope.messages, from included and to not.
+  span: { from: number; to: number };
+  seed: string;
+  countTokens: (text: string) => number;
+};
+
+// A memory prompt's blocks as the messages sent, then the app's answer format. span: the span's texts as the prompt
+// renders them, variables replayed, which the answer is validated against and the records' fingerprints are made of.
+// Like a translation, a memory task holds no chat, so entries placed at a depth are not sent in it.
+export function assembleMemory({ scope, prompt, memory, before, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
+  const { texts, variables } = renderChat('prompt', scope);
+  const laid = lay(scope, scope.messages.slice(0, to), variables, seed, remembered(countTokens), null);
+  const speaker = (role: 'user' | 'assistant') => (role === 'user' ? (scope.persona?.name ?? 'User') : (scope.card?.name ?? 'Assistant'));
+  const span = texts.slice(from, to);
+  const shown = spanText(span.map((text, offset) => ({ speaker: speaker(scope.messages[from + offset]!.role), text: text.trim() })));
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'memory', memory: memoryBefore(memory, before), span: shown });
+  const messages = cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
+  return { messages: [...messages, { role: 'user', content: memoryFormat(to - from) }], span };
 }
 
 type ChatPart = { range: ChatRange; from: From };
 type CachePart = { cache: true };
 
 // Before the chat and at its end, never at the request's end: a block after the chat changes every turn. A @@depth
-// entry sits among the chat's messages, so it opens the chat as a message does.
-export function autoCachePoints(roles: readonly ('chat' | 'depth' | null)[]): number[] {
-  const first = roles.findIndex((role) => role !== null);
+// entry sits among the chat's messages, so it opens the chat as a message does. Before 장기 기억 too when it comes
+// before the chat (design §6.2, Cache): memory changes only at a boundary, so the fixed part before it is never written again.
+export function autoCachePoints(roles: readonly ('chat' | 'depth' | 'memory' | null)[]): number[] {
+  const first = roles.findIndex((role) => role === 'chat' || role === 'depth');
   const last = roles.lastIndexOf('chat');
-  return [...(first > 0 ? [first - 1] : []), ...(last === -1 ? [] : [last])];
+  const memory = roles.indexOf('memory');
+  const anchor = memory > 0 && (first === -1 || memory < first) ? [memory - 1] : [];
+  return [...new Set([...anchor, ...(first > 0 ? [first - 1] : []), ...(last === -1 ? [] : [last])])];
 }
 
 // The cache points: the last message sent up to each block marked 여기까지 캐시, and the app's own.
@@ -283,7 +336,7 @@ function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
     if (!('cache' in part)) sent.push(part);
     else if (sent.length) point(sent.length - 1);
   }
-  const role = ({ from }: Sent) => (from.kind === 'depth' ? 'depth' : from.kind === 'block' && from.slot === 'chat' ? 'chat' : null);
+  const role = ({ from }: Sent) => (from.kind === 'depth' ? 'depth' : from.kind === 'block' && (from.slot === 'chat' || from.slot === 'memory') ? from.slot : null);
   for (const index of autoCachePoints(sent.map(role))) point(index);
   return sent;
 }
