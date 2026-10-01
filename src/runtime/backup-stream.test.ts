@@ -1,0 +1,182 @@
+import { strToU8, zipSync } from 'fflate';
+import { expect, it, vi } from 'vitest';
+import type { Kind, Stored } from '../model/kinds';
+import { sealFile } from '../vault/files';
+import { exportBackup, readBackup, restoreBackup, type BackupOutput } from './backup';
+import type { ObjectStore } from './store';
+
+const persona = (id: string, rev: number): Stored<'persona'> => ({ id, rev, kind: 'persona', parent: null, value: { name: id, description: '이야기 '.repeat(100), picture: null } });
+
+function destination() {
+  const parts: BlobPart[] = [];
+  const output: BackupOutput = {
+    write: vi.fn(async (chunk) => { parts.push(chunk); }),
+    close: vi.fn(async () => {}),
+    abort: vi.fn(async () => { parts.length = 0; }),
+  };
+  return { output, file: () => new Blob(parts) };
+}
+
+function store(objects: Stored<Kind>[] = []) {
+  const held = new Map(objects.map((object) => [object.id, object]));
+  const written: string[] = [];
+  const api: Pick<ObjectStore, 'scan' | 'batch'> = {
+    scan: async (options, visit) => {
+      for (const { value, ...row } of [...held.values()].sort((a, b) => a.rev - b.rev)) await visit(row, options.metadata ? undefined : value);
+      return null;
+    },
+    batch: async (writes, progress = () => {}) => {
+      for (const write of writes) {
+        if (write.type === 'remove') held.delete(write.id);
+        else {
+          const { id, kind, parent, value } = write;
+          held.set(id, { id, kind, parent, value, rev: held.size + 1 } as Stored<Kind>);
+          written.push(write.id);
+        }
+        progress(write);
+      }
+      return { ok: true, data: null };
+    },
+  };
+  return { api, held, written };
+}
+
+async function pictureObjects() {
+  const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+  const { ref } = await sealFile(bytes);
+  const character: Stored<'character'> = {
+    id: 'character', kind: 'character', parent: null, rev: 3,
+    value: {
+      card: {
+        name: '달', nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '',
+        postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false,
+        bias: [], regex: [], triggers: [], lowLevelAccess: false, loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
+      },
+      folder: null, loreFolders: [],
+    },
+  };
+  const avatar: Stored<'avatar'> = { id: 'avatar', kind: 'avatar', parent: character.id, rev: 1, value: { file: ref, type: 'image/png', size: bytes.length, thumb: '' } };
+  return { bytes, ref, objects: [avatar, persona('person', 2), character] };
+}
+
+async function backup(file: Blob) {
+  // A dropped file may only be read in slices, never materialized as a whole buffer.
+  vi.spyOn(file, 'arrayBuffer').mockRejectedValue(new Error('whole file read'));
+  const result = await readBackup(file);
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw new Error(result.error);
+  return result.backup;
+}
+
+it('round-trips streamed objects and files and filters unreachable objects from metadata', async () => {
+  const source = await pictureObjects();
+  const orphan = { ...persona('unused', 4), kind: 'entry', parent: 'gone', value: { type: 'message', role: 'user', at: 0, text: 'gone', receipt: null } } as Stored<'entry'>;
+  const old = store([...source.objects, orphan]);
+  const target = destination();
+  const read = vi.fn(async () => ({ ok: true as const, data: source.bytes }));
+  expect(await exportBackup(old.api, { read }, target.output)).toEqual({ ok: true, data: { left: 0 } });
+  const opened = await backup(target.file());
+  const next = store();
+  const save = vi.fn(async (bytes: Uint8Array<ArrayBuffer>[]) => ({ ok: true as const, data: await Promise.all(bytes.map(async (bytes) => (await sealFile(bytes)).ref)) }));
+  expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: null });
+  expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes]);
+  for (const object of source.objects) expect(next.held.get(object.id)).toMatchObject({ ...object, rev: expect.any(Number) });
+  expect(next.held.size).toBe(source.objects.length);
+  expect(read).toHaveBeenCalledTimes(1);
+});
+
+it('restores a backup built by the previous zipSync format', async () => {
+  const source = await pictureObjects();
+  const file = new Blob([zipSync({
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'objects.jsonl': strToU8(source.objects.map((object) => JSON.stringify(object)).join('\n')),
+    [`files/${source.ref.id}`]: [source.bytes, { level: 0 }],
+  })]);
+  const opened = await backup(file);
+  const next = store();
+  expect(await restoreBackup(next.api, { save: async () => ({ ok: true, data: [source.ref] }) }, opened)).toEqual({ ok: true, data: null });
+  expect(next.held.size).toBe(source.objects.length);
+});
+
+it('serializes each decrypted body before releasing it and backpressures a slow destination', async () => {
+  const count = 1024;
+  let decrypted = 0;
+  let written = 0;
+  let streamed = false;
+  const output: BackupOutput = {
+    write: async () => {
+      const before = decrypted;
+      if (decrypted > 0 && decrypted < count) streamed = true;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(decrypted).toBe(before);
+      written++;
+    },
+    close: async () => {}, abort: async () => {},
+  };
+  const scan: ObjectStore['scan'] = async (options, visit) => {
+    for (let i = 0; i < count; i++) {
+      const { value, ...row } = persona(String(i), i);
+      if (options.metadata) { await visit(row, undefined); continue; }
+      const body = Proxy.revocable(value, {});
+      decrypted++;
+      await visit(row, body.proxy);
+      body.revoke();
+    }
+    return null;
+  };
+  expect(await exportBackup({ scan }, { read: vi.fn() }, output)).toEqual({ ok: true, data: { left: 0 } });
+  expect(decrypted).toBe(count);
+  expect(written).toBeGreaterThan(1);
+  expect(streamed).toBe(true);
+});
+
+it('aborts a stopped export without completing its destination', async () => {
+  const target = destination();
+  const abort = new AbortController();
+  const source = store([persona('first', 1), persona('second', 2)]);
+  const result = await exportBackup(source.api, { read: vi.fn() }, target.output, {
+    signal: abort.signal,
+    progress: (done) => { if (done === 1) abort.abort(); },
+  });
+  expect(result).toEqual({ ok: false, error: 'stopped' });
+  expect(target.output.close).not.toHaveBeenCalled();
+  expect(target.output.abort).toHaveBeenCalledOnce();
+  expect(target.file().size).toBe(0);
+});
+
+it('saves files before their objects, leaves owners until last, and resumes after a stop', async () => {
+  const source = await pictureObjects();
+  const target = destination();
+  await exportBackup(store(source.objects).api, { read: async () => ({ ok: true, data: source.bytes }) }, target.output);
+  const opened = await backup(target.file());
+  const next = store();
+  const abort = new AbortController();
+  let filesSaved = false;
+  const batch = next.api.batch;
+  next.api.batch = async (writes, progress) => {
+    expect(filesSaved).toBe(true);
+    return batch(writes, progress);
+  };
+  const save = async () => { filesSaved = true; return { ok: true as const, data: [source.ref] }; };
+  expect(await restoreBackup(next.api, { save }, opened, {
+    signal: abort.signal, progress: (done) => { if (done === 2) abort.abort(); },
+  })).toEqual({ ok: false, error: 'stopped' });
+  expect(next.written).toEqual(['avatar']);
+  expect(next.held.has('character')).toBe(false);
+  expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: null });
+  expect(next.written).toEqual(['avatar', 'person', 'character']);
+});
+
+it('refuses a file with a body its kind cannot hold', async () => {
+  const object = { ...persona('invalid', 1), value: { name: null, description: '', picture: null } };
+  const file = new Blob([zipSync({
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'objects.jsonl': strToU8(JSON.stringify(object)),
+  })]);
+  expect(await readBackup(file)).toEqual({ ok: false, error: 'not-backup' });
+});
+
+it('distinguishes another backup version from a damaged file', async () => {
+  const file = new Blob([zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })) })]);
+  expect(await readBackup(file)).toEqual({ ok: false, error: 'other-version' });
+});

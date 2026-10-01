@@ -15,7 +15,7 @@ export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: st
   const visit = async (object: ObjectRow): Promise<ApiResult<number>> => {
     const children: ObjectRow[] = [];
     const failed = KIND_NAMES.some((kind) => KINDS[kind].parent === object.kind)
-      ? await store.scan({ parent: object.id, metadata: true }, (row) => children.push(row))
+      ? await store.scan({ parent: object.id, metadata: true }, (row) => { children.push(row); })
       : null;
     if (failed) return failed;
     for (const kind of KIND_NAMES) {
@@ -41,12 +41,13 @@ export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: st
 
 // Stable within each depth: entries retain their input order, while every owner follows its children.
 export function orderOwned<T extends { kind: Kind }>(objects: T[]): T[] {
-  const depth = (kind: Kind): number => {
-    const rule: Rule = KINDS[kind];
-    const owner = rule.parent ?? rule.owner?.kind;
-    return owner ? depth(owner) + 1 : 0;
-  };
-  return [...objects].sort((a, b) => depth(b.kind) - depth(a.kind));
+  return [...objects].sort((a, b) => ownershipDepth(b.kind) - ownershipDepth(a.kind));
+}
+
+export function ownershipDepth(kind: Kind): number {
+  const rule: Rule = KINDS[kind];
+  const owner = rule.parent ?? rule.owner?.kind;
+  return owner ? ownershipDepth(owner) + 1 : 0;
 }
 
 export async function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {

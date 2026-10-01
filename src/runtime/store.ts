@@ -387,7 +387,7 @@ export class ObjectStore {
   }
 
   // An explicit account/parent walk for backup and ownership operations; it never fills the held chat scopes.
-  async scan(options: { parent?: string; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void): Promise<ApiFailure | null> {
+  async scan(options: { parent?: string; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>): Promise<ApiFailure | null> {
     let cursor = 0;
     let more = true;
     while (more) {
@@ -397,7 +397,8 @@ export class ObjectStore {
       for (const { body, omitted, ...row } of result.data.changes) {
         if (body === null) continue;
         const value = omitted ? undefined : await openObject(this.key, this.accountId, row, body!);
-        visit(row, value);
+        // Awaited, so a slow visitor (a backup written to disk) holds the walk instead of queueing opened bodies.
+        await visit(row, value);
       }
       cursor = result.data.cursor;
       more = result.data.more;
@@ -428,12 +429,14 @@ export class ObjectStore {
   // One user action's writes, owned objects before their owners and in the order given within a kind, so an owner
   // appears only once whole and a chat's entries keep their rev order, which model/chat fold reads. An action
   // larger than one request goes as several, the owner in the last; one cut short leaves only unreachable pieces.
-  async batch(writes: Write[], progress: (write: Write) => void = () => {}): Promise<ApiResult<null>> {
+  // unheld: the writes' chats are not held or summarized (a restore writing entries before their chats); their next
+  // lease pulls what was written.
+  async batch(writes: Write[], progress: (write: Write) => void = () => {}, { unheld = false }: { unheld?: boolean } = {}): Promise<ApiResult<null>> {
     const puts = orderOwned(writes.filter((write) => write.type !== 'remove'));
     const ordered = [...puts, ...writes.filter((write) => write.type === 'remove')];
     const chats = new Set<string>();
     const created = new Set<string>();
-    for (const write of ordered) {
+    for (const write of unheld ? [] : ordered) {
       if (write.type === 'remove') {
         const held = this.live.get(write.id);
         if (held && SCOPED.has(held.kind) && held.parent) chats.add(held.parent);
@@ -776,6 +779,8 @@ export class ObjectStore {
       if (scope) scope.head = Math.max(scope.head, object.rev);
     }
     if (this.closing.signal.aborted || this.stale(object.id, object.rev)) return;
+    // A chat's entries and memory stay in memory only while the chat is held.
+    if (SCOPED.has(object.kind) && !(object.parent && this.scopes.has(object.parent))) return;
     const previous = this.live.get(object.id);
     if (previous && (previous.kind !== object.kind || previous.parent !== object.parent)) this.changes.push({ kind: previous.kind, id: previous.id, parent: previous.parent });
     if (!SCOPED.has(object.kind) || (object.parent && this.scopeState(object.parent) === 'loaded')) this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });

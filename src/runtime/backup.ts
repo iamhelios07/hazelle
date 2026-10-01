@@ -1,95 +1,172 @@
-import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped, type Zippable } from 'fflate';
+import { strFromU8, strToU8 } from 'fflate';
 import { isRecord } from '../connectors/values';
 import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { FileRef } from '../vault/files';
+import { BackupZip, indexZip, readEntry, unzipEntry, type BackupOutput, type ZipEntry } from './backup-zip';
 import type { Files } from './files';
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
 import { MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
-import type { ObjectStore, Write } from './store';
+import { SCOPED } from './object-cache';
+import { ownershipDepth } from './removal';
+import type { ObjectRow, ObjectStore, Write } from './store';
 
 // version is the file format's one version key: a file of any other version is refused, never read as this one.
 const FORMAT = { format: 'risu-alpha-backup', version: 2 };
 const MANIFEST = 'manifest.json';
 const OBJECTS = 'objects.jsonl';
 const FILES = 'files/';
-// Files are read, and sent back on a restore, this many at a time.
-const FILE_WINDOW = 8;
+const PAGE_BYTES = 1024 * 1024;
+const PAGE_ROWS = 128;
 
 // What opening an account adds by itself.
 const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
 
-// The stored file an object names, for the kinds that name one.
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 
-// files: each stored file's bytes, by its id.
-export type Backup = { objects: Stored<Kind>[]; files: Map<string, Uint8Array<ArrayBuffer>> };
-export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' };
+type Options = { signal?: AbortSignal; progress?: (done: number, total: number) => void };
+export type Backup = { file: Blob; entries: Map<string, ZipEntry>; objects: ObjectRow[]; files: Map<string, FileRef> };
+export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' };
+export type { BackupOutput } from './backup-zip';
 
 // Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. Pieces
 // nothing reaches are left out: a deleted chat's entries, and the lore and pictures of an
 // import cut short. left counts the objects that did not open, which no backup can hold.
-export async function exportBackup(store: ObjectStore, files: Files): Promise<ApiResult<{ zip: Uint8Array<ArrayBuffer>; left: number }>> {
-  const scanned = new Map<string, Stored<Kind>>();
-  let left = 0;
-  const failure = await store.scan({}, (row, value) => {
-    if (value === undefined || !Object.hasOwn(KINDS, row.kind)) { left++; return; }
-    scanned.set(row.id, { ...row, kind: row.kind as Kind, value } as Stored<Kind>);
-  });
-  if (failure) return failure;
-  const objects = [...scanned.values()].filter(({ kind, parent }) => {
-    const owner = KINDS[kind].parent;
-    return owner === null || (parent !== null && scanned.get(parent)?.kind === owner);
-  });
-  const zip: Zippable = {};
-  const named = [...new Map(objects.flatMap((object) => fileOf(object) ?? []).map((ref) => [ref.id, ref])).values()];
-  for (let start = 0; start < named.length; start += FILE_WINDOW) {
-    const fetched = await Promise.all(named.slice(start, start + FILE_WINDOW).map(async (ref) => {
-      const bytes = await files.read(ref);
-      // Pictures are compressed already.
-      if (bytes.ok) zip[FILES + ref.id] = [bytes.data, { level: 0 }];
-      return bytes;
-    }));
-    const failure = fetched.find((result) => !result.ok);
+export async function exportBackup(
+  store: Pick<ObjectStore, 'scan'>,
+  files: Pick<Files, 'read'>,
+  output: BackupOutput,
+  { signal = new AbortController().signal, progress = () => {} }: Options = {},
+): Promise<ApiResult<{ left: number }>> {
+  let complete = false;
+  try {
+    const metadata = new Map<string, ObjectRow>();
+    const scanned = await store.scan({ metadata: true }, (row) => {
+      signal.throwIfAborted();
+      metadata.set(row.id, row);
+    });
+    if (scanned) return scanned;
+    const reached = new Set<string>();
+    let total = 0;
+    for (const row of metadata.values()) {
+      if (!Object.hasOwn(KINDS, row.kind)) continue;
+      const kind = row.kind as Kind;
+      const owner = KINDS[kind].parent;
+      if (owner !== null && (row.parent === null || metadata.get(row.parent)?.kind !== owner)) continue;
+      reached.add(row.id);
+      total += 1 + Number('file' in KINDS[kind]);
+    }
+    metadata.clear();
+    let done = 0;
+    let left = 0;
+    progress(done, total);
+    const zip = new BackupZip(output, signal);
+    const manifest = await zip.entry(MANIFEST, false);
+    await manifest(strToU8(JSON.stringify(FORMAT)), true);
+    const objects = await zip.entry(OBJECTS, true);
+    const named = new Map<string, { ref: FileRef; uses: number }>();
+    let first = true;
+    const failure = await store.scan({}, async (row, value) => {
+      signal.throwIfAborted();
+      if (value === undefined || !Object.hasOwn(KINDS, row.kind)) {
+        left++;
+        if (reached.has(row.id)) progress(done += 1 + Number('file' in KINDS[row.kind as Kind]), total);
+        return;
+      }
+      if (!reached.has(row.id)) return;
+      const object = { ...row, kind: row.kind as Kind, value } as Stored<Kind>;
+      const ref = fileOf(object);
+      if (ref) {
+        const previous = named.get(ref.id);
+        named.set(ref.id, { ref, uses: (previous?.uses ?? 0) + 1 });
+      }
+      const bytes = strToU8(`${first ? '' : '\n'}${JSON.stringify(object)}`);
+      first = false;
+      await objects(bytes);
+      progress(++done, total);
+    });
     if (failure) return failure;
+    await objects(new Uint8Array(), true);
+    for (const { ref, uses } of named.values()) {
+      signal.throwIfAborted();
+      const bytes = await files.read(ref);
+      if (!bytes.ok) return bytes;
+      // Pictures are compressed already.
+      const push = await zip.entry(FILES + ref.id, false);
+      await push(bytes.data, true);
+      progress(done += uses, total);
+    }
+    await zip.end();
+    signal.throwIfAborted();
+    await output.close();
+    complete = true;
+    return { ok: true, data: { left } };
+  } catch {
+    return { ok: false, error: signal.aborted ? 'stopped' : 'backup-write' };
+  } finally {
+    if (!complete) await output.abort();
   }
-  zip[MANIFEST] = strToU8(JSON.stringify(FORMAT));
-  zip[OBJECTS] = strToU8(objects.map((object) => JSON.stringify(object)).join('\n'));
-  return { ok: true, data: { zip: zipSync(zip), left } };
 }
 
 // The file comes from outside, so its shape and every body are checked before anything is written; one bad
-// line refuses the whole file.
-export function readBackup(bytes: Uint8Array): { ok: true; backup: Backup } | BackupFailure {
-  const damaged = { ok: false, error: 'not-backup' } as const;
-  let entries: Unzipped;
+// line refuses the whole file. The index keeps metadata and references only, never decrypted bodies.
+export async function readBackup(file: Blob, { signal = new AbortController().signal, progress = () => {} }: Options = {}): Promise<{ ok: true; backup: Backup } | BackupFailure> {
   try {
-    entries = unzipSync(bytes);
+    const entries = await indexZip(file, signal);
+    const manifestEntry = entries.get(MANIFEST);
+    if (!manifestEntry || manifestEntry.size > 16384) return { ok: false, error: 'not-backup' };
+    const manifest = parse(strFromU8(await readEntry(file, manifestEntry, signal)));
+    if (!isRecord(manifest) || manifest.format !== FORMAT.format) return { ok: false, error: 'not-backup' };
+    if (manifest.version !== FORMAT.version) return { ok: false, error: 'other-version' };
+    const backup: Backup = { file, entries, objects: [], files: new Map() };
+    const ids = new Set<string>();
+    let rev = -Infinity;
+    for await (const { object } of readObjects(backup, signal)) {
+      // Both exporters walk the server's revision-ordered scan. Keeping that order on disk lets restore
+      // replay each ownership depth without staging the whole JSONL in RAM or browser storage.
+      if (object.rev < rev || ids.has(object.id)) return { ok: false, error: 'not-backup' };
+      rev = object.rev;
+      ids.add(object.id);
+      const { id, kind, parent, rev: revision } = object;
+      backup.objects.push({ id, kind, parent, rev: revision });
+      const ref = fileOf(object);
+      if (ref) {
+        if (!entries.has(FILES + ref.id) || (backup.files.has(ref.id) && backup.files.get(ref.id)!.key !== ref.key)) return { ok: false, error: 'not-backup' };
+        backup.files.set(ref.id, ref);
+      }
+    }
+    progress(0, backup.objects.filter(({ kind }) => kind !== 'summary').length + backup.files.size);
+    return { ok: true, backup };
   } catch {
-    return damaged;
+    return { ok: false, error: signal.aborted ? 'stopped' : 'not-backup' };
   }
-  const text = (name: string) => entries[name] && strFromU8(entries[name]);
-  const manifest = parse(text(MANIFEST));
-  if (!isRecord(manifest) || manifest.format !== FORMAT.format) return damaged;
-  if (manifest.version !== FORMAT.version) return { ok: false, error: 'other-version' };
-  const lines = text(OBJECTS)?.split('\n');
-  if (!lines) return damaged;
-  const objects: Stored<Kind>[] = [];
-  const held = new Map<string, Uint8Array<ArrayBuffer>>();
-  for (const line of lines) {
-    const object = parse(line);
-    if (!isStored(object)) return damaged;
-    objects.push(object);
-    const ref = fileOf(object);
-    if (!ref) continue;
-    // fflate writes every entry into a fresh ArrayBuffer; its types do not say so.
-    const file = entries[FILES + ref.id] as Uint8Array<ArrayBuffer> | undefined;
-    if (!file) return damaged;
-    held.set(ref.id, file);
+}
+
+async function* readObjects(backup: Backup, signal: AbortSignal) {
+  const entry = backup.entries.get(OBJECTS);
+  if (!entry) throw new Error('Missing objects');
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let text = '';
+  const line = (text: string) => {
+    const object = parse(text);
+    if (!isStored(object) || !Number.isFinite(object.rev)) throw new Error('Bad object');
+    return { object, size: text.length * 2 };
+  };
+  for await (const bytes of unzipEntry(backup.file, entry, signal)) {
+    text += decoder.decode(bytes, { stream: true });
+    let at = 0;
+    let end: number;
+    while ((end = text.indexOf('\n', at)) !== -1) {
+      signal.throwIfAborted();
+      yield line(text.slice(at, end));
+      at = end + 1;
+    }
+    text = text.slice(at);
   }
-  return { ok: true, backup: { objects, files: held } };
+  text += decoder.decode();
+  if (text) yield line(text);
 }
 
 // A backup goes only into a new account: one holding nothing but what opening it added, and what this same
@@ -97,38 +174,68 @@ export function readBackup(bytes: Uint8Array): { ok: true; backup: Backup } | Ba
 // The backup's copies replace what opening added, and what it added that the backup lacks goes, so the
 // account ends as the backup was.
 export async function restoreBackup(
-  store: ObjectStore,
-  files: Files,
+  store: Pick<ObjectStore, 'scan' | 'batch'>,
+  files: Pick<Files, 'save'>,
   backup: Backup,
-  progress: (done: number, total: number) => void,
-): Promise<ApiResult<null> | { ok: false; error: 'not-new' | 'not-backup' }> {
-  const ids = new Set(backup.objects.filter(({ kind }) => kind !== 'summary').map(({ id }) => id));
-  const present = new Set<string>();
-  const failure = await store.scan({ metadata: true }, (row) => { if (row.kind !== 'summary') present.add(row.id); });
-  if (failure) return failure;
-  if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
-
-  const todo = backup.objects.filter(({ id, kind }) => kind !== 'summary' && (SEEDED.has(id) || !present.has(id)));
-  const held = [...backup.files.values()];
-  const total = held.length + todo.length;
-  let done = 0;
-  // Each file seals to the id its objects name, and one the server holds already is not sent again.
-  const sealed = new Map<string, string>();
-  for (let start = 0; start < held.length; start += FILE_WINDOW) {
-    const saved = await files.save(held.slice(start, start + FILE_WINDOW));
-    if (!saved.ok) return saved;
-    for (const ref of saved.data) if (ref) sealed.set(ref.id, ref.key);
-    done += saved.data.length;
+  { signal = new AbortController().signal, progress = () => {} }: Options = {},
+): Promise<ApiResult<null>> {
+  try {
+    const ids = new Set(backup.objects.filter(({ kind }) => kind !== 'summary').map(({ id }) => id));
+    const present = new Set<string>();
+    const failure = await store.scan({ metadata: true }, (row) => {
+      signal.throwIfAborted();
+      if (row.kind !== 'summary') present.add(row.id);
+    });
+    if (failure) return failure;
+    if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
+    const todo = new Set([...ids].filter((id) => SEEDED.has(id) || !present.has(id)));
+    const total = backup.files.size + todo.size;
+    let done = 0;
     progress(done, total);
+    // Each file seals to the id its objects name, and one the server holds already is not sent again.
+    // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
+    // would restore a picture that never opens. All files are checked before the first object write.
+    for (const ref of backup.files.values()) {
+      signal.throwIfAborted();
+      const bytes = await readEntry(backup.file, backup.entries.get(FILES + ref.id)!, signal);
+      signal.throwIfAborted();
+      const saved = await files.save([bytes]);
+      if (!saved.ok) return saved;
+      const sealed = saved.data[0];
+      if (!sealed || sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false, error: 'not-backup' };
+      progress(++done, total);
+    }
+    // In their old rev order, so each chat's entries fold as they did; owners follow every owned page.
+    const depths = [...new Set(backup.objects.filter(({ id }) => todo.has(id)).map(({ kind }) => ownershipDepth(kind as Kind)))].sort((a, b) => b - a);
+    for (const depth of depths) {
+      let writes: Write[] = [];
+      let size = 0;
+      const flush = async () => {
+        signal.throwIfAborted();
+        const result = await store.batch(writes, () => progress(++done, total), { unheld: writes.every((write) => write.type !== 'remove' && SCOPED.has(write.kind)) });
+        writes = [];
+        size = 0;
+        return result;
+      };
+      for await (const item of readObjects(backup, signal)) {
+        if (!todo.has(item.object.id) || ownershipDepth(item.object.kind) !== depth) continue;
+        if (writes.length && (writes.length === PAGE_ROWS || size + item.size > PAGE_BYTES)) {
+          const result = await flush();
+          if (!result.ok) return result;
+        }
+        writes.push({ ...item.object, type: 'restore' });
+        size += item.size;
+      }
+      if (writes.length) {
+        const result = await flush();
+        if (!result.ok) return result;
+      }
+    }
+    signal.throwIfAborted();
+    return await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })));
+  } catch {
+    return { ok: false, error: signal.aborted ? 'stopped' : 'not-backup' };
   }
-  // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
-  // would restore a picture that never opens.
-  if (backup.objects.some((object) => { const ref = fileOf(object); return ref && sealed.get(ref.id) !== ref.key; })) return { ok: false, error: 'not-backup' };
-  // In their old rev order, so each chat's entries fold as they did.
-  const writes = todo.sort((a, b) => a.rev - b.rev).map((object): Write => ({ ...object, type: 'restore' }));
-  const restored = await store.batch(writes, () => progress(++done, total));
-  if (!restored.ok) return restored;
-  return store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })));
 }
 
 function parse(text: string | undefined): unknown {
