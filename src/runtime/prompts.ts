@@ -1,4 +1,5 @@
 import { importPreset, type PresetFailure, type PresetUnsupported } from '../engine/import/preset';
+import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
@@ -14,11 +15,16 @@ import { without, type ObjectStore } from './store';
 // Fixed, so two devices adding a default prompt at once meet in a version conflict instead of making two.
 export const STARTER_ID = '00000000-0000-4000-8000-000000000001';
 export const TRANSLATOR_ID = '00000000-0000-4000-8000-000000000004';
+export const MEMORY_PROMPT_ID = '00000000-0000-4000-8000-000000000005';
+
+// Each task's built-in prompt, which a new prompt of its sort starts from while the account's default is gone.
+const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
 
 // Each sort's default prompt: the settings field naming it, and the prompt an account gets once, at a fixed id.
 const DEFAULTS = {
   conversation: { setting: 'prompt', id: STARTER_ID, make: starter },
-  translate: { setting: 'translatePrompt', id: TRANSLATOR_ID, make: () => Promise.resolve(translatorPrompt()) },
+  translate: { setting: 'translatePrompt', id: TRANSLATOR_ID, make: () => Promise.resolve(BUILT_IN.translate()) },
+  memory: { setting: 'memoryPrompt', id: MEMORY_PROMPT_ID, make: () => Promise.resolve(BUILT_IN.memory()) },
 } as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null> } };
 
 export type StoredPrompt<S extends PromptSort> = Stored<'prompt'> & { value: PromptOf<S> };
@@ -40,15 +46,17 @@ export const chatPrompt = (store: ObjectStore, chat: Chat) => choose(store, 'con
 // chosen: the translation prompt a character's 번역 names.
 export const translationPrompt = (store: ObjectStore, chosen: string | undefined) => choose(store, 'translate', chosen);
 
+export const memoryPrompt = (store: ObjectStore) => choose(store, 'memory', undefined);
+
 // A new conversation prompt holds every slot once, the context before the chat and the notes after it, and the two
 // texts a card replaces, empty, so a card's system prompt and post-history instructions have their places. A new
-// translation prompt starts as the account's default translation prompt is, or the built-in one while that is gone.
+// task prompt starts as the account's default of its sort is, or the built-in one while that is gone.
 export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): Promise<ApiResult<Stored<'prompt'>>> {
   const named = () => ({ id: crypto.randomUUID(), name: null });
-  if (sort === 'translate') {
-    const base = translationPrompt(store, undefined);
-    const { blocks, toggles } = base.kind === 'prompt' ? base.prompt.value : translatorPrompt();
-    return store.create('prompt', { task: 'translate', name, blocks: blocks.map((block) => ({ ...block, id: crypto.randomUUID() })), toggles });
+  if (sort !== 'conversation') {
+    const base = choose(store, sort, undefined);
+    const { blocks, toggles } = base.kind === 'prompt' ? base.prompt.value : BUILT_IN[sort]();
+    return store.create('prompt', { task: sort, name, blocks: blocks.map((block) => ({ ...block, id: crypto.randomUUID() })), toggles });
   }
   const blocks: Block[] = [
     { ...named(), kind: 'text', role: 'system', text: '', mark: 'main' },

@@ -7,6 +7,7 @@ import type { Card } from './import/types';
 import { activate, merge, type Activation, type Fired, type LoreInput, type Operation } from './lorebook/activate';
 import { parseDecorators } from './lorebook/decorators';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
+import type { MemorySent } from './memory';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
@@ -33,8 +34,9 @@ export type From =
   | { kind: 'continue' };
 
 // parts[i] says where messages[i] came from and what it counts in o200k_base, an estimate for any other
-// tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null };
+// tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card. memory: null while the
+// chat's memory is off. dropped: the chat's messages the budget left out, oldest first.
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
 
 // The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
 // Claude models refuse with 400.
@@ -200,6 +202,8 @@ export function assemble({ scope, seed, countTokens, budget, continuing }: Promp
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
+      memory: null,
+      dropped: from,
     };
   };
 

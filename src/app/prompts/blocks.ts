@@ -1,4 +1,4 @@
-import { ArrowDownToLine, BookOpen, IdCard, Languages, MessageSquare, MessagesSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, MessageSquare, MessagesSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
 import { autoCachePoints } from '../../engine/pipeline';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
@@ -25,6 +25,14 @@ export const SLOT = {
     kind: 'chat',
     icon: MessagesSquare,
   },
+  memory: {
+    name: SLOT_NAMES.memory,
+    hint: '이 채팅이 기억하는 지난 이야기',
+    line: '이 채팅의 장기 기억이 여기에 들어가요. 기억한 메시지는 채팅 자리에서 빠지고, 기억이 아직 없으면 아무것도 보내지 않아요.',
+    kind: 'note',
+    icon: History,
+  },
+  span: { name: SLOT_NAMES.span, hint: '기억으로 정리할 메시지', line: '이번에 기억으로 정리할 메시지가 여기에 들어가요.', kind: 'chat', icon: ScrollText },
   source: { name: SLOT_NAMES.source, hint: '번역할 글', line: '번역할 글이 여기에 들어가요. 답장은 화면에 보이는 글, 보낼 말은 내가 쓴 글이에요.', kind: 'chat', icon: Languages },
 } satisfies Record<SlotKind, { name: string; hint: string; line: string; kind: OutlineKind; icon: LucideIcon }>;
 

@@ -7,7 +7,7 @@ import type { FileRef } from '../vault/files';
 import type { Files } from './files';
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
-import { STARTER_ID, TRANSLATOR_ID } from './prompts';
+import { MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import type { ObjectStore, Write } from './store';
 
 // version is the file format's one version key: a file of any other version is refused, never read as this one.
@@ -19,7 +19,7 @@ const FILES = 'files/';
 const FILE_WINDOW = 8;
 
 // What opening an account adds by itself.
-const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
+const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
 
 const ALL = Object.keys(KINDS) as Kind[];
 // The stored file an object names, for the kinds that name one.

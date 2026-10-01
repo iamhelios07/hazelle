@@ -20,7 +20,10 @@ export function newBlock(kind: NewBlock): Block {
     case 'description':
     case 'persona':
     case 'authorNote':
+    case 'memory':
       return { ...named, kind: 'slot', slot: kind.slot, role: 'system', wrapper: null };
+    case 'span':
+      return { ...named, kind: 'slot', slot: 'span', role: 'user', wrapper: null };
     case 'recent':
       return { ...named, kind: 'slot', slot: 'recent', role: 'system', wrapper: null, count: RECENT_COUNT };
     case 'source':

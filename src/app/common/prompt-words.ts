@@ -10,6 +10,8 @@ export const SLOT_NAMES: Record<SlotKind, string> = {
   chat: '채팅',
   recent: '앞 메시지',
   source: '원문',
+  memory: '장기 기억',
+  span: '정리할 메시지',
 };
 
 export const MESSAGE_ROLES: Record<Role, string> = { system: '시스템', user: '사용자', assistant: 'AI' };

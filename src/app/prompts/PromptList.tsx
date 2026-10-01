@@ -14,7 +14,7 @@ import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, promptName, usePromptUse, type PromptUse } from './usePromptUse';
 
 const RECENT = 4;
-const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트' } satisfies Record<PromptSort, string>;
+const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트' } satisfies Record<PromptSort, string>;
 
 const useWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '쓰는 채팅 없음');
 const used = (use: PromptUse) => (use.at === null ? useWords(use) : `${useWords(use)} · ${ago(use.at)} 씀`);

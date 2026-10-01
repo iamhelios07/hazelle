@@ -28,12 +28,12 @@ describe('session', () => {
       expect(log.map((call) => call.sent.url)).toEqual([EXCHANGE, MODELS, EXCHANGE]);
     }));
 
-  it('opens with the starter prompt and the translation prompt as the defaults', () =>
+  it('opens with the starter, translation and memory prompts as the defaults', () =>
     server.withSession(async (session) => {
       const prompts = session.read.kind('prompt').snapshot();
       const settings = session.read.settings.snapshot();
       const named = (id: string | undefined) => prompts.find((prompt) => prompt.id === id)?.value.name;
-      expect([prompts.length, named(settings.prompt), named(settings.translatePrompt)]).toEqual([2, '🏓 핑퐁 간소화', '기본 번역']);
+      expect([prompts.length, named(settings.prompt), named(settings.translatePrompt), named(settings.memoryPrompt)]).toEqual([3, '🏓 핑퐁 간소화', '기본 번역', '기본 기억']);
     }));
 
   it('gives the same summaries until the store changes', () =>

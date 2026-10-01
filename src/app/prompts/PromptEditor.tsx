@@ -47,6 +47,11 @@ const SORT_WORDS = {
     makeDefault: '번역 프롬프트를 따로 고르지 않은 채팅이 이 프롬프트로 번역해요',
     refused: ['기본 번역 프롬프트는 지울 수 없어요.', '다른 번역 프롬프트를 기본으로 정한 뒤 지워 주세요.'],
   },
+  memory: {
+    default: '기본 기억 프롬프트',
+    makeDefault: '장기 기억을 이 프롬프트로 정리해요',
+    refused: ['기본 기억 프롬프트는 지울 수 없어요.', '다른 기억 프롬프트를 기본으로 정한 뒤 지워 주세요.'],
+  },
 } satisfies Record<PromptSort, { default: string; makeDefault: string; refused: [string, string] }>;
 const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 누르면 순서를 바꿔요. Enter로 글을 고치고, Delete로 빼요. 맨 위가 맨 처음 보내는 블록, 맨 아래가 답장 직전이에요.';
 

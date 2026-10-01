@@ -1,6 +1,7 @@
 import type { Connection } from '../connectors/types';
 import type { Chat, Entry } from './chat';
 import type { Asset, Avatar, Character, Folder, Lore } from './library';
+import type { Memory } from './memory';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
 import type { Prompt } from './prompt';
@@ -17,6 +18,7 @@ export type Values = {
   chat: Chat;
   entry: Entry;
   stream: Stream;
+  memory: Memory;
   connection: Connection;
   settings: Settings;
   prompt: Prompt;
@@ -46,6 +48,7 @@ export const KINDS = {
   chat: { parent: null, owner: { field: 'character', kind: 'character' } },
   entry: { parent: 'chat', appendOnly: true },
   stream: { parent: 'chat' },
+  memory: { parent: 'chat' },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
   prompt: { parent: null },
@@ -80,7 +83,7 @@ const ENTRIES = {
 
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(shape({ key: str, label: str, kind: str })) });
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
-const translate = shape({ task: (value) => value === 'translate', model: (value) => value === undefined || isRecord(value) });
+const task = shape({ task: (value) => value === 'translate' || value === 'memory', model: (value) => value === undefined || isRecord(value) });
 
 // Each kind's required fields, and one level into what screens index.
 const SHAPES = {
@@ -117,9 +120,10 @@ const SHAPES = {
   chat: shape({ title: orNull(str), character: orNull(str), models: isRecord }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   stream: shape({ key: isRecord, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) }),
+  memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
   connection: shape({ type: str, label: str, baseUrl: orNull(str), protocol: orNull(str), secret: str, starred: listOf(shape({ id: str, name: str })) }),
   settings: shape({ models: isRecord }),
-  prompt: (value) => prompt(value) && (conversation(value) || translate(value)),
+  prompt: (value) => prompt(value) && (conversation(value) || task(value)),
   persona: shape({ name: str, description: str, picture: orNull(str) }),
   profile: shape({ name: str, settings: isRecord }),
 } satisfies Record<Kind, Check>;

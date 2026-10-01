@@ -6,6 +6,7 @@ import { purgeExpired } from './characters';
 import { Costs } from './cost';
 import { Credentials } from './credential';
 import { Files } from './files';
+import { Rememberer } from './memory';
 import { addFirstPersona } from './personas';
 import { addFirstProfile } from './profiles';
 import { addDefaults } from './prompts';
@@ -24,6 +25,7 @@ export type Session = {
   talk: Talk;
   costs: Costs;
   translator: Translator;
+  memory: Rememberer;
   streams: Streams;
   credentials: Credentials;
   catalogs: Catalogs;
@@ -51,6 +53,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
   const read = new ReadModels(store);
+  const memory = new Rememberer();
   const talk = new Talk(store, credentials, costs, (chat) => translateLatest({ store, read, talk, translator }, chat), reading);
   const closing = new AbortController();
   const streams: Streams = new Streams(store, reading, (stream) => {
@@ -70,10 +73,11 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     streams.close();
     talk.close();
     translator.close();
+    memory.close();
     costs.close();
     catalogs.close();
     credentials.close();
     assets.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, translator, streams, credentials, catalogs, read, close } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, streams, credentials, catalogs, read, close } };
 }

@@ -3,15 +3,15 @@ import type { Assignment, ModelRef } from '../connectors/assignment';
 export type Role = 'system' | 'user' | 'assistant';
 
 // A conversation prompt, or a task prompt (design §4.2) named by its task.
-export type PromptSort = 'conversation' | 'translate';
+export type PromptSort = 'conversation' | 'translate' | 'memory';
 
 // The slot kinds: a feature that brings something new to the prompt adds a row.
 // wrapped: the slot takes a role and a 감싸는 글 with {{slot}} where its content goes. repeats: it may
 // be placed more than once. sorts: the prompts that may hold it.
 export const SLOTS = {
-  description: { wrapped: true, repeats: false, sorts: ['conversation', 'translate'] },
-  persona: { wrapped: true, repeats: false, sorts: ['conversation', 'translate'] },
-  lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate'] },
+  description: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory'] },
+  persona: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory'] },
+  lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory'] },
   authorNote: { wrapped: true, repeats: false, sorts: ['conversation'] },
   postEverything: { wrapped: false, repeats: false, sorts: ['conversation'] },
   chat: { wrapped: false, repeats: true, sorts: ['conversation'] },
@@ -19,6 +19,10 @@ export const SLOTS = {
   recent: { wrapped: true, repeats: false, sorts: ['translate'] },
   // 원문: the text being translated.
   source: { wrapped: true, repeats: false, sorts: ['translate'] },
+  // 장기 기억: in a conversation, the chat's memory as sent; in a memory task, the memory the new records follow.
+  memory: { wrapped: true, repeats: false, sorts: ['conversation', 'memory'] },
+  // 정리할 메시지: the messages a memory task summarizes.
+  span: { wrapped: true, repeats: false, sorts: ['memory'] },
 } as const satisfies Record<string, { wrapped: boolean; repeats: boolean; sorts: readonly PromptSort[] }>;
 export type SlotKind = keyof typeof SLOTS;
 type Wrapped = { [K in SlotKind]: (typeof SLOTS)[K]['wrapped'] extends true ? K : never }[SlotKind];
@@ -74,7 +78,17 @@ export type TranslatePrompt = {
   origin?: { id: string; name: string };
 };
 
-export type Prompt = ConversationPrompt | TranslatePrompt;
-export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt }[S];
+// model: the one place the memory's model is chosen; without one, the chat's 보조 모델, then its 대화 모델.
+export type MemoryPrompt = {
+  task: 'memory';
+  name: string;
+  model?: ModelRef;
+  blocks: Block[];
+  toggles: Toggle[];
+  origin?: { id: string; name: string };
+};
+
+export type Prompt = ConversationPrompt | TranslatePrompt | MemoryPrompt;
+export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt }[S];
 
 export const sortOf = (prompt: Prompt): PromptSort => prompt.task ?? 'conversation';
