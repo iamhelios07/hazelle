@@ -106,17 +106,19 @@ export type RisuChat = {
   variables: [string, string][];
   messages: RisuMessage[];
 };
-export type MoveUnsupportedKind =
-  | 'group-chat'
-  | 'chat-lore'
-  | 'memory'
-  | 'inlay'
-  | 'module'
-  | 'chat-folder'
-  | 'bookmark'
-  | 'hidden-message'
-  | 'cold-missing'
-  | 'missing-picture';
+export const MOVE_UNSUPPORTED_KINDS = [
+  'group-chat',
+  'chat-lore',
+  'memory',
+  'inlay',
+  'module',
+  'chat-folder',
+  'bookmark',
+  'hidden-message',
+  'cold-missing',
+  'missing-picture',
+] as const;
+export type MoveUnsupportedKind = (typeof MOVE_UNSUPPORTED_KINDS)[number];
 export type MoveUnsupported = { kind: MoveUnsupportedKind; count: number };
 
 // The card as the card importer reads it, with its pictures read from the backup when it is brought.
