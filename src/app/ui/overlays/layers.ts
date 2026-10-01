@@ -45,14 +45,29 @@ export function useLayer(active: boolean, layer: Layer) {
   }, [active]);
 }
 
-// Shifts a popover sideways, through --nudge, back inside the screen's sides less the --menu-edge gutter.
+// The sides a popover must stay within: the nearest box that clips it, such as a list column that scrolls, inside the
+// screen. The screen alone is not enough: a menu inside a narrow column is cut off at the column's side.
+function room(element: HTMLElement) {
+  let left = 0;
+  let right = document.documentElement.clientWidth;
+  for (let at = element.parentElement; at; at = at.parentElement) {
+    if (getComputedStyle(at).overflowX === 'visible') continue;
+    const box = at.getBoundingClientRect();
+    left = Math.max(left, box.left);
+    right = Math.min(right, box.right);
+    break;
+  }
+  return { left, right };
+}
+
+// Shifts a popover sideways, through --nudge, back inside its room's sides less the --menu-edge gutter.
 export function keepOnScreen(element: HTMLElement) {
   // Measured unshifted: --nudge inherits, so a popover inside another would otherwise start from the outer one's shift.
   element.style.setProperty('--nudge', '0px');
   const box = element.getBoundingClientRect();
   const edge = parseFloat(getComputedStyle(element).getPropertyValue('--menu-edge'));
-  const room = document.documentElement.clientWidth;
-  const shift = box.left < edge ? edge - box.left : box.right > room - edge ? room - edge - box.right : 0;
+  const { left, right } = room(element);
+  const shift = box.left < left + edge ? left + edge - box.left : box.right > right - edge ? right - edge - box.right : 0;
   element.style.setProperty('--nudge', `${shift}px`);
 }
 
