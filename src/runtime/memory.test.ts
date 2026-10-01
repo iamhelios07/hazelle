@@ -4,6 +4,7 @@ import { fingerprint } from '../engine/memory';
 import { memoryId } from '../model/memory';
 import { appendUserMessage, editMessage, startChat } from './chat-log';
 import { chatMemory, setDefaultMemory } from './memory';
+import { addPrompt, editPrompt } from './prompts';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
 
@@ -72,5 +73,23 @@ describe('Rememberer', () => {
       expect(memory.state).toEqual([{ about: 'Luna', field: 'mood', value: 'calm', record: 'r0' }]);
       expect(memory.threads).toEqual([]);
       expect(memory.records[1]).toMatchObject({ state: [{ about: 'Luna', field: 'place', value: null }], closes: ['Luna waits for jin.'] });
+    }));
+  it("summarizes nothing while the chat's prompt holds no 장기 기억 slot, so no message leaves the request for a memory never sent", () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      await setDefaultMemory(session.store, { window: 1, batch: 1 });
+      const made = await addPrompt(session.store, 'no memory', 'conversation');
+      if (!made.ok) throw new Error('not saved');
+      await editPrompt(session.store, made.data.id, { blocks: made.data.value.blocks.filter((block) => !(block.kind === 'slot' && block.slot === 'memory')) });
+      const chat = crypto.randomUUID();
+      await startChat(session.store, chat, { title: null, character: null, models: {}, prompt: made.data.id }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'We meet at the pier.' });
+      const log = stubRelay(inTurn([saying('Luna waves.')]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      // A call the saved reply's check or this one planned would be in the log well within a second.
+      session.memory.check(chat);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(log).toHaveLength(1);
+      expect(chatMemory(session.store, chat).records).toEqual([]);
     }));
 });

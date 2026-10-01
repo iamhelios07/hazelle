@@ -402,7 +402,9 @@ export class Rememberer {
     this.asked.delete(chat);
     const stale = memory.records.filter((record) => !record.edited && !record.pinned && !record.forgotten && staleness(record, sent.read, places) === 'changed' && !this.reread.has(readKey(shownFor(record, sent.read, places))));
     const again = asked ?? stale[0];
-    const span = again ? null : this.full.has(chat) ? this.span(chat, sent.read, coveredBy(memory, places), setup, countTokens) : null;
+    // Without a 장기 기억 slot in the request, a new record would only take its messages out of it.
+    const reaches = () => wouldSend(this.session, chat, { kind: 'answer' }, countTokens)?.prompt.memory?.slot === true;
+    const span = !again && this.full.has(chat) && reaches() ? this.span(chat, sent.read, coveredBy(memory, places), setup, countTokens) : null;
     if (!again && !span) return null;
     const indices = again ? again.sources.flatMap(({ message }) => places.get(message) ?? []) : [];
     if (again && !indices.length) return null;
