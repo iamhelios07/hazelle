@@ -1,6 +1,6 @@
 import type { FileRef } from '../vault/files';
 import type { Card, LoreEntry } from '../engine/import/types';
-import type { TranslateSwitches } from './chat';
+import type { Translation, TranslateSwitches } from './chat';
 import type { Stored } from './kinds';
 import type { ToggleValues } from './prompt';
 
@@ -28,7 +28,11 @@ export type Character = {
   // 옆에 두기: 상태 rests in the panel beside the story whenever a chat of it opens with room for one, instead of
   // peeking from the story's edge.
   keepStatus?: true;
+  // A greeting's translation, made before any chat of it was saved, which every new chat opens with. Keyed by the
+  // greeting as the card holds it and the language, so an edited greeting or a changed language translates anew.
+  greetingTranslations?: GreetingTranslation[];
 };
+export type GreetingTranslation = { greeting: string; language: string; translation: Translation };
 export type LoreFolder = { id: string; name: string };
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -39,6 +43,9 @@ export const KEEP_DELETED = 7 * DAY;
 export const KEEP_DAYS = KEEP_DELETED / DAY;
 
 // Whole days a character in 지운 캐릭터 has left. At 0 or less it is due, and purgeExpired removes it.
+export const greetingTranslation = ({ greetingTranslations }: Character, greeting: string, language: string) =>
+  greetingTranslations?.find((each) => each.greeting === greeting && each.language === language)?.translation;
+
 export const daysLeft = (character: Character, now: number) => Math.ceil((character.deleted! + KEEP_DELETED - now) / DAY);
 
 // The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name, nickname or alias.

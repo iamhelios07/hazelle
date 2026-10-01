@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown, type Message } from '../model/chat';
+import { greetingTranslation } from '../model/library';
 import { appendUserMessage, startChat } from './chat-log';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import { setTranslate } from './characters';
@@ -60,30 +61,31 @@ describe('Translator', () => {
       await vi.waitFor(() => expect(session.translator.snapshot().failed.has(reply.id)).toBe(true));
       translateLatest(session, chat);
       expect(log).toHaveLength(2);
-      session.translator.translate(chat, reply.id, translationInput(session, chat, opened, messages(), { kind: 'message', index: 0 }));
+      session.translator.translate(chat, reply, translationInput(session, chat, opened, messages(), { kind: 'message', index: 0 }));
       await vi.waitFor(() => expect(shown(messages()[0]!).translation?.text).toBe('안녕'));
       expect(log).toHaveLength(3);
     }));
 
-  it('holds an unsaved greeting’s automatic translation until startChat saves it', () =>
+  it('keeps an unsaved greeting’s automatic translation on its character, which a new chat opens with', () =>
     server.withSession(async (session) => {
       await answerable(session);
-      await setTranslate(session.store, null, { replies: true });
+      const card = { name: 'Luna', nickname: null, description: '', personality: '', scenario: '', greetings: ['Hello'], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } };
+      const created = await session.store.create('character', { card, folder: null, loreFolders: [] });
+      const character = created.ok ? created.data.id : '';
+      await setTranslate(session.store, character, { replies: true });
       const chat = crypto.randomUUID();
-      const opened = { title: null, character: null, models: {} };
+      const opened = { title: null, character, models: {} };
       const version = crypto.randomUUID();
       const messages: Message[] = [{ id: version, role: 'assistant', at: 0, selected: 0, versions: [{ id: version, seed: version, text: 'Hello', receipt: null, edited: false, at: 0 }] }];
       const log = stubRelay(() => saying('안녕'));
       // The chat screen shows it, as it does before the first send.
       const leave = session.read.screen(chat, session.talk, { chat: opened, messages }).subscribe(() => {});
       translateLatest(session, chat);
-      await vi.waitFor(() => expect(session.translator.snapshot().held.get(version)?.text).toBe('안녕'));
-      expect(session.store.children('entry', chat)).toEqual([]);
-      translateLatest(session, chat);
-      expect(log).toHaveLength(1);
+      const kept = () => greetingTranslation(session.store.get('character', character)!.value, 'Hello', 'Korean');
+      await vi.waitFor(() => expect(kept()?.text).toBe('안녕'));
+      expect(session.store.get('chat', chat)).toBeNull();
       leave();
-      await startChat(session.store, chat, opened, { ids: [version], texts: ['Hello'], selected: 0, translations: session.translator.snapshot().held });
-      expect(shown(fold(session.store.children('entry', chat))[0]!).translation?.text).toBe('안녕');
+      expect(log).toHaveLength(1);
     }));
 
   it('shows a reply’s translation as it comes, then saves it with the call’s receipt', () =>
@@ -102,7 +104,7 @@ describe('Translator', () => {
       const unsubscribe = session.translator.subscribe(() => {
         if (!session.translator.snapshot().live.has(reply.id)) savedWhenLiveClears.push(shown(messages()[1]!).translation !== undefined);
       });
-      session.translator.translate(chat, reply.id, translationInput(session, chat, opened, messages(), { kind: 'message', index: 1 }));
+      session.translator.translate(chat, reply, translationInput(session, chat, opened, messages(), { kind: 'message', index: 1 }));
       expect(session.translator.snapshot().live.get(reply.id)).toBe('');
       await vi.waitFor(() => expect(shown(messages()[1]!).translation).toMatchObject({ text: '안녕, 여행자.', receipt: { state: 'done' } }));
       expect(session.translator.snapshot().live.size).toBe(0);
@@ -121,10 +123,10 @@ describe('Translator', () => {
       const thrown = new Promise((resolve) => process.once('unhandledRejection', resolve));
       const input = translationInput(session, chat, opened, [], { kind: 'input', text: 'Hi' });
 
-      session.translator.translate(chat, 'v', input);
+      session.translator.translate(chat, { id: 'v', seed: 'v', text: 'Hi', receipt: null, edited: false, at: 0 }, input);
       expect(await thrown).toBeInstanceOf(TypeError);
       expect(session.translator.snapshot().live.has('v')).toBe(false);
-      session.translator.translate(chat, 'v', input);
+      session.translator.translate(chat, { id: 'v', seed: 'v', text: 'Hi', receipt: null, edited: false, at: 0 }, input);
       expect(session.translator.snapshot().live.get('v')).toBe('');
     }));
 

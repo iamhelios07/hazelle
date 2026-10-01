@@ -25,8 +25,7 @@ type Props = {
   hosted: Box[];
   // The boxes the bot drew in this message, by the script that draws each, and whether it is the status window's.
   offered: { script: number; name: string; marked: boolean }[];
-  // The chat's translations being made, failed, or held for a chat not saved yet, and whether this version shows the
-  // other way round from its default.
+  // The chat's translations being made or failed, and whether this version shows the other way round from its default.
   translating: Translating;
   // 답장 번역 will translate this version, being written or just written.
   awaited: boolean;
@@ -66,7 +65,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const mine = message.role === 'user';
   const live = message.live === version.id;
   // A version with a translation shows it, and a translation being made shows as it comes.
-  const translation = version.translation ?? translating.held.get(version.id) ?? null;
+  const translation = version.translation ?? null;
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
   const text = flipped ? original : translatingText || (translation?.text ?? original);
@@ -279,7 +278,7 @@ function sameRow(previous: Props, next: Props): boolean {
   if (aHosted.length !== bHosted.length || aHosted.some((box, index) => box.script !== bHosted[index]!.script || box.html !== bHosted[index]!.html || box.at !== bHosted[index]!.at)) return false;
   if (aOffered.length !== bOffered.length || aOffered.some((box, index) => box.script !== bOffered[index]!.script || box.name !== bOffered[index]!.name || box.marked !== bOffered[index]!.marked)) return false;
   const id = shown(next.message).id;
-  return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.held.get(id) === bTranslating.held.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
+  return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
 }
 
 // A shown text as the story draws it, in a message or in 상태.

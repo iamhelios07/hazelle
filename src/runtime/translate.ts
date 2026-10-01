@@ -1,11 +1,11 @@
 import { assembleTranslation } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
-import type { Chat, Receipt, Translation } from '../model/chat';
+import type { Chat, Receipt, Translation, Version } from '../model/chat';
 import type { TranslatePrompt } from '../model/prompt';
 import type { ApiFailure } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
-import { translateSwitches } from './characters';
+import { setGreetingTranslation, translateSwitches } from './characters';
 import { appendTranslation } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
@@ -41,7 +41,7 @@ export async function translate(
   { chat, scope, take, translations, request }: TranslateInput,
   signal: AbortSignal,
   onText: (text: string) => void,
-): Promise<{ ok: true; translation: Translation } | { ok: false; failure: TranslateFailure }> {
+): Promise<{ ok: true; translation: Translation; language: string } | { ok: false; failure: TranslateFailure }> {
   const switches = translateSwitches(store, chat.character);
   const translator = translatorOf(store, chat);
   if (!translator.ok) return translator;
@@ -68,7 +68,7 @@ export async function translate(
   if (answer.cut === 'stopped') return { ok: false, failure: { kind: 'stopped' } };
   const receipt = receiptOf(route, answer);
   if (answer.state === 'failed' || !text.trim()) return { ok: false, failure: { kind: 'failed', receipt } };
-  return { ok: true, translation: { text: text.trim(), receipt, at: Date.now() } };
+  return { ok: true, translation: { text: text.trim(), receipt, at: Date.now() }, language };
 }
 
 // The prompt a chat's translations go through and the model that makes them.
@@ -82,15 +82,14 @@ export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt
 export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }> | { kind: 'unsaved'; failure: ApiFailure };
 
 // live: the text so far of each translation being made, by the version's id. failed: why the last try at a version
-// did not translate it, kept for the session so a chat does not try it again on its own. held: translations of a
-// new chat's greetings, which startChat saves with them.
-export type Translating = { live: ReadonlyMap<string, string>; failed: ReadonlyMap<string, TranslatorFailure>; held: ReadonlyMap<string, Translation> };
+// did not translate it, kept for the session so a chat does not try it again on its own.
+export type Translating = { live: ReadonlyMap<string, string>; failed: ReadonlyMap<string, TranslatorFailure> };
 
 // The translations of the chats' messages. Unlike replies, several run at once, one per version, and each goes
 // on when its chat is left.
 export class Translator {
   private closed = false;
-  private state: Translating = { live: new Map(), failed: new Map(), held: new Map() };
+  private state: Translating = { live: new Map(), failed: new Map() };
   private readonly aborts = new Map<string, AbortController>();
   private readonly listeners = new Set<() => void>();
 
@@ -107,20 +106,20 @@ export class Translator {
 
   readonly snapshot = () => this.state;
 
-  private change(version: string, change: { live?: string | null; failed?: TranslatorFailure | null; held?: Translation }) {
-    const next = { live: new Map(this.state.live), failed: new Map(this.state.failed), held: new Map(this.state.held) };
+  private change(version: string, change: { live?: string | null; failed?: TranslatorFailure | null }) {
+    const next = { live: new Map(this.state.live), failed: new Map(this.state.failed) };
     if (change.live === null) next.live.delete(version);
     else if (change.live !== undefined) next.live.set(version, change.live);
     if (change.failed === null) next.failed.delete(version);
     else if (change.failed) next.failed.set(version, change.failed);
-    if (change.held) next.held.set(version, change.held);
     this.state = next;
     for (const listener of this.listeners) listener();
   }
 
-  // chat: its id, saved or not yet; a translation for a chat not saved when it ends is held.
+  // chat: its id, saved or not yet; a chat not saved when the translation ends shows only its character's greetings,
+  // so the translation is that greeting's, kept on the character.
   // closed: a reply stopped by a lock is still saved, and its follow-up must not start a call.
-  translate(chat: string, version: string, input: TranslateInput) {
+  translate(chat: string, { id: version, text: original }: Version, input: TranslateInput) {
     if (this.closed || this.aborts.has(version)) return;
     const abort = new AbortController();
     this.aborts.set(version, abort);
@@ -130,11 +129,13 @@ export class Translator {
       .then(
         async (made) => {
           if (!made.ok) return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
-          if (!this.store.get('chat', chat)) return this.change(version, { live: null, held: made.translation });
-          const saved = await appendTranslation(this.store, chat, version, made.translation);
+          const greeting = !this.store.get('chat', chat);
+          const saved = greeting
+            ? await setGreetingTranslation(this.store, input.chat.character!, original, made.language, made.translation)
+            : await appendTranslation(this.store, chat, version, made.translation);
           // The live text goes once the store holds the translation, so the original never shows in between.
           this.change(version, { live: null, failed: saved.ok ? null : { kind: 'unsaved', failure: saved } });
-          if (saved.ok) this.costs.settle(chat, made.translation.receipt!);
+          if (saved.ok && !greeting) this.costs.settle(chat, made.translation.receipt!);
         },
         (error: unknown) => {
           this.change(version, { live: null });

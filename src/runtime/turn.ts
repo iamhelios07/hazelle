@@ -168,10 +168,10 @@ export function translateLatest(session: Pick<Session, 'store' | 'read' | 'talk'
   const last = messages.at(-1);
   if (!last || last.role !== 'assistant' || last.live !== null) return;
   const version = shown(last);
-  const { live, held, failed } = session.translator.snapshot();
-  if (version.receipt?.state === 'failed' || version.translation || live.has(version.id) || held.has(version.id) || failed.has(version.id)) return;
+  const { live, failed } = session.translator.snapshot();
+  if (version.receipt?.state === 'failed' || version.translation || live.has(version.id) || failed.has(version.id)) return;
   if (!view.display.texts.at(-1)!.trim()) return;
-  session.translator.translate(id, version.id, translationInput(session, id, chat, messages, { kind: 'message', index: messages.length - 1 }));
+  session.translator.translate(id, version, translationInput(session, id, chat, messages, { kind: 'message', index: messages.length - 1 }));
 }
 
 // A scope a turn can send from, or why not.

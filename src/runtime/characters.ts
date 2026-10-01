@@ -1,6 +1,6 @@
 import { imageType } from '../engine/import/card';
 import type { Card, Imported } from '../engine/import/types';
-import type { TranslateSwitches } from '../model/chat';
+import type { Translation, TranslateSwitches } from '../model/chat';
 import type { Stored, Values } from '../model/kinds';
 import { daysLeft, holds, nest, type Asset, type Avatar, type Character, type Lore } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
@@ -164,6 +164,17 @@ export function setTranslate(store: ObjectStore, character: string | null, chang
   const merged = (saved: TranslateSwitches | undefined): TranslateSwitches => ({ replies: TRANSLATE_DEFAULTS.replies, input: TRANSLATE_DEFAULTS.input, ...saved, ...change });
   if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, translate: merged(current?.translate) }));
   return store.update('character', character, (current) => ({ ...current, translate: merged(current.translate) }));
+}
+
+// Translations of greetings the card no longer holds go with the write.
+export function setGreetingTranslation(store: ObjectStore, character: string, greeting: string, language: string, translation: Translation) {
+  return store.update('character', character, (current) => ({
+    ...current,
+    greetingTranslations: [
+      ...(current.greetingTranslations ?? []).filter((each) => current.card.greetings.includes(each.greeting) && !(each.greeting === greeting && each.language === language)),
+      { greeting, language, translation },
+    ],
+  }));
 }
 
 // 기본값으로 되돌리기: the chats go back to the toggles' declared defaults.

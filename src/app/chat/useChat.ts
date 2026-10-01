@@ -3,7 +3,7 @@ import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem, type ChatSummary, type TranslateSwitches } from '../../model/chat';
-import type { CharacterShelf } from '../../model/library';
+import { greetingTranslation, type CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
 import { resetToggles, setKeepStatus, setStatusScript, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
@@ -77,17 +77,21 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
   const greetings = card?.greetings.filter((text) => text.trim()) ?? [];
   // The ids the greetings are saved under, so their random tags roll the same before and after the first send.
   const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
+  const translate = translateSwitches(store, chat.character);
   const unstarted: Shown | null = useMemo(() =>
     item === null && card && greetings.length > 0
       ? {
           id: 'opening',
           role: 'assistant',
           at: openedAt,
-          versions: greetings.map((text, index) => ({ id: openingIds[index]!, seed: openingIds[index]!, text, receipt: null, edited: false, at: openedAt })),
+          versions: greetings.map((text, index) => {
+            const translation = greetingTranslation(shelf!.character, text, translate.replyLanguage);
+            return { id: openingIds[index]!, seed: openingIds[index]!, text, receipt: null, edited: false, at: openedAt, ...(translation && { translation }) };
+          }),
           selected: greeting,
           live: null,
         }
-      : null, [item === null, card, openedAt, openingIds, greeting]);
+      : null, [item === null, card, shelf?.character.greetingTranslations, translate.replyLanguage, openedAt, openingIds, greeting]);
   // A new chat shows its turn while it is saved, under the id it is saved as.
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
@@ -102,7 +106,6 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
   const status = statusBoxes(view, messages, statusScripts).map((box) => ({ ...box, name: scriptName(box.script) }));
   const offered = view.drawn.map((scripts) => (bot ? scripts.map((script) => ({ script, name: scriptName(script), marked: statusScripts.includes(script) })) : []));
   const url = useAssetUrl();
-  const translate = translateSwitches(store, chat.character);
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);
   const busy = turn !== null;
@@ -181,7 +184,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
               ids: opening.versions.map((version) => version.id),
               texts: opening.versions.map((version) => version.text),
               selected: opening.selected,
-              translations: translating.held,
+              translations: new Map(opening.versions.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
             },
             started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
           }
@@ -218,7 +221,7 @@ export function useChat(item: ChatItem | null, shelf: CharacterShelf<ChatSummary
   }
 
   function translateMessage(message: Shown) {
-    translator.translate(chatId, shown(message).id, translationInput(session, chatId, chat, messages, { kind: 'message', index: messages.indexOf(message) }));
+    translator.translate(chatId, shown(message), translationInput(session, chatId, chat, messages, { kind: 'message', index: messages.indexOf(message) }));
   }
 
   function flipTranslation(message: Shown) {
