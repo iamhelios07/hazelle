@@ -84,7 +84,7 @@ describe('importCard', () => {
     expect(counts(imported)).toEqual({ asset: 2 });
   });
 
-  it('reads a charx’s x-risu-asset files when asked, and counts the ones no file holds', () => {
+  it('reads a charx’s x-risu-asset files when asked, and counts the ones no file holds', async () => {
     const smile = png(tEXt('Title', 'smile'));
     const imported = charx({
       'card.json': strToU8(
@@ -100,17 +100,17 @@ describe('importCard', () => {
       ),
       'assets/other/image/smile.png': smile,
     });
-    expect(imported.assets.map(({ name, read }) => [name, read()])).toEqual([
+    expect(await Promise.all(imported.assets.map(async ({ name, read }) => [name, await read()]))).toEqual([
       ['Smile.png', smile],
       ['lost', null],
     ]);
     expect(counts(imported)).toEqual({ asset: 1 });
   });
 
-  it('reads a PNG’s v2 additionalAssets from its asset chunks', () => {
+  it('reads a PNG’s v2 additionalAssets from its asset chunks', async () => {
     const picture = png(tEXt('Title', 'wave'));
     const file = png(tEXt('chara', cardText(v2({ extensions: { risuai: { additionalAssets: [['wave', '__asset:0', 'png']] } } }))), tEXt('chara-ext-asset_:0', base64(picture)));
-    expect(ok(importCard('Mira.png', file)).assets.map(({ name, read }) => [name, read()])).toEqual([['wave', picture]]);
+    expect(await Promise.all(ok(importCard('Mira.png', file)).assets.map(async ({ name, read }) => [name, await read()]))).toEqual([['wave', picture]]);
   });
 
   it('reads a zip appended to a JPEG and keeps the JPEG as the avatar', () => {

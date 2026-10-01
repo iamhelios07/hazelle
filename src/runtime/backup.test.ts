@@ -74,8 +74,8 @@ async function oldAccount({ profile = true } = {}) {
   const image = randomBytes(256);
   const smile = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
   const assets = [
-    { name: 'smile', read: () => smile },
-    { name: 'grin', read: () => smile },
+    { name: 'smile', read: async () => smile },
+    { name: 'grin', read: async () => smile },
   ];
   const added = await importCharacter(store, files, { card, lore: [{ ...lore, folder: null }], loreFolders: [], assets }, { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
   const character = added.ok ? added.data.id : '';

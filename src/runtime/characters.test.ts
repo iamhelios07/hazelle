@@ -31,10 +31,10 @@ describe('importCharacter', () => {
     const { store, files } = await server.account();
     const [smile, image] = [png(), picture()];
     const assets = [
-      { name: 'smile', read: () => smile },
-      { name: 'grin', read: () => smile },
-      { name: 'notes', read: () => randomBytes(8) },
-      { name: 'lost', read: () => null },
+      { name: 'smile', read: async () => smile },
+      { name: 'grin', read: async () => smile },
+      { name: 'notes', read: async () => randomBytes(8) },
+      { name: 'lost', read: async () => null },
     ];
     const steps: string[] = [];
     const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, image, (step) => steps.push(step.kind));
@@ -58,7 +58,7 @@ describe('copyCharacter', () => {
     const { store, files } = await server.account();
     const luna: Character = { card: { name: '루나' } as Card, folder: 'f', loreFolders: [{ id: 'town', name: '마을' }] };
     const entry = { name: '등대', content: '폭풍 치는 밤의 등대', folder: 'town' } as Lore;
-    const saved = await importCharacter(store, files, { card: luna.card, lore: [], loreFolders: [], assets: [{ name: 'smile', read: png }] }, picture(), () => {});
+    const saved = await importCharacter(store, files, { card: luna.card, lore: [], loreFolders: [], assets: [{ name: 'smile', read: async () => png() }] }, picture(), () => {});
     const imported = saved.ok ? saved.data.id : '';
     const [avatar] = store.children('avatar', imported).map(({ value }) => value);
     const assets = store.children('asset', imported).map(({ value }) => value);
@@ -78,7 +78,7 @@ describe('purgeExpired', () => {
   it('removes a character deleted a week ago with everything it owns, and keeps one deleted since', async () => {
     const { store, files } = await server.account();
     const now = Date.now();
-    const saved = await importCharacter(store, files, { card: { name: 'old' } as Card, lore: [{ name: 'lore', folder: null } as LoreEntry], loreFolders: [], assets: [{ name: 'smile', read: png }] }, picture(), () => {});
+    const saved = await importCharacter(store, files, { card: { name: 'old' } as Card, lore: [{ name: 'lore', folder: null } as LoreEntry], loreFolders: [], assets: [{ name: 'smile', read: async () => png() }] }, picture(), () => {});
     const expired = saved.ok ? saved.data.id : '';
     await setDeleted(store, expired, now - KEEP_DELETED);
     await addCharacter(store, bare('recent', { deleted: now - 1000 }), none, () => {});

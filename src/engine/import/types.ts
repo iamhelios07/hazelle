@@ -1,3 +1,5 @@
+import type { PresetResult } from './preset';
+
 export type Card = {
   name: string;
   nickname: string | null;
@@ -56,7 +58,7 @@ export type Imported = {
   loreFolders: string[];
   avatar: { bytes: Uint8Array<ArrayBuffer>; type: string } | null;
   // The bot's own pictures, read one at a time when they are stored; read answers null for one the file lacks.
-  assets: { name: string; read: () => Uint8Array<ArrayBuffer> | null }[];
+  assets: { name: string; read: () => Promise<Uint8Array<ArrayBuffer> | null> }[];
   report: ImportReport;
 };
 
@@ -84,3 +86,58 @@ export type ImportReport = {
 export type ImportFailure = { kind: 'unknown-format' | 'module-file' | 'encrypted' | 'unreadable'; detail?: string };
 
 export type ImportResult = { ok: true; card: Imported } | { ok: false; failure: ImportFailure };
+
+// A Risu local backup, read (design F7; research/risu-backup-spec.md). Pictures stay in the file until a character
+// or persona is brought.
+export type BackupSource = { size: number; read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>> };
+export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string };
+
+// Text as Risu stored it, already past the bot's input and output scripts.
+export type RisuMessage = { role: 'user' | 'assistant'; text: string; at: number };
+export type RisuChat = {
+  title: string;
+  // 작가의 노트; null when Risu's is empty.
+  note: string | null;
+  // The Risu persona id the chat is bound to.
+  persona: string | null;
+  // Index into the card's greetings.
+  greeting: number;
+  // Risu's chat variables (scriptstate without its `$`), Lua's state included.
+  variables: [string, string][];
+  messages: RisuMessage[];
+};
+export type MoveUnsupportedKind =
+  | 'group-chat'
+  | 'chat-lore'
+  | 'memory'
+  | 'inlay'
+  | 'module'
+  | 'chat-folder'
+  | 'bookmark'
+  | 'hidden-message'
+  | 'cold-missing'
+  | 'missing-picture';
+export type MoveUnsupported = { kind: MoveUnsupportedKind; count: number };
+
+// The card as the card importer reads it, with its pictures read from the backup when it is brought.
+export type RisuCharacter = Omit<Imported, 'avatar'> & {
+  // Risu's chaId.
+  id: string;
+  avatar: () => Promise<Picture | null>;
+  // The Risu folder it sits in, by name.
+  folder: string | null;
+  chats: RisuChat[];
+  // What its chats held that does not come.
+  missed: MoveUnsupported[];
+};
+export type RisuPersona = { id: string | null; name: string; description: string; picture: () => Promise<Picture | null> };
+export type RisuPreset = { name: string; result: PresetResult };
+export type RisuBackup = {
+  characters: RisuCharacter[];
+  personas: RisuPersona[];
+  presets: RisuPreset[];
+  // What the backup held outside its characters that does not come (group chats, modules).
+  unsupported: MoveUnsupported[];
+};
+export type BackupFailure = { kind: 'encrypted' | 'no-database' | 'unreadable'; detail?: string };
+export type BackupResult = { ok: true; backup: RisuBackup } | { ok: false; failure: BackupFailure };

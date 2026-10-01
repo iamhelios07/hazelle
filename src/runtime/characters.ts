@@ -61,8 +61,8 @@ export async function importCharacter(
   let skipped = 0;
   for (let start = 0; start < assets.length; start += FILE_WINDOW) {
     progress({ kind: 'assets', done: start, total: assets.length });
-    const read = assets.slice(start, start + FILE_WINDOW).flatMap(({ name, read }) => {
-      const bytes = read();
+    const window = await Promise.all(assets.slice(start, start + FILE_WINDOW).map(async ({ name, read }) => ({ name, bytes: await read() })));
+    const read = window.flatMap(({ name, bytes }) => {
       const type = bytes && imageType(bytes);
       if (!type) skipped++;
       return type ? [{ name, type, bytes: bytes! }] : [];

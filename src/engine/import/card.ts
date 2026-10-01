@@ -68,7 +68,7 @@ function done(format: ImportReport['format'], converted: Converted, avatar: Impo
   const assets = converted.assets.flatMap(({ name, uri }) => {
     const read = reader(uri, holders);
     if (!read) add(tally, 'asset');
-    return read ? [{ name, read }] : [];
+    return read ? [{ name, read: async () => read() }] : [];
   });
   return { ok: true, card: { card, lore, loreFolders, avatar, assets, report: { format, spec, unsupported: counted(UNSUPPORTED_KINDS, tally) } } };
 }
