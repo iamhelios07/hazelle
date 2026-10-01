@@ -1,0 +1,204 @@
+import { gzipSync, strToU8 } from 'fflate';
+import { describe, expect, it } from 'vitest';
+import { readBackup } from './backup';
+import type { RisuBackup } from './types';
+
+const u32 = (value: number, little: boolean) => {
+  const out = new Uint8Array(4);
+  new DataView(out.buffer).setUint32(0, value, little);
+  return [...out];
+};
+
+// msgpackr's output for the shapes a database holds, undefined as its d4 00 00 extension.
+function pack(value: unknown): number[] {
+  if (value === undefined) return [0xd4, 0, 0];
+  if (value === null) return [0xc0];
+  if (typeof value === 'boolean') return [value ? 0xc3 : 0xc2];
+  if (typeof value === 'number') {
+    if (Number.isInteger(value) && value >= 0 && value < 0x80) return [value];
+    const out = new Uint8Array(9);
+    out[0] = 0xcb;
+    new DataView(out.buffer).setFloat64(1, value);
+    return [...out];
+  }
+  if (typeof value === 'string') {
+    const bytes = strToU8(value);
+    return [0xdb, ...u32(bytes.length, false), ...bytes];
+  }
+  if (Array.isArray(value)) return [0xdd, ...u32(value.length, false), ...value.flatMap(pack)];
+  const entries = Object.entries(value as object);
+  return [0xdf, ...u32(entries.length, false), ...entries.flatMap(([key, item]) => [...pack(key), ...pack(item)])];
+}
+
+const database = (db: unknown) => new Uint8Array([0, ...strToU8('RISUSAVE'), 0, 8, ...gzipSync(new Uint8Array(pack(db)))]);
+
+function bin(entries: [string, Uint8Array][]) {
+  const bytes = new Uint8Array(entries.flatMap(([name, data]) => [...u32(strToU8(name).length, true), ...strToU8(name), ...u32(data.length, true), ...data]));
+  return { size: bytes.length, read: (offset: number, length: number) => Promise.resolve(bytes.slice(offset, offset + length)) };
+}
+
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
+const COLD = 'COLDSTORAGE';
+const CHAT_KEY = '11111111-1111-4111-8111-111111111111';
+const CHARACTER_KEY = '22222222-2222-4222-8222-222222222222';
+const json = (value: unknown) => strToU8(JSON.stringify(value));
+
+const mira = {
+  chaId: 'mira',
+  name: 'Mira',
+  image: 'assets/mira.png',
+  desc: 'd',
+  firstMessage: 'hi',
+  alternateGreetings: ['hello', 'yo'],
+  replaceGlobalNote: 'stay in character',
+  postHistoryInstructions: 'old note',
+  customscript: [{ comment: 'r', in: 'a', out: 'b', type: 'editoutput' }],
+  triggerscript: [{ comment: 'lua', type: 'start', conditions: [], effect: [{ type: 'triggerlua', code: 'print(1)' }] }],
+  lowLevelAccess: true,
+  globalLore: [{ key: 'castle', secondkey: '', insertorder: 100, comment: 'Castle', content: '<user> sees\n@@end', mode: 'normal', alwaysActive: false, selective: false, activationPercent: 40 }],
+  additionalAssets: [
+    ['map', 'assets/map.png', 'png'],
+    ['gone', 'assets/gone.png', 'png'],
+  ],
+  modules: ['m1'],
+  chatFolders: [{ id: 'f', folded: false }],
+  chatPage: 0,
+  chats: [
+    {
+      name: 'Live',
+      note: '',
+      fmIndex: 1,
+      bindedPersona: 'p1',
+      lastDate: 500,
+      scriptstate: { $mood: 'calm', $count: 3, plain: 'x' },
+      bookmarks: ['c1'],
+      localLore: [],
+      message: [
+        { role: 'user', data: 'hey', time: 1000 },
+        { role: 'char', data: 'look {{inlay::abc}}', disabled: true },
+      ],
+    },
+    { name: 'Cold', note: 'n', localLore: [], scriptstate: {}, message: [{ role: 'char', data: COLD + CHAT_KEY, time: 900 }] },
+    { name: 'Empty', note: '', localLore: [], message: [] },
+    { name: 'Lost', note: '', localLore: [], message: [{ role: 'char', data: `${COLD}33333333-3333-4333-8333-333333333333`, time: 1 }] },
+  ],
+};
+
+const db = {
+  account: undefined,
+  characters: [
+    null,
+    mira,
+    { type: 'character', chaId: 'sleeper', name: 'Sleeper', coldstorage: CHARACTER_KEY, chats: [{ message: [{ role: 'char', data: '' }] }] },
+    { type: 'group', chaId: 'g', chats: [{ message: [{ role: 'user', data: 'x' }] }, { message: [] }] },
+    { chaId: 'trashed', name: 'T', trashTime: 1, chats: [] },
+    { chaId: '§temp', name: 'Temp', chats: [] },
+    { type: 'character', chaId: 'gone', coldstorage: '44444444-4444-4444-8444-444444444444', chats: [] },
+  ],
+  characterOrder: [{ name: 'Fav', data: ['sleeper'] }, 'mira'],
+  modules: [{ id: 'm1' }],
+  personas: [
+    { id: 'p1', name: 'old', personaPrompt: 'stale', icon: '' },
+    { id: 'p2', name: 'Bob', personaPrompt: 'b', icon: 'assets/bob.png' },
+  ],
+  selectedPersona: 0,
+  username: 'Ann',
+  personaPrompt: 'live',
+  userIcon: 'assets/ann.png',
+  botPresets: [
+    { name: 'Main', openAIKey: 'sk-slot', mainPrompt: '', promptTemplate: [{ type: 'plain', type2: 'main', role: 'system', text: 'stale' }] },
+    { name: 'Legacy', mainPrompt: 'x' },
+  ],
+  botPresetsId: 0,
+  openAIKey: 'sk-top',
+  mainPrompt: '',
+  promptTemplate: [{ type: 'plain', type2: 'main', role: 'system', text: 'live' }],
+};
+
+const backupFile = () =>
+  bin([
+    ['mira.png', PNG],
+    ['map.png', PNG],
+    ['ann.png', PNG],
+    [`coldstorage_${CHAT_KEY}.json`, json({ message: [{ role: 'user', data: 'old', time: 10 }], scriptstate: { $x: { a: 1 } }, localLore: [{ key: 'k' }], hypaV3Data: { summaries: [{}] } })],
+    [`coldstorage_${CHARACTER_KEY}.json`, json({ character: { chaId: 'sleeper', name: 'Sleeper', firstMessage: 'zzz', chats: [{ name: 'Nap', message: [{ role: 'user', data: 'wake', time: 5 }] }] } })],
+    ['database.risudat', database(db)],
+  ]);
+
+async function read(): Promise<RisuBackup> {
+  const result = await readBackup(backupFile());
+  if (!result.ok) throw new Error(result.failure.kind);
+  return result.backup;
+}
+
+describe('readBackup', () => {
+  it('refuses an encrypted, database-less or undecodable backup', async () => {
+    expect(await readBackup(bin([['encryption.risudat', json({ type: 'account' })], ['database.risudat', database(db)]]))).toEqual({ ok: false, failure: { kind: 'encrypted' } });
+    expect(await readBackup(bin([['mira.png', PNG]]))).toEqual({ ok: false, failure: { kind: 'no-database' } });
+    expect(await readBackup(bin([['database.risudat', PNG]]))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
+  });
+
+  it('brings characters out of cold storage, in Risu order, as cards with lazy pictures', async () => {
+    const { characters, unsupported } = await read();
+    expect(characters.map(({ id, folder }) => [id, folder])).toEqual([
+      ['sleeper', 'Fav'],
+      ['mira', null],
+    ]);
+    expect(characters[0]!.chats).toEqual([{ title: 'Nap', note: null, persona: null, greeting: 0, variables: [], messages: [{ role: 'user', text: 'wake', at: 5 }] }]);
+    expect(unsupported).toEqual([
+      { kind: 'group-chat', count: 1 },
+      { kind: 'module', count: 1 },
+      { kind: 'cold-missing', count: 1 },
+    ]);
+    const card = characters[1]!;
+    expect(card.card).toMatchObject({
+      greetings: ['hi', 'hello', 'yo'],
+      postHistoryInstructions: 'stay in character',
+      regex: [{ name: 'r', find: 'a', replace: 'b', stage: 'output', flags: null }],
+      lua: [{ name: 'lua', code: 'print(1)' }],
+      lowLevelAccess: true,
+    });
+    expect(card.lore[0]!.content).toBe('@@probability 40\n{{user}} sees\n@@depth 0');
+    expect(await card.avatar()).toEqual({ bytes: PNG, type: 'image/png' });
+    expect(card.assets.map(({ name }) => name)).toEqual(['map']);
+    expect(await card.assets[0]!.read()).toEqual(PNG);
+  });
+
+  it('maps chats and counts what they held that does not come', async () => {
+    const card = (await read()).characters[1]!;
+    expect(card.chats).toEqual([
+      {
+        title: 'Live',
+        note: 'old note',
+        persona: 'p1',
+        greeting: 2,
+        variables: [
+          ['mood', 'calm'],
+          ['count', '3'],
+        ],
+        messages: [
+          { role: 'user', text: 'hey', at: 1000 },
+          { role: 'assistant', text: 'look {{inlay::abc}}', at: 1000 },
+        ],
+      },
+      { title: 'Cold', note: 'n', persona: null, greeting: 0, variables: [['x', '{"a":1}']], messages: [{ role: 'user', text: 'old', at: 10 }] },
+    ]);
+    expect(card.missed).toEqual(
+      (['chat-lore', 'memory', 'inlay', 'module', 'chat-folder', 'bookmark', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
+    );
+  });
+
+  it('takes the selected persona and the active preset from their live values, without keys', async () => {
+    const backup = await read();
+    expect(backup.personas.map(({ id, name, description }) => ({ id, name, description }))).toEqual([
+      { id: 'p1', name: 'Ann', description: 'live' },
+      { id: 'p2', name: 'Bob', description: 'b' },
+    ]);
+    expect(await backup.personas[0]!.picture()).toEqual({ bytes: PNG, type: 'image/png' });
+    expect(await backup.personas[1]!.picture()).toBeNull();
+    const [main, legacy] = backup.presets;
+    expect(main!.result).toMatchObject({ ok: true, prompt: { name: 'Main', blocks: [{ kind: 'text', text: 'live', mark: 'main' }] } });
+    expect(legacy).toEqual({ name: 'Legacy', result: { ok: false, failure: { kind: 'no-template' } } });
+    expect(JSON.stringify(backup)).not.toContain('sk-');
+  });
+});

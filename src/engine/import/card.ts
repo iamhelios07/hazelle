@@ -64,13 +64,25 @@ function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
 type Holders = { zip?: Zip; chunks?: Map<string, string> };
 
 function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], holders: Holders, tally: Tally): ImportResult {
-  const { card, lore, loreFolders, spec } = converted;
-  const assets = converted.assets.flatMap(({ name, uri }) => {
+  const resolve: Resolve = (uri) => {
     const read = reader(uri, holders);
     if (!read) add(tally, 'asset');
-    return read ? [{ name, read: async () => read() }] : [];
+    return read && (async () => read());
+  };
+  return { ok: true, card: { ...assemble(format, converted, resolve, tally), avatar } };
+}
+
+// Where an asset's bytes are read from; null for a uri the source does not hold, which the resolver counts.
+export type Resolve = (uri: string) => Imported['assets'][number]['read'] | null;
+
+// The report is counted after the assets are resolved, so the resolver's counts are in it.
+export function assemble(format: ImportReport['format'], converted: Converted, resolve: Resolve, tally: Tally): Omit<Imported, 'avatar'> {
+  const { card, lore, loreFolders, spec } = converted;
+  const assets = converted.assets.flatMap(({ name, uri }) => {
+    const read = resolve(uri);
+    return read ? [{ name, read }] : [];
   });
-  return { ok: true, card: { card, lore, loreFolders, avatar, assets, report: { format, spec, unsupported: counted(UNSUPPORTED_KINDS, tally) } } };
+  return { card, lore, loreFolders, assets, report: { format, spec, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
 }
 
 // An asset's bytes as Risu finds them: __asset:N a PNG chunk, embeded:// (Risu's spelling) a file in the charx,

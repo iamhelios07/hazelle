@@ -1,6 +1,8 @@
-const utf8 = new TextDecoder('utf-8', { fatal: true });
+// Not fatal: msgpackr writes a lone surrogate in a short string as three bytes and reads them back, so one cut
+// emoji in a Risu chat must not make the whole database unreadable.
+const utf8 = new TextDecoder();
 
-// MessagePack as Risu writes its presets (msgpackr): the standard types, and msgpackr's one extension,
+// MessagePack as Risu writes its presets and database (msgpackr): the standard types, and msgpackr's one extension,
 // d4 00 00 for undefined. Anything else, or bytes that end early, throws.
 export function readMsgpack(bytes: Uint8Array): unknown {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

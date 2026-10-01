@@ -75,6 +75,11 @@ export async function importPreset(fileName: string, bytes: Uint8Array): Promise
   } catch {
     return fail('unreadable');
   }
+  return convertPreset(preset);
+}
+
+// A Risu preset object, as a .risup holds it and as a backup's botPresets lists it.
+export function convertPreset(preset: unknown): PresetResult {
   if (!isRecord(preset)) return fail('unreadable');
   if (!Array.isArray(preset.promptTemplate)) return fail('no-template');
   return { ok: true, ...convert(preset, preset.promptTemplate) };
