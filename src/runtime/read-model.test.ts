@@ -277,9 +277,12 @@ describe('selective account reads', () => {
       for (let index = 0; index < 3; index++) await seed(`${id}${index}`, 'entry', id, message(`${id}${index}`));
     }
     const store = await open();
-    const exported = await exportBackup(store, new Files(request));
+    const parts: BlobPart[] = [];
+    const exported = await exportBackup(store, new Files(request), {
+      write: async (bytes) => { parts.push(bytes); }, close: async () => {}, abort: async () => { parts.length = 0; },
+    });
     if (!exported.ok) throw new Error(exported.error);
-    const backup = readBackup(exported.data.zip);
+    const backup = await readBackup(new Blob(parts));
     if (!backup.ok) throw new Error(backup.error);
     expect(backup.backup.objects.filter((object) => object.kind === 'entry')).toHaveLength(6);
     expect(store.scopeState('a')).toBe('unloaded');

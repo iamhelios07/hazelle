@@ -121,6 +121,8 @@ test('a new account imports a card, chats through the fake provider and finds th
 
   await test.step('the backup holds the card and the reply, and loading it again carries on without adding anything', async () => {
     await page.goto('/account');
+    // A native save dialog does not emit Playwright's download event; this flow exercises the Blob fallback.
+    await page.evaluate(() => Object.defineProperty(globalThis, 'showSaveFilePicker', { value: undefined, configurable: true }));
     const saved = page.waitForEvent('download');
     await page.getByRole('button', { name: '받기', exact: true }).click();
     const file = await (await saved).path();
