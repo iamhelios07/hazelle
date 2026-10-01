@@ -1,3 +1,4 @@
+import { deflateSync, inflateSync } from 'fflate';
 import { encodeText, fromBase64, openBytes, sealBytes, toBase64 } from './aead';
 import type { VaultKey } from './keys';
 
@@ -23,7 +24,7 @@ export async function objectKey(vaultKey: VaultKey): Promise<CryptoKey> {
 }
 
 export async function sealObject(key: CryptoKey, accountId: string, address: ObjectAddress, value: unknown): Promise<string> {
-  const sealed = await sealBytes(key, await transform(encodeText(JSON.stringify(value)), new CompressionStream('deflate-raw')), objectAad(accountId, address));
+  const sealed = await sealBytes(key, deflateSync(encodeText(JSON.stringify(value))), objectAad(accountId, address));
   const body = new Uint8Array(1 + sealed.length);
   body[0] = FORMAT;
   body.set(sealed, 1);
@@ -36,9 +37,6 @@ export async function openObject(key: CryptoKey, accountId: string, address: Obj
   if (bytes[0] !== FORMAT) return undefined;
   const compressed = await openBytes(key, bytes.subarray(1), objectAad(accountId, address));
   if (!compressed) return undefined;
-  return JSON.parse(new TextDecoder().decode(await transform(compressed, new DecompressionStream('deflate-raw'))));
-}
-
-async function transform(bytes: Uint8Array<ArrayBuffer>, stream: CompressionStream | DecompressionStream): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  // Synchronous: a stream per object cost more than the inflating itself, across thousands of objects on open.
+  return JSON.parse(new TextDecoder().decode(inflateSync(compressed)));
 }

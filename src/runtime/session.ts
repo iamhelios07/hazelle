@@ -6,6 +6,8 @@ import { purgeExpired } from './characters';
 import { Costs } from './cost';
 import { Credentials } from './credential';
 import { Files } from './files';
+import { deviceCache } from './device-cache';
+import type { DeviceCache } from './object-cache';
 import { Rememberer } from './memory';
 import { addFirstPersona } from './personas';
 import { addFirstProfile } from './profiles';
@@ -37,17 +39,29 @@ export type Session = {
   startBackground: () => void;
 };
 
-// Pulls once before the first screen, then keeps the store in sync while the session is open. An open
-// given up while it pulls (signal) starts nothing.
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void): Promise<ApiResult<Session>> {
-  const store = await ObjectStore.open(accountId, vaultKey, api);
-  const pulled = await store.pull({ signal, progress });
-  if (pulled) return pulled;
+// An open given up while it loads (signal) starts nothing. A cached opening never waits for the network.
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId)): Promise<ApiResult<Session>> {
+  const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
+  if (signal.aborted) {
+    store.close();
+    return { ok: false, error: 'stopped' };
+  }
+  if (!store.cached) {
+    const pulled = await store.pull({ signal, progress });
+    if (pulled) {
+      store.close();
+      return pulled;
+    }
+  }
   const files = new Files(api);
   const assets = new AssetUrls(store, files);
-  // Awaited rather than started, so the first screen and every turn already see the default prompts, persona and 묶음.
-  await Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store)]);
-  if (signal.aborted) return { ok: false, error: 'stopped' };
+  // A new account sees its defaults on the first screen; a cached account fills missing defaults after catch-up.
+  const defaults = () => Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store)]);
+  if (!store.cached) await defaults();
+  if (signal.aborted) {
+    store.close();
+    return { ok: false, error: 'stopped' };
+  }
 
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
@@ -79,9 +93,17 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const startBackground = () => {
     if (started || closing.signal.aborted) return;
     started = true;
-    streams.pickUp();
-    void purgeExpired(store, Date.now(), closing.signal);
-    void backfillSummaries(store, closing.signal);
+    void (async () => {
+      if (store.cached) {
+        const failure = await store.pull();
+        if (failure || closing.signal.aborted) return;
+        await defaults();
+      }
+      if (closing.signal.aborted) return;
+      streams.pickUp();
+      void purgeExpired(store, Date.now(), closing.signal);
+      void backfillSummaries(store, closing.signal);
+    })();
   };
 
   const close = () => {

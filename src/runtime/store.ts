@@ -4,11 +4,11 @@ import type { FileRef } from '../vault/files';
 import type { VaultKey } from '../vault/keys';
 import type { ApiFailure, ApiResult, api as realApi } from './api';
 import { orderOwned } from './removal';
+import { SCOPED, type CacheState, type CacheWrite, type DeviceCache, type SealedChange } from './object-cache';
 import { projectChat, summaryId, summaryStale, type Projection } from './summary';
 
 type Api = typeof realApi;
 export type ObjectRow = { id: string; kind: string; parent: string | null; rev: number };
-type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
 export type StoreChange = { kind: string; id: string; parent: string | null };
 export type StoreRead = { kind: Kind; id: string } | { kind: Kind; list: true } | { kind: Kind; parent: string };
 export type PullProgress = { objects: number; pages: number };
@@ -18,7 +18,7 @@ export const readsChanged = (reads: StoreRead[], changes: readonly StoreChange[]
   reads.some((read) => changes.some((change) => read.kind === change.kind && ('list' in read || ('id' in read ? read.id === change.id : read.parent === change.parent))));
 
 type Limits = { items: number; bytes: number; body: number };
-type Page = { until?: number; changes: Change[]; cursor: number; more: boolean; limits: Limits };
+type Page = { until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits };
 type ObjectValue = Omit<Stored<Kind>, 'rev'>;
 export type Write = (ObjectValue & { type: 'create' | 'restore' }) | { type: 'remove'; id: string };
 type Pending = { id: string; kind: string; parent: string | null; value: unknown; baseRev: number | null };
@@ -30,9 +30,9 @@ type Step = { resolve: () => ApiResult<Resolved> };
 type Held = { id: string; kind: string; parent: string | null; rev: number; value: unknown };
 
 const MAX_ATTEMPTS = 3;
-const SCOPED = new Set<string>(['entry', 'memory']);
+const OPEN_AHEAD = 256;
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
-type Scope = { abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
+type Scope = { opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
 export type ChatLease = { ready: Promise<ApiFailure | null>; release: () => void };
 
 export class ScopeUnavailable extends Error {
@@ -63,15 +63,105 @@ export class ObjectStore {
   private readonly behind = new Set<string>();
   private limits: Limits | null = null;
   private pulling: Promise<ApiFailure | null> | null = null;
+  private caching: Promise<void> = Promise.resolve();
+  private cacheFailed = false;
+  private epoch = 0;
+  private known = 0;
+  private restored = false;
 
   private constructor(
     private readonly accountId: string,
     private readonly key: CryptoKey,
     private readonly request: Api,
+    private readonly cache?: DeviceCache,
   ) {}
 
-  static async open(accountId: string, vaultKey: VaultKey, request: Api): Promise<ObjectStore> {
-    return new ObjectStore(accountId, await objectKey(vaultKey), request);
+  static async open(accountId: string, vaultKey: VaultKey, request: Api, cache?: DeviceCache, signal?: AbortSignal): Promise<ObjectStore> {
+    const store = new ObjectStore(accountId, await objectKey(vaultKey), request, cache);
+    try {
+      const saved = await cache?.read();
+      if (saved) {
+        const { state } = saved;
+        store.cursor = state.cursor;
+        store.bootstrap = state.until;
+        store.bootstrapped = state.complete;
+        store.limits = state.limits;
+        for (const [chat, head] of state.heads) store.heads.set(chat, head);
+        for (const [read, rev] of state.revisions) store.revisions.set(read, rev);
+        store.known = Math.max(state.cursor, state.until ?? 0);
+        for (const [, rev] of [...state.heads, ...state.revisions]) store.known = Math.max(store.known, rev);
+        const rows = saved.changes.sort((a, b) => a.rev - b.rev);
+        const opened = store.opener(rows, false);
+        for (const [index, row] of rows.entries()) {
+          if (signal?.aborted) return store;
+          await store.apply(row, false, undefined, opened(index));
+        }
+        store.changes.length = 0;
+        store.restored = true;
+      }
+    } catch {
+      store.reset();
+    }
+    return store;
+  }
+
+  get cached(): boolean { return this.restored; }
+
+  private cacheState(scope?: Scope): CacheState {
+    return {
+      cursor: scope?.cursor ?? this.cursor,
+      complete: scope ? scope.state === 'loaded' : this.bootstrapped,
+      until: scope ? null : this.bootstrap,
+      limits: this.limits,
+      heads: scope ? [] : [...this.heads],
+      revisions: scope ? [] : [...this.revisions],
+    };
+  }
+
+  private cacheWrite(changes: SealedChange[], chat?: string, scope?: Scope, complete = false) {
+    if (!this.cache || this.cacheFailed) return;
+    const scopes = chat && scope ? [{ chat, state: { ...this.cacheState(scope), complete } }] : [...new Set(changes.filter((row) => SCOPED.has(row.kind)).map((row) => row.parent!))].flatMap((chat) => {
+      const held = this.scopes.get(chat);
+      return held?.state === 'loaded' && !held.loading ? [{ chat, state: this.cacheState(held) }] : [];
+    });
+    const write: CacheWrite = { changes, feed: this.cacheState(), scopes };
+    this.queueCache(() => this.cache!.write(write));
+  }
+
+  // A failed transaction leaves a valid prefix. Never advance a later cursor past rows it failed to save.
+  private queueCache(write: () => Promise<void>) {
+    this.caching = this.caching.then(async () => {
+      if (!this.cacheFailed) await write();
+    }).catch(() => { this.cacheFailed = true; });
+  }
+
+  private reset() {
+    this.epoch++;
+    for (const object of this.live.values()) this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });
+    for (const [chat, scope] of this.scopes) {
+      scope.abort.abort();
+      scope.state = 'unloaded';
+      scope.cursor = scope.head = 0;
+      scope.loading = scope.opening = null;
+      this.behind.add(chat);
+    }
+    this.live.clear();
+    this.deleted.clear();
+    this.byKind.clear();
+    this.byParent.clear();
+    this.heads.clear();
+    this.revisions.clear();
+    this.projections.clear();
+    this.unreadableCount = this.cursor = this.known = 0;
+    this.bootstrap = null;
+    this.bootstrapped = this.restored = false;
+    this.limits = null;
+    if (this.cache) this.caching = this.caching.then(() => this.cache!.clear()).catch(() => { this.cacheFailed = true; });
+    this.changed();
+  }
+
+  private cacheBounds() {
+    return this.cache ? `&account=${encodeURIComponent(this.accountId)}&known=${this.known}` : '';
   }
 
   readonly subscribe = (listener: (changes: readonly StoreChange[]) => void) => {
@@ -163,12 +253,17 @@ export class ObjectStore {
     if (this.closing.signal.aborted) return { ready: Promise.resolve({ ok: false, error: 'stopped' }), release: () => {} };
     let scope = this.scopes.get(chat);
     if (!scope) {
-      scope = { abort: new AbortController(), state: created ? 'loaded' : 'unloaded', users: 0, cursor: 0, head: 0, loading: null, error: null };
+      scope = { opening: null, abort: new AbortController(), state: created ? 'loaded' : 'unloaded', users: 0, cursor: 0, head: 0, loading: null, error: null };
       this.scopes.set(chat, scope);
+      if (created) this.cacheWrite([], chat, scope, true);
     }
     scope.users++;
     const held = scope;
-    const ready = (held.state === 'loaded' ? Promise.resolve(null) : this.refreshChat(chat)).then(async (failure) => failure ?? await this.saveSummary(chat));
+    if (held.state !== 'loaded' && !held.opening) {
+      const opening = this.openChat(chat, held).finally(() => { if (held.opening === opening) held.opening = null; });
+      held.opening = opening;
+    }
+    const ready = held.opening ?? Promise.resolve(null);
     let released = false;
     return { ready, release: () => {
       if (released) return;
@@ -176,6 +271,43 @@ export class ObjectStore {
       held.users--;
       if (!held.users) this.releaseChat(chat, held);
     } };
+  }
+
+  private async openChat(chat: string, scope: Scope): Promise<ApiFailure | null> {
+    const signal = scope.abort.signal;
+    scope.state = 'loading';
+    this.changes.push({ kind: 'scope', id: chat, parent: chat });
+    this.changed();
+    await this.caching;
+    const saved = this.cacheFailed ? null : await this.cache?.read(chat).catch(() => null);
+    if (signal.aborted || this.scopes.get(chat) !== scope) return { ok: false, error: 'stopped' };
+    if (saved) {
+      scope.cursor = saved.state.cursor;
+      const rows = saved.changes.sort((a, b) => a.rev - b.rev);
+      const opened = this.opener(rows, true);
+      for (const [index, row] of rows.entries()) {
+        await this.apply(row, true, signal, opened(index));
+        if (signal.aborted) return { ok: false, error: 'stopped' };
+        if (row.body && this.live.get(row.id)?.value === undefined) {
+          scope.state = 'failed';
+          scope.error = { ok: false, error: 'unreadable' };
+          this.changes.push({ kind: 'scope', id: chat, parent: chat });
+          this.changed();
+          return scope.error;
+        }
+      }
+      if (signal.aborted) return { ok: false, error: 'stopped' };
+      if (saved.state.complete && !saved.changes.some((row) => row.omitted)) {
+        scope.state = 'loaded';
+        this.changes.push({ kind: 'scope', id: chat, parent: chat });
+        this.changed();
+        // Ready is cache-only; catch-up and summary writes must not hold the chat screen behind the network.
+        void this.refreshChat(chat).then((failure) => { if (!failure && scope.users) this.summarizeChat(chat); });
+        return null;
+      }
+    }
+    const failure = await this.refreshChat(chat);
+    return failure ?? await this.saveSummary(chat);
   }
 
   async withChat<T>(chat: string, run: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> {
@@ -197,7 +329,7 @@ export class ObjectStore {
     scope.loading = this.pullParent(chat, scope, abort.signal).then((failure) => {
       if (abort.signal.aborted || this.scopes.get(chat) !== scope) return { ok: false, error: 'stopped' } as const;
       scope.error = failure;
-      scope.state = failure ? 'failed' : 'loaded';
+      scope.state = failure && (scope.state !== 'loaded' || failure.error === 'unreadable') ? 'failed' : 'loaded';
       scope.loading = null;
       this.changes.push({ kind: 'scope', id: chat, parent: chat });
       this.changed();
@@ -385,9 +517,13 @@ export class ObjectStore {
   private summarizeHeld() {
     for (const [chat, scope] of this.scopes) {
       if (scope.state !== 'loaded') continue;
-      const lease = this.retainChat(chat);
-      void lease.ready.finally(lease.release);
+      this.summarizeChat(chat);
     }
+  }
+
+  private summarizeChat(chat: string) {
+    const lease = this.retainChat(chat);
+    void lease.ready.then((failure) => failure ?? this.saveSummary(chat)).finally(lease.release);
   }
 
   // chat: a scoped write's chat, held for the base revision of what the write changes.
@@ -447,6 +583,7 @@ export class ObjectStore {
       if (failure) return failure;
     }
     const limits = this.limits!;
+    const epoch = this.epoch;
     const saved: (Held | null)[] = [];
     while (saved.length < steps.length) {
       const start = saved.length;
@@ -476,8 +613,10 @@ export class ObjectStore {
           resolved.push(ready.data);
         }
         if (writes.length) {
+          if (epoch !== this.epoch || this.closing.signal.aborted) return { ok: false, error: 'stopped' };
           const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { writes }, this.closing.signal);
           if (!answer.ok) return answer;
+          if (epoch !== this.epoch || this.closing.signal.aborted) return { ok: false, error: 'stopped' };
           let index = 0;
           for (const ready of resolved) {
             if (!ready.pending) continue;
@@ -489,6 +628,7 @@ export class ObjectStore {
               this.hold(ready.held);
             }
           }
+          this.cacheWrite(writes.map(({ id, kind, parent, body }, index) => ({ id, kind, parent, body, rev: answer.data.revs[index]! })));
           this.changed();
         }
         return { ok: true, data: resolved.map(({ held }) => held) };
@@ -515,20 +655,31 @@ export class ObjectStore {
     let pages = 0;
     while (more) {
       if (signal?.aborted) return { ok: false, error: 'stopped' };
-      const result = await this.request<Page>('GET', `objects?since=${this.cursor}&exclude=entry,memory${this.bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}`, undefined, signal);
+      const epoch = this.epoch;
+      const result = await this.request<Page>('GET', `objects?since=${this.cursor}&exclude=entry,memory${this.bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds()}`, undefined, signal);
       if (signal?.aborted) return { ok: false, error: 'stopped' };
-      if (!result.ok) return result;
+      if (epoch !== this.epoch) continue;
+      if (!result.ok) {
+        if (result.error === 'cache-reset' || result.error === 'account-mismatch') {
+          this.reset();
+          if (result.error === 'cache-reset') continue;
+        }
+        return result;
+      }
       objects += result.data.changes.length;
       progress?.({ objects, pages: ++pages });
       this.limits = result.data.limits;
       this.bootstrap ??= result.data.until ?? null;
-      for (const change of result.data.changes) {
+      const opened = this.opener(result.data.changes, false);
+      for (const [index, change] of result.data.changes.entries()) {
         if (signal?.aborted) {
           this.changed();
           return { ok: false, error: 'stopped' };
         }
-        await this.apply(change);
+        if (epoch !== this.epoch) break;
+        await this.apply(change, false, undefined, opened(index));
       }
+      if (epoch !== this.epoch) continue;
       this.cursor = result.data.cursor;
       more = result.data.more;
       if (result.data.changes.length) this.changed();
@@ -537,10 +688,11 @@ export class ObjectStore {
         this.bootstrapped = true;
         more = true;
       }
+      this.cacheWrite(result.data.changes);
     }
     for (const chat of [...this.behind]) {
       this.behind.delete(chat);
-      if (this.scopeState(chat) !== 'loaded') continue;
+      if (!this.scopes.has(chat)) continue;
       const failure = await this.refreshChat(chat);
       if (failure) return failure;
     }
@@ -554,21 +706,50 @@ export class ObjectStore {
     }
     let more = true;
     while (more) {
-      const result = await this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}`, undefined, signal);
-      if (!result.ok) return result;
+      const result = await this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}${this.cacheBounds()}`, undefined, signal);
+      if (!result.ok) {
+        if (result.error === 'cache-reset' || result.error === 'account-mismatch') {
+          this.reset();
+          if (result.error === 'cache-reset') void (this.pulling ?? Promise.resolve()).then(() => {
+            if (!this.closing.signal.aborted && !this.bootstrapped) void this.pull();
+          });
+        }
+        return result;
+      }
+      if (signal.aborted) return { ok: false, error: 'stopped' };
       this.limits = result.data.limits;
-      for (const change of result.data.changes) {
+      const opened = this.opener(result.data.changes, true);
+      for (const [index, change] of result.data.changes.entries()) {
         if (signal.aborted) return { ok: false, error: 'stopped' };
-        await this.apply(change, true, signal);
+        await this.apply(change, true, signal, opened(index));
         if (change.body && SCOPED.has(change.kind) && this.live.get(change.id)?.value === undefined) return { ok: false, error: 'unreadable' };
       }
+      if (signal.aborted) return { ok: false, error: 'stopped' };
       scope.cursor = result.data.cursor;
       more = result.data.more;
+      this.cacheWrite(result.data.changes, chat, scope, scope.state === 'loaded' || !more);
     }
     return null;
   }
 
-  private async apply({ id, kind, parent, rev, body, omitted }: Change, scoped = false, signal?: AbortSignal) {
+  // Bodies open ahead of the row being applied, so decryption and inflation overlap; rows still apply in rev order. A body
+  // that throws while opening counts as unreadable, as one that fails authentication does.
+  private opener(rows: SealedChange[], scoped: boolean): (index: number) => Promise<unknown> | undefined {
+    const opened = new Map<number, Promise<unknown>>();
+    let next = 0;
+    return (index) => {
+      for (; next < Math.min(rows.length, index + OPEN_AHEAD); next++) {
+        const { id, kind, parent, rev, body, omitted } = rows[next]!;
+        if (typeof body !== 'string' || omitted || (SCOPED.has(kind) && !scoped) || this.stale(id, rev)) continue;
+        opened.set(next, openObject(this.key, this.accountId, { id, kind, parent }, body).catch(() => undefined));
+      }
+      const open = opened.get(index);
+      opened.delete(index);
+      return open;
+    };
+  }
+
+  private async apply({ id, kind, parent, rev, body, omitted }: SealedChange, scoped = false, signal?: AbortSignal, opened?: Promise<unknown>) {
     if (signal?.aborted || this.closing.signal.aborted) return;
     this.recordRevision({ id, kind, parent, rev });
     if (scoped && kind === 'entry' && parent) {
@@ -583,8 +764,9 @@ export class ObjectStore {
     }
     if (this.stale(id, rev)) return;
     if (body === null) return this.drop(id, rev, { kind, id, parent });
-    const value = await openObject(this.key, this.accountId, { id, kind, parent }, body!);
-    if (!signal?.aborted) this.hold({ id, kind, parent, rev, value });
+    const epoch = this.epoch;
+    const value = await (opened ?? openObject(this.key, this.accountId, { id, kind, parent }, body!));
+    if (!signal?.aborted && epoch === this.epoch) this.hold({ id, kind, parent, rev, value });
   }
 
   private hold(object: Held) {
@@ -650,6 +832,7 @@ export class ObjectStore {
   }
 
   private recordRevision({ kind, parent, rev }: StoreChange & { rev: number }) {
+    this.known = Math.max(this.known, rev);
     for (const read of [{ kind, list: true }, ...(parent ? [{ kind, parent }] : [])]) {
       const key = JSON.stringify(read);
       this.revisions.set(key, Math.max(this.revisions.get(key) ?? 0, rev));

@@ -45,7 +45,7 @@ export async function backfillSummaries(store: ObjectStore, signal: AbortSignal)
   for (const { id } of store.list('chat')) {
     if (signal.aborted) return;
     if (store.get('summary', summaryId(id))) continue;
-    const result = await store.withChat(id, async () => ({ ok: true, data: null }));
+    const result = await store.withChat(id, async () => await store.saveSummary(id) ?? { ok: true, data: null });
     if (!result.ok && result.error !== 'unreadable') return;
     if (!await pause(0, signal)) return;
   }
