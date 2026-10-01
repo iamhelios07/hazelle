@@ -12,7 +12,7 @@ import { cardMissed, moveMissed } from './missed';
 import { tickable, tickCount, toPick, type Ticks } from './movePick';
 
 const FAILURE: Record<BackupFailure['kind'], string> = {
-  encrypted: 'Risu 계정의 전체 백업은 Risu 서버의 키로 잠겨 있어 열 수 없어요. Risu의 백업 설정에서 부분 백업을 만들어 넣어 주세요.',
+  encrypted: 'Risu 계정의 전체 백업은 Risu 서버의 키로 잠겨 있어 열 수 없어요. Risu에서 ‘부분 로컬 백업 저장’으로 받은 파일을 넣어 주세요.',
   'no-database': 'Risu 백업이 아니거나 깨진 파일이에요.',
   unreadable: 'Risu 백업이 아니거나 깨진 파일이에요.',
 };
