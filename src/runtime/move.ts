@@ -1,9 +1,11 @@
 import type { Card, Imported, RisuCharacter, RisuChat, RisuPersona, RisuPreset } from '../engine/import/types';
 import type { Chat } from '../model/chat';
+import type { MemorySettings } from '../model/memory';
 import type { ApiResult } from './api';
 import { createFolder, importCharacter, saveAssets } from './characters';
 import { chatWrites } from './chat-log';
 import type { Files } from './files';
+import { defaultMemory } from './memory';
 import { addPersona } from './personas';
 import { thumbnail } from './picture';
 import { savePreset } from './prompts';
@@ -52,7 +54,10 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
     const avatar = await character.avatar();
     const thumb = avatar && (await thumbnail(avatar).catch(() => null));
     const id = crypto.randomUUID();
-    const chats = character.chats.flatMap((chat) => chatOf(id, character.card, chat, personaIds));
+    // Moved chats start with long-term memory off: on, opening a long one would summarize its whole past at once (user,
+    // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
+    const memory = { ...defaultMemory(store), on: false };
+    const chats = character.chats.flatMap((chat) => chatOf(id, character.card, chat, personaIds, memory));
     const saved = await importCharacter(store, files, character, avatar && thumb ? { ...avatar, thumb } : null, () => {}, { id, folder: folder?.data ?? null, risu: character.id, chats });
     if (!saved.ok) return saved;
     chatsDone += character.chats.length;
@@ -72,12 +77,12 @@ async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<
 
 // The chat opens on the greeting Risu showed, among the card's greetings that are not blank as a new chat's does
 // (runtime/turn greetingOf); a blank one shown leaves the chat without one, as Risu showed none.
-function chatOf(character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>): Write[] {
+function chatOf(character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, memory: MemorySettings): Write[] {
   const shown = card.greetings.flatMap((text, index) => (text.trim() ? [index] : []));
   const selected = shown.indexOf(greeting);
   const greetings = selected === -1 ? null : { ids: shown.map(() => crypto.randomUUID()), texts: shown.map((index) => card.greetings[index]!), selected, translations: new Map() };
   const own = persona === null ? undefined : personaIds.get(persona);
-  const chat: Chat = { title: title.trim() || null, character, models: {}, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }) };
+  const chat: Chat = { title: title.trim() || null, character, models: {}, memory, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }) };
   return chatWrites(crypto.randomUUID(), chat, greetings, messages);
 }
 
