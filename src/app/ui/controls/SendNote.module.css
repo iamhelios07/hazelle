@@ -12,3 +12,9 @@
 .warn {
   color: var(--color-warn-text);
 }
+
+@media (max-width: 959px) {
+  .words {
+    display: none;
+  }
+}

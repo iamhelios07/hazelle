@@ -41,3 +41,8 @@
   white-space: normal;
   translate: var(--nudge, 0) 0;
 }
+
+.bubble[data-above] {
+  top: auto;
+  bottom: calc(100% + var(--space-8));
+}

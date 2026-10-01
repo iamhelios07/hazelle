@@ -54,6 +54,5 @@ export function ChatCache({ cache }: { cache: OpenChat['cache'] }) {
   if (!cache || now >= cache.until) return null;
   const left = clock(cache.until - now);
   const broken = cache.forecast?.broken;
-  if (!broken) return <SendNote tone="plain" label={left} title={TITLE} />;
-  return <SendNote tone="warn" label={`${left} · 깨짐 예상`} title={TITLE} hint={`${why(broken)} ${reads(cache.forecast!)}`} />;
+  return <SendNote label={left} title={TITLE} warning={broken ? { words: '깨짐 예상', why: `${why(broken)} ${reads(cache.forecast!)}` } : undefined} />;
 }

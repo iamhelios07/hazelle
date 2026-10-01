@@ -27,8 +27,13 @@ export function Hint({ label, children }: { label: string; children: string }) {
   });
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
+  // Below its ⓘ, or above where the screen ends first, as for one beside the send button.
   useLayoutEffect(() => {
-    if (bubble.current) keepOnScreen(bubble.current);
+    const element = bubble.current;
+    if (!element) return;
+    keepOnScreen(element);
+    delete element.dataset.above;
+    if (element.getBoundingClientRect().bottom > window.innerHeight) element.dataset.above = '';
   }, [state]);
 
   const peek = () => {
