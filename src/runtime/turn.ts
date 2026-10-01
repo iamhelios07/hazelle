@@ -76,8 +76,9 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     lore: chat.character === null ? [] : store.children('lore', chat.character),
     messages: messages.map((message) => {
       const version = shown(message);
-      return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at };
+      return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at, ...(version.staged && { staged: true }) };
     }),
+    variables: chat.variables ?? [],
     greeting: card && greetingOf(card, messages),
     toggle: togglesOf(store, chat, prompt).value,
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),

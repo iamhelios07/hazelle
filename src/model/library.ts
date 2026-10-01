@@ -33,6 +33,8 @@ export type Character = {
   // A greeting's translation, made before any chat of it was saved, which every new chat opens with. Keyed by the
   // greeting as the card holds it and the language, so an edited greeting or a changed language translates anew.
   greetingTranslations?: GreetingTranslation[];
+  // The Risu chaId of a character brought from Risu: a move skips it, and 그림 채우기 finds it.
+  risu?: string;
 };
 // fold false shows such a picture whole instead of its top until opened. peek is the height its top shows at, most the
 // height no such picture is drawn taller than (shrunk to fit), each in percent of the screen's height.

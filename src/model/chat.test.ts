@@ -50,6 +50,13 @@ describe('fold', () => {
     expect(shown(fold(entries)[0]!).text).toBe('하나 고침');
   });
 
+  it('keeps a text past the scripts staged through its edit, never through a retry or a new version', () => {
+    const edit = (id: string, replaces: string) => entry(id, { type: 'version', message: 'b1', replaces, edit: true, at: rev, text: '고침', receipt: null });
+    const entries = [entry('b1', { type: 'message', role: 'assistant', at: rev, text: '하나', receipt: null, staged: true }), edit('e1', 'b1'), version('v2', 'b1', '둘'), edit('e2', 'v2')];
+    expect(fold(entries)[0]!.versions.map((v) => v.staged)).toEqual([true, undefined]);
+    expect(fold([...entries.slice(0, 1), version('r1', 'b1', '다시', 'b1')])[0]!.versions[0]!.staged).toBeUndefined();
+  });
+
   it('gives a version the latest translation made of it, never one made of the version it replaced', () => {
     const made = (text: string) => ({ text, receipt: receipt(), at: rev });
     const entries = [bot('b1', 'Hello'), entry('t1', { type: 'translation', version: 'b1', ...made('안녕') }), entry('t2', { type: 'translation', version: 'b1', ...made('안녕하세요') })];

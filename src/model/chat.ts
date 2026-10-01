@@ -25,6 +25,8 @@ export type Chat = {
   seed?: string;
   // 이 채팅만 따로: the chat's own memory settings in place of the account's.
   memory?: MemorySettings;
+  // The variables it starts from, over the card's defaults: a chat brought from Risu keeps Risu's.
+  variables?: [string, string][];
 };
 
 // What a reply's generation left behind. The raw request is never stored.
@@ -83,9 +85,11 @@ export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: bo
 // seed: the id a version's random tags roll from in place of its own. A branch's copy keeps its original's, and
 // an edit or a continued cut keeps the seed of the version it replaces, so text already shown never rolls again.
 // translation: the version's own from the start, for a message sent translated, an edit and a branch's copy.
+// staged: text already past the bot's input or output scripts (a message brought from Risu), which never run on it
+// again; an edit of it is the same.
 export type Entry =
   // A new message with its first version, which has the entry's id.
-  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation }
+  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true }
   // replaces: the version this one takes the place of, for an edit, a retried failure or a continued cut
   // (이어 쓰기), so the count of versions does not grow; null for a new version, which goes last. An edit keeps
   // the receipt of the reply it changes.
@@ -99,10 +103,10 @@ export type Entry =
   // A translation made after the version was saved; the latest one for a version is its translation.
   | ({ type: 'translation'; version: string } & Translation);
 
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation };
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true };
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number };
 
-const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'version' }>, edited: boolean): Version => ({
+const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'version' }>, edited: boolean, staged: boolean): Version => ({
   id,
   seed: entry.seed ?? id,
   text: entry.text,
@@ -110,6 +114,7 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
   edited,
   at: entry.at,
   ...(entry.translation && { translation: entry.translation }),
+  ...(staged && { staged: true }),
 });
 
 // A chat's entries, read in rev order into the messages on screen. Entries naming a message or version
@@ -129,7 +134,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
 
   for (const { id, value: entry } of [...entries].sort((a, b) => a.rev - b.rev)) {
     if (entry.type === 'message') {
-      const version = versionOf(id, entry, false);
+      const version = versionOf(id, entry, false, entry.staged === true);
       versions.set(id, version);
       own.set(id, version);
       messages.set(id, { id, role: entry.role, at: entry.at, versions: [version], selected: 0 });
@@ -147,9 +152,9 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     const message = messages.get(entry.message);
     if (!message) continue;
     if (entry.type === 'version') {
-      const version = versionOf(id, entry, entry.edit);
-      own.set(id, version);
       const slot = entry.replaces === null ? -1 : locate(message, entry.replaces);
+      const version = versionOf(id, entry, entry.edit, entry.edit && message.versions[slot]?.staged === true);
+      own.set(id, version);
       if (slot === -1) message.versions.push(version);
       else message.versions[slot] = version;
       versions.set(id, version);

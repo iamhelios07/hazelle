@@ -49,6 +49,7 @@ const scope: ChatScope = {
   faces: { char: null, user: null },
   screen: null,
   pick: 'luna:chat',
+  variables: [],
 };
 
 describe('display', () => {
