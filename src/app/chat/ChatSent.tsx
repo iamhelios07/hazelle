@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { Assembled, From } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
+import type { Memory } from '../../model/memory';
 import type { Role } from '../../model/prompt';
 import type { Sent } from '../../runtime/talk';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
-import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack } from '../ui';
+import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
+import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
 
 type Lore = NonNullable<Assembled['lore']>[number];
@@ -111,6 +113,50 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
     case 'dropped':
       return DROPPED[fate.cause];
   }
+}
+
+// What the reply was sent of the chat's memory, so a fact it forgot reads as missing from memory or sent and not used.
+// The records are named as they are now; one deleted since reads as gone.
+export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memory: Memory | null; onRecord: (record: string) => void }) {
+  if (!sent) return <Empty variant="section">이 답장의 기억 기록이 이 페이지에 없어요. 기억 기록도 요청 원문처럼 페이지를 닫으면 사라져요.</Empty>;
+  const { memory: used, dropped } = sent.prompt;
+  const cut = { label: '컨텍스트 한도로 빠진 메시지', value: `${dropped}개`, tone: dropped ? ('warn' as const) : undefined };
+  if (!used) {
+    return (
+      <>
+        <Text variant="note">이 답장을 보낼 때 장기 기억이 꺼져 있었어요.</Text>
+        <Facts variant="tiles" items={[cut]} />
+      </>
+    );
+  }
+  const records = new Map((memory?.records ?? []).map((record) => [record.id, record]));
+  return (
+    <>
+      <Facts
+        variant="tiles"
+        items={[
+          { label: '보낸 기록', value: `${used.sent.length}개` },
+          { label: '기억이 맡은 메시지', value: `${used.covered}개` },
+          { label: '기억 없이 빠진 메시지', value: `${used.missing}개`, tone: used.missing ? 'warn' : undefined },
+          cut,
+        ]}
+      />
+      {used.sent.length > 0 && (
+        <Section level={3} title="보낸 기록" note={`${used.sent.length}개`} hint="답장이 여기 있는 기록의 일을 잊었다면 모델이 쓰지 않은 거예요. 여기 없는 일은 기억에서 빠진 거예요.">
+          <List label="보낸 기록">
+            {used.sent.map((id) => {
+              const record = records.get(id);
+              return record ? (
+                <ListItem key={id} title={recordTitle(record)} description={recordScene(record) || undefined} onClick={() => onRecord(id)} />
+              ) : (
+                <ListItem key={id} title="지금은 없는 기록" />
+              );
+            })}
+          </List>
+        </Section>
+      )}
+    </>
+  );
 }
 
 export function SentLore({ sent }: { sent: Sent | null }) {

@@ -1,5 +1,6 @@
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
+import type { MemoryFailure } from '../../runtime/memory';
 import type { AddFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
 import type { MetersFailure } from '../../runtime/meters';
@@ -173,5 +174,32 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
       return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 빈 번역을 보냈어요.';
     case 'unsaved':
       return `번역을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+  }
+}
+
+const INVALID = {
+  unreadable: '모델의 답을 기록으로 읽지 못했어요.',
+  fields: '모델의 답에 빠진 칸이 있어요.',
+  lines: '기록에 옮긴 대사가 원문에 그대로 있지 않아요.',
+} as const;
+
+export function describeMemoryFailure(failure: MemoryFailure): string {
+  switch (failure.kind) {
+    case 'no-model':
+      return `기억을 정리할 모델이 정해지지 않았어요. 기억 프롬프트나 ${inSettings('models')}에서 골라 주세요.`;
+    case 'model-gone':
+      return `기억 정리에 쓸 모델이 별표한 모델에 없어요. 기억 프롬프트나 ${inSettings('models')}에서 다시 골라 주세요.`;
+    case 'prompt-missing':
+      return `기본 기억 프롬프트가 없어요. ${inSettings('prompts')}에서 기억 프롬프트 하나를 기본으로 정해 주세요.`;
+    case 'profile-missing':
+      return failure.own ? `기억 모델이 쓰던 설정이 지워졌어요. ${inSettings('models')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 다른 설정을 기본으로 정해 주세요.`;
+    case 'tokenizer':
+      return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
+    case 'failed':
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 빈 답을 보냈어요.';
+    case 'invalid':
+      return INVALID[failure.reason];
+    case 'unsaved':
+      return `기억을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
   }
 }

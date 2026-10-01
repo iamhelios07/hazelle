@@ -29,11 +29,11 @@ import { blocked, takeTurn, togglesOf, statusBoxes, translateLatest, translation
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
-import { useAssetUrl, useChatDisplay, useSession, useTranslating, useTurn } from '../session';
+import { useAssetUrl, useChatDisplay, useChatMemory, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, useViewport } from '../ui';
-import { useCache } from './useCache';
+import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
@@ -112,14 +112,19 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const last = messages.at(-1);
 
   const draft = useDraft(id, chat.character);
-  const { follow: toBottom, ...scroll } = useFollow(messages.length, streaming);
-  const cache = useCache(id, chat, messages, draft.text, busy);
+  const { follow: toBottom, hold: holdScroll, ...scroll } = useFollow(messages.length, streaming);
+  const memory = useChatMemory(id);
+  const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy);
   const [dialog, setDialog] = useState<'rename' | 'reading' | null>(null);
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
-  // 정보, 토글 and the persona and prompt lists take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | Side | null>(null);
+  // 정보, 토글, 장기 기억 and the persona and prompt lists take the same place beside the story, so one closes another.
+  // record: the memory record open in the panel, in place of the whole memory.
+  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
+  // The messages a memory record was made from, marked in the story: at changes with each look, so the same ones are
+  // marked again.
+  const [found, setFound] = useState<{ ids: ReadonlySet<string>; first: string; at: number } | null>(null);
   // Where the status window stands: in its latest message, or with 옆에 두기 in the story's margin, while each box
   // fits there (fitting, which the margin reports whether it is shown or not). The key hides it there for now.
   const [fitting, setFitting] = useState<ReadonlyMap<number, boolean>>(() => new Map());
@@ -143,6 +148,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const problem = stopped ? blocked(session, chat) : null;
 
   useEffect(preloadTokenizer, []);
+
+  useEffect(() => {
+    if (id) session.memory.check(id);
+  }, [id]);
 
   // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateLatest's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
@@ -386,6 +395,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     busy,
     streaming,
     cache,
+    leaving,
+    found,
     problem,
     editing,
     pinned,
@@ -423,6 +434,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       follow,
       info: (reply: string | null) => setPanel({ kind: 'info', id: reply }),
       showToggles: () => setPanel({ kind: 'toggles' }),
+      memory: (record: string | null) => setPanel({ kind: 'memory', record }),
+      // ids in chat order; the view goes to the first.
+      find: (ids: string[]) => {
+        if (!ids.length) return;
+        holdScroll();
+        setFound({ ids: new Set(ids), first: ids[0]!, at: Date.now() });
+      },
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.
       toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),

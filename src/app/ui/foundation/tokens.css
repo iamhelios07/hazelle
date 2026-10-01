@@ -276,6 +276,7 @@
   --duration-pulse: 1.1s;
   --duration-dot: 1.2s;
   --duration-stagger: 150ms;
+  --duration-found: 2.4s;
   --ease-enter: ease-out;
   --ease-loop: ease-in-out;
 

@@ -1,7 +1,7 @@
 import type { ModelRef, Role } from '../../connectors/assignment';
 import { setDefaultModel } from '../../runtime/assignment';
 import { modelProfile, profileUsers } from '../../runtime/profiles';
-import { ofSort } from '../../runtime/prompts';
+import { TASK_NAMES } from '../common/prompt-words';
 import { findStarred, RolePicker } from '../common/RolePicker';
 import { AUX_HELP, DEFAULT_MODELS, follows, MODEL_ROLES, NOT_STARRED, noStarred, PAGES } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
@@ -30,7 +30,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
     });
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
   const sorted = defaultFirst(profiles, settings.profile);
-  const ownModels = prompts.filter((prompt) => ofSort(prompt, 'translate')).flatMap((prompt) => (prompt.value.model ? [{ prompt, model: prompt.value.model }] : []));
+  const ownModels = prompts.flatMap((prompt) => (prompt.value.task && prompt.value.model ? [{ prompt, task: prompt.value.task, model: prompt.value.model }] : []));
 
   return (
     <Screen top={<NavBar title={PAGES.models} {...backBar(back)} />}>
@@ -58,11 +58,11 @@ export function ModelsScreen({ back }: { back: Back | null }) {
       {ownModels.length > 0 && (
         <Section title="프롬프트에서 정한 모델" hint="이 프롬프트로 하는 일은 보조 모델 대신 이 모델을 써요. 눌러서 프롬프트에서 바꿔요.">
           <List label="프롬프트에서 정한 모델">
-            {ownModels.map(({ prompt, model }) => (
+            {ownModels.map(({ prompt, task, model }) => (
               <ListItem
                 key={prompt.id}
                 title={prompt.value.name}
-                tags={['번역']}
+                tags={[TASK_NAMES[task]]}
                 aside={findStarred(model, connections)?.name ?? NOT_STARRED}
                 onClick={() => navigate({ kind: 'prompt', id: prompt.id, pane: null })}
               />

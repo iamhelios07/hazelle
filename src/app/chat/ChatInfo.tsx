@@ -4,9 +4,9 @@ import { calls, shown, type Receipt } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
-import { useSession } from '../session';
+import { useChatMemory, useSession } from '../session';
 import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
-import { SentLore, SentRequest } from './ChatSent';
+import { SentLore, SentMemory, SentRequest } from './ChatSent';
 import { cost, seconds, speed, tokens, UNKNOWN } from '../common/receipt';
 
 type Props = {
@@ -15,6 +15,8 @@ type Props = {
   // The reply shown; the latest when it is gone.
   id: string | null;
   onShow: (id: string) => void;
+  // Opens a memory record in the memory panel.
+  onRecord: (record: string) => void;
   onClose: () => void;
 };
 
@@ -23,6 +25,7 @@ const CUT = { length: '길이 한도', stopped: '직접 멈춤', 'no-terminal': 
 const TABS = [
   { value: 'reply', label: '답장' },
   { value: 'lore', label: '로어북' },
+  { value: 'memory', label: '기억' },
   { value: 'request', label: '요청 원문' },
 ] as const;
 
@@ -42,8 +45,9 @@ const timeFacts = (receipt: Receipt) => [
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
 ];
 
-export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
+export function ChatInfo({ chat, messages, id, onShow, onRecord, onClose }: Props) {
   const { talk, costs } = useSession();
+  const memory = useChatMemory(chat);
   const [tab, setTab] = useState<(typeof TABS)[number]['value']>('reply');
   const replies = messages.filter((message) => message.role === 'assistant');
   const reply = replies.find((message) => message.id === id) ?? replies.at(-1);
@@ -112,6 +116,7 @@ export function ChatInfo({ chat, messages, id, onShow, onClose }: Props) {
           </>
         )}
         {tab === 'lore' && <SentLore sent={sent} />}
+        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
         {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
       </>
     );

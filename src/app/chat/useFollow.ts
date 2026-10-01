@@ -57,8 +57,13 @@ export function useFollow(count: number, streaming: boolean) {
     setUnread(false);
   }
 
+  // Before the view is moved up from code: following would take it back down in the same render.
+  function hold() {
+    stick.current = false;
+  }
+
   // What the pill over the composer says, or null while the view is at the bottom.
   const pill = !away ? null : streaming ? '답장 쓰는 중' : unread ? '새 답장' : '맨 아래로';
 
-  return { scrollRef, onScroll, follow, pill, away };
+  return { scrollRef, onScroll, follow, hold, pill, away };
 }

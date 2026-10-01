@@ -9,6 +9,7 @@ import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
+import { ChatMemory } from './ChatMemory';
 import { useReading } from './ChatReading';
 import { ChatStatusAside, ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
@@ -50,9 +51,12 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
         footer={<ChatComposer chat={chat} />}
         panel={
           panel?.kind === 'info' ? (
-            <ChatInfo chat={id} messages={messages} id={panel.id} onShow={actions.info} onClose={actions.closePanel} />
+            <ChatInfo chat={id} messages={messages} id={panel.id} onShow={actions.info} onRecord={actions.memory} onClose={actions.closePanel} />
           ) : panel?.kind === 'toggles' ? (
             <ChatToggles chat={chat} />
+          ) : panel?.kind === 'memory' ? (
+            // The panel opens only from a saved chat.
+            id && <ChatMemory id={id} record={panel.record} chat={chat} />
           ) : (
             panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           )

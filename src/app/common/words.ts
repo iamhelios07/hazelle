@@ -9,7 +9,7 @@ import type { Role } from '../../connectors/assignment';
 
 export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '보조 모델' };
 
-export const AUX_HELP = '번역처럼 대화 밖에서 하는 일에 써요. 번역 프롬프트에서 모델을 고르면 번역은 그 모델로 해요.';
+export const AUX_HELP = '번역과 장기 기억 정리처럼 대화 밖에서 하는 일에 써요. 번역 프롬프트나 기억 프롬프트에서 모델을 고르면 그 일은 그 모델로 해요.';
 
 export const SETTINGS = '설정';
 

@@ -3,12 +3,14 @@ import type { Blocked } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { withRo } from '../common/languages';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
-import { Button, Callout, Composer, pressed, pressedKey, SendButton, useMenuOpener, useWide } from '../ui';
+import { Button, Callout, Composer, pressed, pressedKey, SendButton, SendNote, useMenuOpener, useWide } from '../ui';
 import { ChatCache } from './ChatCache';
 import { ChatNote } from './ChatNote';
 import { ChatPersonaMenu } from './ChatPersonaMenu';
 import { ChatTranslate } from './ChatTranslate';
 import type { OpenChat } from './useChat';
+
+const LEAVING = '가장 오래된 메시지가 이번 요청에서 빠지는데, 장기 기억이 아직 정리하지 못했거나 보내지 않는 부분이라 모델이 그 내용을 몰라요. 장기 기억 패널에서 무엇이 빠지는지 볼 수 있어요.';
 
 type Chip = 'model' | 'prompt' | 'persona';
 // The chip whose menu fixes each failure that stops a chat before sending.
@@ -86,6 +88,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
                 답장 받기
               </Button>
             )}
+            {!busy && chat.leaving ? <SendNote label={`메시지 ${chat.leaving}개`} title="기억 없이 빠질 메시지" warning={{ words: '기억 없이 빠짐', why: LEAVING }} /> : null}
             {!busy && <ChatCache cache={chat.cache} />}
             <SendButton
               streaming={streaming}

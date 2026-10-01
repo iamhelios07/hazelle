@@ -47,6 +47,9 @@ type Props = {
   // What the edit box holds, while this message is being edited: its text, and its translation when it has one.
   editing: { text: string; translation: string | null } | null;
   pinned: boolean;
+  // One of the messages a memory record was made from, marked as StoryMessage's found; seek on the first.
+  found: number;
+  seek: boolean;
   // A branch of this chat is being saved; one at a time.
   branching: boolean;
   // The header's model menu, which a failed reply's 다른 모델로 opens.
@@ -57,7 +60,7 @@ type Props = {
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, decor, hosted, offered, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, branching, modelMenu, actions } = props;
+  const { message, text: original, decor, hosted, offered, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, found, seek, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
@@ -262,6 +265,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       after={after}
       tools={tools}
       pinned={pinned}
+      found={found}
+      seek={seek}
       onTap={() => actions.pin(message)}
     >
       {body}

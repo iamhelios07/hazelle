@@ -1,4 +1,4 @@
-import type { Role, SlotKind } from '../../model/prompt';
+import type { PromptSort, Role, SlotKind } from '../../model/prompt';
 
 // What a prompt's parts are called, in the prompt editor and in 요청 원문.
 export const SLOT_NAMES: Record<SlotKind, string> = {
@@ -18,3 +18,6 @@ export const MESSAGE_ROLES: Record<Role, string> = { system: '시스템', user: 
 
 // A text block with no name of its own.
 export const textName = (role: Role) => `${MESSAGE_ROLES[role]} 글`;
+
+// A task prompt's tag where it is listed among others.
+export const TASK_NAMES: Record<Exclude<PromptSort, 'conversation'>, string> = { translate: '번역', memory: '기억' };

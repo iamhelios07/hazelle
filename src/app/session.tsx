@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatScope } from '../engine/render';
 import type { Kind } from '../model/kinds';
+import { memoryId, type Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
+import type { Remembering } from '../runtime/memory';
 import type { Session } from '../runtime/session';
 import type { Opening } from '../runtime/read-model';
 import type { ObjectStore } from '../runtime/store';
@@ -111,4 +113,20 @@ export function useTurn(): Turn | null {
 export function useTranslating(): Translating {
   const translator = useTranslator();
   return useSyncExternalStore(translator.subscribe, translator.snapshot);
+}
+
+// The chat's stored memory, null while it has none.
+export function useChatMemory(chat: string | null): Memory | null {
+  const { store } = useSession();
+  const id = chat === null ? null : memoryId(chat);
+  const subscribe = useCallback(
+    (listener: () => void) => (id === null ? () => {} : store.subscribe((changes) => changes.some((change) => change.kind === 'memory' && change.id === id) && listener())),
+    [store, id],
+  );
+  return useSyncExternalStore(subscribe, () => (id === null ? null : store.get('memory', id)))?.value ?? null;
+}
+
+export function useRemembering(): Remembering {
+  const { memory } = useSession();
+  return useSyncExternalStore(memory.subscribe, memory.snapshot);
 }
