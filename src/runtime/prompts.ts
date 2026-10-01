@@ -48,7 +48,8 @@ export const translationPrompt = (store: ObjectStore, chosen: string | undefined
 
 export const memoryPrompt = (store: ObjectStore) => choose(store, 'memory', undefined);
 
-// A new conversation prompt holds every slot once, the context before the chat and the notes after it, and the two
+// A new conversation prompt holds every slot once, the context before the chat with 장기 기억 last, where memory changing
+// at a boundary leaves the rest of the fixed part cached (design §6.2, Cache), and the notes after it, and the two
 // texts a card replaces, empty, so a card's system prompt and post-history instructions have their places. A new
 // task prompt starts as the account's default of its sort is, or the built-in one while that is gone.
 export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): Promise<ApiResult<Stored<'prompt'>>> {
@@ -63,6 +64,7 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): P
     { ...named(), kind: 'slot', slot: 'description', role: 'system', wrapper: null },
     { ...named(), kind: 'slot', slot: 'persona', role: 'system', wrapper: null },
     { ...named(), kind: 'slot', slot: 'lorebook' },
+    { ...named(), kind: 'slot', slot: 'memory', role: 'system', wrapper: null },
     { ...named(), kind: 'slot', slot: 'chat', range: { from: 0, to: null } },
     { ...named(), kind: 'text', role: 'system', text: '', mark: 'globalNote' },
     { ...named(), kind: 'slot', slot: 'authorNote', role: 'system', wrapper: null },

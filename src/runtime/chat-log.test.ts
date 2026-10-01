@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
+import { memoryId, type MemoryRecord } from '../model/memory';
 import { appendCost, appendReply, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
 import { BATCH_LIMITS, testServer } from './testing';
 import { displayChat } from './turn';
@@ -93,5 +94,41 @@ describe('branchChat', () => {
     const reader = { store, username: 'jin' };
     expect(displayChat(reader, branched.data, stored.value, copy)).toEqual(displayChat(reader, source, chat, item.messages.slice(0, -1)));
     expect(stored.rev).toBeGreaterThan(Math.max(...entries.map((entry) => entry.rev)));
+  });
+  it('carries the memory records whose every message lies before the split, their sources remapped, with the facts and threads they or the user set', async () => {
+    const { store } = await server.account();
+    const source = crypto.randomUUID();
+    const chat: Chat = { title: null, character: null, models: {} };
+    await startChat(store, source, chat, null);
+    const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    for (const [index, id] of ids.entries()) await appendUserMessage(store, source, { id, text: `말 ${index}` });
+    await editMessage(store, source, fold(store.children('entry', source))[1]!, '고친 말', null);
+    const messages = fold(store.children('entry', source));
+    const sourcesOf = (from: number, to: number) => messages.slice(from, to).map((message) => ({ message: message.id, version: shown(message).id }));
+    const record = (id: string, sources: MemoryRecord['sources']): MemoryRecord => ({ id, sources, print: 'p', when: null, where: null, who: [], what: id, lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 });
+    await store.create(
+      'memory',
+      {
+        records: [record('before', sourcesOf(0, 2)), record('across', sourcesOf(2, 4))],
+        state: [
+          { about: 'Luna', field: 'mood', value: 'calm', record: 'before' },
+          { about: 'Luna', field: 'place', value: 'pier', record: 'across' },
+          { about: 'jin', field: 'name', value: 'Jin', record: null },
+        ],
+        threads: [
+          { id: 't1', text: 'A promise', opened: 'across' },
+          { id: 't2', text: 'The user’s own', opened: null },
+        ],
+      },
+      { id: memoryId(source), parent: source },
+    );
+    const item: ChatItem = { id: source, chat, messages, count: messages.length, title: '', preview: '', at: null, order: 0 };
+    const branched = await branchChat(store, item, ids[2]!);
+    if (!branched.ok) throw new Error(branched.error);
+    const copy = fold(store.children('entry', branched.data));
+    const memory = store.get('memory', memoryId(branched.data))!.value;
+    expect(memory.records.map(({ id, sources }) => [id, sources])).toEqual([['before', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);
+    expect(memory.state.map(({ field }) => field)).toEqual(['mood', 'name']);
+    expect(memory.threads.map(({ id }) => id)).toEqual(['t2']);
   });
 });

@@ -3,7 +3,7 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Card } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
-import { assemble, type PromptInput, type TooLong } from '../engine/pipeline';
+import { assemble, type Assembled, type PromptInput, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
@@ -15,6 +15,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route, type RouteFailure } from './assignment';
 import { translateSwitches } from './characters';
+import { memoryInput } from './memory';
 import { chatPersona } from './personas';
 import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
@@ -52,7 +53,7 @@ export type TurnFailure =
 
 // Everything one reply needs, read once when it is asked for: the chat, the model, what the prompt is built from (the
 // user's new message last in its messages), the message Talk saves with the reply, and where the reply goes.
-export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 'reply'> & Pick<PromptInput, 'scope' | 'budget'> & { chat: Chat };
+export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 'reply'> & Pick<PromptInput, 'scope' | 'budget' | 'memory'> & { chat: Chat };
 
 type Reader = Pick<Session, 'store'>;
 
@@ -129,6 +130,15 @@ function budgetOf(model: Starred, settings: ModelSettings | null): number | null
   return context === null ? null : context - (replyOf(model, settings) ?? 0);
 }
 
+// What a chat's prompt may take of its 대화 모델's context; null when it has none or the context is unknown.
+export function promptBudget(store: Reader['store'], chat: Chat): number | null {
+  const route = chatModel(store, chat, 'main');
+  return 'kind' in route ? null : budgetOf(route.model, sentSettings(store, route));
+}
+
+// A chat's messages as a request sends them: under 반전 모드, each with its shown version's translation as its text.
+export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) => (translateSwitches(store, chat.character).reverse ? messages.map(reversed) : messages);
+
 // Each message's text as the chat shows it, for its log, its title and its preview, and the bot's CSS for its log.
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
 export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null): Display =>
@@ -198,7 +208,7 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
 
 // null: the chat, or the message the target names, is gone; for a continue, so is the version it names. ids are
 // the ones the turn was shown under, for a new chat shown before it was saved.
-function gatherTurn(session: Session, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
+function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
   const stored = session.store.get('chat', chat);
   if (!stored) return null;
   const route = chatModel(session.store, stored.value, 'main');
@@ -222,7 +232,7 @@ function gatherTurn(session: Session, chat: string, target: Target, ids = { said
   const sending: Message[] = said ? [{ id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now }], selected: 0 }] : [];
   // 반전 모드 sends the messages before the target as the reader reads them. A continuation's prompt ends with the
   // version it continues, as its text, which the continuation is written after.
-  const before = translateSwitches(session.store, stored.value.character).reverse ? messages.slice(0, at).map(reversed) : messages.slice(0, at);
+  const before = asSent(session.store, stored.value, messages.slice(0, at));
   const history = continues ? [...before, { ...messages[at]!, selected: index }] : [...before, ...sending];
   const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);
   if ('kind' in scope) return scope;
@@ -232,6 +242,7 @@ function gatherTurn(session: Session, chat: string, target: Target, ids = { said
     settings,
     scope,
     budget: budgetOf(route.model, sentSettings(session.store, route)),
+    memory: memoryInput(session.store, chat, stored.value, history),
     said,
     reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues },
   };
@@ -240,12 +251,19 @@ function gatherTurn(session: Session, chat: string, target: Target, ids = { said
 // The request sending text would make, as its cache reads it, for the forecast beside the send button. A message sent
 // translated goes out as its translation, which is not made yet, so it stands in as typed.
 export function nextSend(session: Session, chat: string, text: string, countTokens: (text: string) => number): CacheSend | null {
-  const turn = gatherTurn(session, chat, { kind: 'send', text });
-  if (turn === null || 'kind' in turn) return null;
-  const prompt = assemble({ scope: turn.scope, seed: turn.reply.id, countTokens, budget: turn.budget, continuing: false });
-  if ('kind' in prompt) return null;
+  const next = wouldSend(session, chat, { kind: 'send', text }, countTokens);
+  if (!next) return null;
+  const { turn, prompt } = next;
   const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
   return view && { connection: turn.route.connection.id, view, parts: prompt.parts };
+}
+
+// The request the chat would send for target now; null while it cannot send, or the prompt is over the model's budget.
+export function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, countTokens: (text: string) => number): { turn: TurnContext; prompt: Assembled } | null {
+  const turn = gatherTurn(session, chat, target);
+  if (turn === null || 'kind' in turn) return null;
+  const prompt = assemble({ scope: turn.scope, seed: turn.reply.id, countTokens, budget: turn.budget, continuing: false, memory: turn.memory });
+  return 'kind' in prompt ? null : { turn, prompt };
 }
 
 // A message whose shown version has a translation, with that translation as its text: a reply's, or what the user
@@ -279,8 +297,8 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in turn) return turn;
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { kind: 'tokenizer' };
-  const { route, settings, scope, budget, said, reply } = turn;
-  const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null });
+  const { route, settings, scope, budget, memory, said, reply } = turn;
+  const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null, memory });
   return 'kind' in prompt ? prompt : { route, settings, prompt, said };
 }
 

@@ -112,14 +112,17 @@ export class ObjectStore {
   }
 
   // The parent is the live object's, so an update never moves an object. One that is gone, or goes
-  // while a conflict is resolved, fails as 'gone' and is never written back.
-  update<K extends Exclude<Kind, AppendOnly>>(kind: K, id: string, change: (current: Values[K]) => Values[K]): Promise<ApiResult<Stored<K>>> {
+  // while a conflict is resolved, fails as 'gone' and is never written back. So does a change that answers null: what
+  // it changes is no longer there in the copy it is applied to, and nothing is written.
+  update<K extends Exclude<Kind, AppendOnly>>(kind: K, id: string, change: (current: Values[K]) => Values[K] | null): Promise<ApiResult<Stored<K>>> {
     return this.one<K>({
       resolve: () => {
         const held = this.live.get(id);
         if (!held || held.kind !== kind) return { ok: false, error: 'gone' };
         if (held.value === undefined) return { ok: false, error: 'unreadable' };
-        return { ok: true, data: { pending: { kind, id, parent: held.parent, value: change(held.value as Values[K]), baseRev: held.rev }, held: null } };
+        const value = change(held.value as Values[K]);
+        if (value === null) return { ok: false, error: 'gone' };
+        return { ok: true, data: { pending: { kind, id, parent: held.parent, value, baseRev: held.rev }, held: null } };
       },
     });
   }
