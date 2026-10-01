@@ -37,7 +37,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: '모델 고르기', exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_MODEL} 별표하기` }).click();
     await page.getByRole('button', { name: '완료', exact: true }).click();
-    await page.getByRole('button', { name: '기본값', exact: true }).click();
+    await page.getByRole('button', { name: '모델', exact: true }).click();
     const main = page.getByRole('button', { name: /^대화 모델 · / });
     await main.click();
     await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();

@@ -17,11 +17,14 @@ export const SETTINGS = '설정';
 export const COMMAND = '명령어';
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
-export const PAGES = { prompts: '프롬프트', personas: '페르소나', connections: '연결', profiles: '모델 설정', defaults: '기본값', account: '계정' };
+export const PAGES = { models: '모델', connections: '연결', prompts: '프롬프트', personas: '페르소나', account: '계정' };
+
+// The layer of the model assignment that 설정's 모델 page holds, under every prompt and chat.
+export const DEFAULT_MODELS = '기본 모델';
 
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
 
-// An unset choice takes its value from somewhere else, and names it: 기본값 따르기, 보조 모델 따르기.
+// An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;
 
 export const NOT_STARRED = '별표한 모델에 없음';

@@ -6,7 +6,7 @@ import type { Back } from '../shell/routes';
 import { PAGES } from '../common/words';
 import { Button, Callout, Empty, Icon, List, ListItem, NavBar, Screen } from '../ui';
 
-// The default model is chosen in 설정's 기본값, not here.
+// The default model is chosen on 설정's 모델 page, not here.
 export function ConnectionsScreen({ back }: { back: Back | null }) {
   const connections = useConnections();
   const unreadable = useUnreadable();

@@ -28,12 +28,11 @@ export type Route =
   | { kind: 'prompt'; id: string; pane: 'toggles' | null }
   | { kind: 'personas' }
   | { kind: 'persona'; id: string }
-  // 설정's 모델 설정: the 설정 묶음 list, and one 묶음's editor.
-  | { kind: 'profiles' }
+  // 설정's 모델: the default models, the starred models and the 설정 묶음 list; one 묶음's editor.
+  | { kind: 'models' }
   | { kind: 'profile'; id: string }
   // model: a starred model's id, which may hold any character; the path carries it escaped.
   | { kind: 'model'; connection: string; model: string }
-  | { kind: 'defaults' }
   | { kind: 'account' }
   // 설정's own list of its pages, which phones open from the library.
   | { kind: 'settings' };
@@ -97,12 +96,11 @@ export function parseRoute(at: string): Route {
     return ID.test(id) ? { kind: 'persona', id } : HOME;
   }
   if (top === 'models') {
-    if (id === undefined) return { kind: 'profiles' };
+    if (id === undefined) return { kind: 'models' };
     return ID.test(id) ? { kind: 'profile', id } : HOME;
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
-    if (top === 'defaults') return { kind: 'defaults' };
     if (top === 'account') return { kind: 'account' };
   }
   return HOME;
@@ -151,14 +149,12 @@ export function href(route: Route): string {
       return '/personas';
     case 'persona':
       return `/personas/${route.id}`;
-    case 'profiles':
+    case 'models':
       return '/models';
     case 'profile':
       return `/models/${route.id}`;
     case 'model':
       return `/models/${route.connection}/${route.model.split('/').map(encodeURIComponent).join('/')}`;
-    case 'defaults':
-      return '/defaults';
     case 'account':
       return '/account';
     case 'settings':
@@ -169,8 +165,8 @@ export function href(route: Route): string {
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
 // The list a route sits in: its screen is the list itself, or the item beside it where there is room. null outside
-// the connection, persona and 모델 설정 screens.
-export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'profiles'> | null {
+// the connection, persona and 모델 screens.
+export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'models'> | null {
   switch (route.kind) {
     case 'connections':
     case 'connection':
@@ -178,10 +174,10 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
     case 'personas':
     case 'persona':
       return { kind: 'personas' };
-    case 'profiles':
+    case 'models':
     case 'profile':
     case 'model':
-      return { kind: 'profiles' };
+      return { kind: 'models' };
     case 'add-connection':
     case 'connect':
     case 'connect-direct':
@@ -191,7 +187,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
   }
 }
 
-export type SettingsPage = 'prompts' | 'personas' | 'connections' | 'profiles' | 'defaults' | 'account';
+export type SettingsPage = 'models' | 'connections' | 'prompts' | 'personas' | 'account';
 
 // Which page of 설정 a route is on, 'list' for 설정's own list, or null outside 설정. While it is not null, the
 // settings layer stands in for the library.
@@ -203,11 +199,10 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'personas':
     case 'persona':
       return 'personas';
-    case 'profiles':
+    case 'models':
     case 'profile':
     case 'model':
-      return 'profiles';
-    case 'defaults':
+      return 'models';
     case 'account':
       return route.kind;
     case 'settings':
@@ -264,8 +259,7 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     case 'connections':
     case 'prompts':
     case 'personas':
-    case 'profiles':
-    case 'defaults':
+    case 'models':
     case 'account':
       return { kind: 'settings' };
     case 'add-connection':
@@ -280,7 +274,7 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
       return { kind: 'personas' };
     case 'profile':
     case 'model':
-      return { kind: 'profiles' };
+      return { kind: 'models' };
   }
 }
 

@@ -15,14 +15,13 @@ import { GalleryScreen } from '../library/gallery/GalleryScreen';
 import { HomeScreen } from '../library/HomeScreen';
 import { ModelScreen } from '../models/ModelScreen';
 import { ProfileScreen } from '../models/ProfileScreen';
-import { ProfilesScreen } from '../models/ProfilesScreen';
+import { ModelsScreen } from '../models/ModelsScreen';
 import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
 import { useChatModel, useChats, useConnections, useLibrary, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
-import { DefaultsScreen } from '../settings/DefaultsScreen';
 import { Empty, ListDetail, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
 import { backTo, listOf, up, upFromMissing, type Below, type Route } from './routes';
@@ -35,7 +34,7 @@ const EMPTY = {
   connections: '연결을 고르면 모델 목록과 사용량이 여기에 보여요.',
   'add-connection': '왼쪽에서 연결할 곳을 고르면 여기서 이어서 연결해요.',
   personas: '페르소나를 고르면 여기서 고칠 수 있어요.',
-  profiles: '모델을 고르면 그 모델의 정보와 쓰는 설정이 여기에 보여요.',
+  models: '모델을 고르면 그 모델의 정보와 쓰는 설정이 여기에 보여요.',
 };
 
 // The chat, character or connection a route names is looked up here, so each screen is given what it
@@ -116,8 +115,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         const stored = personas.find((persona) => persona.id === at.id);
         return stored ? <PersonaScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'persona');
       }
-      case 'profiles':
-        return <ProfilesScreen back={sideBack(at)} />;
+      case 'models':
+        return <ModelsScreen back={sideBack(at)} />;
       case 'profile': {
         const stored = profiles.find((profile) => profile.id === at.id);
         return stored ? <ProfileScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'profile');
@@ -127,14 +126,12 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         const model = connection?.value.starred.find((candidate) => candidate.id === at.model);
         return connection && model ? <ModelScreen key={`${connection.id}/${model.id}`} connection={connection} model={model} back={back(at)} /> : missing(at, 'model');
       }
-      case 'defaults':
-        return <DefaultsScreen back={sideBack(at)} />;
       case 'account':
         return <AccountScreen back={sideBack(at)} />;
     }
   }
 
-  // The connection, persona and 모델 설정 screens: their list and the item picked from it, side by side when there is room.
+  // The connection, persona and 모델 screens: their list and the item picked from it, side by side when there is room.
   const list = listOf(route);
   if (!list) return screen(route);
   const detail = route.kind === list.kind ? null : screen(route);
