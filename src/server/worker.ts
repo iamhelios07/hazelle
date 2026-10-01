@@ -3,12 +3,10 @@ import { accounts } from './accounts';
 import { files } from './files';
 import { fail, type AppEnv } from './http';
 import { objects } from './objects';
-import { createRelay } from './relay';
+import { EXIT } from './relay';
 import { requireSession } from './session';
 import { streams } from './streams';
 import { vaults } from './vaults';
-
-const relay = createRelay(fetch);
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -28,9 +26,10 @@ app.route('/', accounts);
 app.route('/vault', vaults);
 app.route('/objects', objects);
 app.route('/files', files);
-app.post('/relay', requireSession, (c) => relay(c.req.raw));
+app.post('/relay', requireSession, (c) => c.env.RELAY.get(c.env.RELAY.newUniqueId(), EXIT).fetch(c.req.raw));
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 
 export default app;
+export { Relay } from './relay';
 export { ReplyStream } from './streams';

@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { fail, ID, readObject, type AppEnv } from './http';
+import { EXIT } from './relay';
 import { StreamBox } from './stream-box';
 import { requireSession } from './session';
 
@@ -22,7 +23,7 @@ export class ReplyStream {
 }
 
 const checkId = createMiddleware<AppEnv>(async (c, next) => (ID.test(c.req.param('id') ?? '') ? next() : fail(c, 400, 'bad-id')));
-const box = (c: Context<AppEnv>) => c.env.STREAMS.get(c.env.STREAMS.idFromName(`${c.get('account').id}:${c.req.param('id')}`));
+const box = (c: Context<AppEnv>) => c.env.STREAMS.get(c.env.STREAMS.idFromName(`${c.get('account').id}:${c.req.param('id')}`), EXIT);
 
 export const streams = new Hono<AppEnv>()
   .use(requireSession)

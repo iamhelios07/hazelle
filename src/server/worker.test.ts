@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { EXIT } from './relay';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
-  t = await testApp();
+  t = await testApp(async () => Response.json({ data: [] }));
 });
 afterAll(() => t.dispose());
 beforeEach(() => t.reset());
@@ -85,6 +86,18 @@ describe('accounts', () => {
     const cookie = sessionCookie(await post('signup', signupBody()));
     await t.env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
     expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
+  });
+});
+
+describe('provider calls', () => {
+  it('leave from a Durable Object placed at EXIT, for the relay and for a reply alike', async () => {
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    t.placed.length = 0;
+    const relayed = await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie);
+    expect(relayed.headers.get('x-relay')).toBe('upstream');
+    expect(await relayed.json()).toEqual({ data: [] });
+    await post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null }, cookie);
+    expect(t.placed).toEqual([EXIT, EXIT]);
   });
 });
 

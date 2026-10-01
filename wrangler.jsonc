@@ -20,9 +20,15 @@
     }
   ],
   "durable_objects": {
-    "bindings": [{ "name": "STREAMS", "class_name": "ReplyStream" }]
+    "bindings": [
+      { "name": "STREAMS", "class_name": "ReplyStream" },
+      { "name": "RELAY", "class_name": "Relay" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ReplyStream"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ReplyStream"] },
+    { "tag": "v2", "new_sqlite_classes": ["Relay"] }
+  ],
   "r2_buckets": [
     {
       "binding": "BLOBS",
