@@ -60,6 +60,13 @@
   composes: ellipsis from '../foundation/a11y.module.css';
 }
 
+/* A setting row stacked in a narrow box (SettingGroup's container query) gives its field the whole row, as on a phone. */
+@container (max-width: 440px) {
+  .field {
+    max-width: 100%;
+  }
+}
+
 /* On a phone the chip leaves room for the title beside it. */
 @media (max-width: 959px) {
   .chip {

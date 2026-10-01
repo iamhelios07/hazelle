@@ -1,4 +1,5 @@
 .group {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   border: var(--border-thin) solid var(--color-divider);
@@ -102,6 +103,24 @@
 
 .note {
   color: var(--color-text-muted);
+}
+
+/* The box, not the screen, decides: in a narrow list column on a wide screen, a field chip beside the words squeezes
+   them to a syllable a line. */
+@container (max-width: 440px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  .control {
+    justify-content: flex-start;
+  }
+
+  .error,
+  .note {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 959px) {
