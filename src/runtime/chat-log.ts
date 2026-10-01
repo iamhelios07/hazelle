@@ -24,7 +24,8 @@ export async function startChat(store: ObjectStore, id: string, chat: Chat, gree
 // the chat.
 export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, messages: RisuMessage[]): Write[] {
   const held = messages.map(({ role, text, at }): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: id, value: { type: 'message', role, at, text, receipt: null, staged: true } }));
-  return [...(greetings ? greetingWrites(id, greetings) : []), ...held, { type: 'create', kind: 'chat', id, parent: null, value: chat }];
+  // A moved chat's greeting takes its first message's time, so it does not read as newer than what follows it.
+  return [...(greetings ? greetingWrites(id, greetings, messages[0]?.at ?? Date.now()) : []), ...held, { type: 'create', kind: 'chat', id, parent: null, value: chat }];
 }
 
 // ids are the ones the greetings were shown under before the chat was saved, which seed their random tags.
@@ -32,8 +33,7 @@ export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, 
 export type Greetings = { ids: string[]; texts: string[]; selected: number; translations: ReadonlyMap<string, Translation> };
 
 // A character's chat opens on its greeting, and the other greetings are versions of it. They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
-function greetingWrites(chat: string, { ids, texts, selected, translations }: Greetings): Write[] {
-  const at = Date.now();
+function greetingWrites(chat: string, { ids, texts, selected, translations }: Greetings, at: number): Write[] {
   const first = ids[0]!;
   const entries: [string, Entry][] = texts.map((text, index) => {
     const translation = translations.get(ids[index]!);

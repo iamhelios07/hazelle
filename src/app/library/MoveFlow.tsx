@@ -53,7 +53,9 @@ export function MoveFlow({ file, aside, onClose }: { file: File; aside: number; 
       if (!read.ok) return setPhase({ kind: 'failed', message: FAILURE[read.failure.kind] });
       const have = broughtFromRisu(store);
       const can = tickable(read.backup, have);
-      setPhase({ kind: 'picking', backup: read.backup, have, can, ticks: can });
+      // Personas and presets carry no Risu id, so once anything was brought they start unticked rather than come twice.
+      const ticks = have.size === 0 ? can : { ...can, personas: can.personas.map(() => false), presets: can.presets.map(() => false) };
+      setPhase({ kind: 'picking', backup: read.backup, have, can, ticks });
     });
     return () => {
       live = false;
@@ -163,9 +165,8 @@ function Picks({ title, rows, can, ticks, onChange }: PicksProps) {
 function Summary({ backup, pick, moved }: { backup: RisuBackup; pick: MovePick; moved: Moved }) {
   const chats = moved.characters.reduce((sum, character) => sum + character.chats, 0);
   const missed = [
-    // moveFromRisu answers one entry per picked character, in pick order.
-    ...moved.characters.flatMap((character, index) => {
-      const source = pick.characters[index]!;
+    ...moved.characters.flatMap((character) => {
+      const source = pick.characters.find(({ id }) => id === character.risu)!;
       const lines = [...cardMissed(source.report, character.skipped, character.faceless), ...moveMissed(source.missed)];
       return lines.length ? [{ tone: 'missed' as const, title: character.name, note: lines.join(' · ') }] : [];
     }),
