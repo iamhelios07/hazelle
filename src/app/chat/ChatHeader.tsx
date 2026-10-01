@@ -1,8 +1,8 @@
-import { GitBranch, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
+import { GitBranch, History, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
 import { branchTree } from '../../model/chat';
 import { NameDialog } from '../common/NameDialog';
 import { ago } from '../common/time';
-import { useLibrary } from '../session';
+import { useLibrary, useRemembering } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
 import { Avatar, ChatTitle, Divider, IconButton, Menu, MenuHeading, MenuItem, ToolButton, useWide } from '../ui';
@@ -47,7 +47,10 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
 }
 
 export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
-  const { item, route, toggles, panel, modelMenu, actions } = chat;
+  const { id, item, route, toggles, panel, modelMenu, actions } = chat;
+  const remembering = useRemembering();
+  const failed = id !== null && remembering.failed.has(id);
+  const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
   const wide = useWide();
   const label = 'kind' in route ? '모델 고르기' : route.model.name;
   const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
@@ -64,7 +67,17 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
         expanded={panel?.kind === 'toggles'}
         onClick={() => (panel?.kind === 'toggles' ? actions.closePanel() : actions.showToggles())}
       />
-      {/* A phone's header has no room left beside the chat's title, so there 읽기 설정 opens from ⋯. */}
+      {/* A phone's header has no room left beside the chat's title, so there 장기 기억 and 읽기 설정 open from ⋯. */}
+      {wide && item && (
+        <ToolButton
+          icon={History}
+          label="장기 기억"
+          detail={failed ? '마지막 정리가 실패했어요' : undefined}
+          mark={failed ? { kind: 'dot' } : undefined}
+          expanded={panel?.kind === 'memory'}
+          onClick={toggleMemory}
+        />
+      )}
       {wide && <ReadingMenu reading={reading} />}
       {/* A phone opens 정보 from a tapped message's tools. */}
       {wide && (
@@ -78,6 +91,7 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
       )}
       <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
+        {!wide && item && <MenuItem label="장기 기억" sub={failed ? '마지막 정리가 실패했어요' : undefined} onClick={toggleMemory} />}
         {!wide && <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />}
         <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (

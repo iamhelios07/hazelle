@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Languages, Scissors, Square, TriangleAlert } from 'lucide-react';
-import type { MouseEvent, ReactNode } from 'react';
+import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 import { Button } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
@@ -22,17 +22,26 @@ type Props = {
   tools?: ReactNode;
   pinned: boolean;
   onTap: () => void;
+  // Marked for a moment as what was looked for, again each time the number changes; 0 for none. seek: the view
+  // goes to it.
+  found?: number;
+  seek?: boolean;
 };
 
-export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap }: Props) {
+export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap, found = 0, seek = false }: Props) {
   const hover = useHover();
+  const self = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (found && seek) self.current?.scrollIntoView({ block: 'center' });
+  }, [found]);
   // Phones have no hover, so a tap on the message itself shows its tools; not one the story took, such as on a picture.
   const tap = (event: MouseEvent) => {
     if (hover || event.defaultPrevented || (event.target as HTMLElement).closest('button, a, textarea')) return;
     onTap();
   };
   return (
-    <article className={pinned ? `${styles.message} ${styles.pinned}` : styles.message} onClick={tap}>
+    <article ref={self} className={pinned ? `${styles.message} ${styles.pinned}` : styles.message} onClick={tap}>
+      {found !== 0 && <span key={found} className={styles.found} aria-hidden />}
       {avatar}
       <div className={styles.main}>
         <div className={styles.head}>

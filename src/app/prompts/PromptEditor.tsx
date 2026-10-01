@@ -344,7 +344,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       stored.value.task === undefined ? (
         <ModelPane models={stored.value.models} defaults={settings.models} connections={connections} onPick={(role, ref) => void pickModel(role, ref)} />
       ) : (
-        <TaskModelPane own={stored.value.model} connections={connections} onPick={(ref) => void pickTaskModel(ref)} />
+        <TaskModelPane task={stored.value.task} own={stored.value.model} connections={connections} onPick={(ref) => void pickTaskModel(ref)} />
       )
     ) : open === TOGGLES ? (
       <TogglePane

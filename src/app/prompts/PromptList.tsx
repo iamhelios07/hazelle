@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronRight, Import, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
 import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
 import type { Frame } from '../common/frame';
+import { TASK_NAMES } from '../common/prompt-words';
 import { noResults } from '../common/search';
 import { ago } from '../common/time';
 import { usePrompts, useSettings, useStore } from '../session';
@@ -25,9 +26,11 @@ type Props = {
   // The one a chat uses, marked 사용 중.
   inUse?: string;
   frame: Frame;
+  // The page's own sections under the lists, left out while searching.
+  after?: ReactNode;
 };
 
-export function PromptList({ onPick, inUse, frame }: Props) {
+export function PromptList({ onPick, inUse, frame, after }: Props) {
   const store = useStore();
   const toast = useToast();
   const prompts = usePrompts();
@@ -62,6 +65,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       .sort((a, b) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byName(a, b));
   const conversations = prompts.filter((prompt) => ofSort(prompt, 'conversation'));
   const translators = prompts.filter((prompt) => ofSort(prompt, 'translate'));
+  const memorizers = prompts.filter((prompt) => ofSort(prompt, 'memory'));
   const recent = conversations
     .filter((prompt) => use(prompt.id).at !== null)
     .sort((a, b) => use(b.id).at! - use(a.id).at!)
@@ -118,7 +122,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
                 key={prompt.id}
                 title={promptName(prompt.value.name)}
                 badge={badge(prompt)}
-                tags={[...(ofSort(prompt, 'translate') ? ['번역'] : []), ...tags(prompt.id)]}
+                tags={[...(prompt.value.task ? [TASK_NAMES[prompt.value.task]] : []), ...tags(prompt.id)]}
                 description={description(prompt)}
                 onClick={() => onPick(prompt.id)}
               />
@@ -156,6 +160,18 @@ export function PromptList({ onPick, inUse, frame }: Props) {
           >
             {translators.length ? <List label="번역 프롬프트">{topOf('translate').map(row)}</List> : <Empty variant="section">번역 프롬프트가 없어요. 새로 만들어 보세요.</Empty>}
           </Section>
+          <Section
+            title={`기억 프롬프트 ${memorizers.length}개`}
+            hint="지난 메시지를 장기 기억으로 정리할 때 쓰는 프롬프트예요. 모든 채팅이 기본으로 정한 하나로 정리해요."
+            action={
+              <Button variant="ghost" size="xs" icon={Plus} busy={adding === 'memory'} onClick={() => void add('memory')}>
+                새 기억 프롬프트
+              </Button>
+            }
+          >
+            {memorizers.length ? <List label="기억 프롬프트">{topOf('memory').map(row)}</List> : <Empty variant="section">기억 프롬프트가 없어요. 새로 만들어 보세요.</Empty>}
+          </Section>
+          {after}
         </>
       )}
       {preset.view}
