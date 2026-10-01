@@ -1,4 +1,5 @@
 import type { Assignment, ModelRef } from '../connectors/assignment';
+import type { Cache } from '../connectors/settings';
 import type { Cost, Usage } from '../connectors/types';
 import type { Stored } from './kinds';
 
@@ -40,6 +41,9 @@ export type Receipt = {
   replyId: string | null;
   firstTextMs: number | null;
   totalMs: number;
+  // How long the call's cache points keep what they cache, measured from its start; null when it sent none, or its
+  // request was not this page's.
+  cache: Cache | null;
   // 이어 쓰기: the receipt of the reply this one continued, as it read then, so every call and its cost stays
   // visible after the continued version replaces the cut one. It nests when a continuation is continued again.
   continues?: Receipt;

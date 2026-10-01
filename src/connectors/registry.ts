@@ -4,7 +4,7 @@ import { chatCompletions } from './chat-completions';
 import { copilot } from './copilot';
 import { ollama } from './ollama';
 import { openRouter } from './openrouter';
-import { fit, settingsSchema, type Carries, type SettingsSchema } from './settings';
+import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type SettingsSchema } from './settings';
 import { vercel } from './vercel';
 import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
@@ -78,12 +78,31 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
 }
 
 // settings is the 묶음's as stored; the 모델 설정 screen names each change with the same fit().
-export function chatRequest(route: Resolved, { model, messages, settings: stored }: ChatRequest): HttpRequest {
+// What a request sends before its codec writes it: the settings its model takes, and the messages with the roles and
+// cache points they go out with. chatRequest writes it and cacheView reads it, so a forecast compares what is sent.
+function sending(route: Resolved, { model, messages, settings: stored }: ChatRequest): ChatRequest {
   const { settings } = fit(settingsSchema(carries(route), model), stored);
-  const { reasoning } = settings;
-  const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
   const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
-  return route.codec.chat(route.endpoint, { model, messages: cachePoints(roled, settings.cache !== undefined), settings }, fields);
+  return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
+}
+
+export function chatRequest(route: Resolved, request: ChatRequest): HttpRequest {
+  const sent = sending(route, request);
+  const { reasoning } = sent.settings;
+  const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
+  return route.codec.chat(route.endpoint, sent, fields);
+}
+
+// A request as a provider's cache reads it: its messages in the order the wire sends them, each with its place in the
+// prompt (index) and whether a cache point ends there. cache is how long the points keep it, null when none is sent.
+// Reasoning is there because changing it drops the cached messages.
+export type CacheView = { model: string; reasoning: ModelSettings['reasoning']; cache: Cache | null; messages: (ChatMessage & { index: number })[] };
+
+export function cacheView(route: Resolved, request: ChatRequest): CacheView {
+  const { settings, messages } = sending(route, request);
+  const placed = messages.map((message, index) => ({ ...message, index }));
+  const ordered = route.codec.systemFirst ? [...placed.filter(({ role }) => role === 'system'), ...placed.filter(({ role }) => role !== 'system')] : placed;
+  return { model: request.model.id, reasoning: settings.reasoning, cache: messages.some((message) => message.cache) ? settings.cache! : null, messages: ordered };
 }
 
 // A request takes at most four cache points (Anthropic's limit, which OpenRouter passes on). Past that the last one

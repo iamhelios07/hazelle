@@ -54,6 +54,8 @@ export const anthropicMessages: Codec = {
 
   listModels: (endpoint) => ({ url: `${endpoint.baseUrl}/models?limit=1000`, method: 'GET', headers: VERSION, body: null }),
 
+  systemFirst: true,
+
   // The Models API reports limits, image, PDF and thinking support and effort levels. It does not report
   // tool support, sampling, or whether thinking can be turned off. A limit of 0 is read as unknown, as
   // the API's own example shows 0 for real models.

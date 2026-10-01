@@ -7,6 +7,7 @@ import vercelModels from './fixtures/vercel-models.json';
 import { openRouter } from './openrouter';
 import { vercel } from './vercel';
 import {
+  cacheView,
   catalogRequest,
   chatRequest,
   CONNECTION_TYPES,
@@ -240,6 +241,14 @@ describe('chat requests', () => {
     expect(request.headers).toEqual({ 'x-api-key': 'sk-ant', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
     expect(JSON.parse(request.body!)).toEqual({ model: 'm', max_tokens: 64000, system: '짧게 답해.', messages: [messages[1]], stream: true });
     expect(() => chatRequest(anthropic, { model: model(), messages, settings: {} })).toThrow(ConnectorError);
+  });
+
+  it('reads a request for the cache in the order its wire sends it, with the points it keeps', () => {
+    const sent = [{ role: 'user' as const, content: '안녕', cache: true as const }, { role: 'system' as const, content: '짧게 답해.', cache: true as const }];
+    const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
+    expect(cacheView(generic, { model: model(), messages: sent, settings: {} })).toMatchObject({ cache: null, messages: [{ index: 0 }, { index: 1 }] });
+    const view = cacheView(connection('anthropic'), { model: model(), messages: sent, settings: { cache: '1h' } });
+    expect(view).toMatchObject({ model: 'm', cache: '1h', messages: [{ role: 'system', index: 1, cache: true }, { role: 'user', index: 0, cache: true }] });
   });
 });
 

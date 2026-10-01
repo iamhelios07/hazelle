@@ -13,6 +13,7 @@ export { PhraseField } from './PhraseField';
 export { Pill } from './Pill';
 export { SearchField } from './SearchField';
 export { SendButton } from './SendButton';
+export { SendNote } from './SendNote';
 export { Stepper } from './Stepper';
 export { Switch } from './Switch';
 export { TextField } from './TextField';

@@ -33,6 +33,7 @@ import { useAssetUrl, useChatDisplay, useSession, useTranslating, useTurn } from
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, useViewport } from '../ui';
+import { useCache } from './useCache';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
@@ -112,6 +113,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   const draft = useDraft(id, chat.character);
   const { follow: toBottom, ...scroll } = useFollow(messages.length, streaming);
+  const cache = useCache(id, chat, messages, draft.text, busy);
   const [dialog, setDialog] = useState<'rename' | 'reading' | null>(null);
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
@@ -383,6 +385,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     last,
     busy,
     streaming,
+    cache,
     problem,
     editing,
     pinned,

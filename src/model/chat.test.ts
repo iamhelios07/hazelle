@@ -19,6 +19,7 @@ const receipt = (over: Partial<Receipt> = {}): Receipt => ({
   replyId: null,
   firstTextMs: 100,
   totalMs: 900,
+  cache: null,
   ...over,
 });
 const bot = (id: string, text: string, over?: Partial<Receipt>) =>

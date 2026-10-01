@@ -20,7 +20,9 @@ import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
+import type { CacheSend } from './cache';
 import { appendUserMessage, startChat, type Greetings, type Said } from './chat-log';
+import { cacheViewOf } from './generate';
 import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
 import { tokenizer } from './tokenizer';
 import { endCall, type CallTarget } from './streams';
@@ -233,6 +235,17 @@ function gatherTurn(session: Session, chat: string, target: Target, ids = { said
     said,
     reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues },
   };
+}
+
+// The request sending text would make, as its cache reads it, for the forecast beside the send button. A message sent
+// translated goes out as its translation, which is not made yet, so it stands in as typed.
+export function nextSend(session: Session, chat: string, text: string, countTokens: (text: string) => number): CacheSend | null {
+  const turn = gatherTurn(session, chat, { kind: 'send', text });
+  if (turn === null || 'kind' in turn) return null;
+  const prompt = assemble({ scope: turn.scope, seed: turn.reply.id, countTokens, budget: turn.budget, continuing: false });
+  if ('kind' in prompt) return null;
+  const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
+  return view && { connection: turn.route.connection.id, view, parts: prompt.parts };
 }
 
 // A message whose shown version has a translation, with that translation as its text: a reply's, or what the user

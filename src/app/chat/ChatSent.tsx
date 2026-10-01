@@ -11,7 +11,7 @@ type Lore = NonNullable<Assembled['lore']>[number];
 
 const loreName = (name: string) => name.trim() || '이름 없는 항목';
 
-function partName(from: From, role: Role): string {
+export function partName(from: From, role: Role): string {
   switch (from.kind) {
     case 'block':
       return from.name ?? (from.slot ? SLOT_NAMES[from.slot] : textName(role));

@@ -34,7 +34,7 @@ export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; sa
 
 // What one reply sent, for 정보's 요청 원문 and lorebook part. It lives in page memory only, until the session
 // closes: the raw request is never stored.
-export type Sent = { request: Reply['request']; prompt: Assembled };
+export type Sent = Pick<Reply, 'request' | 'cache'> & { prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again.
@@ -182,7 +182,7 @@ export class Talk {
       const answer = await replying;
       if (this.closed) return null;
       // Kept before the save, whose store change is what shows the reply's 정보.
-      this.sentBy.set(reply.id, { request: answer.request, prompt });
+      this.sentBy.set(reply.id, { request: answer.request, cache: answer.cache, prompt });
       return await this.save(chat, this.written(reply, callOf(route), answer), call.id);
     } finally {
       // On a throw too: a turn left set turns every later send away, and a reply still streaming would write into the next.
@@ -239,6 +239,7 @@ export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
     replyId: answer.replyId,
     firstTextMs: answer.firstTextMs,
     totalMs: answer.totalMs,
+    cache: answer.cache?.cache ?? null,
   };
 }
 

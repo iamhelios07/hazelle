@@ -38,6 +38,8 @@ export const chatCompletions: Codec = {
 
   listModels: (endpoint) => ({ url: `${endpoint.baseUrl}/models`, method: 'GET', headers: {}, body: null }),
 
+  systemFirst: false,
+
   // The standard list names models and nothing else, so every capability stays unknown.
   parseModels: (payload) =>
     modelEntries(payload)?.map(({ id }) => ({

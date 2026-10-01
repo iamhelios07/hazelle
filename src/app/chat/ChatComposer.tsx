@@ -4,6 +4,7 @@ import { describeTurnFailure } from '../common/failure';
 import { withRo } from '../common/languages';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
 import { Button, Callout, Composer, pressed, pressedKey, SendButton, useMenuOpener, useWide } from '../ui';
+import { ChatCache } from './ChatCache';
 import { ChatNote } from './ChatNote';
 import { ChatPersonaMenu } from './ChatPersonaMenu';
 import { ChatTranslate } from './ChatTranslate';
@@ -85,6 +86,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
                 답장 받기
               </Button>
             )}
+            {!busy && <ChatCache cache={chat.cache} />}
             <SendButton
               streaming={streaming}
               disabled={!streaming && (!draft.text.trim() || busy)}

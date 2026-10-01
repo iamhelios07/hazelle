@@ -94,6 +94,9 @@ export type Codec = {
   // null when the payload is not a model list at all, which is not the same as an empty one.
   parseModels(payload: unknown): Model[] | null;
   carries: Carries;
+  // The wire sends every system message ahead of the others (Messages' system field), so a provider's cache reads them
+  // first, whatever their place in the prompt.
+  systemFirst: boolean;
   // fields are the connection type's own, laid over the format's body.
   chat(endpoint: Endpoint, request: ChatRequest, fields: Record<string, unknown>): HttpRequest;
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
