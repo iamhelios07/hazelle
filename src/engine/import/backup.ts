@@ -24,6 +24,8 @@ type Cold = (key: string) => Promise<unknown>;
 const DATABASE_HEADER = [0, ...Array.from('RISUSAVE', (char) => char.charCodeAt(0)), 0, 8];
 // coldstorageData.ts:4. The private-use marks are part of the pointer; the bare word is not one.
 const COLD = 'COLDSTORAGE';
+const READ_AHEAD = 4 * 1024 * 1024;
+const COLD_READS = 8;
 // A preset slot's keys and endpoints, never read (design F7).
 const SECRETS = new Set(['openAIKey', 'proxyKey', 'forceReplaceUrl', 'forceReplaceUrl2', 'textgenWebUIStreamURL', 'textgenWebUIBlockingURL']);
 
@@ -35,7 +37,7 @@ const fail = (kind: BackupFailure['kind'], detail?: string): BackupResult => ({ 
 // Only the database and the cold-storage entries are read here; a picture is read when it is asked for.
 export async function readBackup(source: BackupSource): Promise<BackupResult> {
   try {
-    const files = await index(source);
+    const files = await index(readAhead(source));
     if (files.has('encryption.risudat')) return fail('encrypted');
     const database = files.get('database.risudat');
     if (!database) return fail('no-database');
@@ -45,6 +47,22 @@ export async function readBackup(source: BackupSource): Promise<BackupResult> {
   } catch (error) {
     return fail('unreadable', error instanceof Error ? error.message : String(error));
   }
+}
+
+function readAhead(source: BackupSource): BackupSource {
+  let start = 0;
+  let bytes = new Uint8Array(0);
+  return {
+    size: source.size,
+    async read(offset, length) {
+      if (length > READ_AHEAD) return source.read(offset, length);
+      if (offset < start || offset + length > start + bytes.length) {
+        bytes = await source.read(offset, Math.min(READ_AHEAD, source.size - offset));
+        start = offset;
+      }
+      return bytes.subarray(offset - start, offset - start + length);
+    },
+  };
 }
 
 // Records of u32 name length, name, u32 data length, data, little-endian, with nothing around them (spec §1).
@@ -79,15 +97,26 @@ async function fromDatabase(db: Json, source: BackupSource, files: Map<string, S
     const span = files.get(key.slice(Math.max(key.lastIndexOf('/'), key.lastIndexOf('\\')) + 1));
     return span ? reader(span) : null;
   };
-  // A payload that does not parse is as missing as one the backup left out.
+  let reading = 0;
+  const waiting: (() => void)[] = [];
+  // Character and chat payloads share the same limit, including chats inside a cold character.
   const cold: Cold = async (key) => {
     const span = files.get(`coldstorage_${key}.json`);
     if (!span) return null;
-    const bytes = await reader(span)();
+    if (reading === COLD_READS) await new Promise<void>((resolve) => waiting.push(resolve));
+    else reading++;
     try {
-      return JSON.parse(utf8.decode(bytes));
-    } catch {
-      return null;
+      const bytes = await reader(span)();
+      // A payload that does not parse is as missing as one the backup left out.
+      try {
+        return JSON.parse(utf8.decode(bytes));
+      } catch {
+        return null;
+      }
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else reading--;
     }
   };
 
@@ -102,22 +131,22 @@ async function fromDatabase(db: Json, source: BackupSource, files: Map<string, S
   }
 
   const unsupported: Tally<MoveUnsupportedKind> = new Map();
-  const characters: RisuCharacter[] = [];
-  for (const stub of list(db.characters)) {
-    if (!isRecord(stub) || text(stub.chaId).startsWith('§')) continue;
+  const loaded = await Promise.all(list(db.characters).map(async (stub): Promise<RisuCharacter | null> => {
+    if (!isRecord(stub) || text(stub.chaId).startsWith('§')) return null;
     const char = typeof stub.coldstorage === 'string' ? await coldCharacter(stub, stub.coldstorage, cold) : stub;
     if (!char) {
       add(unsupported, 'cold-missing');
-      continue;
+      return null;
     }
-    if (typeof char.trashTime === 'number') continue;
+    if (typeof char.trashTime === 'number') return null;
     if (char.type === 'group') {
       add(unsupported, 'group-chat', list(char.chats).filter((chat) => list(record(chat).message).length > 0).length);
-      continue;
+      return null;
     }
     const chats = await Promise.all(list(char.chats).map((chat) => coldChat(record(chat), cold)));
-    characters.push(risuCharacter(char, chats, folders.get(text(char.chaId)) ?? null, entry));
-  }
+    return risuCharacter(char, chats, folders.get(text(char.chaId)) ?? null, entry);
+  }));
+  const characters = loaded.filter((char) => char !== null);
   characters.sort((a, b) => (order.get(a.id) ?? order.size) - (order.get(b.id) ?? order.size));
   add(unsupported, 'module', list(db.modules).length);
 
