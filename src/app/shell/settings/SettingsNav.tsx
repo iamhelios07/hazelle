@@ -10,17 +10,17 @@ type Place = { page: SettingsPage; label: string; icon: LucideIcon; route: Route
 // 설정's pages. Only built pages are listed.
 const GROUPS: { label: string; places: Place[] }[] = [
   {
-    label: '대화',
-    places: [
-      { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts' } },
-      { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
-    ],
-  },
-  {
     label: '모델',
     places: [
       { page: 'connections', label: PAGES.connections, icon: Plug, route: { kind: 'connections' } },
       { page: 'profiles', label: PAGES.profiles, icon: Layers, route: { kind: 'profiles' } },
+    ],
+  },
+  {
+    label: '대화',
+    places: [
+      { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts' } },
+      { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
     ],
   },
   {
