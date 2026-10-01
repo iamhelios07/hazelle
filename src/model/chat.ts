@@ -1,7 +1,7 @@
 import type { Assignment, ModelRef } from '../connectors/assignment';
 import type { Cache } from '../connectors/settings';
 import type { Cost, Usage } from '../connectors/types';
-import type { Stored } from './kinds';
+import type { Kind, Stored } from './kinds';
 import type { MemorySettings } from './memory';
 
 // Its messages are `entry` objects whose parent is the chat.
@@ -209,8 +209,25 @@ export function chatTitle(chat: Chat, messages: Message[], texts: string[]): str
   return (first !== -1 && firstLine(texts[first]!)) || '새 채팅';
 }
 
-export type ChatSummary = { id: string; chat: Chat; count: number; title: string; preview: string; at: number | null; order: number };
-export type ChatItem = ChatSummary & { messages: Message[] };
+// count and preview are null while the chat has no saved summary.
+export type ChatSummary = { id: string; chat: Chat; count: number | null; title: string; preview: string | null; at: number | null; order: number };
+export type ChatItem = ChatSummary & { count: number; preview: string; messages: Message[] };
+export type SummaryRead = ({ kind: Kind; id: string } | { kind: Kind; list: true } | { kind: Kind; parent: string }) & { rev: number };
+export type Summary = {
+  version: number;
+  head: number;
+  chatRev: number;
+  dependencies: SummaryRead[];
+  rendered: { now: number; timeZone: string };
+  character: string | null;
+  title: string;
+  preview: string;
+  count: number;
+  at: number | null;
+  order: number;
+  recent: RecentModel[];
+};
+export type RecentModel = { at: number; ref: ModelRef };
 
 // One shelf's chats with each branch right under the chat it came from, in the order given at each level.
 // A branch whose origin is not among them stands at the top level.
@@ -230,44 +247,72 @@ export type ModelUsage = { calls: number; last: number | null; input: Tally; out
 // Every call to one model in the chats kept, a continued reply counting each of its calls and a translation its own.
 // A branch copies the replies it holds with their receipts, so a call is counted once however many chats hold it; the
 // cost stays out of the key, as the original settles it later than a copy made after.
-export function modelUsage(chats: Message[][], ref: ModelRef): ModelUsage {
-  const usage: ModelUsage = { calls: 0, last: null, input: { total: 0, unknown: 0 }, output: { total: 0, unknown: 0 }, costs: [], costUnknown: 0 };
-  const seen = new Set<string>();
-  const add = (tally: Tally, value: number | null) => (value === null ? tally.unknown++ : (tally.total += value));
-  const made = chats
-    .flat()
-    .flatMap((message) => message.versions)
-    .flatMap(({ at, receipt, translation }) => [...(receipt ? calls(receipt).map((call) => ({ at, call })) : []), ...(translation?.receipt ? [{ at: translation.at, call: translation.receipt }] : [])]);
-  for (const { at, call } of made) {
-    if (call.connection !== ref.connection || call.model !== ref.model) continue;
-    const key = JSON.stringify([at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    usage.calls++;
-    usage.last = Math.max(usage.last ?? 0, at);
-    add(usage.input, call.usage?.inputTokens ?? null);
-    add(usage.output, call.usage?.outputTokens ?? null);
-    const cost = call.cost === 'pending' ? null : call.cost;
-    if (!cost) {
-      usage.costUnknown++;
-      continue;
+export class UsageCounter {
+  private readonly usage: Omit<ModelUsage, 'costs' | 'costUnknown'> = { calls: 0, last: null, input: { total: 0, unknown: 0 }, output: { total: 0, unknown: 0 } };
+  private readonly seen = new Map<string, Cost | null>();
+  constructor(private readonly ref: ModelRef) {}
+
+  get value(): ModelUsage {
+    const costs: ModelUsage['costs'] = [];
+    let costUnknown = 0;
+    for (const cost of this.seen.values()) {
+      if (!cost) { costUnknown++; continue; }
+      const sum = costs.find((entry) => entry.unit === cost.unit);
+      if (sum) {
+        sum.amount += cost.amount;
+        sum.estimated ||= cost.source === 'price-list';
+      } else costs.push({ unit: cost.unit, amount: cost.amount, estimated: cost.source === 'price-list' });
     }
-    const sum = usage.costs.find((entry) => entry.unit === cost.unit);
-    if (sum) {
-      sum.amount += cost.amount;
-      sum.estimated ||= cost.source === 'price-list';
-    } else usage.costs.push({ unit: cost.unit, amount: cost.amount, estimated: cost.source === 'price-list' });
+    return { ...this.usage, costs, costUnknown };
   }
-  return usage;
+
+  add(messages: Message[]) {
+    const usage = this.usage;
+    const add = (tally: Tally, value: number | null) => (value === null ? tally.unknown++ : (tally.total += value));
+    const made = messages
+      .flatMap((message) => message.versions)
+      .flatMap(({ at, receipt, translation }) => [...(receipt ? calls(receipt).map((call) => ({ at, call })) : []), ...(translation?.receipt ? [{ at: translation.at, call: translation.receipt }] : [])]);
+    for (const { at, call } of made) {
+      if (call.connection !== this.ref.connection || call.model !== this.ref.model) continue;
+      const key = JSON.stringify([at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
+      const cost = call.cost === 'pending' ? null : call.cost;
+      if (this.seen.has(key)) {
+        // A branch can be walked before the original that later settled the same call.
+        const previous = this.seen.get(key);
+        if (cost && (!previous || (previous.source === 'price-list' && cost.source === 'reported'))) this.seen.set(key, cost);
+        continue;
+      }
+      this.seen.set(key, cost);
+      usage.calls++;
+      usage.last = Math.max(usage.last ?? 0, at);
+      add(usage.input, call.usage?.inputTokens ?? null);
+      add(usage.output, call.usage?.outputTokens ?? null);
+    }
+  }
+}
+
+export function modelUsage(chats: Message[][], ref: ModelRef): ModelUsage {
+  const counter = new UsageCounter(ref);
+  for (const messages of chats) counter.add(messages);
+  return counter.value;
+}
+
+export function recentIn(messages: Message[]): RecentModel[] {
+  const used = messages.flatMap((message) => message.versions)
+    .flatMap((version) => (version.receipt ? [{ at: version.at, ref: { connection: version.receipt.connection, model: version.receipt.model } }] : []))
+    .sort((a, b) => b.at - a.at);
+  const latest: RecentModel[] = [];
+  for (const model of used) {
+    if (latest.some(({ ref }) => ref.connection === model.ref.connection && ref.model === model.ref.model)) continue;
+    latest.push(model);
+    if (latest.length === 3) break;
+  }
+  return latest;
 }
 
 // Models used lately across all chats, newest first, for the model picker's 최근.
-export function recentModels(chats: Message[][], limit: number): ModelRef[] {
-  const used = chats
-    .flat()
-    .flatMap((message) => message.versions)
-    .flatMap((version) => (version.receipt ? [{ at: version.at, ref: { connection: version.receipt.connection, model: version.receipt.model } }] : []))
-    .sort((a, b) => b.at - a.at);
+export function recentModels(chats: RecentModel[][], limit: number): ModelRef[] {
+  const used = chats.flat().sort((a, b) => b.at - a.at);
   const seen = new Set<string>();
   const refs: ModelRef[] = [];
   for (const { ref } of used) {

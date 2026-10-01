@@ -37,6 +37,12 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
     };
   }, [accountId, vaultKey, username, attempt]);
 
+  useEffect(() => {
+    if (!session) return;
+    const timer = setTimeout(() => session.startBackground(), 0);
+    return () => clearTimeout(timer);
+  }, [session]);
+
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
   if (!session) return (
     <Screen top={<Brand />} align="center">

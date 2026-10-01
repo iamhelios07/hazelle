@@ -12,7 +12,7 @@ export const BATCH_LIMITS = { items: 200, bytes: 4_000_000, body: 1_500_000 };
 const PAGE_ROWS = 500;
 const PAGE_BODY_LENGTH = 4_000_000;
 
-type Row = { id: string; kind: string; parent_id: string | null; rev: number; deleted: number; fits: number; body: string | null };
+type Row = { id: string; kind: string; parent_id: string | null; rev: number; deleted: number; fits: number; omitted: number; body: string | null };
 
 export const objects = new Hono<AppEnv>();
 
@@ -25,14 +25,30 @@ objects.use(requireSession);
 objects.get('/', async (c) => {
   const since = Number(c.req.query('since'));
   if (!Number.isSafeInteger(since) || since < 0) return fail(c, 400, 'bad-input');
+  const excluded = c.req.query('exclude')?.split(',') ?? [];
+  const parent = c.req.query('parent');
+  const bootstrap = c.req.query('bootstrap') === '1';
+  const metadata = c.req.query('metadata') === '1';
+  if (excluded.length > 32 || excluded.some((kind) => !KIND.test(kind)) || (parent !== undefined && !ID.test(parent))) return fail(c, 400, 'bad-input');
+  const account = c.get('account').id;
+  const until = bootstrap ? Number(c.req.query('until') ?? await c.env.DB.prepare('SELECT rev FROM accounts WHERE id = ?').bind(account).first('rev')) : null;
+  if (until !== null && (!Number.isSafeInteger(until) || until < since)) return fail(c, 400, 'bad-input');
   const { results } = await c.env.DB.prepare(
-    `SELECT id, kind, parent_id, rev, deleted_at IS NOT NULL AS deleted, start < ?3 AS fits, CASE WHEN start < ?3 THEN body END AS body
+    `SELECT id, kind, parent_id, rev, deleted_at IS NOT NULL AS deleted, omitted, start < ?3 AS fits, CASE WHEN start < ?3 THEN body END AS body
      FROM (
        SELECT *, SUM(COALESCE(LENGTH(body), 0)) OVER (ORDER BY rev) - COALESCE(LENGTH(body), 0) AS start
-       FROM (SELECT * FROM objects WHERE account_id = ?1 AND rev > ?2 ORDER BY rev LIMIT ?4)
+       FROM (
+         SELECT id, kind, parent_id, rev, deleted_at,
+           (kind IN (SELECT value FROM json_each(?5)) OR ${metadata ? 1 : 0}) AND deleted_at IS NULL AS omitted,
+           CASE WHEN kind NOT IN (SELECT value FROM json_each(?5)) AND ${metadata ? 0 : 1} THEN body END AS body
+         FROM objects WHERE account_id = ?1 AND rev > ?2
+           ${parent === undefined ? '' : 'AND parent_id = ?6'}
+           ${bootstrap ? 'AND kind NOT IN (SELECT value FROM json_each(?5)) AND rev <= ?7' : ''}
+         ORDER BY rev LIMIT ?4
+       )
      ) ORDER BY rev`,
   )
-    .bind(c.get('account').id, since, PAGE_BODY_LENGTH, PAGE_ROWS + 1)
+    .bind(...[account, since, PAGE_BODY_LENGTH, PAGE_ROWS + 1, JSON.stringify(excluded), ...(parent !== undefined || bootstrap ? [parent ?? null] : []), ...(bootstrap ? [until] : [])])
     .all<Row>();
   const page: Row[] = [];
   for (const row of results) {
@@ -41,7 +57,8 @@ objects.get('/', async (c) => {
   }
   return c.json({
     limits: BATCH_LIMITS,
-    changes: page.map((row) => ({ id: row.id, kind: row.kind, parent: row.parent_id, rev: row.rev, body: row.deleted ? null : row.body })),
+    ...(until === null ? {} : { until }),
+    changes: page.map((row) => ({ id: row.id, kind: row.kind, parent: row.parent_id, rev: row.rev, ...(row.omitted ? { omitted: true } : { body: row.deleted ? null : row.body }) })),
     cursor: page.at(-1)?.rev ?? since,
     more: results.length > page.length,
   });

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatScope } from '../engine/render';
 import type { Kind } from '../model/kinds';
 import { memoryId, type Memory } from '../model/memory';
@@ -46,9 +46,21 @@ export function useChats() {
 }
 
 export function useChatModel(id: string | null) {
-  const { read } = useSession();
+  const { read, store } = useSession();
+  const exists = id !== null && store.get('chat', id) !== null;
+  const [attempt, retry] = useReducer((value: number) => value + 1, 0);
+  useEffect(() => {
+    if (id === null || !exists) return;
+    const lease = store.retainChat(id);
+    return lease.release;
+  }, [store, id, attempt, exists]);
   const model = id === null ? null : read.chat(id);
-  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
+  const value = useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
+  const subscribe = useCallback((listener: () => void) => store.subscribe((changes) => {
+    if (changes.some((change) => change.kind === 'scope' && change.id === id)) listener();
+  }), [store, id]);
+  const state = useSyncExternalStore(subscribe, () => id === null ? 'unloaded' : store.scopeState(id));
+  return { model: value, state, error: id === null ? null : store.scopeError(id), retry };
 }
 
 export function useChatSummary(id: string | null) {
@@ -57,9 +69,13 @@ export function useChatSummary(id: string | null) {
   return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
 }
 
-export function useChatMessages() {
-  const { read } = useSession();
-  return useSyncExternalStore(read.messages.subscribe, read.messages.snapshot);
+export function useSummaries() {
+  const summaries = useKind('summary');
+  const chats = useChats();
+  return useMemo(() => {
+    const ids = new Set(chats.map((chat) => chat.id));
+    return summaries.filter((summary) => summary.parent !== null && ids.has(summary.parent));
+  }, [summaries, chats]);
 }
 
 export function useLibrary() {
@@ -118,12 +134,12 @@ export function useTranslating(): Translating {
 // The chat's stored memory, null while it has none.
 export function useChatMemory(chat: string | null): Memory | null {
   const { store } = useSession();
-  const id = chat === null ? null : memoryId(chat);
+  const id = chat;
   const subscribe = useCallback(
-    (listener: () => void) => (id === null ? () => {} : store.subscribe((changes) => changes.some((change) => change.kind === 'memory' && change.id === id) && listener())),
+    (listener: () => void) => (id === null ? () => {} : store.subscribe((changes) => changes.some((change) => (change.kind === 'memory' || change.kind === 'scope') && change.parent === id) && listener())),
     [store, id],
   );
-  return useSyncExternalStore(subscribe, () => (id === null ? null : store.get('memory', id)))?.value ?? null;
+  return useSyncExternalStore(subscribe, () => (id === null ? null : store.children('memory', id).find((memory) => memory.id === memoryId(id)) ?? null))?.value ?? null;
 }
 
 export function useRemembering(): Remembering {

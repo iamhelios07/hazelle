@@ -4,7 +4,7 @@ import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf,
 import { assembleMemory } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { renderChat } from '../engine/render';
-import { fold, shown, type Chat, type Message, type Receipt } from '../model/chat';
+import { shown, type Chat, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
@@ -43,7 +43,7 @@ export const setChatMemory = (store: ObjectStore, chat: string, settings: Memory
 export const setDefaultMemory = (store: ObjectStore, change: Partial<MemorySettings>) =>
   store.upsert('settings', (current) => ({ models: {}, ...current, memory: { ...current?.memory, ...change } }));
 
-export const chatMemory = (store: ObjectStore, chat: string): Memory => store.get('memory', memoryId(chat))?.value ?? emptyMemory();
+export const chatMemory = (store: ObjectStore, chat: string): Memory => store.children('memory', chat).find((entry) => entry.id === memoryId(chat))?.value ?? emptyMemory();
 
 const sourcesOf = (messages: Message[]): Source[] => messages.map((message) => ({ message: message.id, version: shown(message).id }));
 
@@ -58,14 +58,16 @@ type Write<T = Stored<'memory'>> = Promise<ApiResult<T>>;
 // One update of the chat's memory, creating it the first time. change answers null when what it changes is not there,
 // and nothing is written ('gone'). A create that meets another device's goes on as an update of that one.
 async function changeMemory(store: ObjectStore, chat: string, change: (memory: Memory) => Memory | null): Write {
-  const id = memoryId(chat);
-  if (!store.get('memory', id)) {
-    const value = change(emptyMemory());
-    if (value === null) return { ok: false, error: 'gone' };
-    const created = await store.create('memory', value, { id, parent: chat });
-    if (created.ok || created.error !== 'conflict' || !store.get('memory', id)) return created;
-  }
-  return store.update('memory', id, change);
+  return store.withChat(chat, async () => {
+    const id = memoryId(chat);
+    if (!store.children('memory', chat).find((entry) => entry.id === id)) {
+      const value = change(emptyMemory());
+      if (value === null) return { ok: false, error: 'gone' };
+      const created = await store.create('memory', value, { id, parent: chat });
+      if (created.ok || created.error !== 'conflict' || !store.children('memory', chat).find((entry) => entry.id === id)) return created;
+    }
+    return store.update('memory', id, change);
+  });
 }
 
 const withRecord = (store: ObjectStore, chat: string, id: string, change: (record: MemoryRecord) => MemoryRecord) =>
@@ -338,7 +340,7 @@ export class Rememberer {
     if (this.closed || purpose.kind !== 'memory' || this.working.has(chat)) return;
     this.working.add(chat);
     this.change(chat, { running: { model: stream.value.call.modelName, left: 1 } });
-    void this.resumed(chat, stream, purpose.sources).finally(() => this.done(chat));
+    void this.hold(chat, () => this.resumed(chat, stream, purpose.sources)).finally(() => this.done(chat));
   }
 
   close() {
@@ -358,7 +360,7 @@ export class Rememberer {
   }
 
   private start(chat: string, full: boolean) {
-    if (this.closed || this.state.failed.has(chat)) return;
+    if (this.closed || this.state.failed.has(chat) || (!full && this.session.store.scopeState(chat) !== 'loaded')) return;
     if (this.working.has(chat)) {
       if (full) this.full.add(chat);
       return;
@@ -367,7 +369,16 @@ export class Rememberer {
     if (!stored || !memorySetup(this.session.store, stored.value).on || (!full && !chatMemory(this.session.store, chat).records.length)) return;
     if (full) this.full.add(chat);
     this.working.add(chat);
-    void this.work(chat).finally(() => this.done(chat));
+    void this.hold(chat, () => this.work(chat)).finally(() => this.done(chat));
+  }
+
+  private async hold(chat: string, work: () => Promise<unknown>) {
+    const lease = this.session.store.retainChat(chat);
+    try {
+      const failure = await lease.ready;
+      if (failure) return this.change(chat, { failed: { kind: 'unsaved', failure } });
+      if (!this.closed) await work();
+    } finally { lease.release(); }
   }
 
   private done(chat: string) {
@@ -496,7 +507,10 @@ export class Rememberer {
       if (answer.state !== 'done') return { kind: 'failed', receipt };
       const parsed = parseRecords(text, span.map(({ text }) => text));
       if (!parsed.ok) return { kind: 'invalid', receipt, reason: parsed.reason };
-      const saved = await changeMemory(store, chat, (memory) => (applies(memory, fold(store.children('entry', chat)), job) ? committed(memory, job, parsed.records, span, receipt, first) : null));
+      const saved = await changeMemory(store, chat, (memory) => {
+        const messages = store.projection(chat)?.model.messages;
+        return messages && applies(memory, messages, job) ? committed(memory, job, parsed.records, span, receipt, first) : null;
+      });
       return saved.ok ? 'done' : saved.error === 'gone' ? 'moved' : { kind: 'unsaved', failure: saved };
     })();
     endCall(store, id);

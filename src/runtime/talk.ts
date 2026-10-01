@@ -89,7 +89,8 @@ export class Talk {
   private readonly unsaved = new Map<string, { chat: string; reply: Written; call: string }>();
   private readonly listeners = new Set<() => void>();
   // By the id of the version each reply wrote.
-  private readonly sentBy = new Map<string, Sent>();
+  private readonly sentBy = new Map<string, { chat: string; sent: Sent }>();
+  private readonly leave: () => void;
 
   constructor(
     private readonly store: ObjectStore,
@@ -98,7 +99,12 @@ export class Talk {
     private readonly saved: (chat: string) => void,
     // The calls this page reads (runtime/streams), shared with Translator and Streams.
     private readonly reading: Set<string>,
-  ) {}
+  ) {
+    this.leave = store.subscribe((changes) => {
+      const released = new Set(changes.filter((change) => change.kind === 'scope' && store.scopeState(change.id) === 'unloaded').map((change) => change.id));
+      for (const [id, held] of this.sentBy) if (released.has(held.chat)) this.sentBy.delete(id);
+    });
+  }
 
   readonly subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -107,9 +113,9 @@ export class Talk {
 
   readonly snapshot = () => this.turn;
 
-  // null: not written by this page since the session opened, or written as another version (an edit).
+  // null: its chat was released, it was not written by this page, or it was written as another version (an edit).
   sent(version: string): Sent | null {
-    return this.sentBy.get(version) ?? null;
+    return this.sentBy.get(version)?.sent ?? null;
   }
 
   // 멈추기: the call ends on the server too, and the text so far is saved as cut. Reading stops first, so the server's
@@ -124,18 +130,24 @@ export class Talk {
     this.abort?.abort();
     this.unsaved.clear();
     this.sentBy.clear();
+    this.leave();
   }
 
   async saveAgain(reply: string): Promise<TalkFailure | null> {
     const unsaved = this.unsaved.get(reply);
-    return unsaved ? this.save(unsaved.chat, unsaved.reply, unsaved.call) : null;
+    if (!unsaved) return null;
+    const lease = this.store.retainChat(unsaved.chat);
+    try {
+      const failure = await lease.ready;
+      return failure ? { kind: 'unsaved', reply, failure } : await this.save(unsaved.chat, unsaved.reply, unsaved.call);
+    } finally { lease.release(); }
   }
 
   // A conflict over an entry already there is the same reply saved by another device that read the call. A reply
   // not saved keeps its call's marker, so a reload saves it too.
   private async save(chat: string, reply: Written, call: string): Promise<TalkFailure | null> {
     const appended = await appendReply(this.store, chat, reply);
-    const elsewhere = !appended.ok && appended.error === 'conflict' && this.store.get('entry', reply.id) !== null;
+    const elsewhere = !appended.ok && appended.error === 'conflict' && this.store.children('entry', chat).some((entry) => entry.id === reply.id);
     if (!appended.ok && !elsewhere) {
       this.unsaved.set(reply.id, { chat, reply, call });
       return { kind: 'unsaved', reply: reply.id, failure: appended };
@@ -158,10 +170,13 @@ export class Talk {
   // turn unsent.
   async run<F extends { kind: string }>({ chat, said, reply }: Omit<Turn, 'text'>, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
     if (this.turn) return null;
+    const lease = this.store.retainChat(chat);
     this.set({ chat, said, reply, text: reply.continues?.text ?? '' });
     const abort = new AbortController();
     this.abort = abort;
     try {
+      const failure = await lease.ready;
+      if (failure) return { kind: 'unsent', failure };
       const ready = await prepare(abort.signal);
       if ('kind' in ready) return ready;
       const { route, settings, prompt } = ready;
@@ -182,7 +197,7 @@ export class Talk {
       const answer = await replying;
       if (this.closed) return null;
       // Kept before the save, whose store change is what shows the reply's 정보.
-      this.sentBy.set(reply.id, { request: answer.request, cache: answer.cache, prompt });
+      this.sentBy.set(reply.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
       return await this.save(chat, this.written(reply, callOf(route), answer), call.id);
     } finally {
       // On a throw too: a turn left set turns every later send away, and a reply still streaming would write into the next.
@@ -191,6 +206,7 @@ export class Talk {
       this.calling = null;
       this.abort = null;
       this.set(null);
+      lease.release();
     }
   }
 
@@ -200,6 +216,7 @@ export class Talk {
     const purpose = stream.value.for;
     if (this.turn || this.closed || purpose.kind !== 'reply') return;
     const chat = stream.parent!;
+    const lease = this.store.retainChat(chat);
     const reply = { id: stream.value.result, message: purpose.message, replaces: purpose.replaces, continues: purpose.continues };
     this.set({ chat, said: null, reply, text: reply.continues?.text ?? '' });
     const abort = new AbortController();
@@ -207,6 +224,7 @@ export class Talk {
     this.reading.add(stream.id);
     this.calling = stream.id;
     try {
+      if (await lease.ready) return;
       const answer = await resume(this.store, stream, abort.signal, this.write);
       if (!this.closed) await this.save(chat, this.written(reply, stream.value.call, answer), stream.id);
     } finally {
@@ -215,6 +233,7 @@ export class Talk {
       this.calling = null;
       this.abort = null;
       this.set(null);
+      lease.release();
     }
   }
 

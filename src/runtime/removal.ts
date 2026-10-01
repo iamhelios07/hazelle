@@ -1,6 +1,6 @@
 import { KINDS, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
-import type { ObjectStore } from './store';
+import type { ObjectRow, ObjectStore } from './store';
 
 const KIND_NAMES = Object.keys(KINDS) as Kind[];
 
@@ -8,26 +8,35 @@ const KIND_NAMES = Object.keys(KINDS) as Kind[];
 // in one round may run together. The invariant: an object is removed only after everything it owns, so a removal
 // that fails midway leaves the owner in place and can be tried again. Stored files stay: other objects, in this
 // account or another, may name the same one (runtime/files).
-export function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }): string[][] {
-  const rounds: string[][] = [];
-  const visit = ({ kind, id }: { kind: Kind; id: string }): number => {
-    const round = owned(store, kind, id).reduce((last, object) => Math.max(last, visit(object)), -1) + 1;
-    (rounds[round] ??= []).push(id);
-    return round;
+export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }): Promise<ApiResult<ObjectRow[][]>> {
+  const pulled = await store.pull();
+  if (pulled) return pulled;
+  const rounds: ObjectRow[][] = [];
+  const visit = async (object: ObjectRow): Promise<ApiResult<number>> => {
+    const children: ObjectRow[] = [];
+    const failed = KIND_NAMES.some((kind) => KINDS[kind].parent === object.kind)
+      ? await store.scan({ parent: object.id, metadata: true }, (row) => children.push(row))
+      : null;
+    if (failed) return failed;
+    for (const kind of KIND_NAMES) {
+      const rule: Rule = KINDS[kind];
+      if (rule.owner?.kind !== object.kind) continue;
+      const field = rule.owner.field;
+      children.push(...store.list(kind).filter(({ value }) => (value as Record<string, unknown>)[field] === object.id));
+    }
+    let round = 0;
+    for (const child of children) {
+      const result = await visit(child);
+      if (!result.ok) return result;
+      round = Math.max(round, result.data + 1);
+    }
+    (rounds[round] ??= []).push(object);
+    return { ok: true, data: round };
   };
-  visit(root);
-  return rounds;
-}
-
-// What an object owns by either link KINDS declares: the parent, or a body field.
-function owned(store: ObjectStore, owner: Kind, id: string): { kind: Kind; id: string }[] {
-  return KIND_NAMES.flatMap((kind) => {
-    const rule: Rule = KINDS[kind];
-    const link = rule.owner;
-    const byParent = rule.parent === owner ? store.children(kind, id) : [];
-    const byBody = link?.kind === owner ? store.list(kind).filter(({ value }) => (value as Record<string, unknown>)[link.field] === id) : [];
-    return [...byParent, ...byBody];
-  });
+  const stored = store.get(root.kind, root.id);
+  if (!stored) return { ok: false, error: 'gone' };
+  const result = await visit(stored);
+  return result.ok ? { ok: true, data: rounds } : result;
 }
 
 // Stable within each depth: entries retain their input order, while every owner follows its children.
@@ -41,13 +50,23 @@ export function orderOwned<T extends { kind: Kind }>(objects: T[]): T[] {
 }
 
 export async function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
-  const rounds = planRemoval(store, root);
-  const total = rounds.reduce((sum, round) => sum + round.length, 0);
-  let done = 0;
-  progress(done, total);
-  for (const round of rounds) {
-    const removed = await store.batch(round.map((id) => ({ type: 'remove', id })), () => progress(++done, total));
-    if (!removed.ok) return removed;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const plan = await planRemoval(store, root);
+    if (!plan.ok) return plan;
+    const total = plan.data.reduce((sum, round) => sum + round.length, 0);
+    let done = 0;
+    progress(done, total);
+    let conflict = false;
+    for (const round of plan.data) {
+      const removed = await store.removeRows(round);
+      if (!removed.ok) {
+        if (removed.error !== 'conflict') return removed;
+        conflict = true;
+        break;
+      }
+      progress(done += round.length, total);
+    }
+    if (!conflict) return { ok: true, data: null };
   }
-  return { ok: true, data: null };
+  return { ok: false, error: 'conflict' };
 }

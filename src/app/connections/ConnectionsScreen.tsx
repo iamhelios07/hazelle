@@ -26,7 +26,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
         />
       }
     >
-      {unreadable > 0 && <Callout tone="warn">금고 열쇠로 열리지 않는 항목이 {unreadable}개 있어요. 목록에서 빠져 있어요.</Callout>}
+      {unreadable > 0 && <Callout tone="warn">불러온 항목 중 금고 열쇠로 열리지 않는 항목이 {unreadable}개 있어요. 목록에서 빠져 있어요.</Callout>}
       {connections.length > 0 ? (
         <List label="연결">
           {connections.map((connection) => (

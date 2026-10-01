@@ -21,6 +21,7 @@ const lastTwo = (body: string | null) => (JSON.parse(body!) as { messages: { rol
 async function cutReply(session: Session, answers: (Response | null)[]) {
   await answerable(session);
   const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
   await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
   await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '이야기 하나 해 줘' });
   const log = stubRelay(inTurn([cutAt('옛날 옛적에', 0.002), ...answers]));
@@ -62,6 +63,7 @@ describe('a new chat', () => {
       const log = stubRelay(() => saying('왔구나.'));
 
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       let preview: string | undefined;
       const turn = takeTurn(
         session,
@@ -132,6 +134,7 @@ describe('반전 모드', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Hello there', translation: { text: '안녕', receipt: null, at: 0 } });
       await setTranslate(session.store, null, { input: true, reverse: true });
@@ -151,6 +154,7 @@ describe('보낼 말 번역', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await setTranslate(session.store, null, { replies: false, input: true });
       const log = stubRelay(inTurn([saying('Hello there'), saying('Hi!')]));
@@ -165,6 +169,7 @@ describe('보낼 말 번역', () => {
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await setTranslate(session.store, null, { replies: false, input: true });
       const log = stubRelay(inTurn([upstream(500, { error: { message: 'overloaded' } })]));

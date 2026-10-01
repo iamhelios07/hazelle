@@ -40,7 +40,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
             { label: '보낸 토큰', value: tokens(receipt.usage?.inputTokens ?? null) },
           ]}
         />
-        <Empty variant="section">이 답장의 요청 원문이 이 페이지에 없어요. 요청 원문은 페이지를 닫으면 사라져요.</Empty>
+        <Empty variant="section">이 답장의 요청 원문이 이 페이지에 없어요. 요청 원문은 이 채팅을 벗어나면 사라져요.</Empty>
       </>
     );
   }
@@ -118,7 +118,7 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
 // What the reply was sent of the chat's memory, so a fact it forgot reads as missing from memory or sent and not used.
 // The records are named as they are now; one deleted since reads as gone.
 export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memory: Memory | null; onRecord: (record: string) => void }) {
-  if (!sent) return <Empty variant="section">이 답장의 기억 기록이 이 페이지에 없어요. 기억 기록도 요청 원문처럼 페이지를 닫으면 사라져요.</Empty>;
+  if (!sent) return <Empty variant="section">이 답장의 기억 기록이 이 페이지에 없어요. 기억 기록도 요청 원문처럼 이 채팅을 벗어나면 사라져요.</Empty>;
   const { memory: used, dropped } = sent.prompt;
   const cut = { label: '컨텍스트 한도로 빠진 메시지', value: `${dropped}개`, tone: dropped ? ('warn' as const) : undefined };
   if (!used) {
@@ -161,7 +161,7 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
 }
 
 export function SentLore({ sent }: { sent: Sent | null }) {
-  if (!sent) return <Empty variant="section">이 답장의 로어북 기록이 이 페이지에 없어요. 로어북 기록도 요청 원문처럼 페이지를 닫으면 사라져요.</Empty>;
+  if (!sent) return <Empty variant="section">이 답장의 로어북 기록이 이 페이지에 없어요. 로어북 기록도 요청 원문처럼 이 채팅을 벗어나면 사라져요.</Empty>;
   const lore = sent.prompt.lore;
   if (!lore) return <Empty variant="section">캐릭터가 없는 채팅이라 로어북이 없어요.</Empty>;
   if (lore.length === 0) return <Empty variant="section">이 답장에는 떠오른 로어북 항목이 없어요.</Empty>;

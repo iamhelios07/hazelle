@@ -21,7 +21,6 @@ const FILE_WINDOW = 8;
 // What opening an account adds by itself.
 const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
 
-const ALL = Object.keys(KINDS) as Kind[];
 // The stored file an object names, for the kinds that name one.
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 
@@ -33,9 +32,16 @@ export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' }
 // nothing reaches are left out: a deleted chat's entries, and the lore and pictures of an
 // import cut short. left counts the objects that did not open, which no backup can hold.
 export async function exportBackup(store: ObjectStore, files: Files): Promise<ApiResult<{ zip: Uint8Array<ArrayBuffer>; left: number }>> {
-  const objects = ALL.flatMap((kind) => store.list(kind)).filter(({ kind, parent }) => {
+  const scanned = new Map<string, Stored<Kind>>();
+  let left = 0;
+  const failure = await store.scan({}, (row, value) => {
+    if (value === undefined || !Object.hasOwn(KINDS, row.kind)) { left++; return; }
+    scanned.set(row.id, { ...row, kind: row.kind as Kind, value } as Stored<Kind>);
+  });
+  if (failure) return failure;
+  const objects = [...scanned.values()].filter(({ kind, parent }) => {
     const owner = KINDS[kind].parent;
-    return owner === null || (parent !== null && store.get(owner, parent) !== null);
+    return owner === null || (parent !== null && scanned.get(parent)?.kind === owner);
   });
   const zip: Zippable = {};
   const named = [...new Map(objects.flatMap((object) => fileOf(object) ?? []).map((ref) => [ref.id, ref])).values()];
@@ -51,7 +57,7 @@ export async function exportBackup(store: ObjectStore, files: Files): Promise<Ap
   }
   zip[MANIFEST] = strToU8(JSON.stringify(FORMAT));
   zip[OBJECTS] = strToU8(objects.map((object) => JSON.stringify(object)).join('\n'));
-  return { ok: true, data: { zip: zipSync(zip), left: store.unreadable() } };
+  return { ok: true, data: { zip: zipSync(zip), left } };
 }
 
 // The file comes from outside, so its shape and every body are checked before anything is written; one bad
@@ -96,11 +102,13 @@ export async function restoreBackup(
   backup: Backup,
   progress: (done: number, total: number) => void,
 ): Promise<ApiResult<null> | { ok: false; error: 'not-new' | 'not-backup' }> {
-  const ids = new Set(backup.objects.map(({ id }) => id));
-  const present = new Set(ALL.flatMap((kind) => store.list(kind)).map(({ id }) => id));
+  const ids = new Set(backup.objects.filter(({ kind }) => kind !== 'summary').map(({ id }) => id));
+  const present = new Set<string>();
+  const failure = await store.scan({ metadata: true }, (row) => { if (row.kind !== 'summary') present.add(row.id); });
+  if (failure) return failure;
   if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
 
-  const todo = backup.objects.filter(({ id }) => SEEDED.has(id) || !present.has(id));
+  const todo = backup.objects.filter(({ id, kind }) => kind !== 'summary' && (SEEDED.has(id) || !present.has(id)));
   const held = [...backup.files.values()];
   const total = held.length + todo.length;
   let done = 0;
@@ -120,7 +128,7 @@ export async function restoreBackup(
   const writes = todo.sort((a, b) => a.rev - b.rev).map((object): Write => ({ ...object, type: 'restore' }));
   const restored = await store.batch(writes, () => progress(++done, total));
   if (!restored.ok) return restored;
-  return store.batch([...SEEDED].filter((id) => !ids.has(id)).map((id) => ({ type: 'remove', id })));
+  return store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })));
 }
 
 function parse(text: string | undefined): unknown {

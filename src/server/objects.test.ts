@@ -30,6 +30,36 @@ async function write(cookie: string, id: string, input: Record<string, unknown>)
 }
 
 describe('objects', () => {
+  it('bootstraps without scoped kinds, feeds omitted revisions and deletions, and reads only the requested parent', async () => {
+    const cookie = await signedIn();
+    const C = crypto.randomUUID();
+    const D = crypto.randomUUID();
+    const E = crypto.randomUUID();
+    const F = crypto.randomUUID();
+    await write(cookie, A, { kind: 'chat', body: 'chat-a' });
+    await write(cookie, B, { kind: 'entry', parent: A, body: 'entry-a' });
+    await write(cookie, C, { kind: 'memory', parent: A, body: 'memory-a' });
+    await write(cookie, D, { kind: 'chat', body: 'chat-b' });
+    await write(cookie, E, { kind: 'entry', parent: D, body: 'entry-b' });
+    const bootstrap = await (await t.get('objects?since=0&exclude=entry,memory&bootstrap=1', cookie)).json();
+    expect(bootstrap).toMatchObject({ until: 5, more: false, changes: [
+      { id: A, kind: 'chat', body: 'chat-a' }, { id: D, kind: 'chat', body: 'chat-b' },
+    ] });
+    await write(cookie, B, { kind: 'entry', parent: A, body: 'new-entry', baseRev: 2 });
+    await write(cookie, C, { kind: 'memory', parent: A, body: null, baseRev: 3 });
+    await write(cookie, F, { kind: 'summary', parent: A, body: 'new-summary' });
+    const feed = await (await t.get('objects?since=5&exclude=entry,memory', cookie)).json();
+    expect(feed).toMatchObject({ cursor: 8, more: false, changes: [
+      { id: B, kind: 'entry', parent: A, rev: 6, omitted: true },
+      { id: C, kind: 'memory', parent: A, rev: 7, body: null },
+      { id: F, kind: 'summary', parent: A, rev: 8, body: 'new-summary' },
+    ] });
+    expect(JSON.stringify(feed)).not.toContain('new-entry');
+    expect(await (await t.get(`objects?since=0&parent=${A}`, cookie)).json()).toMatchObject({ changes: [
+      { id: B, body: 'new-entry' }, { id: C, body: null }, { id: F, body: 'new-summary' },
+    ] });
+  });
+
   it('creates, updates with a version check, and syncs from a cursor', async () => {
     const cookie = await signedIn();
     expect(await write(cookie, A, { kind: 'settings', body: 'b25l' })).toEqual({ status: 200, json: { revs: [1] } });

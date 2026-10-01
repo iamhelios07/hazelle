@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
+import type { Card } from '../engine/import/types';
 import type { HttpRequest } from '../connectors/types';
 export { BATCH_LIMITS } from '../server/objects';
 import type { Upstream } from '../server/relay';
@@ -10,6 +11,12 @@ import { setDefaultModel } from './assignment';
 import { Files } from './files';
 import { openSession, type Session } from './session';
 import { ObjectStore } from './store';
+
+export const testCard = (name: string): Card => ({
+  name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '',
+  creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [], lowLevelAccess: false,
+  loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
+});
 
 type App = Awaited<ReturnType<typeof testApp>>;
 // The relay's answer to the upstream request it carries. null is a connection that dropped.
@@ -99,6 +106,7 @@ export async function answerable(session: Session): Promise<void> {
 // more device of it, and another vault key stands for a device that cannot read what it wrote.
 export function testServer() {
   let app: App;
+  const held: (() => void)[] = [];
   beforeAll(async () => {
     app = await testApp(viaStreams);
   });
@@ -110,11 +118,20 @@ export function testServer() {
     stubFetch();
   });
   afterEach(async () => {
+    for (const release of held.splice(0)) release();
     while (answered.size) await Promise.allSettled([...answered]);
     vi.unstubAllGlobals();
   });
 
   const harness = {
+    async hold(store: ObjectStore, ...chats: string[]) {
+      for (const chat of chats) {
+        const lease = store.retainChat(chat);
+        held.push(lease.release);
+        const failure = await lease.ready;
+        if (failure) throw new Error(failure.error);
+      }
+    },
     async account() {
       const body = signupBody();
       server!.cookie = sessionCookie(await app.post('signup', body));

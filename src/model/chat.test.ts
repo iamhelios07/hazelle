@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, chatTitle, fold, modelUsage, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, chatTitle, fold, modelUsage, recentIn, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -131,6 +131,13 @@ describe('branchTree', () => {
 });
 
 describe('modelUsage', () => {
+  it('keeps the booked cost when an explicitly walked branch precedes the original that settled it', () => {
+    const original = fold([bot('original', 'reply', receipt({ cost: { unit: 'usd', amount: 0.5, source: 'reported' } }))]);
+    const branch = structuredClone(original);
+    branch[0]!.versions[0]!.receipt!.cost = 'pending';
+    expect(modelUsage([branch, original], { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 1, costUnknown: 0, costs: [{ unit: 'usd', amount: 0.5, estimated: false }] });
+  });
+
   it('counts a branch’s copy once and each call of a continued reply, and keeps what was not reported apart', () => {
     const cut = receipt({ usage: { inputTokens: 100, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 50, reasoningTokens: null }, cost: { unit: 'usd', amount: 0.5, source: 'reported' }, totalMs: 500 });
     const continued = receipt({ continues: cut, cost: { unit: 'usd', amount: 0.25, source: 'price-list' } });
@@ -159,7 +166,7 @@ describe('recentModels', () => {
   it('lists each model once, newest first', () => {
     const one = fold([bot('b1', 'a', { model: 'm1' }), bot('b2', 'b', { model: 'm2' })]);
     const two = fold([bot('b3', 'c', { model: 'm1' })]);
-    expect(recentModels([one, two], 5)).toEqual([
+    expect(recentModels([recentIn(one), recentIn(two)], 5)).toEqual([
       { connection: 'c1', model: 'm1' },
       { connection: 'c1', model: 'm2' },
     ]);

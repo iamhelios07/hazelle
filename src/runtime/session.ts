@@ -15,6 +15,7 @@ import { Talk } from './talk';
 import { Translator } from './translate';
 import { ReadModels } from './read-model';
 import { Streams } from './streams';
+import { backfillSummaries } from './summary';
 import { resumeSend, translateLatest } from './turn';
 
 export type Session = {
@@ -33,6 +34,7 @@ export type Session = {
   // Stops sync, the reply and the background work, and drops the tokens and model lists. Every way out
   // of an open vault (잠그기, 로그아웃) unmounts app/shell/Workspace, which calls it.
   close: () => void;
+  startBackground: () => void;
 };
 
 // Pulls once before the first screen, then keeps the store in sync while the session is open. An open
@@ -72,9 +74,15 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     else if (purpose.kind === 'memory') memory.resume(stream);
     else void resumeSend({ store, streams }, stream, closing.signal);
   });
-  const stopSync = keepSynced(store);
-  void purgeExpired(store, Date.now(), closing.signal);
-  streams.pickUp();
+  let started = false;
+  const stopSync = keepSynced(store, () => { if (started && !closing.signal.aborted) streams.pickUp(); });
+  const startBackground = () => {
+    if (started || closing.signal.aborted) return;
+    started = true;
+    streams.pickUp();
+    void purgeExpired(store, Date.now(), closing.signal);
+    void backfillSummaries(store, closing.signal);
+  };
 
   const close = () => {
     closing.abort();
@@ -88,6 +96,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     catalogs.close();
     credentials.close();
     assets.close();
+    store.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, streams, credentials, catalogs, read, close } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, streams, credentials, catalogs, read, close, startBackground } };
 }
