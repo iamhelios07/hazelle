@@ -30,6 +30,21 @@ async function write(cookie: string, id: string, input: Record<string, unknown>)
 }
 
 describe('objects', () => {
+  it('rejects a cursor newer than the restored account instead of answering an empty feed', async () => {
+    const cookie = await signedIn();
+    await write(cookie, A, { kind: 'settings', body: 'sealed' });
+    const response = await t.get('objects?since=2&exclude=entry,memory', cookie);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'cache-reset' });
+  });
+
+  it('refuses a device feed for an account other than its authenticated session', async () => {
+    const cookie = await signedIn();
+    const response = await t.get(`objects?since=0&account=${A}`, cookie);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'account-mismatch' });
+  });
+
   it('bootstraps without scoped kinds, feeds omitted revisions and deletions, and reads only the requested parent', async () => {
     const cookie = await signedIn();
     const C = crypto.randomUUID();
@@ -146,6 +161,7 @@ describe('objects', () => {
     ) INSERT INTO objects (account_id, id, kind, rev, body)
       SELECT accounts.id, printf('%08d-1111-4111-8111-111111111111', revisions.rev), 'entry', revisions.rev, 'body-' || revisions.rev
       FROM accounts CROSS JOIN revisions`).run();
+    await t.env.DB.prepare('UPDATE accounts SET rev = 2000').run();
     const changes = (since: number) => Array.from({ length: 500 }, (_, index) => {
       const rev = since + index + 1;
       return { id: `${String(rev).padStart(8, '0')}-1111-4111-8111-111111111111`, kind: 'entry', parent: null, rev, body: `body-${rev}` };

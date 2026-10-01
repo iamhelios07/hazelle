@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api } from '../../runtime/api';
-import { forgetVault, recallVault, rememberVault } from '../../vault/device';
+import { forgetVault } from '../../runtime/device-cache';
+import { lockVault, recallVault, rememberVault } from '../../vault/device';
 import {
   canonicalUsername,
   createVault,
@@ -79,10 +80,10 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
     return null;
   }
 
-  async function logout(): Promise<string | null> {
+  async function logout(accountId: string): Promise<string | null> {
     const result = await api('POST', 'logout');
     if (!result.ok) return describeFailure(result);
-    await forgetVault();
+    await forgetVault(accountId);
     setState({ kind: 'login' });
     return null;
   }
@@ -149,7 +150,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
             const credential = await vaultCredential(username, method, secret);
             return credential ? open(signedIn, credential) : wrongSecret(method, false);
           }}
-          onLogout={() => void logout().then((failure) => failure && setState({ kind: 'unreachable', message: failure }))}
+          onLogout={() => void logout(signedIn.session.accountId).then((failure) => failure && setState({ kind: 'unreachable', message: failure }))}
         />
       );
     }
@@ -174,8 +175,8 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
         accountId: state.session.accountId,
         username: state.session.username,
         vaultKey: state.vaultKey,
-        onLock: () => void forgetVault().then(reload),
-        onLogout: logout,
+        onLock: () => void lockVault().then(reload),
+        onLogout: () => logout(state.session.accountId),
       });
   }
 }

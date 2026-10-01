@@ -27,7 +27,7 @@ export async function recallVault(accountId: string): Promise<VaultKey | null> {
   return open(key, stored.sealed, deviceAad(accountId));
 }
 
-export async function forgetVault(): Promise<void> {
+export async function lockVault(): Promise<void> {
   const db = await database();
   await request(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(VAULT));
 }

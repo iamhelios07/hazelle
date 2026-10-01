@@ -31,7 +31,14 @@ objects.get('/', async (c) => {
   const metadata = c.req.query('metadata') === '1';
   if (excluded.length > 32 || excluded.some((kind) => !KIND.test(kind)) || (parent !== undefined && !ID.test(parent))) return fail(c, 400, 'bad-input');
   const account = c.get('account').id;
-  const until = bootstrap ? Number(c.req.query('until') ?? await c.env.DB.prepare('SELECT rev FROM accounts WHERE id = ?').bind(account).first('rev')) : null;
+  const expected = c.req.query('account');
+  if (expected !== undefined && expected !== account) return fail(c, 409, 'account-mismatch');
+  const head = Number(await c.env.DB.prepare('SELECT rev FROM accounts WHERE id = ?').bind(account).first('rev'));
+  const known = Number(c.req.query('known') ?? since);
+  if (!Number.isSafeInteger(known) || known < 0) return fail(c, 400, 'bad-input');
+  const until = bootstrap ? Number(c.req.query('until') ?? head) : null;
+  // An operator wipe/restore can move revisions backwards. Never merge that account with a newer device snapshot.
+  if (Math.max(since, known, until ?? 0) > head) return fail(c, 409, 'cache-reset');
   if (until !== null && (!Number.isSafeInteger(until) || until < since)) return fail(c, 400, 'bad-input');
   const { results } = await c.env.DB.prepare(
     `SELECT id, kind, parent_id, rev, deleted_at IS NOT NULL AS deleted, omitted, start < ?3 AS fits, CASE WHEN start < ?3 THEN body END AS body
