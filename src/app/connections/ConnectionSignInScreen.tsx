@@ -37,7 +37,8 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
       if (!account.ok) return fail(describeSignInFailure(account.failure, signIn.site));
       const connection: Connection = {
         type: type.id,
-        label: `${type.label} · ${account.name}`,
+        label: type.label,
+        account: account.name,
         baseUrl: null,
         protocol: null,
         secret: approved.secret,

@@ -112,7 +112,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       top={
         <NavBar
           title={connection.label}
-          subtitle={subtitle}
+          subtitle={connection.account ? `${connection.account} · ${subtitle}` : subtitle}
           {...backBar(back)}
           actions={<IconButton icon={Trash2} label="연결 지우기" onClick={() => void remove()} />}
         />

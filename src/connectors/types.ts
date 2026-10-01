@@ -16,6 +16,8 @@ export type Endpoint = { baseUrl: string; protocol: Protocol };
 export type Connection = {
   type: string;
   label: string;
+  // The account a sign-in connection (Copilot) was made with, shown only on 연결; the label stays the type's own.
+  account?: string;
   baseUrl: string | null;
   protocol: Protocol | null;
   secret: string;
