@@ -36,6 +36,13 @@ it('ends a read at once when it is stopped while it cannot reach the server', as
   expect(Date.now() - began).toBeLessThan(500);
 });
 
+it('ends a read once the session is gone instead of trying again', async () => {
+  const fetch = vi.fn(async () => Response.json({ error: 'no-session' }, { status: 401 }));
+  vi.stubGlobal('fetch', fetch);
+  expect(await stream({ id: crypto.randomUUID(), key: {} }, null, new AbortController().signal)).toEqual({ kind: 'app', code: 'no-session' });
+  expect(fetch).toHaveBeenCalledOnce();
+});
+
 it('states the account the page holds on the relay and on every stream request', async () => {
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json({ error: 'stream-exists' }, { status: 409 }));
   vi.stubGlobal('fetch', fetch);

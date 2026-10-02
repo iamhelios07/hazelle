@@ -89,10 +89,11 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
 export type StreamCall = { id: string; key: JsonWebKey; public?: string; started?: () => void; bot?: string; took?: number };
 
 // A read ends only at the call's own end: the end the server read, a call the server lost, or one it no longer holds
-// (stream-gone). This page's own failures to reach it are tried again until the page stops reading; failing the read
-// on them would save that failure as the call's result and drop a call still running.
+// (stream-gone); or once the session is gone (no-session), when no read can reach it. This page's other failures to
+// reach it are tried again until the page stops reading; failing the read on them would save that failure as the
+// call's result and drop a call still running.
 export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal): Promise<Response | RelayFailure> {
-  let body: ReadableStream<Uint8Array> | 'gone';
+  let body: ReadableStream<Uint8Array>;
   if (request) {
     let response: Response;
     try {
@@ -107,13 +108,15 @@ export async function stream(call: StreamCall, request: HttpRequest | null, sign
     call.started?.();
     body = response.body;
   } else {
+    let reached: ReadableStream<Uint8Array> | RelayFailure;
     try {
-      body = await reach(call.id, 0, 0, signal);
+      reached = await reach(call.id, 0, 0, signal);
     } catch {
       return lost(signal);
     }
+    if (!(reached instanceof ReadableStream)) return reached;
+    body = reached;
   }
-  if (body === 'gone') return { kind: 'app', code: 'stream-gone' };
   return answered(await unframe(call, body, signal));
 }
 
@@ -123,9 +126,10 @@ export const stopStream = (id: string) => void fetchApi(`streams/${id}/stop`, { 
 // Once the call's result is saved. A refused drop leaves the server's copy until it expires on its own.
 export const dropStream = (id: string) => void fetchApi(`streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
 
-// The call's frames from seq from. No connection, a server error or a refused session are this page's and are tried
-// again, ever more slowly; gone: the server holds no such call. Throws once signal stops the read.
-async function reach(id: string, from: number, tries: number, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | 'gone'> {
+// The call's frames from seq from. No connection or a server error are this page's and are tried again, ever more
+// slowly; stream-gone: the server holds no such call; no-session: the session is gone. Throws once signal stops the
+// read.
+async function reach(id: string, from: number, tries: number, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | RelayFailure> {
   for (; ; tries++) {
     signal.throwIfAborted();
     if (tries) await new Promise<void>((resolve) => {
@@ -140,7 +144,8 @@ async function reach(id: string, from: number, tries: number, signal: AbortSigna
     signal.throwIfAborted();
     const response = await fetchApi(`streams/${id}?from=${from}`, { signal }).catch(() => null);
     if (response?.headers.get('x-stream') === 'frames' && response.body) return response.body;
-    if (response?.status === 404) return 'gone';
+    if (response?.status === 404) return { kind: 'app', code: 'stream-gone' };
+    if (response?.status === 401) return { kind: 'app', code: await errorCode(response) };
   }
 }
 
@@ -202,7 +207,7 @@ async function* framesOf(id: string, first: ReadableStream<Uint8Array>, signal: 
       if (signal.aborted) throw error;
     }
     const again = await reach(id, next, tries, signal);
-    if (again === 'gone') return;
+    if (!(again instanceof ReadableStream)) return;
     body = again;
   }
 }
