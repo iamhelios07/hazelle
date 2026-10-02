@@ -1,6 +1,6 @@
 import MarkdownIt, { type StateCore, type Token } from 'markdown-it';
 import { unescapeCbs } from './cbs/escape';
-import { evaluate } from './cbs/evaluate';
+import { evaluate, Runaway } from './cbs/evaluate';
 import type { Box } from './regex/scripts';
 import { contexts, renderChat, type ChatScope, type Missed } from './render';
 
@@ -9,14 +9,16 @@ import { contexts, renderChat, type ChatScope, type Missed } from './render';
 // drawn: the display scripts, by place among the packs' regex, that drew a box in each message; boxes: each message's
 // boxes taken out of it (상태창 지정), their <style> blocks in css too. pass: what the bot's Lua editDisplay pass has
 // yet to run (scope.lua), with what its run reads: each message past its input or output stage, and the variables
-// the chat starts from.
-export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: { items: Missed[]; staged: string[]; start: [string, string][] } | null };
+// the chat starts from. stopped: the bot's commands in a message or a backgroundHTML that ran away (renderChat); a
+// backgroundHTML that did is left out.
+export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: { items: Missed[]; staged: string[]; start: [string, string][] } | null; stopped: Runaway | null };
 
 // A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
 const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 
 export function display(scope: ChatScope, take: ReadonlySet<number> = new Set()): Display {
-  const { texts, variables, drawn, boxes, missed, staged, start } = renderChat('display', scope, take);
+  const { texts, variables, drawn, boxes, missed, staged, start, stopped: inMessages } = renderChat('display', scope, take);
+  let stopped = inMessages;
   const blocks: string[] = [];
   const strip = (text: string) =>
     text.replace(STYLE, (_, css: string) => {
@@ -24,10 +26,18 @@ export function display(scope: ChatScope, take: ReadonlySet<number> = new Set())
       return '';
     });
   // Read with the variables as the last message left them, as Risu reads it with the chat's current ones.
-  for (const { background } of scope.packs) if (background) strip(unescapeCbs(evaluate(background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
+  for (const { background } of scope.packs) {
+    if (!background) continue;
+    try {
+      strip(unescapeCbs(evaluate(background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
+    } catch (error) {
+      if (!(error instanceof Runaway)) throw error;
+      stopped ??= error;
+    }
+  }
   const shown = texts.map(strip);
   const taken = boxes.map((list) => list.map((box) => ({ ...box, html: strip(box.html) })));
-  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n'), drawn, boxes: taken, pass: missed.length > 0 ? { items: missed, staged, start } : null };
+  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n'), drawn, boxes: taken, pass: missed.length > 0 ? { items: missed, staged, start } : null, stopped };
 }
 
 // Markdown as Risu parses it (markdown-it, soft breaks kept, no indented code), so a bot's HTML blocks and the prose

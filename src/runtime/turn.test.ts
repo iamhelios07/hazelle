@@ -149,7 +149,7 @@ describe('반전 모드', () => {
 });
 
 describe('보낼 말 번역', () => {
-  it('translates the message first, sends the translation and saves it, with what the user typed as its translation', () =>
+  it('translates the message first, sends the translation and saves it, with what the user typed as its translation and the language it went out in', () =>
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
@@ -161,7 +161,7 @@ describe('보낼 말 번역', () => {
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
       expect(lastTwo(log[0]!.sent.body)[1]).toEqual({ role: 'user', content: '안녕' });
       expect(lastTwo(log[1]!.sent.body)[1]).toEqual({ role: 'user', content: 'Hello there' });
-      expect(shown(fold(session.store.children('entry', chat))[0]!)).toMatchObject({ text: 'Hello there', translation: { text: '안녕', receipt: { state: 'done' } } });
+      expect(shown(fold(session.store.children('entry', chat))[0]!)).toMatchObject({ text: 'Hello there', translation: { text: '안녕', receipt: { state: 'done' }, sentIn: 'English' } });
     }));
 
   it('sends and saves nothing when the message is not translated', () =>
@@ -185,7 +185,7 @@ describe('상태', () => {
     const messages = [message('a', false), message('b', false), message('c', false), message('d', true)];
     const box = (html: string) => [{ script: 0, html, at: 'top' as const }];
     const boxes = [box('first'), box('second'), box(' '), box('half')];
-    expect(statusBoxes({ texts: [], css: '', drawn: [], boxes, pass: null }, messages, [0, 2])).toEqual([
+    expect(statusBoxes({ texts: [], css: '', drawn: [], boxes, pass: null, stopped: null }, messages, [0, 2])).toEqual([
       { script: 0, drawn: { script: 0, html: 'second', at: 'top', message: 1 } },
       { script: 2, drawn: null },
     ]);

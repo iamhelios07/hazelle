@@ -139,6 +139,9 @@ export function describeAddFailure(failure: AddFailure): string {
   }
 }
 
+export const RUNAWAY_FIX = '캐릭터, 로어북, 프롬프트, 메시지에서 서로를 끝없이 불러오는 명령어를 고쳐 주세요.';
+const runaway = (before: string) => `명령어가 글을 너무 많이 만들어서 ${before} 멈췄어요. ${RUNAWAY_FIX}`;
+
 export function describeTurnFailure(failure: TurnFailure): string {
   switch (failure.kind) {
     case 'no-model':
@@ -151,6 +154,8 @@ export function describeTurnFailure(failure: TurnFailure): string {
       return failure.own ? '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.' : `기본 페르소나가 지워졌어요. ${inSettings('personas')}에서 다른 페르소나를 기본으로 정해 주세요.`;
     case 'profile-missing':
       return failure.own ? `이 모델이 쓰던 설정이 지워졌어요. ${inSettings('models')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 다른 설정을 기본으로 정해 주세요.`;
+    case 'runaway':
+      return runaway('보내기 전에');
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 보내 주세요.';
     case 'too-long':
@@ -175,6 +180,8 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
   switch (failure.kind) {
     case 'prompt-missing':
       return failure.own ? '고른 번역 프롬프트가 지워졌어요. 채팅의 번역 메뉴에서 다른 프롬프트를 골라 주세요.' : `기본 번역 프롬프트가 없어요. ${inSettings('prompts')}에서 번역 프롬프트 하나를 기본으로 정해 주세요.`;
+    case 'runaway':
+      return runaway('번역하기 전에');
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 번역해 주세요.';
     case 'no-model':
@@ -206,6 +213,8 @@ export function describeMemoryFailure(failure: MemoryFailure): string {
       return `기본 기억 프롬프트가 없어요. ${inSettings('prompts')}에서 기억 프롬프트 하나를 기본으로 정해 주세요.`;
     case 'profile-missing':
       return failure.own ? `기억 모델이 쓰던 설정이 지워졌어요. ${inSettings('models')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 다른 설정을 기본으로 정해 주세요.`;
+    case 'runaway':
+      return runaway('기억을 정리하기 전에');
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
     case 'failed':

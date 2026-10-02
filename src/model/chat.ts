@@ -73,8 +73,9 @@ export type ReceiptError =
 
 // A version as the reader reads it, beside its text, which is what the model is sent and never this.
 // A reply's is translated from its displayed text; a message sent translated keeps here what the user typed, and its
-// text is the translation sent. receipt: the call that translated, null when the user wrote it in an edit.
-export type Translation = { text: string; receipt: Receipt | null; at: number };
+// text is the translation sent. receipt: the call that translated, null when the user wrote it in an edit. sentIn: the
+// language a message sent translated went out in, as the English name its prompt read; a reply's translation has none.
+export type Translation = { text: string; receipt: Receipt | null; at: number; sentIn?: string };
 
 // Per character, or for every 캐릭터 없이 chat: replies translates each chat's latest reply, input
 // sends the user's messages translated, reverse (반전 모드) sends the model each version's translation in place of

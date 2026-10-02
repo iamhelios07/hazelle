@@ -47,8 +47,11 @@ const scope: ChatScope = {
   pick: 'luna:chat',
   variables: [],
 };
-const translate = (input: Pick<Parameters<typeof assembleTranslation>[0], 'request' | 'language'> & Partial<Parameters<typeof assembleTranslation>[0]>) =>
-  assembleTranslation({ scope, take: new Set(), prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], seed: 'seed', countTokens: (text) => text.length, ...input });
+const translate = (input: Pick<Parameters<typeof assembleTranslation>[0], 'request' | 'language'> & Partial<Parameters<typeof assembleTranslation>[0]>) => {
+  const assembled = assembleTranslation({ scope, take: new Set(), prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], seed: 'seed', countTokens: (text) => text.length, ...input });
+  if ('kind' in assembled) throw new Error(assembled.kind);
+  return assembled;
+};
 
 describe('the default translation prompt', () => {
   it('translates a displayed message into Korean, with the character, the persona and the messages before it with their translations', () => {

@@ -1,6 +1,6 @@
 import type { ConversationPrompt, TextBlock } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
-import { evaluate, type CbsContext } from './cbs/evaluate';
+import { evaluate, Runaway, type CbsContext } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card, Pack } from './import/types';
 import type { LoreInput } from './lorebook/activate';
@@ -73,12 +73,13 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
 // take: the display scripts, by place among the packs' regex, whose boxes leave the messages (상태창 지정). drawn and
 // boxes are each message's; only the display reads them. staged: each message's text past its input or output stage,
 // which is what the bot's Lua reads; wrote: the variables that stage's own CBS wrote. missed: the messages whose
-// editDisplay pass (scope.lua) is not fresh.
+// editDisplay pass (scope.lua) is not fresh. stopped: a stage of some message whose CBS ran away, which leaves that stage's
+// text as it came in, its tags as written; null when none did.
 export function renderChat(
   stage: Stage,
   scope: ChatScope,
   take: ReadonlySet<number> = new Set(),
-): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[] } {
+): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; stopped: Runaway | null } {
   const context = contexts(scope, stage, null);
   const scripts = scope.packs.flatMap(({ regex }) => regex);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
@@ -94,6 +95,17 @@ export function renderChat(
   const drawn: number[][] = [];
   const boxes: Box[][] = [];
   const past: string[] = [];
+  let stopped: Runaway | null = null;
+  // What the stage's CBS wrote before the stop stays written.
+  const guarded = <T>(run: () => T, unrun: T): T => {
+    try {
+      return run();
+    } catch (error) {
+      if (!(error instanceof Runaway)) throw error;
+      stopped ??= error;
+      return unrun;
+    }
+  };
   const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
     const at = { messages: scope.messages, index };
@@ -102,7 +114,7 @@ export function renderChat(
     const written = (index === 0 && scope.greeting !== null) || staged ? [] : scripts;
     for (const [name, value] of before) variables.set(name, value);
     variables.log = [];
-    const replayed = applyScripts(role === 'user' ? 'input' : 'output', text, { ...at, scripts: written, cbs: cbs(variables) }).text;
+    const replayed = guarded(() => applyScripts(role === 'user' ? 'input' : 'output', text, { ...at, scripts: written, cbs: cbs(variables) }).text, text);
     wrote.push(variables.log);
     variables.log = null;
     for (const [name, value] of after) variables.set(name, value);
@@ -122,13 +134,13 @@ export function renderChat(
       }
       edited = held?.text ?? '';
     }
-    const shown = applyScripts(stage === 'prompt' ? 'process' : 'display', edited, { ...at, scripts, take, cbs: cbs(new Map(variables)) });
+    const shown = guarded(() => applyScripts(stage === 'prompt' ? 'process' : 'display', edited, { ...at, scripts, take, cbs: cbs(new Map(variables)) }), { text: edited, skipped: [], drawn: [], boxes: [] });
     drawn.push(shown.drawn);
     boxes.push(shown.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })));
     return unescapeCbs(shown.text);
   });
   for (const [name, value] of scope.pending ?? []) variables.set(name, value);
-  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed };
+  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, stopped };
 }
 
 const LATEST = 5;

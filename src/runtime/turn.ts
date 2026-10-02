@@ -3,7 +3,7 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Card, Pack } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
-import { assemble, rewritten, type Assembled, type PromptInput, type TooLong } from '../engine/pipeline';
+import { assemble, rewritten, type Assembled, type PromptInput, type RanAway, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
@@ -51,6 +51,7 @@ export type TurnFailure = (
   | TalkFailure
   | Blocked
   | TooLong
+  | RanAway
   | { kind: 'tokenizer' }
   | { kind: 'unstarted'; failure: ApiFailure }
   | { kind: 'unpulled'; failure: ApiFailure }
@@ -371,7 +372,7 @@ export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, st
     const made = await resumeTranslation(session.store, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
     if (!made.ok && made.failure.kind === 'stopped') return;
     const id = stream.value.result;
-    const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed } } : { id, text: purpose.typed };
+    const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed, sentIn: purpose.language } } : { id, text: purpose.typed };
     const saved = await appendUserMessage(session.store, stream.parent!, said);
     if (!saved.ok && saved.error === 'stopped') return;
     if (saved.ok || session.store.children('entry', stream.parent!).some((entry) => entry.id === id)) endCall(session.store, stream.id);
@@ -385,7 +386,8 @@ export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, st
 async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
   const typed = turn.said!;
   const messages = session.read.chat(chat).snapshot()!.messages;
-  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text } };
+  const language = translateSwitches(session.store, turn.chat.character).inputLanguage;
+  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language } };
   session.streams.reading.add(target.id);
   const made = await translate(session, translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text }), target, signal, () => {}).finally(() =>
     session.streams.reading.delete(target.id),
@@ -397,6 +399,6 @@ async function sendTranslated(session: Session, chat: string, turn: TurnContext,
   return {
     ...turn,
     scope: { ...turn.scope, messages: turn.scope.messages.with(-1, { ...last, text: sent }) },
-    said: { id: typed.id, text: sent, translation: { ...made.translation, text: typed.text } },
+    said: { id: typed.id, text: sent, translation: { ...made.translation, text: typed.text, sentIn: language } },
   };
 }

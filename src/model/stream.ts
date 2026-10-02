@@ -16,6 +16,6 @@ export type Stream = {
   for:
     | { kind: 'reply'; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes }
     | { kind: 'translation'; version: string }
-    | { kind: 'input'; typed: string }
+    | { kind: 'input'; typed: string; language: string }
     | { kind: 'memory'; sources: Source[]; print: string };
 };
