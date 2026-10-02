@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { noResults } from '../common/search';
+import { PAGES } from '../common/words';
 import { Button, ChoiceGroup, Empty, Row, SearchField, Section, SettingRow, SidePanel, Stack, Switch, Text } from '../ui';
-import { shownRows, type ToggleRow } from './toggles';
+import { shownRows, splitByCard, type ToggleRow } from './toggles';
 import type { OpenChat } from './useChat';
 
 // Search and the 바꾼 것 filter show from this many toggles; fewer fit the panel at a glance.
@@ -17,10 +18,13 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
   const changedKeys = () => new Set([...toggles.prompt, ...toggles.card].filter((row) => row.changed).map((row) => row.toggle.key));
   const [first, setFirst] = useState(changedKeys);
   const total = toggles.prompt.length + toggles.card.length;
+  const packs = splitByCard(toggles.card, card?.toggles ?? '');
+  const modules = packs.modules.length > 0;
 
   const groups = [
     { title: prompt.kind === 'prompt' ? `프롬프트 · ${prompt.prompt.value.name}` : '프롬프트', rows: toggles.prompt },
-    { title: `캐릭터 · ${card?.name ?? ''}`, rows: toggles.card },
+    { title: `캐릭터 · ${card?.name ?? ''}`, rows: packs.card },
+    { title: PAGES.modules, rows: packs.modules },
   ]
     .filter((group) => group.rows.length > 0)
     .map((group) => ({ ...group, shown: shownRows(group.rows, query, filter === 'changed', first) }));
@@ -65,8 +69,8 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       <Stack gap="related">
         <Text variant="note">
           {card
-            ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요. 처음 값은 프롬프트와 캐릭터 카드가 정해요.`
-            : '여기서 바꾼 값은 캐릭터 없이 하는 모든 채팅에 적용돼요. 처음 값은 프롬프트가 정해요.'}
+            ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요. 처음 값은 ${modules ? '프롬프트, 캐릭터 카드와 모듈이' : '프롬프트와 캐릭터 카드가'} 정해요.`
+            : `여기서 바꾼 값은 캐릭터 없이 하는 모든 채팅에 적용돼요. 처음 값은 ${modules ? '프롬프트와 모듈이' : '프롬프트가'} 정해요.`}
         </Text>
         {prompt.kind === 'prompt' && toggles.prompt.length > 0 && (
           <Row kind="actions">

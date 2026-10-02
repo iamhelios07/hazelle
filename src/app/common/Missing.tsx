@@ -13,6 +13,7 @@ const COPY = {
   connection: { title: '연결', message: '이 연결이 없어요. 지워졌거나 주소가 잘못됐어요.' },
   prompt: { title: '프롬프트', message: '이 프롬프트가 없어요. 지워졌거나 주소가 잘못됐어요.' },
   persona: { title: '페르소나', message: '이 페르소나가 없어요. 지워졌거나 주소가 잘못됐어요.' },
+  module: { title: '모듈', message: '이 모듈이 없어요. 지워졌거나 주소가 잘못됐어요.' },
   profile: { title: '모델 설정', message: '이 설정이 없어요. 지워졌거나 주소가 잘못됐어요.' },
   model: { title: '모델', message: '별표한 모델 중에 이 모델이 없어요. 별표를 뺐거나 연결을 지웠어요.' },
 };

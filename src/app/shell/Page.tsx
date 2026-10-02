@@ -14,14 +14,17 @@ import { CharacterEditScreen } from '../library/CharacterEditScreen';
 import { CharacterScreen } from '../library/CharacterScreen';
 import { GalleryScreen } from '../library/gallery/GalleryScreen';
 import { HomeScreen } from '../library/HomeScreen';
+import { useImport } from '../library/ImportFlow';
 import { ModelScreen } from '../models/ModelScreen';
 import { ProfileScreen } from '../models/ProfileScreen';
 import { ModelsScreen } from '../models/ModelsScreen';
+import { ModuleScreen } from '../modules/ModuleScreen';
+import { ModulesScreen } from '../modules/ModulesScreen';
 import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
-import { useChatModel, useChats, useConnections, useLibrary, usePersonas, useProfiles, usePrompts } from '../session';
+import { useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
@@ -36,6 +39,7 @@ const EMPTY = {
   connections: '연결을 고르면 모델 목록과 사용량이 여기에 보여요.',
   'add-connection': '왼쪽에서 연결할 곳을 고르면 여기서 이어서 연결해요.',
   personas: '페르소나를 고르면 여기서 고칠 수 있어요.',
+  modules: '모듈을 고르면 담긴 것과 켜는 곳이 여기에 보여요.',
   models: '모델을 고르면 그 모델의 정보와 쓰는 설정이 여기에 보여요.',
 };
 
@@ -49,6 +53,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const prompts = usePrompts();
   const personas = usePersonas();
   const profiles = useProfiles();
+  const modules = useModules();
+  const { pick } = useImport();
   const chatModel = useChatModel(route.kind === 'chat' ? route.id : null);
   const wide = useWide();
   const split = useSplit();
@@ -132,6 +138,12 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         const stored = personas.find((persona) => persona.id === at.id);
         return stored ? <PersonaScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'persona');
       }
+      case 'modules':
+        return <ModulesScreen back={sideBack(at)} onImport={pick} />;
+      case 'module': {
+        const stored = modules.find((module) => module.id === at.id);
+        return stored ? <ModuleScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'module');
+      }
       case 'models':
         return <ModelsScreen back={sideBack(at)} />;
       case 'profile': {
@@ -148,7 +160,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
     }
   }
 
-  // The connection, persona and 모델 screens: their list and the item picked from it, side by side when there is room.
+  // The connection, persona, module and 모델 screens: their list and the item picked from it, side by side when there is room.
   const list = listOf(route);
   if (!list) return screen(route);
   const detail = route.kind === list.kind ? null : screen(route);
