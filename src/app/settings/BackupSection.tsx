@@ -50,8 +50,9 @@ export function BackupSection() {
         if (made.error === 'stopped') return;
         return toast.failed(made, '백업을 만들지 못했어요.');
       }
-      const { left } = made.data;
-      toast.show('백업을 받았어요.', left ? { detail: `금고 열쇠로 열리지 않는 항목 ${left}개는 담지 못했어요.` } : undefined);
+      const { left, skipped } = made.data;
+      const detail = [left ? `금고 열쇠로 열리지 않는 항목 ${left}개는 담지 못했어요.` : '', skipped ? `내려진 그림 ${skipped}개는 빼고 담았어요.` : ''].filter(Boolean).join(' ');
+      toast.show('백업을 받았어요.', detail ? { detail } : undefined);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('백업을 저장하지 못했어요.');
     } finally {

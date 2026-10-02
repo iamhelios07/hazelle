@@ -2,7 +2,7 @@ import { strFromU8, strToU8 } from 'fflate';
 import { isRecord } from '../connectors/values';
 import { KINDS, isValue, parentKinds, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
-import type { ApiResult } from './api';
+import type { ApiFailure, ApiResult } from './api';
 import { toBase64 } from '../vault/aead';
 import type { FileRef } from '../vault/files';
 import { BackupZip, indexZip, readEntry, unzipEntry, type BackupOutput, type ZipEntry } from './backup-zip';
@@ -34,14 +34,16 @@ export type { BackupOutput } from './backup-zip';
 
 // Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. Pieces
 // nothing reaches are left out: a deleted chat's entries, and the lore and pictures of an
-// import cut short. left counts the objects that did not open, which no backup can hold.
+// import cut short. left counts the objects that did not open, which no backup can hold. skipped counts the objects
+// naming a picture the operator blocked, which are left out as restore leaves out what the server refuses.
 export async function exportBackup(
   store: Pick<ObjectStore, 'scan'>,
   files: Pick<Files, 'read'>,
   output: BackupOutput,
   { signal = new AbortController().signal, progress = () => {} }: Options = {},
-): Promise<ApiResult<{ left: number }>> {
+): Promise<ApiResult<{ left: number; skipped: number }>> {
   let complete = false;
+  let refused: ApiFailure | null = null;
   try {
     const metadata = new Map<string, ObjectRow>();
     const scanned = await store.scan({ metadata: true }, (row) => {
@@ -68,6 +70,8 @@ export async function exportBackup(
     await manifest(strToU8(JSON.stringify(FORMAT)), true);
     const objects = await zip.entry(OBJECTS, true);
     const named = new Map<string, { ref: FileRef; uses: number }>();
+    const blocked = new Set<string>();
+    let skipped = 0;
     let first = true;
     // An object edited elsewhere after it was written comes again later in the walk, at its newer rev. Each id is written
     // once, as first met, since the importer refuses a second line for an id and the first is already in the zip.
@@ -82,6 +86,19 @@ export async function exportBackup(
       if (!due) return;
       const object = { ...row, kind: row.kind as Kind, value } as Stored<Kind>;
       const ref = fileOf(object);
+      // readBackup refuses a line naming a file the archive lacks, so a blocked picture must be known before the first
+      // line naming it is written. The bytes read here are read again after the objects; the server lets the browser
+      // keep its answer.
+      if (ref && !named.has(ref.id) && !blocked.has(ref.id)) {
+        const read = await files.read(ref);
+        if (!read.ok && read.error !== 'file-blocked') throw (refused = read);
+        if (!read.ok) blocked.add(ref.id);
+      }
+      if (ref && blocked.has(ref.id)) {
+        skipped++;
+        progress(done += 2, total);
+        return;
+      }
       if (ref) {
         const previous = named.get(ref.id);
         named.set(ref.id, { ref, uses: (previous?.uses ?? 0) + 1 });
@@ -106,9 +123,9 @@ export async function exportBackup(
     signal.throwIfAborted();
     await output.close();
     complete = true;
-    return { ok: true, data: { left } };
+    return { ok: true, data: { left, skipped } };
   } catch {
-    return { ok: false, error: signal.aborted ? 'stopped' : 'backup-write' };
+    return refused ?? { ok: false, error: signal.aborted ? 'stopped' : 'backup-write' };
   } finally {
     if (!complete) await output.abort();
   }

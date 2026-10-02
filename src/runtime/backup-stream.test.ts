@@ -74,7 +74,7 @@ it('round-trips streamed objects and files and filters unreachable objects from 
   const old = store([...source.objects, orphan]);
   const target = destination();
   const read = vi.fn(async () => ({ ok: true as const, data: source.bytes }));
-  expect(await exportBackup(old.api, { read }, target.output)).toEqual({ ok: true, data: { left: 0 } });
+  expect(await exportBackup(old.api, { read }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
   const opened = await backup(target.file());
   const next = store();
   const save = vi.fn(async (bytes: Uint8Array<ArrayBuffer>[]) => ({ ok: true as const, data: await Promise.all(bytes.map(async (bytes) => (await sealFile(bytes)).ref)) }));
@@ -82,7 +82,7 @@ it('round-trips streamed objects and files and filters unreachable objects from 
   expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes]);
   for (const object of source.objects) expect(next.held.get(object.id)).toMatchObject({ ...object, rev: expect.any(Number) });
   expect(next.held.size).toBe(source.objects.length);
-  expect(read).toHaveBeenCalledTimes(1);
+  expect(read).toHaveBeenCalledTimes(2);
 });
 
 it('restores a backup built by the previous zipSync format', async () => {
@@ -124,7 +124,7 @@ it('serializes each decrypted body before releasing it and backpressures a slow 
     }
     return null;
   };
-  expect(await exportBackup({ scan }, { read: vi.fn() }, output)).toEqual({ ok: true, data: { left: 0 } });
+  expect(await exportBackup({ scan }, { read: vi.fn() }, output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
   expect(decrypted).toBe(count);
   expect(written).toBeGreaterThan(1);
   expect(streamed).toBe(true);
@@ -174,6 +174,16 @@ it('leaves out what names a picture the server refuses, and counts it', async ()
   const next = store();
   expect(await restoreBackup(next.api, { save: async () => ({ ok: true, data: [null] }) }, await backup(target.file()))).toEqual({ ok: true, data: { skipped: 1 } });
   expect(next.written).toEqual(['person', 'character']);
+});
+
+it('exports without a picture the operator blocked and what names it, and counts them', async () => {
+  const source = await pictureObjects();
+  const target = destination();
+  const read = async () => ({ ok: false as const, error: 'file-blocked' });
+  expect(await exportBackup(store(source.objects).api, { read }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 1 } });
+  const opened = await backup(target.file());
+  expect(opened.objects.map(({ id }) => id)).toEqual(['person', 'character']);
+  expect(opened.files.size).toBe(0);
 });
 
 it('refuses a file with a body its kind cannot hold', async () => {
