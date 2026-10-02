@@ -1,7 +1,7 @@
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
 import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, standing, threadLabel, windowStart, type ChatRead, type Drafted, type MemoryInput, type RecordStatus, type Staleness } from '../engine/memory';
-import { assembleMemory } from '../engine/pipeline';
+import { assembleMemory, type Assembled } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { renderChat } from '../engine/render';
 import { shown, type Chat, type Message, type Receipt } from '../model/chat';
@@ -194,12 +194,9 @@ export function memoryView(session: Pick<Session, 'store' | 'read'>, chat: strin
   };
 }
 
-// The messages the next request would leave out with no memory standing for them: covered by memory that is not sent,
-// or cut by the model's budget. null while the chat cannot send.
-export function leaving(session: Session, chat: string, text: string, countTokens: (text: string) => number): number | null {
-  const next = wouldSend(session, chat, { kind: 'send', text }, countTokens);
-  return next && (next.prompt.memory?.missing ?? 0) + next.prompt.dropped;
-}
+// The messages a request leaves out with no memory standing for them: covered by memory that is not sent, or cut by
+// the model's budget.
+export const leaving = (prompt: Assembled): number => (prompt.memory?.missing ?? 0) + prompt.dropped;
 
 // One summary: the message versions it reads, in chat order, and the record it summarizes again as it was when the job
 // started (at), null for the messages after memory's end. user: the user asked, and may have a record they edited or
