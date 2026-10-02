@@ -20,6 +20,8 @@ export type ChatScope = {
   messages: HistoryMessage[];
   // The chat's own starting variables, over the card's defaults.
   variables: [string, string][];
+  // The variables the bot's Lua wrote for the reply being made, which stand after the last message.
+  pending?: [string, string][];
   greeting: CbsContext['greeting'];
   toggle: CbsContext['toggle'];
   model: CbsContext['model'];
@@ -61,28 +63,46 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
 // output stage is the only one whose CBS writes variables, so a stage chained after it cannot run a setvar twice;
 // the process or display stage reads a copy, so the display never changes what the prompt sees.
 // take: the display scripts, by place in the card's regex, whose boxes leave the messages (상태창 지정). drawn and
-// boxes are each message's; only the display reads them.
+// boxes are each message's; only the display reads them. staged: each message's text past its input or output stage,
+// which is what the bot's Lua reads; wrote: the variables that stage's own CBS wrote.
 export function renderChat(
   stage: Stage,
   scope: ChatScope,
   take: ReadonlySet<number> = new Set(),
-): { texts: string[]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][] } {
+): { texts: string[]; staged: string[]; wrote: [string, string][][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][] } {
   const context = contexts(scope, stage, null);
   const scripts = scope.card?.regex ?? [];
-  const variables = new Map([...(scope.card?.variables ?? []), ...scope.variables]);
+  const variables = new Logged([...(scope.card?.variables ?? []), ...scope.variables]);
+  const wrote: [string, string][][] = [];
   const drawn: number[][] = [];
   const boxes: Box[][] = [];
-  const texts = scope.messages.map(({ role, text, staged }, index) => {
+  const past: string[] = [];
+  const texts = scope.messages.map(({ role, text, staged, before = [], after = [] }, index) => {
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
     const at = { messages: scope.messages, index };
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
     // CBS still writes.
     const written = (index === 0 && scope.greeting !== null) || staged ? [] : scripts;
+    for (const [name, value] of before) variables.set(name, value);
+    variables.log = [];
     const replayed = applyScripts(role === 'user' ? 'input' : 'output', text, { ...at, scripts: written, cbs: cbs(variables) }).text;
+    wrote.push(variables.log);
+    variables.log = null;
+    for (const [name, value] of after) variables.set(name, value);
+    past.push(unescapeCbs(replayed));
     const shown = applyScripts(stage === 'prompt' ? 'process' : 'display', replayed, { ...at, scripts, take, cbs: cbs(new Map(variables)) });
     drawn.push(shown.drawn);
     boxes.push(shown.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })));
     return unescapeCbs(shown.text);
   });
-  return { texts, variables, drawn, boxes };
+  for (const [name, value] of scope.pending ?? []) variables.set(name, value);
+  return { texts, staged: past, wrote, variables, drawn, boxes };
+}
+
+class Logged extends Map<string, string> {
+  log: [string, string][] | null = null;
+  override set(name: string, value: string) {
+    this.log?.push([name, value]);
+    return super.set(name, value);
+  }
 }

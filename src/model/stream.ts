@@ -1,4 +1,4 @@
-import type { Receipt } from './chat';
+import type { Receipt, Writes } from './chat';
 import type { Source } from './memory';
 
 // A generation call the server is making for a chat (tech-spec §6, Detached replies), kept until its result is saved,
@@ -13,7 +13,7 @@ export type Stream = {
   at: number;
   result: string;
   for:
-    | { kind: 'reply'; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string } | null }
+    | { kind: 'reply'; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string } | null; before?: Writes }
     | { kind: 'translation'; version: string }
     | { kind: 'input'; typed: string }
     | { kind: 'memory'; sources: Source[] };

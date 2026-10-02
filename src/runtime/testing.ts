@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import type { Card } from '../engine/import/types';
 import type { HttpRequest } from '../connectors/types';
+import { Lua } from '../engine/lua/run';
 export { BATCH_LIMITS } from '../server/objects';
 import type { Upstream } from '../server/relay';
 import { sessionCookie, signupBody, testApp } from '../server/testing';
@@ -11,6 +12,10 @@ import { setDefaultModel } from './assignment';
 import { Files } from './files';
 import { openSession, type Session } from './session';
 import { ObjectStore } from './store';
+
+// The bot scripts run in the test's own thread: node has no Worker to load them into. Made before withSession stubs
+// window, which the VM's loader would read as a browser.
+const lua = Lua.create();
 
 export const testCard = (name: string): Card => ({
   name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '',
@@ -149,7 +154,7 @@ export function testServer() {
       vi.stubGlobal('window', new EventTarget());
       vi.stubGlobal('document', { visibilityState: 'hidden' });
       const { accountId, vaultKey } = await harness.account();
-      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal);
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, () => lua);
       if (!opened.ok) throw new Error(opened.error);
       try {
         await test(opened.data);

@@ -15,7 +15,9 @@ import { addDefaults } from './prompts';
 import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
+import type { Runner } from './lua/client';
 import { ReadModels } from './read-model';
+import { Scripts } from './scripts';
 import { Streams } from './streams';
 import { backfillSummaries } from './summary';
 import { resumeSend, translateLatest } from './turn';
@@ -30,6 +32,7 @@ export type Session = {
   translator: Translator;
   memory: Rememberer;
   streams: Streams;
+  scripts: Scripts;
   credentials: Credentials;
   catalogs: Catalogs;
   read: ReadModels;
@@ -39,8 +42,12 @@ export type Session = {
   startBackground: () => void;
 };
 
+// The worker is loaded when a chat's bot first runs Lua, never with the page.
+const luaWorker = (): Promise<Runner> => import('./lua/client').then(({ LuaWorker }) => new LuaWorker());
+
 // An open given up while it loads (signal) starts nothing. A cached opening never waits for the network.
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId)): Promise<ApiResult<Session>> {
+// lua: where the bot scripts run.
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), lua: () => Promise<Runner> = luaWorker): Promise<ApiResult<Session>> {
   const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
   if (signal.aborted) {
     store.close();
@@ -70,14 +77,18 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const translator = new Translator(store, credentials, costs, reading);
   const read = new ReadModels(store);
   const memory = new Rememberer({ store, read, credentials }, reading);
+  const scripts = new Scripts({ store, read }, lua);
   const talk = new Talk(
     store,
     credentials,
     costs,
-    (chat) => {
-      translateLatest({ store, read, talk, translator }, chat);
-      memory.check(chat);
-    },
+    (chat, reply) => scripts.ending(chat, reply),
+    // The bot's onOutput may rewrite the reply, so what reads the reply waits for it.
+    (chat, reply) =>
+      void scripts.ended(chat, reply).then(() => {
+        translateLatest({ store, read, talk, translator }, chat);
+        memory.check(chat);
+      }),
     reading,
   );
   const closing = new AbortController();
@@ -112,6 +123,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     read.close();
     streams.close();
     talk.close();
+    scripts.close();
     translator.close();
     memory.close();
     costs.close();
@@ -120,5 +132,5 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, streams, credentials, catalogs, read, close, startBackground } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, streams, scripts, credentials, catalogs, read, close, startBackground } };
 }

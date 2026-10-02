@@ -22,6 +22,7 @@ import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { CacheSend } from './cache';
+import type { Halted } from './scripts';
 import { appendUserMessage, startChat, type Greetings, type Said } from './chat-log';
 import { cacheViewOf } from './generate';
 import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
@@ -76,7 +77,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     lore: chat.character === null ? [] : store.children('lore', chat.character),
     messages: messages.map((message) => {
       const version = shown(message);
-      return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at, ...(version.staged && { staged: true }) };
+      return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at, ...(version.staged && { staged: true }), ...(version.before && { before: version.before }), ...(version.after && { after: version.after }) };
     }),
     variables: chat.variables ?? [],
     greeting: card && greetingOf(card, messages),
@@ -282,42 +283,51 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
   if (start) {
     const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const said = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
-    return session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async (signal) => {
+    const again = (answer: boolean) => gatherTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
+    return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async (signal) => {
       const unstarted = await startChat(session.store, chat, start.chat, start.greetings);
       if (unstarted) return { kind: 'unstarted', failure: unstarted };
       start.started();
       // The chat was just saved and a new chat's target names no message, so it is there.
       const turn = gatherTurn(session, chat, target, ids)!;
-      return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
-    });
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);
+    }));
   }
   const lease = session.store.retainChat(chat);
   const send = (): Promise<TurnFailure | null> => {
     const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const showing = gatherTurn(session, chat, target, ids);
     if (showing === null || 'kind' in showing) return Promise.resolve(showing);
-    return session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
+    const again = (answer: boolean) => gatherTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
+    return unhalted(session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
       // Another device may have written to this chat while this page stood open without focus or a timer's pull, so the
       // prompt is gathered again after a pull. A turn it cannot pull does not send on what may be stale.
       const unpulled = await session.store.pull();
       if (unpulled) return { kind: 'unpulled', failure: unpulled };
       const turn = gatherTurn(session, chat, target, ids);
       if (turn === null) return { kind: 'gone' };
-      return 'kind' in turn ? turn : prepare(session, chat, turn, signal);
-    });
+      return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);
+    }));
   };
   const sending = session.store.scopeState(chat) === 'loaded' ? send() : lease.ready.then((failure): Promise<TurnFailure | null> => failure ? Promise.resolve({ kind: 'unpulled', failure }) : send());
   return sending.finally(lease.release);
 }
 
-async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal): Promise<Ask | TooLong | { kind: 'tokenizer' } | Extract<TurnFailure, { kind: 'untranslated' }>> {
-  const turn = gathered.said && translateSwitches(session.store, gathered.chat.character).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
-  if ('kind' in turn) return turn;
+// A turn the bot's Lua ended before any request (stopChat) is not a failure: the user's message stays, and nothing
+// is said of it.
+const unhalted = (turn: Promise<TurnFailure | Halted | null>): Promise<TurnFailure | null> => turn.then((failure) => (failure?.kind === 'halted' ? null : failure));
+
+// again: the turn gathered anew, once the bot's Lua has changed the chat under it (Scripts.starting).
+async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => TurnContext | Blocked | null): Promise<Ask | Halted | TurnFailure> {
+  const translated = gathered.said && translateSwitches(session.store, gathered.chat.character).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
+  if ('kind' in translated) return translated;
+  const started = await session.scripts.starting(chat, translated, again, signal);
+  if ('kind' in started) return started;
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { kind: 'tokenizer' };
-  const { route, settings, scope, budget, memory, said, reply } = turn;
+  const { route, settings, scope, budget, memory, said, reply } = started.turn;
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null, memory });
-  return 'kind' in prompt ? prompt : { route, settings, prompt, said };
+  return 'kind' in prompt ? prompt : { route, settings, prompt, said, ...(reply.before && { before: reply.before }) };
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or

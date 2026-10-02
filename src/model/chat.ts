@@ -85,15 +85,18 @@ export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: bo
 // seed: the id a version's random tags roll from in place of its own. A branch's copy keeps its original's, and
 // an edit or a continued cut keeps the seed of the version it replaces, so text already shown never rolls again.
 // translation: the version's own from the start, for a message sent translated, an edit and a branch's copy.
-// staged: text already past the bot's input or output scripts (a message brought from Risu), which never run on it
-// again; an edit of it is the same.
+// staged: text already past the bot's input or output scripts (a message brought from Risu, one the bot's Lua
+// wrote), which never run on it again; an edit of it is the same.
+// before: the variables the bot's Lua wrote on the way to this version (when the message was sent, before its reply
+// was made), which the chat's replay sets before the version's own text is read. An edit keeps those of the version
+// it changes and adds its own.
 export type Entry =
   // A new message with its first version, which has the entry's id.
-  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true }
+  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true; before?: Writes }
   // replaces: the version this one takes the place of, for an edit, a retried failure or a continued cut
   // (이어 쓰기), so the count of versions does not grow; null for a new version, which goes last. An edit keeps
   // the receipt of the reply it changes.
-  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation }
+  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true; before?: Writes }
   | { type: 'select'; message: string; version: string; at: number }
   | { type: 'delete'; message: string; at: number }
   | { type: 'restore'; message: string; at: number }
@@ -101,9 +104,16 @@ export type Entry =
   // carries and translations' included.
   | { type: 'cost'; replyId: string; cost: Cost | null; at: number }
   // A translation made after the version was saved; the latest one for a version is its translation.
-  | ({ type: 'translation'; version: string } & Translation);
+  | ({ type: 'translation'; version: string } & Translation)
+  // The variables the bot's Lua wrote once the version stood (after its reply ended, on a button), which the replay
+  // sets after the version's own text is read. They follow the version into its edits and no further: a retried or
+  // continued reply runs the bot's Lua again.
+  | { type: 'vars'; version: string; set: Writes; at: number };
 
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true };
+// Variable writes in the order made; a later one of a name wins.
+export type Writes = [string, string][];
+
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes };
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number };
 
 const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'version' }>, edited: boolean, staged: boolean): Version => ({
@@ -115,6 +125,7 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
   at: entry.at,
   ...(entry.translation && { translation: entry.translation }),
   ...(staged && { staged: true }),
+  ...(entry.before && { before: entry.before }),
 });
 
 // A chat's entries, read in rev order into the messages on screen. Entries naming a message or version
@@ -126,6 +137,13 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
   const versions = new Map<string, Version>();
   // By a version's own id only: a translation of a replaced version is not its replacement's.
   const own = new Map<string, Version>();
+  // By a version's own id and those of the versions it is an edit of, and those ids by the version.
+  const edits = new Map<string, Version>();
+  const ids = new Map<Version, string[]>();
+  const stand = (id: string, version: Version, earlier: string[] = []) => {
+    ids.set(version, [...earlier, id]);
+    for (const each of ids.get(version)!) edits.set(each, version);
+  };
   const costs = new Map<string, Cost | null>();
   const locate = (message: Message, id: string) => {
     const version = versions.get(id);
@@ -137,7 +155,13 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       const version = versionOf(id, entry, false, entry.staged === true);
       versions.set(id, version);
       own.set(id, version);
+      stand(id, version);
       messages.set(id, { id, role: entry.role, at: entry.at, versions: [version], selected: 0 });
+      continue;
+    }
+    if (entry.type === 'vars') {
+      const version = edits.get(entry.version);
+      if (version) version.after = [...(version.after ?? []), ...entry.set];
       continue;
     }
     if (entry.type === 'cost') {
@@ -153,8 +177,14 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     if (!message) continue;
     if (entry.type === 'version') {
       const slot = entry.replaces === null ? -1 : locate(message, entry.replaces);
-      const version = versionOf(id, entry, entry.edit, entry.edit && message.versions[slot]?.staged === true);
+      const edited = entry.edit ? message.versions[slot] : undefined;
+      const version = versionOf(id, entry, entry.edit, entry.staged === true || edited?.staged === true);
+      if (edited) {
+        if (edited.before) version.before = [...edited.before, ...(entry.before ?? [])];
+        if (edited.after) version.after = edited.after;
+      }
       own.set(id, version);
+      stand(id, version, edited && ids.get(edited));
       if (slot === -1) message.versions.push(version);
       else message.versions[slot] = version;
       versions.set(id, version);

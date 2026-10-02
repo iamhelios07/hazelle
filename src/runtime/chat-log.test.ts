@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { memoryId, type MemoryRecord } from '../model/memory';
-import { appendCost, appendReply, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
 import { BATCH_LIMITS, testServer } from './testing';
 import { displayChat } from './turn';
 
@@ -39,6 +39,26 @@ describe('startChat', () => {
 });
 
 describe('branchChat', () => {
+  it("carries what the bot's Lua wrote and the texts it staged", async () => {
+    const { store } = await server.account();
+    const source = crypto.randomUUID();
+    await server.hold(store, source);
+    const chat: Chat = { title: null, character: null, models: {} };
+    await startChat(store, source, chat, null);
+    const said = crypto.randomUUID();
+    await appendUserMessage(store, source, { id: said, text: '안녕', before: [['order', 'input']] });
+    const folded = () => fold(store.children('entry', source));
+    await appendScripted(store, source, { edits: [{ message: folded()[0]!, text: '안녕!', wrote: [['typed', '1']] }], removed: [], added: [{ role: 'assistant', text: 'narration' }], vars: { version: said, set: [['hp', '9']] } });
+    const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after]);
+    expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']]], ['narration', true, undefined, undefined]]);
+
+    const item: ChatItem = { id: source, chat, messages: folded(), count: 2, title: '', preview: '', at: null, order: 0 };
+    const branched = await branchChat(store, item, folded()[1]!.id);
+    if (!branched.ok) throw new Error(branched.error);
+    await server.hold(store, branched.data);
+    expect(held(fold(store.children('entry', branched.data)))).toEqual(held(folded()));
+  });
+
   it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();

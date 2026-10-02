@@ -1,6 +1,6 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
-import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation } from '../model/chat';
+import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
@@ -99,10 +99,12 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 function copied(id: string, { role, at, versions, selected }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
-  const held = ({ text, receipt, seed, translation }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }) });
-  const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(first!), ...(first!.staged && { staged: true }) }]];
+  const held = ({ text, receipt, seed, translation, staged, before }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }) });
+  // The first version said again holds its own writes: an edit would add them to the message entry's.
+  const repeated = first!.edited || first!.at !== at;
+  const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(repeated ? { ...first!, before: undefined } : first!) }]];
   const made = new Map(versions.map((version, index) => [version.id, ids[index]!]));
-  if (first!.edited || first!.at !== at) {
+  if (repeated) {
     const again = crypto.randomUUID();
     made.set(first!.id, again);
     entries.push([again, { type: 'version', message: id, replaces: id, edit: first!.edited, at: first!.at, ...held(first!) }]);
@@ -111,6 +113,7 @@ function copied(id: string, { role, at, versions, selected }: Message): { entrie
     entries.push([ids[index + 1]!, { type: 'version', message: id, replaces: null, edit: version.edited, at: version.at, ...held(version) }]);
   });
   if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
+  for (const version of versions) if (version.after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(version.id)!, set: version.after, at: version.at }]);
   return { entries, versions: made };
 }
 
@@ -135,19 +138,47 @@ export const setChatNote = (store: ObjectStore, chat: string, note: string | nul
 
 const append = (store: ObjectStore, chat: string, entry: Entry, id?: string) => store.create('entry', entry, { id, parent: chat });
 
-// translation: what the user typed, when text is its translation sent.
-export type Said = { id: string; text: string; translation?: Translation };
+// translation: what the user typed, when text is its translation sent. before: what the bot's Lua wrote as it was
+// sent (model/chat Entry).
+export type Said = { id: string; text: string; translation?: Translation; before?: Writes };
 
-export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, translation }: Said) =>
-  append(store, chat, { type: 'message', role: 'user', at: Date.now(), text, receipt: null, ...(translation && { translation }) }, id);
+export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, translation, before }: Said) =>
+  append(store, chat, { type: 'message', role: 'user', at: Date.now(), text, receipt: null, ...(translation && { translation }), ...(before && { before }) }, id);
 
 // A reply as its stream ended: a new message, or a new version of `message`, in place of `replaces` on
 // 다시 시도. at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain)
 // sends the same entry, and a first try that landed unanswered is found as it is.
-export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt; seed?: string };
+export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt; seed?: string; before?: Writes };
 
-export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt, seed }: Written) {
-  return append(store, chat, message === null ? { type: 'message', role: 'assistant', at, text, receipt } : { type: 'version', message, replaces, edit: false, at, text, receipt, ...(seed && { seed }) }, id);
+export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt, seed, before }: Written) {
+  const held = { at, text, receipt, ...(before && { before }) };
+  return append(store, chat, message === null ? { type: 'message', role: 'assistant', ...held } : { type: 'version', message, replaces, edit: false, ...held, ...(seed && { seed }) }, id);
+}
+
+// What a run of the bot's Lua did to a chat (engine/lua Outcome), by the messages it read. edits: a message's new
+// text in place of its shown version, with the variables that version's own text wrote, which the new text no
+// longer does. vars: the variables written, standing after a version.
+export type Scripted = {
+  edits: { message: Message; text: string; wrote: Writes }[];
+  removed: string[];
+  added: { role: 'user' | 'assistant'; text: string }[];
+  vars: { version: string; set: Writes } | null;
+};
+
+// One batch, so a run's changes land together. What Lua writes is already past the input and output scripts.
+export function appendScripted(store: ObjectStore, chat: string, { edits, removed, added, vars }: Scripted): Promise<ApiResult<null>> {
+  const at = Date.now();
+  const entries: Entry[] = [
+    ...edits.map(({ message, text, wrote }): Entry => {
+      const current = shown(message);
+      return { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, staged: true, ...(wrote.length > 0 && { before: wrote }) };
+    }),
+    ...removed.map((message): Entry => ({ type: 'delete', message, at })),
+    ...added.map(({ role, text }): Entry => ({ type: 'message', role, at, text, receipt: null, staged: true })),
+    ...(vars && vars.set.length > 0 ? [{ type: 'vars', version: vars.version, set: vars.set, at } satisfies Entry] : []),
+  ];
+  if (entries.length === 0) return Promise.resolve({ ok: true, data: null });
+  return store.batch(entries.map((value) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: chat, value })));
 }
 
 export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });

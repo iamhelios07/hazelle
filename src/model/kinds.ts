@@ -81,6 +81,7 @@ const ENTRIES = {
   restore: shape({ message: str, at: num }),
   cost: shape({ replyId: str, cost: orNull(isRecord), at: num }),
   translation: shape({ version: str, ...text }),
+  vars: shape({ version: str, set: listOf(Array.isArray), at: num }),
 } satisfies Record<Entry['type'], Check>;
 
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(shape({ key: str, label: str, kind: str })) });

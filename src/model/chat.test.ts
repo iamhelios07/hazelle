@@ -95,6 +95,23 @@ describe('fold', () => {
   });
 });
 
+describe("fold with the bot's Lua writes", () => {
+  it('keeps them with a version through its edits, and leaves them behind on a retry', () => {
+    const edit = (id: string, replaces: string, before?: [string, string][]) => entry(id, { type: 'version', message: 'b1', replaces, edit: true, at: rev, text: id, receipt: receipt(), ...(before && { before }) });
+    const entries = [
+      entry('b1', { type: 'message', role: 'assistant', at: rev, text: '하나', receipt: receipt(), before: [['turn', '1']] }),
+      entry('w1', { type: 'vars', version: 'b1', set: [['hp', '9']], at: rev }),
+      edit('e1', 'b1', [['mood', 'calm']]),
+      entry('w2', { type: 'vars', version: 'b1', set: [['hp', '8']], at: rev }),
+      edit('e2', 'e1'),
+      entry('w3', { type: 'vars', version: 'e1', set: [['hp', '7']], at: rev }),
+    ];
+    expect(shown(fold(entries)[0]!)).toMatchObject({ id: 'e2', before: [['turn', '1'], ['mood', 'calm']], after: [['hp', '9'], ['hp', '8'], ['hp', '7']] });
+    const retried = shown(fold([...entries, version('r1', 'b1', '다시', 'e2')])[0]!);
+    expect([retried.before, retried.after]).toEqual([undefined, undefined]);
+  });
+});
+
 const asStored = (messages: Message[]) => messages.map((message) => shown(message).text);
 
 describe('chatTitle', () => {

@@ -357,6 +357,17 @@ describe('renderChat', () => {
     expect(renderChat('prompt', scope({ ...over, variables: [['count', '5']] })).texts).toEqual(['5 calm']);
   });
 
+  it("sets the bot's Lua writes around a message's own text, and those for the reply being made after the last", () => {
+    const messages = [
+      { ...message('u1', 'user', '{{getvar::turn}}{{setvar::turn::typed}}'), before: [['turn', 'lua']] as [string, string][], after: [['hp', '9']] as [string, string][] },
+      message('a1', 'assistant', '{{getvar::turn}} {{getvar::hp}}'),
+    ];
+    const rendered = renderChat('prompt', scope({ card: card({ greetings: [] }), messages, greeting: null, pending: [['turn', 'next']] }));
+    expect(rendered.texts).toEqual(['lua', 'typed 9']);
+    expect(rendered.staged).toEqual(['lua', 'typed 9']);
+    expect(rendered.variables.get('turn')).toBe('next');
+  });
+
   it('rolls a random tag in a message the same on screen as in the prompt', () => {
     const over = { card: card({ greetings: [] }), messages, greeting: null };
     expect(renderChat('display', scope(over)).texts[2]).toBe(renderChat('prompt', scope(over)).texts[2]);
