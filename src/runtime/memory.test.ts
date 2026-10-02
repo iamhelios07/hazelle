@@ -97,6 +97,29 @@ describe('Rememberer', () => {
       expect(log).toHaveLength(1);
       expect(chatMemory(session.store, chat).records).toEqual([]);
     }));
+  it("leaves a stale record as it is while the chat's prompt holds no 장기 기억 slot, and still summarizes it again when the user asks", () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const made = await addPrompt(session.store, 'no memory', 'conversation');
+      if (!made.ok) throw new Error('not saved');
+      await editPrompt(session.store, made.data.id, { blocks: made.data.value.blocks.filter((block) => !(block.kind === 'slot' && block.slot === 'memory')) });
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {}, prompt: made.data.id }, null);
+      const said = crypto.randomUUID();
+      await appendUserMessage(session.store, chat, { id: said, text: 'We meet at the pier.' });
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Luna waves.' });
+      const stale = { id: 'r0', sources: [{ message: said, version: said }], print: 'another text', when: null, where: null, who: [], what: 'They meet.', lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 };
+      await session.store.create('memory', { records: [stale], state: [], threads: [] }, { id: memoryId(chat), parent: chat });
+      const log = stubRelay(inTurn([saying(summary('jin and Luna meet at the pier.', 'We meet at the pier.'))]));
+      session.memory.check(chat);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(log).toHaveLength(0);
+
+      session.memory.rebuild(chat, 'r0');
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).records[0]).toMatchObject({ what: 'jin and Luna meet at the pier.' }));
+      expect(log).toHaveLength(1);
+    }));
   it('keeps a thread said again as the one thread already open', () =>
     server.withSession(async (session) => {
       await answerable(session);

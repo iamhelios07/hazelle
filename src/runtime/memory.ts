@@ -426,9 +426,11 @@ export class Rememberer {
     const asked = memory.records.find(({ id }) => id === this.asked.get(chat));
     this.asked.delete(chat);
     const stale = memory.records.filter((record) => !record.edited && !record.pinned && !record.forgotten && staleness(record, sent.read, places) === 'changed' && !this.reread.has(readKey(shownFor(record, sent.read, places))));
-    const again = asked ?? stale[0];
-    // Without a 장기 기억 slot in the request, a new record would only take its messages out of it.
-    const reaches = () => wouldSend(this.session, chat, { kind: 'answer' }, countTokens)?.prompt.memory?.slot === true;
+    // Without a 장기 기억 slot in the request, a new record would only take its messages out of it, and a stale one
+    // summarized again would be paid for and never read. What the user asked for is made whatever the prompt holds.
+    let slot: boolean | null = null;
+    const reaches = () => (slot ??= wouldSend(this.session, chat, { kind: 'answer' }, countTokens)?.prompt.memory?.slot === true);
+    const again = asked ?? (stale.length && reaches() ? stale[0] : undefined);
     const span = !again && this.full.has(chat) && reaches() ? this.span(chat, sent.read, coveredBy(memory, places), setup, countTokens) : null;
     if (!again && !span) return null;
     const indices = again ? again.sources.flatMap(({ message }) => places.get(message) ?? []) : [];
