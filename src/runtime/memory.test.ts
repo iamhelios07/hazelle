@@ -7,6 +7,7 @@ import { api } from './api';
 import { chatMemory, forgetRecord, removeFact, setDefaultMemory } from './memory';
 import { addPrompt, editPrompt } from './prompts';
 import { ObjectStore } from './store';
+import { openSession } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
 
@@ -173,6 +174,49 @@ describe('a deletion from memory', () => {
       expect(chatMemory(store, chat)).toEqual({ records: [{ ...record, forgotten: true }], state: [], threads: [] });
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('a summary picked up after a reload', () => {
+  it('is dropped when its messages render differently than the call read them, though their versions are the same', async () => {
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    const { accountId, vaultKey } = await server.account();
+    const open = async () => {
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal);
+      if (!opened.ok) throw new Error(opened.error);
+      opened.data.startBackground();
+      return opened.data;
+    };
+    const first = await open();
+    await answerable(first);
+    await setDefaultMemory(first.store, { window: 1, batch: 1 });
+    const chat = crypto.randomUUID();
+    await server.hold(first.store, chat);
+    await startChat(first.store, chat, { title: null, character: null, models: {}, variables: [['place', 'the pier']] }, null);
+    await appendUserMessage(first.store, chat, { id: crypto.randomUUID(), text: 'We meet at {{getvar::place}}.' });
+    const provider = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = provider.writable.getWriter();
+    const log = stubRelay(inTurn([saying('Luna waves.'), new Response(provider.readable, { headers: { 'x-relay': 'upstream' } })]));
+    expect(await takeTurn(first, chat, { kind: 'answer' })).toBeNull();
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ value }) => value.for.kind)).toEqual(['memory']));
+    await vi.waitFor(() => expect(log).toHaveLength(2));
+    first.close();
+
+    const second = await open();
+    try {
+      await server.hold(second.store, chat);
+      await vi.waitFor(() => expect(second.memory.snapshot().running.has(chat)).toBe(true));
+      await second.store.update('chat', chat, (current) => ({ ...current, variables: [['place', 'the harbor']] }));
+      // No key line, so nothing but the print tells the answer from one made of the text as it renders now.
+      const answer = JSON.stringify({ records: [{ to: 1, when: null, where: 'the pier', who: ['jin'], what: 'They meet at the pier.', lines: [], outcome: '', state: [], opens: [], closes: [] }] });
+      await writer.write(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: answer }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`));
+      await writer.close();
+      await vi.waitFor(() => expect(second.store.list('stream')).toEqual([]));
+      expect(chatMemory(second.store, chat).records).toEqual([]);
+    } finally {
+      second.close();
     }
   });
 });

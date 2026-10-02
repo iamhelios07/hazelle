@@ -9,6 +9,7 @@ import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
+import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { generate, resume, type Reply } from './generate';
@@ -348,7 +349,7 @@ export class Rememberer {
     if (this.closed || purpose.kind !== 'memory' || this.working.has(chat)) return;
     this.working.add(chat);
     this.change(chat, { running: { model: stream.value.call.modelName, left: 1 } });
-    void this.hold(chat, () => this.resumed(chat, stream, purpose.sources)).finally(() => this.done(chat));
+    void this.hold(chat, () => this.resumed(chat, stream, purpose)).finally(() => this.done(chat));
   }
 
   close() {
@@ -463,33 +464,36 @@ export class Rememberer {
     const { store, credentials } = this.session;
     const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
     const { messages, span } = assembleMemory({ scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID(), countTokens });
-    const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources } };
+    const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));
+    const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read) } };
     const text = gather();
     const answer = await this.reads(target.id, async (signal) =>
       generate({ credentials, connection: route.connection.value, model: route.model, settings, messages, call: await newCall(store, route, target), signal, onText: text.add }),
     );
-    const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));
     return this.finish(chat, target.id, target.result, callOf(route), answer, text.value(), job, read);
   }
 
-  // A resumed call reads its span as the chat renders it now; the commit checks the versions are still the ones it read.
-  private async resumed(chat: string, stream: Stored<'stream'>, sources: Source[]) {
+  // A resumed call's answer is for its span as the prompt rendered it when the call was made (the marker's print).
+  // Rendered differently now, after a toggle or a variable an earlier message sets, the answer is dropped as one whose
+  // versions changed is: its key lines cannot be checked against a text the call never read, and its records would
+  // take the print of that text and never read as stale.
+  private async resumed(chat: string, stream: Stored<'stream'>, { sources, print }: Extract<Stream['for'], { kind: 'memory' }>) {
     const text = gather();
     const answer = await this.reads(stream.id, (signal) => resume(this.session.store, stream, signal, text.add));
     const sent = chatSent(this.session, chat);
-    const places = sent && placesOf(sent.read.shown);
-    const indices = sources.flatMap(({ message }) => places?.get(message) ?? []);
-    if (!sent || indices.length < sources.length) {
+    const places = placesOf(sent?.read.shown ?? []);
+    const indices = sources.flatMap(({ message }) => places.get(message) ?? []);
+    const read = indices.map((index) => ({ role: sent!.read.roles[index]!, text: sent!.read.texts[index]! }));
+    if (indices.length < sources.length || fingerprint(read) !== print) {
       if (answer.cut !== 'stopped') endCall(this.session.store, stream.id);
       return;
     }
     const memory = chatMemory(this.session.store, chat);
     const again = memory.records.find((record) => {
-      const present = record.sources.filter(({ message }) => places!.has(message));
+      const present = record.sources.filter(({ message }) => places.has(message));
       return present.length === sources.length && present.every(({ message }, index) => message === sources[index]!.message);
     });
     const job: Job = { sources, redo: again ? { record: again.id, at: again.at, user: false } : null };
-    const read = indices.map((index) => ({ role: sent.read.roles[index]!, text: sent.read.texts[index]! }));
     const outcome = await this.finish(chat, stream.id, stream.value.result, stream.value.call, answer, text.value(), job, read);
     if (typeof outcome !== 'string') this.change(chat, { failed: outcome });
   }
