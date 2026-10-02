@@ -308,7 +308,7 @@ function readLife(row: unknown): Life | null {
 }
 
 async function settles<T>(read: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer!: ReturnType<typeof setTimeout>;
   const late = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error('The D1 read took too long.')), READ_MS);
   });
