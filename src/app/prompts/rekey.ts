@@ -1,4 +1,4 @@
-import { blockHead, conditionSteps, separatorOf, whenArgs } from '../../engine/cbs/evaluate';
+import { blockHead, conditionSteps, isRawBlock, separatorOf, whenArgs } from '../../engine/cbs/evaluate';
 import { parse, type Node, type Tag } from '../../engine/cbs/parse';
 import { normalize, TOGGLE_GLOBAL } from '../../engine/cbs/tags';
 
@@ -7,7 +7,7 @@ export type ToggleUse = { key: string; at: number };
 
 // Every place CBS reads a toggle by a written key, found the way the evaluator reads them: the literal `toggle` applies
 // to and the left side of `tis`/`tisnot` in a #when, and `toggle_KEY` in getglobalvar. A key built by a nested tag is
-// computed, not written, so it is not one.
+// computed, not written, so it is not one, and neither is anything in a body the evaluator takes as text.
 export function toggleUses(text: string): ToggleUse[] {
   const uses: ToggleUse[] = [];
   const visit = (nodes: Node[]) => {
@@ -17,9 +17,11 @@ export function toggleUses(text: string): ToggleUse[] {
         global(node, uses);
         visit(node.parts);
       } else {
-        when(node.head, uses);
+        const written = source(node.head);
+        const head = blockHead(written.content)!;
+        if (head.name === 'when') when(written, head.rest, uses);
         visit(node.head.parts);
-        visit(node.body);
+        if (!isRawBlock(head.name)) visit(node.body);
         visit(node.close.parts);
       }
     }
@@ -35,30 +37,44 @@ export function renameToggle(text: string, from: string, to: string): string {
     .reduce((result, use) => result.slice(0, use.at) + to + result.slice(use.at + from.length), text);
 }
 
-// A tag's written source, when no tag is nested in it, and where that source starts.
-function source(tag: Tag): { content: string; start: number } | null {
-  const [content, ...rest] = tag.parts;
-  return typeof content === 'string' && rest.length === 0 ? { content, start: tag.at + 2 } : null;
+// Stands for a nested tag, once for each character of its source, so a place in the content is a place in the text.
+// A noncharacter, which no key holds: an argument with one in it is computed.
+const NESTED = '﷐';
+type Written = { content: string; start: number };
+
+const sourceLength = (node: Node): number =>
+  typeof node === 'string'
+    ? node.length
+    : node.kind === 'tag'
+      ? '{{}}'.length + node.parts.reduce((sum: number, part) => sum + sourceLength(part), 0)
+      : sourceLength(node.head) + node.raw.length + sourceLength(node.close);
+
+// A tag's written source, and where that source starts.
+function source(tag: Tag): Written {
+  return { content: tag.parts.map((part) => (typeof part === 'string' ? part : NESTED.repeat(sourceLength(part)))).join(''), start: tag.at + 2 };
+}
+
+function note(key: string, at: number, uses: ToggleUse[]) {
+  if (!key.includes(NESTED)) uses.push({ key, at });
 }
 
 function global(tag: Tag, uses: ToggleUse[]) {
-  const written = source(tag);
-  const sep = written && separatorOf(written.content);
-  if (!written || !sep) return;
-  const [name, argument] = written.content.split(sep);
+  const { content, start } = source(tag);
+  const sep = separatorOf(content);
+  if (!sep) return;
+  const [name, argument] = content.split(sep);
   if (normalize(name!) !== 'getglobalvar' || !argument?.startsWith(TOGGLE_GLOBAL)) return;
-  uses.push({ key: argument.slice(TOGGLE_GLOBAL.length), at: written.start + name!.length + sep.length + TOGGLE_GLOBAL.length });
+  note(argument.slice(TOGGLE_GLOBAL.length), start + name!.length + sep.length + TOGGLE_GLOBAL.length, uses);
 }
 
-function when(head: Tag, uses: ToggleUse[]) {
-  const written = source(head);
-  const block = written && blockHead(written.content);
-  const sep = block && separatorOf(block.rest);
-  if (!written || block?.name !== 'when' || !sep) return;
-  const { modes, condition } = whenArgs(block.rest);
-  const start = written.start + written.content.length - block.rest.length + sep.length;
-  const at = (index: number) => [...modes, ...condition.slice(0, index)].reduce((place, arg) => place + arg.length + sep.length, start);
-  const use = (index: number) => uses.push({ key: condition[index]!, at: at(index) });
+// rest: the #when head after its name, as blockHead gives it.
+function when({ content, start }: Written, rest: string, uses: ToggleUse[]) {
+  const sep = separatorOf(rest);
+  if (!sep) return;
+  const { modes, condition } = whenArgs(rest);
+  const first = start + content.length - rest.length + sep.length;
+  const at = (index: number) => [...modes, ...condition.slice(0, index)].reduce((place, arg) => place + arg.length + sep.length, first);
+  const use = (index: number) => note(condition[index]!, at(index), uses);
   // Only the first step's operand is the key as written; a later one is an operator's result.
   conditionSteps(condition).steps.forEach(({ op, left }, step) => {
     if (op === 'toggle' && step === 0) use(condition.length - 1);

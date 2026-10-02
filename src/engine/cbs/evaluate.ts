@@ -143,10 +143,21 @@ function env(frame: Frame, place: string): Env {
   };
 }
 
+// The blocks whose body is taken as its source and never evaluated, so a tag written in one is text.
+const RAW = new Map<string, (raw: string, rest: string) => string>([
+  ['escape', (raw, rest) => escapeCbs(rest === '::keep' ? raw : trimBlank(raw), '{}()')],
+  ['pure', (raw) => raw],
+  // Risu backslash-escapes the braces for its markdown; escaped braces survive the later passes and show as braces.
+  ['puredisplay', (raw) => escapeCbs(raw, '{}')],
+]);
+export const isRawBlock = (name: string) => RAW.has(name);
+
 function evaluateBlock(block: Block, frame: Frame): string {
   const head = evaluateNodes(block.head.parts, frame);
   const { name, rest } = blockHead(head)!;
   const unknown = () => asWritten(head) + evaluateNodes(block.body, frame) + asWritten(evaluateNodes(block.close.parts, frame));
+  const raw = RAW.get(name);
+  if (raw) return raw(block.raw, rest);
   switch (name) {
     case 'when':
       return when(block, rest, frame);
@@ -156,13 +167,6 @@ function evaluateBlock(block: Block, frame: Frame): string {
       return truthy(rest.trim()) ? evaluateNodes(block.body, frame) : '';
     case 'each':
       return each(block, rest, frame) ?? unknown();
-    case 'escape':
-      return escapeCbs(rest === '::keep' ? block.raw : trimBlank(block.raw), '{}()');
-    case 'pure':
-      return block.raw;
-    // Risu backslash-escapes the braces for its markdown; escaped braces survive the later passes and show as braces.
-    case 'puredisplay':
-      return escapeCbs(block.raw, '{}');
     case 'code':
       return unbackslash(evaluateNodes(block.body, frame).replace(/[\n\r\t]/g, ''));
     case 'func': {
