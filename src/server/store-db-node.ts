@@ -151,7 +151,7 @@ export function nodeStores(reads: StoreReads, now: () => number) {
       return new Proxy({} as StoreStub, {
         get: (_, method) => {
           if (method === 'restart') return restart;
-          if (typeof method !== 'string' || !(method in StoreRules.prototype)) return undefined;
+          if (typeof method !== 'string' || !Object.hasOwn(StoreRules.prototype, method) || method === 'constructor') return undefined;
           return async (...args: unknown[]) => (live()[method as keyof StoreRules] as (...args: unknown[]) => unknown).apply(live(), args);
         },
       });
