@@ -53,7 +53,10 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
             시작하기
           </Button>
           <Text variant="note" align="center">
-            시작하면 <Link href={TERMS.path}>{TERMS.title}</Link>과 <Link href={PRIVACY.path}>{PRIVACY.title}</Link>에 동의하는 거예요.
+            시작하기를 누르면 아래 두 문서에 동의하게 됩니다.
+          </Text>
+          <Text variant="note" align="center">
+            <Link href={TERMS.path}>{TERMS.title}</Link> · <Link href={PRIVACY.path}>{PRIVACY.title}</Link>
           </Text>
           <Text variant="note" align="center">
             이 단계는 건너뛸 수 없어요.

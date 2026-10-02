@@ -11,7 +11,7 @@ export function legalPage(path: string) {
 function LegalPage({ text }: { text: LegalText }) {
   return (
     <Screen top={<Brand />}>
-      <Intro title={text.title}>시행일: {EFFECTIVE ?? '아직 정하지 않았어요'}</Intro>
+      <Intro title={text.title}>시행일: {EFFECTIVE ?? '미정'}</Intro>
       {text.sections.map((section) => (
         <Section key={section.title} title={section.title}>
           <Stack gap="related">
