@@ -68,14 +68,17 @@ export async function exportBackup(
     const objects = await zip.entry(OBJECTS, true);
     const named = new Map<string, { ref: FileRef; uses: number }>();
     let first = true;
+    // An object edited elsewhere after it was written comes again later in the walk, at its newer rev. Each id is written
+    // once, as first met, since the importer refuses a second line for an id and the first is already in the zip.
     const failure = await store.scan({}, async (row, value) => {
       signal.throwIfAborted();
+      const due = reached.delete(row.id);
       if (value === undefined || !Object.hasOwn(KINDS, row.kind)) {
         left++;
-        if (reached.has(row.id)) progress(done += 1 + Number('file' in KINDS[row.kind as Kind]), total);
+        if (due) progress(done += 1 + Number('file' in KINDS[row.kind as Kind]), total);
         return;
       }
-      if (!reached.has(row.id)) return;
+      if (!due) return;
       const object = { ...row, kind: row.kind as Kind, value } as Stored<Kind>;
       const ref = fileOf(object);
       if (ref) {
