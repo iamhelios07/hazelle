@@ -2,30 +2,43 @@ import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { every } from 'hono/combine';
 import { createMiddleware } from 'hono/factory';
-import { fail, hex, sha256Hex, type Account, type AppEnv } from './http';
+import { CAP } from './caps';
+import { fail, hex, sha256Hex, type Account, type AppEnv, type State } from './http';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIFETIME_MS = 30 * DAY_MS;
 
+// A leaving account has no session: its deletion has begun (lifecycle.ts), and only 탈퇴 itself, run again to finish
+// it, is admitted (requireOwnSession).
 export async function currentAccount(c: Context<AppEnv>): Promise<Account | null> {
+  const account = await sessionAccount(c);
+  return account?.state === 'leaving' ? null : account;
+}
+
+async function sessionAccount(c: Context<AppEnv>): Promise<Account | null> {
   const token = getCookie(c, 'session', 'host');
   return token ? readSession(c.env.DB, token) : null;
 }
 
-export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
-  const account = await currentAccount(c);
-  // Carries no x-relay header: that header is how the client tells this 401 from a provider's.
-  if (!account) return fail(c, 401, 'no-session');
-  // A page states the account it holds. Once another tab has signed in as someone else the cookie names that account,
-  // and what this page sealed or asks for must not be filed under it. This is the only such check: routes have none.
-  // A request stating none is not from a page holding an account: bad input, since a 409 here would close the page's
-  // account as if another tab had signed in, and a 401 would say the session is gone.
-  const stated = c.req.header('x-account');
-  if (stated === undefined) return fail(c, 400, 'bad-input');
-  if (stated !== account.id) return fail(c, 409, 'account-mismatch');
-  c.set('account', account);
-  await next();
-});
+const sessionGuard = (read: (c: Context<AppEnv>) => Promise<Account | null>) =>
+  createMiddleware<AppEnv>(async (c, next) => {
+    const account = await read(c);
+    // Carries no x-relay header: that header is how the client tells this 401 from a provider's.
+    if (!account) return fail(c, 401, 'no-session');
+    // A page states the account it holds. Once another tab has signed in as someone else the cookie names that account,
+    // and what this page sealed or asks for must not be filed under it. This is the only such check: routes have none.
+    // A request stating none is not from a page holding an account: bad input, since a 409 here would close the page's
+    // account as if another tab had signed in, and a 401 would say the session is gone.
+    const stated = c.req.header('x-account');
+    if (stated === undefined) return fail(c, 400, 'bad-input');
+    if (stated !== account.id) return fail(c, 409, 'account-mismatch');
+    c.set('account', account);
+    await next();
+  });
+
+export const requireSession = sessionGuard(currentAccount);
+// 탈퇴 only: it admits a leaving account too.
+export const requireOwnSession = sessionGuard(sessionAccount);
 
 // A suspended account still reads, exports and deletes itself, and adds nothing: canWrite follows requireSession on
 // the routes that write objects or upload files, canCall on the ones that call a provider.
@@ -74,14 +87,15 @@ async function readSession(db: D1Database, token: string): Promise<Account | nul
   const tokenHash = await sha256Hex(token);
   const row = await db
     .prepare(
-      'SELECT a.id, a.username, a.suspended_at, s.expires_at FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?',
+      `SELECT a.id, a.username, a.suspended_at, a.incarnation, a.state, ${CAP.bytes} AS cap, s.expires_at
+       FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?`,
     )
     .bind(tokenHash, now)
-    .first<{ id: string; username: string; suspended_at: number | null; expires_at: number }>();
+    .first<{ id: string; username: string; suspended_at: number | null; incarnation: string; state: State; cap: number | null; expires_at: number }>();
   if (!row) return null;
   // Sliding expiry, written at most once a day rather than on every request.
   if (row.expires_at - now < SESSION_LIFETIME_MS - DAY_MS) {
     await db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_LIFETIME_MS, tokenHash).run();
   }
-  return { id: row.id, username: row.username, suspended: row.suspended_at !== null };
+  return { id: row.id, username: row.username, suspended: row.suspended_at !== null, incarnation: row.incarnation, state: row.state, bytesCap: row.cap };
 }

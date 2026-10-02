@@ -1,5 +1,6 @@
 // The cap that applies to an account, as SQL over its accounts row: its own when the operator gave it one, else the
-// service's. A statement that checks a cap reads it here, in the same statement, so no second read can go stale.
+// service's. The object bytes cap is read with the session and holds for that request's batch, in the account's store
+// (session.ts); the picture cap is read by the upload's reservation, in the same statement (files.ts).
 export const CAP = {
   bytes: 'CASE WHEN own_bytes_cap THEN bytes_cap ELSE (SELECT account_bytes_cap FROM service) END',
   fileBytes: 'CASE WHEN own_file_bytes_cap THEN file_bytes_cap ELSE (SELECT account_file_bytes_cap FROM service) END',

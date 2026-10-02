@@ -50,5 +50,3 @@ app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 
 export default app;
-export { Relay } from './relay';
-export { ReplyStream } from './streams';
