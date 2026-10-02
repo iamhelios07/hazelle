@@ -123,10 +123,10 @@ export class Scripts {
     const scripts = scriptsOf(first.scope.card);
     if (scripts.length === 0) return { turn: first };
     const halted: Halted = { kind: 'halted' };
-    // 멈추기 gives up the wait; a run already made still saves what it did.
+    // 멈추기 ends the turn without waiting for a run that may itself be waiting, for a model or for the user. The
+    // runs go on to where the user's message is saved, as a stopped turn saves it without Lua, and no further.
     const stopped = new Promise<Halted>((resolve) => signal.addEventListener('abort', () => resolve(halted), { once: true }));
     const started = this.queued(chat, async (): Promise<Started> => {
-      if (signal.aborted) return halted;
       let turn = first;
       const regather = (answer: boolean) => {
         const next = again(answer);
@@ -151,6 +151,7 @@ export class Scripts {
         const failed = regather(true);
         if (failed) return failed;
       }
+      if (signal.aborted) return halted;
       const start = await this.event(chat, first.chat, scripts, turn.scope, { kind: 'start' }, null);
       if (start.outcome.stop) {
         const last = turn.scope.messages.at(-1);

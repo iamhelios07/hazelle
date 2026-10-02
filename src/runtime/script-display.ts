@@ -11,6 +11,12 @@ import { pinned, scopeOf } from './turn';
 type Held = { text: string; stamp: string; shown: string };
 type Pass = { scripts: Script[]; snapshot: Snapshot; items: Missed[] };
 
+// How long one stretch of a pass may hold the worker, which the chat's other Lua (a send, a button) waits behind. A
+// script that reads the whole chat for every message takes a third of a second each on a long chat (measured
+// 2026-10-02), so a pass is cut into stretches of about this long, sized by how the last one went.
+const STRETCH_MS = 200;
+const STRETCH_MOST = 512;
+
 // The open chats' displays with the bot's Lua editDisplay pass laid over them (design §6.8). The display is made at
 // once from what the pass has given so far; what it has not is run in the background, and the chat's listeners are
 // told when it lands, to display again.
@@ -62,23 +68,31 @@ export class ScriptDisplay {
     this.tell(chat);
   }
 
-  // One pass at a time per chat, and only the latest one asked for after it: a reply being written asks at every
-  // chunk.
+  // One stretch at a time per chat, of the latest pass asked for: its newest messages, which are the ones on screen.
+  // Telling the listeners displays the chat again, which asks for what is still missing, and so the next stretch; a
+  // reply being written asks at every chunk.
   private pass(chat: string, pass: Pass) {
     this.waiting.set(chat, pass);
     if (this.running.has(chat)) return;
     this.running.add(chat);
     void (async () => {
+      let size = 8;
       for (let next = this.waiting.get(chat); next; next = this.waiting.get(chat)) {
         this.waiting.delete(chat);
-        const { scripts, snapshot, items } = next;
+        const { scripts, snapshot } = next;
+        const from = Math.max(0, next.items.length - size);
+        const items = next.items.slice(from);
+        const variables = new Map(snapshot.variables);
+        for (const item of next.items.slice(0, from)) for (const [name, value] of item.variables) variables.set(name, value);
+        const began = performance.now();
         // A pass that cannot be made shows the texts as they were, rather than nothing.
         const texts = await this.open()
-          .then((runner) => runner.display(chat, scripts, snapshot, items))
+          .then((runner) => runner.display(chat, scripts, { ...snapshot, variables: [...variables] }, items))
           .then(
             (shown) => (this.report(chat, shown), shown.texts),
             (error: unknown) => (this.report(chat, error), items.map((item) => item.text)),
           );
+        size = Math.min(STRETCH_MOST, Math.max(1, Math.round((STRETCH_MS * items.length) / Math.max(1, performance.now() - began))));
         if (!this.listeners.has(chat)) break;
         const held = this.held.get(chat) ?? new Map<string, Held>();
         this.held.set(chat, held);

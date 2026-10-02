@@ -102,11 +102,15 @@ export function renderChat(
     past.push(unescapeCbs(replayed));
     let edited = replayed;
     if (lua) {
-      // Its place and the chat's length are part of what a pass reads: bots draw their status on the last message.
-      const stamp = `${index}/${scope.messages.length}/${variables.stamp}`;
+      // A pass is made again when its message's place or the state as of it changes, and for the last LATEST
+      // messages when the chat grows or shrinks, which is when Risu draws them again: bots draw their status on the
+      // last message and take it off the one before. Older messages keep their pass until reloadDisplay.
+      const place = index - first;
+      const length = scope.messages.length - first;
+      const stamp = `${place}/${place >= length - LATEST ? length : ''}/${variables.stamp}`;
       const held = lua(id, replayed, stamp);
       if (!held?.fresh) {
-        missed.push({ index: index - first, version: id, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });
+        missed.push({ index: place, version: id, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });
         variables.changed!.clear();
       }
       edited = held?.text ?? '';
@@ -119,6 +123,8 @@ export function renderChat(
   for (const [name, value] of scope.pending ?? []) variables.set(name, value);
   return { texts, staged: past, wrote, start, variables, drawn, boxes, missed };
 }
+
+const LATEST = 5;
 
 // One message whose editDisplay pass is to be run. index: its place as Lua counts, the greeting -1. text: past its
 // input or output stage, escaped braces still escaped, so the display's own CBS pass does not read them as tags.
