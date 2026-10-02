@@ -18,8 +18,11 @@ export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
   if (!account) return fail(c, 401, 'no-session');
   // A page states the account it holds. Once another tab has signed in as someone else the cookie names that account,
   // and what this page sealed or asks for must not be filed under it. This is the only such check: routes have none.
+  // A request stating none is not from a page holding an account: bad input, since a 409 here would close the page's
+  // account as if another tab had signed in, and a 401 would say the session is gone.
   const stated = c.req.header('x-account');
-  if (stated !== undefined && stated !== account.id) return fail(c, 409, 'account-mismatch');
+  if (stated === undefined) return fail(c, 400, 'bad-input');
+  if (stated !== account.id) return fail(c, 409, 'account-mismatch');
   c.set('account', account);
   await next();
 });

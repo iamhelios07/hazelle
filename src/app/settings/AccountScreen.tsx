@@ -1,4 +1,5 @@
-import { useAccount, useSession } from '../session';
+import { sizeText } from '../common/size';
+import { useAccount, useSession, useStanding } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -8,9 +9,13 @@ import { BackupSection } from './BackupSection';
 import { LeaveSection } from './LeaveSection';
 import { ReportSection } from './ReportSection';
 
+// Used, and the cap when there is one.
+const used = (name: string, bytes: number, cap: number | null) => `${name} ${sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
+
 export function AccountScreen({ back }: { back: Back | null }) {
   const { username } = useSession();
-  const { suspended, onLock, onLogout } = useAccount();
+  const { onLock, onLogout } = useAccount();
+  const { suspended, storage } = useStanding();
   const toast = useToast();
   return (
     <Screen width="form" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
@@ -21,6 +26,12 @@ export function AccountScreen({ back }: { back: Back | null }) {
         </Text>
       </FaceRow>
       <SettingGroup label="계정">
+        <SettingRow
+          label="저장 공간"
+          help="그림은 이 계정이 처음 올린 크기로 세고, 지워도 줄지 않아요."
+          sub={`${used('글', storage.bytes, storage.bytesCap)} · ${used('그림', storage.fileBytes, storage.fileBytesCap)}`}
+          control={null}
+        />
         <SettingRow
           label="잠그기"
           help="금고를 닫아요. 다시 열 때는 비밀번호를 넣어요."

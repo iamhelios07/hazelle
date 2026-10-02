@@ -1,7 +1,7 @@
 import { readLog, type LogRow } from '../../runtime/admin';
+import { sizeText } from '../common/size';
 import { ago } from '../common/time';
 import { Button, Callout, Empty, List, ListItem, Section } from '../ui';
-import { megabytes } from './bytes';
 import { usePages } from './useLoaded';
 
 // The actions server/admin logs. One it does not list shows as the server wrote it.
@@ -10,18 +10,21 @@ const ACTIONS: Record<string, string> = {
   lift: '정지 풀기',
   'delete-account': '계정 지우기',
   'set-service': '서비스 설정',
+  'set-caps': '저장 한도',
   'resolve-report': '알림 확인',
   'block-file': '파일 차단',
   'unblock-file': '파일 차단 풀기',
 };
 
+const capText = (cap: unknown) => (typeof cap === 'number' ? sizeText(cap) : cap === 'default' ? '기본값' : '없음');
+
 function detailOf({ action, detail }: LogRow): string | undefined {
   if (detail === null) return undefined;
   const values = detail as Record<string, unknown>;
+  if (action === 'set-caps') return `${String(values.username)} · 글 한도 ${capText(values.bytesCap)} · 그림 한도 ${capText(values.fileBytesCap)}`;
   if (typeof values.username === 'string') return values.username;
   if (action === 'set-service' && typeof values.signupCap === 'number') {
-    const cap = values.accountBytesCap;
-    return `가입 정원 ${values.signupCap}명 · 계정당 저장 한도 ${typeof cap === 'number' ? megabytes(cap) : '없음'}`;
+    return `가입 정원 ${values.signupCap}명 · 계정당 글 한도 ${capText(values.accountBytesCap)} · 계정당 그림 한도 ${capText(values.accountFileBytesCap)}`;
   }
   return JSON.stringify(detail);
 }

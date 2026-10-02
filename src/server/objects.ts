@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { CAP, USE_HEADERS } from './caps';
 import { FILE_ID } from './files';
 import { fail, ID, readObject, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
@@ -10,6 +11,9 @@ const KIND = /^[a-z][a-z-]{0,31}$/;
 export const BATCH_LIMITS = { items: 200, bytes: 4_000_000, body: 1_500_000 };
 const PAGE_ROWS = 500;
 const PAGE_BODY_LENGTH = 4_000_000;
+// How far past its cap an account's updates may still grow it, so a full account can move what it means to delete to
+// 지운 캐릭터 (a body that grows a little), while nothing new is created. The account's bytes never pass cap + this.
+const FULL_MARGIN = 1_000_000;
 
 type Row = { id: string; kind: string; parent_id: string | null; rev: number; deleted: number; fits: number; omitted: number; body: string | null };
 
@@ -30,7 +34,9 @@ objects.get('/', async (c) => {
   const metadata = c.req.query('metadata') === '1';
   if (excluded.length > 32 || excluded.some((kind) => !KIND.test(kind)) || (parent !== undefined && !ID.test(parent))) return fail(c, 400, 'bad-input');
   const account = c.get('account').id;
-  const head = Number(await c.env.DB.prepare('SELECT rev FROM accounts WHERE id = ?').bind(account).first('rev'));
+  const counts = (await c.env.DB.prepare('SELECT rev, bytes FROM accounts WHERE id = ?').bind(account).first<{ rev: number; bytes: number }>())!;
+  const head = counts.rev;
+  c.header(USE_HEADERS.bytes, String(counts.bytes));
   const known = Number(c.req.query('known') ?? since);
   if (!Number.isSafeInteger(known) || known < 0) return fail(c, 400, 'bad-input');
   const until = bootstrap ? Number(c.req.query('until') ?? head) : null;
@@ -75,8 +81,9 @@ type Write = { id: string; kind: string; parent: string | null; body: string | n
 // the object's parent: one naming another parent is bad input, not a conflict, since pulling and trying again could
 // never make it fit. A deleted object stays as a row without a body, so other devices learn of the deletion by sync;
 // writing it again with its current rev restores it (되돌리기).
-// The same statement keeps accounts.bytes, the bytes of the account's bodies, and holds it under the operator's cap. A
-// batch that does not grow the account always passes, so a full account can still delete.
+// The same statement keeps accounts.bytes, the bytes of the account's bodies, and holds it under the account's cap
+// (caps.ts): a batch that creates an object must fit under it, one that only changes or deletes objects under it plus
+// FULL_MARGIN, and one that does not grow the account always passes, so a full account can still delete.
 objects.post('/batch', canWrite, async (c) => {
   const input = await readObject(c);
   if (!input || !Array.isArray(input.writes) || !input.writes.length) return fail(c, 400, 'bad-input');
@@ -106,12 +113,12 @@ objects.post('/batch', canWrite, async (c) => {
   // changes() gates the entire chain on the first statement. No read outside this transaction
   // decides whether to write; a later item's conflict must leave even accounts.rev untouched.
   // replaced: the bytes of the bodies these writes replace, counted as the migration counted them.
-  const results = await db.batch<{ rev: number; moved: number; conflict: number }>([
+  const results = await db.batch<{ rev: number; bytes: number; moved: number; conflict: number }>([
     db.prepare(`WITH replaced (bytes) AS MATERIALIZED (SELECT COALESCE(SUM(LENGTH(CAST(o.body AS BLOB))), 0) ${candidates})
       UPDATE accounts SET rev = rev + ?3, bytes = bytes + ?4 - (SELECT bytes FROM replaced)
       WHERE id = ?1 AND NOT ${conflict}
-        AND (?4 <= (SELECT bytes FROM replaced) OR COALESCE(bytes + ?4 - (SELECT bytes FROM replaced) <= (SELECT account_bytes_cap FROM service), 1))
-      RETURNING rev`).bind(account, checks, writes.length, bytes),
+        AND (?4 <= (SELECT bytes FROM replaced) OR COALESCE(bytes + ?4 - (SELECT bytes FROM replaced) <= ${CAP.bytes} + ?5, 1))
+      RETURNING rev, bytes`).bind(account, checks, writes.length, bytes, writes.some(({ baseRev }) => baseRev === null) ? 0 : FULL_MARGIN),
     ...writes.map(({ id, kind, parent, body, file }, index) =>
       db.prepare(`INSERT INTO objects (account_id, id, kind, parent_id, rev, body, deleted_at, file_id)
         SELECT ?1, ?2, ?3, ?4, rev - ?5, ?6, ?7, ?8 FROM accounts WHERE id = ?1 AND changes() = 1
@@ -124,6 +131,7 @@ objects.post('/batch', canWrite, async (c) => {
     const refused = results.at(-1)!.results[0]!;
     return refused.moved ? fail(c, 400, 'bad-input') : refused.conflict ? fail(c, 409, 'conflict') : fail(c, 413, 'storage-full');
   }
+  c.header(USE_HEADERS.bytes, String(results[0]!.results[0]!.bytes));
   return c.json({ revs: results.slice(1, -1).map(({ results }) => results[0]!.rev) });
 });
 

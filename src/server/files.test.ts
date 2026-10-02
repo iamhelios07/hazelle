@@ -10,9 +10,8 @@ afterAll(() => t.dispose());
 beforeEach(() => t.reset());
 
 const idOf = async (bytes: Uint8Array<ArrayBuffer>) => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
-const signedIn = async () => sessionCookie(await t.post('signup', signupBody()));
-const put = (id: string, bytes: Uint8Array<ArrayBuffer>, cookie?: string) =>
-  t.raw(`files/${id}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream', ...(cookie ? { cookie } : {}) }, body: bytes });
+const signedIn = async (username?: string) => sessionCookie(await t.post('signup', signupBody(username)));
+const put = (id: string, bytes: Uint8Array<ArrayBuffer>, cookie?: string) => t.put(`files/${id}`, bytes, cookie);
 
 describe('files', () => {
   it('stores a body under its hash once, outside any account, and says which ids are missing', async () => {
@@ -42,6 +41,21 @@ describe('files', () => {
     expect((await t.post('files/missing', { ids: ['x'] }, cookie)).status).toBe(400);
     expect((await put(id, new Uint8Array([1]))).status).toBe(401);
     expect((await t.get(`files/${id}`)).status).toBe(401);
+  });
+
+  it('charges the account that first stores a file, under its cap and before storing it, and nobody for a file held', async () => {
+    await t.env.DB.prepare('UPDATE service SET signup_cap = 2, account_file_bytes_cap = 5').run();
+    const [jin, other] = [await signedIn(), await signedIn('other')];
+    const [held, large] = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
+    const first = await put(await idOf(held), held, jin);
+    expect(first.headers.get('x-account-file-bytes')).toBe('3');
+    expect((await put(await idOf(held), held, other)).headers.get('x-account-file-bytes')).toBeNull();
+
+    const refused = await put(await idOf(large), large, jin);
+    expect(refused.status).toBe(413);
+    expect(await refused.json()).toEqual({ error: 'files-full' });
+    expect(await t.env.BLOBS.get(`files/${await idOf(large)}`)).toBeNull();
+    expect((await t.env.DB.prepare('SELECT file_bytes FROM accounts ORDER BY created_at').all()).results).toEqual([{ file_bytes: 3 }, { file_bytes: 0 }]);
   });
 
   it('keeps the file a live object names, visible to the server, and forgets it when the object goes', async () => {

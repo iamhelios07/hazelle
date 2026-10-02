@@ -27,7 +27,7 @@ const log = async (cookie: string) => ((await (await t.get('admin/log', cookie))
 
 async function stored(bytes: Uint8Array<ArrayBuffer>, cookie: string) {
   const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
-  await t.raw(`files/${id}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream', cookie }, body: bytes });
+  await t.put(`files/${id}`, bytes, cookie);
   return id;
 }
 
@@ -46,17 +46,18 @@ describe('the operator', () => {
     expect((await t.post('signup', { ...signupBody('again'), accountId: admin.id })).status).toBe(400);
   });
 
-  it('lists each account with the bytes of its bodies and of the files its objects name', async () => {
+  it('lists each account with the bytes of its bodies, of the files it first stored, and its own caps', async () => {
     const admin = await operator();
     const other = await account('other');
     const file = await stored(new Uint8Array([1, 2, 3]), other.cookie);
     const writes = ['a', 'b'].map((body) => ({ id: crypto.randomUUID(), kind: 'asset', parent: null, body: body.repeat(10), baseRev: null, file }));
     await t.post('objects/batch', { writes }, other.cookie);
+    await t.post('objects/batch', { writes: writes.map((write) => ({ ...write, id: crypto.randomUUID() })) }, admin.cookie);
 
     const { accounts } = (await (await t.get('admin/accounts', admin.cookie)).json()) as { accounts: Record<string, unknown>[] };
     expect(accounts).toEqual([
-      { accountId: admin.id, username: 'operator', createdAt: expect.any(Number), suspended: false, bytes: 0, fileBytes: 0 },
-      { accountId: other.id, username: 'other', createdAt: expect.any(Number), suspended: false, bytes: 20, fileBytes: 3 },
+      { accountId: admin.id, username: 'operator', createdAt: expect.any(Number), suspended: false, bytes: 20, fileBytes: 0, bytesCap: 'default', fileBytesCap: 'default' },
+      { accountId: other.id, username: 'other', createdAt: expect.any(Number), suspended: false, bytes: 20, fileBytes: 3, bytesCap: 'default', fileBytesCap: 'default' },
     ]);
   });
 
@@ -81,13 +82,36 @@ describe('the operator', () => {
   it('reads the service values with their totals and sets them, which opens signup again', async () => {
     const admin = await operator();
     await t.post('objects/batch', { writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }, admin.cookie);
-    expect(await (await t.get('admin/service', admin.cookie)).json()).toEqual({ signupCap: 3, accountBytesCap: null, accounts: 1, bytes: 6 });
+    await stored(new Uint8Array([1, 2, 3]), admin.cookie);
+    expect(await (await t.get('admin/service', admin.cookie)).json()).toEqual({ signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, bytes: 6, fileBytes: 3 });
 
-    expect((await t.put('admin/service', { signupCap: 1, accountBytesCap: 1000 }, admin.cookie)).status).toBe(204);
+    expect((await t.put('admin/service', { signupCap: 1, accountBytesCap: 1000, accountFileBytesCap: 2000 }, admin.cookie)).status).toBe(204);
     expect((await t.post('signup', signupBody('late'))).status).toBe(403);
-    expect((await t.put('admin/service', { signupCap: 2, accountBytesCap: null }, admin.cookie)).status).toBe(204);
+    expect((await t.put('admin/service', { signupCap: 2, accountBytesCap: null, accountFileBytesCap: null }, admin.cookie)).status).toBe(204);
     expect((await t.post('signup', signupBody('late'))).status).toBe(201);
-    expect((await log(admin.cookie))[0]).toMatchObject({ action: 'set-service', target: 'service', detail: { signupCap: 2, accountBytesCap: null } });
+    expect((await log(admin.cookie))[0]).toMatchObject({ action: 'set-service', target: 'service', detail: { signupCap: 2, accountBytesCap: null, accountFileBytesCap: null } });
+  });
+
+  it("gives an account its own caps in place of the service's, none among them, and logs each", async () => {
+    const admin = await operator();
+    const other = await account('other');
+    await t.env.DB.prepare('UPDATE service SET account_bytes_cap = 0, account_file_bytes_cap = 0').run();
+    const write = async () => (await t.post('objects/batch', { writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }, other.cookie)).status;
+    const session = async () => ((await (await t.get('session', other.cookie)).json()) as { session: { storage: unknown } }).session.storage;
+    expect(await write()).toBe(413);
+
+    expect((await t.put(`admin/accounts/${other.id}/caps`, { bytesCap: null, fileBytesCap: 5 }, admin.cookie)).status).toBe(204);
+    expect(await write()).toBe(200);
+    expect(await session()).toEqual({ bytes: 6, bytesCap: null, fileBytes: 0, fileBytesCap: 5 });
+
+    expect((await t.put(`admin/accounts/${other.id}/caps`, { bytesCap: 'default', fileBytesCap: 'default' }, admin.cookie)).status).toBe(204);
+    expect(await write()).toBe(413);
+    expect(await session()).toEqual({ bytes: 6, bytesCap: 0, fileBytes: 0, fileBytesCap: 0 });
+    expect((await t.put(`admin/accounts/${other.id}/caps`, { bytesCap: -1, fileBytesCap: 'default' }, admin.cookie)).status).toBe(400);
+    expect(await log(admin.cookie)).toMatchObject([
+      { action: 'set-caps', target: other.id, detail: { username: 'other', bytesCap: 'default', fileBytesCap: 'default' } },
+      { action: 'set-caps', target: other.id, detail: { username: 'other', bytesCap: null, fileBytesCap: 5 } },
+    ]);
   });
 
   it('lists the reports accounts send, a suspended one too, and resolves one once', async () => {
@@ -118,7 +142,7 @@ describe('the operator', () => {
     const other = await account('other');
     const bytes = new Uint8Array([4, 5, 6]);
     const id = await stored(bytes, other.cookie);
-    const put = () => t.raw(`files/${id}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream', cookie: other.cookie }, body: bytes });
+    const put = () => t.put(`files/${id}`, bytes, other.cookie);
     const missing = async () => ((await (await t.post('files/missing', { ids: [id] }, other.cookie)).json()) as { missing: string[] }).missing;
 
     expect((await t.put(`admin/files/${id}/blocked`, { blocked: true }, admin.cookie)).status).toBe(204);

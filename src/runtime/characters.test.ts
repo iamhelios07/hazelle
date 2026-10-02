@@ -55,17 +55,21 @@ describe('importCharacter', () => {
     expect(new Set(steps)).toEqual(new Set(['picture', 'assets', 'saving']));
   });
 
-  it('leaves out a picture the operator blocked, counted, and keeps the rest of the bot', async () => {
+  it('leaves out a picture the operator blocked or one past the picture cap, counted, and keeps the rest of the bot', async () => {
     const { store } = await server.account();
-    const [blocked, kept] = [png(), png()];
-    const { ref } = await sealFile(blocked);
-    const files = new Files(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'PUT' && args[1] === `files/${ref.id}` ? { ok: false as const, error: 'file-blocked' } : api<T>(...args)));
+    const [blocked, over, kept] = [png(), png(), png()];
+    const refusals = new Map([[(await sealFile(blocked)).ref.id, 'file-blocked'], [(await sealFile(over)).ref.id, 'files-full']]);
+    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+      const error = args[0] === 'PUT' ? refusals.get(args[1].slice('files/'.length)) : undefined;
+      return error ? { ok: false as const, error } : api<T>(...args);
+    });
     const assets = [
       { name: 'taken', read: async () => blocked },
+      { name: 'over', read: async () => over },
       { name: 'smile', read: async () => kept },
     ];
     const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, null, () => {});
-    expect(saved).toMatchObject({ ok: true, data: { skipped: 1 } });
+    expect(saved).toMatchObject({ ok: true, data: { skipped: 2 } });
     expect(store.children('asset', saved.ok ? saved.data.id : '').map(({ value }) => value.name)).toEqual(['smile']);
   });
 });

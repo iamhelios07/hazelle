@@ -17,6 +17,8 @@ const SUSPENDED: Standing = {
   message: '운영자가 이 계정을 정지했어요',
   detail: `읽기는 그대로 되지만 저장과 모델 부르기는 막혀 있어요. ${inSettings('account')}에서 백업을 받거나 운영자에게 알리거나 탈퇴할 수 있어요.`,
 };
+// Said once, and standing until the account shrinks: each refused write saying it again would be a stream of toasts.
+const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: '새로 만든 것은 저장되지 않아요. 채팅을 지우거나 지운 캐릭터를 완전히 지우면 자리가 생겨요.' };
 const subscribeNothing = () => () => {};
 const notWaiting = () => false;
 
@@ -28,6 +30,13 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   const [attempt, setAttempt] = useState(0);
   const [progress, setProgress] = useState<PullProgress>({ objects: 0, pages: 0 });
   const waiting = useSyncExternalStore(session?.store.subscribeWaiting ?? subscribeNothing, session?.store.waiting ?? notWaiting, notWaiting);
+  // The notice alone, not the facts, so the counts every write brings render nothing here.
+  const { facts } = account;
+  const noticeOf = () => {
+    const { suspended, full } = facts.snapshot();
+    return suspended ? SUSPENDED : full ? FULL : null;
+  };
+  const notice = useSyncExternalStore(facts.subscribe, noticeOf, noticeOf);
 
   useEffect(() => {
     const abandon = new AbortController();
@@ -62,7 +71,7 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   );
   return (
     <SessionProvider session={session} account={account}>
-      <ToastProvider standing={waiting ? RECONNECTING : account.suspended ? SUSPENDED : null}>
+      <ToastProvider standing={waiting ? RECONNECTING : notice}>
         <BotNotes />
         <ImportProvider>
           <Layout />

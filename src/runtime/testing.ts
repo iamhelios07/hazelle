@@ -7,7 +7,7 @@ import type { Upstream } from '../server/relay';
 import { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
-import { api } from './api';
+import { api, holdAccount } from './api';
 import { setDefaultModel } from './assignment';
 import { Files } from './files';
 import { openSession, type Session } from './session';
@@ -118,6 +118,7 @@ export function testServer() {
   afterAll(() => app.dispose());
   beforeEach(async () => {
     await app.reset();
+    holdAccount(null);
     server = { app, cookie: null };
     relay = null;
     stubFetch();
@@ -137,10 +138,12 @@ export function testServer() {
         if (failure) throw new Error(failure.error);
       }
     },
+    // The page holds the account it signed up, as AccountFlow does, so every request states it.
     async account() {
       const body = signupBody();
       server!.cookie = sessionCookie(await app.post('signup', body));
       const { accountId } = body;
+      holdAccount(accountId);
       const vaultKey = randomBytes(32);
       const open = (key: VaultKey = vaultKey) => ObjectStore.open(accountId, key, api);
       return { accountId, vaultKey, store: await open(), files: new Files(api), open };

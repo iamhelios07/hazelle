@@ -32,8 +32,9 @@ admin.use(createMiddleware<AppEnv>(async (c, next) => (isAdmin(c, c.get('account
 // Every action below goes in one batch with its admin_log row, so the log never misses an action that happened and
 // never holds one that did not. The row comes first and is written only if the target is there: a delete could not
 // name its target afterwards.
-function logged(db: D1Database, action: string, table: 'accounts' | 'files', id: string, detail = 'NULL') {
-  return db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?1, ?2, id, ${detail} FROM ${table} WHERE id = ?3`).bind(Date.now(), action, id);
+// values: what detail names from ?4 on.
+function logged(db: D1Database, action: string, table: 'accounts' | 'files', id: string, detail = 'NULL', ...values: unknown[]) {
+  return db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?1, ?2, id, ${detail} FROM ${table} WHERE id = ?3`).bind(Date.now(), action, id, ...values);
 }
 
 const USERNAME = `json_object('username', username)`;
@@ -43,18 +44,22 @@ async function act(c: Context<AppEnv>, log: D1PreparedStatement, action: D1Prepa
   return done!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
 }
 
-// fileBytes: the sizes of the stored files the account's objects name. A file two accounts name counts for both.
+// fileBytes: the files the account was first to store (files.ts). bytesCap, fileBytesCap: its own caps, 'default' while
+// the service's apply.
 admin.get('/accounts', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT a.id AS accountId, a.username, a.created_at AS createdAt, a.suspended_at IS NOT NULL AS suspended, a.bytes, COALESCE(f.bytes, 0) AS fileBytes
-     FROM accounts a LEFT JOIN (
-       SELECT o.account_id, SUM(f.size) AS bytes
-       FROM (SELECT DISTINCT account_id, file_id FROM objects WHERE file_id IS NOT NULL) o JOIN files f ON f.id = o.file_id
-       GROUP BY o.account_id
-     ) f ON f.account_id = a.id
-     ORDER BY a.created_at, a.id`,
-  ).all<{ suspended: number }>();
-  return c.json({ accounts: results.map((row) => ({ ...row, suspended: Boolean(row.suspended) })) });
+    `SELECT id AS accountId, username, created_at AS createdAt, suspended_at IS NOT NULL AS suspended, bytes, file_bytes AS fileBytes,
+       own_bytes_cap, bytes_cap, own_file_bytes_cap, file_bytes_cap
+     FROM accounts ORDER BY created_at, id`,
+  ).all<{ suspended: number; own_bytes_cap: number; bytes_cap: number | null; own_file_bytes_cap: number; file_bytes_cap: number | null }>();
+  return c.json({
+    accounts: results.map(({ own_bytes_cap, bytes_cap, own_file_bytes_cap, file_bytes_cap, ...row }) => ({
+      ...row,
+      suspended: Boolean(row.suspended),
+      bytesCap: own_bytes_cap ? bytes_cap : 'default',
+      fileBytesCap: own_file_bytes_cap ? file_bytes_cap : 'default',
+    })),
+  });
 });
 
 admin.put('/accounts/:id/suspended', async (c) => {
@@ -69,6 +74,22 @@ admin.put('/accounts/:id/suspended', async (c) => {
   );
 });
 
+// Each cap: a count of bytes, null for none, or 'default' for the service's.
+admin.put('/accounts/:id/caps', async (c) => {
+  const id = c.req.param('id');
+  const body = await readObject(c);
+  const bytesCap = body?.bytesCap;
+  const fileBytesCap = body?.fileBytesCap;
+  if (!ID.test(id) || !ownCap(bytesCap) || !ownCap(fileBytesCap)) return fail(c, 400, 'bad-input');
+  const db = c.env.DB;
+  const own = (cap: unknown) => [cap === 'default' ? 0 : 1, cap === 'default' ? null : cap];
+  return act(
+    c,
+    logged(db, 'set-caps', 'accounts', id, `json_object('username', username, 'bytesCap', json(?4), 'fileBytesCap', json(?5))`, JSON.stringify(bytesCap), JSON.stringify(fileBytesCap)),
+    db.prepare('UPDATE accounts SET own_bytes_cap = ?2, bytes_cap = ?3, own_file_bytes_cap = ?4, file_bytes_cap = ?5 WHERE id = ?1 RETURNING id').bind(id, ...own(bytesCap), ...own(fileBytesCap)),
+  );
+});
+
 // What stays is what stays after 탈퇴 (accounts.ts).
 admin.delete('/accounts/:id', async (c) => {
   const id = c.req.param('id');
@@ -77,27 +98,32 @@ admin.delete('/accounts/:id', async (c) => {
   return act(c, logged(db, 'delete-account', 'accounts', id, USERNAME), db.prepare('DELETE FROM accounts WHERE id = ? RETURNING id').bind(id));
 });
 
-// bytes: every account's object bodies, the part of the database that grows.
+// bytes: every account's object bodies, the part of the database that grows. fileBytes: every stored file, a deleted
+// account's too.
 admin.get('/service', async (c) => {
   const row = await c.env.DB.prepare(
-    `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap,
-       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(bytes), 0) FROM accounts) AS bytes
+    `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
+       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(bytes), 0) FROM accounts) AS bytes,
+       (SELECT COALESCE(SUM(size), 0) FROM files) AS fileBytes
      FROM service`,
   ).first();
   return c.json(row);
 });
 
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const cap = (value: unknown) => value === null || count(value);
+const ownCap = (value: unknown) => value === 'default' || cap(value);
 
 admin.put('/service', async (c) => {
   const body = await readObject(c);
   const signupCap = body?.signupCap;
   const accountBytesCap = body?.accountBytesCap;
-  if (!count(signupCap) || (accountBytesCap !== null && !count(accountBytesCap))) return fail(c, 400, 'bad-input');
+  const accountFileBytesCap = body?.accountFileBytesCap;
+  if (!count(signupCap) || !cap(accountBytesCap) || !cap(accountFileBytesCap)) return fail(c, 400, 'bad-input');
   const db = c.env.DB;
   await db.batch([
-    db.prepare(`INSERT INTO admin_log (at, action, target, detail) VALUES (?, 'set-service', 'service', ?)`).bind(Date.now(), JSON.stringify({ signupCap, accountBytesCap })),
-    db.prepare('UPDATE service SET signup_cap = ?, account_bytes_cap = ?').bind(signupCap, accountBytesCap),
+    db.prepare(`INSERT INTO admin_log (at, action, target, detail) VALUES (?, 'set-service', 'service', ?)`).bind(Date.now(), JSON.stringify({ signupCap, accountBytesCap, accountFileBytesCap })),
+    db.prepare('UPDATE service SET signup_cap = ?, account_bytes_cap = ?, account_file_bytes_cap = ?').bind(signupCap, accountBytesCap, accountFileBytesCap),
   ]);
   return c.body(null, 204);
 });

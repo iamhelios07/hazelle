@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { fetchApi } from './api';
 import type { Trigger } from '../engine/import/types';
 import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown } from '../model/chat';
@@ -110,7 +111,7 @@ describe("a turn with the bot's Lua", () => {
       expect(shown(messages()[2]!).calls).toMatchObject([{ receipt: { state: 'done', model: 'm' } }]);
       expect(modelUsage([messages()], { connection: shown(messages()[2]!).receipt!.connection, model: 'm' }).calls).toBe(2);
       expect(calls).toHaveLength(2);
-      await vi.waitFor(async () => expect((await fetch(calls[1]!)).status).toBe(404));
+      await vi.waitFor(async () => expect((await fetchApi(calls[1]!.slice('/api/'.length))).status).toBe(404));
     }));
 
   it("tells the chat when the server turns its bot's model call away for coming too often", () =>
