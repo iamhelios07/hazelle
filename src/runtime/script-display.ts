@@ -62,15 +62,18 @@ export class ScriptDisplay {
     const reader = { store: this.store };
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
+    const all = scriptsOf(scope.packs);
     // A bot whose engines all said no is shown with no pass and no worker.
-    const scripts = scriptsOf(scope.packs).filter(({ code }) => this.listens.get(code) !== false);
+    const scripts = all.filter(({ code }) => this.listens.get(code) !== false);
     if (scripts.length === 0) return display(scope, take);
     // Until an engine has answered, its script is passed all the same, and the source is only a guess at what to show
     // meanwhile: one that names the hook waits empty as a listening one does, any other shows its text as it is.
     const waits = scripts.some(({ code }) => this.listens.get(code) ?? code.includes('editDisplay'));
     const standing = luaStanding(this.store, chat, scope);
     const { character, persona } = standing;
-    const generation = this.generation(id, [String(scripts.length), ...scripts.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
+    // Of all the bot's scripts, not only those passed: an engine's answer takes its script out of the passes and must
+    // not make the others' results stale.
+    const generation = this.generation(id, [String(all.length), ...all.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
     const held = this.held.get(id);
     const shown = display({ ...scope, lua: (version, text, stamp) => {
       const had = held?.get(version);

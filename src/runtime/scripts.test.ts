@@ -222,8 +222,8 @@ describe("the display with the bot's Lua", () => {
 
   it('leaves it to the engine whether a script listens: one that only names the hook is passed once, one registered under a computed name is passed', () =>
     server.withSession(async (session) => {
-      const open = async (code: string) => {
-        const { chat, messages } = await chatWith(session, code);
+      const open = async (script: string | Trigger[]) => {
+        const { chat, messages } = await chatWith(session, script);
         const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
         const screen = session.read.screen(chat, session.talk, opening);
         const leave = screen.subscribe(() => {});
@@ -243,6 +243,18 @@ describe("the display with the bot's Lua", () => {
       expect(computed.texts()).toEqual(['어서 와.']);
       await expect.poll(computed.texts).toEqual(['어서 와.!']);
       computed.leave();
+
+      // The answer of one script's engine leaves the other's results fresh.
+      display.mockClear();
+      const mixed = await open([
+        { kind: 'lua', name: 'named', code: `-- editDisplay\nfunction onInput(id) end` },
+        { kind: 'lua', name: 'listening', code: `listenEdit('editDisplay', function(id, value) return value .. '?' end)` },
+      ]);
+      await expect.poll(mixed.texts).toEqual(['어서 와.?']);
+      mixed.again();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(display).toHaveBeenCalledOnce();
+      mixed.leave();
       display.mockRestore();
     }));
 });

@@ -210,6 +210,7 @@ export class Scripts {
     if (scripts.length === 0) return { messages, writes: [] };
     return this.queued(chat, async () => {
       const { outcome } = await this.event(chat, turn.chat, scripts, turn.scope, { kind: 'edit', stage: 'editRequest', value: messages, meta: {} }, null);
+      if (!outcome.handled) return { messages, writes: outcome.writes };
       const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
         if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
         return [{ role: message.role, content: message.content, ...(message.cache === true && { cache: true }) }];
