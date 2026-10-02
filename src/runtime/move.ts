@@ -21,7 +21,7 @@ export type MovedCharacter = { id: string; risu: string; name: string; chats: nu
 export type MovedModule = { module: ImportedModule; skipped: number };
 export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[] };
 
-// Those in 지운 캐릭터 too, until they are removed for good.
+// Those in 휴지통 too, until they are removed for good.
 export const broughtFromRisu = (store: ObjectStore): Set<string> => new Set(store.list('character').flatMap(({ value }) => (value.risu === undefined ? [] : [value.risu])));
 
 // By Risu id, the deleted ones too, until they are removed for good.

@@ -17,6 +17,9 @@ export const BOT_MODELS_HELP = '봇의 스크립트가 답장과 별개로 모�
 
 export const SETTINGS = '설정';
 
+// Where deleted characters and chats wait KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
+export const BIN = '휴지통';
+
 // A {{…}} tag in a prompt or a card's text.
 export const COMMAND = '명령어';
 

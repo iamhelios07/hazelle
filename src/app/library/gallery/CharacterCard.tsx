@@ -6,11 +6,11 @@ import { navigate } from '../../shell/router';
 import { enterShelf } from '../../shell/routes';
 import { FaceCard, IconButton, Menu, MenuItem, useMenuHandle, useMenuOpener, useWide } from '../../ui';
 import { binCardNote, cardNote } from '../shelf';
-import type { CharacterActions } from '../useCharacterActions';
+import { binnedCharacter, type CharacterActions } from '../useCharacterActions';
 
 type Props = {
   shelf: CharacterShelf<ChatSummary>;
-  // In 지운 캐릭터: it can be brought back or removed for good, and a press opens its menu.
+  // In 휴지통: it can be brought back or removed for good, and a press opens its menu.
   binned: boolean;
   // The step it is at while it is being copied or removed for good.
   busy: string | null;
@@ -32,7 +32,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
     <Menu handle={handle} place="below-end" label={`${name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" {...opener} />}>
       {binned ? (
         <>
-          <MenuItem icon={RotateCcw} label="되살리기" onClick={() => void actions.restore(shelf)} />
+          <MenuItem icon={RotateCcw} label="되살리기" onClick={() => void actions.restore(binnedCharacter(shelf))} />
           <MenuItem icon={Trash2} label="지금 지우기" tone="warn" onClick={onPurge} />
         </>
       ) : (

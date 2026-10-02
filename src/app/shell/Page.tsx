@@ -108,7 +108,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         );
         const { character } = item.chat;
         const shelf = character === null ? null : characterById.get(character);
-        // Its character is in 지운 캐릭터, or gone for good.
+        // Its character is in 휴지통, or gone for good.
         if (shelf === undefined) return missing(at, 'orphaned-chat');
         return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={sideBack(at)} side={side} />;
       }

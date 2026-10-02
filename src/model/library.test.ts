@@ -11,7 +11,7 @@ describe('shelve', () => {
     const avatar: Stored<'avatar'> = { id: 'blob', kind: 'avatar', parent: 'b', rev: 3, value: { type: 'image/png', size: 1, thumb: 'data:thumb', file: { id: 'f', key: 'k' } } };
     // Newest first, as chatItems gives them.
     const chats = [chat('c3', null, 9), chat('c2', 'a', 8), chat('c1', 'a', 5)];
-    const { characters, none } = shelve([character('a', 1), character('b', 2), character('c', 7)], [avatar], chats);
+    const { characters, none } = shelve([character('a', 1), character('b', 2), character('c', 7)], [avatar], chats, []);
     expect(characters.map((shelf) => [shelf.id, shelf.order, shelf.chats.map((item) => item.id)])).toEqual([
       ['a', 8, ['c2', 'c1']],
       ['c', 7, []],
@@ -25,14 +25,14 @@ describe('shelve', () => {
     const claimed = character('d', 2);
     claimed.value.deleted = 1;
     claimed.value.purging = true;
-    const { characters, deleted } = shelve([character('a', 1), claimed], [], []);
+    const { characters, deleted } = shelve([character('a', 1), claimed], [], [], []);
     expect([characters.map((shelf) => shelf.id), deleted]).toEqual([['a'], []]);
   });
 
   it('keeps deleted characters and their chats apart', () => {
     const gone = character('d', 4);
     gone.value.deleted = 1;
-    const { characters, deleted } = shelve([character('a', 1), gone], [], [chat('c1', 'd', 5)]);
+    const { characters, deleted } = shelve([character('a', 1), gone], [], [chat('c1', 'd', 5)], []);
     expect(characters.map((shelf) => shelf.id)).toEqual(['a']);
     expect(deleted.map((shelf) => [shelf.id, shelf.chats.map((item) => item.id)])).toEqual([['d', ['c1']]]);
   });
@@ -56,7 +56,7 @@ describe('nest', () => {
 });
 
 describe('daysLeft', () => {
-  it('counts whole days left in 지운 캐릭터, and reaches 0 when the character is due', () => {
+  it('counts whole days left in 휴지통, and reaches 0 when the character is due', () => {
     const gone = { ...character('a', 1).value, deleted: 0 };
     expect(daysLeft(gone, 0)).toBe(7);
     expect(daysLeft(gone, KEEP_DELETED - 1)).toBe(1);

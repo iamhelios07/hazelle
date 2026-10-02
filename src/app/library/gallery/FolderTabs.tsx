@@ -1,10 +1,11 @@
 import { FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { holds, type FolderTree } from '../../../model/library';
+import { BIN } from '../../common/words';
 import { useLibrary } from '../../session';
 import { IconButton, Menu, MenuItem, Row, Stack, Tab, Tabs } from '../../ui';
 import { useFolderActions } from '../useFolderActions';
 
-// 'all', 'loose' (in no folder), 'deleted' (지운 캐릭터), or a folder's id.
+// 'all', 'loose' (in no folder), 'deleted' (휴지통), or a folder's id.
 export type Filter = string;
 // A folder being named: a new one (id null), inside parent when it has one, or one being renamed.
 export type Naming = { id: string | null; name: string; parent?: FolderTree };
@@ -18,11 +19,12 @@ type Props = {
 };
 
 export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
-  const { characters, folders, deleted } = useLibrary();
+  const { characters, folders, deleted, deletedChats } = useLibrary();
   const { remove } = useFolderActions();
   // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
   const top = folder && (folders.find((candidate) => candidate === folder || candidate.children.includes(folder)) ?? null);
   const binned = filter === 'deleted';
+  const inBin = deleted.length + deletedChats.length;
   const count = (candidate: FolderTree) => characters.filter(({ character }) => holds(candidate, character)).length;
 
   async function drop(target: FolderTree) {
@@ -39,7 +41,7 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
             <Tab key={candidate.id} label={candidate.value.name} count={count(candidate)} current={candidate === top} onClick={() => onFilter(candidate.id)} />
           ))}
           {folders.length > 0 && <Tab label="폴더 없음" current={filter === 'loose'} onClick={() => onFilter('loose')} />}
-          {(deleted.length > 0 || binned) && <Tab label="지운 캐릭터" count={deleted.length} current={binned} onClick={() => onFilter('deleted')} />}
+          {(inBin > 0 || binned) && <Tab label={BIN} count={inBin} current={binned} onClick={() => onFilter('deleted')} />}
         </Tabs>
         {!binned && <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => onName({ id: null, name: '' })} />}
         {folder && (

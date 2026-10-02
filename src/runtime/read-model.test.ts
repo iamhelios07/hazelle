@@ -551,4 +551,21 @@ describe('per-chat read models', () => {
     expect([lists(), texts(), read.summary('a').snapshot()?.count]).toEqual([[['a', 'b'], ['a', 'b']], ['a first'], 1]);
     read.close();
   });
+
+  it('lists in 휴지통 the deleted chats of a character not deleted or of none, never those of a deleted character', async () => {
+    const { store } = await account();
+    await store.create('character', { card: card('루나'), folder: null, loreFolders: [] }, { id: 'ca' });
+    await store.create('character', { card: card('해나'), folder: null, loreFolders: [], deleted: Date.now() }, { id: 'cd' });
+    await store.create('chat', { ...chat, character: 'ca', title: '등대' }, { id: 'a' });
+    await store.create('chat', { ...chat, character: 'cd' }, { id: 'd' });
+    await store.create('chat', chat, { id: 'n' });
+    const read = new ReadModels(store);
+    const binned = () => read.library.snapshot().deletedChats.map(({ id, title }) => [id, title]).toSorted();
+    for (const id of ['a', 'd', 'n']) await removeChat(store, id);
+    expect([binned(), read.chats.snapshot(), read.summary('a').snapshot()]).toEqual([[['a', '등대'], ['n', expect.any(String)]], [], null]);
+
+    await restoreChat(store, 'a');
+    expect([binned(), read.chats.snapshot().map(({ id }) => id)]).toEqual([[['n', expect.any(String)]], ['a']]);
+    read.close();
+  });
 });

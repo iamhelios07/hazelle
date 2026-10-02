@@ -119,7 +119,7 @@ export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id
   return store.update(kind, id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }) as Values[K] | null);
 }
 
-// at is when it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good.
+// at is when it went to 휴지통, where it and its chats wait KEEP_DELETED before going for good.
 export const setDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'character', id, at);
 
 type Mark = Pick<Character, 'deleted' | 'purging'>;
@@ -133,9 +133,9 @@ async function purge(store: ObjectStore, kind: Removable, id: string, due: (valu
   return removeOwned(store, { kind, id }, progress);
 }
 
-// 지금 지우기: only one still in 지운 캐릭터.
-export const purgeCharacter = (store: ObjectStore, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
-  purge(store, 'character', id, (value) => value.deleted !== undefined, progress);
+// 지금 지우기: only one still in 휴지통.
+export const purgeNow = (store: ObjectStore, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
+  purge(store, kind, id, (value) => value.deleted !== undefined, progress);
 
 // Removes for good the deleted characters, modules and chats whose time is up. The session runs it when it opens, on
 // whichever device opens first. One that fails is tried again next time. A stop (the vault closing) lets the one
@@ -253,7 +253,7 @@ export const renameFolder = (store: ObjectStore, id: string, name: string) => st
 // out of every folder).
 export type RemovedFolder = { folders: Stored<'folder'>[]; placements: Placement[]; up: Stored<'folder'> | null };
 
-// A folder goes with the folders inside it, and its characters, those in 지운 캐릭터 too, first move up
+// A folder goes with the folders inside it, and its characters, those in 휴지통 too, first move up
 // a level, so no character points at a folder that is gone.
 export async function removeFolder(store: ObjectStore, id: string): Promise<ApiResult<RemovedFolder>> {
   const tree = nest(store.list('folder'));
