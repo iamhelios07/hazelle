@@ -125,7 +125,7 @@ export const setDeleted = (store: ObjectStore, id: string, at: number | null) =>
 type Mark = Pick<Character, 'deleted' | 'purging'>;
 
 // Removal for good is decided once, by the purging claim, at the rev the claim is written on (store.update): a restore
-// landing first leaves the root not due ('gone'), and one after it is refused (markDeleted, setModuleDeleted). Nothing
+// landing first leaves the root not due ('gone'), and one after it is refused (markDeleted). Nothing
 // the root owns goes before the claim lands. A claimed root is always due, so the next purge finishes one cut short.
 async function purge(store: ObjectStore, kind: Removable, id: string, due: (value: Mark) => boolean, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
   const claimed = await store.update(kind, id, (current) => (current.purging || due(current) ? { ...current, purging: true } : null));

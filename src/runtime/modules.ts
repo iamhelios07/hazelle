@@ -2,9 +2,9 @@ import type { ImportedModule } from '../engine/import/types';
 import type { Stored } from '../model/kinds';
 import type { Module } from '../model/library';
 import type { ApiResult } from './api';
-import { saveAssets, type Progress } from './characters';
+import { markDeleted, saveAssets, type Progress } from './characters';
 import type { Files } from './files';
-import { without, type ObjectStore, type Write } from './store';
+import type { ObjectStore, Write } from './store';
 
 // A module as the importer read it (design §6.5). Its pictures are stored first; then it is written with its lorebook
 // and assets in one batch, itself last, so a module appears only once whole. brought: a move from Risu's, with its
@@ -48,6 +48,4 @@ export function setCharacterModule(store: ObjectStore, character: string, id: st
 
 // at is when it was deleted: it is off everywhere at once, and removed for good with what it owns KEEP_DELETED later
 // (purgeExpired); null brings it back as it was, on where it was on, unless its removal has begun ('gone').
-export function setModuleDeleted(store: ObjectStore, id: string, at: number | null): Promise<ApiResult<Stored<'module'>>> {
-  return store.update('module', id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }));
-}
+export const setModuleDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'module', id, at);
