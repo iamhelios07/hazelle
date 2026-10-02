@@ -15,7 +15,7 @@ import { addDefaults } from './prompts';
 import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
-import type { Runner } from './lua/client';
+import { LuaWorker, type Runner } from './lua/client';
 import { ReadModels } from './read-model';
 import { ScriptDisplay } from './script-display';
 import { Scripts } from './scripts';
@@ -43,8 +43,8 @@ export type Session = {
   startBackground: () => void;
 };
 
-// The worker is loaded when a chat's bot first runs Lua, never with the page.
-const luaWorker = (): Promise<Runner> => import('./lua/client').then(({ LuaWorker }) => new LuaWorker());
+// Its worker starts, and the VM loads, when a chat's bot first runs Lua, never with the page.
+const luaWorker = (): Promise<Runner> => Promise.resolve(new LuaWorker());
 
 // An open given up while it loads (signal) starts nothing. A cached opening never waits for the network.
 // lua: where the bot scripts run.

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { aliased } from '../common/alias';
+import { MODEL_ROLES } from '../common/words';
 import { useScripts, useSession } from '../session';
 import { useToast } from '../toast';
 
@@ -30,6 +31,15 @@ export function BotNotes() {
           break;
         case 'stuck':
           toast.error('봇의 스크립트가 끝나지 않아 멈췄어요');
+          break;
+        case 'no-model':
+          toast.error(`봇이 부르려는 ${MODEL_ROLES[note.role]}이 정해지지 않았어요`);
+          break;
+        case 'flood':
+          toast.error('봇이 모델을 너무 자주 불러서 잠시 막았어요');
+          break;
+        case 'unsaved':
+          toast.failed(note.failure, '봇이 바꾼 내용을 저장하지 못했어요');
           break;
       }
     }

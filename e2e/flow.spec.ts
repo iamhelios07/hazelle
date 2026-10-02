@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { strFromU8, unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
-import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE } from './helpers';
+import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE, SCRIPTED } from './helpers';
 
 const CSP = /Content-Security-Policy: (.+)/.exec(readFileSync(new URL('../public/_headers', import.meta.url), 'utf8'))![1];
 const PASSWORD = 'e2e-password';
@@ -163,6 +163,23 @@ test('a new account imports a card, chats through the fake provider and finds th
     await greeting.getByRole('button', { name: '누르기', exact: true }).click();
     await expect(page.getByText('봇의 버튼은 아직 동작하지 않아요.', { exact: true })).toBeVisible();
     expect(await page.evaluate('window.ran')).toBeUndefined();
+    expect(violations).toEqual([]);
+  });
+
+  await test.step('a bot’s Lua runs in its worker under the CSP: a button is answered, the bot speaks, the display follows its state, and a reply is edited once saved', async () => {
+    await page.goto('/');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
+    await (await chooser).setFiles(SCRIPTED);
+    await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
+    const greeting = messages.first();
+    await expect(greeting).toContainText('[door:null]');
+    await greeting.getByRole('button', { name: '문 열기', exact: true }).click();
+    await expect(page.getByText('문이 열렸어요', { exact: true })).toBeVisible();
+    await expect(greeting).toContainText('[door:open]');
+    await page.getByLabel('메시지', { exact: true }).fill('hi');
+    await page.getByRole('button', { name: '보내기', exact: true }).click();
+    await expect(messages.nth(2)).toContainText('Scripted smiles. [[bow]] (seen) [door:open]');
     expect(violations).toEqual([]);
   });
 });

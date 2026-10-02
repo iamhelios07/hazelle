@@ -55,6 +55,44 @@ export const HOSTILE = {
   ),
 };
 
+// A bot whose Lua answers a button, speaks, rewrites what is shown and edits a reply once it is saved (design §6.8).
+export const SCRIPTED = {
+  name: 'scripted.json',
+  mimeType: 'application/json',
+  buffer: Buffer.from(
+    JSON.stringify({
+      spec: 'chara_card_v3',
+      spec_version: '3.0',
+      data: {
+        name: 'Scripted',
+        description: '',
+        first_mes: 'The door is shut. {{button::문 열기::open}}',
+        extensions: {
+          risuai: {
+            triggerscript: [
+              {
+                comment: 'main',
+                type: 'start',
+                conditions: [],
+                effect: [
+                  {
+                    type: 'triggerlua',
+                    code: [
+                      "function open(id) setChatVar(id, 'door', 'open') alertNormal(id, '문이 열렸어요') end",
+                      "listenEdit('editDisplay', function(id, value) return value .. ' [door:' .. getChatVar(id, 'door') .. ']' end)",
+                      "function onOutput(id) setChat(id, -1, getChat(id, -1).data .. ' (seen)') end",
+                    ].join('\n'),
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    }),
+  ),
+};
+
 const REPLY = ['{{char}} smiles. ', '[[bow]]'];
 
 // route.fulfill hands the browser the whole stream in one body: this exercises SSE parsing and the call's sealed

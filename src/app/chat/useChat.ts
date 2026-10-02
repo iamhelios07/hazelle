@@ -203,9 +203,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     draft.set('');
     follow();
     const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
-    // Only an unsaved reply means the user's message was saved. A new chat that was not saved stays on this screen.
+    // An unsaved reply or a kept failure means the user's message was saved. A new chat that was not saved stays on
+    // this screen.
     if (failure?.kind === 'unstarted') draft.set(text);
-    else if (failure && failure.kind !== 'unsaved') draft.putBack(chatId, text);
+    else if (failure && failure.kind !== 'unsaved' && !failure.kept) draft.putBack(chatId, text);
     report(failure);
   }
 
