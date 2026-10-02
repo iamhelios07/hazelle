@@ -8,7 +8,7 @@ import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, s
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useConnections, useSettings, useStore } from '../session';
 import { typing, useShortcut } from '../shortcuts';
-import { useToast } from '../toast';
+import { useOwnUndo, useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
@@ -141,7 +141,9 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (pane) onPane(null);
   };
 
-  // Every structural edit is a step on this one stack; a toast's 되돌리기 undoes its own step.
+  // Every structural edit is a step on this one stack; a toast's 되돌리기 undoes its own step, and leaves with the
+  // editor, whose stack it is.
+  const undoable = useOwnUndo();
   const history = useRef(NO_HISTORY);
   const perform = (step: Step) => {
     update(step.redo);
@@ -186,7 +188,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const next = latest.current.blocks[at + 1] ?? latest.current.blocks[at - 1];
     const step = perform(removeBlock(gone, at));
     if (open === id) setPicked(next?.id ?? MODEL);
-    toast.undoable(`‘${blockTitle(gone).title}’ 블록을 뺐어요.`, () => undo(step));
+    undoable(`‘${blockTitle(gone).title}’ 블록을 뺐어요.`, () => undo(step));
   };
   const mark = (target: TextBlock, value: TextBlock['mark']) => {
     if (value === target.mark) return;
@@ -196,7 +198,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   };
   const wrap = (target: WrappedSlot, wrapper: string | null) => {
     const step = perform(setWrapper(target, wrapper));
-    if (wrapper === null) toast.undoable('감싸는 글을 뺐어요.', () => undo(step));
+    if (wrapper === null) undoable('감싸는 글을 뺐어요.', () => undo(step));
   };
   const typeSnippet = (snippet: (selected: string) => Snippet) => {
     const area = textRef.current!;
@@ -210,7 +212,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const gone = latest.current.toggles[at];
     if (!gone) return;
     const step = perform(removeToggle(gone, at));
-    toast.undoable(`‘${gone.label}’ 토글을 지웠어요.`, () => undo(step), '글 속 조건은 그대로예요.');
+    undoable(`‘${gone.label}’ 토글을 지웠어요.`, () => undo(step), '글 속 조건은 그대로예요.');
   };
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);

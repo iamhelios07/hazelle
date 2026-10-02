@@ -18,7 +18,8 @@ export type Toasts = {
   // Why a write failed, in failure.ts's words, led by prefix when it names what did not happen.
   failed: (failure: ApiFailure, prefix?: string) => void;
   // Deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog; Ctrl+Z does it too.
-  undoable: (message: string, undo: () => void, detail?: string) => void;
+  // Answers what takes the toast away.
+  undoable: (message: string, undo: () => void, detail?: string) => () => void;
   // Someone else's words, such as a bot's, under their face and name. Long ones are cut until pressed, and once
   // opened stay until closed.
   said: (from: From, text: string, tone: Notice['tone']) => void;
@@ -52,13 +53,14 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       const keep = () => setNotices((all) => all.map((notice) => (notice.key === key ? { ...notice, ends: Infinity } : notice)));
       const pressed = action && { ...action, onClick: () => (close(), action.onClick()), ...(undo && { keys: SHORTCUTS.undoToast.keys }) };
       setNotices((all) => [{ key, message, detail, tone, action: pressed, said: from && { from, keep, close }, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
+      return close;
     };
     return {
-      show: (message, extra) => add(message, 'plain', extra),
-      error: (message, extra) => add(message, 'error', extra),
-      failed: (failure, prefix) => add(prefix ?? describeFailure(failure), 'error', prefix ? { detail: describeFailure(failure) } : {}),
+      show: (message, extra) => void add(message, 'plain', extra),
+      error: (message, extra) => void add(message, 'error', extra),
+      failed: (failure, prefix) => void add(prefix ?? describeFailure(failure), 'error', prefix ? { detail: describeFailure(failure) } : {}),
       undoable: (message, undo, detail) => add(message, 'plain', { detail, action: { label: '되돌리기', onClick: undo } }, true),
-      said: (from, text, tone) => add(text, tone, { from }),
+      said: (from, text, tone) => void add(text, tone, { from }),
     };
   }, []);
 
@@ -110,4 +112,24 @@ export function useToast(): Toasts {
   const toasts = useContext(ToastContext);
   if (!toasts) throw new Error('useToast outside ToastProvider');
   return toasts;
+}
+
+// undoable for a 되돌리기 that works through the screen offering it, such as an editor's own undo: its toasts leave
+// with the screen, since pressed after that it would change a draft that is no longer shown. A 되돌리기 that writes
+// to the store itself, such as putting a deleted thing back, outlives its screen and takes useToast's.
+export function useOwnUndo(): Toasts['undoable'] {
+  const toasts = useToast();
+  const [offered] = useState(() => new Set<() => void>());
+  useEffect(
+    () => () => {
+      for (const withdraw of offered) withdraw();
+      offered.clear();
+    },
+    [offered],
+  );
+  return (message, undo, detail) => {
+    const withdraw = toasts.undoable(message, undo, detail);
+    offered.add(withdraw);
+    return withdraw;
+  };
 }
