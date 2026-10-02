@@ -1,4 +1,4 @@
-import { GitBranch, History, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
+import { GitBranch, History, List, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
 import { branchTree } from '../../model/chat';
 import { NameDialog } from '../common/NameDialog';
 import { ago } from '../common/time';
@@ -22,14 +22,25 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
   );
 }
 
+// A character can hold hundreds of chats, so the menu lists only the latest; the rest are on the character's chat list.
+const RECENT = 8;
+
 // Mounted only while the menu is open.
 function ChatChoices({ chat }: { chat: OpenChat }) {
-  const { id, card, shelf, actions } = chat;
+  const { id, shelf, actions } = chat;
   const { none } = useLibrary();
+  const chats = shelf?.chats ?? none.chats;
   return (
     <>
-      <MenuHeading>{card ? `${card.name}의 채팅` : '캐릭터 없이'}</MenuHeading>
-      {branchTree(shelf?.chats ?? none.chats).map(({ item, nested }) => (
+      <MenuItem icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />
+      {shelf && <MenuItem icon={Pencil} label="캐릭터 편집" onClick={() => actions.side({ kind: 'character', id: shelf.id })} />}
+      {chats.length > 0 && (
+        <>
+          <Divider variant="menu" />
+          <MenuHeading>최근 채팅</MenuHeading>
+        </>
+      )}
+      {branchTree(chats.slice(0, RECENT)).map(({ item, nested }) => (
         <MenuItem
           key={item.id}
           icon={nested ? GitBranch : undefined}
@@ -39,9 +50,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
           onClick={() => navigate({ kind: 'chat', id: item.id })}
         />
       ))}
-      <Divider variant="menu" />
-      <MenuItem icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />
-      {shelf && <MenuItem icon={Pencil} label="캐릭터 편집" onClick={() => actions.side({ kind: 'character', id: shelf.id })} />}
+      {chats.length > RECENT && <MenuItem icon={List} label={`채팅 ${chats.length}개 모두 보기`} onClick={() => navigate({ kind: 'shelf', character: shelf?.id ?? null })} />}
     </>
   );
 }

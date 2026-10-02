@@ -4,7 +4,7 @@ import type { Shelf } from '../../../model/library';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary, useTurn } from '../../session';
-import { Empty, FaceButton, FaceStrip, IconButton, ItemRow, NavRow, SideTitle, Sidebar } from '../../ui';
+import { Empty, FaceButton, FaceStrip, ItemRow, NavRow, SideTitle, Sidebar } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { characterPage, type Route } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
@@ -45,9 +45,8 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
               ))}
             </FaceStrip>
           )}
-          <SideTitle avatar={<ShelfFace shelf={shelf} />} name={shelfName(shelf)} onOpen={about === null ? undefined : () => navigate(about)}>
-            <IconButton icon={Plus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: shelf.id })} />
-          </SideTitle>
+          <SideTitle avatar={<ShelfFace shelf={shelf} />} name={shelfName(shelf)} onOpen={about === null ? undefined : () => navigate(about)} />
+          <NavRow icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf.id })} />
         </>
       }
       footer={<SidebarFooter />}
