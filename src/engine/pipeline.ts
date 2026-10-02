@@ -241,31 +241,35 @@ export function assemble({ scope, seed, countTokens, budget, continuing, memory 
     return template.flatMap((part) => ('range' in part ? range(kept, before, part) : [part]));
   };
   const size = (parts: (Sent | CachePart)[]) => parts.reduce((sum, part) => sum + ('cache' in part ? 0 : tokens(part.message.content)), 0);
-  const assembled = (parts: (Sent | CachePart)[]): Assembled => {
+  const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       memory: recalled && { sent: recalled.sent, covered, missing: slot ? covered - recalled.held : covered, slot },
-      dropped: from,
+      dropped,
     };
   };
 
-  // The budget drops the oldest chat messages first and never the last one; the rest of the template stays whole.
-  // What does not fit even then is not sent.
-  let from = 0;
-  let sent = fill(messages);
-  if (budget === null) return assembled(sent);
-  while (size(sent) > budget && from < messages.length - 1) sent = fill(messages.slice(++from));
-  const used = size(sent);
-  return used > budget ? { kind: 'too-long', tokens: used, budget } : assembled(sent);
+  // The rest of the template stays whole.
+  const dropped = dropOldest(budget, messages.length, (from) => size(fill(messages.slice(from))));
+  return typeof dropped === 'number' ? assembled(fill(messages.slice(dropped)), dropped) : dropped;
+}
+
+// The budget drops the oldest chat messages first and never the last one; what does not fit even then is not sent.
+// size: the request's tokens with the oldest of its count chat messages dropped. Gives how many to drop.
+function dropOldest(budget: number | null, count: number, size: (dropped: number) => number): number | TooLong {
+  if (budget === null) return 0;
+  let dropped = 0;
+  while (size(dropped) > budget && dropped < count - 1) dropped++;
+  const tokens = size(dropped);
+  return tokens > budget ? { kind: 'too-long', tokens, budget } : dropped;
 }
 
 // The request as a bot's script left it (editRequest), with its parts as sent: a message the script left as built
 // keeps its part, any other is the script's and counted here. The budget holds for this request as it does in
-// assemble: the oldest chat messages left as built go first, never the last of them, and what does not fit even then
-// is not sent.
+// assemble, over the chat messages left as built.
 export function rewritten(prompt: Assembled, messages: ChatMessage[], countTokens: (text: string) => number, budget: number | null): Assembled | TooLong {
   let next = 0;
   const sent = messages.map((message) => {
@@ -275,17 +279,15 @@ export function rewritten(prompt: Assembled, messages: ChatMessage[], countToken
     next = at + 1;
     return { message, ...prompt.parts[at]! };
   });
-  const chat = ({ from }: { from: From }) => from.kind === 'block' && from.slot === 'chat';
-  let used = sent.reduce((sum, { tokens }) => sum + tokens, 0);
-  let dropped = prompt.dropped;
-  while (budget !== null && used > budget) {
-    const oldest = sent.findIndex(chat);
-    if (oldest === -1 || oldest === sent.findLastIndex(chat)) return { kind: 'too-long', tokens: used, budget };
-    used -= sent[oldest]!.tokens;
-    sent.splice(oldest, 1);
-    dropped++;
-  }
-  return { ...prompt, messages: sent.map(({ message }) => message), parts: sent.map(({ from, tokens }) => ({ from, tokens })), dropped };
+  const chat = sent.flatMap(({ from }, at) => (from.kind === 'block' && from.slot === 'chat' ? [at] : []));
+  const total = sent.reduce((sum, { tokens }) => sum + tokens, 0);
+  const before = [0];
+  for (const at of chat) before.push(before.at(-1)! + sent[at]!.tokens);
+  const dropped = dropOldest(budget, chat.length, (from) => total - before[from]!);
+  if (typeof dropped !== 'number') return dropped;
+  const gone = new Set(chat.slice(0, dropped));
+  const kept = sent.filter((_, at) => !gone.has(at));
+  return { ...prompt, messages: kept.map(({ message }) => message), parts: kept.map(({ from, tokens }) => ({ from, tokens })), dropped: prompt.dropped + dropped };
 }
 
 // How much of each message before the source 앞 메시지 holds, from its end.
