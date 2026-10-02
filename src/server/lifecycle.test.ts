@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Phase, Write } from './account-store';
+import type { FeedPage, Phase, Write } from './account-store';
 import { hex } from './http';
 import { beginRestore, cancelRestore, leaveAccount, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
@@ -193,8 +193,8 @@ async function expectRestored(seed: Awaited<ReturnType<typeof seeded>>, id: numb
   const db = t.stores.db(seed.incarnation);
   await db.bookmarks.restoreOnNextSession(checkpoint);
   db.restart();
-  const rows = db.exec<{ id: string; body: string }>('SELECT id, body FROM objects WHERE body IS NOT NULL');
-  expect(Object.fromEntries(rows.map(({ id, body }) => [id, body]))).toEqual(BEFORE);
+  const page = (await t.stores.getByName(seed.incarnation).feed(seed.incarnation, { timeline: null, since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null })) as FeedPage;
+  expect(Object.fromEntries(page.changes.map(({ id, body }) => [id, body]))).toEqual(BEFORE);
 }
 
 describe('a restore', () => {
