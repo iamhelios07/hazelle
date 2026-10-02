@@ -49,6 +49,7 @@ const SAMPLE: CbsContext = {
   clock: { now: Date.UTC(2026, 9, 1, 3), timeZone: 'Asia/Seoul' },
   language: 'Korean',
   assets: [],
+  modules: [],
   faces: { char: null, user: null },
   pickSeed: 'sample',
 };

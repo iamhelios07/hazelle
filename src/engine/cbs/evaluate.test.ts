@@ -46,6 +46,7 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => ({
   clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
   language: null,
   assets: [],
+  modules: [],
   faces: { char: null, user: null },
   pickSeed: 'pick-1',
   ...over,
@@ -183,6 +184,11 @@ describe('evaluate', () => {
   it('escapes :: inside an array, and spreads an array into the arguments of the tag around it', () => {
     expect(run('{{arrayelement::{{history}}::1}}', { messages: [message('g', 'assistant', 'a'), message('u', 'user', 'k::v')] })).toBe('k::v');
     expect(run('{{equal::{{spread::["x","x"]}}}}')).toBe('1');
+  });
+
+  it("tells which modules are on by namespace, and lists the character's pictures apart from each module's", () => {
+    const assets = [{ id: 'a', name: 'own' }, { id: 'b', name: 'wall', module: 'phone' }, { id: 'c', name: 'loose', module: null }];
+    expect(run('{{moduleenabled::phone}}{{moduleenabled::radio}} {{assetlist}} {{moduleassetlist::phone}}|{{moduleassetlist::radio}}', { modules: ['phone'], assets })).toBe('10 ["own"] ["wall"]|');
   });
 
   it('leaves a tag with an argument out of range as written', () => {

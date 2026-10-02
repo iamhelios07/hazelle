@@ -95,6 +95,7 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   model: { id: 'model', maxContext: null, prefill: null },
   clock: { now: Date.UTC(2026, 8, 28), timeZone: 'UTC' },
   assets: [],
+  modules: [],
   faces: { char: null, user: null },
   screen: null,
   pick: 'luna:chat',

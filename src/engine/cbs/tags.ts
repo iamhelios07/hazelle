@@ -49,8 +49,6 @@ const UNSUPPORTED = new Set([
   'triggerid',
   'emotionlist',
   'chardisplayasset',
-  'moduleenabled',
-  'moduleassetlist',
   'file',
   'risu',
   'bkspc',
@@ -174,7 +172,9 @@ define('source', 1, ([name], { context: { stage, faces } }) => {
   return (face === 'char' ? faces.char : face === 'user' ? faces.user : null) ?? '';
 });
 // The names a bot's prompt lists, so the model can pick pictures by name.
-define('assetlist', 0, (_, { context: { card, assets } }) => (card ? serialize(assets.map(({ name }) => name)) : ''));
+define('assetlist', 0, (_, { context: { card, assets } }) => (card ? serialize(assets.filter((asset) => asset.module === undefined).map(({ name }) => name)) : ''));
+define('moduleenabled', 1, ([namespace], { context }) => (context.modules.includes(namespace!) ? '1' : '0'));
+define('moduleassetlist', 1, ([namespace], { context: { modules, assets } }) => (modules.includes(namespace!) ? serialize(assets.filter((asset) => asset.module === namespace).map(({ name }) => name)) : ''));
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
 define('setvar', 2, ([name, value], { context, writes }) => {

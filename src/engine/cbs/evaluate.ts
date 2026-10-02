@@ -39,9 +39,11 @@ export type CbsContext = {
   clock: { now: number; timeZone: string };
   // The language a translation prompt translates into, as the English name the model reads; null outside one.
   language: string | null;
-  // The character's own pictures, and the faces {{source}} shows: the character's and the persona's pictures as data:
+  // The pictures of the chat's packs, and the faces {{source}} shows: the character's and the persona's pictures as data:
   // URLs, each null when there is none.
   assets: readonly BotAsset[];
+  // The namespaces of the modules on in the chat (design §6.5).
+  modules: readonly string[];
   faces: { char: string | null; user: string | null };
   // pick and rollp keep Risu's seed: the character, the chat and its message count.
   pickSeed: string;

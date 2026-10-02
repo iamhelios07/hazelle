@@ -67,14 +67,15 @@ type Reader = Pick<Session, 'store'>;
 // A chat's packs with what holds each, in order (design §6.5): its character's own, then the modules on in every
 // chat, then the character's, each once. The one place that knows a pack is a card's or a module's; a module that is
 // gone or deleted is off.
-export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character'>): { id: string; pack: Pack; namespace: string | null }[] {
+// module: null for the character's own pack.
+export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character'>): { id: string; pack: Pack; module: { namespace: string | null } | null }[] {
   const character = chat.character === null ? null : store.get('character', chat.character);
   const modules = [...new Set([...(store.get('settings', SETTINGS_ID)?.value.modules ?? []), ...(character?.value.modules ?? [])])];
   return [
-    ...(character ? [{ id: character.id, pack: character.value.card, namespace: null }] : []),
+    ...(character ? [{ id: character.id, pack: character.value.card, module: null }] : []),
     ...modules.flatMap((id) => {
       const module = store.get('module', id)?.value;
-      return module && module.deleted === undefined ? [{ id, pack: module, namespace: module.namespace }] : [];
+      return module && module.deleted === undefined ? [{ id, pack: module, module: { namespace: module.namespace } }] : [];
     }),
   ];
 }
@@ -106,7 +107,8 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     toggle: togglesOf(store, chat, prompt).value,
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    assets: packs.flatMap((pack) => store.children('asset', pack.id).map(({ id, value }) => ({ id, name: value.name }))),
+    assets: packs.flatMap(({ id: pack, module }) => store.children('asset', pack).map(({ id, value }) => ({ id, name: value.name, ...(module && { module: module.namespace }) }))),
+    modules: packs.flatMap(({ module }) => module?.namespace ?? []),
     faces: {
       char: chat.character === null ? null : (store.children('avatar', chat.character)[0]?.value.thumb ?? null),
       user: persona.kind === 'persona' ? persona.persona.value.picture : null,

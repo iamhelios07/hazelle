@@ -41,6 +41,7 @@ const scope: ChatScope = {
   model: null,
   clock: { now: 0, timeZone: 'UTC' },
   assets: [],
+  modules: [],
   faces: { char: null, user: null },
   screen: null,
   pick: 'luna:chat',

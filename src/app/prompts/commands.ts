@@ -40,6 +40,8 @@ export const COMMANDS: readonly CommandGroup[] = [
       { names: ['lorebook', 'worldinfo'], form: '{{lorebook}}', what: '로어북 항목 전부를 JSON 배열로 넣어요.' },
       { names: [], form: '{{position::이름}}', what: '로어북에서 @@position pt_이름으로 자리를 정한 항목이 한 줄씩 들어가요.' },
       { names: ['assetlist'], form: '{{assetlist}}', what: '캐릭터 그림들의 이름을 JSON 배열로 넣어요. 모델이 그림을 이름으로 고를 때 써요.' },
+      { names: ['moduleenabled'], form: '{{moduleenabled::이름}}', what: '그 네임스페이스의 모듈이 이 채팅에 켜져 있으면 1, 아니면 0이에요.' },
+      { names: ['moduleassetlist'], form: '{{moduleassetlist::이름}}', what: '그 네임스페이스의 모듈이 켜져 있을 때, 그 모듈 그림들의 이름을 JSON 배열로 넣어요.' },
     ],
   },
   {

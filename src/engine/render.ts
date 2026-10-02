@@ -33,6 +33,7 @@ export type ChatScope = {
   model: CbsContext['model'];
   clock: CbsContext['clock'];
   assets: CbsContext['assets'];
+  modules: CbsContext['modules'];
   faces: CbsContext['faces'];
   // The window the chat is shown in, which only the display reads; null in a turn and in a chat's preview.
   screen: CbsContext['screen'];
@@ -45,7 +46,7 @@ const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prom
 
 // One chat's CBS contexts for a stage, by the text's source and the variables it reads. language: a translation's.
 export function contexts(scope: ChatScope, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
-  const { card, persona, prompt, note, messages, greeting, toggle, model, clock, assets, faces, screen, pick } = scope;
+  const { card, persona, prompt, note, messages, greeting, toggle, model, clock, assets, modules, faces, screen, pick } = scope;
   const fixed = {
     stage,
     card,
@@ -60,6 +61,7 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
     clock,
     language,
     assets,
+    modules,
     faces,
   };
   return (source, variables) => ({ ...fixed, source, variables, pickSeed: `${pick}:${'message' in source ? source.message : messages.length}` });

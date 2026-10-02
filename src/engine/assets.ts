@@ -1,6 +1,7 @@
 // A bot's own picture as its text reaches it: by name, through {{raw}}, {{img}} and the like (design §6.4). id is the
-// stored asset's.
-export type BotAsset = { id: string; name: string };
+// stored asset's. module: the namespace of the module it came with, null for a module that has none; absent for the
+// character's own.
+export type BotAsset = { id: string; name: string; module?: string | null };
 
 // What the display writes where an asset's picture goes. The chat screen puts the picture's own URL there once it is
 // loaded (resolveAssets), and nothing before.
