@@ -211,8 +211,7 @@ export async function restoreBackup(
       let writes: Write[] = [];
       let size = 0;
       const flush = async () => {
-        signal.throwIfAborted();
-        const result = await store.batch(writes, () => progress(++done, total), { unheld: writes.every((write) => write.type !== 'remove' && SCOPED.has(write.kind)) });
+        const result = await store.batch(writes, () => progress(++done, total), { unheld: writes.every((write) => write.type !== 'remove' && SCOPED.has(write.kind)), signal });
         writes = [];
         size = 0;
         return result;
@@ -231,8 +230,7 @@ export async function restoreBackup(
         if (!result.ok) return result;
       }
     }
-    signal.throwIfAborted();
-    return await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })));
+    return await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })), undefined, { signal });
   } catch {
     return { ok: false, error: signal.aborted ? 'stopped' : 'not-backup' };
   }
