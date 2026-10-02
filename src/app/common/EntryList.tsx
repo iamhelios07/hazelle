@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
-import { useToast } from '../toast';
+import { Fragment, useRef, type ReactNode } from 'react';
+import { useOwnUndo } from '../toast';
 import { Button, IconButton } from '../ui';
 
 type Entry<T> = { value: T; name: string; set: (value: T) => void; remove: ReactNode };
@@ -18,12 +18,15 @@ type Props<T> = {
 };
 
 // Entries edited in place, in order, such as a card's greetings. A delete takes effect at once and the toast offers
-// 되돌리기.
+// 되돌리기, which puts the entry back into the list as it is then, at its old place or last when the list is shorter.
 export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed, children }: Props<T>) {
-  const toast = useToast();
+  const undoable = useOwnUndo();
+  const latest = useRef({ entries, onChange });
+  latest.current = { entries, onChange };
   function remove(index: number) {
+    const gone = entries[index]!;
     onChange(entries.filter((_, at) => at !== index));
-    toast.undoable(removed(index), () => onChange(entries));
+    undoable(removed(index), () => latest.current.onChange(latest.current.entries.toSpliced(index, 0, gone)));
   }
   return (
     <>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ApiFailure } from '../../runtime/api';
-import { SaveQueue } from './saveQueue';
+import { SaveQueue, Saves } from './saveQueue';
 
 type Note = { title: string; body: string };
 type Answer = { ok: true } | ApiFailure;
@@ -63,5 +63,103 @@ describe('SaveQueue', () => {
     writes[0]!.answer({ ok: true });
     await flushed;
     expect(saves.busy).toBe(false);
+  });
+
+  it('runs a removal once what was changed is stored, and drops what is typed while it runs', async () => {
+    const { saves, writes } = queue();
+    saves.change({ title: 'a' });
+    let answer!: (result: { ok: boolean }) => void;
+    const removed = saves.remove(() => new Promise<{ ok: boolean }>((resolve) => (answer = resolve)));
+    await settle();
+    expect(writes[0]!.patch).toEqual({ title: 'a' });
+    writes[0]!.answer({ ok: true });
+    await settle();
+
+    saves.change({ title: 'b' });
+    answer({ ok: true });
+    expect(await removed).toEqual({ ok: true });
+    saves.change({ title: 'c' });
+    expect(await saves.flush()).toBe(true);
+    expect(writes).toHaveLength(1);
+    expect(saves.busy).toBe(false);
+  });
+
+  it('does not run a removal when a change could not be stored', async () => {
+    const { saves, writes } = queue();
+    saves.change({ title: 'a' });
+    let ran = false;
+    const removed = saves.remove(async () => ({ ok: (ran = true) }));
+    await settle();
+    writes[0]!.answer({ ok: false, error: 'too-large' });
+    expect(await removed).toBeNull();
+    expect(ran).toBe(false);
+    expect(saves.unsaved).toEqual({ title: 'a' });
+  });
+});
+
+// The page's beforeunload listeners, which stand for the browser asking before the tab goes.
+function page() {
+  const asking = new Set<unknown>();
+  const target = { addEventListener: (_: string, listener: unknown) => void asking.add(listener), removeEventListener: (_: string, listener: unknown) => void asking.delete(listener) };
+  return { target: target as unknown as Window, asks: () => asking.size > 0 };
+}
+
+describe('Saves', () => {
+  it('gives a screen opened again the queue the one before it left, so its save lands after the earlier one', async () => {
+    const { target, asks } = page();
+    const saves = new Saves(target);
+    const writes: { patch: Partial<Note>; answer: (answer: Answer) => void }[] = [];
+    const write = (patch: Partial<Note>) => new Promise<Answer>((answer) => writes.push({ patch, answer }));
+
+    const leave = saves.watch('note', () => {});
+    saves.queue<Note>('note', write, () => {}).change({ title: 'a' });
+    leave();
+    void saves.flush('note');
+    await settle();
+
+    const leaveAgain = saves.watch('note', () => {});
+    expect(saves.view<Note>('note').unsaved).toEqual({ title: 'a' });
+    void saves.queue<Note>('note', write, () => {}).save({ title: 'b' });
+    await settle();
+    expect(writes).toHaveLength(1);
+    writes[0]!.answer({ ok: true });
+    await settle();
+    expect(writes[1]!.patch).toEqual({ title: 'b' });
+
+    leaveAgain();
+    expect(asks()).toBe(true);
+    writes[1]!.answer({ ok: true });
+    await settle();
+    expect(asks()).toBe(false);
+  });
+
+  it('tells a save that failed after its screen was left once, and drops it', async () => {
+    const { target, asks } = page();
+    const saves = new Saves(target);
+    const told: ApiFailure[] = [];
+    let answer!: (answer: Answer) => void;
+    const leave = saves.watch('note', () => {});
+    saves.queue<Note>('note', () => new Promise<Answer>((resolve) => (answer = resolve)), (failure) => told.push(failure)).change({ title: 'a' });
+    leave();
+    void saves.flush('note');
+    await settle();
+    answer({ ok: false, error: 'gone' });
+    await settle();
+    expect(told).toEqual([{ ok: false, error: 'gone' }]);
+    expect(saves.view<Note>('note').unsaved).toEqual({});
+    expect(asks()).toBe(false);
+  });
+
+  it('drops what waits when the session closes', async () => {
+    const { target, asks } = page();
+    const saves = new Saves(target);
+    const written: Partial<Note>[] = [];
+    saves.watch('note', () => {});
+    const note = saves.queue<Note>('note', async (patch) => (written.push(patch), { ok: true }), () => {});
+    note.change({ title: 'a' });
+    saves.close();
+    expect(asks()).toBe(false);
+    expect(await note.flush()).toBe(true);
+    expect(written).toEqual([]);
   });
 });

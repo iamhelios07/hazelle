@@ -1,7 +1,11 @@
 import type { Block, ChatRange, ChatSlot, RecentSlot, Role, TextBlock, Toggle, WrappedSlot } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
-import { blockTitle, MARKS } from './blocks';
-import { moved, rekey, withMark, type Draft } from './edits';
+import { blockTitle, MARKS, SLOT } from './blocks';
+import { keyInUse, moved, placedOnce, rekey, withMark, type Draft } from './edits';
+
+// Why a step cannot apply to the draft as it is now, in words. A toast's 되돌리기 undoes a step out of turn, so what
+// a step puts back may no longer fit: the slot it held is taken, or its key is another toggle's.
+export type Refused = { refused: string };
 
 // One structural edit and its inverse. Both apply to the draft as it is then and change only what the edit changed,
 // so text typed in between survives either way. Typing is not a step: a text field keeps the browser's own undo.
@@ -10,33 +14,47 @@ export type Step = {
   label: string;
   // The block to show once it is undone or redone.
   block: string | null;
-  undo: (draft: Draft) => PromptPatch;
-  redo: (draft: Draft) => PromptPatch;
+  undo: (draft: Draft) => PromptPatch | Refused;
+  redo: (draft: Draft) => PromptPatch | Refused;
 };
 
 export type History = { done: readonly Step[]; undone: readonly Step[] };
 export const NO_HISTORY: History = { done: [], undone: [] };
 
-export const recorded = (history: History, step: Step): History => ({ done: [...history.done, step], undone: [] });
+// A step applied to a draft: the history after it, and the patch it makes. A step refused changes nothing and leaves
+// the history for good, so the steps under it can still be reached.
+export type Turned = { step: Step; history: History } & ({ patch: PromptPatch } | Refused);
 
-// The last step done, or the one a toast's 되돌리기 names, moved to the undone; null when it is not there to undo.
-export function undoing(history: History, step = history.done.at(-1)): { history: History; step: Step } | null {
+const turned = (step: Step, change: PromptPatch | Refused, applied: History, refused: History): Turned =>
+  'refused' in change ? { step, history: refused, ...change } : { step, history: applied, patch: change };
+
+// A new edit: its redo applied, and the step recorded over whatever was undone.
+export const doing = (history: History, draft: Draft, step: Step): Turned => turned(step, step.redo(draft), { done: [...history.done, step], undone: [] }, history);
+
+// The last step done, or the one a toast's 되돌리기 names; null when it is not there to undo.
+export function undoing(history: History, draft: Draft, step = history.done.at(-1)): Turned | null {
   if (!step || !history.done.includes(step)) return null;
-  return { step, history: { done: history.done.filter((each) => each !== step), undone: [...history.undone, step] } };
+  const done = history.done.filter((each) => each !== step);
+  return turned(step, step.undo(draft), { done, undone: [...history.undone, step] }, { done, undone: history.undone });
 }
 
-export function redoing(history: History): { history: History; step: Step } | null {
+export function redoing(history: History, draft: Draft): Turned | null {
   const step = history.undone.at(-1);
   if (!step) return null;
-  return { step, history: { done: [...history.done, step], undone: history.undone.slice(0, -1) } };
+  const undone = history.undone.slice(0, -1);
+  return turned(step, step.redo(draft), { done: [...history.done, step], undone }, { done: history.done, undone });
 }
 
 // Puts an item back where it stood, or takes it out, keeping it as it was when taken, typing included. Adding is put
-// then take to undo, removing the other way round.
-function presence<T>(item: T, at: number, same: (a: T, b: T) => boolean) {
+// then take to undo, removing the other way round. joining: the item as it may stand among the others now, under
+// the rules adding one keeps, or why it may not.
+function presence<T extends object>(item: T, at: number, same: (a: T, b: T) => boolean, joining: (items: readonly T[], item: T) => T | Refused) {
   let kept = item;
   return {
-    put: (items: readonly T[]) => [...items.slice(0, at), kept, ...items.slice(at)],
+    put: (items: readonly T[]): T[] | Refused => {
+      const fit = joining(items, kept);
+      return 'refused' in fit ? fit : [...items.slice(0, at), fit, ...items.slice(at)];
+    },
     take: (items: readonly T[]) => {
       kept = items.find((each) => same(each, kept)) ?? kept;
       return items.filter((each) => !same(each, kept));
@@ -46,19 +64,28 @@ function presence<T>(item: T, at: number, same: (a: T, b: T) => boolean) {
 
 const sameBlock = (a: Block, b: Block) => a.id === b.id;
 const sameToggle = (a: Toggle, b: Toggle) => a.key === b.key;
+// A text comes back without a mark another text has taken since: its words matter more than the mark.
+const joiningBlock = (blocks: readonly Block[], block: Block): Block | Refused => {
+  if (block.kind === 'slot') return placedOnce(blocks, block.slot) ? { refused: `‘${SLOT[block.slot].name}’ 자리가 이미 있어요.` } : block;
+  return block.mark && blocks.some((each) => each.kind === 'text' && each.mark === block.mark) ? { ...block, mark: null } : block;
+};
+const keyTaken = (key: string): Refused => ({ refused: `조건에서 부르는 이름 ‘${key}’을(를) 다른 토글이 쓰고 있어요.` });
+const joiningToggle = (toggles: readonly Toggle[], toggle: Toggle): Toggle | Refused => (keyInUse(toggles, toggle.key) ? keyTaken(toggle.key) : toggle);
+const blocksOr = (blocks: Block[] | Refused): PromptPatch | Refused => ('refused' in blocks ? blocks : { blocks });
+const togglesOr = (toggles: Toggle[] | Refused): PromptPatch | Refused => ('refused' in toggles ? toggles : { toggles });
 const titled = (block: Block, what: string) => `‘${blockTitle(block).title}’ ${what}`;
 const onBlock = (id: string, change: (block: Block) => Block) => (draft: Draft): PromptPatch => ({
   blocks: draft.blocks.map((each) => (each.id === id ? change(each) : each)),
 });
 
 export function addBlock(block: Block, at: number): Step {
-  const { put, take } = presence(block, at, sameBlock);
-  return { label: titled(block, '블록 넣기'), block: block.id, undo: (draft) => ({ blocks: take(draft.blocks) }), redo: (draft) => ({ blocks: put(draft.blocks) }) };
+  const { put, take } = presence(block, at, sameBlock, joiningBlock);
+  return { label: titled(block, '블록 넣기'), block: block.id, undo: (draft) => ({ blocks: take(draft.blocks) }), redo: (draft) => blocksOr(put(draft.blocks)) };
 }
 
 export function removeBlock(block: Block, at: number): Step {
-  const { put, take } = presence(block, at, sameBlock);
-  return { label: titled(block, '블록 빼기'), block: block.id, undo: (draft) => ({ blocks: put(draft.blocks) }), redo: (draft) => ({ blocks: take(draft.blocks) }) };
+  const { put, take } = presence(block, at, sameBlock, joiningBlock);
+  return { label: titled(block, '블록 빼기'), block: block.id, undo: (draft) => blocksOr(put(draft.blocks)), redo: (draft) => ({ blocks: take(draft.blocks) }) };
 }
 
 export function moveBlock(block: Block, from: number, to: number): Step {
@@ -119,13 +146,13 @@ export function setMark(block: TextBlock, mark: TextBlock['mark'], taken: string
 }
 
 export function addToggle(toggle: Toggle, at: number): Step {
-  const { put, take } = presence(toggle, at, sameToggle);
-  return { label: `‘${toggle.label}’ 토글 만들기`, block: null, undo: (draft) => ({ toggles: take(draft.toggles) }), redo: (draft) => ({ toggles: put(draft.toggles) }) };
+  const { put, take } = presence(toggle, at, sameToggle, joiningToggle);
+  return { label: `‘${toggle.label}’ 토글 만들기`, block: null, undo: (draft) => ({ toggles: take(draft.toggles) }), redo: (draft) => togglesOr(put(draft.toggles)) };
 }
 
 export function removeToggle(toggle: Toggle, at: number): Step {
-  const { put, take } = presence(toggle, at, sameToggle);
-  return { label: `‘${toggle.label}’ 토글 지우기`, block: null, undo: (draft) => ({ toggles: put(draft.toggles) }), redo: (draft) => ({ toggles: take(draft.toggles) }) };
+  const { put, take } = presence(toggle, at, sameToggle, joiningToggle);
+  return { label: `‘${toggle.label}’ 토글 지우기`, block: null, undo: (draft) => togglesOr(put(draft.toggles)), redo: (draft) => ({ toggles: take(draft.toggles) }) };
 }
 
 // The whole toggle swaps, since nothing is typed into one in place.
@@ -135,5 +162,6 @@ export function editToggle(before: Toggle, after: Toggle, what: 'label' | 'defau
 }
 
 export function renameKey(toggle: Toggle, to: string): Step {
-  return { label: `‘${toggle.label}’ 조건에서 부르는 이름 바꾸기`, block: null, undo: (draft) => rekey(draft, to, toggle.key), redo: (draft) => rekey(draft, toggle.key, to) };
+  const renamed = (from: string, next: string) => (draft: Draft) => (keyInUse(draft.toggles, next) ? keyTaken(next) : rekey(draft, from, next));
+  return { label: `‘${toggle.label}’ 조건에서 부르는 이름 바꾸기`, block: null, undo: renamed(to, toggle.key), redo: renamed(toggle.key, to) };
 }

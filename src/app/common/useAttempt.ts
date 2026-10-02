@@ -1,15 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // A submit that is busy until it settles, then shows why it failed beside the form. The task answers
-// with the failure in words, or null when it went through.
+// with the failure in words, or null when it went through. Its signal stops once the screen is left, and what a task
+// answers after that is not shown.
 export function useAttempt() {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // Made by the effect: StrictMode runs a mount's cleanup once before the screen is used.
+  const life = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    life.current = controller;
+    return () => controller.abort();
+  }, []);
 
-  async function run(task: () => Promise<string | null>) {
+  async function run(task: (signal: AbortSignal) => Promise<string | null>) {
+    const { signal } = life.current!;
     setBusy(true);
     setFailure(null);
-    const failed = await task();
+    const failed = await task(signal);
+    if (signal.aborted) return;
     setBusy(false);
     setFailure(failed);
   }

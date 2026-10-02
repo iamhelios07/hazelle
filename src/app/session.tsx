@@ -11,13 +11,17 @@ import type { ScriptsState } from '../runtime/scripts';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';
+import { Saves } from './common/saveQueue';
 
 export type Account = { onLock: () => void; onLogout: () => Promise<string | null> };
 
-const SessionContext = createContext<{ session: Session; account: Account } | null>(null);
+const SessionContext = createContext<{ session: Session; account: Account; saves: Saves } | null>(null);
 
 export function SessionProvider({ session, account, children }: { session: Session; account: Account; children: ReactNode }) {
-  return <SessionContext value={{ session, account }}>{children}</SessionContext>;
+  // One session's save queues, closed with it: a queue kept past it would write its change into the next account.
+  const saves = useMemo(() => new Saves(window), [session]);
+  useEffect(() => () => saves.close(), [saves]);
+  return <SessionContext value={{ session, account, saves }}>{children}</SessionContext>;
 }
 
 function useOpen() {
@@ -28,6 +32,7 @@ function useOpen() {
 
 export const useSession = (): Session => useOpen().session;
 export const useAccount = (): Account => useOpen().account;
+export const useSaves = (): Saves => useOpen().saves;
 export const useStore = (): ObjectStore => useSession().store;
 export const useFiles = (): Files => useSession().files;
 export const useTalk = (): Talk => useSession().talk;

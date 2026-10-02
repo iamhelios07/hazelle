@@ -19,7 +19,7 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!secret) return;
-    await run(() => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }));
+    await run((signal) => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }, signal));
   }
 
   return (

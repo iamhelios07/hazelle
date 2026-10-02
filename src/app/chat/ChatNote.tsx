@@ -37,7 +37,7 @@ function NoteEditor({ chat }: { chat: OpenChat }) {
   const fallback = prompt.kind === 'prompt' ? prompt.prompt.value.authorNote : null;
   const [text, setText] = useState(note ?? fallback ?? '');
   // An unsaved chat holds the note itself until its first send, so only a saved one goes through autosave.
-  const autosave = useAutosave<{ note: string | null }>((patch) => actions.setOwn('note', patch.note as string | null));
+  const autosave = useAutosave<{ note: string | null }>(`note:${id}`, (patch) => actions.setOwn('note', patch.note as string | null));
 
   function change(value: string) {
     setText(value);
