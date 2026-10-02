@@ -1,3 +1,4 @@
+import { readToggles } from '../../engine/import/toggles';
 import type { Toggle } from '../../model/prompt';
 import type { ChatToggleSet } from '../../runtime/turn';
 
@@ -12,6 +13,13 @@ export function toggleRows({ declared, value }: ChatToggleSet, fromPrompt: numbe
     return { toggle, value: current, changed: current !== toggle.default };
   });
   return { prompt: rows.slice(0, fromPrompt), card: rows.slice(fromPrompt), changed: rows.filter((row) => row.changed).length };
+}
+
+// The rows after the prompt's, apart by who declares them: the card (its toggle text), or a module on in the chat. A
+// key both declare is the card's, whose pack comes first (runtime/turn packsOf).
+export function splitByCard(rows: readonly ToggleRow[], card: string): { card: ToggleRow[]; modules: ToggleRow[] } {
+  const own = new Set(readToggles(card).toggles.map(({ key }) => key));
+  return { card: rows.filter(({ toggle }) => own.has(toggle.key)), modules: rows.filter(({ toggle }) => !own.has(toggle.key)) };
 }
 
 // What the panel shows of a group: the rows the search and the 바꾼 것 filter keep, those that differed when the

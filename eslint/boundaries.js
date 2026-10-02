@@ -6,7 +6,7 @@ import path from 'node:path';
 // files those in `tests`. A module in no area fails lint until this table places it.
 const RUNTIME_IMPORTS = ['model', 'engine', 'connectors', 'vault'];
 const BELOW_APP = ['runtime', ...RUNTIME_IMPORTS];
-const FEATURES = ['account', 'library', 'chat', 'connections', 'models', 'prompts', 'personas', 'settings'];
+const FEATURES = ['account', 'library', 'chat', 'connections', 'models', 'prompts', 'personas', 'modules', 'settings'];
 const FEATURE = {
   imports: ['ui', 'routes', 'common', 'root', ...BELOW_APP],
   why: 'a feature folder imports no other feature folder and nothing from the shell but routes and router (only the shell and main.tsx compose features), and reaches the server over HTTP only.',

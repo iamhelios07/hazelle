@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { PICTURE_PERCENT, type Character, type Pictures } from '../../model/library';
 import { editCharacter, setBotModels, setDecor, setPictures, type CharacterText } from '../../runtime/characters';
+import { setCharacterModule } from '../../runtime/modules';
 import { scriptsOf } from '../../runtime/scripts';
+import { packsOf } from '../../runtime/turn';
 import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP } from '../common/words';
-import { useStore } from '../session';
+import { ALWAYS, BOT_MODELS, BOT_MODELS_HELP, inSettings, PAGES } from '../common/words';
+import { useCharacter, useModules, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
 
@@ -33,6 +35,10 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
   const pictureSave = useAutosave<Pictures>((patch) => setPictures(store, id, patch));
   const [fold, setFold] = useState(initial.pictures?.fold !== false);
   const [heights, setHeights] = useState<Record<Height, string>>({ peek: String(initial.pictures?.peek ?? ''), most: String(initial.pictures?.most ?? '') });
+  // Read as they are now, not as they were at open: a module comes, goes and is switched while the editor is open.
+  const modules = useModules();
+  const always = useSettings().modules ?? [];
+  const own = useCharacter(id)?.character.modules ?? [];
 
   function changeDecor(on: boolean) {
     setDecorShown(on);
@@ -50,6 +56,11 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
       setBotModelsShown(!on);
       toast.failed(saved, '저장하지 못했어요.');
     });
+  }
+
+  async function changeModule(module: string, on: boolean) {
+    const saved = await setCharacterModule(store, id, module, on);
+    if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
   }
 
   function changeFold(on: boolean) {
@@ -139,7 +150,7 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
               control={<Switch label="긴 그림 접기" checked={fold} onChange={changeFold} />}
             />
           )}
-          {scriptsOf([initial.card]).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={changeBotModels} />} />}
+          {scriptsOf(packsOf(store, { character: id }).map(({ pack }) => pack)).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={changeBotModels} />} />}
         </SettingGroup>
         {decor && (
           <Disclosure label="그림 크기">
@@ -150,6 +161,25 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
           </Disclosure>
         )}
       </Section>
+      {modules.length > 0 && (
+        <Section title={PAGES.modules} hint={`켠 모듈은 이 캐릭터의 모든 채팅에서 일해요. ${inSettings('modules')}에서 ${ALWAYS} 켠 모듈은 여기서 끌 수 없어요.`}>
+          <SettingGroup label={PAGES.modules}>
+            {modules.map(({ id: module, value }) => (
+              <SettingRow
+                key={module}
+                label={value.name}
+                control={
+                  always.includes(module) ? (
+                    <Text variant="note">{ALWAYS} 켜짐</Text>
+                  ) : (
+                    <Switch label={value.name} checked={own.includes(module)} onChange={(on) => void changeModule(module, on)} />
+                  )
+                }
+              />
+            ))}
+          </SettingGroup>
+        </Section>
+      )}
     </>
   );
   const saved = merged(status, pictureSave.status);

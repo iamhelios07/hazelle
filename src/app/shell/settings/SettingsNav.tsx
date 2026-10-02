@@ -1,6 +1,6 @@
-import { ChevronRight, FileText, Layers, Lock, Plug, User, type LucideIcon } from 'lucide-react';
+import { ChevronRight, FileText, Layers, Lock, Package, Plug, User, type LucideIcon } from 'lucide-react';
 import { PAGES, SETTINGS } from '../../common/words';
-import { useConnections, usePersonas, usePrompts, useSession } from '../../session';
+import { useConnections, useModules, usePersonas, usePrompts, useSession } from '../../session';
 import { Icon, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
 import type { Route, SettingsPage } from '../routes';
@@ -16,6 +16,7 @@ const GROUPS: Place[][] = [
   [
     { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts' } },
     { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
+    { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules' } },
   ],
   [{ page: 'account', label: PAGES.account, icon: Lock, route: { kind: 'account' } }],
 ];
@@ -41,6 +42,7 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
 export function SettingsList({ onClose }: { onClose: () => void }) {
   const prompts = usePrompts();
   const personas = usePersonas();
+  const modules = useModules();
   const connections = useConnections();
   const { username } = useSession();
   const holds: Record<SettingsPage, string | undefined> = {
@@ -48,6 +50,7 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
     connections: `${connections.length}개`,
     prompts: `${prompts.length}개`,
     personas: `${personas.length}개`,
+    modules: `${modules.length}개`,
     account: username,
   };
   return (

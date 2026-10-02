@@ -35,6 +35,8 @@ const EXAMPLES = {
   ],
   personas: [{ kind: 'personas' }],
   persona: [{ kind: 'persona', id: CHAT }],
+  modules: [{ kind: 'modules' }],
+  module: [{ kind: 'module', id: CHAT }],
   models: [{ kind: 'models' }],
   profile: [{ kind: 'profile', id: CHAT }],
   model: [
@@ -62,7 +64,7 @@ describe('routes', () => {
     expect(href(model)).toBe(`/models/${CHAT}/anthropic/claude-opus-5.5`);
   });
 
-  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x'])(
+  it.each(['/nope', '/characters/', '/characters/abc', '/characters/none/about', `/characters/${CHARACTER}/other`, '/chats', `/chats/${CHAT}/x`, '/connections/', '/connections/new/nope', '/prompts/abc', `/prompts/${CHAT}/x`, `/connections/abc/model`, `/connections/${CHAT}/model`, '/personas/abc', `/personas/${CHAT}/x`, '/modules/abc', `/modules/${CHAT}/x`, '/models/abc', `/models/abc/x`, `/models/${CHAT}/%E0%A4%A`, '/settings/x'])(
     '%s is home',
     (at) => {
       expect(parseRoute(at)).toEqual(HOME);

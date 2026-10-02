@@ -4,6 +4,7 @@ import type { Kind } from '../model/kinds';
 import { memoryId, type Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
 import type { Remembering } from '../runtime/memory';
+import { modulesOf } from '../runtime/modules';
 import type { Session } from '../runtime/session';
 import type { Opening } from '../runtime/read-model';
 import type { ScriptsState } from '../runtime/scripts';
@@ -93,6 +94,20 @@ export const useConnections = () => useKind('connection');
 export const usePrompts = () => useKind('prompt');
 export const usePersonas = () => useKind('persona');
 export const useProfiles = () => useKind('profile');
+// The modules there are, by name; a deleted one is not among them (runtime/modules modulesOf). all is the memo's key
+// only: it is a new array exactly when a module changed.
+export function useModules() {
+  const store = useStore();
+  const all = useKind('module');
+  return useMemo(() => modulesOf(store), [store, all]);
+}
+// How many lorebook entries or assets something holds, such as a module. A number, since a fresh array of them would
+// make React re-render forever.
+export function useCount(kind: 'lore' | 'asset', parent: string): number {
+  const store = useStore();
+  const subscribe = useCallback((listener: () => void) => store.subscribe((changes) => changes.some((change) => change.kind === kind && change.parent === parent) && listener()), [store, kind, parent]);
+  return useSyncExternalStore(subscribe, () => store.children(kind, parent).length);
+}
 export function useSettings() {
   const { read } = useSession();
   return useSyncExternalStore(read.settings.subscribe, read.settings.snapshot);

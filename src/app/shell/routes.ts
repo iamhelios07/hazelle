@@ -28,6 +28,9 @@ export type Route =
   | { kind: 'prompt'; id: string; pane: 'toggles' | null }
   | { kind: 'personas' }
   | { kind: 'persona'; id: string }
+  // 설정's 모듈: the list, and one module's page.
+  | { kind: 'modules' }
+  | { kind: 'module'; id: string }
   // 설정's 모델: the default models, the starred models and the 설정 묶음 list; one 묶음's editor.
   | { kind: 'models' }
   | { kind: 'profile'; id: string }
@@ -95,6 +98,10 @@ export function parseRoute(at: string): Route {
     if (id === undefined) return { kind: 'personas' };
     return ID.test(id) ? { kind: 'persona', id } : HOME;
   }
+  if (top === 'modules' && sub === undefined) {
+    if (id === undefined) return { kind: 'modules' };
+    return ID.test(id) ? { kind: 'module', id } : HOME;
+  }
   if (top === 'models') {
     if (id === undefined) return { kind: 'models' };
     return ID.test(id) ? { kind: 'profile', id } : HOME;
@@ -149,6 +156,10 @@ export function href(route: Route): string {
       return '/personas';
     case 'persona':
       return `/personas/${route.id}`;
+    case 'modules':
+      return '/modules';
+    case 'module':
+      return `/modules/${route.id}`;
     case 'models':
       return '/models';
     case 'profile':
@@ -165,8 +176,8 @@ export function href(route: Route): string {
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
 // The list a route sits in: its screen is the list itself, or the item beside it where there is room. null outside
-// the connection, persona and 모델 screens.
-export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'models'> | null {
+// the connection, persona, module and 모델 screens.
+export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'modules' | 'models'> | null {
   switch (route.kind) {
     case 'connections':
     case 'connection':
@@ -174,6 +185,9 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
     case 'personas':
     case 'persona':
       return { kind: 'personas' };
+    case 'modules':
+    case 'module':
+      return { kind: 'modules' };
     case 'models':
     case 'profile':
     case 'model':
@@ -187,7 +201,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
   }
 }
 
-export type SettingsPage = 'models' | 'connections' | 'prompts' | 'personas' | 'account';
+export type SettingsPage = 'models' | 'connections' | 'prompts' | 'personas' | 'modules' | 'account';
 
 // Which page of 설정 a route is on, 'list' for 설정's own list, or null outside 설정. While it is not null, the
 // settings layer stands in for the library.
@@ -199,6 +213,9 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'personas':
     case 'persona':
       return 'personas';
+    case 'modules':
+    case 'module':
+      return 'modules';
     case 'models':
     case 'profile':
     case 'model':
@@ -259,6 +276,7 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     case 'connections':
     case 'prompts':
     case 'personas':
+    case 'modules':
     case 'models':
     case 'account':
       return { kind: 'settings' };
@@ -272,6 +290,8 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
       return { kind: 'prompts' };
     case 'persona':
       return { kind: 'personas' };
+    case 'module':
+      return { kind: 'modules' };
     case 'profile':
     case 'model':
       return { kind: 'models' };
