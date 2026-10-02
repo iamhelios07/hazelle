@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "risu-alpha",
-  "main": "src/server/worker.ts",
+  "main": "src/server/main.ts",
   "compatibility_date": "2026-09-25",
   "send_metrics": false,
   // Without this flag request.signal never fires on client disconnect, so a closed tab would not end
@@ -22,12 +22,14 @@
   "durable_objects": {
     "bindings": [
       { "name": "STREAMS", "class_name": "ReplyStream" },
-      { "name": "RELAY", "class_name": "Relay" }
+      { "name": "RELAY", "class_name": "Relay" },
+      { "name": "STORES", "class_name": "AccountStore" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ReplyStream"] },
-    { "tag": "v2", "new_sqlite_classes": ["Relay"] }
+    { "tag": "v2", "new_sqlite_classes": ["Relay"] },
+    { "tag": "v3", "new_sqlite_classes": ["AccountStore"] }
   ],
   // CALLS throttles provider calls per account (src/server/session.ts). BOT_CALLS limits a chat's bot's own model
   // calls, keyed account:chat (src/server/streams.ts), so a script in a loop cannot spend the user's money unseen.
@@ -38,10 +40,12 @@
   ],
   // The operator's account id (src/server/http.ts). Empty names no one.
   "vars": { "ADMIN_ACCOUNT": "" },
+  // The hourly sweep of pictures whose account is gone (src/server/main.ts).
+  "triggers": { "crons": ["17 * * * *"] },
   "r2_buckets": [
     {
       "binding": "BLOBS",
-      "bucket_name": "risu-alpha-blobs"
+      "bucket_name": "risu-alpha-files"
     }
   ]
 }

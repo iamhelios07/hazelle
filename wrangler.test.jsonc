@@ -1,5 +1,5 @@
-// The tests' in-process platform (src/server/testing): wrangler.jsonc without its Durable Object, a class the
-// platform cannot run, whose namespace the tests make in process. Keep the bindings in step with wrangler.jsonc.
+// The tests' in-process platform (src/server/testing): wrangler.jsonc without its Durable Objects, classes the
+// platform cannot run, whose namespaces the tests make in process. Keep the bindings in step with wrangler.jsonc.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "risu-alpha",
@@ -7,7 +7,7 @@
   "send_metrics": false,
   "compatibility_flags": ["enable_request_signal"],
   "d1_databases": [{ "binding": "DB", "database_name": "risu-alpha", "database_id": "abe6fd8a-7c52-4d19-aa8a-b18065dfee1e", "migrations_dir": "migrations" }],
-  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "risu-alpha-blobs" }],
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "risu-alpha-files" }],
   "ratelimits": [
     { "name": "CALLS", "namespace_id": "1001", "simple": { "limit": 240, "period": 60 } },
     { "name": "BOT_CALLS", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
