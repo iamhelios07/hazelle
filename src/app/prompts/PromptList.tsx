@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Import, Plus } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
 import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
@@ -26,11 +26,9 @@ type Props = {
   // The one a chat uses, marked 사용 중.
   inUse?: string;
   frame: Frame;
-  // The page's own sections under the lists, left out while searching.
-  after?: ReactNode;
 };
 
-export function PromptList({ onPick, inUse, frame, after }: Props) {
+export function PromptList({ onPick, inUse, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const prompts = usePrompts();
@@ -171,7 +169,6 @@ export function PromptList({ onPick, inUse, frame, after }: Props) {
           >
             {memorizers.length ? <List label="기억 프롬프트">{topOf('memory').map(row)}</List> : <Empty variant="section">기억 프롬프트가 없어요. 새로 만들어 보세요.</Empty>}
           </Section>
-          {after}
         </>
       )}
       {preset.view}

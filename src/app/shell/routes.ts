@@ -37,6 +37,8 @@ export type Route =
   // model: a starred model's id, which may hold any character; the path carries it escaped.
   | { kind: 'model'; connection: string; model: string }
   | { kind: 'account' }
+  // 설정's 채팅 page: what every chat starts with, such as the long-term memory settings.
+  | { kind: 'chat-settings' }
   // 설정's own list of its pages, which phones open from the library.
   | { kind: 'settings' };
 
@@ -110,6 +112,7 @@ export function parseRoute(at: string): Route {
     if (top === 'settings') return { kind: 'settings' };
     if (top === 'account') return { kind: 'account' };
   }
+  if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
   return HOME;
 }
 
@@ -168,6 +171,8 @@ export function href(route: Route): string {
       return `/models/${route.connection}/${route.model.split('/').map(encodeURIComponent).join('/')}`;
     case 'account':
       return '/account';
+    case 'chat-settings':
+      return '/settings/chat';
     case 'settings':
       return '/settings';
   }
@@ -201,7 +206,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
   }
 }
 
-export type SettingsPage = 'models' | 'connections' | 'prompts' | 'personas' | 'modules' | 'account';
+export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'account';
 
 // Which page of 설정 a route is on, 'list' for 설정's own list, or null outside 설정. While it is not null, the
 // settings layer stands in for the library.
@@ -222,6 +227,8 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return 'models';
     case 'account':
       return route.kind;
+    case 'chat-settings':
+      return 'chat';
     case 'settings':
       return 'list';
     default:
@@ -279,6 +286,7 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     case 'modules':
     case 'models':
     case 'account':
+    case 'chat-settings':
       return { kind: 'settings' };
     case 'add-connection':
     case 'connection':

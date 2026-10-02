@@ -21,7 +21,7 @@ export const SETTINGS = '설정';
 export const COMMAND = '명령어';
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
-export const PAGES = { models: '모델', connections: '연결', prompts: '프롬프트', personas: '페르소나', modules: '모듈', account: '계정' };
+export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', account: '계정' };
 
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집 (항상 켜짐).

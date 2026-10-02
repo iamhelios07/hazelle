@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Layers, Lock, Package, Plug, User, type LucideIcon } from 'lucide-react';
+import { ChevronRight, FileText, Layers, Lock, MessageSquare, Package, Plug, User, type LucideIcon } from 'lucide-react';
 import { PAGES, SETTINGS } from '../../common/words';
 import { useConnections, useModules, usePersonas, usePrompts, useSession } from '../../session';
 import { Icon, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
@@ -14,6 +14,7 @@ const GROUPS: Place[][] = [
     { page: 'connections', label: PAGES.connections, icon: Plug, route: { kind: 'connections' } },
   ],
   [
+    { page: 'chat', label: PAGES.chat, icon: MessageSquare, route: { kind: 'chat-settings' } },
     { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts' } },
     { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
     { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules' } },
@@ -48,6 +49,7 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
   const holds: Record<SettingsPage, string | undefined> = {
     models: `${connections.reduce((sum, connection) => sum + connection.value.starred.length, 0)}개`,
     connections: `${connections.length}개`,
+    chat: undefined,
     prompts: `${prompts.length}개`,
     personas: `${personas.length}개`,
     modules: `${modules.length}개`,

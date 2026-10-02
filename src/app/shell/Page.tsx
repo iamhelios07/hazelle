@@ -26,6 +26,7 @@ import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
 import { useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
+import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
 import { backBar } from './router';
@@ -157,6 +158,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
       }
       case 'account':
         return <AccountScreen back={sideBack(at)} />;
+      case 'chat-settings':
+        return <ChatSettingsScreen back={sideBack(at)} />;
     }
   }
 
