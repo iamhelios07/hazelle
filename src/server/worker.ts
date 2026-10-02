@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { accounts } from './accounts';
-import { admin, reports } from './admin';
+import { admin, notices, reports } from './admin';
 import { files, MAX_FILE_BYTES } from './files';
 import { fail, type AppEnv } from './http';
 import { BATCH_LIMITS, objects } from './objects';
@@ -44,6 +44,7 @@ app.route('/vault', vaults);
 app.route('/objects', objects);
 app.route('/files', files);
 app.route('/reports', reports);
+app.route('/notices', notices);
 app.route('/admin', admin);
 app.post('/relay', requireSession, canCall, (c) => c.env.RELAY.get(c.env.RELAY.newUniqueId(), EXIT).fetch(c.req.raw));
 app.route('/streams', streams);

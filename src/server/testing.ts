@@ -63,7 +63,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       env.ADMIN_ACCOUNT = '';
       clock.now = () => Date.now();
       await env.DB.batch([
-        ...['file_blocks', 'restores', 'account_files', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+        ...['file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
         env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
       for (let listed = await env.BLOBS.list(); listed.objects.length; listed = await env.BLOBS.list()) {
