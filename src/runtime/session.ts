@@ -7,6 +7,7 @@ import { Costs } from './cost';
 import { Credentials } from './credential';
 import { Files } from './files';
 import { deviceCache } from './device-cache';
+import { Drafts } from './drafts';
 import type { DeviceCache } from './object-cache';
 import { Rememberer } from './memory';
 import { addFirstPersona } from './personas';
@@ -32,6 +33,7 @@ export type Session = {
   costs: Costs;
   translator: Translator;
   memory: Rememberer;
+  drafts: Drafts;
   streams: Streams;
   scripts: Scripts;
   credentials: Credentials;
@@ -74,6 +76,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
   const costs = new Costs(store);
+  const drafts = new Drafts();
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
   let runner: Promise<Runner> | null = null;
@@ -130,11 +133,12 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     scripts.close();
     translator.close();
     memory.close();
+    drafts.close();
     costs.close();
     catalogs.close();
     credentials.close();
     assets.close();
     store.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, streams, scripts, credentials, catalogs, read, close, startBackground } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, drafts, streams, scripts, credentials, catalogs, read, close, startBackground } };
 }

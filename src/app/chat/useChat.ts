@@ -58,7 +58,7 @@ export type ChatActions = OpenChat['actions'];
 // item null is a new chat, saved under chatId with its first message; shelf null is 캐릭터 없이.
 export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null) {
   const session = useSession();
-  const { store, talk, translator } = session;
+  const { store, talk, translator, drafts } = session;
   const turn = useTurn();
   const translating = useTranslating();
   const toast = useToast();
@@ -197,23 +197,28 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
         selected,
         translations: new Map(said.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
       },
-      started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
+      started: () => {
+        drafts.move(draft.key, chatId);
+        navigate({ kind: 'chat', id: chatId }, { replace: true });
+      },
     };
   }
 
   async function send() {
-    const text = draft.text.trim();
-    if (!text || busy) return;
+    if (!draft.text.trim() || busy) return;
     await Promise.all(writes.current);
     if (blocked(session, chat)) return setStopped(true);
+    // Taken only now: the composer stayed open through the wait, so what was typed in it goes with the message, and a
+    // turn that began meanwhile leaves the text where it is.
+    const text = drafts.text(draft.key).trim();
+    if (!text || talk.snapshot()) return;
     setStopped(false);
-    draft.set('');
+    drafts.set(draft.key, '');
     follow();
     const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
-    // An unsaved reply or a kept failure means the user's message was saved. A new chat that was not saved stays on
-    // this screen.
-    if (failure?.kind === 'unstarted') draft.set(text);
-    else if (failure && failure.kind !== 'unsaved' && !failure.kept) draft.putBack(chatId, text);
+    // An unsaved reply or a kept failure means the user's message was saved. Any other failure's text goes back to the
+    // chat's draft, wherever that is by now: a new chat may have been saved before the failure, or not at all.
+    if (failure && failure.kind !== 'unsaved' && !failure.kept) drafts.putBack(store.get('chat', chatId) ? chatId : draft.key, text);
     report(failure);
   }
 
