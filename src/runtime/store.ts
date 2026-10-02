@@ -227,6 +227,7 @@ export class ObjectStore {
     for (const object of this.live.values()) this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });
     for (const [chat, scope] of this.scopes) {
       scope.abort.abort();
+      scope.abort = new AbortController();
       scope.state = 'unloaded';
       scope.cursor = scope.head = 0;
       scope.loading = scope.opening = null;
@@ -370,20 +371,21 @@ export class ObjectStore {
   }
 
   private async openChat(chat: string, scope: Scope): Promise<ApiFailure | null> {
+    const epoch = this.epoch;
     const signal = scope.abort.signal;
     scope.state = 'loading';
     this.changes.push({ kind: 'scope', id: chat, parent: chat });
     this.changed();
     await this.caching;
     const saved = await this.cachedChat(chat);
-    if (signal.aborted || this.scopes.get(chat) !== scope) return { ok: false, error: 'stopped' };
+    if (signal.aborted || this.scopes.get(chat) !== scope) return this.halted(epoch);
     if (saved) {
       scope.cursor = saved.state.cursor;
       const rows = saved.changes.sort((a, b) => a.rev - b.rev);
       const opened = this.opener(rows, true);
       for (const [index, row] of rows.entries()) {
         await this.apply(row, true, signal, opened(index));
-        if (signal.aborted) return { ok: false, error: 'stopped' };
+        if (signal.aborted) return this.halted(epoch);
         if (row.body && this.live.get(row.id)?.value === undefined) {
           scope.state = 'failed';
           scope.error = { ok: false, error: 'unreadable' };
@@ -392,7 +394,7 @@ export class ObjectStore {
           return scope.error;
         }
       }
-      if (signal.aborted) return { ok: false, error: 'stopped' };
+      if (signal.aborted) return this.halted(epoch);
       if (saved.state.complete && !saved.changes.some((row) => row.omitted)) {
         scope.state = 'loaded';
         this.changes.push({ kind: 'scope', id: chat, parent: chat });
@@ -404,6 +406,12 @@ export class ObjectStore {
     }
     const failure = await this.refreshChat(chat);
     return failure ?? await this.saveSummary(chat);
+  }
+
+  // What an operation begun in epoch answers when it is cut short: timeline-changed once a reset has ended that epoch,
+  // stopped for the store closing, the caller's own stop and a released lease.
+  private halted(epoch: number): ApiFailure {
+    return epoch !== this.epoch && !this.closing.signal.aborted ? changed() : { ok: false, error: 'stopped' };
   }
 
   // A chat's cached rows, only while the stored generation is the one this tab holds: rows another tab cached of
@@ -434,8 +442,9 @@ export class ObjectStore {
     scope.error = null;
     const abort = new AbortController();
     scope.abort = abort;
+    const epoch = this.epoch;
     scope.loading = this.pullParent(chat, scope, abort.signal).then((failure) => {
-      if (abort.signal.aborted || this.scopes.get(chat) !== scope) return { ok: false, error: 'stopped' } as const;
+      if (abort.signal.aborted || this.scopes.get(chat) !== scope) return this.halted(epoch);
       scope.error = failure;
       scope.state = failure && (scope.state !== 'loaded' || failure.error === 'unreadable') ? 'failed' : 'loaded';
       scope.loading = null;
@@ -541,16 +550,16 @@ export class ObjectStore {
     const epoch = this.epoch;
     if (!this.limits || this.timeline === null) {
       const failure = await this.reaching(() => this.pull(), signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
-      if (failure) return epoch === this.epoch ? failure : changed();
+      if (failure) return epoch === this.epoch ? failure : this.halted(epoch);
     }
-    return epoch === this.epoch ? { ok: true, data: { timeline: this.timeline!, epoch } } : changed();
+    return epoch === this.epoch ? { ok: true, data: { timeline: this.timeline!, epoch } } : this.halted(epoch);
   }
 
-  // A workflow of several requests on one timeline: a backup's two scans, its restore, the Risu move, a removal. run's
-  // scans take the pin, and every write made while it runs fails with timeline-changed once the pin's epoch has ended,
-  // so no part of a workflow begun on one timeline lands on the next. A write of the new epoch fails too until the
-  // workflow has ended, which its next request to this store does.
-  async pinned<T>(run: (pin: Pin) => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
+  // A workflow of several requests on one timeline: a backup's two scans, its restore, the Risu move, a removal, a chat
+  // turn (runtime/talk). run's scans take the pin, and every write made while it runs fails with timeline-changed once
+  // the pin's epoch has ended, so no part of a workflow begun on one timeline lands on the next. A write of the new
+  // epoch fails too until the workflow has ended.
+  async pinned<T>(run: (pin: Pin) => Promise<T>, signal?: AbortSignal): Promise<T | ApiFailure> {
     const pin = await this.pin(signal);
     if (!pin.ok) return pin;
     this.workflows.add(pin.data);
@@ -824,7 +833,7 @@ export class ObjectStore {
         }
         return { ok: true, data: resolved.map(({ held }) => held) };
       }, halt);
-      if (!result.ok) return epoch === this.epoch ? result : changed();
+      if (!result.ok) return epoch === this.epoch ? result : this.halted(epoch);
       saved.push(...result.data);
       for (let index = start; index < saved.length; index++) progress(index);
     }
@@ -888,7 +897,9 @@ export class ObjectStore {
     }
     for (const chat of [...this.behind]) {
       this.behind.delete(chat);
-      if (!this.scopes.has(chat)) continue;
+      // A chat already loading waits for this pull (pullParent) and reads its parent after it: waiting for it here
+      // would wait for this pull itself.
+      if (!this.scopes.has(chat) || this.scopes.get(chat)!.loading) continue;
       const failure = await this.refreshChat(chat);
       if (failure) return failure;
     }

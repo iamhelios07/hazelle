@@ -11,7 +11,7 @@ import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate, resume, type Reply } from './generate';
 import { stopStream } from './relay';
-import type { ObjectStore } from './store';
+import type { ChatLease, ObjectStore } from './store';
 import { callOf, endCall, newCall } from './streams';
 
 // The reply being written. said is the user's message sent with it, shown until the store has it; reply
@@ -41,8 +41,8 @@ export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; sa
 export type Sent = Pick<Reply, 'request' | 'cache'> & { prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
-// but not saved; saveAgain(reply) tries it again.
-export type TalkFailure = RouteFailure | { kind: 'unsent'; failure: ApiFailure } | { kind: 'unsaved'; reply: string; failure: ApiFailure };
+// but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
+export type TalkFailure = RouteFailure | { kind: 'unsent'; failure: ApiFailure } | { kind: 'unsaved'; reply: string | null; failure: ApiFailure };
 
 const saidMessages = new WeakMap<Said, Shown>();
 const rested = new WeakMap<Message, Shown>();
@@ -155,6 +155,11 @@ export class Talk {
     const appended = await appendReply(this.store, chat, reply);
     const elsewhere = !appended.ok && appended.error === 'conflict' && this.store.children('entry', chat).some((entry) => entry.id === reply.id);
     if (!appended.ok && !elsewhere) {
+      // Saved again, it would land on the chat the restore rewound, which the reply was never written against.
+      if (appended.error === 'timeline-changed') {
+        endCall(this.store, call);
+        return { kind: 'unsaved', reply: null, failure: appended };
+      }
       this.unsaved.set(reply.id, { chat, reply, call });
       return { kind: 'unsaved', reply: reply.id, failure: appended };
     }
@@ -181,31 +186,9 @@ export class Talk {
     const abort = new AbortController();
     this.abort = abort;
     try {
-      const failure = await lease.ready;
-      if (failure) return { kind: 'unsent', failure };
-      const ready = await prepare(abort.signal);
-      if ('kind' in ready) return ready;
-      const { route, settings, prompt } = ready;
-      const reply = ready.before ? { ...asked, before: ready.before } : asked;
-      // A message sent translated or changed by the bot shows as it is saved from the moment it is made so.
-      this.set({ ...this.turn!, reply, said: ready.said ?? said });
-      const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
-      const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, continues: reply.continues, ...(reply.before && { before: reply.before }) } });
-      this.reading.add(call.id);
-      this.calling = call.id;
-      const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write });
-      const sent = await sending;
-      if (sent && !sent.ok) {
-        abort.abort();
-        endCall(this.store, call.id);
-        await replying;
-        return { kind: 'unsent', failure: sent };
-      }
-      const answer = await replying;
-      if (this.closed) return null;
-      // Kept before the save, whose store change is what shows the reply's 정보.
-      this.sentBy.set(reply.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
-      return await this.save(chat, await this.ended(chat, this.written(reply, callOf(route), answer)), call.id);
+      // A turn is one workflow: begun on one timeline, none of its writes lands on the next (store pinned).
+      const ran = await this.store.pinned(() => this.turnOn(chat, said, asked, lease, abort, prepare));
+      return ran !== null && 'ok' in ran ? { kind: 'unsent', failure: ran } : ran;
     } finally {
       // On a throw too: a turn left set turns every later send away, and a reply still streaming would write into the next.
       abort.abort();
@@ -217,8 +200,37 @@ export class Talk {
     }
   }
 
+  private async turnOn<F extends { kind: string }>(chat: string, said: Turn['said'], asked: Turn['reply'], lease: ChatLease, abort: AbortController, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
+    const failure = await lease.ready;
+    if (failure) return { kind: 'unsent', failure };
+    const ready = await prepare(abort.signal);
+    if ('kind' in ready) return ready;
+    const { route, settings, prompt } = ready;
+    const reply = ready.before ? { ...asked, before: ready.before } : asked;
+    // A message sent translated or changed by the bot shows as it is saved from the moment it is made so.
+    this.set({ ...this.turn!, reply, said: ready.said ?? said });
+    const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
+    const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, continues: reply.continues, ...(reply.before && { before: reply.before }) } });
+    this.reading.add(call.id);
+    this.calling = call.id;
+    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write });
+    const sent = await sending;
+    if (sent && !sent.ok) {
+      abort.abort();
+      endCall(this.store, call.id);
+      await replying;
+      return { kind: 'unsent', failure: sent };
+    }
+    const answer = await replying;
+    if (this.closed) return null;
+    // Kept before the save, whose store change is what shows the reply's 정보.
+    this.sentBy.set(reply.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
+    return await this.save(chat, await this.ended(chat, this.written(reply, callOf(route), answer)), call.id);
+  }
+
   // A reply the server was writing when this page came, which Streams hands over; it waits while another is written.
-  // One not saved is not reported: its marker stays, and the next pick-up saves it again.
+  // One not saved is not reported: its marker stays, and the next pick-up saves it again. One a restore ended goes with
+  // the timeline it was begun on (save).
   async resume(stream: Stored<'stream'>) {
     const purpose = stream.value.for;
     if (this.turn || this.closed || purpose.kind !== 'reply') return;
@@ -231,9 +243,11 @@ export class Talk {
     this.reading.add(stream.id);
     this.calling = stream.id;
     try {
-      if (await lease.ready) return;
-      const answer = await resume(this.store, stream, abort.signal, this.write);
-      if (!this.closed) await this.save(chat, await this.ended(chat, this.written(reply, stream.value.call, answer)), stream.id);
+      await this.store.pinned(async () => {
+        if (await lease.ready) return;
+        const answer = await resume(this.store, stream, abort.signal, this.write);
+        if (!this.closed) await this.save(chat, await this.ended(chat, this.written(reply, stream.value.call, answer)), stream.id);
+      });
     } finally {
       abort.abort();
       this.reading.delete(stream.id);
