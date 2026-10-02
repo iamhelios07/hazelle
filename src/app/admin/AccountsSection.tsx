@@ -1,7 +1,7 @@
 import { Ban, HardDrive, History, MoreHorizontal, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiResult } from '../../runtime/api';
-import { removeAccount, sendNotice, setSuspended, type AccountState, type AdminAccount, type OwnCap, type Totals } from '../../runtime/admin';
+import { liftSuspension, removeAccount, sendNotice, suspend, type AccountState, type AdminAccount, type OwnCap, type Totals } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
@@ -78,7 +78,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
                         {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
                         {others &&
                           (account.suspended ? (
-                            <MenuItem icon={RotateCcw} label="정지 풀기" onClick={() => void act(setSuspended(account.accountId, false), `${account.username} 계정의 정지를 풀지 못했어요.`)} />
+                            <MenuItem icon={RotateCcw} label="정지 풀기" onClick={() => void act(liftSuspension(account.accountId), `${account.username} 계정의 정지를 풀지 못했어요.`)} />
                           ) : (
                             <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알리기, 탈퇴만 돼요" onClick={() => setWriting({ account, suspend: true })} />
                           ))}
@@ -107,10 +107,9 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
           <NoticeDialog
             title={`${writing.account.username} 계정을 정지할까요?`}
             label="정지 이유"
-            optional
-            placeholder="비워 두면 이유 없이 정지해요. 적으면 그 계정에 알림으로 가요."
+            placeholder="그 계정에 알림으로 가요."
             confirm={{ label: '정지', icon: Ban }}
-            send={(reason) => setSuspended(writing.account.accountId, true, reason)}
+            send={(reason) => suspend(writing.account.accountId, reason)}
             onSent={() => {
               setWriting(null);
               onActed();

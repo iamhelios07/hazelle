@@ -91,9 +91,11 @@ it('replies on resolving a report in the one batch: a resolve that fails leaves 
   expect(await stored()).toBe(0);
 });
 
-it('sends a suspension reason as a notice with the suspension', async () => {
+it('sends a suspension reason as a notice with the suspension, and suspends no one without a reason', async () => {
   const admin = await operator();
   const to = await account('to');
+  for (const body of [{ suspended: true }, { suspended: true, reason: '  ' }]) expect((await t.put(`admin/accounts/${to.id}/suspended`, body, admin.cookie)).status).toBe(400);
+  expect(await t.env.DB.prepare('SELECT suspended_at FROM accounts WHERE id = ?').bind(to.id).first('suspended_at')).toBeNull();
   expect((await t.put(`admin/accounts/${to.id}/suspended`, { suspended: true, reason: '도배 때문에 멈춰요' }, admin.cookie)).status).toBe(204);
   expect((await t.put(`admin/accounts/${to.id}/suspended`, { suspended: false, reason: '   ' }, admin.cookie)).status).toBe(204);
   expect(await read(to.cookie)).toMatchObject([{ text: '도배 때문에 멈춰요' }]);

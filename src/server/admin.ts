@@ -11,6 +11,13 @@ const MAX_REPORT_LENGTH = 4000;
 const MAX_OPEN_REPORTS = 20;
 const MAX_NOTICE_LENGTH = 2000;
 const PAGE_ROWS = 100;
+// How long a resolved report and a log row are kept, as the privacy page says. An open report stays whatever its age.
+const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
+
+export async function forgetOldRecords(db: D1Database): Promise<void> {
+  const before = Date.now() - KEEP_MS;
+  await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before)]);
+}
 
 // What any account, a suspended one too, sends the operator.
 export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c) => {
@@ -196,13 +203,14 @@ admin.post('/notices', async (c) => {
   return act(c, ...noticed(c.env.DB, text, to === null ? null : toAccount(to)));
 });
 
-// reason: a notice to the account, sent with the change.
+// reason: a notice to the account, sent with the change. A suspension cannot go without one: the terms promise every
+// suspended account is told why.
 admin.put('/accounts/:id/suspended', async (c) => {
   const id = c.req.param('id');
   const body = await readObject(c);
   const suspended = body?.suspended;
   const reason = optionalText(body?.reason);
-  if (!ID.test(id) || typeof suspended !== 'boolean' || reason === undefined) return fail(c, 400, 'bad-input');
+  if (!ID.test(id) || typeof suspended !== 'boolean' || reason === undefined || (suspended && reason === null)) return fail(c, 400, 'bad-input');
   const db = c.env.DB;
   return act(
     c,

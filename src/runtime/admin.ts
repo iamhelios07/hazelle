@@ -33,8 +33,9 @@ export const setService = (values: Pick<Service, 'signupCap' | 'accountBytesCap'
 
 export const readAccounts = () => api<{ accounts: AdminAccount[]; totals: Totals }>('GET', 'admin/accounts');
 
-// reason: a notice to the account, sent with the change; blank sends none.
-export const setSuspended = (account: string, suspended: boolean, reason = '') => api<undefined>('PUT', `admin/accounts/${account}/suspended`, { suspended, reason });
+// reason: a notice to the account, sent with the suspension.
+export const suspend = (account: string, reason: string) => api<undefined>('PUT', `admin/accounts/${account}/suspended`, { suspended: true, reason });
+export const liftSuspension = (account: string) => api<undefined>('PUT', `admin/accounts/${account}/suspended`, { suspended: false });
 // Plaintext, to one account or, with null, to every account there now. The server's MAX_NOTICE_LENGTH (server/admin).
 export const NOTICE_LENGTH = 2000;
 export const sendNotice = (to: string | null, text: string) => api<undefined>('POST', 'admin/notices', { to, text });
