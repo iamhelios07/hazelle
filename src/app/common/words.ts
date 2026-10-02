@@ -26,6 +26,8 @@ export const PAGES = { models: '모델', connections: '연결', prompts: '프롬
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집 (항상 켜짐).
 export const ALWAYS = '항상';
+// Who a script's words and questions are from in a chat with no character, where only a module's script runs.
+export const MODULE_VOICE = { name: PAGES.modules, face: null };
 
 // The layer of the model assignment that 설정's 모델 page holds, under every prompt and chat.
 export const DEFAULT_MODELS = '기본 모델';

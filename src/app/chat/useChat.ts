@@ -107,7 +107,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const statusScripts = bot ? (shelf?.character.statusScripts ?? []) : [];
   const scriptName = (script: number) => card?.regex[script]?.name.trim() || `표시 스크립트 ${script + 1}`;
   const status = statusBoxes(view, messages, statusScripts).map((box) => ({ ...box, name: scriptName(box.script) }));
-  const offered = view.drawn.map((scripts) => (bot ? scripts.map((script) => ({ script, name: scriptName(script), marked: statusScripts.includes(script) })) : []));
+  // Only the card's own scripts, which come first among the packs': a module's place moves as modules go on and off.
+  const own = card?.regex.length ?? 0;
+  const offered = view.drawn.map((scripts) => (bot ? scripts.filter((script) => script < own).map((script) => ({ script, name: scriptName(script), marked: statusScripts.includes(script) })) : []));
   const url = useAssetUrl();
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);

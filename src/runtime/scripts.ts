@@ -1,5 +1,3 @@
-import { unescapeCbs } from '../engine/cbs/escape';
-import { evaluate } from '../engine/cbs/evaluate';
 import { TOGGLE_GLOBAL } from '../engine/cbs/tags';
 import type { Pack, Trigger } from '../engine/import/types';
 import type { Role } from '../connectors/assignment';
@@ -7,7 +5,8 @@ import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Event, Outcome, Script } from '../engine/lua/run';
 import type { Host, ModelMessage, Question, Snapshot } from '../engine/lua/state';
-import { authorNote, contexts, renderChat, type ChatScope } from '../engine/render';
+import { activeLore } from '../engine/pipeline';
+import { authorNote, renderChat, type ChatScope } from '../engine/render';
 import { shown, type Chat, type Message, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
 import { chatModel } from './assignment';
@@ -30,7 +29,8 @@ import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './t
 // What the bot's scripts have for the chat screen. said: the bot's own words (alertNormal, alertError, showAlert). The
 // others are the app's about the bot: a script's error, the functions it called and the block effects it holds that
 // this app does not have, a script that never ended.
-// no-model: the bot called a model of a role the chat has none for. flood: it called models faster than CALLS_A_MINUTE.
+// no-model: the bot called a model of a role the chat has none for. no-character: a module called one in a chat with
+// no character, where there is nobody to allow it for. flood: it called models faster than CALLS_A_MINUTE.
 // unsaved: what a run did to the chat could not be saved.
 type Note =
   | { kind: 'said'; tone: 'normal' | 'error'; text: string }
@@ -38,6 +38,7 @@ type Note =
   | { kind: 'missing'; names: string[] }
   | { kind: 'stuck' }
   | { kind: 'no-model'; role: Role }
+  | { kind: 'no-character' }
   | { kind: 'flood' }
   | { kind: 'unsaved'; failure: ApiFailure };
 export type ScriptNote = { id: number; chat: string } & Note;
@@ -60,6 +61,11 @@ export const scriptsOf = (packs: readonly Pack[]): Script[] => triggersOf(packs)
 type Read = { snapshot: Snapshot; wrote: Writes[]; greeting: number };
 type Anchor = { version: string; stays?: true };
 
+// The card without its scripts and triggers, which no tag reads and a run is handed apart.
+function cbsScope({ card, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick }: ChatScope): Snapshot['scope'] {
+  return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick };
+}
+
 // The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
 // variables given.
 export function luaSnapshot(store: ObjectStore, chat: Chat, scope: ChatScope, staged: string[], variables: [string, string][]): Snapshot {
@@ -72,6 +78,7 @@ export function luaSnapshot(store: ObjectStore, chat: Chat, scope: ChatScope, st
     character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
     persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
     note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
+    scope: cbsScope(scope),
   };
 }
 
@@ -272,7 +279,7 @@ export class Scripts {
     if (this.closing.signal.aborted) return nothing;
     try {
       const runner = await this.open();
-      const outcome = await runner.run(chat, scripts, snapshot, event, this.host(chat, scope, snapshot));
+      const outcome = await runner.run(chat, scripts, snapshot, event, this.host(chat, scope));
       this.report(chat, outcome);
       return outcome;
     } catch (error) {
@@ -291,16 +298,25 @@ export class Scripts {
     if (missing.length > 0) this.tell(chat, `missing:${missing.join()}`, { kind: 'missing', names: missing });
   }
 
-  private host(chat: string, scope: ChatScope, snapshot: Snapshot): Host {
-    // The prompt's stage: a tag only the display reads stays as written, for the display to read once the text is a
-    // message's.
-    const context = contexts(scope, 'prompt', null);
+  private host(chat: string, scope: ChatScope): Host {
     return {
       say: (tone, text) => this.note(chat, { kind: 'said', tone, text }),
       ask: (question) => this.ask(chat, question),
       model: (role, messages) => this.model(chat, role, messages),
       tokens: (text) => tokenizer().then((count) => count(text)),
-      cbs: async (text, written) => unescapeCbs(evaluate(text, context({ seed: crypto.randomUUID() }, new Map([...snapshot.variables, ...written])))),
+      lore: async (reserve) => {
+        const count = await tokenizer();
+        const context = scope.model?.maxContext ?? null;
+        const limit = reserve === null || context === null ? Infinity : context - reserve;
+        let total = 0;
+        const fitting: Awaited<ReturnType<Host['lore']>> = [];
+        for (const entry of activeLore(scope, crypto.randomUUID(), count)) {
+          total += count(entry.text);
+          if (total > limit) break;
+          fitting.push(entry);
+        }
+        return fitting;
+      },
     };
   }
 
@@ -323,6 +339,10 @@ export class Scripts {
     const { store, credentials, costs } = this.session;
     const refused = (why: string) => ({ success: false, result: `Error: ${why}` });
     const stored = store.get('chat', chat);
+    if (stored && stored.value.character === null) {
+      this.tell(chat, 'no-character', { kind: 'no-character' });
+      return refused('a chat with no character cannot call models');
+    }
     const character = stored?.value.character ? store.get('character', stored.value.character) : null;
     if (!stored || !character) return refused('the chat is gone');
     let allowed = character.value.botModels;

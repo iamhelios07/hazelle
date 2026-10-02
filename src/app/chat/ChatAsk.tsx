@@ -1,4 +1,5 @@
 import { aliased } from '../common/alias';
+import { MODULE_VOICE } from '../common/words';
 import { useScripts, useSession } from '../session';
 import { AskCard } from '../ui';
 import { asking } from './ask';
@@ -10,12 +11,12 @@ export function ChatAsk({ chat, onTyped }: { chat: OpenChat; onTyped: () => void
   const { scripts } = useSession();
   const asked = useScripts().questions.find((question) => question.chat === chat.id);
   if (!asked) return null;
-  // Only a character's script asks.
-  const { character, face } = chat.shelf!;
+  // A chat with no character has only its modules' scripts to ask.
+  const from = chat.shelf ? { name: aliased(chat.shelf.character.card.name, chat.shelf.character.alias), face: chat.shelf.face } : MODULE_VOICE;
   return (
     <AskCard
       key={asked.id}
-      from={{ name: aliased(character.card.name, character.alias), face }}
+      from={from}
       {...asking(asked.question)}
       onAnswer={(answer) => {
         scripts.answer(asked.id, answer);

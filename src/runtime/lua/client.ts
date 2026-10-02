@@ -19,7 +19,7 @@ export type Up =
   | { kind: 'ask'; id: number; call: number; args: Parameters<Host['ask']> }
   | { kind: 'model'; id: number; call: number; args: Parameters<Host['model']> }
   | { kind: 'tokens'; id: number; call: number; args: Parameters<Host['tokens']> }
-  | { kind: 'cbs'; id: number; call: number; args: Parameters<Host['cbs']> }
+  | { kind: 'lore'; id: number; call: number; args: Parameters<Host['lore']> }
   | { kind: 'pong' };
 
 const BEAT_MS = 1000;
@@ -94,9 +94,11 @@ export class LuaWorker implements Runner {
     }
     if (!run.host) return;
     if (message.kind === 'say') return run.host.say(...message.args);
-    const answering: Promise<unknown> = message.kind === 'ask' ? run.host.ask(...message.args) : message.kind === 'model' ? run.host.model(...message.args) : message.kind === 'cbs' ? run.host.cbs(...message.args) : run.host.tokens(...message.args);
+    const answering: Promise<unknown> = message.kind === 'ask' ? run.host.ask(...message.args) : message.kind === 'model' ? run.host.model(...message.args) : message.kind === 'lore' ? run.host.lore(...message.args) : run.host.tokens(...message.args);
     const worker = this.worker;
-    void answering.then((value) => worker?.postMessage({ kind: 'answer', call: message.call, value } satisfies Down));
+    const answer = (value: unknown) => worker?.postMessage({ kind: 'answer', call: message.call, value } satisfies Down);
+    // A call the host failed at answers nothing, as a dismissed question does: unanswered, its run would never end.
+    void answering.then(answer, () => answer(null));
   }
 
   // A ping still unanswered after STUCK_MS means a script holds the worker. Counted from the ping, never from the

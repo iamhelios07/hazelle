@@ -25,6 +25,18 @@ function getRecentChats(id, count)
     return json.decode(getRecentChatsMain(id, count))
 end
 
+function setFullChat(id, value)
+    setFullChatMain(id, json.encode(value))
+end
+
+function getLoreBooks(id, search)
+    return json.decode(getLoreBooksMain(id, search))
+end
+
+function loadLoreBooks(id, reserve)
+    return json.decode(loadLoreBooksMain(id, reserve):await())
+end
+
 function log(value)
     logMain(json.encode(value))
 end

@@ -1,12 +1,20 @@
+import { unescapeCbs } from '../cbs/escape';
+import { evaluate } from '../cbs/evaluate';
+import { TOGGLE_GLOBAL } from '../cbs/tags';
+import { contexts, type ChatScope } from '../render';
+
 // A message as a script reads it: role and data are Risu's names, which bots index by.
 export type LuaMessage = { role: 'user' | 'char'; data: string; time: number };
 
 // The chat as a run finds it. messages: without the greeting, each as it stands after the bot's input or output
-// scripts. variables: as of the point in the story the run stands at. globals: what getGlobalVar reads.
+// scripts. variables: as of the point in the story the run stands at. globals: what getGlobalVar reads, which is the
+// chat's toggle values. scope: what CBS in a script's text is evaluated over and where its lorebook is read from: the
+// chat's scope without what does not cross to a worker or no tag reads (its toggle function, its packs).
 export type Snapshot = {
   messages: LuaMessage[];
   variables: [string, string][];
   globals: [string, string][];
+  scope: Omit<ChatScope, 'toggle' | 'lua' | 'packs' | 'pending'>;
   character: { name: string; description: string; firstMessage: string };
   persona: { name: string; description: string };
   note: string;
@@ -22,9 +30,9 @@ export type Host = {
   ask(question: Question): Promise<string | null>;
   model(role: 'main' | 'aux', messages: ModelMessage[]): Promise<{ success: boolean; result: string }>;
   tokens(text: string): Promise<number>;
-  // The text with its CBS evaluated over the chat as the run found it. written: the run's variable writes so far,
-  // which stand over the snapshot's. What the run did to the messages is not seen, as in Risu.
-  cbs(text: string, written: [string, string][]): Promise<string>;
+  // The lorebook entries a prompt built now would hold, each as sent, while their tokens fit within the model's
+  // context less reserve; all of them when reserve is no number, as Risu's sum then never passes its limit.
+  lore(reserve: number | null): Promise<{ role: 'system' | 'user' | 'assistant'; text: string }[]>;
 };
 
 export type Working = { origin: number | null; role: 'user' | 'char'; data: string; time: number; first: string };
@@ -62,3 +70,18 @@ export function write(run: Run, name: string, value: unknown): boolean {
 }
 
 export const add = (run: Run, role: Working['role'], data: string) => void run.messages.push({ origin: null, role, data, time: Date.now(), first: '' });
+
+const CONTEXTS = new WeakMap<Snapshot, ReturnType<typeof contexts>>();
+
+// A script's text with its CBS evaluated over the chat as the run found it, with the run's variable writes so far over
+// the snapshot's. What the run did to the messages is not seen, as in Risu, and a setvar in the text writes nothing.
+// The prompt's stage: a tag only the display reads stays as written, for the display to read once the text is a
+// message's.
+export function cbs(run: Run, value: string): string {
+  let context = CONTEXTS.get(run.snapshot);
+  if (!context) {
+    context = contexts({ ...run.snapshot.scope, packs: [], toggle: (key) => run.globals.get(`${TOGGLE_GLOBAL}${key}`) ?? null }, 'prompt', null);
+    CONTEXTS.set(run.snapshot, context);
+  }
+  return unescapeCbs(evaluate(value, context({ seed: crypto.randomUUID() }, new Map([...run.variables, ...run.written]))));
+}

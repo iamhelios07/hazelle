@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { aliased } from '../common/alias';
-import { MODEL_ROLES } from '../common/words';
+import { MODEL_ROLES, MODULE_VOICE } from '../common/words';
 import { useScripts, useSession } from '../session';
 import { useToast } from '../toast';
 
@@ -16,11 +16,14 @@ export function BotNotes() {
       scripts.seen(note.id);
       switch (note.kind) {
         case 'said': {
-          const id = store.get('chat', note.chat)?.value.character;
+          const chat = store.get('chat', note.chat)?.value;
+          const id = chat?.character ?? null;
           const character = id ? store.get('character', id)?.value : null;
           // Its chat or character was deleted while the script ran, and its words go with it.
-          if (!id || !character) break;
-          toast.said({ name: aliased(character.card.name, character.alias), face: store.children('avatar', id)[0]?.value.thumb ?? null }, note.text, note.tone === 'error' ? 'error' : 'plain');
+          if (!chat || (id && !character)) break;
+          // In a chat with no character only a module's script speaks.
+          const from = id && character ? { name: aliased(character.card.name, character.alias), face: store.children('avatar', id)[0]?.value.thumb ?? null } : MODULE_VOICE;
+          toast.said(from, note.text, note.tone === 'error' ? 'error' : 'plain');
           break;
         }
         case 'failed':
@@ -34,6 +37,9 @@ export function BotNotes() {
           break;
         case 'no-model':
           toast.error(`봇이 부르려는 ${MODEL_ROLES[note.role]}이 정해지지 않았어요`);
+          break;
+        case 'no-character':
+          toast.error('캐릭터 없는 채팅에서는 모듈이 모델을 부르지 못해요');
           break;
         case 'flood':
           toast.error('봇이 모델을 너무 자주 불러서 잠시 막았어요');

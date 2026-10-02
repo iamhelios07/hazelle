@@ -115,6 +115,16 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
   };
 }
 
+// Every lorebook entry a prompt built now would hold, wherever it would sit, as the text and role it is sent with, in
+// the order they were placed: what a bot's loadLoreBooks reads. An entry that renders to nothing is left out.
+export function activeLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
+  const laid = lay(scope, scope.messages, renderChat('prompt', scope).variables, seed, remembered(countTokens), null);
+  return (laid.activation?.placed ?? []).flatMap(({ id, body, placement }) => {
+    const text = laid.render(body, `lore:${id}`);
+    return text ? [{ role: 'role' in placement ? placement.role : 'system', text }] : [];
+  });
+}
+
 // What only one sort of prompt fills: a conversation its 작가의 노트, a translation 앞 메시지 (by how many messages it
 // holds) and 원문, a memory task 정리할 메시지; 장기 기억 is a conversation's memory as sent, or what a memory task follows.
 type Filling =

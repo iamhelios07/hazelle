@@ -20,7 +20,7 @@ const host = (id: number): Host => {
     ask: (...args) => asked((call) => ({ kind: 'ask', id, call, args })),
     model: (...args) => asked((call) => ({ kind: 'model', id, call, args })),
     tokens: (...args) => asked((call) => ({ kind: 'tokens', id, call, args })),
-    cbs: (...args) => asked((call) => ({ kind: 'cbs', id, call, args })),
+    lore: (...args) => asked((call) => ({ kind: 'lore', id, call, args })),
   };
 };
 

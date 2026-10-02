@@ -13,13 +13,28 @@ const SNAPSHOT: Snapshot = {
   character: { name: 'Mina', description: 'a guide', firstMessage: 'welcome' },
   persona: { name: 'Jin', description: 'a traveler' },
   note: '',
+  scope: {
+    card: null,
+    persona: { name: 'Jin', description: 'a traveler' },
+    prompt: null,
+    note: null,
+    lore: [{ id: 'l1', value: { name: 'Gate', keys: ['gate', 'door'], secondaryKeys: [], content: 'hp {{getvar::hp}}', enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 7, priority: null, position: null } }],
+    messages: [],
+    variables: [],
+    greeting: null,
+    model: null,
+    clock: { now: 0, timeZone: 'UTC' },
+    assets: [],
+    modules: [],
+    faces: { char: null, user: null },
+    screen: null,
+    pick: 'test',
+  },
 };
 
 const host = (over: Partial<Host> = {}): Host & { said: string[] } => {
   const said: string[] = [];
-  // Only {{getvar}}, which is enough to tell that a text went through the host with the run's writes.
-  const cbs: Host['cbs'] = async (text, written) => text.replace(/\{\{getvar::(\w+)\}\}/g, (_, name: string) => new Map([...SNAPSHOT.variables, ...written]).get(name) ?? 'null');
-  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), tokens: async (text) => text.length, cbs, ...over };
+  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), tokens: async (text) => text.length, lore: async () => [{ role: 'assistant', text: 'active' }], ...over };
 };
 
 const lua = await Lua.create({ sliceMs: 300 });
@@ -94,6 +109,24 @@ describe('Lua runs', () => {
     expect((await run(`function onStart(id) generateImage(id, 'x') setChatVar(id, 'after', '1') end`, { kind: 'start' }))).toMatchObject({ missing: ['generateImage'], writes: [['after', '1']] });
     expect((await run(`syntax error here`, { kind: 'start' })).errors).toHaveLength(1);
     expect((await run(`function onStart(id) while true do end end`, { kind: 'start' })).errors[0]!.message).toContain('timeout');
+  });
+
+  it('evaluates CBS with the run\'s writes, reads the lorebook by name and as the prompt would hold it, and takes a whole chat', async () => {
+    const outcome = await run(
+      `onOutput = async(function(id)
+        setChatVar(id, 'hp', '4')
+        setChatVar(id, 'cbs', cbs('{{getvar::hp}}/{{user}}/{{getglobalvar::toggle_hard}}'))
+        local gate = getLoreBooks(id, 'Gate')[1]
+        setChatVar(id, 'gate', gate.key .. '|' .. gate.content .. '|' .. gate.insertorder .. '|' .. #getLoreBooks(id, 'None'))
+        local active = loadLoreBooks(id)[1]
+        setChatVar(id, 'active', active.role .. ':' .. active.data)
+        setFullChat(id, { { role = 'user', data = 'hello!' }, { role = 'user', data = 'again' }, { role = 'char', data = 'new' } })
+      end)`,
+      { kind: 'output' },
+    );
+    expect(outcome.errors).toEqual([]);
+    expect(new Map(outcome.writes)).toEqual(new Map([['hp', '4'], ['cbs', '4/Jin/1'], ['gate', 'gate, door|hp 4|7|0'], ['active', 'char:active']]));
+    expect(outcome).toMatchObject({ edits: [{ index: 0, text: 'hello!' }], removed: [1], added: [{ role: 'user', text: 'again' }, { role: 'char', text: 'new' }] });
   });
 
   it('gives a script no way out of the sandbox', async () => {

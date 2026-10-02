@@ -3,7 +3,7 @@ import type { Trigger } from '../import/types';
 import { runBlocks } from './blocks';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
-import { add, read, text, UNSET, working, write, type Acting, type Host, type ModelMessage, type Run, type Snapshot, type Working } from './state';
+import { add, cbs, read, text, UNSET, working, write, type Acting, type Host, type ModelMessage, type Run, type Snapshot, type Working } from './state';
 
 // One Lua trigger of a pack. name is for error messages only.
 export type Script = Extract<Trigger, { kind: 'lua' }>;
@@ -44,15 +44,15 @@ const ENGINES = 8;
 const KEY = 'lua';
 
 const UNSUPPORTED = [
-  'setChatRole', 'insertChat', 'setFullChat', 'setFullChatMain', 'cbs', 'similarity', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
+  'setChatRole', 'insertChat', 'similarity', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
   'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage', 'getBackgroundEmbedding', 'setBackgroundEmbedding',
-  'getLoreBooks', 'getLoreBooksMain', 'loadLoreBooks', 'loadLoreBooksMain', 'upsertLocalLoreBook',
+  'upsertLocalLoreBook',
 ];
 
 type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
 
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
-const roleOf = (value: unknown) => (value === 'user' ? 'user' : 'char');
+const roleOf = (value: unknown): Working['role'] => (value === 'user' ? 'user' : 'char');
 const view = ({ role, data, time }: Working) => ({ role, data, time });
 
 const MODEL_ROLES: Record<string, ModelMessage['role']> = { system: 'system', sys: 'system', user: 'user', assistant: 'assistant', bot: 'assistant', char: 'assistant' };
@@ -256,6 +256,32 @@ export class Lua {
     act('removeChat', (run, index: number) => void run.messages.splice(index, 1));
     act('cutChat', (run, start: number, end: number) => void (run.messages = run.messages.slice(start, end)));
     act('addChat', (run, role: unknown, value: unknown) => add(run, roleOf(role), text(value)));
+
+    // The messages given take the chat's place. One at the place of a message of its role is that message, edited;
+    // any other is new, and a message no longer at its place is removed.
+    act('setFullChatMain', (run, value: string) => {
+      const given = (JSON.parse(value) as { role?: unknown; data?: unknown }[]).map((message) => ({ role: roleOf(message.role), data: text(message.data) }));
+      const had = run.messages;
+      run.messages = given.map(({ role, data }, index) => {
+        const at = had[index];
+        return at && at.origin !== null && at.role === role ? { ...at, data } : { origin: null, role, data, time: Date.now(), first: '' };
+      });
+    });
+
+    // Risu's cbs takes no id before its text.
+    engine.lua.global.set('cbs', (value: unknown) => (engine.run ? cbs(engine.run, text(value)) : undefined));
+    // The entries of that name in the chat's lorebook, the modules' included, as Risu's own lore reads, each content
+    // with its CBS evaluated.
+    set('getLoreBooksMain', (run, search: unknown) =>
+      JSON.stringify(
+        run.snapshot.scope.lore
+          .filter(({ value }) => value.name === text(search))
+          .map(({ value }) => ({ key: value.keys.join(', '), secondkey: value.secondaryKeys.join(', '), comment: value.name, content: cbs(run, value.content), insertorder: value.insertionOrder, alwaysActive: value.constant, selective: value.selective, useRegex: value.useRegex, mode: 'normal' })),
+      ),
+    );
+    act('loadLoreBooksMain', (run, reserve: unknown) =>
+      run.host.lore(typeof reserve === 'number' ? reserve : null).then((entries) => JSON.stringify((entries ?? []).map(({ role, text: data }) => ({ data, role: role === 'assistant' ? 'char' : role })))),
+    );
 
     act('stopChat', (run) => void (run.stop = true));
     act('alertNormal', (run, value: unknown) => run.host.say('normal', text(value)));
