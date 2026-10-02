@@ -26,7 +26,7 @@ export function ChatSide({ open, inUse, onOpen, onClose }: SideAt) {
   if (open.kind === 'character') {
     // The chat is gone from the page with its character, so the character is there while this is.
     const { character } = shelf!;
-    return <CharacterEditor key={open.id} id={open.id} initial={character} frame={panel('캐릭터')} />;
+    return <CharacterEditor key={open.id} id={open.id} character={character} frame={panel('캐릭터')} />;
   }
   if (open.kind === 'personas') {
     const toList = () => onOpen({ kind: 'personas', id: null });

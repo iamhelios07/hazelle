@@ -4,6 +4,7 @@ import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
+import { inSettings } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
 import { ToastProvider, type Standing } from '../toast';
@@ -12,6 +13,10 @@ import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 
 const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 닿으면 이어서 저장해요.' };
+const SUSPENDED: Standing = {
+  message: '운영자가 이 계정을 정지했어요',
+  detail: `읽기는 그대로 되지만 저장과 모델 부르기는 막혀 있어요. ${inSettings('account')}에서 백업을 받거나 운영자에게 알리거나 탈퇴할 수 있어요.`,
+};
 const subscribeNothing = () => () => {};
 const notWaiting = () => false;
 
@@ -57,7 +62,7 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   );
   return (
     <SessionProvider session={session} account={account}>
-      <ToastProvider standing={waiting ? RECONNECTING : null}>
+      <ToastProvider standing={waiting ? RECONNECTING : account.suspended ? SUSPENDED : null}>
         <BotNotes />
         <ImportProvider>
           <Layout />

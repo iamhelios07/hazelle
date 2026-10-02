@@ -13,7 +13,12 @@ import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';
 import { Saves } from './common/saveQueue';
 
-export type Account = { onLock: () => void; onLogout: () => Promise<string | null> };
+// admin and suspended are the server's word on the account when it was opened (GET /session, signup, login).
+export type Account = { admin: boolean; suspended: boolean; onLock: () => void; onLogout: () => Promise<string | null> };
+
+// How long leaving waits for the saves still on their way. A save in flight and one queued behind it are two round
+// trips, which from Korea can take seconds each; a store write waiting out a dropped connection never ends on its own.
+const LEAVING_WAIT = 10_000;
 
 const SessionContext = createContext<{ session: Session; account: Account; saves: Saves } | null>(null);
 
@@ -21,7 +26,16 @@ export function SessionProvider({ session, account, children }: { session: Sessi
   // One session's save queues, closed with it: a queue kept past it would write its change into the next account.
   const saves = useMemo(() => new Saves(window), [session]);
   useEffect(() => () => saves.close(), [saves]);
-  return <SessionContext value={{ session, account, saves }}>{children}</SessionContext>;
+  // Leaving closes the session, which drops what has not been written, so it waits for the saves first.
+  const leaving = useMemo<Account>(
+    () => ({
+      ...account,
+      onLock: () => void saves.settled(LEAVING_WAIT).then(account.onLock),
+      onLogout: () => saves.settled(LEAVING_WAIT).then(account.onLogout),
+    }),
+    [account, saves],
+  );
+  return <SessionContext value={{ session, account: leaving, saves }}>{children}</SessionContext>;
 }
 
 function useOpen() {

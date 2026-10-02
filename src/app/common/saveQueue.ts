@@ -149,6 +149,15 @@ export class Saves {
     return this.queues.get(key)?.queue.flush() ?? Promise.resolve(true);
   }
 
+  // Everything changed so far, written now and not after its pause, for leaving the session: true once all of it is
+  // stored. What is still unwritten after bound ms, such as a save waiting out a dropped connection, is close()'s to drop.
+  settled(bound: number): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), bound)));
+    const written = Promise.all([...this.queues.values()].map(({ queue }) => queue.flush())).then((done) => done.every(Boolean));
+    return Promise.race([written, late]).finally(() => clearTimeout(timer));
+  }
+
   // The session is over: what waits is dropped, since its store takes no more writes.
   close() {
     const open = [...this.queues.values()];
