@@ -30,8 +30,11 @@ function lifeOf(tone: Notice['tone'], text: string, action: boolean): number {
 
 const ToastContext = createContext<Toasts | null>(null);
 
+export type Standing = { message: string; detail: string };
+
 // Newest in front. Pointing at the stack opens it and stops every notice's time, which runs on from where it stopped.
-export function ToastProvider({ children }: { children: ReactNode }) {
+// standing: a notice in front of them for as long as the caller passes it, with no time of its own.
+export function ToastProvider({ standing, children }: { standing: Standing | null; children: ReactNode }) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [held, setHeld] = useState(false);
   const heldSince = useRef(0);
@@ -81,10 +84,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={toasts}>
       {children}
       <ToastStack
-        items={notices.map(({ key, message, detail, tone, action, life }) => ({
-          key,
-          toast: <Toast message={message} detail={detail} tone={tone} action={action} life={life} paused={held} />,
-        }))}
+        items={[
+          ...(standing ? [{ key: 'standing', toast: <Toast message={standing.message} detail={standing.detail} tone="plain" life={0} paused={held} /> }] : []),
+          ...notices.map(({ key, message, detail, tone, action, life }) => ({
+            key,
+            toast: <Toast message={message} detail={detail} tone={tone} action={action} life={life} paused={held} />,
+          })),
+        ]}
         onHold={hold}
       />
     </ToastContext.Provider>

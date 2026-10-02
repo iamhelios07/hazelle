@@ -146,6 +146,32 @@ describe('object store', () => {
     expect(store.get('connection', id)?.value.label).toBe('ab');
   });
 
+  it('waits out a dropped connection and lands a write whose answer was lost', async () => {
+    const { accountId, vaultKey } = await server.account();
+    let drop = false;
+    const request = async <T,>(...args: Parameters<typeof api>) => {
+      const result = await api<T>(...args);
+      if (!drop || args[1] !== 'objects/batch') return result;
+      drop = false;
+      return { ok: false as const, error: 'offline' };
+    };
+    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const created = await store.create('connection', connection('a'));
+    if (!created.ok) throw new Error(created.error);
+
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      drop = true;
+      const saving = store.update('connection', created.data.id, (current) => ({ ...current, label: 'b' }));
+      await vi.waitFor(() => expect(store.waiting()).toBe(true));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await saving).toMatchObject({ ok: true, data: { value: { label: 'b' } } });
+      expect(store.waiting()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('counts a body it cannot open and refuses to overwrite it', async () => {
     const { store: mine, open } = await server.account();
     const stranger = await open(randomBytes(32));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { openSession, type Session } from '../../runtime/session';
 import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
@@ -6,9 +6,13 @@ import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
 import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
-import { ToastProvider } from '../toast';
+import { ToastProvider, type Standing } from '../toast';
 import { Brand, Screen, Text } from '../ui';
 import { Layout } from './Layout';
+
+const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 닿으면 이어서 저장해요.' };
+const subscribeNothing = () => () => {};
+const notWaiting = () => false;
 
 // Everything behind an open vault is one session, opened before the first screen and closed when this unmounts,
 // which 잠그기 and 로그아웃 both do.
@@ -17,6 +21,7 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [progress, setProgress] = useState<PullProgress>({ objects: 0, pages: 0 });
+  const waiting = useSyncExternalStore(session?.store.subscribeWaiting ?? subscribeNothing, session?.store.waiting ?? notWaiting, notWaiting);
 
   useEffect(() => {
     const abandon = new AbortController();
@@ -51,7 +56,7 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   );
   return (
     <SessionProvider session={session} account={account}>
-      <ToastProvider>
+      <ToastProvider standing={waiting ? RECONNECTING : null}>
         <ImportProvider>
           <Layout />
         </ImportProvider>

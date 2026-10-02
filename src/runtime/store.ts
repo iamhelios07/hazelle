@@ -3,6 +3,7 @@ import { objectKey, openObject, sealObject } from '../vault/objects';
 import type { FileRef } from '../vault/files';
 import type { VaultKey } from '../vault/keys';
 import type { ApiFailure, ApiResult, api as realApi } from './api';
+import { pause } from './pause';
 import { orderOwned } from './removal';
 import { SCOPED, type CacheState, type CacheWrite, type DeviceCache, type SealedChange } from './object-cache';
 import { projectChat, summaryId, summaryStale, type Projection } from './summary';
@@ -30,6 +31,8 @@ type Step = { resolve: () => ApiResult<Resolved> };
 type Held = { id: string; kind: string; parent: string | null; rev: number; value: unknown };
 
 const MAX_ATTEMPTS = 3;
+// Pauses between tries of a write that could not reach the server; the last repeats until it does.
+const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 const OPEN_AHEAD = 256;
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
 type Scope = { opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
@@ -50,6 +53,8 @@ export class ObjectStore {
   private readonly byParent = new Map<string, Map<string, Set<string>>>();
   private unreadableCount = 0;
   private readonly listeners = new Set<(changes: readonly StoreChange[]) => void>();
+  private readonly waitListeners = new Set<() => void>();
+  private waitingWrites = 0;
   private readonly changes: StoreChange[] = [];
   private reading: StoreRead[] | null = null;
   private cursor = 0;
@@ -167,6 +172,14 @@ export class ObjectStore {
   readonly subscribe = (listener: (changes: readonly StoreChange[]) => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  };
+
+  // True while a write waits for the server to be reachable again.
+  readonly waiting = () => this.waitingWrites > 0;
+
+  readonly subscribeWaiting = (listener: () => void) => {
+    this.waitListeners.add(listener);
+    return () => this.waitListeners.delete(listener);
   };
 
   // Capture is synchronous: every missing read counts too, so a later create invalidates it.
@@ -569,20 +582,43 @@ export class ObjectStore {
     };
   }
 
-  private async retry<T>(attempt: () => ApiResult<T> | Promise<ApiResult<T>>): Promise<ApiResult<T>> {
+  private async retry<T>(attempt: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> {
     for (let tries = 0; tries < MAX_ATTEMPTS; tries++) {
-      const result = await attempt();
+      const result = await this.reaching(attempt);
       if (result.ok || result.error !== 'conflict') return result;
-      const failure = await this.pull();
+      const failure = await this.reaching(() => this.pull());
       if (failure) return failure;
     }
     return { ok: false, error: 'conflict' };
   }
 
+  // A write that cannot reach the server waits and tries again until it does, or the store closes: a dropped
+  // connection does not fail it. A try whose answer was lost after it landed comes back as a conflict and is
+  // applied again, so an update's change must read the same applied twice as once (set a value, never add to one).
+  private async reaching<R extends ApiResult<unknown> | null>(attempt: () => Promise<R>): Promise<R | ApiFailure> {
+    let result = await attempt();
+    if (result?.ok !== false || result.error !== 'offline') return result;
+    this.wait(1);
+    try {
+      for (let tries = 0; result?.ok === false && result.error === 'offline'; tries++) {
+        if (!(await pause(RECONNECT_PAUSES[Math.min(tries, RECONNECT_PAUSES.length - 1)]!, this.closing.signal))) return { ok: false, error: 'stopped' };
+        result = await attempt();
+      }
+      return result;
+    } finally {
+      this.wait(-1);
+    }
+  }
+
+  private wait(by: 1 | -1) {
+    this.waitingWrites += by;
+    for (const listener of this.waitListeners) listener();
+  }
+
   private async commit(steps: Step[], progress: (index: number) => void = () => {}): Promise<ApiResult<(Held | null)[]>> {
     if (this.closing.signal.aborted) return { ok: false, error: 'stopped' };
     if (!this.limits) {
-      const failure = await this.pull();
+      const failure = await this.reaching(() => this.pull());
       if (failure) return failure;
     }
     const limits = this.limits!;

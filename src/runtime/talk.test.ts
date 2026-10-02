@@ -27,25 +27,25 @@ describe('Talk', () => {
         await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
       }
 
-      let offline = false;
+      let failing = false;
       const answers = inTurn([saying('첫 답장'), saying('다음 답장')]);
       stubRelay((sent) => {
-        offline = true;
+        failing = true;
         return answers(sent);
       });
       const through = globalThis.fetch;
-      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (offline && url.startsWith('/api/objects/') ? Promise.reject(new TypeError('Failed to fetch')) : through(url, init)));
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (failing && url.startsWith('/api/objects/') ? Promise.resolve(new Response(null, { status: 500 })) : through(url, init)));
 
       const first = await takeTurn(session, chats[0]!, { kind: 'answer' });
       const second = await takeTurn(session, chats[1]!, { kind: 'answer' });
-      expect(first).toEqual({ kind: 'unsaved', reply: expect.any(String), failure: { ok: false, error: 'offline' } });
-      expect(second).toEqual({ kind: 'unsaved', reply: expect.any(String), failure: { ok: false, error: 'offline' } });
+      expect(first).toEqual({ kind: 'unsaved', reply: expect.any(String), failure: { ok: false, error: 'server-error' } });
+      expect(second).toEqual({ kind: 'unsaved', reply: expect.any(String), failure: { ok: false, error: 'server-error' } });
       if (first?.kind !== 'unsaved' || second?.kind !== 'unsaved') throw new Error('Expected unsaved replies');
       expect(first.reply).not.toBe(second.reply);
       expect(await session.talk.saveAgain(first.reply)).toEqual(first);
       for (const chat of chats) expect(fold(session.store.children('entry', chat))).toHaveLength(1);
 
-      offline = false;
+      failing = false;
       expect(await session.talk.saveAgain(second.reply)).toBeNull();
       expect(fold(session.store.children('entry', chats[0]!))).toHaveLength(1);
       expect(await session.talk.saveAgain(first.reply)).toBeNull();
