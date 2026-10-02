@@ -6,8 +6,8 @@ const KIND_NAMES = Object.keys(KINDS) as Kind[];
 
 // The ids of everything that goes when root is removed for good, as rounds to run one after another; the removals
 // in one round may run together. The invariant: an object is removed only after everything it owns, so a removal
-// that fails midway leaves the owner in place and can be tried again. Stored files stay: other objects, in this
-// account or another, may name the same one (runtime/files). pin: the removal's, so the plan and the removal are of one
+// that fails midway leaves the owner in place and can be tried again. Stored files stay: other objects of
+// the account may name the same one (runtime/files). pin: the removal's, so the plan and the removal are of one
 // timeline.
 export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }, pin: Pin): Promise<ApiResult<ObjectRow[][]>> {
   const pulled = await store.pull();
