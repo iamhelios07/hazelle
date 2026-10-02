@@ -2,6 +2,8 @@ import { readLog, type LogRow } from '../../runtime/admin';
 import { sizeText } from '../common/size';
 import { ago } from '../common/time';
 import { Button, Callout, Empty, List, ListItem, Section } from '../ui';
+import { restoreError } from './RestoresDialog';
+import { moment } from './time';
 import { usePages } from './useLoaded';
 
 // The actions server/admin logs. One it does not list shows as the server wrote it.
@@ -26,6 +28,8 @@ function detailOf({ action, detail }: LogRow): string | undefined {
   if (detail === null) return undefined;
   const values = detail as Record<string, unknown>;
   if (action === 'set-caps') return `${String(values.username)} · 글 한도 ${capText(values.bytesCap)} · 그림 한도 ${capText(values.fileBytesCap)}`;
+  if (action === 'restore-begun') return `${String(values.username)} · ${typeof values.at === 'number' ? `${moment(values.at)} 시점으로` : '복원 전으로 되돌리기'}`;
+  if (action === 'restore-failed' && typeof values.error === 'string') return `${String(values.username)} · ${restoreError(values.error)}`;
   if (typeof values.username === 'string') return values.username;
   if (action === 'set-service' && typeof values.signupCap === 'number') {
     return `가입 정원 ${values.signupCap}명 · 계정당 글 한도 ${capText(values.accountBytesCap)} · 계정당 그림 한도 ${capText(values.accountFileBytesCap)}`;

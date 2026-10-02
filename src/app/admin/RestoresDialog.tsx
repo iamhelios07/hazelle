@@ -31,14 +31,20 @@ const wordsOf = ({ phase, verified }: RestoreRun): Words => (phase === 'done' ? 
 
 // The server's error codes this page knows; another shows as the server wrote it.
 const ERRORS: Record<string, string> = {
+  'too-early': '그 시각의 기록이 저장소에 없어요. 더 늦은 시각으로 새로 복원해 주세요.',
   'target-expired': '복원할 시점이 30일 보관 기간을 넘겼어요.',
   'store-unavailable': '그 계정의 저장소가 답하지 않았어요. 잠시 뒤 이어서 해 주세요.',
+  'not-rewound': '복원을 걸었지만 저장소가 아직 그 시점으로 돌아가지 않았어요. 잠시 뒤 이어서 해 주세요.',
+  'not-verified': '저장소가 아직 계정을 다시 연 것으로 보지 않아요. 잠시 뒤 마무리 확인을 해 주세요.',
+  stuck: '단계가 끝없이 되풀이되어 멈췄어요. 이어서 해도 같으면 기록을 살펴봐야 해요.',
 };
+export const restoreError = (code: string) => ERRORS[code] ?? code;
 const REFUSED: Record<string, string> = {
   'bad-report': '이 알림으로는 복원할 수 없어요. 그 계정이 보내고 아직 확인함으로 두지 않은 알림이어야 해요.',
   'bad-time': '10분 전부터 29일 전 사이의 시각으로만 복원할 수 있어요.',
   'cannot-undo': '복원 전으로 되돌릴 수 없어요. 그 계정의 마지막 복원만 29일 안에 한 번 되돌릴 수 있어요.',
   'account-busy': '그 계정은 다른 복원이나 탈퇴가 진행 중이에요. 그것을 끝내거나 취소한 뒤 다시 해 주세요.',
+  'cannot-cancel': '이미 복원을 걸어서 취소할 수 없어요. 이어서 하기로 끝까지 해 주세요.',
 };
 
 // Up to targeted nothing has changed, so resuming from there arms the restore, which cannot be taken back.
@@ -51,7 +57,7 @@ const ACTIONS: Record<RestoreAction, { label: string; sub: string }> = {
 };
 
 function described(restore: Restore): string {
-  const error = restore.error === null ? '' : ` 오류: ${ERRORS[restore.error] ?? restore.error}`;
+  const error = restore.error === null ? '' : ` 오류: ${restoreError(restore.error)}`;
   const undo = restore.canUndo && restore.undoExpiresAt !== null ? ` ${moment(restore.undoExpiresAt)}까지 복원 전으로 되돌릴 수 있어요.` : '';
   return `${wordsOf(restore).says}${error}${undo}`;
 }
@@ -81,7 +87,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
       const ended = answer.data;
       if (ended.phase === 'done' && ended.verified) toast.show(`${username} 계정의 복원을 끝냈어요.`);
       else if (ended.phase === 'cancelled') toast.show(`${username} 계정의 복원을 취소했어요.`);
-      else toast.error(`${username} 계정의 복원이 '${wordsOf(ended).tag}'에서 멈췄어요.`, { detail: `${wordsOf(ended).says}${ended.error === null ? '' : ` 오류: ${ERRORS[ended.error] ?? ended.error}`}` });
+      else toast.error(`${username} 계정의 복원이 '${wordsOf(ended).tag}'에서 멈췄어요.`, { detail: `${wordsOf(ended).says}${ended.error === null ? '' : ` 오류: ${restoreError(ended.error)}`}` });
       restores.reload();
       onActed();
       return null;
