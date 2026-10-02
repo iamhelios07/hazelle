@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check, History } from 'lucide-react';
 import { useState } from 'react';
 import { readReports, resolveReport, type Report } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
@@ -7,7 +7,8 @@ import { useAttempt } from '../common/useAttempt';
 import { Button, Callout, Dialog, Empty, List, ListItem, Section, Text } from '../ui';
 import { usePages } from './useLoaded';
 
-export function ReportsSection({ onActed }: { onActed: () => void }) {
+// A restore starts only from a report the account sent, so it is asked from the report.
+export function ReportsSection({ onActed, onRestore }: { onActed: () => void; onRestore: (report: Report) => void }) {
   const pages = usePages(readReports);
   const [open, setOpen] = useState<Report | null>(null);
   const { rows } = pages;
@@ -38,6 +39,10 @@ export function ReportsSection({ onActed }: { onActed: () => void }) {
         <ReportDialog
           report={open}
           onClose={() => setOpen(null)}
+          onRestore={() => {
+            setOpen(null);
+            onRestore(open);
+          }}
           onResolved={(resolvedAt) => {
             pages.patch(open.id, { resolvedAt });
             setOpen(null);
@@ -49,7 +54,7 @@ export function ReportsSection({ onActed }: { onActed: () => void }) {
   );
 }
 
-function ReportDialog({ report, onClose, onResolved }: { report: Report; onClose: () => void; onResolved: (at: number) => void }) {
+function ReportDialog({ report, onClose, onRestore, onResolved }: { report: Report; onClose: () => void; onRestore: () => void; onResolved: (at: number) => void }) {
   const { busy, failure, run } = useAttempt();
   const resolve = () =>
     run(async () => {
@@ -65,9 +70,14 @@ function ReportDialog({ report, onClose, onResolved }: { report: Report; onClose
       onClose={onClose}
       actions={
         report.resolvedAt === null ? (
-          <Button icon={Check} busy={busy} onClick={() => void resolve()}>
-            확인함으로 두기
-          </Button>
+          <>
+            <Button variant="secondary" icon={History} onClick={onRestore}>
+              이 알림으로 복원
+            </Button>
+            <Button icon={Check} busy={busy} onClick={() => void resolve()}>
+              확인함으로 두기
+            </Button>
+          </>
         ) : undefined
       }
     >
