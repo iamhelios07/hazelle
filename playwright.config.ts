@@ -11,6 +11,8 @@ const WRANGLER = './node_modules/.bin/wrangler';
 // that vite build writes, where wrangler.jsonc names no assets at all.
 export default defineConfig({
   testDir: 'e2e',
+  // The store spec runs on a wrapped Worker of its own (playwright.store.config.ts).
+  testIgnore: 'store.spec.ts',
   workers: 1,
   reporter: 'list',
   timeout: 120_000,
