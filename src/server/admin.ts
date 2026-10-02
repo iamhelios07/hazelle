@@ -14,7 +14,6 @@ const PAGE_ROWS = 100;
 // How long a resolved report and a log row are kept, as the privacy page says. An open report stays whatever its age.
 const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
-// Run by the Worker's schedule (main.ts).
 export async function forgetOldRecords(db: D1Database): Promise<void> {
   const before = Date.now() - KEEP_MS;
   await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before)]);
