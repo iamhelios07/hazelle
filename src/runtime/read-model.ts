@@ -1,7 +1,7 @@
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
 import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
-import type { Kind, Stored } from '../model/kinds';
+import type { Kind, Stored, Values } from '../model/kinds';
 import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import type { ScriptDisplay } from './script-display';
@@ -33,6 +33,15 @@ export type Library = { characters: CharacterShelf<ChatSummary>[]; none: Shelf<C
 export type OpenDisplay = Pick<ScriptDisplay, 'display' | 'subscribe'>;
 
 const EMPTY_SETTINGS: Settings = { models: {} };
+// store.list answers in the order of the last write, so read as it comes an edited object would drop to the end of
+// its list. The kinds screens list come by name instead.
+const NAMED: { [K in Kind]?: (value: Values[K]) => string } = {
+  connection: (value) => value.label,
+  module: (value) => value.name,
+  persona: (value) => value.name,
+  profile: (value) => value.name,
+  prompt: (value) => value.name,
+};
 const sameItems = <T>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 const sameSummary = (a: ChatSummary, b: ChatSummary) => a.chat === b.chat && a.count === b.count && a.title === b.title && a.preview === b.preview && a.at === b.at && a.order === b.order;
 
@@ -81,10 +90,16 @@ export class ReadModels {
     return snapshot;
   }
 
+  private listed<K extends Kind>(kind: K): Stored<K>[] {
+    const name = NAMED[kind] as ((value: Values[K]) => string) | undefined;
+    const list = this.store.list(kind);
+    return name ? list.sort((a, b) => name(a.value).localeCompare(name(b.value), 'ko') || a.id.localeCompare(b.id)) : list;
+  }
+
   kind<K extends Kind>(kind: K): Snapshot<Stored<K>[]> {
     let snapshot = this.byKind.get(kind);
     if (!snapshot) {
-      snapshot = new Snapshot(this.store.list(kind));
+      snapshot = new Snapshot(this.listed(kind));
       this.byKind.set(kind, snapshot);
     }
     return snapshot as Snapshot<Stored<K>[]>;
@@ -130,7 +145,7 @@ export class ReadModels {
     const kinds = new Set(changes.map((change) => change.kind));
     for (const [kind, snapshot] of this.byKind) {
       if (!kinds.has(kind)) continue;
-      const next = this.store.list(kind);
+      const next = this.listed(kind);
       if (!sameItems(snapshot.snapshot(), next)) snapshot.set(next);
     }
     if (kinds.has('settings')) this.settings.set(this.store.get('settings', SETTINGS_ID)?.value ?? EMPTY_SETTINGS);

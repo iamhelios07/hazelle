@@ -480,6 +480,17 @@ describe('per-chat read models', () => {
     read.close();
   });
 
+  it('lists a kind by name, so an edited one keeps its place', async () => {
+    const { store } = await account();
+    for (const name of ['나', '가', '다']) await store.create('persona', { name, description: '', picture: null }, { id: name });
+    const read = new ReadModels(store);
+    const names = () => read.kind('persona').snapshot().map(({ value }) => value.name);
+    expect(names()).toEqual(['가', '나', '다']);
+    await store.update('persona', '가', (current) => ({ ...current, alias: '별명' }));
+    expect(names()).toEqual(['가', '나', '다']);
+    read.close();
+  });
+
   it('keeps populated chat order on rename and unchanged summaries on dependency writes', async () => {
     const { store } = await account();
     await store.create('chat', chat, { id: 'a' });
