@@ -77,10 +77,16 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // A blank greeting is a choice like the others: picked, the chat starts with no first message (user, 2026-10-02).
   // The chat still opens on the first greeting that says something.
   const greetings = card?.greetings ?? [];
-  const [greeting, setGreeting] = useState(() => Math.max(0, greetings.findIndex((text) => text.trim())));
+  const firstSaid = () => Math.max(0, greetings.findIndex((text) => text.trim()));
+  const [picked, setGreeting] = useState(firstSaid);
+  // The greetings change under an open new chat when its character is edited beside it: a pick whose greeting was
+  // removed goes back to the first.
+  const greeting = picked < greetings.length ? picked : firstSaid();
   // The ids the greetings are saved under, so their random tags roll the same before and after the first send, and the
-  // greeting keeps its place in the story rather than being drawn again.
-  const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
+  // greeting keeps its place in the story rather than being drawn again. A greeting added since gets its own.
+  const [madeIds, setOpeningIds] = useState(() => greetings.map(() => crypto.randomUUID()));
+  const openingIds = madeIds.length < greetings.length ? [...madeIds, ...greetings.slice(madeIds.length).map(() => crypto.randomUUID())] : madeIds;
+  if (openingIds !== madeIds) setOpeningIds(openingIds);
   const translate = translateSwitches(store, chat.character);
   const unstarted: Shown | null = useMemo(() =>
     item === null && card && greetings.some((text) => text.trim())
