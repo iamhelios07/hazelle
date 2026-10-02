@@ -66,18 +66,28 @@ function cbsScope({ card, persona, prompt, note, lore, messages, variables, gree
   return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick };
 }
 
-// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
-// variables given.
-export function luaSnapshot(store: ObjectStore, chat: Chat, scope: ChatScope, staged: string[], variables: [string, string][]): Snapshot {
-  const greeting = scope.greeting === null ? 0 : 1;
+// What Lua's own functions read of a chat besides its messages and variables; its CBS and lorebook reads go through
+// the snapshot's scope. An editDisplay pass run on one is not fresh for another (ScriptDisplay).
+export type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
+
+export function luaStanding(store: ObjectStore, chat: Chat, scope: ChatScope): LuaStanding {
   const toggles = togglesOf(store, chat, chatPrompt(store, chat));
   return {
-    messages: scope.messages.slice(greeting).map(({ role, time }, index) => ({ role: role === 'user' ? 'user' : 'char', data: staged[index + greeting]!, time: time ?? 0 })),
-    variables,
     globals: toggles.declared.map(({ key }) => [`${TOGGLE_GLOBAL}${key}`, toggles.value(key) ?? '']),
     character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
     persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
     note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
+  };
+}
+
+// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
+// variables given.
+export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: string[], variables: [string, string][]): Snapshot {
+  const greeting = scope.greeting === null ? 0 : 1;
+  return {
+    messages: scope.messages.slice(greeting).map(({ role, time }, index) => ({ role: role === 'user' ? 'user' : 'char', data: staged[index + greeting]!, time: time ?? 0 })),
+    variables,
+    ...standing,
     scope: cbsScope(scope),
   };
 }
@@ -276,7 +286,7 @@ export class Scripts {
 
   private reading(chat: Chat, scope: ChatScope): Read {
     const { staged, wrote, variables } = renderChat('prompt', scope);
-    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(this.session.store, chat, scope, staged, [...variables]) };
+    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(scope, luaStanding(this.session.store, chat, scope), staged, [...variables]) };
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.

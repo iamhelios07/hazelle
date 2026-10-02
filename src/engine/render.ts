@@ -82,9 +82,12 @@ export function renderChat(
   const context = contexts(scope, stage, null);
   const scripts = scope.packs.flatMap(({ regex }) => regex);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
-  const variables = new Logged(start);
+  const variables = new Logged();
   const lua = stage === 'display' ? scope.lua : undefined;
   if (lua) variables.changed = new Set();
+  // Through set, so the stamp tells one start from another; then cleared, since a pass begins from start.
+  for (const [name, value] of start) variables.set(name, value);
+  variables.changed?.clear();
   const first = scope.greeting === null ? 0 : 1;
   const missed: Missed[] = [];
   const wrote: [string, string][][] = [];

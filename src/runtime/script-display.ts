@@ -4,13 +4,18 @@ import type { Snapshot } from '../engine/lua/state';
 import type { ChatScope, Missed } from '../engine/render';
 import type { Chat, Message } from '../model/chat';
 import type { Runner } from './lua/client';
-import { luaSnapshot, scriptsOf } from './scripts';
+import { luaSnapshot, luaStanding, scriptsOf } from './scripts';
 import type { ObjectStore } from './store';
 import { pinned, scopeOf } from './turn';
 
 // What a version's text became in the bot's editDisplay pass, with the text and state it was run on.
 type Held = { text: string; stamp: string; shown: string };
-type Pass = { scripts: Script[]; snapshot: Snapshot; items: Missed[] };
+type Pass = { scripts: Script[]; snapshot: Snapshot; items: Missed[]; generation: number };
+// What a chat's passes are run with besides each message's text and state: its scripts and what Lua reads of the
+// chat's standing. generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks,
+// and never used twice, so a stretch begun under an older one lands as a last result and never as a fresh one.
+type Basis = { parts: string[]; generation: number };
+const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
 
 // How long one stretch of a pass may hold the worker, which the chat's other Lua (a send, a button) waits behind. A
 // script that reads the whole chat for every message takes a third of a second each on a long chat (measured
@@ -26,6 +31,8 @@ export class ScriptDisplay {
   private readonly listeners = new Map<string, Set<() => void>>();
   private readonly waiting = new Map<string, Pass>();
   private readonly running = new Set<string>();
+  private readonly bases = new Map<string, Basis>();
+  private generations = 0;
   // The scripts, by their code, whose engine held no editDisplay listener when a pass asked it. Only the engine
   // says so, never the source's text: a listener may be registered under a computed name.
   private readonly deaf = new Set<string>();
@@ -47,6 +54,7 @@ export class ScriptDisplay {
       this.listeners.delete(chat);
       this.held.delete(chat);
       this.waiting.delete(chat);
+      this.bases.delete(chat);
     };
   }
 
@@ -58,19 +66,31 @@ export class ScriptDisplay {
     // asked yet is passed as a listening one is, its messages empty until its first pass says which it is.
     const scripts = scriptsOf(scope.packs).filter(({ code }) => !this.deaf.has(code));
     if (scripts.length === 0) return display(scope, take);
+    const standing = luaStanding(this.store, chat, scope);
+    const { character, persona } = standing;
+    const generation = this.generation(id, [String(scripts.length), ...scripts.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
     const held = this.held.get(id);
     const shown = display({ ...scope, lua: (version, text, stamp) => {
       const had = held?.get(version);
-      return had ? { text: had.shown, fresh: had.text === text && had.stamp === stamp } : null;
+      return had ? { text: had.shown, fresh: had.text === text && had.stamp === stamped(generation, stamp) } : null;
     } }, take);
-    if (shown.pass && this.listeners.has(id)) this.pass(id, { scripts, snapshot: luaSnapshot(this.store, chat, scope, shown.pass.staged, shown.pass.start), items: shown.pass.items });
+    if (shown.pass && this.listeners.has(id)) this.pass(id, { scripts, snapshot: luaSnapshot(scope, standing, shown.pass.staged, shown.pass.start), items: shown.pass.items, generation });
     return shown;
   }
 
   // reloadDisplay: every pass of the chat is made again, its last result shown until then.
   stale(chat: string) {
-    for (const held of this.held.get(chat)?.values() ?? []) held.stamp = '';
+    const basis = this.bases.get(chat);
+    if (basis) basis.generation = ++this.generations;
     this.tell(chat);
+  }
+
+  private generation(chat: string, parts: string[]): number {
+    const had = this.bases.get(chat);
+    if (had && had.parts.length === parts.length && had.parts.every((part, at) => part === parts[at])) return had.generation;
+    const basis = { parts, generation: ++this.generations };
+    this.bases.set(chat, basis);
+    return basis.generation;
   }
 
   // One stretch at a time per chat, of the latest pass asked for: its newest messages, which are the ones on screen.
@@ -105,7 +125,7 @@ export class ScriptDisplay {
         if (!this.listeners.has(chat)) break;
         const held = this.held.get(chat) ?? new Map<string, Held>();
         this.held.set(chat, held);
-        items.forEach((item, at) => held.set(item.version, { text: item.text, stamp: item.stamp, shown: texts[at]! }));
+        items.forEach((item, at) => held.set(item.version, { text: item.text, stamp: stamped(next.generation, item.stamp), shown: texts[at]! }));
         this.tell(chat);
       }
       this.running.delete(chat);

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Trigger } from '../engine/import/types';
 import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown } from '../model/chat';
-import { startChat } from './chat-log';
+import { setToggle } from './characters';
+import { appendUserMessage, startChat } from './chat-log';
 import type { Runner } from './lua/client';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
@@ -11,10 +12,10 @@ import { displayChat, takeTurn } from './turn';
 const server = testServer();
 
 // A chat with a character whose triggers are these, or the one Lua trigger of this code, opened on its greeting.
-async function chatWith(session: Session, script: string | Trigger[]) {
+async function chatWith(session: Session, script: string | Trigger[], toggles = '') {
   await answerable(session);
   const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', name: 'main', code: script }] : script;
-  const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers };
+  const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers, toggles };
   const character = await session.store.create('character', { card, folder: null, loreFolders: [] });
   if (!character.ok) throw new Error(character.error);
   const chat = crypto.randomUUID();
@@ -172,6 +173,47 @@ describe("the display with the bot's Lua", () => {
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
       await session.scripts.press(chat, { trigger: 'hit' });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:9>']);
+      leave();
+    }));
+
+  it('passes a message again when a toggle its listener reads changes', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value .. ' <' .. getGlobalVar(id, 'toggle_hard') .. '>' end)`, 'hard=어렵게');
+      const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+      const screen = session.read.screen(chat, session.talk, opening);
+      const leave = screen.subscribe(() => {});
+      screen.setInputs(opening, { width: 1200, height: 800 });
+      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <0>']);
+      await setToggle(session.store, opening.chat.character, 'hard', '1');
+      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <1>']);
+      leave();
+    }));
+
+  it('passes again, after reloadDisplay, the messages of a stretch that was running when it was asked', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value end)\nfunction again(id) reloadDisplay(id) end`);
+      for (let said = 0; said < 9; said++) await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
+      const run = Lua.prototype.display;
+      const passed: number[][] = [];
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      // The second stretch, of the two oldest messages, is held until reloadDisplay has been asked, and long enough
+      // that the stretch after it is a short one of the newest.
+      const display = vi.spyOn(Lua.prototype, 'display').mockImplementation(async function (this: Lua, owner, scripts, snapshot, items) {
+        const shown = await run.call(this, owner, scripts, snapshot, items);
+        if (passed.push(items.map(({ index }) => index)) === 2) await held;
+        return shown;
+      });
+      const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+      const screen = session.read.screen(chat, session.talk, opening);
+      const leave = screen.subscribe(() => {});
+      screen.setInputs(opening, { width: 1200, height: 800 });
+      await vi.waitFor(() => expect(passed).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [-1, 0]]));
+      await session.scripts.press(chat, { trigger: 'again' });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      release();
+      await vi.waitFor(() => expect(passed.slice(2).flat()).toContain(-1));
+      display.mockRestore();
       leave();
     }));
 
