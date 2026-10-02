@@ -117,7 +117,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
       case 'add-connection':
         return <ConnectionAddScreen back={back(at)} />;
       case 'connect-direct':
-        return <ConnectionDirectScreen address={at.address} back={back(at)} />;
+        return <ConnectionDirectScreen key={at.address} address={at.address} back={back(at)} />;
       case 'connect': {
         const { type } = at;
         if (type.signIn) return <ConnectionSignInScreen key={type.id} type={type} signIn={type.signIn} back={back(at)} />;
