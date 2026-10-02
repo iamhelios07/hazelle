@@ -30,8 +30,8 @@ const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
 
 // 캐릭터 편집: the card's text and the alias, on its own page or beside the chat. Only the fields changed here go to
 // editCharacter. A caller leaves by unmounting it, which saves.
-// initial: the stored character as it is now, on every render. The editor shows it, under what waits to be saved.
-export function CharacterEditor({ id, initial: character, frame }: { id: string; initial: Character; frame: Frame }) {
+// character: the stored character as it is now, on every render. The editor shows it, under what waits to be saved.
+export function CharacterEditor({ id, character, frame }: { id: string; character: Character; frame: Frame }) {
   const store = useStore();
   const toast = useToast();
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
