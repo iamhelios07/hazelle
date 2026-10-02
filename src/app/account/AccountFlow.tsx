@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { api } from '../../runtime/api';
+import { useEffect, useState, type ReactNode } from 'react';
+import { api, holdAccount } from '../../runtime/api';
 import { forgetVault } from '../../runtime/device-cache';
 import { lockVault, recallVault, rememberVault } from '../../vault/device';
 import {
@@ -57,25 +57,34 @@ const vaultCredential = (username: string, method: Method, secret: string) =>
 export function AccountFlow({ children }: { children: (unlocked: Unlocked) => ReactNode }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
 
-  const reload = useCallback(() => {
-    setState({ kind: 'loading' });
-    void loadState().then(setState);
-  }, []);
+  // The page holds the account it has open, and goes on holding it while it asks who it is now (loading,
+  // unreachable): a request still leaving for that account stays refused. Once the server says the cookie names
+  // another account, the page asks again and shows that one, which closes what was open.
+  function show(next: State) {
+    if (next.kind === 'unlocked') holdAccount(next.session.accountId, reload);
+    else if (next.kind !== 'loading' && next.kind !== 'unreachable') holdAccount(null);
+    setState(next);
+  }
+
+  function reload() {
+    show({ kind: 'loading' });
+    void loadState().then(show);
+  }
 
   useEffect(() => {
-    void loadState().then(setState);
+    void loadState().then(show);
   }, []);
 
   async function unlocked(session: LoginSession, vaultKey: VaultKey) {
     await rememberVault(session.accountId, vaultKey);
-    setState({ kind: 'unlocked', session, vaultKey });
+    show({ kind: 'unlocked', session, vaultKey });
   }
 
   // A recovery key opens the vault but then asks for a new password, since the old one is lost.
   async function open(signedIn: SignedIn, credential: Credential): Promise<string | null> {
     const vaultKey = await openVault(signedIn.session.accountId, signedIn.vault, credential);
     if (!vaultKey) return wrongSecret(credential.method, false);
-    if (credential.method === 'recovery') setState({ kind: 'recovered', session: signedIn.session, vaultKey, current: credential });
+    if (credential.method === 'recovery') show({ kind: 'recovered', session: signedIn.session, vaultKey, current: credential });
     else await unlocked(signedIn.session, vaultKey);
     return null;
   }
@@ -84,7 +93,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
     const result = await api('POST', 'logout');
     if (!result.ok) return describeFailure(result);
     await forgetVault(accountId);
-    setState({ kind: 'login' });
+    show({ kind: 'login' });
     return null;
   }
 
@@ -100,7 +109,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
           <RecoveryKeyScreen
             username={draft.session.username}
             recoveryKey={draft.recoveryKey}
-            onBack={() => setState({ kind: 'signup', step: 'password', draft })}
+            onBack={() => show({ kind: 'signup', step: 'password', draft })}
             onStart={async () => {
               const result = await api('POST', 'signup', { ...draft.session, ...draft.signup });
               if (!result.ok) return describeFailure(result);
@@ -121,7 +130,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
             const vault = draft
               ? { ...draft, signup: { ...draft.signup, ...(await wrapWithPassword(accountId, draft.vaultKey, credential)) } }
               : await createVault(accountId, credential);
-            setState({ kind: 'signup', step: 'recovery', draft: { ...vault, session: { accountId, username } } });
+            show({ kind: 'signup', step: 'recovery', draft: { ...vault, session: { accountId, username } } });
             return null;
           }}
         />
@@ -150,7 +159,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
             const credential = await vaultCredential(username, method, secret);
             return credential ? open(signedIn, credential) : wrongSecret(method, false);
           }}
-          onLogout={() => void logout(signedIn.session.accountId).then((failure) => failure && setState({ kind: 'unreachable', message: failure }))}
+          onLogout={() => void logout(signedIn.session.accountId).then((failure) => failure && show({ kind: 'unreachable', message: failure }))}
         />
       );
     }

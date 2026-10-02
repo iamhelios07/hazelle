@@ -1,7 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { api } from './api';
+import { api, holdAccount } from './api';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  holdAccount(null);
+});
 
 it('reads a connection that drops inside the answer as offline, and a whole answer that is not JSON as a server error', async () => {
   const dropped = new ReadableStream<Uint8Array>({
@@ -15,4 +18,16 @@ it('reads a connection that drops inside the answer as offline, and a whole answ
 
   vi.stubGlobal('fetch', async () => new Response('<html>502</html>', { status: 502 }));
   expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'server-error' });
+});
+
+it('states the account the page holds with every request, and tells the page once when the server names another', async () => {
+  const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json({ error: 'account-mismatch' }, { status: 409 }));
+  vi.stubGlobal('fetch', fetch);
+  const lost = vi.fn();
+  holdAccount('account-a', lost);
+
+  expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'account-mismatch' });
+  await api('GET', 'objects?since=0');
+  expect(fetch.mock.calls.map(([, init]) => (init.headers as Record<string, string>)['x-account'])).toEqual(['account-a', 'account-a']);
+  expect(lost).toHaveBeenCalledTimes(1);
 });

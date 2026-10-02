@@ -166,7 +166,7 @@ export class ObjectStore {
   }
 
   private cacheBounds() {
-    return this.cache ? `&account=${encodeURIComponent(this.accountId)}&known=${this.known}` : '';
+    return this.cache ? `&known=${this.known}` : '';
   }
 
   readonly subscribe = (listener: (changes: readonly StoreChange[]) => void) => {
@@ -699,9 +699,9 @@ export class ObjectStore {
       if (signal?.aborted) return { ok: false, error: 'stopped' };
       if (epoch !== this.epoch) continue;
       if (!result.ok) {
-        if (result.error === 'cache-reset' || result.error === 'account-mismatch') {
+        if (result.error === 'cache-reset') {
           this.reset();
-          if (result.error === 'cache-reset') continue;
+          continue;
         }
         return result;
       }
@@ -747,9 +747,9 @@ export class ObjectStore {
     while (more) {
       const result = await this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}${this.cacheBounds()}`, undefined, signal);
       if (!result.ok) {
-        if (result.error === 'cache-reset' || result.error === 'account-mismatch') {
+        if (result.error === 'cache-reset') {
           this.reset();
-          if (result.error === 'cache-reset') void (this.pulling ?? Promise.resolve()).then(() => {
+          void (this.pulling ?? Promise.resolve()).then(() => {
             if (!this.closing.signal.aborted && !this.bootstrapped) void this.pull();
           });
         }
