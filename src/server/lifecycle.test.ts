@@ -262,6 +262,18 @@ describe('a restore', () => {
     await expectRestored(seed, (await runRestore(env(), armed))!.id, []);
   });
 
+  it('repairs, by finalizing, a store left refusing as restoring by a cancel cut off before its restart', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await expect(runRestore(pausedAt('targeted').env, id)).rejects.toThrow(Crash);
+    await expect(cancelRestore(crashing(1).env, id)).rejects.toThrow(Crash);
+    expect(await account(seed.id)).toMatchObject({ state: 'active', operation: null });
+    expect((await t.get('objects?since=0', seed.cookie)).status).toBe(503);
+    expect(await runRestore(env(), id)).toEqual({ id, phase: 'cancelled', verified: true, error: null });
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
+    expect(t.stores.db(seed.incarnation).kv.get(`restore:${id}`)).toBeUndefined();
+  });
+
   it('fails one asking for a time before the store existed, and one whose target expired before arming, giving the account back', async () => {
     const seed = await seeded();
     const early = await beginRestore(env(), seed.id, seed.report, { at: seed.at - HOUR_MS });
