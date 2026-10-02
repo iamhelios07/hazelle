@@ -4,7 +4,7 @@ import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf,
 import { assembleMemory, type Assembled, type RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { renderChat } from '../engine/render';
-import { shown, type Chat, type Message, type Receipt } from '../model/chat';
+import { liveChat, shown, type Chat, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
@@ -379,7 +379,7 @@ export class Rememberer {
       if (full) this.full.add(chat);
       return;
     }
-    const stored = this.session.store.get('chat', chat);
+    const stored = liveChat(this.session.store.get('chat', chat));
     if (!stored || !memorySetup(this.session.store, stored.value).on || (!full && !chatMemory(this.session.store, chat).records.length)) return;
     if (full) this.full.add(chat);
     this.working.add(chat);

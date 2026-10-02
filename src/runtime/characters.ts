@@ -111,18 +111,23 @@ export async function copyCharacter(store: ObjectStore, id: string, name: string
   return addCharacter(store, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, owned, progress);
 }
 
-// at is when it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good
-// (purgeExpired); null brings it back, unless its removal has begun ('gone').
-export function setDeleted(store: ObjectStore, id: string, at: number | null): Promise<ApiResult<Stored<'character'>>> {
-  return store.update('character', id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }));
+// What waits KEEP_DELETED once deleted, and then goes for good with everything it owns (purgeExpired).
+type Removable = 'character' | 'module' | 'chat';
+
+// at is when it was deleted; null brings it back, unless its removal has begun ('gone').
+export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id: string, at: number | null): Promise<ApiResult<Stored<K>>> {
+  return store.update(kind, id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }) as Values[K] | null);
 }
 
-type Removable = Pick<Character, 'deleted' | 'purging'>;
+// at is when it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good.
+export const setDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'character', id, at);
+
+type Mark = Pick<Character, 'deleted' | 'purging'>;
 
 // Removal for good is decided once, by the purging claim, at the rev the claim is written on (store.update): a restore
-// landing first leaves the root not due ('gone'), and one after it is refused (setDeleted, setModuleDeleted). Nothing
+// landing first leaves the root not due ('gone'), and one after it is refused (markDeleted, setModuleDeleted). Nothing
 // the root owns goes before the claim lands. A claimed root is always due, so the next purge finishes one cut short.
-async function purge(store: ObjectStore, kind: 'character' | 'module', id: string, due: (value: Removable) => boolean, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
+async function purge(store: ObjectStore, kind: Removable, id: string, due: (value: Mark) => boolean, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
   const claimed = await store.update(kind, id, (current) => (current.purging || due(current) ? { ...current, purging: true } : null));
   if (!claimed.ok) return claimed;
   return removeOwned(store, { kind, id }, progress);
@@ -132,12 +137,12 @@ async function purge(store: ObjectStore, kind: 'character' | 'module', id: strin
 export const purgeCharacter = (store: ObjectStore, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
   purge(store, 'character', id, (value) => value.deleted !== undefined, progress);
 
-// Removes for good the deleted characters and modules whose time is up. The session runs it when it opens, on
+// Removes for good the deleted characters, modules and chats whose time is up. The session runs it when it opens, on
 // whichever device opens first. One that fails is tried again next time. A stop (the vault closing) lets the one
 // under way finish and leaves the rest for next time.
 export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
-  const due = (value: Removable) => value.deleted !== undefined && daysLeft(value, now) <= 0;
-  for (const kind of ['character', 'module'] as const) {
+  const due = (value: Mark) => value.deleted !== undefined && daysLeft(value, now) <= 0;
+  for (const kind of ['character', 'module', 'chat'] as const) {
     for (const { id, value } of store.list(kind)) {
       if (signal.aborted) return;
       if (value.purging || due(value)) await purge(store, kind, id, due, () => {});

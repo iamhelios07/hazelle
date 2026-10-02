@@ -8,7 +8,7 @@ import { display, type Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
-import { shown, type Chat, type Message } from '../model/chat';
+import { liveChat, shown, type Chat, type Message } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import type { Toggle } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
@@ -239,7 +239,7 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
 // null: the chat, or the message the target names, is gone; for a continue, so is the version it names. ids are
 // the ones the turn was shown under, for a new chat shown before it was saved.
 function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
-  const stored = session.store.get('chat', chat);
+  const stored = liveChat(session.store.get('chat', chat));
   if (!stored) return null;
   const route = chatModel(session.store, stored.value, 'main');
   if ('kind' in route) return route;

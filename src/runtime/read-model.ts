@@ -1,6 +1,6 @@
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
-import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
+import { chatTitle, liveChat, type Chat, type ChatSummary, type Message } from '../model/chat';
 import type { Kind, Stored, Values } from '../model/kinds';
 import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
@@ -165,7 +165,7 @@ export class ReadModels {
       : new Set(this.store.list('chat').map(({ id }) => id));
     let changed = false;
     for (const id of ids) {
-      const stored = this.store.get('chat', id);
+      const stored = liveChat(this.store.get('chat', id));
       const previous = this.summaries.get(id);
       if (!stored) {
         if (this.summaries.delete(id)) changed = true;

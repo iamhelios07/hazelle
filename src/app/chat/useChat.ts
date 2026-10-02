@@ -333,7 +333,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!removed.ok) return toast.failed(removed);
     const stored = removed.data;
     navigate({ kind: 'shelf', character: stored.value.character });
-    toast.undoable('채팅을 지웠어요', () => void restoreChat(store, stored).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })), item.title);
+    toast.undoable('채팅을 지웠어요', () => void restoreChat(store, stored.id).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })), item.title);
   }
 
   function copy(text: string) {

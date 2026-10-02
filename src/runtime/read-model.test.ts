@@ -314,9 +314,27 @@ describe('selective account reads', () => {
     if (!removed.ok) throw new Error(removed.error);
     expect(decrypt).not.toHaveBeenCalled();
     expect(store.scopeState('a')).toBe('unloaded');
-    expect((await restoreChat(store, removed.data)).ok).toBe(true);
+    expect((await restoreChat(store, 'a')).ok).toBe(true);
     expect(decrypt).not.toHaveBeenCalled();
     expect(store.scopeState('a')).toBe('unloaded');
+  });
+
+  it('leaves a deleted chat’s call untaken, and takes it once 되돌리기 brings the chat back', async () => {
+    const { seed, open } = await account();
+    await seed('a', 'chat', null, chat);
+    await seed('stream', 'stream', 'a', { key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'reply', for: { kind: 'reply', message: null, replaces: null, continues: null } });
+    const store = await open();
+    await removeChat(store, 'a');
+    const take = vi.fn();
+    const opened = vi.spyOn(store, 'withChat');
+    const streams = new Streams(store, new Set(), take);
+    try {
+      streams.pickUp();
+      expect(opened).not.toHaveBeenCalled();
+      await restoreChat(store, 'a');
+      streams.pickUp();
+      await vi.waitFor(() => expect(take).toHaveBeenCalledOnce());
+    } finally { streams.close(); }
   });
 });
 
@@ -512,6 +530,25 @@ describe('per-chat read models', () => {
     expect(read.chats.snapshot()).toBe(summaries);
     expect(read.library.snapshot()).toBe(library);
     expect(read.chat('a').snapshot()?.messages).toBe(messages);
+    read.close();
+  });
+
+  it('reads a deleted chat as gone from its character, the chat list and its screen, and 되돌리기 brings it back whole', async () => {
+    const { store } = await account();
+    await store.create('character', { card: card('루나'), folder: null, loreFolders: [] }, { id: 'ca' });
+    await store.create('chat', { ...chat, character: 'ca' }, { id: 'a' });
+    await store.create('chat', { ...chat, character: 'ca' }, { id: 'b' });
+    await store.create('entry', message('a first'), { id: 'a1', parent: 'a' });
+    await hold(store, 'a', 'b');
+    const read = new ReadModels(store);
+    const lists = () => [read.chats.snapshot(), read.library.snapshot().characters[0]!.chats].map((list) => list.map(({ id }) => id).toSorted());
+    const texts = () => read.chat('a').snapshot()?.messages.map((message) => chatModel.shown(message).text);
+    expect([lists(), texts()]).toEqual([[['a', 'b'], ['a', 'b']], ['a first']]);
+
+    await removeChat(store, 'a');
+    expect([lists(), read.summary('a').snapshot(), read.chat('a').snapshot()]).toEqual([[['b'], ['b']], null, null]);
+    await restoreChat(store, 'a');
+    expect([lists(), texts(), read.summary('a').snapshot()?.count]).toEqual([[['a', 'b'], ['a', 'b']], ['a first'], 1]);
     read.close();
   });
 });
