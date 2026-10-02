@@ -281,7 +281,7 @@ function Threads({ chat, threads }: { chat: string; threads: Thread[] }) {
 function ThreadRow({ chat, thread, name, onDrop }: { chat: string; thread: Thread; name: string; onDrop: () => void }) {
   const store = useStore();
   const toast = useToast();
-  const save = useAutosave<Pick<Thread, 'text'>>(`thread:${chat}:${thread.id}`, (patch) => setThread(store, chat, { ...thread, ...patch }));
+  const save = useAutosave<Pick<Thread, 'text'>>(`thread:${chat}:${thread.id}`, (patch) => setThread(store, chat, { ...thread, ...patch }, true));
   const [typed, setTyped] = useState<string>();
   const text = typedText(typed, filled, save.unsaved.text ?? thread.text, String);
 
@@ -294,7 +294,7 @@ function ThreadRow({ chat, thread, name, onDrop }: { chat: string; thread: Threa
     const removed = await save.remove(() => removeThread(store, chat, thread.id));
     if (!removed) return;
     if (!removed.ok) return removed.error === 'gone' ? onDrop() : toast.failed(removed, '지우지 못했어요.');
-    toast.undoable('열린 이야기를 지웠어요', () => void setThread(store, chat, removed.data).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
+    toast.undoable('열린 이야기를 지웠어요', () => void setThread(store, chat, removed.data, false).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
   }
 
   return (
