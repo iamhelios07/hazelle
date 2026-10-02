@@ -1,4 +1,4 @@
-import { assembleTranslation } from '../engine/pipeline';
+import { assembleTranslation, type RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import type { Chat, Receipt, Translation, Version } from '../model/chat';
@@ -33,7 +33,8 @@ export type TranslateFailure =
   | { kind: 'profile-missing'; own: boolean }
   | { kind: 'tokenizer' }
   | { kind: 'failed'; receipt: Receipt }
-  | { kind: 'stopped' };
+  | { kind: 'stopped' }
+  | RanAway;
 
 type Deps = { store: ObjectStore; credentials: Credentials };
 
@@ -56,13 +57,15 @@ export async function translate(
   const countTokens = await tokenizer().catch(() => null);
   if (!countTokens) return { ok: false, failure: { kind: 'tokenizer' } };
   const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
+  const assembled = assembleTranslation({ scope, take, prompt, translations, request, language, seed: crypto.randomUUID(), countTokens });
+  if ('kind' in assembled) return { ok: false, failure: assembled };
   const text = gather(onText);
   const answer = await generate({
     credentials,
     connection: route.connection.value,
     model: route.model,
     settings: profile.profile.value.settings,
-    messages: assembleTranslation({ scope, take, prompt, translations, request, language, seed: crypto.randomUUID(), countTokens }).messages,
+    messages: assembled.messages,
     call: await newCall(store, route, target),
     signal,
     onText: text.add,

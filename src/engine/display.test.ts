@@ -61,6 +61,15 @@ describe('display', () => {
   });
 });
 
+describe('a message whose commands ran away', () => {
+  it('shows as stored, its tags as written, and says the display stopped them', () => {
+    const runaway = '{{settempvar::x::ab}}' + '{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}'.repeat(24);
+    const shown = display({ ...scope, messages: [message('a1', 'assistant', runaway), message('a2', 'assistant', 'The lamp.')] });
+    expect(shown.texts).toEqual([runaway, 'The lamp.']);
+    expect(shown.stopped).not.toBeNull();
+  });
+});
+
 describe('the editDisplay pass', () => {
   it('stamps each message with the variables the chat starts from, so a pass run from other ones is not fresh', () => {
     const stamps = (variables: [string, string][]) => {

@@ -104,7 +104,7 @@ function Tryout({ example, onInsert }: { example: Example; onInsert: (text: stri
   return (
     <Stack gap="related">
       <MarkupArea label="예시" variant="field" value={written} onChange={setWritten} />
-      <Text variant="note">{result ? '결과' : '결과: 빈 글'}</Text>
+      <Text variant="note">{result === null ? '결과: 글을 너무 많이 만들어서 멈췄어요' : result ? '결과' : '결과: 빈 글'}</Text>
       {result && <CodeBlock variant="prose">{result}</CodeBlock>}
       <Row kind="actions">
         <Button variant="ghost" size="xs" onClick={() => onInsert(written)}>

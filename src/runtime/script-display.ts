@@ -65,7 +65,7 @@ export class ScriptDisplay {
     const all = scriptsOf(scope.packs);
     // A bot whose engines all said no is shown with no pass and no worker.
     const scripts = all.filter(({ code }) => this.listens.get(code) !== false);
-    if (scripts.length === 0) return display(scope, take);
+    if (scripts.length === 0) return this.told(id, display(scope, take));
     // Until an engine has answered, its script is passed all the same, and the source is only a guess at what to show
     // meanwhile: one that names the hook waits empty as a listening one does, any other shows its text as it is.
     const waits = scripts.some(({ code }) => this.listens.get(code) ?? code.includes('editDisplay'));
@@ -81,6 +81,11 @@ export class ScriptDisplay {
       return waits ? null : { text, fresh: false };
     } }, take);
     if (shown.pass && this.listeners.has(id)) this.pass(id, { scripts, snapshot: luaSnapshot(scope, standing, shown.pass.staged, shown.pass.start), items: shown.pass.items, generation });
+    return this.told(id, shown);
+  }
+
+  private told(chat: string, shown: Display): Display {
+    if (shown.stopped) this.report(chat, shown.stopped);
     return shown;
   }
 

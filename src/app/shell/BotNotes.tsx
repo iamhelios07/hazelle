@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { aliased } from '../common/alias';
+import { RUNAWAY_FIX } from '../common/failure';
 import { MODEL_ROLES, MODULE_VOICE } from '../common/words';
 import { useScripts, useSession } from '../session';
 import { useToast } from '../toast';
@@ -34,6 +35,9 @@ export function BotNotes() {
           break;
         case 'stuck':
           toast.error('봇의 스크립트가 끝나지 않아 멈췄어요');
+          break;
+        case 'runaway':
+          toast.error('봇의 명령어가 글을 너무 많이 만들어서 멈췄어요', { detail: RUNAWAY_FIX });
           break;
         case 'no-model':
           toast.error(`봇이 부르려는 ${MODEL_ROLES[note.role]}이 정해지지 않았어요`);

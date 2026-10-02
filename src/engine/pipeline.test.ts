@@ -5,7 +5,7 @@ import type { Memory, MemoryRecord } from '../model/memory';
 import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, rewritten, unused, type Assembled, type From, type PromptInput, type TooLong } from './pipeline';
+import { assemble, rewritten, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, type ChatRead } from './memory';
 import { renderChat } from './render';
 
@@ -103,11 +103,11 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   ...over,
 });
 
-const assembledOf = (result: Assembled | TooLong) => {
-  if ('kind' in result) throw new Error(`over budget: ${result.tokens} of ${result.budget}`);
+const assembledOf = (result: ReturnType<typeof assemble>) => {
+  if ('kind' in result) throw new Error(result.kind);
   return result;
 };
-const sentOf = (result: Assembled | TooLong) => assembledOf(result).messages;
+const sentOf = (result: ReturnType<typeof assemble>) => assembledOf(result).messages;
 const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: null });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
@@ -245,6 +245,12 @@ describe('assemble', () => {
     expect(kept.length).toBeLessThan(messages.length);
     expect(kept).toEqual(whole.filter(inChat).slice(-kept.length));
     expect(assemble({ ...input, budget: 100 })).toMatchObject({ kind: 'too-long', budget: 100 });
+  });
+});
+
+describe('a request whose commands ran away', () => {
+  it('is not built', () => {
+    expect(assemble(input({ card: card({ description: '{{description}}{{description}}' }) }))).toEqual({ kind: 'runaway' });
   });
 });
 

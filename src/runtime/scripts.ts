@@ -1,3 +1,4 @@
+import { Runaway } from '../engine/cbs/evaluate';
 import { TOGGLE_GLOBAL } from '../engine/cbs/tags';
 import type { Pack, Trigger } from '../engine/import/types';
 import type { Role } from '../connectors/assignment';
@@ -31,7 +32,8 @@ import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './t
 // this app does not have, a script that never ended.
 // no-model: the bot called a model of a role the chat has none for. no-character: a module called one in a chat with
 // no character, where there is nobody to allow it for. flood: it called models faster than CALLS_A_MINUTE.
-// unsaved: what a run did to the chat could not be saved.
+// unsaved: what a run did to the chat could not be saved. runaway: the bot's commands were stopped for making too much
+// text.
 type Note =
   | { kind: 'said'; tone: 'normal' | 'error'; text: string }
   | { kind: 'failed'; message: string }
@@ -40,7 +42,8 @@ type Note =
   | { kind: 'no-model'; role: Role }
   | { kind: 'no-character' }
   | { kind: 'flood' }
-  | { kind: 'unsaved'; failure: ApiFailure };
+  | { kind: 'unsaved'; failure: ApiFailure }
+  | { kind: 'runaway' };
 export type ScriptNote = { id: number; chat: string } & Note;
 // model: the bot's Lua wants to call a model, which the character has not been allowed or refused yet. Its answer
 // 'yes' allows it and 'no' refuses it, both kept on the character; a dismissal leaves it to be asked again.
@@ -306,9 +309,10 @@ export class Scripts {
   }
 
   // What a run or a display pass has to say of the bot's scripts: their errors and the functions this app lacks, or
-  // the error the run itself ended on.
+  // the error the run itself ended on. Or a display's commands that ran away.
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown) {
     if (result instanceof LuaStuck) return this.note(chat, { kind: 'stuck' });
+    if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' });
     if (result instanceof Error) return this.tell(chat, `failed:${result.message}`, { kind: 'failed', message: result.message });
     const { errors, missing } = result as Pick<Outcome, 'errors' | 'missing'>;
     for (const { script, message } of errors) this.tell(chat, `failed:${message}`, { kind: 'failed', message: `${script}: ${message}` });
@@ -327,7 +331,13 @@ export class Scripts {
         const limit = reserve === null || context === null ? Infinity : context - reserve;
         let total = 0;
         const fitting: Awaited<ReturnType<Host['lore']>> = [];
-        for (const entry of activeLore(scope, crypto.randomUUID(), count)) {
+        const lore = activeLore(scope, crypto.randomUUID(), count);
+        // The script reads none, and the person is told why.
+        if ('kind' in lore) {
+          this.tell(chat, 'runaway', { kind: 'runaway' });
+          return fitting;
+        }
+        for (const entry of lore) {
           total += count(entry.text);
           if (total > limit) break;
           fitting.push(entry);

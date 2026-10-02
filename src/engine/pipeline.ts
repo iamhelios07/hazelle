@@ -2,7 +2,7 @@ import type { ChatMessage } from '../connectors/types';
 import type { Memory, MemoryRecord } from '../model/memory';
 import type { Block, ChatRange, ConversationPrompt, MemoryPrompt, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
-import { evaluate } from './cbs/evaluate';
+import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
 import { activate, merge, type Activation, type Fired, type LoreInput, type Operation } from './lorebook/activate';
@@ -28,6 +28,18 @@ export type PromptInput = {
 
 // Even the last message alone leaves the prompt over its budget.
 export type TooLong = { kind: 'too-long'; tokens: number; budget: number };
+
+// The CBS of some text the request is built from ran away (cbs/evaluate Runaway), and none of the request is sent.
+export type RanAway = { kind: 'runaway' };
+
+function stoppable<T>(build: () => T): T | RanAway {
+  try {
+    return build();
+  } catch (error) {
+    if (error instanceof Runaway) return { kind: 'runaway' };
+    throw error;
+  }
+}
 
 // Where a sent message came from, for 요청 원문. slot is null for a text block.
 export type From =
@@ -129,7 +141,10 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
 
 // Every lorebook entry a prompt built now would hold, wherever it would sit, as the text and role it is sent with, in
 // the order they were placed: what a bot's loadLoreBooks reads. An entry that renders to nothing is left out.
-export function activeLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
+export const activeLore = (scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] | RanAway =>
+  stoppable(() => placedLore(scope, seed, countTokens));
+
+function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
   const laid = lay(scope, scope.messages, renderChat('prompt', scope).variables, seed, remembered(countTokens), null);
   return (laid.activation?.placed ?? []).flatMap(({ id, body, placement }) => {
     const text = laid.render(body, id);
@@ -212,9 +227,12 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
 // A conversation prompt's blocks, in order, as the messages sent. Messages left empty are dropped.
 // The messages memory covers leave the chat slots, though their variables are still replayed (renderChat renders them
 // all) and the lorebook still scans them.
-export function assemble({ scope, seed, countTokens, budget, continuing, memory }: PromptInput): Assembled | TooLong {
+export const assemble = (input: PromptInput): Assembled | TooLong | RanAway => stoppable(() => conversation(input));
+
+function conversation({ scope, seed, countTokens, budget, continuing, memory }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const chat = renderChat('prompt', scope);
+  if (chat.stopped) throw chat.stopped;
   const tokens = remembered(countTokens);
   const laid = lay(scope, scope.messages, chat.variables, seed, tokens, null);
   const { activation, named } = laid;
@@ -312,7 +330,10 @@ export type TranslationInput = {
 // A translation prompt's blocks as the messages sent. source is what goes out to be translated: a message as it is
 // displayed (after its CBS and display scripts), which is what the reader would otherwise read, or the user's input.
 // A translation holds no chat, so entries placed at a depth, or into a text a card replaces, are not sent in it.
-export function assembleTranslation({ scope, take, prompt, translations, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
+export const assembleTranslation = (input: TranslationInput): { source: string; messages: ChatMessage[] } | RanAway => stoppable(() => translation(input));
+
+// A message whose CBS ran away is its source as shown, tags as written, and the display says so.
+function translation({ scope, take, prompt, translations, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
   const { texts, variables } = renderChat('display', scope, take);
   const before = request.kind === 'message' ? request.index : texts.length;
   const source = request.kind === 'message' ? texts[request.index]! : request.text;
@@ -352,8 +373,11 @@ export type MemoryTaskInput = {
 // A memory prompt's blocks as the messages sent, then the app's answer format. span: the span's texts as the prompt
 // renders them, variables replayed, which the answer is validated against and the records' fingerprints are made of.
 // Like a translation, a memory task holds no chat, so entries placed at a depth are not sent in it.
-export function assembleMemory({ scope, prompt, memory, before, budget, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
-  const { texts, variables } = renderChat('prompt', scope);
+export const assembleMemory = (input: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } | RanAway => stoppable(() => memoryTask(input));
+
+function memoryTask({ scope, prompt, memory, before, budget, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
+  const { texts, variables, stopped } = renderChat('prompt', scope);
+  if (stopped) throw stopped;
   const laid = lay(scope, scope.messages.slice(0, to), variables, seed, remembered(countTokens), null);
   const speaker = (role: 'user' | 'assistant') => (role === 'user' ? (scope.persona?.name ?? 'User') : (scope.card?.name ?? 'Assistant'));
   const span = texts.slice(from, to);

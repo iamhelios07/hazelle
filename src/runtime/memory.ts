@@ -1,7 +1,7 @@
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
 import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, standing, threadLabel, windowStart, type ChatRead, type Drafted, type MemoryInput, type RecordStatus, type Staleness } from '../engine/memory';
-import { assembleMemory, type Assembled } from '../engine/pipeline';
+import { assembleMemory, type Assembled, type RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { renderChat } from '../engine/render';
 import { shown, type Chat, type Message, type Receipt } from '../model/chat';
@@ -262,7 +262,8 @@ export type MemoryFailure =
   | { kind: 'tokenizer' }
   | { kind: 'failed'; receipt: Receipt }
   | { kind: 'invalid'; receipt: Receipt; reason: 'unreadable' | 'fields' | 'lines' }
-  | { kind: 'unsaved'; failure: ApiFailure };
+  | { kind: 'unsaved'; failure: ApiFailure }
+  | RanAway;
 
 // running: the chats whose memory is being written, with the model writing it and the calls left. failed: why a
 // chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
@@ -463,7 +464,9 @@ export class Rememberer {
   private async summarize(chat: string, { job, sent, from, to, memory, before, prompt, route, settings }: Planned, countTokens: (text: string) => number): Promise<Outcome> {
     const { store, credentials } = this.session;
     const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
-    const { messages, span } = assembleMemory({ scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID(), countTokens });
+    const assembled = assembleMemory({ scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID(), countTokens });
+    if ('kind' in assembled) return assembled;
+    const { messages, span } = assembled;
     const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));
     const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read) } };
     const text = gather();

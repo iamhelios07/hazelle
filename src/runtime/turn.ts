@@ -3,7 +3,7 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Card, Pack } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
-import { assemble, rewritten, type Assembled, type PromptInput, type TooLong } from '../engine/pipeline';
+import { assemble, rewritten, type Assembled, type PromptInput, type RanAway, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
@@ -51,6 +51,7 @@ export type TurnFailure = (
   | TalkFailure
   | Blocked
   | TooLong
+  | RanAway
   | { kind: 'tokenizer' }
   | { kind: 'unstarted'; failure: ApiFailure }
   | { kind: 'unpulled'; failure: ApiFailure }

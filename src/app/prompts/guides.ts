@@ -1,5 +1,5 @@
 import { unescapeCbs } from '../../engine/cbs/escape';
-import { evaluate, type CbsContext } from '../../engine/cbs/evaluate';
+import { evaluate, Runaway, type CbsContext } from '../../engine/cbs/evaluate';
 
 export type GuideId = 'basics' | 'when' | 'vars' | 'lists' | 'func' | 'random' | 'literal';
 // inMessage: the example runs as a chat message's own text, the only place setvar and addvar write.
@@ -56,9 +56,15 @@ const SAMPLE: CbsContext = {
 
 export const SAMPLE_NOTE = '예시는 캐릭터 미라, 페르소나 나, 채팅 변수 호감도=30 · 날씨=비 · 가방=["열쇠","지도"], 토글 존댓말 켬인 채팅에서 계산해요.';
 
-export function tryExample(written: string, inMessage = false): string {
+// null: the example's commands ran away and were stopped.
+export function tryExample(written: string, inMessage = false): string | null {
   const context = { ...SAMPLE, variables: new Map(SAMPLE.variables), source: inMessage ? { message: 0 } : SAMPLE.source };
-  return unescapeCbs(evaluate(written, context));
+  try {
+    return unescapeCbs(evaluate(written, context));
+  } catch (error) {
+    if (error instanceof Runaway) return null;
+    throw error;
+  }
 }
 
 export const GUIDES: Record<GuideId, Guide> = {
