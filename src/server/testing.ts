@@ -1,19 +1,29 @@
 import { getPlatformProxy } from 'wrangler';
+import { d1Reads } from './account-store';
 import { sha256Hex } from './http';
 import { createRelay, type Upstream } from './relay';
+import { nodeStores } from './store-db-node';
 import { StreamBox, type BoxStorage } from './stream-box';
 import app from './worker';
 
 const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
 
-// An in-memory local D1 with every migration applied, and a client that calls the app in-process. upstream answers
-// the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the options each Durable Object
-// was got with.
+// An in-memory local D1 with every migration applied, a local R2, and a client that calls the app in-process. upstream
+// answers the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the options each Durable
+// Object was got with. stores: the accounts' stores in process (store-db-node), whose bookmarks are stamped by clock.
 export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.'))) {
   const proxy = await getPlatformProxy<Env>({ configPath: 'wrangler.test.jsonc', persist: false, remoteBindings: false });
   const placed: unknown[] = [];
+  const clock = { now: () => Date.now() };
+  const stores = nodeStores(d1Reads(proxy.env.DB), () => clock.now());
   // ADMIN_ACCOUNT: a test names its operator after signing it up, since nobody signs up as the operator's id.
-  const env = { ...proxy.env, STREAMS: streamObjects(upstream, placed), RELAY: relayObjects(upstream, placed), ADMIN_ACCOUNT: '' as string };
+  const env = {
+    ...proxy.env,
+    STREAMS: streamObjects(upstream, placed),
+    RELAY: relayObjects(upstream, placed),
+    STORES: stores as unknown as Env['STORES'],
+    ADMIN_ACCOUNT: '' as string,
+  };
   for (const name of Object.keys(migrations).sort()) {
     const statements = migrations[name]!.split(';').filter((s) => s.trim());
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
@@ -41,13 +51,19 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   return {
     env,
     placed,
+    stores,
+    clock,
     dispose: () => proxy.dispose(),
-    reset: () => {
+    reset: async () => {
       env.ADMIN_ACCOUNT = '';
-      return env.DB.batch([
-        ...['objects', 'files', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+      clock.now = () => Date.now();
+      await env.DB.batch([
+        ...['objects', 'files', 'file_blocks', 'restores', 'account_files', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
         env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
+      for (let listed = await env.BLOBS.list(); listed.objects.length; listed = await env.BLOBS.list()) {
+        await env.BLOBS.delete(listed.objects.map(({ key }) => key));
+      }
     },
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),
     post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),

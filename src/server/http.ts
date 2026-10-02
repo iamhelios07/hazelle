@@ -1,7 +1,10 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-export type Account = { id: string; username: string; suspended: boolean };
+export type State = 'active' | 'restoring' | 'leaving';
+// incarnation: the server-made id of the account's data (migrations/0009). bytesCap: the cap as this request's session
+// read it, null for none.
+export type Account = { id: string; username: string; suspended: boolean; incarnation: string; state: State; bytesCap: number | null };
 // Account and object ids are UUIDs made by the client.
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

@@ -34,9 +34,12 @@ accounts.post('/signup', async (c) => {
   const now = Date.now();
   // The insert itself checks the cap and the username, so two signups at once cannot both take the last place or the
   // same name: no read outside this batch decides. changes() carries its outcome to the vault and the session.
-  const [created, , , room] = await db.batch<{ open?: number }>([
+  const [created, , , room] = await db.batch<{ incarnation?: string; open?: number }>([
     db
-      .prepare(`INSERT INTO accounts (id, username, login_hash, created_at) SELECT ?1, ?2, ?3, ?4 WHERE ${ROOM} AND NOT EXISTS (SELECT 1 FROM accounts WHERE id = ?1 OR username = ?2) RETURNING id`)
+      .prepare(
+        `INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) SELECT ?1, ?2, ?3, ?4, lower(hex(randomblob(16))), lower(hex(randomblob(16)))
+         WHERE ${ROOM} AND NOT EXISTS (SELECT 1 FROM accounts WHERE id = ?1 OR username = ?2) RETURNING incarnation`,
+      )
       .bind(accountId, username, loginHash, now),
     insertVault(db, accountId, { passwordWrap, recoveryWrap, recoveryHash }, now),
     session.insert,
@@ -99,7 +102,7 @@ accounts.delete('/account', requireSession, async (c) => {
 
 // The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:
 // what the account holds and the caps that apply to it, null for none.
-async function describe(c: Context<AppEnv>, account: Account) {
+async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended'>) {
   const storage = await c.env.DB.prepare(`SELECT bytes, ${CAP.bytes} AS bytesCap, file_bytes AS fileBytes, ${CAP.fileBytes} AS fileBytesCap FROM accounts WHERE id = ?`)
     .bind(account.id)
     .first<{ bytes: number; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null }>();

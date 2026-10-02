@@ -2,7 +2,8 @@ import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { every } from 'hono/combine';
 import { createMiddleware } from 'hono/factory';
-import { fail, hex, sha256Hex, type Account, type AppEnv } from './http';
+import { CAP } from './caps';
+import { fail, hex, sha256Hex, type Account, type AppEnv, type State } from './http';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIFETIME_MS = 30 * DAY_MS;
@@ -74,14 +75,15 @@ async function readSession(db: D1Database, token: string): Promise<Account | nul
   const tokenHash = await sha256Hex(token);
   const row = await db
     .prepare(
-      'SELECT a.id, a.username, a.suspended_at, s.expires_at FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?',
+      `SELECT a.id, a.username, a.suspended_at, a.incarnation, a.state, ${CAP.bytes} AS cap, s.expires_at
+       FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?`,
     )
     .bind(tokenHash, now)
-    .first<{ id: string; username: string; suspended_at: number | null; expires_at: number }>();
+    .first<{ id: string; username: string; suspended_at: number | null; incarnation: string; state: State; cap: number | null; expires_at: number }>();
   if (!row) return null;
   // Sliding expiry, written at most once a day rather than on every request.
   if (row.expires_at - now < SESSION_LIFETIME_MS - DAY_MS) {
     await db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_LIFETIME_MS, tokenHash).run();
   }
-  return { id: row.id, username: row.username, suspended: row.suspended_at !== null };
+  return { id: row.id, username: row.username, suspended: row.suspended_at !== null, incarnation: row.incarnation, state: row.state, bytesCap: row.cap };
 }
