@@ -1,9 +1,11 @@
 import { UserRound } from 'lucide-react';
+import { useState } from 'react';
 import { aliased } from '../common/alias';
+import { matches, noResults, SEARCH_FROM } from '../common/search';
 import { follows } from '../common/words';
 import { usePersonas, useSettings } from '../session';
 import { useToast } from '../toast';
-import { Avatar, ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
+import { Avatar, ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, SearchField, Tag } from '../ui';
 import type { OpenChat } from './useChat';
 
 // Without its own choice it follows the default, and a deleted one shows as missing.
@@ -35,7 +37,7 @@ export function ChatPersonaMenu({ chat }: { chat: OpenChat }) {
   );
 }
 
-// Mounted only while the menu is open.
+// Mounted only while the menu is open, so each opening starts with an empty search.
 function PersonaChoices({ chat }: { chat: OpenChat }) {
   const { persona, actions } = chat;
   const personas = usePersonas();
@@ -44,11 +46,17 @@ function PersonaChoices({ chat }: { chat: OpenChat }) {
   const choose = (value: string | null) => void actions.setOwn('persona', value).then((saved) => saved.ok || toast.failed(saved));
   const fallback = personas.find(({ id }) => id === settings.persona);
   const own = persona.kind === 'persona' && persona.own ? persona.persona.id : null;
+  const [query, setQuery] = useState('');
+  const found = personas.filter(({ value }) => matches(query, value.name, value.alias ?? ''));
   return (
     <>
+      {personas.length >= SEARCH_FROM && <SearchField size="sm" label="페르소나 검색" value={query} onChange={setQuery} />}
       <MenuHeading>이 채팅에서 나는</MenuHeading>
-      <MenuItem label={follows('기본 페르소나')} sub={fallback ? aliased(fallback.value.name, fallback.value.alias) : '기본 페르소나가 지워졌어요'} checked={!persona.own} onClick={() => choose(null)} />
-      {personas.map(({ id, value }) => (
+      {!query.trim() && (
+        <MenuItem label={follows('기본 페르소나')} sub={fallback ? aliased(fallback.value.name, fallback.value.alias) : '기본 페르소나가 지워졌어요'} checked={!persona.own} onClick={() => choose(null)} />
+      )}
+      {found.length === 0 && <Empty variant="menu">{noResults(query.trim())}</Empty>}
+      {found.map(({ id, value }) => (
         <MenuItem
           key={id}
           label={aliased(value.name, value.alias)}

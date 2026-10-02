@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
-import { noResults } from '../common/search';
+import { noResults, SEARCH_FROM } from '../common/search';
 import { ToggleChoice } from '../common/ToggleChoice';
 import { PAGES } from '../common/words';
 import { Button, ChoiceGroup, Empty, Row, SearchField, Section, SettingRow, SidePanel, Stack, Switch, Text } from '../ui';
 import { shownRows, splitByCard, type ToggleRow } from './toggles';
 import type { OpenChat } from './useChat';
-
-// Search and the 바꾼 것 filter show from this many toggles; fewer fit the panel at a glance.
-const SEARCH_FROM = 8;
 
 const defaultOf = (toggle: Toggle) => `처음 값: ${toggle.kind === 'check' ? (toggle.default === '1' ? '켬' : '끔') : (toggle.options[Number(toggle.default)] ?? toggle.default)}`;
 

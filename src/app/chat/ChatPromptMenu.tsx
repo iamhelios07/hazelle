@@ -1,10 +1,12 @@
 import { FileText } from 'lucide-react';
+import { useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import { chatPrompt, ofSort } from '../../runtime/prompts';
+import { matches, noResults, SEARCH_FROM } from '../common/search';
 import { follows } from '../common/words';
 import { useChats, useSession, useSettings, usePrompts } from '../session';
 import { useToast } from '../toast';
-import { ChipButton, Divider, Icon, Menu, MenuHeading, MenuItem, Tag } from '../ui';
+import { ChipButton, Divider, Empty, Icon, Menu, MenuHeading, MenuItem, SearchField, Tag } from '../ui';
 import type { OpenChat } from './useChat';
 
 // Without its own choice it follows the default live, and a deleted one shows as missing, never as another prompt.
@@ -28,7 +30,7 @@ export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
   );
 }
 
-// Mounted only while the menu is open. The conversation prompts go by their latest use in any chat, then by name.
+// Mounted only while the menu is open, so each opening starts with an empty search. The conversation prompts go by their latest use in any chat, then by name.
 function PromptChoices({ chat }: { chat: OpenChat }) {
   const { prompt, actions } = chat;
   const { store } = useSession();
@@ -47,11 +49,16 @@ function PromptChoices({ chat }: { chat: OpenChat }) {
   const order = (a: Stored<'prompt'>, b: Stored<'prompt'>) => (used.get(a.id) ?? Infinity) - (used.get(b.id) ?? Infinity) || a.value.name.localeCompare(b.value.name, 'ko');
   const own = prompt.own && prompt.kind === 'prompt' ? prompt.prompt.id : null;
 
+  const [query, setQuery] = useState('');
+  const found = prompts.filter((item) => matches(query, item.value.name)).sort(order);
+
   return (
     <>
+      {prompts.length >= SEARCH_FROM && <SearchField size="sm" label="프롬프트 검색" value={query} onChange={setQuery} />}
       <MenuHeading>이 채팅만 바뀌어요 · 최근 사용</MenuHeading>
-      <MenuItem label={follows('기본 프롬프트')} sub={fallback?.value.name ?? '기본 프롬프트가 없어요'} checked={!prompt.own} onClick={() => choose(null)} />
-      {[...prompts].sort(order).map((item) => (
+      {!query.trim() && <MenuItem label={follows('기본 프롬프트')} sub={fallback?.value.name ?? '기본 프롬프트가 없어요'} checked={!prompt.own} onClick={() => choose(null)} />}
+      {found.length === 0 && <Empty variant="menu">{noResults(query.trim())}</Empty>}
+      {found.map((item) => (
         <MenuItem
           key={item.id}
           label={item.value.name}
