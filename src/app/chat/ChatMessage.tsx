@@ -243,7 +243,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       </Menu>
     ) : null;
 
-  const tools = live || editing !== null ? undefined : opening ? (
+  const tools = live || message.unstored || editing !== null ? undefined : opening ? (
     <>
       {translateTool}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}

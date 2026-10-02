@@ -26,8 +26,9 @@ export type Turn = {
   reasoning: string;
 };
 
-// A message on screen: live marks the version being written.
-export type Shown = Message & { live: string | null };
+// A message on screen: live marks the version being written. unstored: the user's message shown before the store has
+// it. Nothing may be saved against it yet: fold skips, for good, an entry that names a message saved after it.
+export type Shown = Message & { live: string | null; unstored?: true };
 
 // What one reply is sent with, ready once its prompt is built: the model and the prompt, which the reply's id
 // seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model. said: the user's message
@@ -61,7 +62,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   if (said && !out.some((message) => message.id === said.id)) {
     let message = saidMessages.get(said);
     if (!message) {
-      message = { id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now, ...(said.translation && { translation: said.translation }), ...(said.before && { before: said.before }) }], selected: 0, live: null };
+      message = { id: said.id, role: 'user', at: now, versions: [{ id: said.id, seed: said.id, text: said.text, receipt: null, edited: false, at: now, ...(said.translation && { translation: said.translation }), ...(said.before && { before: said.before }) }], selected: 0, live: null, unstored: true };
       saidMessages.set(said, message);
     }
     out.push(message);
