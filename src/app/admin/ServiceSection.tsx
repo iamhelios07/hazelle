@@ -50,13 +50,12 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
         <SettingRow
           label="계정당 글 한도"
           help="그림을 뺀, 한 계정이 저장한 내용의 크기예요. 비우면 한도가 없어요. 계정 목록에서 계정마다 따로 정할 수 있어요."
-          sub={`모든 계정 합계 ${sizeText(service.bytes)}`}
           error={accountBytesCap === undefined ? CAP_ERROR : undefined}
           control={<NumberInput label="계정당 글 한도" unit="MB" placeholder="없음" value={cap ?? capText(service.accountBytesCap)} invalid={accountBytesCap === undefined} onChange={setCap} />}
         />
         <SettingRow
           label="계정당 그림 한도"
-          help="한 계정이 처음 올린 그림의 크기예요. 그림은 지워도 줄지 않아요. 비우면 한도가 없어요. 계정 목록에서 계정마다 따로 정할 수 있어요."
+          help="한 계정이 올린 그림의 크기예요. 그림은 지워도 줄지 않아요. 비우면 한도가 없어요. 계정 목록에서 계정마다 따로 정할 수 있어요."
           sub={`저장된 그림 합계 ${sizeText(service.fileBytes)}`}
           error={accountFileBytesCap === undefined ? CAP_ERROR : undefined}
           control={<NumberInput label="계정당 그림 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}

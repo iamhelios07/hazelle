@@ -14,6 +14,10 @@ const ACTIONS: Record<string, string> = {
   'resolve-report': '알림 확인',
   'block-file': '파일 차단',
   'unblock-file': '파일 차단 풀기',
+  'restore-begun': '복원 시작',
+  'restore-done': '복원 끝남',
+  'restore-cancelled': '복원 취소',
+  'restore-failed': '복원 실패',
 };
 
 const capText = (cap: unknown) => (typeof cap === 'number' ? sizeText(cap) : cap === 'default' ? '기본값' : '없음');

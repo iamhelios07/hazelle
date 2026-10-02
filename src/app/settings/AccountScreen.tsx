@@ -10,8 +10,8 @@ import { BackupSection } from './BackupSection';
 import { LeaveSection } from './LeaveSection';
 import { ReportSection } from './ReportSection';
 
-// Used, and the cap when there is one.
-const used = (name: string, bytes: number, cap: number | null) => `${name} ${sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
+// Used, and the cap when there is one. bytes is null while the server could not read it.
+const used = (name: string, bytes: number | null, cap: number | null) => `${name} ${bytes === null ? '알 수 없음' : sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
 
 export function AccountScreen({ back }: { back: Back | null }) {
   const { username } = useSession();
@@ -29,7 +29,7 @@ export function AccountScreen({ back }: { back: Back | null }) {
       <SettingGroup label="계정">
         <SettingRow
           label="저장 공간"
-          help="그림은 이 계정이 처음 올린 크기로 세고, 지워도 줄지 않아요."
+          help="그림은 올린 크기로 세고, 지워도 줄지 않아요."
           sub={`${used('글', storage.bytes, storage.bytesCap)} · ${used('그림', storage.fileBytes, storage.fileBytesCap)}`}
           control={null}
         />
