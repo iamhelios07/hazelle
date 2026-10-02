@@ -277,22 +277,20 @@ function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, targ
   };
 }
 
-// The request sending text would make, as its cache reads it, for the forecast beside the send button. A message sent
-// translated goes out as its translation, which is not made yet, so it stands in as typed.
-export function nextSend(session: Session, chat: string, text: string, countTokens: (text: string) => number): CacheSend | null {
-  const next = wouldSend(session, chat, { kind: 'send', text }, countTokens);
-  if (!next) return null;
-  const { turn, prompt } = next;
-  const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
-  return view && { connection: turn.route.connection.id, view, parts: prompt.parts };
-}
-
 // The request the chat would send for target now; null while it cannot send, or the prompt is over the model's budget.
-export function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, countTokens: (text: string) => number): { turn: TurnContext; prompt: Assembled } | null {
+export type Sending = { turn: TurnContext; prompt: Assembled };
+
+export function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, countTokens: (text: string) => number): Sending | null {
   const turn = gatherTurn(session, chat, target);
   if (turn === null || 'kind' in turn) return null;
   const prompt = assemble({ scope: turn.scope, seed: turn.reply.id, countTokens, budget: turn.budget, continuing: false, memory: turn.memory });
   return 'kind' in prompt ? null : { turn, prompt };
+}
+
+// A request as its cache reads it, for the forecast beside the send button.
+export function cacheSend({ turn, prompt }: Sending): CacheSend | null {
+  const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
+  return view && { connection: turn.route.connection.id, view, parts: prompt.parts };
 }
 
 // A message whose shown version has a translation, with that translation as its text: a reply's, or what the user

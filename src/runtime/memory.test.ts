@@ -3,8 +3,11 @@ import { fold, shown } from '../model/chat';
 import { fingerprint } from '../engine/memory';
 import { memoryId } from '../model/memory';
 import { appendUserMessage, editMessage, startChat } from './chat-log';
-import { chatMemory, setDefaultMemory } from './memory';
+import { api } from './api';
+import { chatMemory, forgetRecord, removeFact, setDefaultMemory } from './memory';
 import { addPrompt, editPrompt } from './prompts';
+import { ObjectStore } from './store';
+import { openSession } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
 
@@ -95,6 +98,29 @@ describe('Rememberer', () => {
       expect(log).toHaveLength(1);
       expect(chatMemory(session.store, chat).records).toEqual([]);
     }));
+  it("leaves a stale record as it is while the chat's prompt holds no 장기 기억 slot, and still summarizes it again when the user asks", () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const made = await addPrompt(session.store, 'no memory', 'conversation');
+      if (!made.ok) throw new Error('not saved');
+      await editPrompt(session.store, made.data.id, { blocks: made.data.value.blocks.filter((block) => !(block.kind === 'slot' && block.slot === 'memory')) });
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {}, prompt: made.data.id }, null);
+      const said = crypto.randomUUID();
+      await appendUserMessage(session.store, chat, { id: said, text: 'We meet at the pier.' });
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Luna waves.' });
+      const stale = { id: 'r0', sources: [{ message: said, version: said }], print: 'another text', when: null, where: null, who: [], what: 'They meet.', lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 };
+      await session.store.create('memory', { records: [stale], state: [], threads: [] }, { id: memoryId(chat), parent: chat });
+      const log = stubRelay(inTurn([saying(summary('jin and Luna meet at the pier.', 'We meet at the pier.'))]));
+      session.memory.check(chat);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(log).toHaveLength(0);
+
+      session.memory.rebuild(chat, 'r0');
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).records[0]).toMatchObject({ what: 'jin and Luna meet at the pier.' }));
+      expect(log).toHaveLength(1);
+    }));
   it('keeps a thread said again as the one thread already open', () =>
     server.withSession(async (session) => {
       await answerable(session);
@@ -114,4 +140,83 @@ describe('Rememberer', () => {
       await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(2));
       expect(chatMemory(session.store, chat).threads.map(({ opened }) => opened)).toEqual(['r0']);
     }));
+});
+
+describe('a deletion from memory', () => {
+  it('answers what it deleted when its first try landed unanswered, so 되돌리기 has it', async () => {
+    const { accountId, vaultKey } = await server.account();
+    let drop = false;
+    const request = async <T,>(...args: Parameters<typeof api>) => {
+      const result = await api<T>(...args);
+      if (!drop || args[1] !== 'objects/batch') return result;
+      drop = false;
+      return { ok: false as const, error: 'offline' };
+    };
+    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: null, character: null, models: {} }, null);
+    const record = { id: 'r0', sources: [], print: 'p', when: null, where: null, who: [], what: 'Luna waits.', lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 };
+    const fact = { about: 'Luna', field: 'place', value: 'the pier', record: 'r0' };
+    await store.create('memory', { records: [record], state: [fact], threads: [] }, { id: memoryId(chat), parent: chat });
+
+    const unanswered = async <T,>(write: () => Promise<T>) => {
+      drop = true;
+      const writing = write();
+      await vi.waitFor(() => expect(store.waiting()).toBe(true));
+      await vi.advanceTimersByTimeAsync(1000);
+      return writing;
+    };
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      expect(await unanswered(() => removeFact(store, chat, fact))).toEqual({ ok: true, data: fact });
+      expect(await unanswered(() => forgetRecord(store, chat, 'r0'))).toEqual({ ok: true, data: record });
+      expect(chatMemory(store, chat)).toEqual({ records: [{ ...record, forgotten: true }], state: [], threads: [] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('a summary picked up after a reload', () => {
+  it('is dropped when its messages render differently than the call read them, though their versions are the same', async () => {
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    const { accountId, vaultKey } = await server.account();
+    const open = async () => {
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal);
+      if (!opened.ok) throw new Error(opened.error);
+      opened.data.startBackground();
+      return opened.data;
+    };
+    const first = await open();
+    await answerable(first);
+    await setDefaultMemory(first.store, { window: 1, batch: 1 });
+    const chat = crypto.randomUUID();
+    await server.hold(first.store, chat);
+    await startChat(first.store, chat, { title: null, character: null, models: {}, variables: [['place', 'the pier']] }, null);
+    await appendUserMessage(first.store, chat, { id: crypto.randomUUID(), text: 'We meet at {{getvar::place}}.' });
+    const provider = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = provider.writable.getWriter();
+    const log = stubRelay(inTurn([saying('Luna waves.'), new Response(provider.readable, { headers: { 'x-relay': 'upstream' } })]));
+    expect(await takeTurn(first, chat, { kind: 'answer' })).toBeNull();
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ value }) => value.for.kind)).toEqual(['memory']));
+    await vi.waitFor(() => expect(log).toHaveLength(2));
+    first.close();
+
+    const second = await open();
+    try {
+      await server.hold(second.store, chat);
+      await vi.waitFor(() => expect(second.memory.snapshot().running.has(chat)).toBe(true));
+      await second.store.update('chat', chat, (current) => ({ ...current, variables: [['place', 'the harbor']] }));
+      // No key line, so nothing but the print tells the answer from one made of the text as it renders now.
+      const answer = JSON.stringify({ records: [{ to: 1, when: null, where: 'the pier', who: ['jin'], what: 'They meet at the pier.', lines: [], outcome: '', state: [], opens: [], closes: [] }] });
+      await writer.write(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: answer }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`));
+      await writer.close();
+      await vi.waitFor(() => expect(second.store.list('stream')).toEqual([]));
+      expect(chatMemory(second.store, chat).records).toEqual([]);
+    } finally {
+      second.close();
+    }
+  });
 });

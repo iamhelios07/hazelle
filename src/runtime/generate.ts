@@ -16,7 +16,9 @@ export type ReplyError =
 // The facts a receipt keeps: the outcome, and times measured from the moment of sending.
 // A stop is a cut, never an error. request is the address and body the request was built with, for 요청 원문, and
 // cache what its cache read and wrote; both null when it was refused before it could be built, or picked up after a reload.
+// call: the call's id, which its receipt keeps (model/chat Receipt id); a call picked up after a reload has the same.
 export type Reply = Omit<Outcome, 'error'> & {
+  call: string;
   error: Exclude<ReplyError, { kind: 'stopped' }> | null;
   firstTextMs: number | null;
   totalMs: number;
@@ -44,6 +46,7 @@ export async function generate({ credentials, connection, model, settings, messa
   let cached: CacheView | null = null;
   const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
     ...outcome,
+    call: call.id,
     error,
     firstTextMs: firstText === null ? null : Math.round(firstText - started),
     totalMs: Math.round(performance.now() - started),
@@ -97,7 +100,7 @@ export function cacheViewOf(connection: Connection, model: Starred, settings: Mo
 export async function resume(store: ObjectStore, { id, value }: Stored<'stream'>, signal: AbortSignal, onText: GenerateInput['onText']): Promise<Reply> {
   const call: StreamCall = { id, key: value.key };
   const empty = { finishReason: null, usage: null, cost: null, replyId: null };
-  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({ ...outcome, error, firstTextMs: null, totalMs: call.took ?? 0, request: null, cache: null });
+  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({ ...outcome, call: id, error, firstTextMs: null, totalMs: call.took ?? 0, request: null, cache: null });
   const route = routeOf(store, value.call);
   const resolved = 'kind' in route ? null : resolveConnection(route.connection.value);
   if ('kind' in route || !resolved) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'model-gone' });

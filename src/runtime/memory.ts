@@ -1,7 +1,7 @@
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
 import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, standing, threadLabel, windowStart, type ChatRead, type Drafted, type MemoryInput, type RecordStatus, type Staleness } from '../engine/memory';
-import { assembleMemory } from '../engine/pipeline';
+import { assembleMemory, type Assembled } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { renderChat } from '../engine/render';
 import { shown, type Chat, type Message, type Receipt } from '../model/chat';
@@ -9,6 +9,7 @@ import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
+import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { generate, resume, type Reply } from './generate';
@@ -87,15 +88,28 @@ export const editRecord = (store: ObjectStore, chat: string, record: string, pat
 export const pinRecord = (store: ObjectStore, chat: string, record: string, pinned: boolean): Write =>
   withRecord(store, chat, record, (current) => (pinned ? { ...current, pinned: true } : without(current, 'pinned')));
 
-// Answers the record as it was, which restoreRecord (되돌리기) writes back.
-export async function forgetRecord(store: ObjectStore, chat: string, record: string): Write<MemoryRecord> {
-  let was: MemoryRecord | null = null;
-  const saved = await withRecord(store, chat, record, (current) => {
-    was = current;
-    return { ...current, forgotten: true };
+// A deletion that answers what it deleted, for its 되돌리기. The store applies a change again when a try's answer was
+// lost after it landed (ObjectStore reaching), and that copy no longer holds the thing: the snapshot stays the last
+// copy's that held it, and the deletion already made, by that try or by another device, is this one done.
+async function taking<T>(store: ObjectStore, chat: string, find: (memory: Memory) => T | undefined, remove: (memory: Memory, found: T) => Memory): Write<T> {
+  let was: T | undefined;
+  const saved = await changeMemory(store, chat, (memory) => {
+    const found = find(memory);
+    if (found === undefined) return was === undefined ? null : memory;
+    was = found;
+    return remove(memory, found);
   });
   return saved.ok ? { ok: true, data: was! } : saved;
 }
+
+// Answers the record as it was, which restoreRecord (되돌리기) writes back.
+export const forgetRecord = (store: ObjectStore, chat: string, record: string): Write<MemoryRecord> =>
+  taking(
+    store,
+    chat,
+    (memory) => memory.records.find(({ id, forgotten }) => id === record && !forgotten),
+    (memory, found) => ({ ...memory, records: memory.records.map((each) => (each === found ? { ...found, forgotten: true } : each)) }),
+  );
 
 export const restoreRecord = (store: ObjectStore, chat: string, record: MemoryRecord): Write => withRecord(store, chat, record.id, () => record);
 
@@ -112,14 +126,13 @@ export function setFact(store: ObjectStore, chat: string, fact: Fact, replaces: 
   });
 }
 
-export async function removeFact(store: ObjectStore, chat: string, fact: Pick<Fact, 'about' | 'field'>): Write<Fact> {
-  let was: Fact | null = null;
-  const saved = await changeMemory(store, chat, (memory) => {
-    was = memory.state.find((each) => sameFact(each, fact)) ?? null;
-    return was && { ...memory, state: memory.state.filter((each) => each !== was) };
-  });
-  return saved.ok ? { ok: true, data: was! } : saved;
-}
+export const removeFact = (store: ObjectStore, chat: string, fact: Pick<Fact, 'about' | 'field'>): Write<Fact> =>
+  taking(
+    store,
+    chat,
+    (memory) => memory.state.find((each) => sameFact(each, fact)),
+    (memory, found) => ({ ...memory, state: memory.state.filter((each) => each !== found) }),
+  );
 
 export const setThread = (store: ObjectStore, chat: string, thread: Thread): Write =>
   changeMemory(store, chat, (memory) => {
@@ -127,14 +140,13 @@ export const setThread = (store: ObjectStore, chat: string, thread: Thread): Wri
     return { ...memory, threads: at === -1 ? [...memory.threads, thread] : memory.threads.with(at, thread) };
   });
 
-export async function removeThread(store: ObjectStore, chat: string, thread: string): Write<Thread> {
-  let was: Thread | null = null;
-  const saved = await changeMemory(store, chat, (memory) => {
-    was = memory.threads.find(({ id }) => id === thread) ?? null;
-    return was && { ...memory, threads: memory.threads.filter((each) => each !== was) };
-  });
-  return saved.ok ? { ok: true, data: was! } : saved;
-}
+export const removeThread = (store: ObjectStore, chat: string, thread: string): Write<Thread> =>
+  taking(
+    store,
+    chat,
+    (memory) => memory.threads.find(({ id }) => id === thread),
+    (memory, found) => ({ ...memory, threads: memory.threads.filter((each) => each !== found) }),
+  );
 
 // A saved chat as memory reads it: its messages as a request sends them, and their texts as the prompt renders them.
 type ChatSent = { chat: Chat; scope: ChatScope; read: ChatRead };
@@ -183,12 +195,9 @@ export function memoryView(session: Pick<Session, 'store' | 'read'>, chat: strin
   };
 }
 
-// The messages the next request would leave out with no memory standing for them: covered by memory that is not sent,
-// or cut by the model's budget. null while the chat cannot send.
-export function leaving(session: Session, chat: string, text: string, countTokens: (text: string) => number): number | null {
-  const next = wouldSend(session, chat, { kind: 'send', text }, countTokens);
-  return next && (next.prompt.memory?.missing ?? 0) + next.prompt.dropped;
-}
+// The messages a request leaves out with no memory standing for them: covered by memory that is not sent, or cut by
+// the model's budget.
+export const leaving = (prompt: Assembled): number => (prompt.memory?.missing ?? 0) + prompt.dropped;
 
 // One summary: the message versions it reads, in chat order, and the record it summarizes again as it was when the job
 // started (at), null for the messages after memory's end. user: the user asked, and may have a record they edited or
@@ -340,7 +349,7 @@ export class Rememberer {
     if (this.closed || purpose.kind !== 'memory' || this.working.has(chat)) return;
     this.working.add(chat);
     this.change(chat, { running: { model: stream.value.call.modelName, left: 1 } });
-    void this.hold(chat, () => this.resumed(chat, stream, purpose.sources)).finally(() => this.done(chat));
+    void this.hold(chat, () => this.resumed(chat, stream, purpose)).finally(() => this.done(chat));
   }
 
   close() {
@@ -415,9 +424,11 @@ export class Rememberer {
     const asked = memory.records.find(({ id }) => id === this.asked.get(chat));
     this.asked.delete(chat);
     const stale = memory.records.filter((record) => !record.edited && !record.pinned && !record.forgotten && staleness(record, sent.read, places) === 'changed' && !this.reread.has(readKey(shownFor(record, sent.read, places))));
-    const again = asked ?? stale[0];
-    // Without a 장기 기억 slot in the request, a new record would only take its messages out of it.
-    const reaches = () => wouldSend(this.session, chat, { kind: 'answer' }, countTokens)?.prompt.memory?.slot === true;
+    // Without a 장기 기억 slot in the request, a new record would only take its messages out of it, and a stale one
+    // summarized again would be paid for and never read. What the user asked for is made whatever the prompt holds.
+    let slot: boolean | null = null;
+    const reaches = () => (slot ??= wouldSend(this.session, chat, { kind: 'answer' }, countTokens)?.prompt.memory?.slot === true);
+    const again = asked ?? (stale.length && reaches() ? stale[0] : undefined);
     const span = !again && this.full.has(chat) && reaches() ? this.span(chat, sent.read, coveredBy(memory, places), setup, countTokens) : null;
     if (!again && !span) return null;
     const indices = again ? again.sources.flatMap(({ message }) => places.get(message) ?? []) : [];
@@ -453,33 +464,36 @@ export class Rememberer {
     const { store, credentials } = this.session;
     const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
     const { messages, span } = assembleMemory({ scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID(), countTokens });
-    const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources } };
+    const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));
+    const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read) } };
     const text = gather();
     const answer = await this.reads(target.id, async (signal) =>
       generate({ credentials, connection: route.connection.value, model: route.model, settings, messages, call: await newCall(store, route, target), signal, onText: text.add }),
     );
-    const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));
     return this.finish(chat, target.id, target.result, callOf(route), answer, text.value(), job, read);
   }
 
-  // A resumed call reads its span as the chat renders it now; the commit checks the versions are still the ones it read.
-  private async resumed(chat: string, stream: Stored<'stream'>, sources: Source[]) {
+  // A resumed call's answer is for its span as the prompt rendered it when the call was made (the marker's print).
+  // Rendered differently now, after a toggle or a variable an earlier message sets, the answer is dropped as one whose
+  // versions changed is: its key lines cannot be checked against a text the call never read, and its records would
+  // take the print of that text and never read as stale.
+  private async resumed(chat: string, stream: Stored<'stream'>, { sources, print }: Extract<Stream['for'], { kind: 'memory' }>) {
     const text = gather();
     const answer = await this.reads(stream.id, (signal) => resume(this.session.store, stream, signal, text.add));
     const sent = chatSent(this.session, chat);
-    const places = sent && placesOf(sent.read.shown);
-    const indices = sources.flatMap(({ message }) => places?.get(message) ?? []);
-    if (!sent || indices.length < sources.length) {
+    const places = placesOf(sent?.read.shown ?? []);
+    const indices = sources.flatMap(({ message }) => places.get(message) ?? []);
+    const read = indices.map((index) => ({ role: sent!.read.roles[index]!, text: sent!.read.texts[index]! }));
+    if (indices.length < sources.length || fingerprint(read) !== print) {
       if (answer.cut !== 'stopped') endCall(this.session.store, stream.id);
       return;
     }
     const memory = chatMemory(this.session.store, chat);
     const again = memory.records.find((record) => {
-      const present = record.sources.filter(({ message }) => places!.has(message));
+      const present = record.sources.filter(({ message }) => places.has(message));
       return present.length === sources.length && present.every(({ message }, index) => message === sources[index]!.message);
     });
     const job: Job = { sources, redo: again ? { record: again.id, at: again.at, user: false } : null };
-    const read = indices.map((index) => ({ role: sent.read.roles[index]!, text: sent.read.texts[index]! }));
     const outcome = await this.finish(chat, stream.id, stream.value.result, stream.value.call, answer, text.value(), job, read);
     if (typeof outcome !== 'string') this.change(chat, { failed: outcome });
   }

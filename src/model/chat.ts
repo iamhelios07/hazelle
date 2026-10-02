@@ -31,6 +31,9 @@ export type Chat = {
 
 // What a reply's generation left behind. The raw request is never stored.
 export type Receipt = {
+  // The call's own id (runtime/streams newCall, pageCall), the same in every copy of the receipt: an edit, a branch's
+  // copy and a continued reply keep the receipt whole, so usage counts the call once wherever it is held.
+  id: string;
   connection: string;
   // The connection's and the model's names when the reply was made; either may be renamed or deleted later.
   source: string;
@@ -142,10 +145,11 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
 export function fold(entries: Stored<'entry'>[]): Message[] {
   const messages = new Map<string, Message>();
   const deleted = new Set<string>();
-  // A replaced version's id keeps leading to the version that took its place.
-  const versions = new Map<string, Version>();
   // By a version's own id only: a translation of a replaced version is not its replacement's.
   const own = new Map<string, Version>();
+  // A version's place among its message's versions, by its id. A place never moves, so a replaced version's id keeps
+  // leading to whichever version stands there now, however many times it was replaced since.
+  const places = new Map<string, number>();
   // By a version's own id and those of the versions it is an edit of, and those ids by the version.
   const edits = new Map<string, Version>();
   const ids = new Map<Version, string[]>();
@@ -156,15 +160,15 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
   };
   const costs = new Map<string, Cost | null>();
   const locate = (message: Message, id: string) => {
-    const version = versions.get(id);
-    return version ? message.versions.indexOf(version) : -1;
+    const version = own.get(id);
+    return version && home.get(version) === message ? places.get(id)! : -1;
   };
 
   for (const { id, value: entry } of [...entries].sort((a, b) => a.rev - b.rev)) {
     if (entry.type === 'message') {
       const version = versionOf(id, entry, false, entry.staged === true);
-      versions.set(id, version);
       own.set(id, version);
+      places.set(id, 0);
       stand(id, version);
       const message: Message = { id, role: entry.role, at: entry.at, versions: [version], selected: 0 };
       messages.set(id, message);
@@ -208,9 +212,8 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       stand(id, version, edited && ids.get(edited));
       if (slot === -1) message.versions.push(version);
       else message.versions[slot] = version;
-      versions.set(id, version);
-      if (entry.replaces !== null && slot !== -1) versions.set(entry.replaces, version);
       message.selected = slot === -1 ? message.versions.length - 1 : slot;
+      places.set(id, message.selected);
     } else if (entry.type === 'select') {
       const slot = locate(message, entry.version);
       if (slot !== -1) message.selected = slot;
@@ -314,8 +317,8 @@ type Tally = { total: number; unknown: number };
 export type ModelUsage = { calls: number; last: number | null; input: Tally; output: Tally; costs: { unit: Cost['unit']; amount: number; estimated: boolean }[]; costUnknown: number };
 
 // Every call to one model in the chats kept, a continued reply counting each of its calls and a translation its own.
-// A branch copies the replies it holds with their receipts, so a call is counted once however many chats hold it; the
-// cost stays out of the key, as the original settles it later than a copy made after.
+// A branch copies the replies it holds with their receipts, so a call is counted once, by its id, however many chats
+// hold it; the cost is read from whichever copy has settled it, as the original settles later than a copy made after.
 export class UsageCounter {
   private readonly usage: Omit<ModelUsage, 'costs' | 'costUnknown'> = { calls: 0, last: null, input: { total: 0, unknown: 0 }, output: { total: 0, unknown: 0 } };
   private readonly seen = new Map<string, Cost | null>();
@@ -347,15 +350,14 @@ export class UsageCounter {
       ]);
     for (const { at, call } of made) {
       if (call.connection !== this.ref.connection || call.model !== this.ref.model) continue;
-      const key = JSON.stringify([at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
       const cost = call.cost === 'pending' ? null : call.cost;
-      if (this.seen.has(key)) {
+      if (this.seen.has(call.id)) {
         // A branch can be walked before the original that later settled the same call.
-        const previous = this.seen.get(key);
-        if (cost && (!previous || (previous.source === 'price-list' && cost.source === 'reported'))) this.seen.set(key, cost);
+        const previous = this.seen.get(call.id);
+        if (cost && (!previous || (previous.source === 'price-list' && cost.source === 'reported'))) this.seen.set(call.id, cost);
         continue;
       }
-      this.seen.set(key, cost);
+      this.seen.set(call.id, cost);
       usage.calls++;
       usage.last = Math.max(usage.last ?? 0, at);
       add(usage.input, call.usage?.inputTokens ?? null);
