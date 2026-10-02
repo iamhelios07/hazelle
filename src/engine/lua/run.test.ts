@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Trigger } from '../import/types';
-import { Lua, type Event } from './run';
+import { Lua, type Event, type Script } from './run';
 import type { Host, Snapshot } from './state';
 
 const SNAPSHOT: Snapshot = {
@@ -155,7 +155,16 @@ describe('Lua display', () => {
       { index: 0, text: 'a', variables: [] },
       { index: 1, text: 'b', variables: [['hp', '4']] },
     ]);
-    expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], errors: [], missing: [] });
+    expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], listening: [true], errors: [], missing: [] });
+  });
+
+  it('says which scripts listen by what their engines registered, a computed name too, not by their source', async () => {
+    const scripts = [`-- editDisplay editRequest\nfunction onStart(id) end`, `listenEdit('edit' .. 'Display', function(id, value) return value .. '!' end)`].map((code): Script => ({ kind: 'lua', name: 'main', code }));
+    expect(await lua.display('listening', scripts, SNAPSHOT, [{ index: 0, text: 'a', variables: [] }])).toMatchObject({ texts: ['a!'], listening: [false, true] });
+    const request = [{ role: 'user', content: 'a' }];
+    expect(await lua.run('listening', [scripts[0]!], SNAPSHOT, { kind: 'edit', stage: 'editRequest', value: request, meta: {} }, host())).toMatchObject({ value: request, handled: false });
+    const computed = `listenEdit('edit' .. 'Request', function(id, value) value[1].content = 'b' return value end)`;
+    expect(await run(computed, { kind: 'edit', stage: 'editRequest', value: request, meta: {} })).toMatchObject({ value: [{ role: 'user', content: 'b' }], handled: true });
   });
 });
 

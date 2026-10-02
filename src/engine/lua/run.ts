@@ -37,11 +37,14 @@ export type Outcome = {
 
 // One message's editDisplay pass. variables: the writes since the item before it, over the snapshot's.
 export type DisplayItem = { index: number; text: string; variables: [string, string][] };
-export type Displayed = { texts: string[]; errors: ScriptError[]; missing: string[] };
+// listening: false for a script whose engine holds no editDisplay listener, which has no part in any pass.
+export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[] };
 
 const ENGINES = 8;
 // Passed where Risu passes a run's access key. Bots hand it back as each call's first argument and never read it.
 const KEY = 'lua';
+
+const DEAF = Symbol('no listener');
 
 const UNSUPPORTED = [
   'setChatRole', 'insertChat', 'similarity', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
@@ -96,7 +99,8 @@ export class Lua {
         engine.run = run;
         try {
           if (event.kind === 'edit') {
-            const edited: unknown = JSON.parse((await this.call(engine, 'callListenMain', event.stage, KEY, JSON.stringify(value), JSON.stringify(event.meta))) as string);
+            const edited = await this.listeners(engine, event.stage, value, event.meta);
+            if (edited === DEAF) return;
             value = edited ?? value;
             handled = true;
             return;
@@ -137,7 +141,8 @@ export class Lua {
     const texts = items.map((item) => item.text);
     const globals = new Map(snapshot.globals);
     const messages = working(snapshot);
-    for (const script of scripts) {
+    const listening = scripts.map(() => true);
+    for (const [place, script] of scripts.entries()) {
       const engine = await this.engine(owner, 'display', script);
       await this.exclusive(engine, async () => {
         if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
@@ -146,7 +151,8 @@ export class Lua {
           for (const [name, value] of item.variables) variables.set(name, value);
           engine.run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing };
           try {
-            const edited: unknown = JSON.parse((await this.call(engine, 'callListenMain', 'editDisplay', KEY, JSON.stringify(texts[at]), JSON.stringify({ index: item.index }))) as string);
+            const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
+            if (edited === DEAF) return void (listening[place] = false);
             if (typeof edited === 'string') texts[at] = edited;
           } catch (error) {
             if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, message: describe(error) });
@@ -156,16 +162,19 @@ export class Lua {
         }
       });
     }
-    return { texts, errors, missing: [...missing] };
+    return { texts, listening, errors, missing: [...missing] };
   }
 
-  // Ends the owner's engines, and with them their Lua globals.
-  drop(owner: string) {
-    for (const [key, engine] of this.engines) {
-      if (!key.startsWith(`${owner}\n`)) continue;
-      this.engines.delete(key);
-      void engine.then(({ lua }) => lua.global.close());
-    }
+  // Ends every engine, and with them their Lua globals. A run after it starts its engines anew.
+  close() {
+    for (const engine of this.engines.values()) end(engine);
+    this.engines.clear();
+  }
+
+  // The value after the engine's listeners for the stage, or DEAF when it holds none.
+  private async listeners(engine: Engine, stage: EditStage | 'editDisplay', value: unknown, meta: Record<string, unknown>): Promise<unknown> {
+    const answer = await this.call(engine, 'callListenMain', stage, KEY, JSON.stringify(value), JSON.stringify(meta));
+    return typeof answer === 'string' ? (JSON.parse(answer) as unknown) : DEAF;
   }
 
   private call(engine: Engine, name: string, ...args: unknown[]): Promise<unknown> {
@@ -188,7 +197,7 @@ export class Lua {
       for (const [oldest, old] of this.engines) {
         if (this.engines.size < ENGINES) break;
         this.engines.delete(oldest);
-        void old.then((ended) => ended.queue.then(() => ended.lua.global.close()));
+        end(old);
       }
     }
     this.engines.set(key, engine);
@@ -301,6 +310,9 @@ export class Lua {
     for (const name of UNSUPPORTED) set(name, (run) => void run.missing.add(name));
   }
 }
+
+// Closed once what it is running has ended.
+const end = (engine: Promise<Engine>) => void engine.then(({ lua, queue }) => queue.then(() => lua.global.close()));
 
 function globals(lua: LuaEngine): string[] {
   const names: string[] = [];

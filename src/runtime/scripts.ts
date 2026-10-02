@@ -21,7 +21,7 @@ import { chatPrompt } from './prompts';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
-import { callOf, pageCall } from './streams';
+import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
 import { tokenizer } from './tokenizer';
 import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './turn';
@@ -66,18 +66,28 @@ function cbsScope({ card, persona, prompt, note, lore, messages, variables, gree
   return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick };
 }
 
-// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
-// variables given.
-export function luaSnapshot(store: ObjectStore, chat: Chat, scope: ChatScope, staged: string[], variables: [string, string][]): Snapshot {
-  const greeting = scope.greeting === null ? 0 : 1;
+// What Lua's own functions read of a chat besides its messages and variables; its CBS and lorebook reads go through
+// the snapshot's scope. An editDisplay pass run on one is not fresh for another (ScriptDisplay).
+export type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
+
+export function luaStanding(store: ObjectStore, chat: Chat, scope: ChatScope): LuaStanding {
   const toggles = togglesOf(store, chat, chatPrompt(store, chat));
   return {
-    messages: scope.messages.slice(greeting).map(({ role, time }, index) => ({ role: role === 'user' ? 'user' : 'char', data: staged[index + greeting]!, time: time ?? 0 })),
-    variables,
     globals: toggles.declared.map(({ key }) => [`${TOGGLE_GLOBAL}${key}`, toggles.value(key) ?? '']),
     character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
     persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
     note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
+  };
+}
+
+// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
+// variables given.
+export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: string[], variables: [string, string][]): Snapshot {
+  const greeting = scope.greeting === null ? 0 : 1;
+  return {
+    messages: scope.messages.slice(greeting).map(({ role, time }, index) => ({ role: role === 'user' ? 'user' : 'char', data: staged[index + greeting]!, time: time ?? 0 })),
+    variables,
+    ...standing,
     scope: cbsScope(scope),
   };
 }
@@ -126,7 +136,7 @@ export class Scripts {
   }
 
   // The bot's scripts on the way to a reply: onInput and editInput for a message being sent, which is then saved here so
-  // that what onStart does to the chat lands after it; then onStart, which may end the turn. again gathers the turn
+  // that what onStart does to the chat lands after it; then onStart. Each may end the turn. again gathers the turn
   // anew once the chat has changed under it: answer, once the user's message is saved and no longer sent.
   async starting(
     chat: string,
@@ -151,18 +161,25 @@ export class Scripts {
       };
       const { said } = first;
       if (said) {
-        let history: ChatScope = { ...turn.scope, messages: turn.scope.messages.slice(0, -1) };
-        const input = await this.event(chat, first.chat, scripts, history, { kind: 'input' }, null);
-        if (input.changed) {
-          const failed = regather(false);
-          if (failed) return failed;
-          history = { ...turn.scope, messages: turn.scope.messages.slice(0, -1) };
+        const history = (): ChatScope => ({ ...turn.scope, messages: turn.scope.messages.slice(0, -1) });
+        const input = await this.event(chat, first.chat, scripts, history(), { kind: 'input' }, null);
+        let { stop, writes: before } = input.outcome;
+        let text = said.text;
+        // A stop ends the turn where it is called: what would have run after it does not, and the message is saved
+        // as it stands, with what was written until then.
+        if (!stop) {
+          if (input.changed) {
+            const failed = regather(false);
+            if (failed) return failed;
+          }
+          const edited = await this.event(chat, first.chat, scripts, { ...history(), pending: before }, { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } }, null);
+          before = [...before, ...edited.outcome.writes];
+          if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
+          stop = edited.outcome.stop;
         }
-        const edited = await this.event(chat, first.chat, scripts, { ...history, pending: input.outcome.writes }, { kind: 'edit', stage: 'editInput', value: said.text, meta: { index: -1 } }, null);
-        const before = [...input.outcome.writes, ...edited.outcome.writes];
-        const text = typeof edited.outcome.value === 'string' ? edited.outcome.value : said.text;
         const sent = await appendUserMessage(this.session.store, chat, { ...said, text, ...(before.length > 0 && { before }) });
         if (!sent.ok) return { kind: 'unsent', failure: sent };
+        if (stop) return halted;
         const failed = regather(true);
         if (failed) return failed;
       }
@@ -189,11 +206,11 @@ export class Scripts {
   // The request's messages after the bot's editRequest listeners, with what they wrote. A listener's answer that is
   // no list of messages leaves the request as it was built.
   async requesting(chat: string, turn: TurnContext, messages: ChatMessage[]): Promise<{ messages: ChatMessage[]; writes: Writes }> {
-    // Only a script that names the hook can listen for it.
-    const scripts = scriptsOf(turn.scope.packs).filter(({ code }) => code.includes('editRequest'));
+    const scripts = scriptsOf(turn.scope.packs);
     if (scripts.length === 0) return { messages, writes: [] };
     return this.queued(chat, async () => {
       const { outcome } = await this.event(chat, turn.chat, scripts, turn.scope, { kind: 'edit', stage: 'editRequest', value: messages, meta: {} }, null);
+      if (!outcome.handled) return { messages, writes: outcome.writes };
       const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
         if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
         return [{ role: message.role, content: message.content, ...(message.cache === true && { cache: true }) }];
@@ -270,7 +287,7 @@ export class Scripts {
 
   private reading(chat: Chat, scope: ChatScope): Read {
     const { staged, wrote, variables } = renderChat('prompt', scope);
-    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(this.session.store, chat, scope, staged, [...variables]) };
+    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(scope, luaStanding(this.session.store, chat, scope), staged, [...variables]) };
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.
@@ -369,16 +386,18 @@ export class Scripts {
       return refused('no model is set');
     }
     let text = '';
+    const call = await pageCall();
+    // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,
       connection: route.connection.value,
       model: route.model,
       settings: profile.profile.value.settings,
       messages,
-      call: await pageCall(),
+      call,
       signal: this.closing.signal,
       onText: (phase, chunk) => void (phase === 'text' && (text += chunk)),
-    });
+    }).finally(() => endCall(store, call.id));
     const receipt = receiptOf(callOf(route), answer);
     const last = this.session.read.chat(chat).snapshot()?.messages.at(-1);
     if (last) {

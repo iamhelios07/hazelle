@@ -61,6 +61,18 @@ describe('display', () => {
   });
 });
 
+describe('the editDisplay pass', () => {
+  it('stamps each message with the variables the chat starts from, so a pass run from other ones is not fresh', () => {
+    const stamps = (variables: [string, string][]) => {
+      const seen: string[] = [];
+      display({ ...scope, variables, lua: (_version, _text, stamp) => (seen.push(stamp), null) });
+      return seen;
+    };
+    expect(stamps([['mood', 'calm']])).toEqual(stamps([['mood', 'calm']]));
+    expect(stamps([['mood', 'calm']])).not.toEqual(stamps([['mood', 'angry']]));
+  });
+});
+
 describe('asset tags', () => {
   const smile = '11111111-1111-4111-8111-111111111111';
   const wave = '22222222-2222-4222-8222-222222222222';

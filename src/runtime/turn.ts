@@ -3,7 +3,7 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Card, Pack } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
-import { assemble, type Assembled, type PromptInput, type TooLong } from '../engine/pipeline';
+import { assemble, rewritten, type Assembled, type PromptInput, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
@@ -352,8 +352,10 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null, memory });
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
+  const sent = requested.messages === prompt.messages ? prompt : rewritten(prompt, requested.messages, countTokens, budget);
+  if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
-  return { route, settings, prompt: { ...prompt, messages: requested.messages }, said, ...(before.length > 0 && { before }) };
+  return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }) };
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or

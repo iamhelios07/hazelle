@@ -4,12 +4,11 @@ import type { Host, Snapshot } from '../../engine/lua/state';
 import workerUrl from './worker?worker&url';
 
 // What the runtime asks of the bot scripts' machines: the engine itself in tests, a worker in the browser.
-export type Runner = Pick<Lua, 'run' | 'display' | 'drop'>;
+export type Runner = Pick<Lua, 'run' | 'display' | 'close'>;
 
 export type Down =
   | { kind: 'run'; id: number; owner: string; triggers: Trigger[]; snapshot: Snapshot; event: Event }
   | { kind: 'display'; id: number; owner: string; scripts: Script[]; snapshot: Snapshot; items: DisplayItem[] }
-  | { kind: 'drop'; owner: string }
   | { kind: 'answer'; call: number; value: unknown }
   | { kind: 'ping' };
 export type Up =
@@ -53,10 +52,6 @@ export class LuaWorker implements Runner {
 
   display(owner: string, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<Displayed> {
     return this.send((id) => ({ kind: 'display', id, owner, scripts, snapshot, items }), null) as Promise<Displayed>;
-  }
-
-  drop(owner: string) {
-    this.worker?.postMessage({ kind: 'drop', owner } satisfies Down);
   }
 
   close() {
