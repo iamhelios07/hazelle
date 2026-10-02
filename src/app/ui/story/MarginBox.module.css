@@ -3,7 +3,8 @@
   justify-content: flex-end;
 }
 
-/* The box as drawn in the margin; only it takes the pointer. */
+/* The box as drawn in the margin. Until it is pointed at only it takes the pointer: the card's own box is as wide as
+   the story, wrappers that draw nothing included, and would take the story's presses. */
 .slot {
   position: relative;
   flex-shrink: 0;
@@ -27,7 +28,9 @@
   transition: transform var(--duration-slow) var(--ease-enter);
 }
 
+/* Pointed at, the card takes the pointer itself, so the bot's buttons, links and pictures in it answer. */
 .slot:hover .card {
+  pointer-events: auto;
   transform: translateX(var(--shift));
   transition-delay: var(--duration-intent);
 }
