@@ -11,7 +11,16 @@ import { inSettings, MODEL_ROLES } from './words';
 
 const MESSAGES: Record<string, string> = {
   'bad-username': '아이디는 2–32자의 글자, 숫자, _ . - 로만 만들 수 있어요.',
-  'signup-closed': '이미 계정이 있어요. 새로고침한 뒤 로그인해 주세요.',
+  'signup-closed': '지금은 자리가 다 차서 계정을 만들 수 없어요. 자리가 늘면 다시 만들 수 있어요.',
+  // Signup's last step, after the recovery key; the name is set on the step before.
+  'username-taken': '이미 있는 아이디예요. 이전으로 돌아가 다른 아이디를 정해 주세요.',
+  'account-mismatch': '다른 탭에서 다른 계정으로 로그인해서 이 탭에서 한 일은 받지 않았어요. 이 탭에서 다시 로그인해 주세요.',
+  suspended: `운영자가 이 계정을 정지해서 저장하거나 모델을 부를 수 없어요. ${inSettings('account')}에서 백업을 받거나 운영자에게 알릴 수 있어요.`,
+  'too-many-calls': '모델을 너무 자주 불렀어요. 잠시 뒤 다시 해 주세요.',
+  'storage-full': '이 계정의 저장 공간이 가득 찼어요. 채팅을 지우거나 지운 캐릭터를 완전히 지우면 자리가 생겨요.',
+  'file-blocked': '운영자가 막은 파일이라 올리거나 열 수 없어요. 다른 파일을 써 주세요.',
+  'too-many-reports': '아직 확인하지 않은 알림이 많아서 더 보낼 수 없어요. 운영자가 확인하면 다시 보낼 수 있어요.',
+  'not-admin': '운영자 계정에서만 할 수 있어요.',
   'no-session': '로그인이 풀렸어요. 새로고침한 뒤 다시 로그인해 주세요.',
   conflict: '다른 기기에서 같은 것을 동시에 고치고 있어서 저장하지 못했어요. 다시 해 주세요.',
   unreadable: '금고 열쇠로 열리지 않는 항목이라 고칠 수 없어요.',
