@@ -33,9 +33,9 @@ export class ScriptDisplay {
   private readonly running = new Set<string>();
   private readonly bases = new Map<string, Basis>();
   private generations = 0;
-  // The scripts, by their code, whose engine held no editDisplay listener when a pass asked it. Only the engine
-  // says so, never the source's text: a listener may be registered under a computed name.
-  private readonly deaf = new Set<string>();
+  // Whether each script, by its code, holds an editDisplay listener, as its engine said when a pass asked. Only the
+  // engine decides who takes part: a listener may be registered under a computed name, which the source does not show.
+  private readonly listens = new Map<string, boolean>();
 
   constructor(
     private readonly store: ObjectStore,
@@ -62,17 +62,20 @@ export class ScriptDisplay {
     const reader = { store: this.store };
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
-    // A bot whose scripts are all known to have no listener is shown at once, with no pass and no worker. One not
-    // asked yet is passed as a listening one is, its messages empty until its first pass says which it is.
-    const scripts = scriptsOf(scope.packs).filter(({ code }) => !this.deaf.has(code));
+    // A bot whose engines all said no is shown with no pass and no worker.
+    const scripts = scriptsOf(scope.packs).filter(({ code }) => this.listens.get(code) !== false);
     if (scripts.length === 0) return display(scope, take);
+    // Until an engine has answered, its script is passed all the same, and the source is only a guess at what to show
+    // meanwhile: one that names the hook waits empty as a listening one does, any other shows its text as it is.
+    const waits = scripts.some(({ code }) => this.listens.get(code) ?? code.includes('editDisplay'));
     const standing = luaStanding(this.store, chat, scope);
     const { character, persona } = standing;
     const generation = this.generation(id, [String(scripts.length), ...scripts.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
     const held = this.held.get(id);
     const shown = display({ ...scope, lua: (version, text, stamp) => {
       const had = held?.get(version);
-      return had ? { text: had.shown, fresh: had.text === text && had.stamp === stamped(generation, stamp) } : null;
+      if (had) return { text: had.shown, fresh: had.text === text && had.stamp === stamped(generation, stamp) };
+      return waits ? null : { text, fresh: false };
     } }, take);
     if (shown.pass && this.listeners.has(id)) this.pass(id, { scripts, snapshot: luaSnapshot(scope, standing, shown.pass.staged, shown.pass.start), items: shown.pass.items, generation });
     return shown;
@@ -116,7 +119,7 @@ export class ScriptDisplay {
           .then(
             (shown) => {
               this.report(chat, shown);
-              shown.listening.forEach((listening, at) => listening || this.deaf.add(scripts[at]!.code));
+              shown.listening.forEach((listening, at) => this.listens.set(scripts[at]!.code, listening));
               return shown.texts;
             },
             (error: unknown) => (this.report(chat, error), items.map((item) => item.text)),

@@ -217,20 +217,29 @@ describe("the display with the bot's Lua", () => {
       leave();
     }));
 
-  it('passes a chat whose script has no editDisplay listener once, until its engine has said so, and never again', () =>
+  it('leaves it to the engine whether a script listens: one that only names the hook is passed once, one registered under a computed name is passed', () =>
     server.withSession(async (session) => {
-      const { chat, messages } = await chatWith(session, `-- editDisplay\nfunction onStart(id) end`);
+      const open = async (code: string) => {
+        const { chat, messages } = await chatWith(session, code);
+        const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+        const screen = session.read.screen(chat, session.talk, opening);
+        const leave = screen.subscribe(() => {});
+        screen.setInputs(opening, { width: 1200, height: 800 });
+        return { texts: () => screen.snapshot().display.texts, again: () => screen.setInputs(opening, { width: 800, height: 800 }), leave };
+      };
       const display = vi.spyOn(Lua.prototype, 'display');
-      const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, opening);
-      const leave = screen.subscribe(() => {});
-      screen.setInputs(opening, { width: 1200, height: 800 });
-      expect(screen.snapshot().display.texts).toEqual(['']);
-      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와.']);
-      screen.setInputs(opening, { width: 800, height: 800 });
-      expect(screen.snapshot().display.texts).toEqual(['어서 와.']);
+      const named = await open(`-- editDisplay\nfunction onStart(id) end`);
+      expect(named.texts()).toEqual(['']);
+      await expect.poll(named.texts).toEqual(['어서 와.']);
+      named.again();
+      expect(named.texts()).toEqual(['어서 와.']);
       expect(display).toHaveBeenCalledOnce();
+      named.leave();
+
+      const computed = await open(`listenEdit('edit' .. 'Display', function(id, value) return value .. '!' end)`);
+      expect(computed.texts()).toEqual(['어서 와.']);
+      await expect.poll(computed.texts).toEqual(['어서 와.!']);
+      computed.leave();
       display.mockRestore();
-      leave();
     }));
 });
