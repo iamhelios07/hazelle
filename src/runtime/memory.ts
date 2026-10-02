@@ -87,15 +87,28 @@ export const editRecord = (store: ObjectStore, chat: string, record: string, pat
 export const pinRecord = (store: ObjectStore, chat: string, record: string, pinned: boolean): Write =>
   withRecord(store, chat, record, (current) => (pinned ? { ...current, pinned: true } : without(current, 'pinned')));
 
-// Answers the record as it was, which restoreRecord (되돌리기) writes back.
-export async function forgetRecord(store: ObjectStore, chat: string, record: string): Write<MemoryRecord> {
-  let was: MemoryRecord | null = null;
-  const saved = await withRecord(store, chat, record, (current) => {
-    was = current;
-    return { ...current, forgotten: true };
+// A deletion that answers what it deleted, for its 되돌리기. The store applies a change again when a try's answer was
+// lost after it landed (ObjectStore reaching), and that copy no longer holds the thing: the snapshot stays the last
+// copy's that held it, and the deletion already made, by that try or by another device, is this one done.
+async function taking<T>(store: ObjectStore, chat: string, find: (memory: Memory) => T | undefined, remove: (memory: Memory, found: T) => Memory): Write<T> {
+  let was: T | undefined;
+  const saved = await changeMemory(store, chat, (memory) => {
+    const found = find(memory);
+    if (found === undefined) return was === undefined ? null : memory;
+    was = found;
+    return remove(memory, found);
   });
   return saved.ok ? { ok: true, data: was! } : saved;
 }
+
+// Answers the record as it was, which restoreRecord (되돌리기) writes back.
+export const forgetRecord = (store: ObjectStore, chat: string, record: string): Write<MemoryRecord> =>
+  taking(
+    store,
+    chat,
+    (memory) => memory.records.find(({ id, forgotten }) => id === record && !forgotten),
+    (memory, found) => ({ ...memory, records: memory.records.map((each) => (each === found ? { ...found, forgotten: true } : each)) }),
+  );
 
 export const restoreRecord = (store: ObjectStore, chat: string, record: MemoryRecord): Write => withRecord(store, chat, record.id, () => record);
 
@@ -112,14 +125,13 @@ export function setFact(store: ObjectStore, chat: string, fact: Fact, replaces: 
   });
 }
 
-export async function removeFact(store: ObjectStore, chat: string, fact: Pick<Fact, 'about' | 'field'>): Write<Fact> {
-  let was: Fact | null = null;
-  const saved = await changeMemory(store, chat, (memory) => {
-    was = memory.state.find((each) => sameFact(each, fact)) ?? null;
-    return was && { ...memory, state: memory.state.filter((each) => each !== was) };
-  });
-  return saved.ok ? { ok: true, data: was! } : saved;
-}
+export const removeFact = (store: ObjectStore, chat: string, fact: Pick<Fact, 'about' | 'field'>): Write<Fact> =>
+  taking(
+    store,
+    chat,
+    (memory) => memory.state.find((each) => sameFact(each, fact)),
+    (memory, found) => ({ ...memory, state: memory.state.filter((each) => each !== found) }),
+  );
 
 export const setThread = (store: ObjectStore, chat: string, thread: Thread): Write =>
   changeMemory(store, chat, (memory) => {
@@ -127,14 +139,13 @@ export const setThread = (store: ObjectStore, chat: string, thread: Thread): Wri
     return { ...memory, threads: at === -1 ? [...memory.threads, thread] : memory.threads.with(at, thread) };
   });
 
-export async function removeThread(store: ObjectStore, chat: string, thread: string): Write<Thread> {
-  let was: Thread | null = null;
-  const saved = await changeMemory(store, chat, (memory) => {
-    was = memory.threads.find(({ id }) => id === thread) ?? null;
-    return was && { ...memory, threads: memory.threads.filter((each) => each !== was) };
-  });
-  return saved.ok ? { ok: true, data: was! } : saved;
-}
+export const removeThread = (store: ObjectStore, chat: string, thread: string): Write<Thread> =>
+  taking(
+    store,
+    chat,
+    (memory) => memory.threads.find(({ id }) => id === thread),
+    (memory, found) => ({ ...memory, threads: memory.threads.filter((each) => each !== found) }),
+  );
 
 // A saved chat as memory reads it: its messages as a request sends them, and their texts as the prompt renders them.
 type ChatSent = { chat: Chat; scope: ChatScope; read: ChatRead };

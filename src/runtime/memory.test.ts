@@ -3,8 +3,10 @@ import { fold, shown } from '../model/chat';
 import { fingerprint } from '../engine/memory';
 import { memoryId } from '../model/memory';
 import { appendUserMessage, editMessage, startChat } from './chat-log';
-import { chatMemory, setDefaultMemory } from './memory';
+import { api } from './api';
+import { chatMemory, forgetRecord, removeFact, setDefaultMemory } from './memory';
 import { addPrompt, editPrompt } from './prompts';
+import { ObjectStore } from './store';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
 
@@ -114,4 +116,40 @@ describe('Rememberer', () => {
       await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(2));
       expect(chatMemory(session.store, chat).threads.map(({ opened }) => opened)).toEqual(['r0']);
     }));
+});
+
+describe('a deletion from memory', () => {
+  it('answers what it deleted when its first try landed unanswered, so 되돌리기 has it', async () => {
+    const { accountId, vaultKey } = await server.account();
+    let drop = false;
+    const request = async <T,>(...args: Parameters<typeof api>) => {
+      const result = await api<T>(...args);
+      if (!drop || args[1] !== 'objects/batch') return result;
+      drop = false;
+      return { ok: false as const, error: 'offline' };
+    };
+    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: null, character: null, models: {} }, null);
+    const record = { id: 'r0', sources: [], print: 'p', when: null, where: null, who: [], what: 'Luna waits.', lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 };
+    const fact = { about: 'Luna', field: 'place', value: 'the pier', record: 'r0' };
+    await store.create('memory', { records: [record], state: [fact], threads: [] }, { id: memoryId(chat), parent: chat });
+
+    const unanswered = async <T,>(write: () => Promise<T>) => {
+      drop = true;
+      const writing = write();
+      await vi.waitFor(() => expect(store.waiting()).toBe(true));
+      await vi.advanceTimersByTimeAsync(1000);
+      return writing;
+    };
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      expect(await unanswered(() => removeFact(store, chat, fact))).toEqual({ ok: true, data: fact });
+      expect(await unanswered(() => forgetRecord(store, chat, 'r0'))).toEqual({ ok: true, data: record });
+      expect(chatMemory(store, chat)).toEqual({ records: [{ ...record, forgotten: true }], state: [], threads: [] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
