@@ -7,6 +7,7 @@ import { firstLine, shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
+import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
@@ -178,13 +179,12 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => actions.translate(message)} />
   );
   const flip = () => actions.flipTranslation(message);
-  // A message sent translated does not keep the language it went out in, so its mark names none: the setting now may
-  // be another.
+  // The language it went out in, not the setting now.
   const mark =
     !translation || editing !== null
       ? undefined
       : mine
-        ? { label: '옮겨 보냄', action: flipped ? '내가 쓴 말 보기' : '보낸 말 보기', onClick: flip }
+        ? { label: translation.sentIn ? `${withRo(languageLabel(translation.sentIn))} 보냄` : '옮겨 보냄', action: flipped ? '내가 쓴 말 보기' : '보낸 말 보기', onClick: flip }
         : { label: flipped ? '원문' : '번역', action: flipped ? '번역 보기' : '원문 보기', onClick: flip };
 
   const count = message.versions.length;

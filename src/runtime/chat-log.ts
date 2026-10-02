@@ -192,7 +192,7 @@ export const appendCost = (store: ObjectStore, chat: string, replyId: string, co
 export function editMessage(store: ObjectStore, chat: string, message: Message, text: string, translation: string | null) {
   const current = shown(message);
   const at = Date.now();
-  const kept = translation?.trim() && current.translation && { translation: { text: translation, receipt: current.translation.receipt, at } };
+  const kept = translation?.trim() && current.translation && { translation: { ...current.translation, text: translation, at } };
   return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...kept });
 }
 
