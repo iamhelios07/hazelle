@@ -5,7 +5,7 @@ import type { VaultKey } from '../vault/keys';
 import type { ApiFailure, ApiResult, api as realApi } from './api';
 import { pause } from './pause';
 import { orderOwned } from './removal';
-import { SCOPED, type CacheState, type CacheWrite, type DeviceCache, type SealedChange } from './object-cache';
+import { GenerationChanged, SCOPED, type CachedScope, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
 import { projectChat, summaryId, summaryStale, type Projection } from './summary';
 
 type Api = typeof realApi;
@@ -19,12 +19,16 @@ export const readsChanged = (reads: StoreRead[], changes: readonly StoreChange[]
   reads.some((read) => changes.some((change) => read.kind === change.kind && ('list' in read || ('id' in read ? read.id === change.id : read.parent === change.parent))));
 
 type Limits = { items: number; bytes: number; body: number };
-type Page = { until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits };
+type Page = { timeline: string; until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits };
+// What a workflow runs on from its start to its end: the server's timeline and this store's epoch (pinned).
+export type Pin = { timeline: string; epoch: number };
+const changed = (): ApiFailure => ({ ok: false, error: 'timeline-changed' });
 type ObjectValue = Omit<Stored<Kind>, 'rev'>;
 export type Write = (ObjectValue & { type: 'create' | 'restore' }) | { type: 'remove'; id: string };
 type Pending = { id: string; kind: string; parent: string | null; value: unknown; baseRev: number | null };
 type Resolved = { pending: Pending | null; held: Held | null };
-type Step = { resolve: () => ApiResult<Resolved> };
+// derived: a write the store makes on its own (a summary), which is not counted among the person's dropped writes.
+type Step = { resolve: () => ApiResult<Resolved>; derived?: boolean };
 
 // value is undefined for a body that did not open. Such an object is counted, never
 // shown as if it were empty, and never overwritten. kind may be one a newer version wrote.
@@ -33,6 +37,9 @@ type Held = { id: string; kind: string; parent: string | null; rev: number; valu
 const MAX_ATTEMPTS = 3;
 // Pauses between tries of a write that could not reach the server; the last repeats until it does.
 const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
+// A write waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
+const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable']);
+const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
 const OPEN_AHEAD = 256;
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
 type Scope = { opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
@@ -70,7 +77,20 @@ export class ObjectStore {
   private pulling: Promise<ApiFailure | null> | null = null;
   private caching: Promise<void> = Promise.resolve();
   private cacheFailed = false;
+  // The server's token for the account's history (server/account-store), replaced by every restore there. Sent with
+  // every feed and batch, adopted only from the answer to a bootstrap sent with none, and cleared by reset.
+  private timeline: string | null = null;
+  // The local generation, not the server's timeline: every reset ends one, and work begun in it is cancelled.
   private epoch = 0;
+  private ended = new AbortController();
+  // The cache generation this tab holds (object-cache).
+  private generation: Generation | null = null;
+  // A reload from the cache after another tab moved its generation, which a pull waits for before its next request.
+  private opening: Promise<void> | null = null;
+  // Per commit under way, how many of the person's writes in it the server has not taken.
+  private readonly unsent = new Set<() => number>();
+  private readonly workflows = new Set<Pin>();
+  private readonly rewoundListeners = new Set<(dropped: number) => void>();
   private known = 0;
   private restored = false;
 
@@ -83,31 +103,40 @@ export class ObjectStore {
 
   static async open(accountId: string, vaultKey: VaultKey, request: Api, cache?: DeviceCache, signal?: AbortSignal): Promise<ObjectStore> {
     const store = new ObjectStore(accountId, await objectKey(vaultKey), request, cache);
-    try {
-      const saved = await cache?.read();
-      if (saved) {
-        const { state } = saved;
-        store.cursor = state.cursor;
-        store.bootstrap = state.until;
-        store.bootstrapped = state.complete;
-        store.limits = state.limits;
-        for (const [chat, head] of state.heads) store.heads.set(chat, head);
-        for (const [read, rev] of state.revisions) store.revisions.set(read, rev);
-        store.known = Math.max(state.cursor, state.until ?? 0);
-        for (const [, rev] of [...state.heads, ...state.revisions]) store.known = Math.max(store.known, rev);
-        const rows = saved.changes.sort((a, b) => a.rev - b.rev);
-        const opened = store.opener(rows, false);
-        for (const [index, row] of rows.entries()) {
-          if (signal?.aborted) return store;
-          await store.apply(row, false, undefined, opened(index));
-        }
-        store.changes.length = 0;
-        store.restored = true;
-      }
-    } catch {
-      store.reset();
-    }
+    await store.load(store.epoch, signal);
     return store;
+  }
+
+  // What a page load does: take the stored cache generation, and its rows when it has a timeline.
+  private async load(epoch: number, signal?: AbortSignal) {
+    if (!this.cache || this.cacheFailed) return;
+    try {
+      const { generation, saved } = await this.cache.open();
+      if (epoch !== this.epoch) return;
+      this.generation = generation;
+      this.timeline = generation.timeline;
+      if (!saved) return;
+      const { state } = saved;
+      this.cursor = state.cursor;
+      this.bootstrap = state.until;
+      this.bootstrapped = state.complete;
+      this.limits = state.limits;
+      for (const [chat, head] of state.heads) this.heads.set(chat, head);
+      for (const [read, rev] of state.revisions) this.revisions.set(read, rev);
+      this.known = Math.max(state.cursor, state.until ?? 0);
+      for (const [, rev] of [...state.heads, ...state.revisions]) this.known = Math.max(this.known, rev);
+      const rows = saved.changes.sort((a, b) => a.rev - b.rev);
+      const opened = this.opener(rows, false);
+      for (const [index, row] of rows.entries()) {
+        if (signal?.aborted || epoch !== this.epoch) return;
+        await this.apply(row, false, undefined, opened(index));
+      }
+      this.changed();
+      this.restored = true;
+    } catch {
+      this.cacheFailed = true;
+      this.reset(false);
+    }
   }
 
   get cached(): boolean { return this.restored; }
@@ -124,24 +153,67 @@ export class ObjectStore {
   }
 
   private cacheWrite(changes: SealedChange[], chat?: string, scope?: Scope, complete = false) {
-    if (!this.cache || this.cacheFailed) return;
+    if (!this.cache || this.cacheFailed || this.timeline === null) return;
     const scopes = chat && scope ? [{ chat, state: { ...this.cacheState(scope), complete } }] : [...new Set(changes.filter((row) => SCOPED.has(row.kind)).map((row) => row.parent!))].flatMap((chat) => {
       const held = this.scopes.get(chat);
       return held?.state === 'loaded' && !held.loading ? [{ chat, state: this.cacheState(held) }] : [];
     });
     const write: CacheWrite = { changes, feed: this.cacheState(), scopes };
-    this.queueCache(() => this.cache!.write(write));
+    this.queueCache((generation) => this.cache!.write(generation, write));
   }
 
-  // A failed transaction leaves a valid prefix. Never advance a later cursor past rows it failed to save.
-  private queueCache(write: () => Promise<void>) {
+  // A failed transaction leaves a valid prefix. Never advance a later cursor past rows it failed to save. Work queued in
+  // an epoch that has ended is skipped, since what it holds is of a timeline this tab dropped. A changed generation is
+  // not a failure: another tab moved the cache, and this one reloads from it.
+  private queueCache(work: (generation: Generation) => Promise<void>) {
+    const epoch = this.epoch;
     this.caching = this.caching.then(async () => {
-      if (!this.cacheFailed) await write();
-    }).catch(() => { this.cacheFailed = true; });
+      if (!this.cacheFailed && epoch === this.epoch) await work(this.generation!);
+    }).catch((error: unknown) => {
+      if (!(error instanceof GenerationChanged)) this.cacheFailed = true;
+      else if (epoch === this.epoch) this.reopen();
+    });
   }
 
-  private reset() {
+  // Told once for each switch of timeline this tab hears, with how many of the person's writes it dropped.
+  readonly subscribeRewound = (listener: (dropped: number) => void) => {
+    this.rewoundListeners.add(listener);
+    return () => { this.rewoundListeners.delete(listener); };
+  };
+
+  // The server refused the timeline this tab holds: what it holds goes, from memory and from the cache, and the next
+  // pull bootstraps the new timeline.
+  private rewind() {
+    this.reset(true);
+    if (this.cache) this.queueCache(async (generation) => { this.generation = await this.cache!.clear(generation); });
+  }
+
+  // Another tab moved the cache to a generation of its own: this one drops what it holds and loads that generation.
+  private reopen() {
+    this.reset(true);
+    const epoch = this.epoch;
+    const opening: Promise<void> = this.caching.then(() => this.load(epoch)).finally(() => {
+      if (this.opening === opening) this.opening = null;
+    });
+    this.opening = this.caching = opening;
+  }
+
+  private adopt(timeline: string) {
+    this.timeline = timeline;
+    if (this.cache) this.queueCache(async (generation) => { this.generation = await this.cache!.adopt(generation, timeline); });
+  }
+
+  // Old-timeline writes are dropped, never replayed: every commit under way ends with the epoch, its unsent writes
+  // counted. heard: the server or another tab said the account moved to another timeline, which the person is told.
+  private reset(heard: boolean) {
+    let dropped = 0;
+    for (const unsent of this.unsent) dropped += unsent();
+    this.unsent.clear();
+    const held = this.timeline !== null;
+    this.timeline = null;
     this.epoch++;
+    this.ended.abort();
+    this.ended = new AbortController();
     for (const object of this.live.values()) this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });
     for (const [chat, scope] of this.scopes) {
       scope.abort.abort();
@@ -161,8 +233,8 @@ export class ObjectStore {
     this.bootstrap = null;
     this.bootstrapped = this.restored = false;
     this.limits = null;
-    if (this.cache) this.caching = this.caching.then(() => this.cache!.clear()).catch(() => { this.cacheFailed = true; });
     this.changed();
+    if (heard && (held || dropped)) for (const listener of this.rewoundListeners) listener(dropped);
   }
 
   private cacheBounds() {
@@ -218,6 +290,7 @@ export class ObjectStore {
     this.closing.abort();
     for (const scope of this.scopes.values()) scope.abort.abort();
     this.listeners.clear();
+    this.rewoundListeners.clear();
     this.live.clear();
     this.byKind.clear();
     this.byParent.clear();
@@ -292,7 +365,7 @@ export class ObjectStore {
     this.changes.push({ kind: 'scope', id: chat, parent: chat });
     this.changed();
     await this.caching;
-    const saved = this.cacheFailed ? null : await this.cache?.read(chat).catch(() => null);
+    const saved = await this.cachedChat(chat);
     if (signal.aborted || this.scopes.get(chat) !== scope) return { ok: false, error: 'stopped' };
     if (saved) {
       scope.cursor = saved.state.cursor;
@@ -321,6 +394,18 @@ export class ObjectStore {
     }
     const failure = await this.refreshChat(chat);
     return failure ?? await this.saveSummary(chat);
+  }
+
+  // A chat's cached rows, only while the stored generation is the one this tab holds: rows another tab cached of
+  // another timeline are never applied here.
+  private async cachedChat(chat: string): Promise<CachedScope | null> {
+    const generation = this.generation;
+    if (!this.cache || this.cacheFailed || generation?.timeline == null) return null;
+    const epoch = this.epoch;
+    return this.cache.read(generation, chat).catch((error: unknown) => {
+      if (error instanceof GenerationChanged && epoch === this.epoch) this.reopen();
+      return null;
+    });
   }
 
   async withChat<T>(chat: string, run: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> {
@@ -399,17 +484,26 @@ export class ObjectStore {
     return { type: 'restore', id, kind: 'summary', parent: chat, value: projection.summary };
   }
 
-  // An explicit account/parent walk for backup and ownership operations; it never fills the held chat scopes.
-  async scan(options: { parent?: string; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>): Promise<ApiFailure | null> {
+  // An explicit account/parent walk for backup and ownership operations, on its workflow's pin (pinned); it never fills
+  // the held chat scopes. No row is visited once the pin's epoch has ended.
+  async scan(options: { parent?: string; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>, pin: Pin): Promise<ApiFailure | null> {
     let cursor = 0;
     let more = true;
     while (more) {
-      const result = await this.request<Page>('GET', `objects?since=${cursor}${options.parent ? `&parent=${encodeURIComponent(options.parent)}` : ''}${options.metadata ? '&metadata=1' : ''}`, undefined, this.closing.signal);
-      if (!result.ok) return result;
+      if (pin.epoch !== this.epoch) return changed();
+      const result = await this.request<Page>('GET', `objects?since=${cursor}${options.parent ? `&parent=${encodeURIComponent(options.parent)}` : ''}${options.metadata ? '&metadata=1' : ''}&timeline=${encodeURIComponent(pin.timeline)}`, undefined, this.closing.signal);
+      // An answer to a request sent before a reset is of the old timeline, a refusal too: it never resets the new one.
+      if (pin.epoch !== this.epoch) return changed();
+      if (!result.ok) {
+        if (result.error !== 'cache-reset') return result;
+        this.rewind();
+        return changed();
+      }
       this.limits = result.data.limits;
       for (const { body, omitted, ...row } of result.data.changes) {
         if (body === null) continue;
         const value = omitted ? undefined : await openObject(this.key, this.accountId, row, body!);
+        if (pin.epoch !== this.epoch) return changed();
         // Awaited, so a slow visitor (a backup written to disk) holds the walk instead of queueing opened bodies.
         await visit(row, value);
       }
@@ -430,6 +524,31 @@ export class ObjectStore {
 
   unreadable(): number {
     return this.unreadableCount;
+  }
+
+  // The timeline and epoch held now. A store holding no timeline pulls one first, as one about to write does.
+  async pin(signal?: AbortSignal): Promise<ApiResult<Pin>> {
+    const epoch = this.epoch;
+    if (!this.limits || this.timeline === null) {
+      const failure = await this.reaching(() => this.pull(), signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
+      if (failure) return epoch === this.epoch ? failure : changed();
+    }
+    return epoch === this.epoch ? { ok: true, data: { timeline: this.timeline!, epoch } } : changed();
+  }
+
+  // A workflow of several requests on one timeline: a backup's two scans, its restore, the Risu move, a removal. run's
+  // scans take the pin, and every write made while it runs fails with timeline-changed once the pin's epoch has ended,
+  // so no part of a workflow begun on one timeline lands on the next. A write of the new epoch fails too until the
+  // workflow has ended, which its next request to this store does.
+  async pinned<T>(run: (pin: Pin) => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
+    const pin = await this.pin(signal);
+    if (!pin.ok) return pin;
+    this.workflows.add(pin.data);
+    try {
+      return await run(pin.data);
+    } finally {
+      this.workflows.delete(pin.data);
+    }
   }
 
   // One pull at a time: a caller arriving during a pull waits for that pull instead of starting another.
@@ -563,6 +682,7 @@ export class ObjectStore {
 
   private step(write: Write): Step {
     return {
+      derived: write.type !== 'remove' && write.kind === 'summary',
       resolve: () => {
         const held = this.live.get(write.id);
         if (write.type === 'remove') {
@@ -592,17 +712,18 @@ export class ObjectStore {
     return { ok: false, error: 'conflict' };
   }
 
-  // A write that cannot reach the server waits and tries again until it does, or until stop (the store closing, or the
-  // caller's stop) ends it: a dropped
-  // connection does not fail it. A try whose answer was lost after it landed comes back as a conflict and is
+  // A write that cannot reach the server waits and tries again until it does, or until stop (the store closing, the
+  // caller's stop, or a reset) ends it: a dropped connection, a restore under way or a store not answering yet does not
+  // fail it. A try whose answer was lost after it landed comes back as a conflict and is
   // applied again, so an update's change must read the same applied twice as once (set a value, never add to one).
   private async reaching<R extends ApiResult<unknown> | null>(attempt: () => Promise<R>, stop: AbortSignal): Promise<R | ApiFailure> {
-    let result = await attempt();
-    if (result?.ok !== false || result.error !== 'offline') return result;
+    let result: R | ApiFailure = await attempt();
+    if (!waits(result)) return result;
     this.wait(1);
     try {
-      for (let tries = 0; result?.ok === false && result.error === 'offline'; tries++) {
-        if (!(await pause(RECONNECT_PAUSES[Math.min(tries, RECONNECT_PAUSES.length - 1)]!, stop))) return { ok: false, error: 'stopped' };
+      for (let tries = 0; waits(result); tries++) {
+        const after = result.retryAfter === undefined ? RECONNECT_PAUSES[Math.min(tries, RECONNECT_PAUSES.length - 1)]! : result.retryAfter * 1000;
+        if (!(await pause(after, stop))) return { ok: false, error: 'stopped' };
         result = await attempt();
       }
       return result;
@@ -619,19 +740,29 @@ export class ObjectStore {
   private async commit(steps: Step[], progress: (index: number) => void = () => {}, signal?: AbortSignal): Promise<ApiResult<(Held | null)[]>> {
     const stop = signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal;
     if (stop.aborted) return { ok: false, error: 'stopped' };
-    if (!this.limits) {
-      const failure = await this.reaching(() => this.pull(), stop);
-      if (failure) return failure;
-    }
-    const limits = this.limits!;
-    const epoch = this.epoch;
     const saved: (Held | null)[] = [];
+    const unsent = () => steps.slice(saved.length).filter((step) => !step.derived).length;
+    this.unsent.add(unsent);
+    try {
+      return await this.send(steps, saved, progress, stop);
+    } finally {
+      this.unsent.delete(unsent);
+    }
+  }
+
+  private async send(steps: Step[], saved: (Held | null)[], progress: (index: number) => void, stop: AbortSignal): Promise<ApiResult<(Held | null)[]>> {
+    const pinned = await this.pin(stop);
+    if (!pinned.ok) return pinned;
+    const { timeline, epoch } = pinned.data;
+    if ([...this.workflows].some((workflow) => workflow.epoch !== epoch)) return changed();
+    const limits = this.limits!;
+    const halt = AbortSignal.any([stop, this.ended.signal]);
     while (saved.length < steps.length) {
       const start = saved.length;
       const result = await this.retry(async (): Promise<ApiResult<(Held | null)[]>> => {
         const resolved: Resolved[] = [];
         const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null; file: string | null }[] = [];
-        let bytes = new TextEncoder().encode(JSON.stringify({ writes: [] })).length;
+        let bytes = new TextEncoder().encode(JSON.stringify({ timeline, writes: [] })).length;
         for (const step of steps.slice(start, start + limits.items)) {
           const ready = step.resolve();
           if (!ready.ok) return ready;
@@ -654,11 +785,19 @@ export class ObjectStore {
           resolved.push(ready.data);
         }
         if (writes.length) {
-          if (epoch !== this.epoch || stop.aborted) return { ok: false, error: 'stopped' };
-          const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { writes }, stop);
-          if (!answer.ok) return answer;
-          // Only the store closing drops an answer: a caller's stop that arrives after the write landed keeps it held.
-          if (epoch !== this.epoch || this.closing.signal.aborted) return { ok: false, error: 'stopped' };
+          if (epoch !== this.epoch) return changed();
+          if (stop.aborted) return { ok: false, error: 'stopped' };
+          const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { timeline, writes }, halt);
+          // Only the store closing or a reset drops an answer: a caller's stop that arrives after the write landed keeps
+          // it held. An answer to a request sent before a reset is of the old timeline, a refusal too, so this is checked
+          // before the refusal is read: an old 409 or 503 never resets the new timeline.
+          if (this.closing.signal.aborted) return { ok: false, error: 'stopped' };
+          if (epoch !== this.epoch) return changed();
+          if (!answer.ok) {
+            if (answer.error !== 'cache-reset') return answer;
+            this.rewind();
+            return changed();
+          }
           let index = 0;
           for (const ready of resolved) {
             if (!ready.pending) continue;
@@ -674,8 +813,8 @@ export class ObjectStore {
           this.changed();
         }
         return { ok: true, data: resolved.map(({ held }) => held) };
-      }, stop);
-      if (!result.ok) return result;
+      }, halt);
+      if (!result.ok) return epoch === this.epoch ? result : changed();
       saved.push(...result.data);
       for (let index = start; index < saved.length; index++) progress(index);
     }
@@ -696,18 +835,23 @@ export class ObjectStore {
     let objects = 0;
     let pages = 0;
     while (more) {
+      if (this.opening) await this.opening;
       if (signal?.aborted) return { ok: false, error: 'stopped' };
       const epoch = this.epoch;
-      const result = await this.request<Page>('GET', `objects?since=${this.cursor}&exclude=entry,memory${this.bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds()}`, undefined, signal);
+      const sent = this.timeline;
+      const result = await this.request<Page>('GET', `objects?since=${this.cursor}&exclude=entry,memory${this.bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds()}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal);
       if (signal?.aborted) return { ok: false, error: 'stopped' };
       if (epoch !== this.epoch) continue;
       if (!result.ok) {
         if (result.error === 'cache-reset') {
-          this.reset();
+          this.rewind();
           continue;
         }
         return result;
       }
+      // Sent with none, this is a bootstrap from 0 after a reset, and its answer names the timeline to hold. The server
+      // refuses a request whose timeline is not its own, so no other answer can name another.
+      if (sent === null) this.adopt(result.data.timeline);
       objects += result.data.changes.length;
       progress?.({ objects, pages: ++pages });
       this.limits = result.data.limits;
@@ -748,17 +892,20 @@ export class ObjectStore {
     }
     let more = true;
     while (more) {
-      const result = await this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}${this.cacheBounds()}`, undefined, signal);
+      // A reset aborts every scope's signal, so the timeline is the one the pull above, or an earlier one, adopted.
+      if (signal.aborted) return { ok: false, error: 'stopped' };
+      const result = await this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}${this.cacheBounds()}&timeline=${encodeURIComponent(this.timeline!)}`, undefined, signal);
+      // An answer to a request sent before a reset is of the old timeline, a refusal too: it never resets the new one.
+      if (signal.aborted) return { ok: false, error: 'stopped' };
       if (!result.ok) {
         if (result.error === 'cache-reset') {
-          this.reset();
+          this.rewind();
           void (this.pulling ?? Promise.resolve()).then(() => {
             if (!this.closing.signal.aborted && !this.bootstrapped) void this.pull();
           });
         }
         return result;
       }
-      if (signal.aborted) return { ok: false, error: 'stopped' };
       this.limits = result.data.limits;
       const opened = this.opener(result.data.changes, true);
       for (const [index, change] of result.data.changes.entries()) {

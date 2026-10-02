@@ -13,13 +13,13 @@ import * as display from '../runtime/turn';
 import { randomBytes } from '../vault/aead';
 import { SessionProvider, useChatDisplay, useWritingChat } from './session';
 
-const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null } });
+const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null } });
 
 it('C: composer and panel re-renders skip display, while streaming recomputes without replacing unchanged rows', async () => {
   let rev = 0;
   const request: typeof api = async <T,>(method: string): Promise<ApiResult<T>> => ({ ok: true, data: (method === 'GET'
-    ? { changes: [], cursor: 0, more: false, limits: { items: 100, bytes: 1_000_000, body: 100_000 } }
-    : { revs: [++rev] }) as T });
+    ? { timeline: 't', changes: [], cursor: 0, more: false, limits: { items: 100, bytes: 1_000_000, body: 100_000 } }
+    : { revs: [++rev], timeline: 't' }) as T });
   const store = await ObjectStore.open('test', randomBytes(32), request);
   const lease = store.retainChat('chat');
   await lease.ready;

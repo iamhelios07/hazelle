@@ -27,6 +27,9 @@ const MESSAGES: Record<string, string> = {
   gone: '다른 곳에서 지워진 항목이라 고칠 수 없어요.',
   'too-large': '너무 커서 저장할 수 없어요.',
   offline: '서버에 닿지 못했어요. 연결을 확인해 주세요.',
+  'timeline-changed': '계정을 복원해서 하던 일을 멈췄어요. 다시 해 주세요.',
+  'account-restoring': '계정을 복원하는 중이에요. 잠시 뒤 다시 해 주세요.',
+  'account-busy': '운영자가 이 계정을 복원하는 중이라 지금은 할 수 없어요. 잠시 뒤 다시 해 주세요.',
   'stream-gone': '서버가 이 답을 더 이상 갖고 있지 않아요.',
   'stream-lost': '서버가 답을 받다가 놓쳤어요.',
 };

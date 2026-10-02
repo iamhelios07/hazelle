@@ -12,7 +12,7 @@ import { FIRST_PROFILE_ID } from './profiles';
 import { MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import { SCOPED } from './object-cache';
 import { ownershipDepth } from './removal';
-import type { ObjectRow, ObjectStore, Write } from './store';
+import type { ObjectRow, ObjectStore, Pin, Write } from './store';
 
 // version is the file format's one version key: a file of any other version is refused, never read as this one.
 const FORMAT = { format: 'risu-alpha-backup', version: 2 };
@@ -36,9 +36,10 @@ export type { BackupOutput } from './backup-zip';
 // Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. Pieces
 // nothing reaches are left out: a deleted chat's entries, and the lore and pictures of an
 // import cut short. left counts the objects that did not open, which no backup can hold. skipped counts the objects
-// naming a picture the operator blocked, which are left out as restore leaves out what the server refuses.
+// naming a picture the operator blocked, which are left out as restore leaves out what the server refuses. Both scans
+// are of one timeline: an account restored between them fails the export, and no archive is written.
 export async function exportBackup(
-  store: Pick<ObjectStore, 'scan'>,
+  store: Pick<ObjectStore, 'scan' | 'pin'>,
   files: Pick<Files, 'read' | 'missing'>,
   output: BackupOutput,
   { signal = new AbortController().signal, progress = () => {} }: Options = {},
@@ -46,11 +47,14 @@ export async function exportBackup(
   let complete = false;
   let refused: ApiFailure | null = null;
   try {
+    const pinned = await store.pin(signal);
+    if (!pinned.ok) return pinned;
+    const pin = pinned.data;
     const metadata = new Map<string, ObjectRow>();
     const scanned = await store.scan({ metadata: true }, (row) => {
       signal.throwIfAborted();
       metadata.set(row.id, row);
-    });
+    }, pin);
     if (scanned) return scanned;
     const reached = new Set<string>();
     let total = 0;
@@ -124,7 +128,7 @@ export async function exportBackup(
       held.push({ line, ref });
       heldBytes += line.length;
       if (!unasked.size || heldBytes > HELD_BYTES) await settle();
-    });
+    }, pin);
     if (failure) return failure;
     await settle();
     await objects(new Uint8Array(), true);
@@ -212,12 +216,17 @@ async function* readObjects(backup: Backup, signal: AbortSignal) {
 // backup already wrote, so loading the file again after a stop carries on from there.
 // The backup's copies replace what opening added, whatever it holds now, and what it added that the backup lacks
 // goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
-// the operator, or too large), which are left out.
-export async function restoreBackup(
+// the operator, or too large), which are left out. What is checked and what is written are of one timeline.
+export function restoreBackup(store: Pick<ObjectStore, 'scan' | 'batch' | 'pinned'>, files: Pick<Files, 'save'>, backup: Backup, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
+  return store.pinned((pin) => restoreOn(store, files, backup, options, pin), options.signal);
+}
+
+async function restoreOn(
   store: Pick<ObjectStore, 'scan' | 'batch'>,
   files: Pick<Files, 'save'>,
   backup: Backup,
-  { signal = new AbortController().signal, progress = () => {} }: Options = {},
+  { signal = new AbortController().signal, progress = () => {} }: Options,
+  pin: Pin,
 ): Promise<ApiResult<{ skipped: number }>> {
   try {
     const ids = new Set(backup.objects.filter(({ kind }) => kind !== 'summary').map(({ id }) => id));
@@ -225,7 +234,7 @@ export async function restoreBackup(
     const failure = await store.scan({ metadata: true }, (row) => {
       signal.throwIfAborted();
       if (row.kind !== 'summary') present.add(row.id);
-    });
+    }, pin);
     if (failure) return failure;
     if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
     // An id is not enough: another backup of the same account shares ids, and carrying on from its copies would mix
@@ -238,7 +247,7 @@ export async function restoreBackup(
       const failure = await store.scan({}, async (row, value) => {
         signal.throwIfAborted();
         if (copies.has(row.id) && copies.get(row.id) !== (await copyOf({ ...row, value }))) other = true;
-      });
+      }, pin);
       if (failure) return failure;
       if (other) return { ok: false, error: 'not-new' };
     }

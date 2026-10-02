@@ -7,7 +7,8 @@ import { forgetVault } from './device-cache';
 import type { SealedChange } from './object-cache';
 import { openSession } from './session';
 import { ObjectStore } from './store';
-import { MemoryCache } from './testing/cache';
+import { exportBackup } from './backup';
+import { GENERATION_STEPS, generationSteps, MemoryCache } from './testing/cache';
 
 vi.mock('../vault/device', () => ({ lockVault: vi.fn(async () => {}) }));
 
@@ -16,29 +17,41 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const limits = { items: 100, bytes: 1_000_000, body: 100_000 };
 const connection = { type: 'openrouter', label: 'cached', baseUrl: null, protocol: null, secret: 'secret', starred: [] } as const;
 
+// A server as server/objects answers (plan §13), whose timeline a restore replaces: restore(snapshot) rewinds the rows
+// and the head to the snapshot, as a rewind of the account's store does.
 async function fixture() {
   const vault = randomBytes(32);
   const key = await objectKey(vault);
   const cache = new MemoryCache();
   let rev = 0;
+  let timeline = 't0';
+  let resets = 0;
   const rows = new Map<string, SealedChange>();
   const add = async (id: string, kind: string, parent: string | null, value: unknown) => {
     const row = { id, kind, parent, rev: ++rev, body: value === null ? null : await sealObject(key, 'account', { id, kind, parent }, value) };
     rows.set(id, row);
     return row;
   };
+  const refuse = () => {
+    resets++;
+    return Response.json({ error: 'cache-reset' }, { status: 409 });
+  };
   const fetch = vi.fn(async (path: string, init: RequestInit) => {
     const url = new URL(path, 'https://test');
     if (init.method === 'POST') {
-      const { writes } = JSON.parse(init.body as string) as { writes: Omit<SealedChange, 'rev'>[] };
+      const { timeline: sent, writes } = JSON.parse(init.body as string) as { timeline: string; writes: Omit<SealedChange, 'rev'>[] };
+      if (sent !== timeline) return refuse();
       const revs = writes.map((write) => {
         rows.set(write.id, { ...write, rev: ++rev });
         return rev;
       });
-      return Response.json({ revs });
+      return Response.json({ revs, timeline });
     }
     const since = Number(url.searchParams.get('since'));
-    if (Math.max(since, Number(url.searchParams.get('known'))) > rev) return Response.json({ error: 'cache-reset' }, { status: 409 });
+    const known = Number(url.searchParams.get('known'));
+    const sent = url.searchParams.get('timeline');
+    if (sent === null ? since !== 0 || known !== 0 : sent !== timeline) return refuse();
+    if (Math.max(since, known) > rev) return refuse();
     const parent = url.searchParams.get('parent');
     const bootstrap = url.searchParams.has('bootstrap');
     const changes = [...rows.values()].filter((row) => row.rev > since && (parent === null || row.parent === parent)).flatMap((row) => {
@@ -47,13 +60,43 @@ async function fixture() {
       const { body, ...metadata } = row;
       return [body === null ? row : { ...metadata, omitted: true as const }];
     }).sort((a, b) => a.rev - b.rev);
-    return Response.json({ changes, cursor: changes.at(-1)?.rev ?? since, more: false, limits, ...(bootstrap ? { until: rev } : {}) });
+    return Response.json({ timeline, changes, cursor: changes.at(-1)?.rev ?? since, more: false, limits, ...(bootstrap ? { until: rev } : {}) });
   });
   vi.stubGlobal('fetch', fetch);
-  const open = () => ObjectStore.open('account', vault, api, cache);
-  const flush = async () => { await vi.waitFor(() => expect(cache.states.get('')?.cursor).toBe(rev)); };
-  return { vault, cache, rows, add, fetch, open, flush, wipe: () => { rows.clear(); rev = 0; } };
+  const open = (request: typeof api = api, on = cache) => ObjectStore.open('account', vault, request, on);
+  const flush = async (on = cache) => { await vi.waitFor(() => expect(on.states.get('')?.cursor).toBe(rev)); };
+  const snapshot = () => ({ rows: new Map(rows), rev });
+  const restore = (to: ReturnType<typeof snapshot>, next: string) => {
+    rows.clear();
+    for (const [id, row] of to.rows) rows.set(id, row);
+    rev = to.rev;
+    timeline = next;
+  };
+  return { vault, cache, rows, add, fetch, open, flush, snapshot, restore, resets: () => resets, wipe: () => { rows.clear(); rev = 0; } };
 }
+
+// A tab's own request path, whose answers can be held: computed by the server when sent, given to the tab when let go.
+// It hears no stop, as an answer already on its way when the tab stops it does not.
+function tab() {
+  let holding: ((path: string) => boolean) | null = null;
+  const held: (() => void)[] = [];
+  const request = (async (...[method, path, body]: Parameters<typeof api>) => {
+    const answer = api(method, path, body);
+    if (holding?.(path)) await new Promise<void>((resolve) => held.push(resolve));
+    return answer;
+  }) as typeof api;
+  return {
+    request,
+    hold: (match: (path: string) => boolean) => { holding = match; },
+    held: () => held.length,
+    release: () => {
+      holding = null;
+      for (const resolve of held.splice(0)) resolve();
+    },
+  };
+}
+
+const ids = (store: ObjectStore) => store.list('connection').map(({ id }) => id).toSorted();
 
 it('reopens a session with sealed cached objects before any network read', async () => {
   const f = await fixture();
@@ -74,7 +117,7 @@ it('reopens a session with sealed cached objects before any network read', async
   expect(opened.data.store.get('connection', 'connection')?.value.label).toBe('cached');
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory&known=1', expect.anything());
+  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory&known=1&timeline=t0', expect.anything());
   opened.data.close();
 });
 
@@ -100,7 +143,7 @@ it('renders a saved bootstrap prefix and resumes its original until bound in the
   expect(opened.data.store.list('connection').map((row) => row.id)).toEqual(['first']);
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory&bootstrap=1&until=2&known=2');
+  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory&bootstrap=1&until=2&known=2&timeline=t0');
   opened.data.close();
 });
 
@@ -196,7 +239,7 @@ it('forgets the account cache together with its remembered vault on logout', asy
   store.close();
   await forgetVault('account', f.cache);
   expect(lockVault).toHaveBeenCalled();
-  expect(await f.cache.read()).toBeNull();
+  expect(f.cache.generation).toBeUndefined();
   expect(f.cache.rows.size).toBe(0);
 });
 
@@ -210,9 +253,164 @@ it('does not await a cache write or fail a successful object write when caching 
   const saved = await store.create('connection', { ...connection, starred: [] });
   expect(saved.ok).toBe(true);
   await vi.waitFor(() => expect(writing).toHaveBeenCalledOnce());
-  const write = writing.mock.calls[0]![0].changes[0]!;
+  const write = writing.mock.calls[0]![1].changes[0]!;
   expect(write.body).toBe(f.rows.get(write.id)?.body);
   reject(new Error('quota'));
   expect((await store.create('connection', { ...connection, starred: [] })).ok).toBe(true);
   store.close();
+});
+
+it('keeps the generation rules a browser cache keeps', async () => {
+  expect(await generationSteps(new MemoryCache())).toEqual(GENERATION_STEPS);
+});
+
+it('discards a cache from before generations instead of reading its rows', async () => {
+  const f = await fixture();
+  await f.add('server', 'connection', null, connection);
+  f.cache.rows.set('old', { id: 'old', kind: 'connection', parent: null, rev: 9, body: 'sealed' });
+  f.cache.states.set('', { cursor: 9, complete: true, until: null, limits, heads: [], revisions: [] });
+  const store = await f.open();
+  expect(store.cached).toBe(false);
+  expect(await store.pull()).toBeNull();
+  expect(ids(store)).toEqual(['server']);
+  await f.flush();
+  expect([...f.cache.rows.keys()]).toEqual(['server']);
+  store.close();
+});
+
+it('converges on a restore and on its undo: the server rows, the timeline adopted, one reset each', async () => {
+  const f = await fixture();
+  await f.add('kept', 'connection', null, connection);
+  const before = f.snapshot();
+  await f.add('later', 'connection', null, connection);
+  const store = await f.open();
+  await store.pull();
+  await f.flush();
+  const told = vi.fn();
+  store.subscribeRewound(told);
+  const checkpoint = f.snapshot();
+
+  f.restore(before, 't1');
+  expect(await store.pull()).toBeNull();
+  expect(ids(store)).toEqual(['kept']);
+  await vi.waitFor(() => expect(f.cache.generation?.timeline).toBe('t1'));
+  await f.flush();
+  expect([...f.cache.rows.keys()]).toEqual(['kept']);
+
+  f.restore(checkpoint, 't2');
+  expect(await store.pull()).toBeNull();
+  expect(ids(store)).toEqual(['kept', 'later']);
+  expect((await store.create('connection', { ...connection, starred: [] })).ok).toBe(true);
+  expect(await store.pull()).toBeNull();
+  expect(f.resets()).toBe(2);
+  expect(told.mock.calls).toEqual([[0], [0]]);
+  await vi.waitFor(() => expect(f.cache.generation?.timeline).toBe('t2'));
+  await f.flush();
+  expect([...f.cache.rows.keys()].toSorted()).toEqual([...f.rows.keys()].toSorted());
+  store.close();
+});
+
+it('drops a 409 or 503 that answers a write sent before a reset, which neither resets the new timeline nor lands', async () => {
+  for (const late of [Response.json({ error: 'cache-reset' }, { status: 409 }), Response.json({ error: 'account-restoring', retryAfter: 1 }, { status: 503 })]) {
+    const f = await fixture();
+    await f.add('kept', 'connection', null, connection);
+    const writer = tab();
+    const store = await f.open(writer.request);
+    await store.pull();
+    const told = vi.fn();
+    store.subscribeRewound(told);
+    let answer!: (response: Response) => void;
+    f.fetch.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve; }));
+    const writing = store.create('connection', { ...connection, starred: [] });
+    await vi.waitFor(() => expect(answer).toBeDefined());
+
+    f.restore(f.snapshot(), 't1');
+    expect(await store.pull()).toBeNull();
+    expect(told.mock.calls).toEqual([[1]]);
+    answer(late);
+    expect(await writing).toEqual({ ok: false, error: 'timeline-changed' });
+    expect(f.resets()).toBe(1);
+    expect(told).toHaveBeenCalledOnce();
+    expect(ids(store)).toEqual(['kept']);
+    expect((await store.create('connection', { ...connection, starred: [] }, { id: 'new' })).ok).toBe(true);
+    expect([...f.rows.keys()]).toEqual(['kept', 'new']);
+    store.close();
+  }
+});
+
+it('ends a pinned workflow at a switch: a write it makes after the switch is refused before it is sent', async () => {
+  const f = await fixture();
+  await f.add('kept', 'connection', null, connection);
+  const store = await f.open();
+  await store.pull();
+  const result = await store.pinned(async () => {
+    f.restore(f.snapshot(), 't1');
+    expect(await store.pull()).toBeNull();
+    return store.create('connection', { ...connection, starred: [] }, { id: 'late' });
+  });
+  expect(result).toEqual({ ok: false, error: 'timeline-changed' });
+  expect([...f.rows.keys()]).toEqual(['kept']);
+  expect((await store.create('connection', { ...connection, starred: [] }, { id: 'after' })).ok).toBe(true);
+  store.close();
+});
+
+it('fails an export whose timeline changes between its two scans, writing no archive', async () => {
+  const f = await fixture();
+  await f.add('kept', 'connection', null, connection);
+  const store = await f.open();
+  await store.pull();
+  const respond = f.fetch.getMockImplementation()!;
+  f.fetch.mockImplementation(async (path, init) => {
+    if (path.includes('since=0&timeline=')) f.restore(f.snapshot(), 't1');
+    return respond(path, init);
+  });
+  const output = { write: vi.fn(async () => {}), close: vi.fn(async () => {}), abort: vi.fn(async () => {}) };
+  expect(await exportBackup(store, { read: vi.fn(), missing: vi.fn() }, output)).toEqual({ ok: false, error: 'timeline-changed' });
+  expect(output.close).not.toHaveBeenCalled();
+  expect(output.abort).toHaveBeenCalled();
+  store.close();
+});
+
+it('lets a stale tab’s delayed clear and delayed bootstrap change nothing: both tabs end on the newest timeline', async () => {
+  const f = await fixture();
+  await f.add('kept', 'connection', null, connection);
+  const before = f.snapshot();
+  await f.add('later', 'connection', null, connection);
+  const a = tab();
+  const b = tab();
+  const first = await f.open(a.request);
+  await first.pull();
+  await f.flush();
+  const second = await f.open(b.request);
+  expect(second.cached).toBe(true);
+  const checkpoint = f.snapshot();
+  const refused: string[] = [];
+  const clear = MemoryCache.prototype.clear.bind(f.cache);
+  const adopt = MemoryCache.prototype.adopt.bind(f.cache);
+  vi.spyOn(f.cache, 'clear').mockImplementation((stated) => clear(stated).catch((error: unknown) => { refused.push('clear'); throw error; }));
+  vi.spyOn(f.cache, 'adopt').mockImplementation((stated, timeline) => adopt(stated, timeline).catch((error: unknown) => { refused.push(`adopt ${timeline}`); throw error; }));
+
+  // A restore: the first tab clears and asks for its bootstrap, whose answer (of t1) is held.
+  f.restore(before, 't1');
+  const generation = f.cache.generation!.id;
+  a.hold((path) => !path.includes('timeline='));
+  const firstPull = first.pull();
+  await vi.waitFor(() => expect(a.held()).toBe(1));
+  await vi.waitFor(() => expect(f.cache.generation?.id).not.toBe(generation));
+  // Its undo, which the second tab hears first: its own clear is now a stale tab's, and it bootstraps t2.
+  f.restore(checkpoint, 't2');
+  expect(await second.pull()).toBeNull();
+  await vi.waitFor(() => expect(f.cache.generation?.timeline).toBe('t2'));
+  a.release();
+  expect(await firstPull).toBeNull();
+  await vi.waitFor(() => expect(ids(first)).toEqual(['kept', 'later']));
+  expect(await first.pull()).toBeNull();
+  expect(ids(first)).toEqual(['kept', 'later']);
+  expect(ids(second)).toEqual(['kept', 'later']);
+  expect(f.cache.generation?.timeline).toBe('t2');
+  expect(refused).toEqual(['clear', 'adopt t1']);
+  await f.flush();
+  expect([...f.cache.rows.keys()].toSorted()).toEqual(['kept', 'later']);
+  first.close();
+  second.close();
 });

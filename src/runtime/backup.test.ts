@@ -18,9 +18,11 @@ const server = testServer();
 
 const held = async (store: ObjectStore) => {
   const objects = new Map<string, { kind: string; parent: string | null; value: unknown }>();
+  const pin = await store.pin();
+  if (!pin.ok) throw new Error(pin.error);
   const failure = await store.scan({}, ({ id, kind, parent }, value) => {
     if (kind !== 'summary') objects.set(id, { kind, parent, value });
-  });
+  }, pin.data);
   if (failure) throw new Error(failure.error);
   return objects;
 };
@@ -98,7 +100,7 @@ async function oldAccount({ profile = true } = {}) {
   return { store, files, image, smile, chat, gone };
 }
 
-async function exported(store: Pick<ObjectStore, 'scan'>, files: Files) {
+async function exported(store: Pick<ObjectStore, 'scan' | 'pin'>, files: Files) {
   const parts: BlobPart[] = [];
   const result = await exportBackup(store, files, {
     write: async (bytes) => { parts.push(bytes); },
@@ -158,11 +160,12 @@ describe('backup', () => {
     await store.batch(Array.from({ length: 500 }, (_, index) => ({ type: 'create', kind: 'folder', id: crypto.randomUUID(), parent: null, value: { name: `${index}` } })));
     const other = await open();
     await other.pull();
-    const editing: Pick<ObjectStore, 'scan'> = {
-      scan: (options, visit) => store.scan(options, async (row, value) => {
+    const editing: Pick<ObjectStore, 'scan' | 'pin'> = {
+      pin: () => store.pin(),
+      scan: (options, visit, pin) => store.scan(options, async (row, value) => {
         await visit(row, value);
         if (!options.metadata && row.id === created.data.id) await other.update('connection', row.id, (current) => ({ ...current, label: 'b' }));
-      }),
+      }, pin),
     };
 
     const backup = await read(await exported(editing, files));

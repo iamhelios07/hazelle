@@ -37,7 +37,7 @@ async function account() {
         .sort((a, b) => a.rev - b.rev);
       const page = candidates.slice(0, 2).map(({ body, ...row }) => body !== null && (excluded.includes(row.kind) || params.has('metadata')) ? { ...row, omitted: true } : { ...row, body });
       const cursor = page.at(-1)?.rev ?? since;
-      return { ok: true, data: { changes: page, cursor, more: candidates.length > page.length, ...(bootstrap && { until }), limits: { items: 100, bytes: 1_000_000, body: 100_000 } } as T };
+      return { ok: true, data: { timeline: 't', changes: page, cursor, more: candidates.length > page.length, ...(bootstrap && { until }), limits: { items: 100, bytes: 1_000_000, body: 100_000 } } as T };
     }
     const writes = (body as { writes: (Omit<Wire, 'rev'> & { baseRev: number | null })[] }).writes;
     if (writes.some((write) => (changes.get(write.id)?.rev ?? null) !== write.baseRev)) return { ok: false, error: 'conflict' };
@@ -45,7 +45,7 @@ async function account() {
       changes.set(id, { id, kind, parent, body, rev: ++rev });
       return rev;
     });
-    return { ok: true, data: { revs } as T };
+    return { ok: true, data: { revs, timeline: 't' } as T };
   };
   const key = randomBytes(32);
   const open = async () => {
@@ -298,7 +298,7 @@ describe('selective account reads', () => {
     await seed('memory', 'memory', 'a', { records: [], state: [], threads: [] });
     const store = await open();
     const decrypt = vi.spyOn(sealedObjects, 'openObject');
-    const plan = await planRemoval(store, { kind: 'character', id: 'ca' });
+    const plan = await store.pinned((pin) => planRemoval(store, { kind: 'character', id: 'ca' }, pin));
     expect(plan.ok && plan.data.map((round) => round.map(({ id }) => id))).toEqual([['a1', 'a2', 'memory'], ['a'], ['ca']]);
     expect(decrypt).not.toHaveBeenCalled();
     expect(store.scopeState('a')).toBe('unloaded');

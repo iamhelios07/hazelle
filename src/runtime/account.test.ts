@@ -12,7 +12,7 @@ it('deletes the account only with its password proof, after which the session is
 });
 
 it('learns a suspension and a full account from refusals, and holds full until the account shrinks', () => {
-  const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, storage: { bytes: 100, bytesCap: 100, fileBytes: 0, fileBytesCap: null } });
+  const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 100, bytesCap: 100, fileBytes: 0, fileBytesCap: null } });
   facts.heard({ kind: 'storage-full' });
   facts.heard({ kind: 'bytes', bytes: 120 });
   expect(facts.snapshot()).toMatchObject({ suspended: false, full: true, storage: { bytes: 120 } });
