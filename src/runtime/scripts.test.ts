@@ -59,6 +59,9 @@ describe("a turn with the bot's Lua", () => {
       expect(JSON.stringify(log[0]!.sent.body)).toContain('turn 1:안녕 [input]');
       expect(JSON.stringify(log[0]!.sent.body)).toContain('narration');
       expect((JSON.parse(log[0]!.sent.body!) as { messages: unknown[] }).messages.at(-1)).toEqual({ role: 'system', content: 'from lua' });
+      const { prompt } = session.talk.sent(reply!.id)!;
+      expect(prompt.parts).toHaveLength(prompt.messages.length);
+      expect(prompt.parts.at(-1)).toMatchObject({ from: { kind: 'script' } });
     }));
 
   it('ends the turn before any request on stopChat, keeping the message and what was written', () =>

@@ -34,7 +34,9 @@ export type From =
   | { kind: 'block'; name: string | null; slot: SlotKind | null }
   | { kind: 'lore'; name: string; slot: 'lorebook' | 'postEverything' }
   | { kind: 'depth'; name: string; depth: number }
-  | { kind: 'continue' };
+  | { kind: 'continue' }
+  // A message a bot's script added or changed after the prompt was assembled (rewritten).
+  | { kind: 'script' };
 
 // parts[i] says where messages[i] came from and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. memory: null while the
@@ -248,6 +250,32 @@ export function assemble({ scope, seed, countTokens, budget, continuing, memory 
   while (size(sent) > budget && from < messages.length - 1) sent = fill(messages.slice(++from));
   const used = size(sent);
   return used > budget ? { kind: 'too-long', tokens: used, budget } : assembled(sent);
+}
+
+// The request as a bot's script left it (editRequest), with its parts as sent: a message the script left as built
+// keeps its part, any other is the script's and counted here. The budget holds for this request as it does in
+// assemble: the oldest chat messages left as built go first, never the last of them, and what does not fit even then
+// is not sent.
+export function rewritten(prompt: Assembled, messages: ChatMessage[], countTokens: (text: string) => number, budget: number | null): Assembled | TooLong {
+  let next = 0;
+  const sent = messages.map((message) => {
+    let at = next;
+    while (at < prompt.messages.length && (prompt.messages[at]!.role !== message.role || prompt.messages[at]!.content !== message.content)) at++;
+    if (at === prompt.messages.length) return { message, from: { kind: 'script' } satisfies From, tokens: countTokens(message.content) };
+    next = at + 1;
+    return { message, ...prompt.parts[at]! };
+  });
+  const chat = ({ from }: { from: From }) => from.kind === 'block' && from.slot === 'chat';
+  let used = sent.reduce((sum, { tokens }) => sum + tokens, 0);
+  let dropped = prompt.dropped;
+  while (budget !== null && used > budget) {
+    const oldest = sent.findIndex(chat);
+    if (oldest === -1 || oldest === sent.findLastIndex(chat)) return { kind: 'too-long', tokens: used, budget };
+    used -= sent[oldest]!.tokens;
+    sent.splice(oldest, 1);
+    dropped++;
+  }
+  return { ...prompt, messages: sent.map(({ message }) => message), parts: sent.map(({ from, tokens }) => ({ from, tokens })), dropped };
 }
 
 // How much of each message before the source 앞 메시지 holds, from its end.
