@@ -252,11 +252,16 @@ function choose(args: string[], next: () => number): string | null {
   const from = args.length > 1 ? args : options(args[0]!);
   return from[Math.floor(next() * from.length)] ?? null;
 }
+// The most a count read from the text may be where it sizes a loop or an allocation; past it the tag stays as
+// written. It holds each tag, not a text's tags together.
+const MOST = 10_000;
 function roll(notation: string, next: () => number): string | null {
   const [, count, sides] = /^(?:(\d*)d)?(\d+)$/i.exec(notation.trim()) ?? [];
-  if (sides === undefined || Number(sides) < 1) return null;
+  const dice = count ? Number(count) : 1;
+  const faces = Number(sides);
+  if (!Number.isSafeInteger(faces) || faces < 1 || dice > MOST) return null;
   let total = 0;
-  for (let i = 0; i < (count ? Number(count) : 1); i++) total += Math.floor(next() * Number(sides)) + 1;
+  for (let i = 0; i < dice; i++) total += Math.floor(next() * faces) + 1;
   return String(total);
 }
 // pick and rollp keep Risu's seed, the character, chat and message count, and not the tag's place.
@@ -369,7 +374,7 @@ define('objectassert', 3, ([object, key, value]) => {
 define('arrayassert', 3, ([array, index, value]) => {
   const current = items(array!);
   const at = Number(index);
-  if (!Number.isSafeInteger(at) || at < 0) return null;
+  if (!Number.isSafeInteger(at) || at < 0 || at >= MOST) return null;
   return serialize(Array.from({ length: Math.max(current.length, at + 1) }, (_, n) => current[n] ?? (n === at ? value : '')));
 });
 define('arrayshift', 1, ([array]) => serialize(items(array!).slice(1)));
@@ -384,7 +389,7 @@ define('arraysplice', 3, ([array, start, count, ...insert]) => {
 define('br newline', 0, () => '\n');
 define('blank none', 0, () => '');
 // A backslash and an n, not a line break; with a count, that many.
-define('cbr', 0, ([count = '1']) => '\\n'.repeat(Number(count)));
+define('cbr', 0, ([count = '1']) => (Number(count) > MOST ? null : '\\n'.repeat(Number(count))));
 define('bo', 0, () => escapeCbs('{{'));
 define('bc', 0, () => escapeCbs('}}'));
 define('decbo', 0, () => escapeCbs('{'));

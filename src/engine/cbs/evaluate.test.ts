@@ -194,4 +194,11 @@ describe('evaluate', () => {
   it('leaves a tag with an argument out of range as written', () => {
     expect(run('{{fixnum::1.5::200}} {{date::YYYY::soon}}')).toBe('{{fixnum::1.5::200}} {{date::YYYY::soon}}');
   });
+
+  it('leaves a tag as written when its count would size an endless loop or a huge allocation', () => {
+    const huge = '9'.repeat(309);
+    const text = `{{roll::${huge}d6}} {{rollp::10001d6}} {{dice::2d${huge}}} {{cbr::1e9}} {{arrayassert::[]::1e9::x}}`;
+    expect(run(text)).toBe(text);
+    expect(run('{{cbr::2}}{{arrayassert::[]::1::x}}')).toBe('\\n\\n["","x"]');
+  });
 });
