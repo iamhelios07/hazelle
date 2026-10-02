@@ -40,7 +40,8 @@
   ],
   // The operator's account id (src/server/http.ts). Empty names no one.
   "vars": { "ADMIN_ACCOUNT": "" },
-  // The hourly sweep of pictures whose account is gone (src/server/main.ts).
+  // Hourly: the sweep of pictures whose account is gone, and the delete of reports and log rows past their year
+  // (src/server/main.ts).
   "triggers": { "crons": ["17 * * * *"] },
   "r2_buckets": [
     {
