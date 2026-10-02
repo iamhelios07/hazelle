@@ -174,6 +174,10 @@ export function testServer() {
     },
     // The password proof account() signs up with, for what asks for the password again, such as 탈퇴.
     passwordProof: { method: 'password', proof: signupBody().passwordProof } as const,
+    // The server's clock, which stamps the stores' bookmarks: a restore names a time between two writes. reset() puts it back.
+    at(now: () => number) {
+      app.clock.now = now;
+    },
     // An account the Worker names as its operator.
     async operator() {
       const opened = await harness.account();

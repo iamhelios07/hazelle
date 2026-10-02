@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import type { Connection } from '../connectors/types';
 import { loadSession, sendReport } from './account';
 import { beginRestore, continueRestore, readAccounts, readLog, readReports, readRestores, readService, removeAccount, resolveReport, setService, setSuspended, type Restore } from './admin';
 import { testServer } from './testing';
@@ -8,7 +9,7 @@ const server = testServer();
 it('sets the service, suspends an account and resolves its report, each read back newest first in one short page', async () => {
   const { accountId } = await server.operator();
   expect(await setService({ signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null })).toMatchObject({ ok: true });
-  expect(await readService()).toMatchObject({ ok: true, data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, fileBytes: 0 } });
+  expect(await readService()).toEqual({ ok: true, data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, fileBytes: 0 } });
 
   expect(await setSuspended(accountId, true)).toMatchObject({ ok: true });
   expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, suspended: true }] } });
@@ -21,6 +22,37 @@ it('sets the service, suspends an account and resolves its report, each read bac
   const log = await readLog(null);
   expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['resolve-report', 'suspend', 'set-service']);
   expect(log.ok && log.data.more).toBe(false);
+});
+
+it('restores an account to a time on its report: its open device drops to the objects of that time, and the restore reads back with its undo', async () => {
+  const { accountId, store } = await server.operator();
+  const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
+  const now = Date.now();
+  server.at(() => now - 3_600_000);
+  const kept = await store.create('connection', connection('kept'));
+  server.at(() => now - 1_800_000);
+  await store.create('connection', connection('later'));
+  server.at(() => Date.now());
+  await sendReport('되돌려 주세요');
+  const reports = await readReports(null);
+  const report = reports.ok ? reports.data.rows[0]!.id : 0;
+  const at = now - 2_700_000;
+
+  const rewound = vi.fn();
+  store.subscribeRewound(rewound);
+  const run = await beginRestore(accountId, { report, at });
+  expect(run).toEqual({ ok: true, data: { id: expect.any(Number), phase: 'done', verified: true, error: null } });
+  expect(await store.pull()).toBeNull();
+  expect(rewound).toHaveBeenCalledWith(0);
+  expect(store.list('connection')).toEqual([kept.ok && kept.data]);
+
+  expect(await readRestores(accountId)).toEqual({ ok: true, data: [{
+    id: run.ok && run.data.id, reportId: report, at, undoes: null, phase: 'done', verified: true, error: null,
+    createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [],
+  }] });
+  expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, state: 'active', bytes: expect.any(Number) }], totals: { unread: 0 } } });
+  const log = await readLog(null);
+  expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['restore-done', 'restore-begun']);
 });
 
 // The server's answers in turn, and what each request sent.
