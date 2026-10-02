@@ -1,10 +1,12 @@
 import { ChevronLeft, Plus } from 'lucide-react';
+import { useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
+import { matches, noResults, SEARCH_FROM } from '../../common/search';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary, useTurn } from '../../session';
-import { Empty, FaceButton, FaceStrip, ItemRow, NavRow, SideTitle, Sidebar } from '../../ui';
+import { Empty, FaceButton, FaceStrip, ItemRow, NavRow, SearchField, SideTitle, Sidebar } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { characterPage, type Route } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
@@ -21,7 +23,10 @@ type Props = {
   onUp: () => void;
 };
 
+// Keyed by its character, so the search starts empty in each.
 export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: Props) {
+  const [query, setQuery] = useState('');
+  const found = shelf.chats.filter((item) => matches(query, item.title, item.preview ?? ''));
   const { characters } = useLibrary();
   const turn = useTurn();
   const route = useRoute();
@@ -47,11 +52,13 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
           )}
           <SideTitle avatar={<ShelfFace shelf={shelf} />} name={shelfName(shelf)} onOpen={about === null ? undefined : () => navigate(about)} />
           <NavRow icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf.id })} />
+          {shelf.chats.length >= SEARCH_FROM && <SearchField size="sm" label="채팅 검색" value={query} onChange={setQuery} />}
         </>
       }
+      current={openChat}
       footer={<SidebarFooter />}
     >
-      {shelf.chats.map((item) => (
+      {found.map((item) => (
         <ItemRow
           key={item.id}
           title={item.title}
@@ -62,7 +69,7 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
           onClick={() => navigate({ kind: 'chat', id: item.id })}
         />
       ))}
-      {shelf.chats.length === 0 && <Empty variant="side">{`${NO_CHATS}.`}</Empty>}
+      {shelf.chats.length === 0 ? <Empty variant="side">{`${NO_CHATS}.`}</Empty> : found.length === 0 && <Empty variant="side">{noResults(query.trim())}</Empty>}
     </Sidebar>
   );
 }

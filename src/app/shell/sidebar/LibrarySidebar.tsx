@@ -52,7 +52,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   if (collapsed && !page) return <SidebarRail shelves={shelves} current={current} typing={typing} onEnter={enter} onExpand={() => onCollapse(false)} />;
   const fold = page ? undefined : () => onCollapse(true);
   if (current && upAt !== at) {
-    return <ShelfChats page={page} onCollapse={fold} shelf={current} typing={typing} onEnter={enter} onUp={() => (page ? navigate(HOME) : setUpAt(at))} />;
+    return <ShelfChats key={current.id ?? 'none'} page={page} onCollapse={fold} shelf={current} typing={typing} onEnter={enter} onUp={() => (page ? navigate(HOME) : setUpAt(at))} />;
   }
   return (
     <CharacterTree

@@ -1,5 +1,5 @@
 import { PanelLeft, X } from 'lucide-react';
-import { useId, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { Brand } from '../foundation/Brand';
 import { Divider } from '../foundation/Divider';
@@ -11,11 +11,21 @@ type Props = {
   page?: boolean;
   onCollapse?: () => void;
   actions: ReactNode;
+  // What names the current row, such as the open chat's id. When it changes, a current row out of the list's view is
+  // brought into it: a chat opened from a menu or a link may sit hundreds of rows down.
+  current?: string;
   children: ReactNode;
   footer: ReactNode;
 };
 
-export function Sidebar({ page = false, onCollapse, actions, children, footer }: Props) {
+export function Sidebar({ page = false, onCollapse, actions, current, children, footer }: Props) {
+  const list = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const row = list.current?.querySelector('[aria-current]');
+    if (!row) return;
+    const [frame, box] = [list.current!.getBoundingClientRect(), row.getBoundingClientRect()];
+    if (box.top < frame.top || box.bottom > frame.bottom) row.scrollIntoView({ block: 'center' });
+  }, [current]);
   return (
     <aside className={page ? `${styles.sidebar} ${styles.page}` : styles.sidebar} aria-label="캐릭터 목록">
       <div className={styles.head}>
@@ -23,7 +33,7 @@ export function Sidebar({ page = false, onCollapse, actions, children, footer }:
         {onCollapse && <IconButton icon={PanelLeft} label="사이드바 접기" size="sm" onClick={onCollapse} />}
       </div>
       <div className={styles.actions}>{actions}</div>
-      <div className={styles.list}>{children}</div>
+      <div ref={list} className={styles.list}>{children}</div>
       <div className={styles.footer}>{footer}</div>
     </aside>
   );

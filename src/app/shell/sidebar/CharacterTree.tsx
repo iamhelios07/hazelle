@@ -42,7 +42,7 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
         title={shelfName(shelf)}
         time={latest?.at ? ago(latest.at) : ''}
         typing={typing(shelf)}
-        preview={latest?.title ?? (shelf.character ? NO_CHATS : '모델과 바로 이야기해요')}
+        preview={latest ? latest.preview || latest.title : shelf.character ? NO_CHATS : '모델과 바로 이야기해요'}
         current={shelf === current}
         onClick={() => onEnter(shelf)}
       />
