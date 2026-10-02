@@ -207,7 +207,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   async function send() {
     if (!draft.text.trim() || busy) return;
     await Promise.all(writes.current);
-    if (blocked(session, chat)) return setStopped(true);
+    // A saved chat is asked of the store, as the turn reads it: this render's copy was made before the wait.
+    const now = id === null ? chat : store.get('chat', id)?.value;
+    if (now && blocked(session, now)) return setStopped(true);
     // Taken only now: the composer stayed open through the wait, so what was typed in it goes with the message, and a
     // turn that began meanwhile leaves the text where it is.
     const text = drafts.text(draft.key).trim();
@@ -246,7 +248,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   function ask(target: Target) {
     if (!id || busy) return;
     follow();
-    void takeTurn(session, id, target).then(report);
+    void Promise.all(writes.current).then(() => takeTurn(session, id, target)).then(report);
   }
 
   function select(message: Shown, index: number) {
@@ -334,7 +336,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     );
   }
 
-  // A send waits for these, so a model, note or toggle changed just before it reaches that turn: the turn reads the
+  // Every turn waits for these, so a model, note or toggle changed just before it reaches that turn: the turn reads the
   // store, which takes a write only once the server has it.
   const writes = useRef(new Set<Promise<unknown>>());
   function track<T>(write: Promise<T>): Promise<T> {
