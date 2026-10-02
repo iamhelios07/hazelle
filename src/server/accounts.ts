@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
+import { VISIBLE } from './admin';
 import { FILE_BYTES } from './files';
 import { fail, ID, isAdmin, readObject, refused, type Account, type AppEnv } from './http';
 import { leaveAccount, store } from './lifecycle';
@@ -106,15 +107,20 @@ accounts.delete('/account', requireOwnSession, async (c) => {
 
 // The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:
 // what the account holds and the caps that apply to it, null for none. bytes: null while the store does not answer,
-// restoring among the reasons.
+// restoring among the reasons. unreadNotices: what the operator sent that the person has not seen (admin.ts).
 async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended' | 'incarnation' | 'state'>) {
   const { incarnation } = account;
-  const [usage, caps] = await Promise.all([
+  const [usage, facts] = await Promise.all([
     store(c.env, incarnation).usage(incarnation),
-    c.env.DB.prepare(`SELECT ${CAP.bytes} AS bytesCap, ${FILE_BYTES} AS fileBytes, ${CAP.fileBytes} AS fileBytesCap FROM accounts WHERE incarnation = ?`)
+    c.env.DB.prepare(
+      `SELECT ${CAP.bytes} AS bytesCap, ${FILE_BYTES} AS fileBytes, ${CAP.fileBytes} AS fileBytesCap,
+         (SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AND notices.id > accounts.notices_seen) AS unreadNotices
+       FROM accounts WHERE incarnation = ?`,
+    )
       .bind(incarnation)
-      .first<{ bytesCap: number | null; fileBytes: number; fileBytesCap: number | null }>(),
+      .first<{ bytesCap: number | null; fileBytes: number; fileBytesCap: number | null; unreadNotices: number }>(),
   ]);
+  const { unreadNotices, ...storage } = facts!;
   return {
     accountId: account.id,
     username: account.username,
@@ -122,6 +128,7 @@ async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'usern
     suspended: account.suspended,
     state: account.state,
     incarnation,
-    storage: { bytes: 'bytes' in usage ? usage.bytes : null, ...caps! },
+    storage: { bytes: 'bytes' in usage ? usage.bytes : null, ...storage },
+    unreadNotices,
   };
 }

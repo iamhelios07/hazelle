@@ -13,7 +13,7 @@ import * as display from '../runtime/turn';
 import { randomBytes } from '../vault/aead';
 import { SessionProvider, useChatDisplay, useWritingChat } from './session';
 
-const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null } });
+const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 });
 
 it('C: composer and panel re-renders skip display, while streaming recomputes without replacing unchanged rows', async () => {
   let rev = 0;

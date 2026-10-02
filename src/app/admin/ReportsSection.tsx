@@ -1,11 +1,11 @@
 import { Check, History } from 'lucide-react';
 import { useState } from 'react';
 import { readReports, resolveReport, type Report } from '../../runtime/admin';
-import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';
-import { useAttempt } from '../common/useAttempt';
+import { NOTICES } from '../common/words';
 import { Button, Callout, Dialog, Empty, List, ListItem, Section, Text } from '../ui';
-import { usePages } from './useLoaded';
+import { NoticeDialog } from './NoticeDialog';
+import { usePages } from '../common/useLoaded';
 
 // A restore starts only from a report the account sent, so it is asked from the report.
 export function ReportsSection({ onActed, onRestore }: { onActed: () => void; onRestore: (report: Report) => void }) {
@@ -13,11 +13,11 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   const [open, setOpen] = useState<Report | null>(null);
   const { rows } = pages;
   return (
-    <Section title="알림">
+    <Section title={NOTICES.received}>
       {pages.failure && <Callout tone="warn">{pages.failure}</Callout>}
-      {rows && rows.length === 0 && <Empty variant="section">받은 알림이 없어요.</Empty>}
+      {rows && rows.length === 0 && <Empty variant="section">{NOTICES.received}이 없어요.</Empty>}
       {rows && rows.length > 0 && (
-        <List label="알림">
+        <List label={NOTICES.received}>
           {rows.map((report) => (
             <ListItem
               key={report.id}
@@ -54,39 +54,34 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   );
 }
 
+// An open report is resolved with an optional reply, which goes to its sender as a notice.
 function ReportDialog({ report, onClose, onRestore, onResolved }: { report: Report; onClose: () => void; onRestore: () => void; onResolved: (at: number) => void }) {
-  const { busy, failure, run } = useAttempt();
-  const resolve = () =>
-    run(async () => {
-      const done = await resolveReport(report.id);
-      if (!done.ok) return describeFailure(done);
-      onResolved(Date.now());
-      return null;
-    });
+  const title = `${report.username}의 알림`;
+  const text = <Text variant="prose">{report.text}</Text>;
+  if (report.resolvedAt !== null) {
+    return (
+      <Dialog title={title} note={ago(report.createdAt)} onClose={onClose}>
+        {text}
+      </Dialog>
+    );
+  }
   return (
-    <Dialog
-      title={`${report.username}의 알림`}
+    <NoticeDialog
+      title={title}
       note={ago(report.createdAt)}
-      onClose={onClose}
-      actions={
-        report.resolvedAt === null ? (
-          <>
-            <Button variant="secondary" icon={History} onClick={onRestore}>
-              이 알림으로 복원
-            </Button>
-            <Button icon={Check} busy={busy} onClick={() => void resolve()}>
-              확인함으로 두기
-            </Button>
-          </>
-        ) : undefined
+      label="답장"
+      optional
+      placeholder="비워 두면 답장 없이 확인함으로 둬요."
+      confirm={{ label: '확인함으로 두기', icon: Check }}
+      about={text}
+      also={
+        <Button variant="secondary" icon={History} onClick={onRestore}>
+          이 알림으로 복원
+        </Button>
       }
-    >
-      <Text variant="prose">{report.text}</Text>
-      {failure && (
-        <Callout tone="warn" alert>
-          {failure}
-        </Callout>
-      )}
-    </Dialog>
+      send={(reply) => resolveReport(report.id, reply)}
+      onSent={() => onResolved(Date.now())}
+      onClose={onClose}
+    />
   );
 }

@@ -9,6 +9,7 @@ import { requireSession } from './session';
 const MAX_REPORT_LENGTH = 4000;
 // Reports are plaintext rows no byte cap counts, so one account's unresolved ones are bounded.
 const MAX_OPEN_REPORTS = 20;
+const MAX_NOTICE_LENGTH = 2000;
 const PAGE_ROWS = 100;
 
 // What any account, a suspended one too, sends the operator.
@@ -26,6 +27,30 @@ export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c
   return sent ? c.body(null, 204) : fail(c, 429, 'too-many-reports');
 });
 
+// The notices an account reads, over a notices row and an accounts row (both unaliased): its own, and those to every
+// account sent at or after it was created. The list and the session's unread count read the same text.
+export const VISIBLE = '(notices.incarnation = accounts.incarnation OR (notices.incarnation IS NULL AND notices.created_at >= accounts.created_at))';
+
+// What any account, a suspended one too, reads of what the operator sent. Newest first, paged like the operator's lists.
+export const notices = new Hono<AppEnv>()
+  .use(requireSession)
+  .get('/', async (c) => {
+    const rows = page(
+      c,
+      'SELECT id, report_id AS reportId, text, created_at AS createdAt FROM notices',
+      `EXISTS (SELECT 1 FROM accounts WHERE accounts.incarnation = ?3 AND ${VISIBLE})`,
+      c.get('account').incarnation,
+    );
+    return rows ? c.json({ notices: (await rows.all()).results }) : fail(c, 400, 'bad-input');
+  })
+  // id: the newest notice the page showed, so one sent since it was read stays unread.
+  .post('/seen', async (c) => {
+    const id = (await readObject(c))?.id;
+    if (!positive(id)) return fail(c, 400, 'bad-input');
+    await c.env.DB.prepare('UPDATE accounts SET notices_seen = MAX(notices_seen, ?) WHERE incarnation = ?').bind(id, c.get('account').incarnation).run();
+    return c.body(null, 204);
+  });
+
 export const admin = new Hono<AppEnv>();
 
 admin.use(requireSession);
@@ -41,9 +66,40 @@ function logged(db: D1Database, action: string, id: string, detail = 'NULL', ...
 
 const USERNAME = `json_object('username', username)`;
 
-async function act(c: Context<AppEnv>, log: D1PreparedStatement, action: D1PreparedStatement) {
-  const [, done] = await c.env.DB.batch([log, action]);
-  return done!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
+// The last statement is the action, and answers the row it wrote.
+async function act(c: Context<AppEnv>, ...statements: D1PreparedStatement[]) {
+  const done = await c.env.DB.batch(statements);
+  return done.at(-1)!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
+}
+
+const noticeText = (value: unknown) => (typeof value === 'string' && value.trim() && value.trim().length <= MAX_NOTICE_LENGTH ? value.trim() : null);
+// The text of a notice sent with an act: null for none, blank among them; undefined for one too long to send.
+const optionalText = (value: unknown) => (value === undefined || (typeof value === 'string' && !value.trim()) ? null : (noticeText(value) ?? undefined));
+
+// Whom a notice is to: a FROM clause naming one accounts row by ?1, or null for every account.
+type Target = { from: string; key: string | number };
+const toAccount = (id: string): Target => ({ from: 'accounts WHERE accounts.id = ?1', key: id });
+// A report's sender, while the report is open and its account is the one that sent it, not a later one holding its id.
+const toSender = (report: number): Target => ({
+  from: 'reports JOIN accounts ON accounts.id = reports.account_id AND accounts.created_at <= reports.created_at WHERE reports.id = ?1 AND reports.resolved_at IS NULL',
+  key: report,
+});
+
+// The only writer of notices: its log row, then the notice, each written only if its account is there.
+function noticed(db: D1Database, text: string, to: Target | null, report: number | null = null): D1PreparedStatement[] {
+  const now = Date.now();
+  if (!to) {
+    return [
+      db.prepare(`INSERT INTO admin_log (at, action, target) VALUES (?, 'send-notice', 'everyone')`).bind(now),
+      db.prepare('INSERT INTO notices (text, created_at) VALUES (?, ?) RETURNING id').bind(text, now),
+    ];
+  }
+  return [
+    db
+      .prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?2, 'send-notice', accounts.id, json_object('username', accounts.username, 'report', ?3) FROM ${to.from}`)
+      .bind(to.key, now, report),
+    db.prepare(`INSERT INTO notices (incarnation, report_id, text, created_at) SELECT accounts.incarnation, ?3, ?4, ?2 FROM ${to.from} RETURNING id`).bind(to.key, now, report, text),
+  ];
 }
 
 // At most this many store calls are in flight, and the page is answered by the deadline with what was read by then.
@@ -131,14 +187,27 @@ export async function readAll<T>(calls: ((() => Promise<T>) | null)[], slots: nu
   return settled;
 }
 
+// to: an account id, or null for every account.
+admin.post('/notices', async (c) => {
+  const body = await readObject(c);
+  const to = body?.to;
+  const text = noticeText(body?.text);
+  if (!text || !(to === null || (typeof to === 'string' && ID.test(to)))) return fail(c, 400, 'bad-input');
+  return act(c, ...noticed(c.env.DB, text, to === null ? null : toAccount(to)));
+});
+
+// reason: a notice to the account, sent with the change.
 admin.put('/accounts/:id/suspended', async (c) => {
   const id = c.req.param('id');
-  const suspended = (await readObject(c))?.suspended;
-  if (!ID.test(id) || typeof suspended !== 'boolean') return fail(c, 400, 'bad-input');
+  const body = await readObject(c);
+  const suspended = body?.suspended;
+  const reason = optionalText(body?.reason);
+  if (!ID.test(id) || typeof suspended !== 'boolean' || reason === undefined) return fail(c, 400, 'bad-input');
   const db = c.env.DB;
   return act(
     c,
     logged(db, suspended ? 'suspend' : 'lift', id, USERNAME),
+    ...(reason === null ? [] : noticed(db, reason, toAccount(id))),
     db.prepare('UPDATE accounts SET suspended_at = ? WHERE id = ? RETURNING id').bind(suspended ? Date.now() : null, id),
   );
 });
@@ -255,10 +324,11 @@ admin.put('/service', async (c) => {
 });
 
 // Newest first. before: the last id of the page before, for the next one. A page shorter than PAGE_ROWS is the last.
-function page(c: Context<AppEnv>, select: string) {
+// where: what else a row must meet, with its values from ?3 on.
+function page(c: Context<AppEnv>, select: string, where = 'TRUE', ...values: unknown[]) {
   const before = c.req.query('before');
   if (before !== undefined && !/^[1-9]\d{0,15}$/.test(before)) return null;
-  return c.env.DB.prepare(`${select} WHERE ?1 IS NULL OR id < ?1 ORDER BY id DESC LIMIT ?2`).bind(before === undefined ? null : Number(before), PAGE_ROWS);
+  return c.env.DB.prepare(`${select} WHERE (?1 IS NULL OR id < ?1) AND ${where} ORDER BY id DESC LIMIT ?2`).bind(before === undefined ? null : Number(before), PAGE_ROWS, ...values);
 }
 
 admin.get('/reports', async (c) => {
@@ -266,14 +336,18 @@ admin.get('/reports', async (c) => {
   return rows ? c.json({ reports: (await rows.all()).results }) : fail(c, 400, 'bad-input');
 });
 
+// reply: a notice to the report's sender, which must still hold its account: a reply that cannot arrive resolves nothing.
 admin.post('/reports/:id/resolve', async (c) => {
   const id = Number(c.req.param('id'));
-  if (!Number.isSafeInteger(id)) return fail(c, 400, 'bad-input');
+  const reply = optionalText((await readObject(c))?.reply);
+  if (!Number.isSafeInteger(id) || reply === undefined) return fail(c, 400, 'bad-input');
   const db = c.env.DB;
+  const open = reply === null ? 'reports WHERE reports.id = ?1 AND reports.resolved_at IS NULL' : toSender(id).from;
   return act(
     c,
-    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?, 'resolve-report', id FROM reports WHERE id = ? AND resolved_at IS NULL`).bind(Date.now(), id),
-    db.prepare('UPDATE reports SET resolved_at = ? WHERE id = ? AND resolved_at IS NULL RETURNING id').bind(Date.now(), id),
+    db.prepare(`INSERT INTO admin_log (at, action, target) SELECT ?2, 'resolve-report', reports.id FROM ${open}`).bind(id, Date.now()),
+    ...(reply === null ? [] : noticed(db, reply, toSender(id), id)),
+    db.prepare(`UPDATE reports SET resolved_at = ?2 WHERE id IN (SELECT reports.id FROM ${open}) RETURNING id`).bind(id, Date.now()),
   );
 });
 

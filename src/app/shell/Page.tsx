@@ -159,7 +159,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return connection && model ? <ModelScreen key={`${connection.id}/${model.id}`} connection={connection} model={model} back={back(at)} /> : missing(at, 'model');
       }
       case 'account':
-        return <AccountScreen back={sideBack(at)} />;
+        return <AccountScreen section={at.section} back={sideBack(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
       // Its path can be typed by anyone; the server refuses every call but the operator's.

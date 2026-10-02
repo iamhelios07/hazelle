@@ -19,7 +19,7 @@ const GROUPS: Place[][] = [
     { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
     { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules' } },
   ],
-  [{ page: 'account', label: PAGES.account, icon: Lock, route: { kind: 'account' } }],
+  [{ page: 'account', label: PAGES.account, icon: Lock, route: { kind: 'account', section: null } }],
 ];
 const ADMIN: Place[] = [{ page: 'admin', label: PAGES.admin, icon: ShieldCheck, route: { kind: 'admin' } }];
 

@@ -1,21 +1,22 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { openSession, type Session } from '../../runtime/session';
 import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
-import { inSettings } from '../common/words';
+import { inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
 import { ToastProvider, useToast, type Standing } from '../toast';
 import { Brand, Screen, Text } from '../ui';
 import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
+import { navigate } from './router';
 
 const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 닿으면 이어서 저장해요.' };
 const SUSPENDED: Standing = {
   message: '운영자가 이 계정을 정지했어요',
-  detail: `읽기는 그대로 되지만 저장과 모델 부르기는 막혀 있어요. ${inSettings('account')}에서 백업을 받거나 운영자에게 알리거나 탈퇴할 수 있어요.`,
+  detail: `읽기는 그대로 되지만 저장과 모델 부르기는 막혀 있어요. ${inSettings('account')}에서 ${NOTICES.from}을 보거나 백업을 받거나 운영자에게 알리거나 탈퇴할 수 있어요.`,
 };
 // Said once, and standing until the account shrinks: each refused write saying it again would be a stream of toasts.
 const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: '새로 만든 것은 저장되지 않아요. 채팅을 지우거나 지운 캐릭터를 완전히 지우면 자리가 생겨요.' };
@@ -32,9 +33,21 @@ function Restored({ store }: { store: Session['store'] }) {
   return null;
 }
 
+// Said once when the session opens with notices the person has not seen. The ref: StrictMode runs a mount's effect twice.
+function Unread({ count }: { count: number }) {
+  const toast = useToast();
+  const said = useRef(false);
+  useEffect(() => {
+    if (!count || said.current) return;
+    said.current = true;
+    toast.show(`${NOTICES.from}이 ${count.toLocaleString('ko-KR')}개 있어요`, { action: { label: '보기', onClick: () => navigate({ kind: 'account', section: 'notices' }) } });
+  }, []);
+  return null;
+}
+
 // Everything behind an open vault is one session, opened before the first screen and closed when this unmounts,
 // which 잠그기 and 로그아웃 both do.
-export function Workspace({ accountId, vaultKey, username, ...account }: Unlocked) {
+export function Workspace({ accountId, vaultKey, username, unreadNotices, ...account }: Unlocked) {
   const [session, setSession] = useState<Session | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -83,6 +96,7 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
     <SessionProvider session={session} account={account}>
       <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
         <Restored store={session.store} />
+        <Unread count={unreadNotices} />
         <BotNotes />
         <ImportProvider>
           <Layout />

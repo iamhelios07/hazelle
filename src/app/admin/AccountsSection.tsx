@@ -1,14 +1,16 @@
-import { Ban, HardDrive, History, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
+import { Ban, HardDrive, History, MoreHorizontal, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiResult } from '../../runtime/api';
-import { removeAccount, setSuspended, type AccountState, type AdminAccount, type OwnCap, type Totals } from '../../runtime/admin';
+import { removeAccount, sendNotice, setSuspended, type AccountState, type AdminAccount, type OwnCap, type Totals } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
+import { NOTICES } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Callout, ConfirmDialog, IconButton, List, ListItem, Menu, MenuItem, Section, Text } from '../ui';
 import { CapsDialog } from './CapsDialog';
+import { NoticeDialog } from './NoticeDialog';
 import { moment } from './time';
 
 const UNKNOWN = '알 수 없음';
@@ -30,6 +32,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
   const { data, failure, reload } = loaded;
   const [removing, setRemoving] = useState<AdminAccount | null>(null);
   const [capping, setCapping] = useState<AdminAccount | null>(null);
+  const [writing, setWriting] = useState<{ account: AdminAccount; suspend: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function act(done: Promise<ApiResult<undefined>>, failed: string) {
@@ -72,11 +75,12 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
                       <>
                         <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
                         <MenuItem icon={History} label="복원 기록" onClick={() => onRestores(account)} />
+                        {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
                         {others &&
                           (account.suspended ? (
                             <MenuItem icon={RotateCcw} label="정지 풀기" onClick={() => void act(setSuspended(account.accountId, false), `${account.username} 계정의 정지를 풀지 못했어요.`)} />
                           ) : (
-                            <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알리기, 탈퇴만 돼요" onClick={() => void act(setSuspended(account.accountId, true), `${account.username} 계정을 정지하지 못했어요.`)} />
+                            <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알리기, 탈퇴만 돼요" onClick={() => setWriting({ account, suspend: true })} />
                           ))}
                         {others && account.state === 'active' && <MenuItem icon={Trash2} label="계정 지우기" tone="warn" onClick={() => setRemoving(account)} />}
                       </>
@@ -98,6 +102,35 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
           }}
         />
       )}
+      {writing &&
+        (writing.suspend ? (
+          <NoticeDialog
+            title={`${writing.account.username} 계정을 정지할까요?`}
+            label="정지 이유"
+            optional
+            placeholder="비워 두면 이유 없이 정지해요. 적으면 그 계정에 알림으로 가요."
+            confirm={{ label: '정지', icon: Ban }}
+            send={(reason) => setSuspended(writing.account.accountId, true, reason)}
+            onSent={() => {
+              setWriting(null);
+              onActed();
+            }}
+            onClose={() => setWriting(null)}
+          />
+        ) : (
+          <NoticeDialog
+            title={`${writing.account.username}에게 ${NOTICES.send}`}
+            label="보낼 내용"
+            confirm={{ label: '보내기', icon: Send }}
+            send={(text) => sendNotice(writing.account.accountId, text)}
+            onSent={() => {
+              setWriting(null);
+              toast.show(`${writing.account.username}에게 보냈어요.`);
+              onActed();
+            }}
+            onClose={() => setWriting(null)}
+          />
+        ))}
       {removing &&
         (removing.state === 'leaving' ? (
           <ConfirmDialog title={`${removing.username} 계정의 탈퇴를 마무리할까요?`} confirm="마무리" icon={Trash2} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>

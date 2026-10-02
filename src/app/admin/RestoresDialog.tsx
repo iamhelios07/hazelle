@@ -8,7 +8,7 @@ import { useAttempt } from '../common/useAttempt';
 import { useToast } from '../toast';
 import { Button, Callout, ConfirmDialog, Dialog, Empty, IconButton, List, ListItem, Menu, MenuItem, Section, Stack, Text, TextField } from '../ui';
 import { moment, TIME_FORMAT, typedTime } from './time';
-import { useLoaded } from './useLoaded';
+import { useLoaded } from '../common/useLoaded';
 
 // report: the one a new restore or an undo is asked on; null when opened from the account, which only continues one.
 export type Restoring = { accountId: string; username: string; report: Report | null };

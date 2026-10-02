@@ -1,4 +1,5 @@
 import { api, type ApiResult } from './api';
+import { page } from './pages';
 
 // The operator's calls (server/admin). Only the account the Worker names passes; any other is answered not-admin.
 
@@ -27,18 +28,16 @@ export type Totals = { bytes: number; disk: number; unread: number; readAt: numb
 export type Report = { id: number; accountId: string; username: string; text: string; createdAt: number; resolvedAt: number | null };
 // detail: what the server logged with it, such as the account's username or the service values set.
 export type LogRow = { id: number; at: number; action: string; target: string; detail: unknown };
-// more: a full page came, so an older one may follow.
-export type Page<T> = { rows: T[]; more: boolean };
-
-// The server's PAGE_ROWS (server/admin): a page shorter than it is the last.
-const PAGE_ROWS = 100;
-
 export const readService = () => api<Service>('GET', 'admin/service');
 export const setService = (values: Pick<Service, 'signupCap' | 'accountBytesCap' | 'accountFileBytesCap'>) => api<undefined>('PUT', 'admin/service', values);
 
 export const readAccounts = () => api<{ accounts: AdminAccount[]; totals: Totals }>('GET', 'admin/accounts');
 
-export const setSuspended = (account: string, suspended: boolean) => api<undefined>('PUT', `admin/accounts/${account}/suspended`, { suspended });
+// reason: a notice to the account, sent with the change; blank sends none.
+export const setSuspended = (account: string, suspended: boolean, reason = '') => api<undefined>('PUT', `admin/accounts/${account}/suspended`, { suspended, reason });
+// Plaintext, to one account or, with null, to every account there now. The server's MAX_NOTICE_LENGTH (server/admin).
+export const NOTICE_LENGTH = 2000;
+export const sendNotice = (to: string | null, text: string) => api<undefined>('POST', 'admin/notices', { to, text });
 export const setCaps = (account: string, caps: Pick<AdminAccount, 'bytesCap' | 'fileBytesCap'>) => api<undefined>('PUT', `admin/accounts/${account}/caps`, caps);
 // Also finishes the deletion of a leaving account.
 export const removeAccount = (account: string) => api<undefined>('DELETE', `admin/accounts/${account}`);
@@ -76,17 +75,10 @@ export async function readRestores(account: string): Promise<ApiResult<Restore[]
 export const beginRestore = (account: string, ask: RestoreAsk) => api<RestoreRun>('POST', `admin/accounts/${account}/restores`, ask);
 export const continueRestore = (restore: number, action: RestoreAction) => api<RestoreRun>('POST', `admin/restores/${restore}/${action}`);
 
-// Newest first; before is the id of the last row already shown.
-async function page<K extends string, T extends { id: number }>(path: string, key: K, before: number | null): Promise<ApiResult<Page<T>>> {
-  const answer = await api<Record<K, T[]>>('GET', `admin/${path}${before === null ? '' : `?before=${before}`}`);
-  if (!answer.ok) return answer;
-  const rows = answer.data[key];
-  return { ok: true, data: { rows, more: rows.length === PAGE_ROWS } };
-}
-
-export const readReports = (before: number | null) => page<'reports', Report>('reports', 'reports', before);
-export const resolveReport = (id: number) => api<undefined>('POST', `admin/reports/${id}/resolve`);
-export const readLog = (before: number | null) => page<'log', LogRow>('log', 'log', before);
+export const readReports = (before: number | null) => page<'reports', Report>('admin/reports', 'reports', before);
+// reply: a notice to the report's sender, sent with resolving it; blank sends none.
+export const resolveReport = (id: number, reply = '') => api<undefined>('POST', `admin/reports/${id}/resolve`, { reply });
+export const readLog = (before: number | null) => page<'log', LogRow>('admin/log', 'log', before);
 
 // A stored file's id: the hex SHA-256 its sealed body hashes to (server/files FILE_ID).
 export const FILE_ID = /^[0-9a-f]{64}$/;
