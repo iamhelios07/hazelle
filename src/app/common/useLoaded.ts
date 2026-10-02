@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ApiResult } from '../../runtime/api';
-import type { Page } from '../../runtime/admin';
-import { describeFailure } from '../common/failure';
+import type { Page } from '../../runtime/pages';
+import { describeFailure } from './failure';
 
 // What a section shows from the server, asked when it mounts and again on reload. A failed reload keeps what was shown.
 export function useLoaded<T>(load: () => Promise<ApiResult<T>>) {

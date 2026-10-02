@@ -1,10 +1,14 @@
+import { Send } from 'lucide-react';
 import { useState } from 'react';
-import { setService, type Service } from '../../runtime/admin';
+import { sendNotice, setService, type Service } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { useAttempt } from '../common/useAttempt';
+import { NOTICES } from '../common/words';
+import { useToast } from '../toast';
 import { Button, Callout, NumberInput, Section, SettingGroup, SettingRow } from '../ui';
 import { CAP_ERROR, capText, typedCap, typedCount } from './bytes';
+import { NoticeDialog } from './NoticeDialog';
 
 // The operator raises the cap in steps, so each cap sits with the count it bounds.
 export function ServiceSection({ service, onSaved }: { service: Service; onSaved: () => void }) {
@@ -13,6 +17,8 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
   const [cap, setCap] = useState<string | null>(null);
   const [fileCap, setFileCap] = useState<string | null>(null);
   const { busy, failure, run } = useAttempt();
+  const toast = useToast();
+  const [writing, setWriting] = useState(false);
   const signupCap = seats === null ? service.signupCap : typedCount(seats);
   const accountBytesCap = cap === null ? service.accountBytesCap : typedCap(cap);
   const accountFileBytesCap = fileCap === null ? service.accountFileBytesCap : typedCap(fileCap);
@@ -60,7 +66,30 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
           error={accountFileBytesCap === undefined ? CAP_ERROR : undefined}
           control={<NumberInput label="계정당 그림 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}
         />
+        <SettingRow
+          label={`모두에게 ${NOTICES.send}`}
+          help="지금 있는 계정이 모두 받아요. 나중에 가입한 계정에는 보이지 않아요."
+          control={
+            <Button variant="secondary" size="sm" icon={Send} onClick={() => setWriting(true)}>
+              보내기
+            </Button>
+          }
+        />
       </SettingGroup>
+      {writing && (
+        <NoticeDialog
+          title={`모두에게 ${NOTICES.send}`}
+          label="보낼 내용"
+          confirm={{ label: '보내기', icon: Send }}
+          send={(text) => sendNotice(null, text)}
+          onSent={() => {
+            setWriting(false);
+            toast.show('모두에게 보냈어요.');
+            onSaved();
+          }}
+          onClose={() => setWriting(false)}
+        />
+      )}
       {failure && (
         <Callout tone="warn" alert>
           {failure}

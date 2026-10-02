@@ -25,7 +25,8 @@ type State =
   | { kind: 'recovered'; session: SessionFacts; vaultKey: VaultKey; current: Credential }
   | { kind: 'unlocked'; session: SessionFacts; vaultKey: VaultKey; facts: AccountFacts };
 
-export type Unlocked = Account & { accountId: string; username: string; vaultKey: VaultKey };
+// unreadNotices: the server's count when the account was opened.
+export type Unlocked = Account & { accountId: string; username: string; vaultKey: VaultKey; unreadNotices: number };
 
 const ELSEWHERE = '다른 탭에서 다른 계정으로 로그인해서 이 탭에 열려 있던 계정을 닫았어요.';
 
@@ -182,6 +183,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
         accountId: state.session.accountId,
         username: state.session.username,
         admin: state.session.admin,
+        unreadNotices: state.session.unreadNotices,
         facts: state.facts,
         vaultKey: state.vaultKey,
         onLock: () => void lockVault().then(() => reload()),

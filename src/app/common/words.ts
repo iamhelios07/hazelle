@@ -32,6 +32,10 @@ export const MODULE_VOICE = { name: PAGES.modules, face: null };
 // The layer of the model assignment that 설정's 모델 page holds, under every prompt and chat.
 export const DEFAULT_MODELS = '기본 모델';
 
+// What passes between a person and the operator, always said with its direction. from: what the operator sent, on the
+// person's page. received: what people sent, on the operator's page. send: the operator sending one.
+export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
+
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.

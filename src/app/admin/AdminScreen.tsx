@@ -10,7 +10,7 @@ import { LogSection } from './LogSection';
 import { ReportsSection } from './ReportsSection';
 import { RestoresDialog, type Restoring } from './RestoresDialog';
 import { ServiceSection } from './ServiceSection';
-import { useLoaded } from './useLoaded';
+import { useLoaded } from '../common/useLoaded';
 
 // 운영: the operator's tools. Every act lands in the log, which is asked again after one. The accounts are asked again
 // only after an act on an account: reading them calls every account's store.
