@@ -6,7 +6,8 @@ import type { ToggleValues } from './prompt';
 
 // folder is the library folder it sits in; loreFolders only group its lorebook on screen.
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
-// deleted is when it went to 지운 캐릭터; it and its chats are removed for good KEEP_DELETED later.
+// deleted is when it went to 지운 캐릭터; it and its chats are removed for good KEEP_DELETED later. purging: that removal
+// has begun (runtime/characters purge), so it can no longer be brought back, and the next purge finishes it.
 // toggles holds the values set for it, over the declared defaults; translate, its chats' 번역.
 // alias: 별명, the user's own note to tell apart characters (or personas) of one name. It is never sent, unlike the
 // card's nickname (부르는 이름), which CCv3 puts in {{char}}'s place.
@@ -17,6 +18,7 @@ export type Character = {
   loreFolders: LoreFolder[];
   origin?: { id: string; name: string };
   deleted?: number;
+  purging?: true;
   toggles?: ToggleValues;
   translate?: TranslateSwitches;
   // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
@@ -45,6 +47,7 @@ export type Character = {
 // (character.modules). Its lorebook and assets are its children, as a character's are.
 // namespace: Risu's, which {{moduleenabled::…}} asks by. loreFolders only group its lorebook on screen.
 // deleted is when it was deleted: it is off everywhere and listed nowhere, and removed for good KEEP_DELETED later.
+// purging as a character's.
 // risu: the Risu id of one brought from a Risu backup, which a move skips.
 export type Module = Pack & {
   name: string;
@@ -52,6 +55,7 @@ export type Module = Pack & {
   namespace: string | null;
   loreFolders: LoreFolder[];
   deleted?: number;
+  purging?: true;
   risu?: string;
 };
 // fold false shows such a picture whole instead of its top until opened. peek is the height its top shows at, most the

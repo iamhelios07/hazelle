@@ -112,22 +112,35 @@ export async function copyCharacter(store: ObjectStore, id: string, name: string
 }
 
 // at is when it went to 지운 캐릭터, where it and its chats wait KEEP_DELETED before going for good
-// (purgeExpired); null brings it back.
+// (purgeExpired); null brings it back, unless its removal has begun ('gone').
 export function setDeleted(store: ObjectStore, id: string, at: number | null): Promise<ApiResult<Stored<'character'>>> {
-  return store.update('character', id, (current) => (at === null ? without(current, 'deleted') : { ...current, deleted: at }));
+  return store.update('character', id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }));
 }
 
+type Removable = Pick<Character, 'deleted' | 'purging'>;
+
+// Removal for good is decided once, by the purging claim, at the rev the claim is written on (store.update): a restore
+// landing first leaves the root not due ('gone'), and one after it is refused (setDeleted, setModuleDeleted). Nothing
+// the root owns goes before the claim lands. A claimed root is always due, so the next purge finishes one cut short.
+async function purge(store: ObjectStore, kind: 'character' | 'module', id: string, due: (value: Removable) => boolean, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
+  const claimed = await store.update(kind, id, (current) => (current.purging || due(current) ? { ...current, purging: true } : null));
+  if (!claimed.ok) return claimed;
+  return removeOwned(store, { kind, id }, progress);
+}
+
+// 지금 지우기: only one still in 지운 캐릭터.
 export const purgeCharacter = (store: ObjectStore, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
-  removeOwned(store, { kind: 'character', id }, progress);
+  purge(store, 'character', id, (value) => value.deleted !== undefined, progress);
 
 // Removes for good the deleted characters and modules whose time is up. The session runs it when it opens, on
 // whichever device opens first. One that fails is tried again next time. A stop (the vault closing) lets the one
 // under way finish and leaves the rest for next time.
 export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
+  const due = (value: Removable) => value.deleted !== undefined && daysLeft(value, now) <= 0;
   for (const kind of ['character', 'module'] as const) {
     for (const { id, value } of store.list(kind)) {
       if (signal.aborted) return;
-      if (value.deleted !== undefined && daysLeft(value, now) <= 0) await removeOwned(store, { kind, id }, () => {});
+      if (value.purging || due(value)) await purge(store, kind, id, due, () => {});
     }
   }
 }

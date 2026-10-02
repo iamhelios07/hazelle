@@ -90,6 +90,29 @@ describe('purgeExpired', () => {
     expect(store.list('character').map((kept) => kept.value.card.name)).toEqual(['recent']);
     expect([store.list('chat'), store.children('entry', chat.ok ? chat.data.id : ''), store.list('lore'), store.list('avatar'), store.list('asset')].map((left) => left.length)).toEqual([0, 0, 0, 0, 0]);
   });
+
+  it('leaves a character another device brought back since this one listed it, with its chats', async () => {
+    const { store, open } = await server.account();
+    const now = Date.now();
+    const added = await addCharacter(store, bare('루나', { deleted: now - KEEP_DELETED }), none, () => {});
+    const id = added.ok ? added.data : '';
+    const chat = await store.create('chat', { title: null, character: id, models: {} });
+    const other = await open();
+    await other.pull();
+    await setDeleted(other, id, null);
+
+    await purgeExpired(store, now, new AbortController().signal);
+    expect([store.get('character', id)?.value.deleted, store.get('chat', chat.ok ? chat.data.id : '')?.id]).toEqual([undefined, chat.ok ? chat.data.id : '']);
+  });
+
+  it('finishes a removal begun before, however long the character has left', async () => {
+    const { store } = await server.account();
+    const now = Date.now();
+    await addCharacter(store, bare('루나', { deleted: now, purging: true }), { ...none, lore: [{ name: 'lore' } as Lore] }, () => {});
+
+    await purgeExpired(store, now, new AbortController().signal);
+    expect([store.list('character'), store.list('lore')].map((left) => left.length)).toEqual([0, 0]);
+  });
 });
 
 describe('setToggle', () => {
@@ -120,9 +143,9 @@ describe('setPictures', () => {
 });
 
 describe('purgeCharacter', () => {
-  it('leaves the character in place when a removal fails midway, and finishes when tried again', async () => {
+  it('leaves the character in place when a removal fails midway, past bringing back, and finishes when tried again', async () => {
     const { store, open } = await server.account();
-    const added = await addCharacter(store, bare('루나'), { ...none, lore: [{ name: 'lore' } as Lore] }, () => {});
+    const added = await addCharacter(store, bare('루나', { deleted: Date.now() }), { ...none, lore: [{ name: 'lore' } as Lore] }, () => {});
     const id = added.ok ? added.data : '';
     const chat = await store.create('chat', { title: null, character: id, models: {} });
     const chatId = chat.ok ? chat.data.id : '';
@@ -136,6 +159,7 @@ describe('purgeCharacter', () => {
     expect([other.get('character', id), other.get('chat', chatId)].map((kept) => kept?.id)).toEqual([id, chatId]);
     await server.hold(other, chatId);
     expect([other.children('entry', chatId), other.list('lore')].map((left) => left.length)).toEqual([0, 0]);
+    expect(await setDeleted(other, id, null)).toEqual({ ok: false, error: 'gone' });
 
     vi.stubGlobal('fetch', real);
     const steps: [number, number][] = [];
