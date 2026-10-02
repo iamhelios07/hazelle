@@ -1,5 +1,6 @@
 import { display, type Display } from '../engine/display';
-import type { Displayed, Script, Snapshot } from '../engine/lua/run';
+import type { Displayed, Script } from '../engine/lua/run';
+import type { Snapshot } from '../engine/lua/state';
 import type { ChatScope, Missed } from '../engine/render';
 import type { Chat, Message } from '../model/chat';
 import type { Runner } from './lua/client';

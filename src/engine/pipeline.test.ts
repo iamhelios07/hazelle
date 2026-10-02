@@ -378,14 +378,9 @@ describe('renderChat', () => {
 
 describe('unused', () => {
   it('counts what chats do not use yet', () => {
-    const triggers = [
-      { kind: 'lua' as const, name: '', code: 'x()' },
-      { kind: 'blocks' as const, name: '', on: 'manual', conditions: [], effects: [] },
-    ];
-    expect(unused(card({ bias: [['a', 1]], utility: true, triggers }))).toEqual([
+    expect(unused(card({ bias: [['a', 1]], utility: true }))).toEqual([
       { kind: 'bias', count: 1 },
       { kind: 'utility', count: 1 },
-      { kind: 'trigger', count: 1 },
     ]);
   });
 });

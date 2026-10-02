@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Trigger } from '../engine/import/types';
 import { fold, modelUsage, shown } from '../model/chat';
 import { startChat } from './chat-log';
 import type { Session } from './session';
@@ -7,10 +8,11 @@ import { displayChat, takeTurn } from './turn';
 
 const server = testServer();
 
-// A chat with a character whose one Lua trigger is code, opened on its greeting.
-async function chatWith(session: Session, code: string) {
+// A chat with a character whose triggers are these, or the one Lua trigger of this code, opened on its greeting.
+async function chatWith(session: Session, script: string | Trigger[]) {
   await answerable(session);
-  const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers: [{ kind: 'lua' as const, name: 'main', code }] };
+  const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', name: 'main', code: script }] : script;
+  const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers };
   const character = await session.store.create('character', { card, folder: null, loreFolders: [] });
   if (!character.ok) throw new Error(character.error);
   const chat = crypto.randomUUID();
@@ -88,6 +90,21 @@ describe("a turn with the bot's Lua", () => {
       expect(await session.scripts.press(chat, { trigger: 'missing' })).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
+    }));
+
+  it('answers a button with the block trigger of its name, whose texts are CBS over what it wrote', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, [
+        { kind: 'blocks', name: 'open', on: 'manual', conditions: [], effects: [
+          { type: 'v2SetVar', operator: '=', var: 'door', value: 'open', valueType: 'value', indent: 0 },
+          { type: 'impersonate', role: 'char', value: 'The door is {{getvar::door}} at {{lastmessageid}}.' },
+        ] },
+      ]);
+      expect(await session.scripts.press(chat, { trigger: 'open' })).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'missing' })).toBe(false);
+      expect(messages()[0]!.after).toEqual([['door', 'open']]);
+      expect(messages()[1]).toMatchObject({ role: 'assistant' });
+      expect(shown(messages()[1]!)).toMatchObject({ text: 'The door is open at -1.', staged: true });
     }));
 });
 

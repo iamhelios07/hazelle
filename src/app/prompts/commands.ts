@@ -246,7 +246,7 @@ export const COMMANDS: readonly CommandGroup[] = [
       { names: ['asset'], form: '{{asset::그림 이름}}', what: '캐릭터 그림을 보여주고 줄을 바꿔요.' },
       { names: ['raw', 'path'], form: '{{raw::그림 이름}}', what: '캐릭터 그림의 주소예요. HTML 속에 써요.' },
       { names: ['source'], form: '{{source::char}}', what: '캐릭터(char)나 페르소나(user)의 얼굴 그림 주소예요.' },
-      { names: ['button'], form: '{{button::글::트리거}}', what: '봇의 버튼이에요. 트리거는 아직 동작하지 않아요.' },
+      { names: ['button'], form: '{{button::글::트리거}}', what: '봇의 버튼이에요. 누르면 그 이름의 트리거를 실행해요.' },
       { names: ['screenwidth'], form: '{{screenwidth}}', what: '화면 너비예요.' },
       { names: ['screenheight'], form: '{{screenheight}}', what: '화면 높이예요.' },
     ],

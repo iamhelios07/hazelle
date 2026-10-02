@@ -1,48 +1,27 @@
 import { LuaFactory, type LuaEngine } from 'wasmoon';
+import type { Trigger } from '../import/types';
+import { runBlocks } from './blocks';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
+import { add, read, text, UNSET, working, write, type Acting, type Host, type ModelMessage, type Run, type Snapshot, type Working } from './state';
 
 // One Lua trigger of a pack. name is for error messages only.
-export type Script = { name: string; code: string };
-
-// A message as Lua reads it: role and data are Risu's names, which bots index by.
-export type LuaMessage = { role: 'user' | 'char'; data: string; time: number };
-
-// The chat as a run finds it. messages: without the greeting, each as it stands after the bot's input or output
-// scripts. variables: as of the point in the story the run stands at. globals: what getGlobalVar reads.
-export type Snapshot = {
-  messages: LuaMessage[];
-  variables: [string, string][];
-  globals: [string, string][];
-  character: { name: string; description: string; firstMessage: string };
-  persona: { name: string; description: string };
-  note: string;
-};
-
-export type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; options: string[] };
-export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-
-// What a script reaches outside its run, each of which may take as long as the user or a provider does.
-export type Host = {
-  say(kind: 'normal' | 'error', text: string): void;
-  // input: the text typed; confirm: 'yes'; select: the option's index. null: dismissed.
-  ask(question: Question): Promise<string | null>;
-  model(role: 'main' | 'aux', messages: ModelMessage[]): Promise<{ success: boolean; result: string }>;
-  tokens(text: string): Promise<number>;
-};
+export type Script = Extract<Trigger, { kind: 'lua' }>;
 
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
 export type Event =
   | { kind: 'input' | 'start' | 'output' }
   | { kind: 'button'; data: string }
-  // A press on risu-trigger: the script's own global function of that name.
+  // A press on risu-trigger: each Lua script's own global function of that name, and each block trigger of that name
+  // whatever its type, as Risu runs both.
   | { kind: 'call'; name: string }
   | { kind: 'edit'; stage: EditStage; value: unknown; meta: Record<string, unknown> };
 
 export type ScriptError = { script: string; message: string };
 
 // What a run did, for the caller to save. index is a message's place in the snapshot. value: an edit's result.
-// handled: some script had the function the event calls. missing: functions called that this app does not have.
+// handled: some script had the function the event calls, or a block trigger answered it. missing: the functions
+// called and the block effects met that this app does not have.
 export type Outcome = {
   value: unknown;
   stop: boolean;
@@ -61,7 +40,6 @@ export type DisplayItem = { index: number; text: string; variables: [string, str
 export type Displayed = { texts: string[]; errors: ScriptError[]; missing: string[] };
 
 const ENGINES = 8;
-const UNSET = 'null';
 // Passed where Risu passes a run's access key. Bots hand it back as each call's first argument and never read it.
 const KEY = 'lua';
 
@@ -71,30 +49,9 @@ const UNSUPPORTED = [
   'getLoreBooks', 'getLoreBooksMain', 'loadLoreBooks', 'loadLoreBooksMain', 'upsertLocalLoreBook',
 ];
 
-type Working = { origin: number | null; role: 'user' | 'char'; data: string; time: number; first: string };
-
-// One run's view of the chat, which the API functions read and change. quiet: an editDisplay pass, whose writes are
-// dropped and which reaches nothing outside itself. variables is never written: a run's writes stand over it in
-// written, so a display pass over many messages copies nothing.
-type Run = {
-  quiet: boolean;
-  snapshot: Snapshot;
-  variables: ReadonlyMap<string, string>;
-  globals: ReadonlyMap<string, string>;
-  written: Map<string, string>;
-  messages: Working[];
-  host: Host | null;
-  stop: boolean;
-  reload: boolean;
-  missing: Set<string>;
-};
-
 type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
 
-const working = (snapshot: Snapshot): Working[] => snapshot.messages.map((message, origin) => ({ ...message, origin, first: message.data }));
-
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
-const text = (value: unknown) => (value === undefined || value === null ? '' : String(value));
 const roleOf = (value: unknown) => (value === 'user' ? 'user' : 'char');
 const view = ({ role, data, time }: Working) => ({ role, data, time });
 
@@ -119,12 +76,20 @@ export class Lua {
     return new Lua(factory, sliceMs);
   }
 
-  async run(owner: string, scripts: Script[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
-    const run: Run = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set() };
+  // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
+  // the event is its own.
+  async run(owner: string, triggers: Trigger[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
+    const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set() };
     const errors: ScriptError[] = [];
     let value = event.kind === 'edit' ? event.value : undefined;
     let handled = false;
-    for (const script of scripts) {
+    for (const script of triggers) {
+      if (script.kind === 'blocks') {
+        if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
+        handled = true;
+        await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, message: describe(error) }));
+        continue;
+      }
       const engine = await this.engine(owner, 'event', script);
       await this.exclusive(engine, async () => {
         if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
@@ -256,16 +221,9 @@ export class Lua {
   private declare(engine: Engine) {
     const set = (name: string, api: (run: Run, ...args: never[]) => unknown) => engine.lua.global.set(name, (_key: unknown, ...args: never[]) => (engine.run ? api(engine.run, ...args) : undefined));
     // What a run does outside itself, which an editDisplay pass and a script outliving its run do not.
-    const act = (name: string, api: (run: Run & { host: Host }, ...args: never[]) => unknown) => set(name, (run, ...args) => (run.quiet || !run.host ? undefined : api(run as Run & { host: Host }, ...args)));
-    const read = (run: Run, name: string) => run.written.get(name) ?? run.variables.get(name) ?? UNSET;
-    const write = (run: Run, name: string, value: unknown) => {
-      const next = text(value);
-      if ((run.written.get(name) ?? run.variables.get(name)) === next) return false;
-      run.written.set(name, next);
-      return true;
-    };
+    const act = (name: string, api: (run: Acting, ...args: never[]) => unknown) => set(name, (run, ...args) => (run.quiet || !run.host ? undefined : api(run as Acting, ...args)));
     const last = (run: Run, role: Working['role']) => run.messages.findLast((message) => message.role === role)?.data;
-    const model = (role: 'main' | 'aux') => (run: Run & { host: Host }, prompt: string) => {
+    const model = (role: 'main' | 'aux') => (run: Acting, prompt: string) => {
       const messages = (JSON.parse(prompt) as { role?: unknown; content?: unknown }[]).map((message) => ({ role: MODEL_ROLES[text(message.role)] ?? 'assistant', content: text(message.content) }));
       return run.host.model(role, messages).then((answer) => JSON.stringify(answer));
     };
@@ -297,7 +255,7 @@ export class Lua {
     });
     act('removeChat', (run, index: number) => void run.messages.splice(index, 1));
     act('cutChat', (run, start: number, end: number) => void (run.messages = run.messages.slice(start, end)));
-    act('addChat', (run, role: unknown, value: unknown) => void run.messages.push({ origin: null, role: roleOf(role), data: text(value), time: Date.now(), first: '' }));
+    act('addChat', (run, role: unknown, value: unknown) => add(run, roleOf(role), text(value)));
 
     act('stopChat', (run) => void (run.stop = true));
     act('alertNormal', (run, value: unknown) => run.host.say('normal', text(value)));

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { Lua, type Event, type Host, type Snapshot } from './run';
+import type { Trigger } from '../import/types';
+import { Lua, type Event } from './run';
+import type { Host, Snapshot } from './state';
 
 const SNAPSHOT: Snapshot = {
   messages: [
@@ -15,12 +17,15 @@ const SNAPSHOT: Snapshot = {
 
 const host = (over: Partial<Host> = {}): Host & { said: string[] } => {
   const said: string[] = [];
-  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), tokens: async (text) => text.length, ...over };
+  // Only {{getvar}}, which is enough to tell that a text went through the host with the run's writes.
+  const cbs: Host['cbs'] = async (text, written) => text.replace(/\{\{getvar::(\w+)\}\}/g, (_, name: string) => new Map([...SNAPSHOT.variables, ...written]).get(name) ?? 'null');
+  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), tokens: async (text) => text.length, cbs, ...over };
 };
 
 const lua = await Lua.create({ sliceMs: 300 });
 let owner = 0;
-const run = (code: string, event: Event, over: Partial<Host> = {}, snapshot = SNAPSHOT) => lua.run(String(owner++), [{ name: 'main', code }], snapshot, event, host(over));
+const run = (code: string, event: Event, over: Partial<Host> = {}, snapshot = SNAPSHOT) => lua.run(String(owner++), [{ kind: 'lua', name: 'main', code }], snapshot, event, host(over));
+const blocks = (on: string, effects: unknown[], conditions: unknown[] = []): Trigger => ({ kind: 'blocks', name: 'blocks', on, conditions, effects });
 
 describe('Lua runs', () => {
   it('reads and writes variables and state, reporting only what changed', async () => {
@@ -113,10 +118,51 @@ describe('Lua display', () => {
         setChatVar(id, 'hp', 'changed')
         return value .. ':' .. meta.index .. ':' .. hp .. ':' .. getChat(id, 0).data
       end)`;
-    const shown = await lua.display('display', [{ name: 'main', code }], SNAPSHOT, [
+    const shown = await lua.display('display', [{ kind: 'lua', name: 'main', code }], SNAPSHOT, [
       { index: 0, text: 'a', variables: [] },
       { index: 1, text: 'b', variables: [['hp', '4']] },
     ]);
     expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], errors: [], missing: [] });
+  });
+});
+
+describe('block triggers', () => {
+  it('run on their own event when their conditions pass, in one run with the Lua around them', async () => {
+    const bonus = blocks('start', [{ type: 'setvar', operator: '+=', var: 'hp', value: '5' }], [{ type: 'var', var: 'hp', operator: '>=', value: '{{getvar::hp}}' }]);
+    const seen: Trigger = { kind: 'lua', name: 'main', code: `function onStart(id) setChatVar(id, 'seen', getChatVar(id, 'hp')) end` };
+    const refused = blocks('start', [{ type: 'setvar', operator: '=', var: 'hp', value: '0' }], [{ type: 'var', var: 'hp', operator: 'null' }]);
+    const triggers = [bonus, seen, refused, blocks('output', [{ type: 'setvar', operator: '=', var: 'late', value: '1' }])];
+    expect(await lua.run(String(owner++), triggers, SNAPSHOT, { kind: 'start' }, host())).toMatchObject({ errors: [], writes: [['hp', '15'], ['seen', '15']] });
+  });
+
+  it('take the branch of a v2 if that holds, reading operands as texts or as variable names', async () => {
+    const branch = blocks('start', [
+      { type: 'v2Header', indent: 0 },
+      { type: 'v2IfAdvanced', condition: '>', source: 'hp', sourceType: 'var', target: '5', targetType: 'value', indent: 0 },
+      { type: 'v2SetVar', operator: '=', var: 'size', value: 'big', valueType: 'value', indent: 1 },
+      { type: 'v2EndIndent', indent: 1 },
+      { type: 'v2Else', indent: 0 },
+      { type: 'v2SetVar', operator: '=', var: 'size', value: 'small', valueType: 'value', indent: 1 },
+      { type: 'v2EndIndent', indent: 1 },
+      { type: 'v2SetVar', operator: '=', var: 'after', value: 'size', valueType: 'var', indent: 0 },
+    ]);
+    const at = async (hp: string) => (await lua.run(String(owner++), [branch], { ...SNAPSHOT, variables: [['hp', hp]] }, { kind: 'start' }, host())).writes;
+    expect(await at('10')).toEqual([['size', 'big'], ['after', 'big']]);
+    expect(await at('3')).toEqual([['size', 'small'], ['after', 'small']]);
+  });
+
+  it('write to the chat and stop the turn as Lua does', async () => {
+    const outcome = await lua.run(String(owner++), [blocks('output', [
+      { type: 'modifychat', index: '1', value: 'hp {{getvar::hp}}' },
+      { type: 'impersonate', role: 'user', value: 'more' },
+      { type: 'cutchat', start: '1', end: '3' },
+      { type: 'stop' },
+    ])], SNAPSHOT, { kind: 'output' }, host());
+    expect(outcome).toMatchObject({ errors: [], stop: true, edits: [{ index: 1, text: 'hp 10' }], removed: [0], added: [{ role: 'user', text: 'more' }] });
+  });
+
+  it('name an effect this app lacks and go on', async () => {
+    const outcome = await lua.run(String(owner++), [blocks('start', [{ type: 'v2RunLLM', indent: 0 }, { type: 'setvar', operator: '=', var: 'after', value: '1' }])], SNAPSHOT, { kind: 'start' }, host());
+    expect(outcome).toMatchObject({ missing: ['v2RunLLM'], writes: [['after', '1']] });
   });
 });
