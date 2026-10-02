@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
-import { build } from 'esbuild';
+import { build, type Rollup } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { GENERATION_STEPS } from '../src/runtime/testing/cache';
 import { CARD } from './helpers';
@@ -191,17 +191,16 @@ const cacheOf = (page: Page) =>
 test('the browser cache keeps the generation rules MemoryCache keeps, on real IndexedDB', async ({ page }) => {
   await served(page.context());
   await page.goto('/');
-  const bundled = await build({
-    stdin: {
-      contents: "import { deviceCache } from '../src/runtime/device-cache'; import { generationSteps } from '../src/runtime/testing/cache'; Object.assign(window, { steps: () => generationSteps(deviceCache('contract')) });",
-      resolveDir: fileURLToPath(new URL('.', import.meta.url)),
-      loader: 'ts',
-    },
-    bundle: true,
-    write: false,
-    format: 'iife',
-  });
-  await page.evaluate(bundled.outputFiles[0]!.text);
+  const source = (path: string) => JSON.stringify(fileURLToPath(new URL(path, import.meta.url)));
+  const entry = `import { deviceCache } from ${source('../src/runtime/device-cache.ts')}; import { generationSteps } from ${source('../src/runtime/testing/cache.ts')}; Object.assign(window, { steps: () => generationSteps(deviceCache('contract')) });`;
+  const bundled = (await build({
+    configFile: false,
+    logLevel: 'silent',
+    // Vite resolves a library entry against its root before any plugin sees it.
+    plugins: [{ name: 'steps', resolveId: (id) => (id.endsWith('/steps') ? '\0steps' : null), load: (id) => (id === '\0steps' ? entry : null) }],
+    build: { write: false, lib: { entry: 'steps', formats: ['iife'], name: 'steps' } },
+  })) as Rollup.RollupOutput[];
+  await page.evaluate(bundled[0]!.output[0].code);
   expect(await page.evaluate<string[]>('steps()')).toEqual(GENERATION_STEPS);
 });
 
