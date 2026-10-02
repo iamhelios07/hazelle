@@ -124,7 +124,8 @@ export class Scripts {
     if (scripts.length === 0) return { turn: first };
     const halted: Halted = { kind: 'halted' };
     // 멈추기 ends the turn without waiting for a run that may itself be waiting, for a model or for the user. The
-    // runs go on to where the user's message is saved, as a stopped turn saves it without Lua, and no further.
+    // runs go on to where the user's message is saved, since they may already have written to the chat for it, and
+    // no further; without Lua a turn stopped this early hands the text back instead.
     const stopped = new Promise<Halted>((resolve) => signal.addEventListener('abort', () => resolve(halted), { once: true }));
     const started = this.queued(chat, async (): Promise<Started> => {
       let turn = first;
@@ -166,6 +167,8 @@ export class Scripts {
       const before = start.outcome.writes;
       return { turn: { ...turn, said: null, scope: { ...turn.scope, pending: before }, reply: { ...turn.reply, ...(before.length > 0 && { before }) } } };
     });
+    // A message that could not be saved after the turn was stopped has nobody left to hear of it but the chat.
+    void started.then((result) => signal.aborted && 'kind' in result && result.kind === 'unsent' && this.note(chat, { kind: 'unsaved', failure: result.failure }));
     return Promise.race([started, stopped]);
   }
 
