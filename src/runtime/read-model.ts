@@ -4,6 +4,7 @@ import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/c
 import type { Kind, Stored } from '../model/kinds';
 import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
+import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
 import { withTurn, type Shown, type Talk, type Turn } from './talk';
 import { displayChat } from './turn';
@@ -27,6 +28,10 @@ class Snapshot<T> {
 // The characters, each with its chats, most recent first, and the folders by name.
 export type Library = { characters: CharacterShelf<ChatSummary>[]; none: Shelf<ChatSummary>; deleted: CharacterShelf<ChatSummary>[]; folders: FolderTree[] };
 
+// How an open chat is displayed: with the bot's editDisplay pass (ScriptDisplay), which tells the chat's listeners
+// when more of the pass has landed.
+export type OpenDisplay = Pick<ScriptDisplay, 'display' | 'subscribe'>;
+
 const EMPTY_SETTINGS: Settings = { models: {} };
 const sameItems = <T>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 const sameSummary = (a: ChatSummary, b: ChatSummary) => a.chat === b.chat && a.count === b.count && a.title === b.title && a.preview === b.preview && a.at === b.at && a.order === b.order;
@@ -46,7 +51,10 @@ export class ReadModels {
   readonly unreadable: Snapshot<number>;
   private readonly leave: () => void;
 
-  constructor(readonly store: ObjectStore) {
+  constructor(
+    readonly store: ObjectStore,
+    readonly open: OpenDisplay = { display: (id, chat, messages, screen) => displayChat({ store }, id, chat, messages, screen), subscribe: () => () => {} },
+  ) {
     this.folders = nest(store.list('folder'));
     this.settings = new Snapshot(store.get('settings', SETTINGS_ID)?.value ?? EMPTY_SETTINGS);
     this.unreadable = new Snapshot(store.unreadable());
@@ -214,10 +222,12 @@ export class ChatScreenRead {
         this.turn = turn;
         this.refresh();
       });
-      this.leave = () => { detach(); store(); talk(); lease.release(); };
+      const passed = this.models.open.subscribe(this.id, () => this.refresh());
+      this.leave = () => { detach(); store(); talk(); passed(); lease.release(); };
       const model = this.models.chat(this.id).snapshot();
       const turn = this.currentTurn();
-      if (model !== this.model || turn !== this.turn) {
+      // A pass the display was missing while nobody listened was not run: it is asked for again now.
+      if (model !== this.model || turn !== this.turn || this.state.snapshot().display.pass) {
         this.model = model;
         this.turn = turn;
         this.refresh();
@@ -265,7 +275,7 @@ export class ChatScreenRead {
       this.reads = [];
       return { chat, messages, display: this.model.display };
     }
-    const { value: display, reads } = this.models.store.capture(() => displayChat({ store: this.models.store }, this.id, chat, messages, this.screen));
+    const { value: display, reads } = this.models.store.capture(() => this.models.open.display(this.id, chat, messages, this.screen));
     this.reads = reads;
     return { chat, messages, display };
   }

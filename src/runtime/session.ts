@@ -17,6 +17,7 @@ import { Talk } from './talk';
 import { Translator } from './translate';
 import type { Runner } from './lua/client';
 import { ReadModels } from './read-model';
+import { ScriptDisplay } from './script-display';
 import { Scripts } from './scripts';
 import { Streams } from './streams';
 import { backfillSummaries } from './summary';
@@ -75,9 +76,12 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const costs = new Costs(store);
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
-  const read = new ReadModels(store);
+  let runner: Promise<Runner> | null = null;
+  const machine = () => (runner ??= lua());
+  const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
+  const read = new ReadModels(store, display);
   const memory = new Rememberer({ store, read, credentials }, reading);
-  const scripts = new Scripts({ store, read }, lua);
+  const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, machine);
   const talk = new Talk(
     store,
     credentials,

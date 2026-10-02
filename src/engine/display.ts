@@ -2,19 +2,21 @@ import MarkdownIt, { type StateCore, type Token } from 'markdown-it';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate } from './cbs/evaluate';
 import type { Box } from './regex/scripts';
-import { contexts, renderChat, type ChatScope } from './render';
+import { contexts, renderChat, type ChatScope, type Missed } from './render';
 
 // texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the card's
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
 // drawn: the display scripts, by place in the card's regex, that drew a box in each message; boxes: each message's
-// boxes taken out of it (상태창 지정), their <style> blocks in css too.
-export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][] };
+// boxes taken out of it (상태창 지정), their <style> blocks in css too. pass: what the bot's Lua editDisplay pass has
+// yet to run (scope.lua), with what its run reads: each message past its input or output stage, and the variables
+// the chat starts from.
+export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: { items: Missed[]; staged: string[]; start: [string, string][] } | null };
 
 // A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
 const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 
 export function display(scope: ChatScope, take: ReadonlySet<number> = new Set()): Display {
-  const { texts, variables, drawn, boxes } = renderChat('display', scope, take);
+  const { texts, variables, drawn, boxes, missed, staged, start } = renderChat('display', scope, take);
   const blocks: string[] = [];
   const strip = (text: string) =>
     text.replace(STYLE, (_, css: string) => {
@@ -25,7 +27,7 @@ export function display(scope: ChatScope, take: ReadonlySet<number> = new Set())
   if (scope.card?.background) strip(unescapeCbs(evaluate(scope.card.background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
   const shown = texts.map(strip);
   const taken = boxes.map((list) => list.map((box) => ({ ...box, html: strip(box.html) })));
-  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n'), drawn, boxes: taken };
+  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n'), drawn, boxes: taken, pass: missed.length > 0 ? { items: missed, staged, start } : null };
 }
 
 // Markdown as Risu parses it (markdown-it, soft breaks kept, no indented code), so a bot's HTML blocks and the prose

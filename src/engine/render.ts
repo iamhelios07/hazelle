@@ -22,6 +22,10 @@ export type ChatScope = {
   variables: [string, string][];
   // The variables the bot's Lua wrote for the reply being made, which stand after the last message.
   pending?: [string, string][];
+  // The bot's Lua editDisplay pass over the display, when its card listens for one (design §6.8): what a version's
+  // text became, as far as the pass has run. fresh: it was run on this text at this state; otherwise it is the last
+  // one made, shown until the new one lands. null: never run, and the message shows nothing until it is.
+  lua?: (version: string, text: string, stamp: string) => { text: string; fresh: boolean } | null;
   greeting: CbsContext['greeting'];
   toggle: CbsContext['toggle'];
   model: CbsContext['model'];
@@ -64,20 +68,26 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
 // the process or display stage reads a copy, so the display never changes what the prompt sees.
 // take: the display scripts, by place in the card's regex, whose boxes leave the messages (상태창 지정). drawn and
 // boxes are each message's; only the display reads them. staged: each message's text past its input or output stage,
-// which is what the bot's Lua reads; wrote: the variables that stage's own CBS wrote.
+// which is what the bot's Lua reads; wrote: the variables that stage's own CBS wrote. missed: the messages whose
+// editDisplay pass (scope.lua) is not fresh.
 export function renderChat(
   stage: Stage,
   scope: ChatScope,
   take: ReadonlySet<number> = new Set(),
-): { texts: string[]; staged: string[]; wrote: [string, string][][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][] } {
+): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[] } {
   const context = contexts(scope, stage, null);
   const scripts = scope.card?.regex ?? [];
-  const variables = new Logged([...(scope.card?.variables ?? []), ...scope.variables]);
+  const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
+  const variables = new Logged(start);
+  const lua = stage === 'display' ? scope.lua : undefined;
+  if (lua) variables.changed = new Set();
+  const first = scope.greeting === null ? 0 : 1;
+  const missed: Missed[] = [];
   const wrote: [string, string][][] = [];
   const drawn: number[][] = [];
   const boxes: Box[][] = [];
   const past: string[] = [];
-  const texts = scope.messages.map(({ role, text, staged, before = [], after = [] }, index) => {
+  const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
     const at = { messages: scope.messages, index };
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
@@ -90,19 +100,43 @@ export function renderChat(
     variables.log = null;
     for (const [name, value] of after) variables.set(name, value);
     past.push(unescapeCbs(replayed));
-    const shown = applyScripts(stage === 'prompt' ? 'process' : 'display', replayed, { ...at, scripts, take, cbs: cbs(new Map(variables)) });
+    let edited = replayed;
+    if (lua) {
+      // Its place and the chat's length are part of what a pass reads: bots draw their status on the last message.
+      const stamp = `${index}/${scope.messages.length}/${variables.stamp}`;
+      const held = lua(id, replayed, stamp);
+      if (!held?.fresh) {
+        missed.push({ index: index - first, version: id, text: replayed, stamp, variables: [...variables.changed!].map((name) => [name, variables.get(name)!]) });
+        variables.changed!.clear();
+      }
+      edited = held?.text ?? '';
+    }
+    const shown = applyScripts(stage === 'prompt' ? 'process' : 'display', edited, { ...at, scripts, take, cbs: cbs(new Map(variables)) });
     drawn.push(shown.drawn);
     boxes.push(shown.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })));
     return unescapeCbs(shown.text);
   });
   for (const [name, value] of scope.pending ?? []) variables.set(name, value);
-  return { texts, staged: past, wrote, variables, drawn, boxes };
+  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed };
 }
 
+// One message whose editDisplay pass is to be run. index: its place as Lua counts, the greeting -1. text: past its
+// input or output stage, escaped braces still escaped, so the display's own CBS pass does not read them as tags.
+// variables: the names written since the missed message before it, with their values as of this one.
+export type Missed = { index: number; version: string; text: string; stamp: string; variables: [string, string][] };
+
+// log: the writes of one stage, while it is set. changed and stamp follow every write that changes a value, for the
+// editDisplay pass: the names since they were last taken, and a number that differs when the state does.
 class Logged extends Map<string, string> {
   log: [string, string][] | null = null;
+  changed: Set<string> | null = null;
+  stamp = 0;
   override set(name: string, value: string) {
     this.log?.push([name, value]);
+    if (this.changed && this.get(name) !== value) {
+      this.changed.add(name);
+      for (const char of `${name}\0${value}\0`) this.stamp = Math.imul(this.stamp ^ char.charCodeAt(0), 16777619);
+    }
     return super.set(name, value);
   }
 }

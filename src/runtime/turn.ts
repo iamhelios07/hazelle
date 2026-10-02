@@ -151,7 +151,7 @@ export const displayChat = (reader: Reader, id: string | null, chat: Chat, messa
 
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
 // 봇 꾸밈 is off; the chat draws the latest box itself.
-function pinned({ store }: Reader, chat: Chat): ReadonlySet<number> {
+export function pinned({ store }: Reader, chat: Chat): ReadonlySet<number> {
   const character = chat.character === null ? null : store.get('character', chat.character)?.value;
   return new Set(character?.decor === false ? [] : (character?.statusScripts ?? []));
 }
@@ -327,7 +327,10 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if (!countTokens) return { kind: 'tokenizer' };
   const { route, settings, scope, budget, memory, said, reply } = started.turn;
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null, memory });
-  return 'kind' in prompt ? prompt : { route, settings, prompt, said, ...(reply.before && { before: reply.before }) };
+  if ('kind' in prompt) return prompt;
+  const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
+  const before = [...(reply.before ?? []), ...requested.writes];
+  return { route, settings, prompt: { ...prompt, messages: requested.messages }, said, ...(before.length > 0 && { before }) };
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or

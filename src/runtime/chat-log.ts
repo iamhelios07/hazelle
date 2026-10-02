@@ -95,7 +95,8 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 // version again in its own place when it is an edit or came later than the message, which a message entry cannot
 // hold; the other versions; and a select when the one shown is not the last, since adding a version selects it.
 // versions: each version's id in the branch, by its id here.
-// A field added to versions or messages must be written here too, or a branch drops it.
+// A field added to versions or messages must be written here too, or a branch drops it. The calls the bot's Lua made
+// (Version.calls) are dropped on purpose: usage counts a call where it was made.
 function copied(id: string, { role, at, versions, selected }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
@@ -180,6 +181,8 @@ export function appendScripted(store: ObjectStore, chat: string, { edits, remove
   if (entries.length === 0) return Promise.resolve({ ok: true, data: null });
   return store.batch(entries.map((value) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: chat, value })));
 }
+
+export const appendCall = (store: ObjectStore, chat: string, version: string, receipt: Receipt) => append(store, chat, { type: 'call', version, receipt, at: Date.now() });
 
 export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });
 

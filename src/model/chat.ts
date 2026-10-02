@@ -108,12 +108,16 @@ export type Entry =
   // The variables the bot's Lua wrote once the version stood (after its reply ended, on a button), which the replay
   // sets after the version's own text is read. They follow the version into its edits and no further: a retried or
   // continued reply runs the bot's Lua again.
-  | { type: 'vars'; version: string; set: Writes; at: number };
+  | { type: 'vars'; version: string; set: Writes; at: number }
+  // A model call the bot's Lua made (LLM, axLLM) while version was the last one shown, kept so usage and cost count
+  // it. It follows the version as vars does.
+  | { type: 'call'; version: string; receipt: Receipt; at: number };
 
 // Variable writes in the order made; a later one of a name wins.
 export type Writes = [string, string][];
 
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes };
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; calls?: BotCall[] };
+export type BotCall = { receipt: Receipt; at: number };
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number };
 
 const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'version' }>, edited: boolean, staged: boolean): Version => ({
@@ -164,6 +168,11 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       if (version) version.after = [...(version.after ?? []), ...entry.set];
       continue;
     }
+    if (entry.type === 'call') {
+      const version = edits.get(entry.version);
+      if (version) version.calls = [...(version.calls ?? []), { receipt: entry.receipt, at: entry.at }];
+      continue;
+    }
     if (entry.type === 'cost') {
       costs.set(entry.replyId, entry.cost);
       continue;
@@ -182,6 +191,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       if (edited) {
         if (edited.before) version.before = [...edited.before, ...(entry.before ?? [])];
         if (edited.after) version.after = edited.after;
+        if (edited.calls) version.calls = edited.calls;
       }
       own.set(id, version);
       stand(id, version, edited && ids.get(edited));
@@ -212,8 +222,9 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       versions: message.versions.map((version) => {
         const receipt = version.receipt && settled(version.receipt);
         const translated = version.translation?.receipt && settled(version.translation.receipt);
-        if (receipt === version.receipt && translated === version.translation?.receipt) return version;
-        return { ...version, receipt, ...(version.translation && { translation: { ...version.translation, receipt: translated ?? null } }) };
+        const made = version.calls?.map((call) => ({ ...call, receipt: settled(call.receipt) }));
+        if (receipt === version.receipt && translated === version.translation?.receipt && !made?.some((call, index) => call.receipt !== version.calls![index]!.receipt)) return version;
+        return { ...version, receipt, ...(version.translation && { translation: { ...version.translation, receipt: translated ?? null } }), ...(made && { calls: made }) };
       }),
     }));
 }
@@ -301,7 +312,11 @@ export class UsageCounter {
     const add = (tally: Tally, value: number | null) => (value === null ? tally.unknown++ : (tally.total += value));
     const made = messages
       .flatMap((message) => message.versions)
-      .flatMap(({ at, receipt, translation }) => [...(receipt ? calls(receipt).map((call) => ({ at, call })) : []), ...(translation?.receipt ? [{ at: translation.at, call: translation.receipt }] : [])]);
+      .flatMap(({ at, receipt, translation, calls: bot = [] }) => [
+        ...(receipt ? calls(receipt).map((call) => ({ at, call })) : []),
+        ...(translation?.receipt ? [{ at: translation.at, call: translation.receipt }] : []),
+        ...bot.map((call) => ({ at: call.at, call: call.receipt })),
+      ]);
     for (const { at, call } of made) {
       if (call.connection !== this.ref.connection || call.model !== this.ref.model) continue;
       const key = JSON.stringify([at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
