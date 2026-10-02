@@ -26,11 +26,12 @@ describe('addConnection', () => {
 });
 
 describe('setStarred', () => {
-  it('makes the first model starred the 대화 모델, and leaves one already set alone', () =>
+  it('makes the first starred model that can talk the 대화 모델, and leaves one already set alone', () =>
     server.withSession(async ({ store }) => {
       const saved = await store.create('connection', openRouter);
       const id = saved.ok ? saved.data.id : '';
-      const model = (name: string) => ({ id: name, name, contextLength: null, maxOutput: null }) as never;
+      const model = (name: string, output: string[] | null = null) => ({ id: name, name, input: null, output, contextLength: null, maxOutput: null }) as never;
+      await setStarred(store, id, model('painter', ['image']), true);
       await setStarred(store, id, model('first'), true);
       await setStarred(store, id, model('second'), true);
       expect(store.get('settings', SETTINGS_ID)?.value.models.main).toEqual({ connection: id, model: 'first' });

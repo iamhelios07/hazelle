@@ -1,3 +1,4 @@
+import { fitsRole } from '../connectors/assignment';
 import type { Connection, Model } from '../connectors/types';
 import type { Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
@@ -30,14 +31,14 @@ export async function addConnection({ store, catalogs }: Session, connection: Co
 }
 
 // The others are kept apart first, so a star the model got meanwhile on another device is not doubled.
-// The first model starred becomes the 대화 모델: until one is set no chat can send, and with one there is nothing to
+// The first model starred that can talk becomes the 대화 모델: until one is set no chat can send, and with one there is nothing to
 // choose between.
 export async function setStarred(store: ObjectStore, id: string, model: Model, starred: boolean): Promise<ApiResult<Stored<'connection'>>> {
   const saved = await store.update('connection', id, (current) => {
     const others = current.starred.filter((entry) => entry.id !== model.id);
     return { ...current, starred: starred ? [...others, model] : others };
   });
-  if (saved.ok && starred && !store.get('settings', SETTINGS_ID)?.value.models.main) await setDefaultModel(store, 'main', { connection: id, model: model.id });
+  if (saved.ok && starred && fitsRole(model, 'main') && !store.get('settings', SETTINGS_ID)?.value.models.main) await setDefaultModel(store, 'main', { connection: id, model: model.id });
   return saved;
 }
 
