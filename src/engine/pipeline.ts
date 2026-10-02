@@ -67,9 +67,21 @@ type Laid = {
 function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
   const { card } = scope;
   const context = contexts(scope, 'prompt', language);
-  // An entry costs what its body sends, so its CBS is evaluated before it is counted. The replays below count the
-  // same bodies again.
-  const count = remembered((body) => tokens(evaluate(body, context({ seed }, new Map(variables)))));
+  // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
+  // text, and reads the variables as the chat's messages left them. The text last rendered at a place is kept, so
+  // what is rendered there again is the same text and not a second roll.
+  const held = new Map<string, { text: string; out: string }>();
+  const render = (text: string, place: string) => {
+    const last = held.get(place);
+    if (last?.text === text) return last.out;
+    const out = unescapeCbs(evaluate(text, context({ seed: `${seed}:${place}` }, new Map(variables)))).trim();
+    held.set(place, { text, out });
+    return out;
+  };
+  // An entry costs what its body sends, so it is counted as rendered at its own place, where loreMessage sends it.
+  // One merged into another entry or set inside another text is evaluated there, and its count is of its own body.
+  // The replays below count the same bodies again.
+  const count = (id: string, body: string) => tokens(render(body, id));
   const activation = card || scope.lore.length > 0 ? activate(loreInput(scope, history, afterMatch(scope, count), seed, count)) : null;
   const names = new Map(scope.lore.map(({ id, value }) => [id, value.name]));
 
@@ -108,9 +120,7 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
     depths,
     sides,
     injections,
-    // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
-    // text, and reads the variables as the chat's messages left them.
-    render: (text, place) => unescapeCbs(evaluate(atPositions(text, positions), context({ seed: `${seed}:${place}` }, new Map(variables)))).trim(),
+    render: (text, place) => render(atPositions(text, positions), place),
     named: (id) => names.get(id)!,
   };
 }
@@ -120,7 +130,7 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
 export function activeLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
   const laid = lay(scope, scope.messages, renderChat('prompt', scope).variables, seed, remembered(countTokens), null);
   return (laid.activation?.placed ?? []).flatMap(({ id, body, placement }) => {
-    const text = laid.render(body, `lore:${id}`);
+    const text = laid.render(body, id);
     return text ? [{ role: 'role' in placement ? placement.role : 'system', text }] : [];
   });
 }
@@ -383,8 +393,8 @@ function remembered(measure: (text: string) => number): (text: string) => number
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
-function loreInput(scope: ChatScope, history: HistoryMessage[], afterMatch: string[], seed: string, countTokens: (text: string) => number): LoreInput {
-  return { entries: scope.lore, settings: scope.card?.loreSettings ?? NO_SETTINGS, history, turn: history.length, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, countTokens };
+function loreInput(scope: ChatScope, history: HistoryMessage[], afterMatch: string[], seed: string, cost: LoreInput['cost']): LoreInput {
+  return { entries: scope.lore, settings: scope.card?.loreSettings ?? NO_SETTINGS, history, turn: history.length, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost };
 }
 
 const AFTER_MATCH = new Set(['keep_activate_after_match', 'dont_activate_after_match']);
@@ -393,12 +403,12 @@ const declaresAfterMatch = (content: string) =>
 
 // Which after-match entries went into the prompts of the replies before this one. It is not stored: like the
 // variables, it is replayed from the chat, each earlier reply's activation rolled again from its seed.
-function afterMatch(scope: ChatScope, countTokens: (text: string) => number): string[] {
+function afterMatch(scope: ChatScope, cost: LoreInput['cost']): string[] {
   let state: string[] = [];
   if (!scope.lore.some(({ value }) => declaresAfterMatch(value.content))) return state;
   scope.messages.forEach((message, index) => {
     if (message.role === 'user' || (index === 0 && scope.greeting !== null)) return;
-    state = activate(loreInput(scope, scope.messages.slice(0, index), state, message.seed, countTokens)).afterMatch;
+    state = activate(loreInput(scope, scope.messages.slice(0, index), state, message.seed, cost)).afterMatch;
   });
   return state;
 }

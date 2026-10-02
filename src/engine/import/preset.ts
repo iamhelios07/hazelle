@@ -1,7 +1,7 @@
-import { gunzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
 import type { Block, ChatRange, ConversationPrompt, Role, SLOTS, SlotKind, TextBlock } from '../../model/prompt';
 import { add, counted, type Tally } from './convert';
+import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
 import { unpack } from './risum';
 import { readToggles } from './toggles';
@@ -56,7 +56,7 @@ export async function importPreset(fileName: string, bytes: Uint8Array): Promise
   if (!packed && !name.endsWith('.risupreset')) return fail('unreadable');
   let outer: unknown;
   try {
-    outer = readMsgpack(gunzipSync(packed ? unpack(bytes) : bytes));
+    outer = readMsgpack(gunzip(packed ? unpack(bytes) : bytes));
   } catch {
     return fail('unreadable');
   }

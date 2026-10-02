@@ -218,6 +218,18 @@ describe('assemble', () => {
     expect(lorebook).toEqual([{ role: 'system', content: 'kept' }]);
   });
 
+  it('sends a lorebook entry as the text its cost was counted on, whichever way its random tag rolls', () => {
+    const blocks: Prompt['blocks'] = [{ id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' }];
+    const entries = [lore('coin', `{{random::short::${'long '.repeat(20)}}}`)];
+    const sizes = new Set<number>();
+    for (let i = 0; i < 20; i++) {
+      const result = assembledOf(assemble({ ...input({ prompt: { ...starter, blocks }, lore: entries }), seed: `reply-${i}` }));
+      expect(result.lore![0]!.fate).toEqual({ kind: 'placed', tokens: result.parts[0]!.tokens });
+      sizes.add(result.parts[0]!.tokens);
+    }
+    expect(sizes.size).toBe(2);
+  });
+
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));

@@ -27,4 +27,10 @@ describe('renameToggle', () => {
     ].join('\n');
     expect(renameToggle(text, 'sims', 'simulator')).toBe(text);
   });
+
+  it('rewrites a written key beside a nested tag, and no key in a body the evaluator takes as text', () => {
+    const live = '{{#when::sims::tis::{{getvar::mode}}}}x{{/when}} {{#when::{{getvar::a}}::and::toggle::sims}}x{{/when}}';
+    const text = '{{#pure}}{{#when::toggle::sims}}x{{/when}}{{/pure}} {{#escape}}{{getglobalvar::toggle_sims}}{{/escape}}';
+    expect(renameToggle(`${live} ${text}`, 'sims', 'simulator')).toBe(`${live.replaceAll('sims', 'simulator')} ${text}`);
+  });
 });
