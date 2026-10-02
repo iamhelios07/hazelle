@@ -28,7 +28,7 @@ export function ChatMemoryRecord({ chat, record, status, stale, messages, action
   const { store } = session;
   const toast = useToast();
   const wide = useWide();
-  const save = useAutosave<RecordPatch>((patch) => editRecord(store, chat, record.id, patch));
+  const save = useAutosave<RecordPatch>(`record:${chat}:${record.id}`, (patch) => editRecord(store, chat, record.id, patch));
   const shown = { ...record, ...save.unsaved };
   const span = spanOf(record.sources, messages);
   const back = () => actions.memory(null);
@@ -50,8 +50,8 @@ export function ChatMemoryRecord({ chat, record, status, stale, messages, action
   }
 
   async function forget() {
-    await save.flush();
-    const done = await forgetRecord(store, chat, record.id);
+    const done = await save.remove(() => forgetRecord(store, chat, record.id));
+    if (!done) return;
     if (!done.ok) return toast.failed(done, '지우지 못했어요.');
     back();
     toast.undoable('기록을 지웠어요', () => void restoreRecord(store, chat, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
