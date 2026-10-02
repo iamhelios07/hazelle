@@ -9,7 +9,7 @@ import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useToast } from '../toast';
-import { Avatar, Button, FaceRow, FileButton, Row, Text, TextField } from '../ui';
+import { Avatar, Button, Checkbox, FaceRow, FileButton, Row, TextField } from '../ui';
 
 type Props = {
   stored: Stored<'persona'>;
@@ -63,16 +63,9 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
         <FileButton accept="image/*" size="sm" icon={ImageUp} onFile={(file) => void picture(file)}>
           사진 바꾸기
         </FileButton>
-        {isDefault ? (
-          <Text variant="highlight">
-            새 채팅의 기본 페르소나예요
-          </Text>
-        ) : (
-          <Button variant="link" size="xs" onClick={() => void makeDefault()}>
-            새 채팅의 기본으로 정하기
-          </Button>
-        )}
       </FaceRow>
+      {/* One persona is always the default, so it is unticked by ticking another's. */}
+      <Checkbox label="새 채팅의 기본 페르소나" note={isDefault ? '다른 페르소나에서 바꿔요' : undefined} checked={isDefault} disabled={isDefault} onChange={() => void makeDefault()} />
       <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 적어 주세요.'} />
       <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요. 모델에게는 보내지 않아요." />
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} help="프롬프트의 ‘페르소나’ 자리에 이 설명이 들어가요." />

@@ -73,7 +73,7 @@ export function ChatMemoryRecord({ chat, record, status, stale, messages, action
           {`${stale === 'changed' ? '원문이 바뀌었어요.' : '원문 메시지가 지워졌어요.'} ${status === 'stale' ? '그래서 이 기록은 보내지 않아요. 항상 넣기를 켜면 그대로 보내요.' : '직접 고치거나 항상 넣기를 켠 기록이라 그대로 보내요.'}`}
         </Callout>
       )}
-      {status === 'over' && <Text variant="note">기억 예산을 넘어서 지금은 보내지 않아요.</Text>}
+      {status === 'over' && <Text variant="note">기록에 쓸 양을 넘어서 지금은 보내지 않아요.</Text>}
       {record.forgotten && (
         <Callout tone="warn" action={{ label: '원문에서 다시 만들기', onClick: rebuild }}>
           지운 기록이에요. 이 메시지들은 다시 정리하지 않아요.

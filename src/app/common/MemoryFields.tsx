@@ -5,9 +5,9 @@ import { Disclosure, NumberInput, SettingGroup, SettingRow, Switch } from '../ui
 type Count = 'budget' | 'window' | 'batch';
 
 const COUNTS = {
-  budget: { label: '기억 예산', unit: '토큰', help: '장기 기억 자리가 요청마다 쓸 수 있는 토큰이에요. 모델이 받을 수 있는 것보다 크면 그 요청에서만 줄여요.' },
-  window: { label: '최근 원문', unit: '토큰', help: '최근 메시지는 이만큼까지 늘 쓴 그대로 보내고, 기록으로 정리하지 않아요.' },
-  batch: { label: '정리 단위', unit: '토큰', help: '최근 원문보다 앞에서 정리하지 않은 메시지가 이만큼 쌓이면 기록으로 정리해요.' },
+  budget: { label: '기록에 쓸 양', unit: '토큰', help: '정리해 둔 기록을 요청마다 이만큼까지 넣어요. 모델이 받을 수 있는 것보다 크면 그 요청에서만 줄여요.' },
+  window: { label: '그대로 보낼 최근 대화', unit: '토큰', help: '최근 대화는 이만큼까지 정리하지 않고 쓴 그대로 보내요.' },
+  batch: { label: '한 번에 정리할 양', unit: '토큰', help: '그보다 오래된 대화가 이만큼 쌓일 때마다 기록으로 정리해요.' },
 } satisfies Record<Count, { label: string; unit: string; help: string }>;
 
 export const settingsOf = ({ on, budget, window, batch }: MemorySettings): MemorySettings => ({ on, budget, window, batch });
@@ -45,13 +45,13 @@ export function MemoryFields({ value, onChange }: { value: MemorySettings; onCha
       <SettingGroup label="장기 기억">
         <SettingRow
           label="장기 기억"
-          help="지난 이야기를 기록으로 정리해 프롬프트의 장기 기억 자리에 넣어요. 끄면 컨텍스트 한도를 넘는 오래된 메시지는 그냥 빠져요."
+          help="오래된 대화를 기록으로 정리해 두고 모델에게 함께 보내요. 끄면 모델이 한 번에 읽을 수 있는 양을 넘는 옛 대화는 빠져요."
           control={<Switch label="장기 기억" checked={value.on} onChange={(on) => onChange({ on })} />}
         />
-        {row('budget')}
       </SettingGroup>
       <Disclosure label="세부 설정">
         <SettingGroup label="세부 설정">
+          {row('budget')}
           {row('window')}
           {row('batch')}
         </SettingGroup>

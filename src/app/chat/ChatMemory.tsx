@@ -106,7 +106,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
               { label: '보내는 기억', value: `약 ${tokens(view.tokens.used)} / ${tokens(view.tokens.budget)} 토큰` },
             ]}
           />
-          {view.tokens.budget < setup.budget && <Text variant="note">{`지금 모델에 맞춰 기억 예산을 ${tokens(view.tokens.budget)} 토큰으로 줄여 보내요.`}</Text>}
+          {view.tokens.budget < setup.budget && <Text variant="note">{`지금 모델에 맞춰 기록을 ${tokens(view.tokens.budget)} 토큰까지만 보내요.`}</Text>}
         </Stack>
       )}
 
@@ -125,7 +125,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
       <Threads chat={id} threads={memory.threads} />
 
       <Section level={3} title="기록" note={`${live.length}개`}>
-        {pinnedOver && <Callout tone="warn">항상 넣기한 기록이 기억 예산을 넘어서, 넘은 기록은 보내지 않아요. 항상 넣기를 풀거나 예산을 늘려 주세요.</Callout>}
+        {pinnedOver && <Callout tone="warn">항상 넣기한 기록이 기록에 쓸 양을 넘어서, 넘은 기록은 보내지 않아요. 항상 넣기를 풀거나 기록에 쓸 양을 늘려 주세요.</Callout>}
         {memory.records.length ? (
           <List label="기록">
             {memory.records.map((each) => {
@@ -142,7 +142,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
             })}
           </List>
         ) : (
-          <Empty variant="section">{setup.on ? '아직 기록이 없어요. 최근 원문보다 앞의 메시지가 정리 단위만큼 쌓이면 정리를 시작해요.' : '기록이 없어요.'}</Empty>
+          <Empty variant="section">{setup.on ? '아직 기록이 없어요. 대화가 길어지면 오래된 부분부터 기록으로 정리해요.' : '기록이 없어요.'}</Empty>
         )}
       </Section>
 
