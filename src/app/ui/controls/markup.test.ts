@@ -17,4 +17,12 @@ describe('markup', () => {
   it('reads a nested tag as one', () => {
     expect(markup('{{getvar::{{user}}}} x').map((piece) => piece.text)).toEqual(['{{getvar::{{user}}}}', ' x']);
   });
+
+  it('reads a long line of unclosed tags in time, the closed one inside still a tag', () => {
+    const open = '{'.repeat(100_000);
+    expect(markup(`${open}}}`)).toEqual([
+      { text: open.slice(3), line: 'body', mark: null },
+      { text: '{{{}}', line: 'body', mark: 'cbs' },
+    ]);
+  });
 });
