@@ -39,7 +39,7 @@ describe('SaveQueue', () => {
   it('drops a patch a restore dropped, and what was typed meanwhile, without telling a failure', async () => {
     const failures: unknown[] = [];
     const writes: { answer: (answer: Answer) => void }[] = [];
-    const saves = new SaveQueue<Note>((patch) => new Promise((answer) => writes.push({ answer })), (failure) => failures.push(failure));
+    const saves = new SaveQueue<Note>(() => new Promise((answer) => writes.push({ answer })), (failure) => failures.push(failure));
     saves.change({ title: 'a' });
     const first = saves.flush();
     await settle();

@@ -181,14 +181,23 @@ export class ObjectStore {
     return () => { this.rewoundListeners.delete(listener); };
   };
 
-  // The server refused the timeline this tab holds: what it holds goes, from memory and from the cache, and the next
-  // pull bootstraps the new timeline.
+  // The server refused the timeline this tab holds: what it holds goes, from memory and from the cache, and a pull
+  // bootstraps the new timeline (the pull under way, when a pull heard it).
   private rewind() {
     this.reset(true);
     if (this.cache) this.queueCache(async (generation) => { this.generation = await this.cache!.clear(generation); });
+    this.catchUp();
   }
 
-  // Another tab moved the cache to a generation of its own: this one drops what it holds and loads that generation.
+  // A pull under way bootstraps on its next page; one already past its pages does not, so another follows it.
+  private catchUp() {
+    void (this.pulling ?? Promise.resolve()).then(() => {
+      if (!this.closing.signal.aborted && !this.bootstrapped) void this.pull();
+    });
+  }
+
+  // Another tab moved the cache to a generation of its own: this one drops what it holds, loads that generation and
+  // catches up from it.
   private reopen() {
     this.reset(true);
     const epoch = this.epoch;
@@ -196,6 +205,7 @@ export class ObjectStore {
       if (this.opening === opening) this.opening = null;
     });
     this.opening = this.caching = opening;
+    void opening.then(() => this.catchUp());
   }
 
   private adopt(timeline: string) {
@@ -898,12 +908,7 @@ export class ObjectStore {
       // An answer to a request sent before a reset is of the old timeline, a refusal too: it never resets the new one.
       if (signal.aborted) return { ok: false, error: 'stopped' };
       if (!result.ok) {
-        if (result.error === 'cache-reset') {
-          this.rewind();
-          void (this.pulling ?? Promise.resolve()).then(() => {
-            if (!this.closing.signal.aborted && !this.bootstrapped) void this.pull();
-          });
-        }
+        if (result.error === 'cache-reset') this.rewind();
         return result;
       }
       this.limits = result.data.limits;
