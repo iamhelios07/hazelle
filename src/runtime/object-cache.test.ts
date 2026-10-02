@@ -338,6 +338,24 @@ it('drops a 409 or 503 that answers a write sent before a reset, which neither r
   }
 });
 
+it('waits out a restore under way for the time the 503 names, then drops and counts the write the restore left behind', async () => {
+  const f = await fixture();
+  const store = await f.open();
+  await store.pull();
+  const told = vi.fn();
+  store.subscribeRewound(told);
+  f.fetch.mockImplementationOnce(async () => {
+    f.restore(f.snapshot(), 't1');
+    return Response.json({ error: 'account-restoring', retryAfter: 0.05 }, { status: 503 });
+  });
+  const writing = store.create('connection', { ...connection, starred: [] });
+  await vi.waitFor(() => expect(store.waiting()).toBe(true));
+  expect(await writing).toEqual({ ok: false, error: 'timeline-changed' });
+  expect(told.mock.calls).toEqual([[1]]);
+  expect(f.rows.size).toBe(0);
+  store.close();
+});
+
 it('ends a pinned workflow at a switch: a write it makes after the switch is refused before it is sent', async () => {
   const f = await fixture();
   await f.add('kept', 'connection', null, connection);
