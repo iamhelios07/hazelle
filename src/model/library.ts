@@ -6,7 +6,7 @@ import type { ToggleValues } from './prompt';
 
 // folder is the library folder it sits in; loreFolders only group its lorebook on screen.
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
-// deleted is when it went to 지운 캐릭터; it and its chats are removed for good KEEP_DELETED later. purging: that removal
+// deleted is when it went to 휴지통; it and its chats are removed for good KEEP_DELETED later. purging: that removal
 // has begun (runtime/characters purge), so it can no longer be brought back, and the next purge finishes it.
 // toggles holds the values set for it, over the declared defaults; translate, its chats' 번역.
 // alias: 별명, the user's own note to tell apart characters (or personas) of one name. It is never sent, unlike the
@@ -67,7 +67,7 @@ export type LoreFolder = { id: string; name: string };
 
 const DAY = 24 * 60 * 60 * 1000;
 
-// How long a deleted character (in 지운 캐릭터), module or chat waits before it is removed for good.
+// How long a deleted character, module or chat waits before it is removed for good.
 export const KEEP_DELETED = 7 * DAY;
 // KEEP_DELETED as the copy names it (7일).
 export const KEEP_DAYS = KEEP_DELETED / DAY;
@@ -75,7 +75,7 @@ export const KEEP_DAYS = KEEP_DELETED / DAY;
 export const greetingTranslation = ({ greetingTranslations }: Character, greeting: string, language: string) =>
   greetingTranslations?.find((each) => each.greeting === greeting && each.language === language)?.translation;
 
-// Whole days a deleted character (in 지운 캐릭터), module or chat has left. At 0 or less it is due, and purgeExpired removes it.
+// Whole days a deleted character, module or chat has left. At 0 or less it is due, and purgeExpired removes it.
 export const daysLeft = ({ deleted }: { deleted?: number }, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);
 
 // The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name, nickname or alias.
@@ -102,16 +102,19 @@ export type Asset = { name: string; type: string; size: number; file: FileRef };
 export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; chats: C[]; order: number };
 export type CharacterShelf<C> = Shelf<C> & { id: string; character: Character };
 
-type ChatLike = { chat: { character: string | null }; order: number };
+type ChatLike = { chat: { character: string | null; deleted?: number; purging?: true }; order: number };
 
 // chats come newest first. A character is as recent as its latest chat, or, with none yet, as its own
-// last change. Deleted characters and their chats are kept apart, most recently deleted first. One being removed for
-// good (purging) is listed nowhere: it can no longer be brought back.
+// last change. Deleted characters and their chats are kept apart, most recently deleted first. binned are the deleted
+// chats: deletedChats lists those of a character not deleted, or of none, most recently deleted first. A deleted chat
+// of a deleted character is not listed: it goes or comes back with its character. One being removed for good
+// (purging) is listed nowhere: it can no longer be brought back.
 export function shelve<C extends ChatLike>(
   characters: Stored<'character'>[],
   avatars: Stored<'avatar'>[],
   chats: C[],
-): { characters: CharacterShelf<C>[]; none: Shelf<C>; deleted: CharacterShelf<C>[] } {
+  binned: C[],
+): { characters: CharacterShelf<C>[]; none: Shelf<C>; deleted: CharacterShelf<C>[]; deletedChats: C[] } {
   const faces = new Map(avatars.map((avatar) => [avatar.parent, avatar.value.thumb]));
   const grouped = new Map<string | null, C[]>();
   for (const item of chats) {
@@ -124,10 +127,15 @@ export function shelve<C extends ChatLike>(
     return { id, character: value, face: faces.get(id) ?? null, chats: own, order: own[0]?.order ?? rev };
   });
   const loose = grouped.get(null) ?? [];
+  const live = shelves.filter((shelf) => shelf.character.deleted === undefined);
+  const liveIds = new Set(live.map((shelf) => shelf.id));
   return {
-    characters: shelves.filter((shelf) => shelf.character.deleted === undefined).sort((a, b) => b.order - a.order),
+    characters: live.sort((a, b) => b.order - a.order),
     none: { id: null, character: null, face: null, chats: loose, order: loose[0]?.order ?? 0 },
     deleted: shelves.filter((shelf) => shelf.character.deleted !== undefined && !shelf.character.purging).sort((a, b) => b.character.deleted! - a.character.deleted!),
+    deletedChats: binned
+      .filter(({ chat }) => !chat.purging && (chat.character === null || liveIds.has(chat.character)))
+      .sort((a, b) => b.chat.deleted! - a.chat.deleted!),
   };
 }
 

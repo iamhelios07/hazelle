@@ -12,7 +12,7 @@ type State = { open: boolean; from: HTMLElement | null };
 const CLOSED: State = { open: false, from: null };
 
 // A menu's open state and the button that opened it, kept apart from the menu so buttons elsewhere open it and show
-// whether it is open too, such as a card in 지운 캐릭터 or a failed reply's 다른 모델로.
+// whether it is open too, such as a card in 휴지통 or a failed reply's 다른 모델로.
 export type MenuHandle = { read: () => State; subscribe: (listener: () => void) => () => void; set: (state: State) => void };
 
 function menuHandle(): MenuHandle {
