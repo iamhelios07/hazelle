@@ -23,7 +23,7 @@ export async function startChat(store: ObjectStore, id: string, chat: Chat, gree
 // A new chat's writes for one batch: its greetings, then the messages it already holds (a chat brought from Risu), then
 // the chat.
 export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, messages: RisuMessage[]): Write[] {
-  const held = messages.map(({ role, text, at }): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: id, value: { type: 'message', role, at, text, receipt: null, staged: true } }));
+  const held = messages.map(({ role, text, at, reasoning }): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: id, value: { type: 'message', role, at, text, receipt: null, staged: true, ...(reasoning && { reasoning }) } }));
   // A moved chat's greeting takes its first message's time, so it does not read as newer than what follows it.
   return [...(greetings ? greetingWrites(id, greetings, messages[0]?.at ?? Date.now()) : []), ...held, { type: 'create', kind: 'chat', id, parent: null, value: chat }];
 }
@@ -100,7 +100,7 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 function copied(id: string, { role, at, versions, selected, after }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
-  const held = ({ text, receipt, seed, translation, staged, before }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }) });
+  const held = ({ text, receipt, seed, translation, staged, before, reasoning }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }), ...(reasoning && { reasoning }) });
   // The first version said again holds its own writes: an edit would add them to the message entry's.
   const repeated = first!.edited || first!.at !== at;
   const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(repeated ? { ...first!, before: undefined } : first!) }]];
@@ -150,10 +150,10 @@ export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, 
 // A reply as its stream ended: a new message, or a new version of `message`, in place of `replaces` on
 // 다시 시도. at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain)
 // sends the same entry, and a first try that landed unanswered is found as it is.
-export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt; seed?: string; before?: Writes };
+export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt; seed?: string; before?: Writes; reasoning?: string };
 
-export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt, seed, before }: Written) {
-  const held = { at, text, receipt, ...(before && { before }) };
+export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt, seed, before, reasoning }: Written) {
+  const held = { at, text, receipt, ...(before && { before }), ...(reasoning && { reasoning }) };
   return append(store, chat, message === null ? { type: 'message', role: 'assistant', ...held } : { type: 'version', message, replaces, edit: false, ...held, ...(seed && { seed }) }, id);
 }
 

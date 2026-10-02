@@ -76,7 +76,7 @@ const mira = {
       localLore: [],
       message: [
         { role: 'user', data: 'hey', time: 1000 },
-        { role: 'char', data: 'look {{inlay::abc}}', disabled: true },
+        { role: 'char', data: '<Thoughts>\nhmm\n</Thoughts>\n\nlook {{inlay::abc}}', disabled: true },
       ],
     },
     { name: 'Cold', note: 'n', localLore: [], scriptstate: {}, message: [{ role: 'char', data: COLD + CHAT_KEY, time: 900 }] },
@@ -257,7 +257,7 @@ describe('readBackup', () => {
         ],
         messages: [
           { role: 'user', text: 'hey', at: 1000 },
-          { role: 'assistant', text: 'look {{inlay::abc}}', at: 1000 },
+          { role: 'assistant', text: 'look {{inlay::abc}}', at: 1000, reasoning: 'hmm' },
         ],
       },
       { title: 'Cold', note: 'n', persona: null, greeting: 0, variables: [['x', '{"a":1}']], messages: [{ role: 'user', text: 'old', at: 10 }] },

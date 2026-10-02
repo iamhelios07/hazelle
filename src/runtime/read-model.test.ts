@@ -404,7 +404,7 @@ describe('per-chat read models', () => {
     expect(screen.snapshot()).toBe(first);
     expect(screen.snapshot()).toBe(first);
     expect(displayed).not.toHaveBeenCalled();
-    const turn: Turn = { chat: 'a', said: { id: 'said', text: 'question' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'one' };
+    const turn: Turn = { chat: 'a', said: { id: 'said', text: 'question' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'one', reasoning: '' };
     talk.set(turn);
     const chunk = screen.snapshot();
     talk.set({ ...turn, text: 'one two' });
@@ -467,7 +467,7 @@ describe('per-chat read models', () => {
     const displayed = vi.spyOn(turnDisplay, 'displayChat');
     read.displayed('new');
     expect(displayed).not.toHaveBeenCalled();
-    talk.set({ chat: 'new', said: { id: 'said', text: 'hi' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'hello' });
+    talk.set({ chat: 'new', said: { id: 'said', text: 'hi' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'hello', reasoning: '' });
     expect(screen.snapshot().messages.map((message) => message.id)).toEqual(['opening', 'said', 'reply']);
     await store.batch([
       { type: 'create', kind: 'entry', id: 'g', parent: 'new', value: { ...message('{{screenwidth}}'), role: 'assistant' } },

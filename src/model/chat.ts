@@ -90,13 +90,15 @@ export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: bo
 // before: the variables the bot's Lua wrote on the way to this version (when the message was sent, before its reply
 // was made), which the chat's replay sets before the version's own text is read. An edit keeps those of the version
 // it changes and adds its own.
+// reasoning: what the model thought before it wrote the version, as its provider sent it or as Risu kept it. It is
+// never part of text, so it is neither drawn in the story nor sent again; 답장 정보 is its one reader.
 export type Entry =
   // A new message with its first version, which has the entry's id.
-  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true; before?: Writes }
+  | { type: 'message'; role: 'user' | 'assistant'; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true; before?: Writes; reasoning?: string }
   // replaces: the version this one takes the place of, for an edit, a retried failure or a continued cut
   // (이어 쓰기), so the count of versions does not grow; null for a new version, which goes last. An edit keeps
   // the receipt of the reply it changes.
-  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true; before?: Writes }
+  | { type: 'version'; message: string; replaces: string | null; edit: boolean; at: number; text: string; receipt: Receipt | null; seed?: string; translation?: Translation; staged?: true; before?: Writes; reasoning?: string }
   | { type: 'select'; message: string; version: string; at: number }
   | { type: 'delete'; message: string; at: number }
   | { type: 'restore'; message: string; at: number }
@@ -117,7 +119,7 @@ export type Entry =
 // Variable writes in the order made; a later one of a name wins.
 export type Writes = [string, string][];
 
-export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; calls?: BotCall[] };
+export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; calls?: BotCall[]; reasoning?: string };
 export type BotCall = { receipt: Receipt; at: number };
 // after: the writes that stay with the message (Entry vars), set after its shown version's own.
 export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number; after?: Writes };
@@ -132,6 +134,7 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
   ...(entry.translation && { translation: entry.translation }),
   ...(staged && { staged: true }),
   ...(entry.before && { before: entry.before }),
+  ...(entry.reasoning && { reasoning: entry.reasoning }),
 });
 
 // A chat's entries, read in rev order into the messages on screen. Entries naming a message or version
@@ -198,6 +201,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
         if (edited.before) version.before = [...edited.before, ...(entry.before ?? [])];
         if (edited.after) version.after = edited.after;
         if (edited.calls) version.calls = edited.calls;
+        if (edited.reasoning) version.reasoning = edited.reasoning;
       }
       own.set(id, version);
       home.set(version, message);

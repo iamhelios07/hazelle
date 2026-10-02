@@ -54,7 +54,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
     await act(() => render('typing', true));
     expect(view!).toBe(initial);
     expect(displayed).not.toHaveBeenCalled();
-    turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'one' };
+    turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'one', reasoning: '' };
     await act(() => { for (const listener of listeners) listener(); });
     const first = view!;
     turn = { ...turn, text: 'one two' };

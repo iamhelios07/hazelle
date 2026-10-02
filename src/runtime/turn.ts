@@ -254,7 +254,7 @@ function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, targ
   const version = messages[at]?.versions[index];
   // 이어 쓰기 continues the version it names. So does 다시 시도 on a continuation that failed, so that neither the text
   // it continues nor the calls its receipt carries are dropped.
-  const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt, seed: version.seed } : null;
+  const continues = version?.receipt && (target.kind === 'continue' || version.receipt.continues) ? { text: version.text, receipt: version.receipt, seed: version.seed, ...(version.reasoning && { reasoning: version.reasoning }) } : null;
   if (target.kind === 'continue' && !continues) return null;
   const said: Said | null = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
   const now = Date.now();

@@ -12,6 +12,14 @@
   color: var(--color-accent);
 }
 
+.prose {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .center {
   text-align: center;
 }

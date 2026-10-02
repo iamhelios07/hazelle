@@ -16,13 +16,14 @@ import { callOf, endCall, newCall } from './streams';
 
 // The reply being written. said is the user's message sent with it, shown until the store has it; reply
 // says where the answer goes: a new message, or a new version of one (in place of a failed one on 다시 시도, or
-// of the cut one it continues on 이어 쓰기). A continuation's text starts as the text it continues. before: what the
-// bot's Lua wrote before the reply was made (model/chat Entry).
+// of the cut one it continues on 이어 쓰기). A continuation's text and reasoning start as those it continues. before:
+// what the bot's Lua wrote before the reply was made (model/chat Entry).
 export type Turn = {
   chat: string;
   said: Said | null;
-  reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string } | null; before?: Writes };
+  reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes };
   text: string;
+  reasoning: string;
 };
 
 // A message on screen: live marks the version being written.
@@ -65,7 +66,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
     }
     out.push(message);
   }
-  const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now, ...(reply.before && { before: reply.before }) };
+  const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   if (reply.message === null) {
     if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: now, versions: [version], selected: 0, live: reply.id });
     return out;
@@ -172,10 +173,10 @@ export class Talk {
   // The turn is shown before prepare, which may save a new chat, translate the user's message and builds the prompt,
   // so the user's message appears the moment it is sent; stop() stops prepare too. A failure prepare returns ends the
   // turn unsent.
-  async run<F extends { kind: string }>({ chat, said, reply: asked }: Omit<Turn, 'text'>, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
+  async run<F extends { kind: string }>({ chat, said, reply: asked }: Omit<Turn, 'text' | 'reasoning'>, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
     if (this.turn) return null;
     const lease = this.store.retainChat(chat);
-    this.set({ chat, said, reply: asked, text: asked.continues?.text ?? '' });
+    this.set({ chat, said, reply: asked, text: asked.continues?.text ?? '', reasoning: asked.continues?.reasoning ?? '' });
     const abort = new AbortController();
     this.abort = abort;
     try {
@@ -223,7 +224,7 @@ export class Talk {
     const chat = stream.parent!;
     const lease = this.store.retainChat(chat);
     const reply = { id: stream.value.result, message: purpose.message, replaces: purpose.replaces, continues: purpose.continues, ...(purpose.before && { before: purpose.before }) };
-    this.set({ chat, said: null, reply, text: reply.continues?.text ?? '' });
+    this.set({ chat, said: null, reply, text: reply.continues?.text ?? '', reasoning: reply.continues?.reasoning ?? '' });
     const abort = new AbortController();
     this.abort = abort;
     this.reading.add(stream.id);
@@ -242,11 +243,11 @@ export class Talk {
     }
   }
 
-  private readonly write = (phase: Phase, chunk: string) => phase === 'text' && this.set({ ...this.turn!, text: this.turn!.text + chunk });
+  private readonly write = (phase: Phase, chunk: string) => this.set({ ...this.turn!, [phase]: this.turn![phase] + chunk });
 
   private written(reply: Turn['reply'], call: Stream['call'], answer: Reply): Written {
     const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
-    return { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }) };
+    return { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(this.turn!.reasoning && { reasoning: this.turn!.reasoning }) };
   }
 }
 

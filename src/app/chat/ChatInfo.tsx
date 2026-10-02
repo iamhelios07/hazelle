@@ -71,13 +71,26 @@ export function ChatInfo({ chat, messages, id, onShow, onRecord, onClose }: Prop
   );
 
   let body;
+  const thought = version?.reasoning && (
+    <Section level={3} title="생각" hint="모델이 답장을 쓰기 전에 한 생각이에요. 채팅에는 보이지 않고, 모델에게 다시 보내지도 않아요.">
+      <Text variant="prose">{version.reasoning}</Text>
+    </Section>
+  );
   if (!version) body = <Empty>이 채팅에는 아직 답장이 없어요.</Empty>;
-  else if (live) body = <Text variant="note">답장을 쓰는 중이에요. 끝나면 토큰과 비용이 채워져요.</Text>;
+  else if (live) {
+    body = (
+      <>
+        <Text variant="note">답장을 쓰는 중이에요. 끝나면 토큰과 비용이 채워져요.</Text>
+        {thought}
+      </>
+    );
+  }
   else if (!receipt) {
     body = (
       <>
-        <Empty>모델이 만든 답장이 아니라서 토큰이나 비용 정보가 없어요.</Empty>
+        <Empty>{version.reasoning ? '옮겨 온 답장이라 토큰이나 비용 정보가 없어요.' : '모델이 만든 답장이 아니라서 토큰이나 비용 정보가 없어요.'}</Empty>
         {translated && <TranslationCall receipt={translated} />}
+        {thought}
       </>
     );
   }
@@ -100,6 +113,7 @@ export function ChatInfo({ chat, messages, id, onShow, onRecord, onClose }: Prop
             )}
             <Call receipt={receipt} />
             {translated && <TranslationCall receipt={translated} />}
+            {thought}
             {earlier.length > 0 && (
               <Section level={3} title="앞선 호출">
                 {earlier.map((call, index) => (

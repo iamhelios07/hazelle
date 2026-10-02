@@ -11,7 +11,7 @@ describe('withTurn', () => {
   it('shows a message sent translated with its translation before it is saved', () => {
     const translation = { text: '안녕', receipt: null, at: 0 };
     const said = { id: 'said', text: 'Hello', translation };
-    const [message] = withTurn([], { chat: 'c', said, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '' }, 'c');
+    const [message] = withTurn([], { chat: 'c', said, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '', reasoning: '' }, 'c');
     expect(message!.versions[0]).toMatchObject({ text: 'Hello', translation });
   });
 });
@@ -73,6 +73,20 @@ describe('Talk', () => {
       lease.release();
       await vi.waitFor(() => expect(session.store.scopeState(chat)).toBe('unloaded'));
       expect(session.talk.sent(reply.id)).toBeNull();
+    }));
+
+  it('saves what the model thought beside the reply, never inside its text', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
+      const events = [{ choices: [{ delta: { reasoning: '인사를 받았다.' } }] }, { choices: [{ delta: { content: '반가워요' }, finish_reason: 'stop' }] }];
+      stubRelay(() => new Response(`${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`, { headers: { 'x-relay': 'upstream' } }));
+
+      await takeTurn(session, chat, { kind: 'answer' });
+      expect(shown(fold(session.store.children('entry', chat))[1]!)).toMatchObject({ text: '반가워요', reasoning: '인사를 받았다.' });
     }));
 
   it('ends a turn whose prepare throws, so the next one runs', () =>
