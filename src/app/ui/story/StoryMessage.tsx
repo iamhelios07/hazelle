@@ -4,6 +4,7 @@ import { Button } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import { useHover } from '../foundation/media';
+import { Menu, MenuItem } from '../overlays/Menu';
 import styles from './StoryMessage.module.css';
 
 type Props = {
@@ -83,14 +84,31 @@ type SwitcherProps = {
   // With the keys that press them.
   prevTitle: string;
   nextTitle: string;
+  // Each version in a line, which the count's menu lists so any of them is one press away.
+  versions: string[];
+  selected: number;
+  pickDisabled: boolean;
+  onPick: (index: number) => void;
 };
 
 // ← n / m → between a message's versions.
-export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, nextLabel, prevTitle, nextTitle }: SwitcherProps) {
+export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, nextLabel, prevTitle, nextTitle, versions, selected, pickDisabled, onPick }: SwitcherProps) {
   return (
     <div className={styles.switcher}>
       <IconButton icon={ChevronLeft} label="이전" title={prevTitle} size="xs" disabled={prevDisabled} onClick={onPrev} />
-      <span className={styles.count}>{label}</span>
+      <Menu
+        label="바로 고르기"
+        place="above-start"
+        trigger={(opener) => (
+          <button type="button" className={styles.count} title="바로 고르기" disabled={pickDisabled} ref={opener.ref} aria-haspopup={opener.popup} aria-expanded={opener.expanded} onClick={opener.onClick}>
+            {label}
+          </button>
+        )}
+      >
+        {versions.map((line, index) => (
+          <MenuItem key={index} label={`${index + 1}`} sub={line} checked={index === selected} onClick={() => onPick(index)} />
+        ))}
+      </Menu>
       <IconButton icon={ChevronRight} label={nextLabel} title={nextTitle} size="xs" disabled={nextDisabled} onClick={onNext} />
     </div>
   );

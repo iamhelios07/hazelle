@@ -73,16 +73,17 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
   const scripted = triggersOf(packsOf(store, chat).map(({ pack }) => pack)).length > 0;
-  const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
-  // A blank greeting keeps its place in the card, but a chat never opens on nothing.
-  const greetings = card?.greetings.filter((text) => text.trim()) ?? [];
+  // A blank greeting is a choice like the others: picked, the chat starts with no first message (user, 2026-10-02).
+  // The chat still opens on the first greeting that says something.
+  const greetings = card?.greetings ?? [];
+  const [greeting, setGreeting] = useState(() => Math.max(0, greetings.findIndex((text) => text.trim())));
   // The ids the greetings are saved under, so their random tags roll the same before and after the first send, and the
   // greeting keeps its place in the story rather than being drawn again.
   const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
   const translate = translateSwitches(store, chat.character);
   const unstarted: Shown | null = useMemo(() =>
-    item === null && card && greetings.length > 0
+    item === null && card && greetings.some((text) => text.trim())
       ? {
           id: openingIds[0]!,
           role: 'assistant',
@@ -185,13 +186,16 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   // The new chat as it is saved: by its first send, or by a press on a button of its greeting.
   function starting() {
+    // A chat saves the greetings that say something (runtime/turn greetingOf), and none when it starts on a blank one.
+    const said = opening?.versions.filter((version) => version.text.trim()) ?? [];
+    const selected = opening ? said.indexOf(shown(opening)) : -1;
     return {
       chat,
-      greetings: opening && {
-        ids: opening.versions.map((version) => version.id),
-        texts: opening.versions.map((version) => version.text),
-        selected: opening.selected,
-        translations: new Map(opening.versions.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
+      greetings: selected === -1 ? null : {
+        ids: said.map((version) => version.id),
+        texts: said.map((version) => version.text),
+        selected,
+        translations: new Map(said.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
       },
       started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
     };
@@ -256,6 +260,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     }
     if (exists) select(message, next);
     else if (step === 1 && message === last) ask({ kind: 'regenerate', message: message.id });
+  }
+
+  function pick(message: Shown, index: number) {
+    if (busy) return;
+    if (message === opening) setGreeting(index);
+    else select(message, index);
   }
 
   function translateMessage(message: Shown) {
@@ -445,6 +455,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       retry: (message: Shown) => ask({ kind: 'retry', message: message.id, version: shown(message).id }),
       continue: (message: Shown) => ask({ kind: 'continue', message: message.id, version: shown(message).id }),
       swipe,
+      pick,
       edit: (message: Shown) => {
         const version = shown(message);
         setEditing({ id: message.id, text: version.text, translation: version.translation?.text ?? null });

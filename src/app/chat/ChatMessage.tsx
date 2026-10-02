@@ -3,7 +3,7 @@ import { memo, useMemo, type KeyboardEvent } from 'react';
 import { resolveAssets } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
-import { shown } from '../../model/chat';
+import { firstLine, shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
@@ -11,7 +11,7 @@ import { withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
 import { useReveal } from './useReveal';
 
@@ -56,6 +56,9 @@ type Props = {
   modelMenu: MenuHandle;
   actions: ChatActions;
 };
+
+// A card's blank greeting, which starts the chat with no first message.
+const NO_GREETING = '첫 메시지 없이';
 
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
@@ -147,6 +150,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         </Failure>
       </>
     );
+  } else if (opening && empty) {
+    body = <Text variant="note">{`${NO_GREETING} 시작해요.`}</Text>;
   } else if (!empty || live) {
     const box = ({ script, html }: Box) => (
       <div key={script} ref={actions.watch(script)}>
@@ -211,6 +216,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           nextTitle={titled(nextLabel, [forward])}
           onPrev={() => actions.swipe(message, -1)}
           onNext={() => actions.swipe(message, 1)}
+          versions={message.versions.map((each) => firstLine(each.translation?.text ?? each.text) || NO_GREETING)}
+          selected={message.selected}
+          pickDisabled={busy}
+          onPick={(index) => actions.pick(message, index)}
         />
       )}
     </>
@@ -237,7 +246,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const tools = live || editing !== null ? undefined : opening ? (
     <>
       {translateTool}
-      <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />
+      {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
       {statusTool}
     </>
   ) : (
