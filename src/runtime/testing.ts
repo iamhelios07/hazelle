@@ -112,6 +112,8 @@ export async function answerable(session: Session): Promise<void> {
 export function testServer() {
   let app: App;
   const held: (() => void)[] = [];
+  // A store left open pulls on after its test, through the next test's cookie and into its spies.
+  const stores: ObjectStore[] = [];
   beforeAll(async () => {
     app = await testApp(viaStreams);
   });
@@ -125,6 +127,7 @@ export function testServer() {
   });
   afterEach(async () => {
     for (const release of held.splice(0)) release();
+    for (const store of stores.splice(0)) store.close();
     while (answered.size) await Promise.allSettled([...answered]);
     vi.unstubAllGlobals();
   });
@@ -145,7 +148,11 @@ export function testServer() {
       const { accountId } = body;
       holdAccount(accountId);
       const vaultKey = randomBytes(32);
-      const open = (key: VaultKey = vaultKey) => ObjectStore.open(accountId, key, api);
+      const open = async (key: VaultKey = vaultKey) => {
+        const store = await ObjectStore.open(accountId, key, api);
+        stores.push(store);
+        return store;
+      };
       return { accountId, vaultKey, store: await open(), files: new Files(api), open };
     },
     // The operator deletes the account on the server, which opens signup again (server/accounts): how a user
