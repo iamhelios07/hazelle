@@ -1,6 +1,5 @@
 import { monthDay, timeOfDay } from '../common/time';
 
-// 10월 1일 오후 3:30
 export const moment = (at: number) => `${monthDay(at)} ${timeOfDay(at)}`;
 
 export const TIME_FORMAT = '2026-10-01 15:30';

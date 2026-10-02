@@ -396,6 +396,41 @@ describe('a deletion', () => {
     expect(await leaveAccount(env(), seed.id, seed.incarnation, false)).toBe('busy');
     expect(await account(seed.id)).toMatchObject({ state: 'restoring' });
   });
+
+  it('keeps the account row while a restart never reached the store, and finishes once one does', async () => {
+    const held = await holding();
+    const unreached = {
+      ...env(),
+      STORES: {
+        getByName: (name: string) =>
+          new Proxy(t.stores.getByName(name), {
+            get: (stub, method) => (method === 'restart' ? () => Promise.reject(new Error('unreached')) : Reflect.get(stub, method)),
+          }),
+      } as unknown as Env['STORES'],
+    };
+    expect(await leaveAccount(unreached, held.id, held.incarnation, false)).toBe('unavailable');
+    expect(await account(held.id)).toMatchObject({ state: 'leaving' });
+    expect(t.stores.db(held.incarnation).tables()).not.toEqual([]);
+    expect((await t.env.BLOBS.list({ prefix: `files/${held.incarnation}/` })).objects).toHaveLength(1);
+
+    expect(await leaveAccount(env(), held.id, held.incarnation, false)).toBe('left');
+    await gone(held);
+  });
+});
+
+describe('an operation id', () => {
+  it('is not given again after its account is deleted, so a request left holding it names nothing', async () => {
+    const old = await seeded();
+    const id = await begin(old);
+    expect(await cancelRestore(env(), id)).toMatchObject({ phase: 'cancelled', verified: true });
+    expect(await leaveAccount(env(), old.id, old.incarnation, false)).toBe('left');
+
+    const next = await seeded();
+    const current = await begin(next);
+    expect(current).toBeGreaterThan(id);
+    expect(await cancelRestore(env(), id)).toBeNull();
+    expect(await account(next.id)).toMatchObject({ state: 'restoring', operation: current });
+  });
 });
 
 describe('an account id used again', () => {

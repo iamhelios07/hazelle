@@ -141,6 +141,11 @@ export async function exportBackup(
       await push(bytes.data, true);
       progress(done += uses, total);
     }
+    // The pictures are read after the scans, with no timeline of their own: a restore heard meanwhile fails the export
+    // as one between the scans does.
+    const still = await store.pin(signal);
+    if (!still.ok) return still;
+    if (still.data.epoch !== pin.epoch) return { ok: false, error: 'timeline-changed' };
     await zip.end();
     signal.throwIfAborted();
     await output.close();

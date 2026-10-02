@@ -21,8 +21,10 @@ CREATE UNIQUE INDEX accounts_incarnation ON accounts (incarnation);
 -- timeline: installed when it completes. checkpoint: the store's bookmark taken while fenced, the exact undo, written
 -- once. target: the bookmark the store rewinds to. returned: what arming the rewind answered, a second record only.
 -- error: a short code, never prose. verified: the store was seen loading the operation's end state.
+-- id is never used again (AUTOINCREMENT): rows go with their account, and a request still holding a deleted
+-- operation's id must not name another account's.
 CREATE TABLE restores (
-  id INTEGER PRIMARY KEY,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   incarnation TEXT NOT NULL REFERENCES accounts (incarnation) ON DELETE CASCADE,
   report_id INTEGER NOT NULL,
   at INTEGER,

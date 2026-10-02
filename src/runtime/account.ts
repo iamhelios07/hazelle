@@ -2,7 +2,7 @@ import { passwordCredential, recoveryCredential, type Credential, type Method, t
 import { api, type Heard } from './api';
 
 // What the account holds and the caps that apply to it, null for none. bytes is null while the account is restored or
-// its store does not answer. fileBytes: the files it was first to store, which deleting pictures does not lower
+// its store does not answer. fileBytes: the pictures stored for it, which deleting them in the app does not lower
 // (server/files).
 export type Storage = { bytes: number | null; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
 // What the server says about the signed-in account, on GET /session, signup and login alike. state: restoring while the

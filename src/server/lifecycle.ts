@@ -55,7 +55,9 @@ export async function leaveAccount(env: Env, accountId: string, incarnation: str
     if (state !== 'leaving') return 'busy';
   }
   const life = await reload(env, incarnation);
-  if ('unavailable' in life) return 'unavailable';
+  // The row goes only after the store was seen fenced and emptied. A restart that never reached the store leaves it
+  // answering as it was, and deleting the row then would leave its objects behind with nothing left to name them.
+  if ('unavailable' in life || (life.state !== 'leaving' && life.state !== 'gone')) return 'unavailable';
   if (life.state === 'leaving') {
     const destroyed = await store(env, incarnation).destroy(incarnation);
     if ('unavailable' in destroyed) return 'unavailable';

@@ -466,3 +466,29 @@ it('lets a stale tab’s delayed clear and delayed bootstrap change nothing: bot
   first.close();
   second.close();
 });
+
+it('aborts an export when the timeline changes while its final picture is being read', async () => {
+  const f = await fixture();
+  await f.add('character', 'character', null, {});
+  await f.add('asset', 'asset', 'character', { name: 'picture', file: { id: 'picture', key: 'key' } });
+  const store = await f.open();
+  await store.pull();
+  const output = { write: vi.fn(async () => {}), close: vi.fn(async () => {}), abort: vi.fn(async () => {}) };
+  const files = {
+    missing: vi.fn(async () => ({ ok: true as const, data: new Set<string>() })),
+    read: vi.fn(async () => {
+      f.restore(f.snapshot(), 't1');
+      await store.pull();
+      return { ok: true as const, data: new Uint8Array([1]) };
+    }),
+  };
+  try {
+    const result = await exportBackup(store, files, output);
+    expect(files.read).toHaveBeenCalledOnce();
+    expect({ result, closed: output.close.mock.calls.length, aborted: output.abort.mock.calls.length }).toEqual({
+      result: { ok: false, error: 'timeline-changed' }, closed: 0, aborted: 1,
+    });
+  } finally {
+    store.close();
+  }
+});
