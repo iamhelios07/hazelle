@@ -158,7 +158,7 @@ async function fromDatabase(db: Json, source: BackupSource, files: Map<string, S
     // The selected persona's live copy is the database's top level (spec §5).
     const persona = index === selected ? { ...raw, name: db.username, icon: db.userIcon, personaPrompt: db.personaPrompt } : raw;
     const icon = text(persona.icon) && entry(text(persona.icon));
-    return [{ id: text(persona.id) || null, name: text(persona.name), description: text(persona.personaPrompt), picture: icon ? () => picture(icon) : () => Promise.resolve(null) }];
+    return [{ id: text(persona.id) || null, name: text(persona.name), alias: text(persona.note).trim(), description: text(persona.personaPrompt), picture: icon ? () => picture(icon) : () => Promise.resolve(null) }];
   });
 
   const presets = list(db.botPresets).flatMap((raw, index): RisuPreset[] =>

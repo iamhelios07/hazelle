@@ -156,7 +156,8 @@ export type RisuCharacter = Omit<Imported, 'avatar'> & {
   // What its chats held that does not come.
   missed: MoveUnsupported[];
 };
-export type RisuPersona = { id: string | null; name: string; description: string; picture: () => Promise<Picture | null> };
+// alias: Risu's persona note, a line only the user reads to tell personas of one name apart, which is what a 별명 is.
+export type RisuPersona = { id: string | null; name: string; alias: string; description: string; picture: () => Promise<Picture | null> };
 export type RisuPreset = { name: string; result: PresetResult };
 export type RisuBackup = {
   characters: RisuCharacter[];

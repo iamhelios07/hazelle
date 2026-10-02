@@ -38,7 +38,7 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
     progress({ kind: 'personas', done, total: personas.length });
     const picture = await persona.picture();
     const thumb = picture && (await thumbnail(picture).catch(() => null));
-    const saved = await addPersona(store, { name: persona.name, description: persona.description, picture: thumb });
+    const saved = await addPersona(store, { name: persona.name, description: persona.description, picture: thumb, ...(persona.alias && { alias: persona.alias }) });
     if (!saved.ok) return saved;
     if (persona.id !== null) personaIds.set(persona.id, saved.data.id);
   }

@@ -56,7 +56,7 @@ const bell: ImportedModule = {
 describe('moveFromRisu', () => {
   it('brings a character whole, its chat on the greeting Risu showed with its messages staged and its persona, and a second run skips it', async () => {
     const { store, files } = await server.account();
-    const pick: MovePick = { characters: [luna], personas: [{ id: 'risu-jin', name: '진', description: '여행자', picture: async () => null }], presets: [], modules: [], alwaysModules: [] };
+    const pick: MovePick = { characters: [luna], personas: [{ id: 'risu-jin', name: '진', alias: '부자', description: '여행자', picture: async () => null }], presets: [], modules: [], alwaysModules: [] };
     const moved = await moveFromRisu(store, files, pick, () => {});
     expect(moved).toMatchObject({ ok: true, data: { personas: 1, prompts: 0, modules: [], characters: [{ risu: 'risu-luna', name: '루나', chats: 1 }] } });
     const id = moved.ok ? moved.data.characters[0]!.id : '';
@@ -66,7 +66,7 @@ describe('moveFromRisu', () => {
     expect(folder!.value).toEqual({ name: '모험' });
 
     const [chat] = store.list('chat');
-    const jin = store.list('persona').find(({ value }) => value.name === '진')!.id;
+    const jin = store.list('persona').find(({ value }) => value.name === '진' && value.alias === '부자')!.id;
     expect(chat!.value).toEqual({ title: '등대', character: id, models: {}, memory: { ...MEMORY_DEFAULTS, on: false }, note: '비가 온다', persona: jin, variables: [['hp', '7']] });
     await server.hold(store, chat!.id);
     const messages = fold(store.children('entry', chat!.id));

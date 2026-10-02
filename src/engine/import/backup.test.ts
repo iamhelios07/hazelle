@@ -114,7 +114,7 @@ const db = {
   enabledModules: ['m1'],
   personas: [
     { id: 'p1', name: 'old', personaPrompt: 'stale', icon: '' },
-    { id: 'p2', name: 'Bob', personaPrompt: 'b', icon: 'assets/bob.png' },
+    { id: 'p2', name: 'Bob', personaPrompt: 'b', icon: 'assets/bob.png', note: ' the rich one ' },
   ],
   selectedPersona: 0,
   username: 'Ann',
@@ -291,9 +291,9 @@ describe('readBackup', () => {
 
   it('takes the selected persona and the active preset from their live values, without keys', async () => {
     const backup = await read();
-    expect(backup.personas.map(({ id, name, description }) => ({ id, name, description }))).toEqual([
-      { id: 'p1', name: 'Ann', description: 'live' },
-      { id: 'p2', name: 'Bob', description: 'b' },
+    expect(backup.personas.map(({ id, name, alias, description }) => ({ id, name, alias, description }))).toEqual([
+      { id: 'p1', name: 'Ann', alias: '', description: 'live' },
+      { id: 'p2', name: 'Bob', alias: 'the rich one', description: 'b' },
     ]);
     expect(await backup.personas[0]!.picture()).toEqual({ bytes: PNG, type: 'image/png' });
     expect(await backup.personas[1]!.picture()).toBeNull();

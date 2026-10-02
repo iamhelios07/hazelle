@@ -8,7 +8,7 @@ const preset = (ok: boolean) => ({ name: 'p', result: ok ? { ok, prompt: {}, uns
 
 describe('tickable', () => {
   it('leaves out characters and modules already brought and presets the importer refused, and picks the rest', () => {
-    const backup = { characters: [character('a'), character('b')], personas: [{ id: null, name: 'n', description: '', picture: async () => null }], presets: [preset(true), preset(false)], modules: [module('m'), module('n')], alwaysModules: ['m'], unsupported: [] } as RisuBackup;
+    const backup = { characters: [character('a'), character('b')], personas: [{ id: null, name: 'n', alias: '', description: '', picture: async () => null }], presets: [preset(true), preset(false)], modules: [module('m'), module('n')], alwaysModules: ['m'], unsupported: [] } as RisuBackup;
     const can = tickable(backup, { characters: new Set(['a']), modules: new Set(['m']) });
     expect(can).toEqual({ characters: [false, true], personas: [true], presets: [true, false], modules: [false, true] });
     const pick = toPick(backup, can);

@@ -4,6 +4,7 @@ import type { PresetFailure } from '../../engine/import/preset';
 import type { BackupFailure, BackupSource, RisuBackup } from '../../engine/import/types';
 import { unused, type Unused } from '../../engine/pipeline';
 import { broughtFromRisu, modulesFromRisu, moveFromRisu, type Moved, type MovePick, type MoveStep } from '../../runtime/move';
+import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { moduleName } from '../common/words';
@@ -122,7 +123,7 @@ export function MoveFlow({ file, aside, onClose }: { file: File; aside: number; 
           ticks={ticks.characters}
           onChange={(next) => tick('characters', next)}
         />
-        <Picks title="페르소나" rows={backup.personas.map((persona) => ({ label: persona.name }))} can={can.personas} ticks={ticks.personas} onChange={(next) => tick('personas', next)} />
+        <Picks title="페르소나" rows={backup.personas.map((persona) => ({ label: aliased(persona.name, persona.alias) }))} can={can.personas} ticks={ticks.personas} onChange={(next) => tick('personas', next)} />
         <Picks
           title="프롬프트"
           rows={backup.presets.map((preset) => ({ label: preset.name, note: preset.result.ok ? undefined : PRESET_FAILURE[preset.result.failure.kind] }))}
