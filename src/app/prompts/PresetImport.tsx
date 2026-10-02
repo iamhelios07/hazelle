@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { PresetFailure, PresetUnsupported, PresetUnsupportedKind } from '../../engine/import/preset';
 import type { ConversationPrompt } from '../../model/prompt';
 import { importPrompt, ofSort } from '../../runtime/prompts';
+import type { ObjectStore } from '../../runtime/store';
 import { describeFailure } from '../common/failure';
 import { inSettings } from '../common/words';
 import { useStore } from '../session';
@@ -33,6 +34,19 @@ const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: str
 type Opened = { file: string; id: string; prompt: ConversationPrompt; unsupported: PresetUnsupported[] };
 type Result = Opened | { file: string; failure: string };
 
+export async function readPreset(store: ObjectStore, file: File): Promise<Result> {
+  // A folder dropped here, or a file moved since it was picked, cannot be read.
+  const bytes = await file.arrayBuffer().catch(() => null);
+  if (!bytes) return { file: file.name, failure: FAILURE.unreadable };
+  const imported = await importPrompt(store, file.name, new Uint8Array(bytes));
+  if (!imported.ok) {
+    const { failure } = imported;
+    return { file: file.name, failure: failure.kind === 'save' ? `저장하지 못했어요. ${describeFailure(failure.failure)}` : FAILURE[failure.kind] };
+  }
+  const prompt = store.get('prompt', imported.id);
+  return prompt && ofSort(prompt, 'conversation') ? { file: file.name, id: imported.id, prompt: prompt.value, unsupported: imported.unsupported } : { file: file.name, failure: '다른 곳에서 지워졌어요.' };
+}
+
 // A Risu preset picked or dropped on the prompt list becomes a new prompt. While the list is open, its drop takes files
 // from the app's character import.
 export function usePresetImport(onOpen: (id: string) => void): { take: (files: File[]) => void; view: ReactNode } {
@@ -40,22 +54,12 @@ export function usePresetImport(onOpen: (id: string) => void): { take: (files: F
   const [busy, setBusy] = useState<string | null>(null);
   const [results, setResults] = useState<Result[] | null>(null);
 
-  async function read(file: File): Promise<Result> {
-    const imported = await importPrompt(store, file.name, new Uint8Array(await file.arrayBuffer()));
-    if (!imported.ok) {
-      const { failure } = imported;
-      return { file: file.name, failure: failure.kind === 'save' ? `저장하지 못했어요. ${describeFailure(failure.failure)}` : FAILURE[failure.kind] };
-    }
-    const prompt = store.get('prompt', imported.id);
-    return prompt && ofSort(prompt, 'conversation') ? { file: file.name, id: imported.id, prompt: prompt.value, unsupported: imported.unsupported } : { file: file.name, failure: '다른 곳에서 지워졌어요.' };
-  }
-
   async function take(files: File[]) {
     if (files.length === 0 || busy) return;
     const done: Result[] = [];
     for (const file of files) {
       setBusy(file.name);
-      done.push(await read(file));
+      done.push(await readPreset(store, file));
     }
     setBusy(null);
     setResults(done);
