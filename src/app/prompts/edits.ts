@@ -1,4 +1,4 @@
-import type { Block, Prompt, Role, SlotKind, TextBlock, Toggle } from '../../model/prompt';
+import { SLOTS, type Block, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockSource } from './blocks';
 import { renameToggle, toggleUses } from './rekey';
@@ -34,6 +34,10 @@ export function newBlock(kind: NewBlock): Block {
       return { ...named, kind: 'slot', slot: kind.slot };
   }
 }
+
+// The block standing in a slot that is placed once, which no second one joins.
+export const placedOnce = (blocks: readonly Block[], slot: SlotKind): Block | undefined =>
+  SLOTS[slot].repeats ? undefined : blocks.find((each) => each.kind === 'slot' && each.slot === slot);
 
 export function moved<T>(items: readonly T[], from: number, to: number): T[] {
   const next = [...items];
@@ -75,11 +79,13 @@ export function rekey(draft: Draft, from: string, to: string): PromptPatch {
   return { ...rewrite(draft, (text) => renameToggle(text, from, to)), toggles: draft.toggles.map((toggle) => (toggle.key === from ? { ...toggle, key: to } : toggle)) };
 }
 
+export const keyInUse = (toggles: readonly Toggle[], key: string) => toggles.some((toggle) => toggle.key === key);
+
 // Why a key cannot be used, or null. A key stands inside {{#when::toggle::KEY}}, so it holds none of CBS's own marks.
 export function keyProblem(key: string, toggles: readonly Toggle[], own: string | null): string | null {
   if (!key) return '조건에서 부르는 이름을 적어 주세요.';
   if (/[\s:{}]/.test(key)) return '빈칸과 :, {, }는 쓸 수 없어요.';
-  if (key !== own && toggles.some((toggle) => toggle.key === key)) return '이미 쓰는 이름이에요.';
+  if (key !== own && keyInUse(toggles, key)) return '이미 쓰는 이름이에요.';
   return null;
 }
 
