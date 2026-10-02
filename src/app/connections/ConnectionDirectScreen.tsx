@@ -40,7 +40,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!draft) return;
-    await run(() => connect(session, draft));
+    await run((signal) => connect(session, draft, signal));
   }
 
   return (
