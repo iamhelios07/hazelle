@@ -1,11 +1,17 @@
 import { defineConfig } from '@playwright/test';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { STORE_ADMIN, storeSpecWorker } from './e2e/store-harness';
 
 const PORT = 4417;
 const STATE = '.wrangler/e2e';
 const WRANGLER = './node_modules/.bin/wrangler';
+
+// Playwright loads this file again in its worker, while wrangler dev watches the wrapper: an unchanged file is not
+// written again, or the server would rebuild under the running spec.
+function put(path: string, text: string) {
+  if (!existsSync(path) || readFileSync(path, 'utf8') !== text) writeFileSync(path, text);
+}
 
 // The built Worker (npm run e2e builds first) wrapped by e2e/store-harness, which adds probes and an operator beside
 // it. The wrapper is written under .wrangler/ and named apart from the service, and no build or deploy reads it.
@@ -15,8 +21,8 @@ function wrapped() {
   const built = JSON.parse(readFileSync(builtPath, 'utf8')) as { main: string; assets: { directory: string }; vars?: Record<string, string> };
   const directory = resolve('.wrangler/store-spec');
   mkdirSync(directory, { recursive: true });
-  writeFileSync(`${directory}/worker.mjs`, storeSpecWorker(resolve(dirname(builtPath), built.main)));
-  writeFileSync(`${directory}/wrangler.json`, JSON.stringify({
+  put(`${directory}/worker.mjs`, storeSpecWorker(resolve(dirname(builtPath), built.main)));
+  put(`${directory}/wrangler.json`, JSON.stringify({
     ...built,
     name: 'risu-alpha-store-spec',
     main: './worker.mjs',
