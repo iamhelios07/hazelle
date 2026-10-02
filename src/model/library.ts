@@ -105,7 +105,8 @@ export type CharacterShelf<C> = Shelf<C> & { id: string; character: Character };
 type ChatLike = { chat: { character: string | null }; order: number };
 
 // chats come newest first. A character is as recent as its latest chat, or, with none yet, as its own
-// last change. Deleted characters and their chats are kept apart, most recently deleted first.
+// last change. Deleted characters and their chats are kept apart, most recently deleted first. One being removed for
+// good (purging) is listed nowhere: it can no longer be brought back.
 export function shelve<C extends ChatLike>(
   characters: Stored<'character'>[],
   avatars: Stored<'avatar'>[],
@@ -126,7 +127,7 @@ export function shelve<C extends ChatLike>(
   return {
     characters: shelves.filter((shelf) => shelf.character.deleted === undefined).sort((a, b) => b.order - a.order),
     none: { id: null, character: null, face: null, chats: loose, order: loose[0]?.order ?? 0 },
-    deleted: shelves.filter((shelf) => shelf.character.deleted !== undefined).sort((a, b) => b.character.deleted! - a.character.deleted!),
+    deleted: shelves.filter((shelf) => shelf.character.deleted !== undefined && !shelf.character.purging).sort((a, b) => b.character.deleted! - a.character.deleted!),
   };
 }
 

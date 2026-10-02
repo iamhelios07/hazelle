@@ -21,6 +21,14 @@ describe('shelve', () => {
     expect(none.chats.map((item) => item.id)).toEqual(['c3']);
   });
 
+  it('lists a character being removed for good nowhere', () => {
+    const claimed = character('d', 2);
+    claimed.value.deleted = 1;
+    claimed.value.purging = true;
+    const { characters, deleted } = shelve([character('a', 1), claimed], [], []);
+    expect([characters.map((shelf) => shelf.id), deleted]).toEqual([['a'], []]);
+  });
+
   it('keeps deleted characters and their chats apart', () => {
     const gone = character('d', 4);
     gone.value.deleted = 1;
