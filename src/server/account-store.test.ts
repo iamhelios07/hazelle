@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { StoreRules, type FeedQuery, type StoreDb, type StoreReads, type Write } from './account-store';
+import { StoreRules, type FeedPage, type FeedQuery, type StoreDb, type StoreReads, type Write } from './account-store';
 import { NodeStoreDb, nodeStores } from './store-db-node';
 
 const INC = 'a'.repeat(32);
@@ -83,6 +83,18 @@ describe('feed', () => {
     expect(await feed({ since: 2 })).toEqual({ reset: true });
     expect(await feed({ known: 2 })).toEqual({ reset: true });
   });
+
+  it('budgets a page by UTF-8 bytes, through an embedded NUL', async () => {
+    const body = '\0' + '가'.repeat(499_999);
+    expect(Buffer.byteLength(body)).toBe(1_499_998);
+    const writes = Array.from({ length: 4 }, () => put(crypto.randomUUID(), { body }));
+    for (let index = 0; index < 4; index += 2) await write(writes.slice(index, index + 2));
+
+    const page = (await feed()) as FeedPage;
+    expect(page.changes.map(({ rev }) => rev)).toEqual([1, 2, 3]);
+    expect(page).toMatchObject({ cursor: 3, more: true });
+    expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThan(5_500_000);
+  });
 });
 
 describe('batch', () => {
@@ -127,6 +139,22 @@ describe('batch', () => {
     expect(await write(put(C, { body: 'x'.repeat(17) }), 50)).toMatchObject({ bytes: 50 });
     expect(await write(put(C, { body: 'y'.repeat(17), baseRev: 5 }), 0)).toMatchObject({ bytes: 50 });
     expect(await store().usage(INC)).toMatchObject({ bytes: 50 });
+  });
+
+  it('leaves both updates and the head untouched when the later update exceeds the margin by one byte', async () => {
+    await write([put(A), put(B)]);
+    const first = put(A, { body: 'x'.repeat(500_001), baseRev: 1 });
+    expect(await write([first, put(B, { body: 'x'.repeat(500_002), baseRev: 2 })], 2)).toEqual({ refused: 'storage-full' });
+    expect(await feed()).toMatchObject({ bytes: 2, cursor: 2, changes: [{ id: A, rev: 1, body: 'x' }, { id: B, rev: 2, body: 'x' }] });
+    expect(await write([first, put(B, { body: 'x'.repeat(500_001), baseRev: 2 })], 2)).toEqual({ revs: [3, 4], bytes: 1_000_002, timeline: 't1' });
+    expect(await store().usage(INC)).toMatchObject({ bytes: 1_000_002 });
+  });
+
+  it('allows an undelete paid for by a later delete even when the cap has fallen to zero', async () => {
+    await write([put(A, { body: '가' }), put(B, { body: '가' })]);
+    await write(put(A, { body: null, baseRev: 1 }));
+    expect(await write([put(A, { body: '가', baseRev: 3 }), put(B, { body: null, baseRev: 2 })], 0)).toEqual({ revs: [4, 5], bytes: 3, timeline: 't1' });
+    expect(await feed()).toMatchObject({ bytes: 3, cursor: 5, changes: [{ id: A, rev: 4, body: '가' }, { id: B, rev: 5, body: null }] });
   });
 });
 
@@ -179,6 +207,29 @@ describe('timeline', () => {
     expect(await write(put(B), null, 't1')).toEqual({ stale: true });
     expect(await write(put(B), null, 't2')).toEqual({ revs: [2], bytes: 2, timeline: 't2' });
   });
+
+  it('refuses old work after a rewind even when the head passes its cursor and the object regains its revision', async () => {
+    await write(put(A, { body: 'checkpoint' }));
+    const at = now;
+    now += 1000;
+    await write(put(A, { body: 'old branch', baseRev: 1 }));
+    row = restoring(7);
+    await restart();
+    const { target } = (await store().target(INC, 7, { at })) as { target: string };
+    await store().mark(INC, 7);
+    phase = 'armed';
+    await store().arm(INC, 7, target);
+    row = active('t2');
+    await restart();
+    expect(await write(put(A, { body: 'new branch', baseRev: 1 }), null, 't2')).toMatchObject({ revs: [2] });
+    await write(put(B), null, 't2');
+
+    expect(await feed({ since: 2, known: 2 })).toEqual({ stale: true });
+    expect(await feed({ bootstrap: true, since: 1, known: 2, until: 2 })).toEqual({ stale: true });
+    expect(await write(put(A, { body: 'late overwrite', baseRev: 2 }))).toEqual({ stale: true });
+    expect(await write(put(C, { body: 'late create' }))).toEqual({ stale: true });
+    expect(await feed({ timeline: 't2' })).toMatchObject({ cursor: 3, bytes: 11, changes: [{ id: A, rev: 2, body: 'new branch' }, { id: B, rev: 3, body: 'x' }] });
+  });
 });
 
 describe('lifecycle', () => {
@@ -211,6 +262,53 @@ describe('lifecycle', () => {
       late(null);
       reads.life = vi.fn(async () => active());
       expect(await store().status(INC)).toEqual(active());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('holds object calls behind a pending wake read and refuses them all when it resolves restoring', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolve!: (value: unknown) => void;
+      const pending = new Promise((done) => (resolve = done));
+      reads.life = vi.fn(() => pending);
+      const settled = vi.fn();
+      const calls = Promise.all([feed(), write(put(A)), store().usage(INC)]).then((answers) => {
+        settled();
+        return answers;
+      });
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(settled).not.toHaveBeenCalled();
+      expect(stores.db(INC).tables()).toEqual([]);
+      resolve(restoring(7));
+      expect(await calls).toEqual([{ refused: 'restoring' }, { refused: 'restoring' }, { refused: 'restoring' }]);
+      expect(stores.db(INC).tables()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not serve cached objects or adopt a late active answer after a timed-out wake', async () => {
+    await write(put(A, { body: 'kept' }));
+    await restart();
+    vi.useFakeTimers();
+    try {
+      let late!: (value: unknown) => void;
+      reads.life = vi.fn(() => new Promise((resolve) => (late = resolve)));
+      const failed = feed();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await failed).toEqual({ unavailable: true });
+      reads.life = vi.fn().mockRejectedValueOnce(new Error('D1 down')).mockResolvedValue(restoring(7));
+      expect(await write(put(B))).toEqual({ unavailable: true });
+      expect(await store().status(INC)).toEqual(restoring(7));
+      late(active('obsolete'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await feed()).toEqual({ refused: 'restoring' });
+      expect(await write(put(B))).toEqual({ refused: 'restoring' });
+      expect(await store().usage(INC)).toEqual({ refused: 'restoring' });
+      expect(stores.db(INC).exec('SELECT rev, bytes, timeline FROM head')).toEqual([{ rev: 1, bytes: 4, timeline: 't1' }]);
+      expect(stores.db(INC).exec('SELECT id, body FROM objects')).toEqual([{ id: A, body: 'kept' }]);
     } finally {
       vi.useRealTimers();
     }
@@ -276,6 +374,69 @@ describe('restore', () => {
     expect(await store().unmark(INC, 7)).toEqual({ unmarked: true });
     expect(await store().marked(INC, 7)).toEqual({ marked: false });
   });
+
+  it('keeps the original undo usable across a repeated arm and refuses arming once the phase advances', async () => {
+    await write(put(A, { body: 'target' }));
+    const at = now;
+    now += 1000;
+    await write(put(B, { body: 'undo' }));
+    row = restoring(7);
+    await restart();
+    const { checkpoint } = (await store().checkpoint(INC, 7)) as { checkpoint: string };
+    expect(await store().checkpoint(INC, 7)).toEqual({ checkpoint });
+    const { target } = (await store().target(INC, 7, { at })) as { target: string };
+    await store().mark(INC, 7);
+    phase = 'armed';
+    await store().arm(INC, 7, target);
+    await restart();
+    expect(await store().marked(INC, 7)).toEqual({ marked: false });
+    // Section 7 permits the same target to be armed again while fenced; D1 owns the frozen checkpoint.
+    expect(await store().arm(INC, 7, target)).toMatchObject({ returned: expect.any(String) });
+    await restart();
+    expect(await store().marked(INC, 7)).toEqual({ marked: false });
+    phase = 'rewound';
+    expect(await store().arm(INC, 7, checkpoint)).toEqual({ wrongPhase: true });
+    row = active('t2');
+    await restart();
+    await write(put(C, { body: 'after finish' }), null, 't2');
+    expect(await store().arm(INC, 7, target)).toEqual({ wrongPhase: true });
+    await restart();
+    expect(await feed({ timeline: 't2' })).toMatchObject({ cursor: 2, changes: [{ id: A, body: 'target' }, { id: C, body: 'after finish' }] });
+
+    row = restoring(8);
+    phase = 'armed';
+    await restart();
+    await store().arm(INC, 8, checkpoint);
+    row = active('t3');
+    await restart();
+    expect(await feed({ timeline: 't3' })).toMatchObject({ cursor: 2, changes: [{ id: A, body: 'target' }, { id: B, body: 'undo' }] });
+  });
+
+  it('leaves the new operation and its marker untouched when an older runner resumes after the fence', async () => {
+    await write(put(A));
+    row = restoring(7);
+    await restart();
+    const { checkpoint } = (await store().checkpoint(INC, 7)) as { checkpoint: string };
+    await store().mark(INC, 7);
+    row = active();
+    await restart();
+    row = restoring(8);
+    await restart();
+    await store().mark(INC, 8);
+    const arm = vi.spyOn(stores.db(INC).bookmarks, 'restoreOnNextSession');
+    phase = 'armed';
+    expect(await store().checkpoint(INC, 7)).toEqual({ wrongPhase: true });
+    expect(await store().target(INC, 7, { bookmark: checkpoint })).toEqual({ wrongPhase: true });
+    expect(await store().mark(INC, 7)).toEqual({ wrongPhase: true });
+    expect(await store().arm(INC, 7, checkpoint)).toEqual({ wrongPhase: true });
+    expect(arm).not.toHaveBeenCalled();
+    expect(reads.phase).not.toHaveBeenCalled();
+    expect(await store().unmark(INC, 7)).toEqual({ unmarked: true });
+    expect(await store().marked(INC, 7)).toEqual({ marked: false });
+    expect(await store().marked(INC, 8)).toEqual({ marked: true });
+    expect(await store().status(INC)).toEqual(restoring(8));
+    expect(stores.db(INC).exec('SELECT rev, bytes FROM head')).toEqual([{ rev: 1, bytes: 1 }]);
+  });
 });
 
 describe('destroy', () => {
@@ -289,6 +450,26 @@ describe('destroy', () => {
     expect(stores.db(INC).tables()).toEqual([]);
     await restart();
     expect(await store().destroy(INC)).toEqual({ destroyed: true });
+    expect(stores.db(INC).tables()).toEqual([]);
+  });
+
+  it('refuses a batch racing destruction and keeps every data call refused after the account row disappears', async () => {
+    await write(put(A));
+    row = { state: 'leaving', timeline: 't1', operation: null };
+    expect(await write(put(B))).toMatchObject({ revs: [2] });
+    await restart();
+    expect(await store().status(INC)).toEqual(row);
+    expect(await Promise.all([write(put(C)), store().destroy(INC), feed(), store().usage(INC), store().destroy(INC)])).toEqual([
+      { refused: 'leaving' }, { destroyed: true }, { refused: 'leaving' }, { refused: 'leaving' }, { destroyed: true },
+    ]);
+    expect(stores.db(INC).tables()).toEqual([]);
+    row = null;
+    await restart();
+    expect(await store().status(INC)).toEqual({ state: 'gone', timeline: null, operation: null });
+    expect(await Promise.all([
+      feed(), write(put(C)), store().usage(INC), store().checkpoint(INC, 7), store().target(INC, 7, { bookmark: '0' }),
+      store().mark(INC, 7), store().marked(INC, 7), store().unmark(INC, 7), store().arm(INC, 7, '0'), store().destroy(INC),
+    ])).toEqual(Array.from({ length: 10 }, () => ({ refused: 'gone' })));
     expect(stores.db(INC).tables()).toEqual([]);
   });
 });

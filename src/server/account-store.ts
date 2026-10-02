@@ -47,7 +47,7 @@ export const d1Reads = (db: D1Database): StoreReads => ({
 });
 
 const PAGE_ROWS = 500;
-const PAGE_BODY_LENGTH = 4_000_000;
+const PAGE_BODY_BYTES = 4_000_000;
 // How far past its cap an account's updates may still grow it, so a full account can move what it means to delete to
 // 지운 캐릭터 (a body that grows a little), while nothing new is created. The account's bytes never pass cap + this.
 const FULL_MARGIN = 1_000_000;
@@ -98,11 +98,13 @@ export class StoreRules {
       // objects never has to fit in the Worker's memory at once. The first row always fits. Rows past the
       // budget come back without their bodies, only to tell whether more is waiting.
       // Bound candidates before the window sum; an outer LIMIT still sums the rest of the account.
+      // The budget is bytes: LENGTH(body) counts characters and stops at a NUL, so a page could pass the RPC limit.
       const excluded = JSON.stringify(query.excluded);
       const rows = this.db.exec<Row>(
         `SELECT id, kind, parent_id, rev, deleted_at IS NOT NULL AS deleted, omitted, start < ? AS fits, CASE WHEN start < ? THEN body END AS body
          FROM (
-           SELECT *, SUM(COALESCE(LENGTH(body), 0)) OVER (ORDER BY rev) - COALESCE(LENGTH(body), 0) AS start
+           SELECT *, SUM(size) OVER (ORDER BY rev) - size AS start
+           FROM (SELECT *, COALESCE(LENGTH(CAST(body AS BLOB)), 0) AS size
            FROM (
              SELECT id, kind, parent_id, rev, deleted_at,
                (kind IN (SELECT value FROM json_each(?)) OR ${query.metadata ? 1 : 0}) AND deleted_at IS NULL AS omitted,
@@ -111,9 +113,9 @@ export class StoreRules {
                ${query.parent === null ? '' : 'AND parent_id = ?'}
                ${until === null ? '' : 'AND kind NOT IN (SELECT value FROM json_each(?)) AND rev <= ?'}
              ORDER BY rev LIMIT ?
-           )
+           ))
          ) ORDER BY rev`,
-        ...[PAGE_BODY_LENGTH, PAGE_BODY_LENGTH, excluded, excluded, query.since],
+        ...[PAGE_BODY_BYTES, PAGE_BODY_BYTES, excluded, excluded, query.since],
         ...(query.parent === null ? [] : [query.parent]),
         ...(until === null ? [] : [excluded, until]),
         PAGE_ROWS + 1,
