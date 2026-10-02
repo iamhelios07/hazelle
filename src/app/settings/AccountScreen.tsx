@@ -2,8 +2,9 @@ import { useAccount, useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
+import { LegalNotice } from '../common/LegalNotice';
 import { PAGES } from '../common/words';
-import { Avatar, Button, FaceRow, NavBar, Screen, SettingGroup, SettingRow, Text } from '../ui';
+import { Avatar, Button, FaceRow, NavBar, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { LeaveSection } from './LeaveSection';
 import { ReportSection } from './ReportSection';
@@ -42,6 +43,9 @@ export function AccountScreen({ back }: { back: Back | null }) {
       </SettingGroup>
       <BackupSection />
       <ReportSection />
+      <Section title="프로그램 정보">
+        <LegalNotice />
+      </Section>
       <LeaveSection />
     </Screen>
   );

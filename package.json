@@ -10,7 +10,7 @@
     "dev": "vite",
     "types": "wrangler types",
     "css-types": "tcm -s -a -p \"src/app/**/*.module.css\"",
-    "build": "wrangler types && npm run css-types && tsc -b && vite build",
+    "build": "wrangler types && npm run css-types && tsc -b && vite build && scripts/source.sh",
     "test": "vitest run",
     "check": "wrangler types >/dev/null && npm run -s css-types && tsc -b && eslint . && stylelint \"src/**/*.css\" && vitest run --reporter=dot",
     "db:migrate:local": "wrangler d1 migrations apply risu-alpha --local",

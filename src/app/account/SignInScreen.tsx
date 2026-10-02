@@ -1,5 +1,6 @@
 import { FileText, LogOut } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { LegalNotice } from '../common/LegalNotice';
 import { useAttempt } from '../common/useAttempt';
 import { Brand, Button, Callout, FileButton, IconButton, Intro, Screen, Stack, Text, TextField } from '../ui';
 
@@ -86,6 +87,7 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
           {failure}
         </Callout>
       )}
+      <LegalNotice />
     </Screen>
   );
 }
