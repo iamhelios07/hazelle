@@ -2,6 +2,7 @@ import { Ellipsis, Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { NameDialog } from '../common/NameDialog';
+import { ToggleChoice } from '../common/ToggleChoice';
 import { Button, ChoiceGroup, Dialog, Empty, IconButton, Menu, MenuItem, Row, Section, SettingGroup, SettingRow, Switch, TextField } from '../ui';
 import { keyProblem } from './edits';
 
@@ -50,13 +51,7 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
                   {toggle.kind === 'check' ? (
                     <Switch label={`${toggle.label} 처음 값`} checked={toggle.default === '1'} onChange={(on) => onEdit(toggle, { ...toggle, default: on ? '1' : '0' }, 'default')} />
                   ) : (
-                    <ChoiceGroup
-                      label={`${toggle.label} 처음 값`}
-                      layout="segmented"
-                      options={toggle.options.map((option, index) => ({ value: String(index), label: option }))}
-                      value={toggle.default}
-                      onChange={(value) => onEdit(toggle, { ...toggle, default: value }, 'default')}
-                    />
+                    <ToggleChoice label={`${toggle.label} 처음 값`} options={toggle.options} value={toggle.default} onChange={(value) => onEdit(toggle, { ...toggle, default: value }, 'default')} />
                   )}
                   <Menu label={toggle.label} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`‘${toggle.label}’ 더 보기`} title="더 보기" {...opener} />}>
                     <MenuItem label="이름 바꾸기" onClick={() => setRenaming({ key: toggle.key, field: 'label' })} />

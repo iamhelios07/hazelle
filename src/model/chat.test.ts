@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, chatTitle, fold, modelUsage, recentIn, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, chatTitle, fold, modelUsage, previewLine, recentIn, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -195,5 +195,13 @@ describe('recentModels', () => {
       { connection: 'c1', model: 'm1' },
       { connection: 'c1', model: 'm2' },
     ]);
+  });
+});
+
+describe('previewLine', () => {
+  it('passes a status line for the first line of prose, and keeps a message that is all status', () => {
+    expect(previewLine('⏱️[2025-03-15 (토요일) 오후 05:36]\n\n"으응..." 그녀가 눈을 떴다.')).toBe('"으응..." 그녀가 눈을 떴다.');
+    expect(previewLine('# Response\n<div>The moment Steve called</div>')).toBe('The moment Steve called');
+    expect(previewLine('[HP 3/10]\n---')).toBe('[HP 3/10]');
   });
 });

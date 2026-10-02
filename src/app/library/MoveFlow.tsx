@@ -6,6 +6,7 @@ import { unused, type Unused } from '../../engine/pipeline';
 import { broughtFromRisu, modulesFromRisu, moveFromRisu, type Moved, type MovePick, type MoveStep } from '../../runtime/move';
 import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
+import { moduleName } from '../common/words';
 import { useFiles, useStore } from '../session';
 import { Button, Callout, Checkbox, Dialog, Outcome, Section, Stack, Text } from '../ui';
 import { cardMissed, moduleMissed, moveMissed } from './missed';
@@ -131,7 +132,7 @@ export function MoveFlow({ file, aside, onClose }: { file: File; aside: number; 
         />
         <Picks
           title="모듈"
-          rows={backup.modules.map((module) => ({ label: module.name, note: hasModule(have, module.risu) ? '이미 있음' : undefined }))}
+          rows={backup.modules.map((module) => ({ label: moduleName(module.name), note: hasModule(have, module.risu) ? '이미 있음' : undefined }))}
           can={can.modules}
           ticks={ticks.modules}
           onChange={(next) => tick('modules', next)}
@@ -180,7 +181,7 @@ function Summary({ backup, pick, moved }: { backup: RisuBackup; pick: MovePick; 
     ...backup.presets.flatMap((preset) => (preset.result.ok ? [] : [{ tone: 'missed' as const, title: preset.name, note: `프롬프트 · ${PRESET_FAILURE[preset.result.failure.kind]}` }])),
     ...moved.modules.flatMap(({ module, skipped }) => {
       const lines = moduleMissed(module.unsupported, skipped);
-      return lines.length ? [{ tone: 'missed' as const, title: module.name, note: `모듈 · ${lines.join(' · ')}` }] : [];
+      return lines.length ? [{ tone: 'missed' as const, title: moduleName(module.name), note: `모듈 · ${lines.join(' · ')}` }] : [];
     }),
   ];
   const totals = new Map<Unused['kind'], number>();

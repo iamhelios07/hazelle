@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
 import { noResults } from '../common/search';
+import { ToggleChoice } from '../common/ToggleChoice';
 import { PAGES } from '../common/words';
 import { Button, ChoiceGroup, Empty, Row, SearchField, Section, SettingRow, SidePanel, Stack, Switch, Text } from '../ui';
 import { shownRows, splitByCard, type ToggleRow } from './toggles';
@@ -41,13 +42,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
         toggle.kind === 'check' ? (
           <Switch label={toggle.label} checked={value === '1'} onChange={(on) => actions.flip(toggle.key, on ? '1' : '0')} />
         ) : (
-          <ChoiceGroup
-            label={toggle.label}
-            layout="segmented"
-            options={toggle.options.map((label, index) => ({ value: String(index), label }))}
-            value={value}
-            onChange={(next) => actions.flip(toggle.key, next)}
-          />
+          <ToggleChoice label={toggle.label} options={toggle.options} value={value} onChange={(next) => actions.flip(toggle.key, next)} />
         )
       }
     />

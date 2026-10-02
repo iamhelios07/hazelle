@@ -1,7 +1,7 @@
 import { Import } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { packHolds } from '../common/pack';
-import { ALWAYS, PAGES } from '../common/words';
+import { ALWAYS, moduleName, PAGES } from '../common/words';
 import { useCount, useModules, useSettings } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -46,7 +46,7 @@ function ModuleRow({ stored }: { stored: Stored<'module'> }) {
   const always = useSettings().modules?.includes(stored.id);
   return (
     <ListItem
-      title={stored.value.name}
+      title={moduleName(stored.value.name)}
       tags={always ? [ALWAYS] : []}
       description={useHolds(stored)}
       current={route.kind === 'module' && route.id === stored.id}

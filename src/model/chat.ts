@@ -251,12 +251,24 @@ export const shown = (message: Message): Version => message.versions[message.sel
 export const calls = (receipt: Receipt): Receipt[] => [...(receipt.continues ? calls(receipt.continues) : []), receipt];
 
 // A bot's HTML shows as the words in it.
-export const firstLine = (text: string) =>
+const lines = (text: string) =>
   text
     .replace(/<[^>]*>/g, ' ')
     .split('\n')
     .map((line) => line.trim())
-    .find((line) => line !== '') ?? '';
+    .filter((line) => line !== '');
+
+export const firstLine = (text: string) => lines(text)[0] ?? '';
+
+// Words outside brackets, and no heading: a status line such as `⏱️[2025-03-15 (토) 오후 05:36]` or `# Response` has none.
+const prose = (line: string) => !line.startsWith('#') && /\p{L}{2}/u.test(line.replace(/\[[^\]]*\]|\([^)]*\)|【[^】]*】/g, ''));
+
+// A chat list's line for a message: its first line of prose. Many bots open every reply with the same status line,
+// which tells one chat from the next no better than a blank. A message that is all status keeps its first line.
+export function previewLine(text: string): string {
+  const all = lines(text);
+  return all.find(prose) ?? all[0] ?? '';
+}
 
 // texts: each message's text as it is displayed (engine/render, which the model cannot call).
 export function chatTitle(chat: Chat, messages: Message[], texts: string[]): string {

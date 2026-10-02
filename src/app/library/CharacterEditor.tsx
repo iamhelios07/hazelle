@@ -8,7 +8,7 @@ import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { ALWAYS, BOT_MODELS, BOT_MODELS_HELP, inSettings, PAGES } from '../common/words';
+import { ALWAYS, BOT_MODELS, BOT_MODELS_HELP, inSettings, moduleName, PAGES } from '../common/words';
 import { useCharacter, useModules, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
@@ -167,12 +167,12 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
             {modules.map(({ id: module, value }) => (
               <SettingRow
                 key={module}
-                label={value.name}
+                label={moduleName(value.name)}
                 control={
                   always.includes(module) ? (
                     <Text variant="note">{ALWAYS} 켜짐</Text>
                   ) : (
-                    <Switch label={value.name} checked={own.includes(module)} onChange={(on) => void changeModule(module, on)} />
+                    <Switch label={moduleName(value.name)} checked={own.includes(module)} onChange={(on) => void changeModule(module, on)} />
                   )
                 }
               />

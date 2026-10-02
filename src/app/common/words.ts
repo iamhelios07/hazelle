@@ -37,6 +37,9 @@ export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
 export const follows = (source: string) => `${source} 따르기`;
 
+// A module Risu kept without a name still needs one to be told apart in a list.
+export const moduleName = (name: string) => name.trim() || '이름 없는 모듈';
+
 export const NOT_STARRED = '별표한 모델에 없음';
 
 export const noStarred = (then: string) => `별표한 모델이 없어요. ${inSettings('connections')}에서 모델에 별표하면 여기서 ${then}.`;

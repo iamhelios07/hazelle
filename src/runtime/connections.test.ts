@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Connection } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
-import { addConnection } from './connections';
+import { SETTINGS_ID } from '../model/settings';
+import { addConnection, setStarred } from './connections';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
@@ -21,5 +22,17 @@ describe('addConnection', () => {
       key = upstream(200, openRouterKey);
       const added = await addConnection(session, openRouter);
       expect(session.store.list('connection').map((stored) => [stored.id, stored.value])).toEqual([[added.ok && added.id, openRouter]]);
+    }));
+});
+
+describe('setStarred', () => {
+  it('makes the first model starred the 대화 모델, and leaves one already set alone', () =>
+    server.withSession(async ({ store }) => {
+      const saved = await store.create('connection', openRouter);
+      const id = saved.ok ? saved.data.id : '';
+      const model = (name: string) => ({ id: name, name, contextLength: null, maxOutput: null }) as never;
+      await setStarred(store, id, model('first'), true);
+      await setStarred(store, id, model('second'), true);
+      expect(store.get('settings', SETTINGS_ID)?.value.models.main).toEqual({ connection: id, model: 'first' });
     }));
 });

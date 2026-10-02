@@ -1,7 +1,7 @@
 import type { Stored } from '../../model/kinds';
 import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { aliased } from '../common/alias';
-import { ALWAYS } from '../common/words';
+import { ALWAYS, moduleName } from '../common/words';
 import { useLibrary, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
@@ -36,11 +36,11 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   async function remove() {
     if (!(await mark(Date.now()))) return;
     navigate({ kind: 'modules' });
-    toast.undoable(`‘${value.name}’ 모듈을 지웠어요.`, () => void mark(null), '이 알림이 사라지면 되돌릴 수 없어요.');
+    toast.undoable(`‘${moduleName(value.name)}’ 모듈을 지웠어요.`, () => void mark(null), '이 알림이 사라지면 되돌릴 수 없어요.');
   }
 
   return (
-    <Screen top={<NavBar title={value.name} {...backBar(back)} />}>
+    <Screen top={<NavBar title={moduleName(value.name)} {...backBar(back)} />}>
       {value.description.trim() && <Text>{value.description}</Text>}
       <Text variant="note">{holds}</Text>
       <SettingGroup label={ALWAYS_ON}>

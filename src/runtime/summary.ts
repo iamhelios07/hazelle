@@ -1,5 +1,5 @@
 import type { Display } from '../engine/display';
-import { chatTitle, firstLine, fold, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
+import { chatTitle, fold, previewLine, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
 import type { ObjectStore } from './store';
 import { displayChat } from './turn';
 import { pause } from './pause';
@@ -33,7 +33,7 @@ export function projectChat(store: ObjectStore, id: string, previous?: Projectio
     dependencies: [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()],
     character: stored.value.character, count: messages.length,
     title: chatTitle(stored.value, messages, texts).slice(0, 256),
-    preview: last === undefined ? '' : firstLine(last).slice(0, 256),
+    preview: last === undefined ? '' : previewLine(last).slice(0, 256),
     at: latest?.value.at ?? null, order: head || stored.rev, recent: recentIn(messages),
   };
   return { summary, model: { ...summary, id, chat: stored.value, messages, display } };
