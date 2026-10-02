@@ -67,6 +67,22 @@ describe("a turn with the bot's Lua", () => {
       expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', after: [['handled', '/roll']] });
     }));
 
+  it('ends the turn on a stopChat from onInput, running nothing after it and keeping the message with what was written', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(
+        session,
+        `function onInput(id) setChatVar(id, 'seen', '1') stopChat(id) end
+        listenEdit('editInput', function(id, value) return value .. ' edited' end)
+        function onStart(id) setChatVar(id, 'started', '1') end`,
+      );
+      const log = stubRelay(() => saying('never'));
+      expect(await takeTurn(session, chat, { kind: 'send', text: '/roll' })).toBeNull();
+      expect(log).toHaveLength(0);
+      expect(messages()).toHaveLength(2);
+      expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', before: [['seen', '1']] });
+      expect(shown(messages()[1]!).after).toBeUndefined();
+    }));
+
   it("asks before the bot's first model call, keeps the answer on the character, and counts the call in the chat's usage", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `onOutput = async(function(id) setChatVar(id, 'made', LLM(id, { { role = 'user', content = 'sum' } }).result) end)`);

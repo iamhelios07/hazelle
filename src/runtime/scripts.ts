@@ -126,7 +126,7 @@ export class Scripts {
   }
 
   // The bot's scripts on the way to a reply: onInput and editInput for a message being sent, which is then saved here so
-  // that what onStart does to the chat lands after it; then onStart, which may end the turn. again gathers the turn
+  // that what onStart does to the chat lands after it; then onStart. Each may end the turn. again gathers the turn
   // anew once the chat has changed under it: answer, once the user's message is saved and no longer sent.
   async starting(
     chat: string,
@@ -151,18 +151,25 @@ export class Scripts {
       };
       const { said } = first;
       if (said) {
-        let history: ChatScope = { ...turn.scope, messages: turn.scope.messages.slice(0, -1) };
-        const input = await this.event(chat, first.chat, scripts, history, { kind: 'input' }, null);
-        if (input.changed) {
-          const failed = regather(false);
-          if (failed) return failed;
-          history = { ...turn.scope, messages: turn.scope.messages.slice(0, -1) };
+        const history = (): ChatScope => ({ ...turn.scope, messages: turn.scope.messages.slice(0, -1) });
+        const input = await this.event(chat, first.chat, scripts, history(), { kind: 'input' }, null);
+        let { stop, writes: before } = input.outcome;
+        let text = said.text;
+        // A stop ends the turn where it is called: what would have run after it does not, and the message is saved
+        // as it stands, with what was written until then.
+        if (!stop) {
+          if (input.changed) {
+            const failed = regather(false);
+            if (failed) return failed;
+          }
+          const edited = await this.event(chat, first.chat, scripts, { ...history(), pending: before }, { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } }, null);
+          before = [...before, ...edited.outcome.writes];
+          if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
+          stop = edited.outcome.stop;
         }
-        const edited = await this.event(chat, first.chat, scripts, { ...history, pending: input.outcome.writes }, { kind: 'edit', stage: 'editInput', value: said.text, meta: { index: -1 } }, null);
-        const before = [...input.outcome.writes, ...edited.outcome.writes];
-        const text = typeof edited.outcome.value === 'string' ? edited.outcome.value : said.text;
         const sent = await appendUserMessage(this.session.store, chat, { ...said, text, ...(before.length > 0 && { before }) });
         if (!sent.ok) return { kind: 'unsent', failure: sent };
+        if (stop) return halted;
         const failed = regather(true);
         if (failed) return failed;
       }
