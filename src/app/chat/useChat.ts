@@ -290,9 +290,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   async function saveEdit(message: Shown, andReply: boolean) {
     if (!id || !editing) return;
-    const saved = await editMessage(store, id, message, editing.text, editing.translation);
+    const taken = editing;
+    const saved = await editMessage(store, id, message, taken.text, taken.translation);
     if (!saved.ok) return toast.failed(saved);
-    setEditing(null);
+    // Only the edit that was saved closes: one changed since, or another message's opened meanwhile, stays open.
+    setEditing((current) => (current === taken ? null : current));
     if (andReply && last && last.role === 'assistant') ask({ kind: 'regenerate', message: last.id });
   }
 
