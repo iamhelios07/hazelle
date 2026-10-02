@@ -174,10 +174,14 @@ describe('guards', () => {
     expect((await send(body.accountId)).status).toBe(200);
   });
 
-  it('refuses a body over the bound, signed in or not', async () => {
+  it('refuses a body over the bound, signed in or not, and takes more only on the routes listed for it', async () => {
     const response = await post('signup', { ...signupBody(), passwordWrap: 'x'.repeat(100_000) });
     expect(response.status).toBe(413);
     expect(await response.json()).toEqual({ error: 'too-large' });
+
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    const large = await post('objects/batch', { writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'x'.repeat(200_000), baseRev: null }] }, cookie);
+    expect(large.status).toBe(200);
   });
 
   it('throttles an account that has spent its provider calls, on the relay and on a new stream', async () => {
