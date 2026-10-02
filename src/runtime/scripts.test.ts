@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Trigger } from '../engine/import/types';
+import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown } from '../model/chat';
 import { startChat } from './chat-log';
 import type { Runner } from './lua/client';
@@ -37,7 +38,7 @@ describe("a turn with the bot's Lua", () => {
           addChat(id, 'char', 'narration')
         end
         listenEdit('editOutput', function(id, value) return value .. ' (' .. getChatVar(id, 'turn') .. ')' end)
-        listenEdit('editRequest', function(id, value) value[#value + 1] = { role = 'system', content = 'from lua' } return value end)
+        listenEdit('edit' .. 'Request', function(id, value) value[#value + 1] = { role = 'system', content = 'from lua' } return value end)
         function onOutput(id)
           setState(id, 'seen', getChat(id, -1).data)
           setChat(id, -1, getChat(id, -1).data .. '!')
@@ -171,6 +172,23 @@ describe("the display with the bot's Lua", () => {
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
       await session.scripts.press(chat, { trigger: 'hit' });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:9>']);
+      leave();
+    }));
+
+  it('passes a chat whose script has no editDisplay listener once, until its engine has said so, and never again', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `-- editDisplay\nfunction onStart(id) end`);
+      const display = vi.spyOn(Lua.prototype, 'display');
+      const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+      const screen = session.read.screen(chat, session.talk, opening);
+      const leave = screen.subscribe(() => {});
+      screen.setInputs(opening, { width: 1200, height: 800 });
+      expect(screen.snapshot().display.texts).toEqual(['']);
+      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와.']);
+      screen.setInputs(opening, { width: 800, height: 800 });
+      expect(screen.snapshot().display.texts).toEqual(['어서 와.']);
+      expect(display).toHaveBeenCalledOnce();
+      display.mockRestore();
       leave();
     }));
 });

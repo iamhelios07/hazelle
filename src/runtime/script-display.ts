@@ -26,6 +26,9 @@ export class ScriptDisplay {
   private readonly listeners = new Map<string, Set<() => void>>();
   private readonly waiting = new Map<string, Pass>();
   private readonly running = new Set<string>();
+  // The scripts, by their code, whose engine held no editDisplay listener when a pass asked it. Only the engine
+  // says so, never the source's text: a listener may be registered under a computed name.
+  private readonly deaf = new Set<string>();
 
   constructor(
     private readonly store: ObjectStore,
@@ -51,8 +54,9 @@ export class ScriptDisplay {
     const reader = { store: this.store };
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
-    // Only a script that names the hook can listen for it, so the others never start the worker for a display.
-    const scripts = scriptsOf(scope.packs).filter(({ code }) => code.includes('editDisplay'));
+    // A bot whose scripts are all known to have no listener is shown at once, with no pass and no worker. One not
+    // asked yet is passed as a listening one is, its messages empty until its first pass says which it is.
+    const scripts = scriptsOf(scope.packs).filter(({ code }) => !this.deaf.has(code));
     if (scripts.length === 0) return display(scope, take);
     const held = this.held.get(id);
     const shown = display({ ...scope, lua: (version, text, stamp) => {
@@ -90,7 +94,11 @@ export class ScriptDisplay {
         const texts = await this.open()
           .then((runner) => runner.display(chat, scripts, { ...snapshot, variables: [...variables] }, items))
           .then(
-            (shown) => (this.report(chat, shown), shown.texts),
+            (shown) => {
+              this.report(chat, shown);
+              shown.listening.forEach((listening, at) => listening || this.deaf.add(scripts[at]!.code));
+              return shown.texts;
+            },
             (error: unknown) => (this.report(chat, error), items.map((item) => item.text)),
           );
         size = Math.min(STRETCH_MOST, Math.max(1, Math.round((STRETCH_MS * items.length) / Math.max(1, performance.now() - began))));

@@ -106,6 +106,11 @@ function async(callback)
 end
 
 callListenMain = async(function(type, id, value, meta)
+    -- With nobody listening nothing is answered and the value is never decoded: a request is its whole text.
+    if #listeners[type] == 0 then
+        return nil
+    end
+
     local realValue = json.decode(value)
     local realMeta = json.decode(meta)
 

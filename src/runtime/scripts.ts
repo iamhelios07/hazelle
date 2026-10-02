@@ -196,8 +196,7 @@ export class Scripts {
   // The request's messages after the bot's editRequest listeners, with what they wrote. A listener's answer that is
   // no list of messages leaves the request as it was built.
   async requesting(chat: string, turn: TurnContext, messages: ChatMessage[]): Promise<{ messages: ChatMessage[]; writes: Writes }> {
-    // Only a script that names the hook can listen for it.
-    const scripts = scriptsOf(turn.scope.packs).filter(({ code }) => code.includes('editRequest'));
+    const scripts = scriptsOf(turn.scope.packs);
     if (scripts.length === 0) return { messages, writes: [] };
     return this.queued(chat, async () => {
       const { outcome } = await this.event(chat, turn.chat, scripts, turn.scope, { kind: 'edit', stage: 'editRequest', value: messages, meta: {} }, null);
