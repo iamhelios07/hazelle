@@ -22,7 +22,7 @@ export type KeyMatch = { query: 'primary' | 'secondary' | 'additional'; key: str
 
 export type Why = { kind: 'constant' } | { kind: 'decorator'; name: 'activate' | 'keep_activate_after_match' } | { kind: 'keys'; matched: KeyMatch[] };
 
-// tokens: countTokens on the entry's own body, before any merge.
+// tokens: the cost of the entry's own body, before any merge.
 export type Fate =
   | { kind: 'placed'; tokens: number }
   | { kind: 'merged'; into: string; tokens: number }
@@ -45,7 +45,8 @@ export type LoreInput = {
   // Activation.afterMatch left them.
   afterMatch: readonly string[];
   seed: string;
-  countTokens: (text: string) => number;
+  // What an entry's own body costs as the request sends it; the id is the entry's, which places its random tags.
+  cost: (id: string, body: string) => number;
 };
 
 export type Activation = {
@@ -111,7 +112,7 @@ const SIDES = new Map<string, 'before' | 'after'>([
 ]);
 const NEVER: Matcher = () => false;
 
-export function activate({ entries, settings, history, turn, greeting, afterMatch: before, seed, countTokens }: LoreInput): Activation {
+export function activate({ entries, settings, history, turn, greeting, afterMatch: before, seed, cost }: LoreInput): Activation {
   const afterMatch = new Set(before);
   const scanDepth = settings.scanDepth ?? DEFAULTS.scanDepth;
   const recursive = settings.recursive ?? DEFAULTS.recursive;
@@ -156,7 +157,7 @@ export function activate({ entries, settings, history, turn, greeting, afterMatc
 
   // Risu's budget and order (risu-compat-spec §b Budget, ordering, output), step by step: the stable sorts and
   // the final reverse decide where ties land.
-  const tokens = new Map(active.map(({ id, body }) => [id, countTokens(body)]));
+  const tokens = new Map(active.map(({ id, body }) => [id, cost(id, body)]));
   let left = settings.tokenBudget ?? DEFAULTS.tokenBudget;
   const kept: Book[] = [];
   for (const book of [...active].sort((a, b) => b.rules.priority - a.rules.priority)) {

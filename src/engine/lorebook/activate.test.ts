@@ -25,7 +25,7 @@ const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
 });
 const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
 const run = (entries: LoreInput['entries'], history: HistoryMessage[], more: Partial<LoreInput> = {}) =>
-  activate({ entries, history, settings: NULLS, turn: history.length + 1, greeting: 0, afterMatch: [], seed: 'send', countTokens: (text) => text.length, ...more });
+  activate({ entries, history, settings: NULLS, turn: history.length + 1, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, ...more });
 const order = (activation: Activation) => activation.placed.map(({ id }) => id);
 const ids = (activation: Activation) => order(activation).sort();
 const why = (activation: Activation, id: string) => activation.fired.find((fired) => fired.id === id)?.why;
