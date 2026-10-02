@@ -198,6 +198,19 @@ describe('guards', () => {
     expect((await post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null }, cookie)).status).toBe(429);
   });
 
+  it('limits a bot’s own calls per chat, and leaves other chats and the user’s calls alone', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    const chat = crypto.randomUUID();
+    await Promise.all(Array.from({ length: 20 }, () => t.env.BOT_CALLS.limit({ key: `${body.accountId}:${chat}` })));
+    const start = (bot?: string) => post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null, ...(bot && { bot }) }, cookie);
+    const refused = await start(chat);
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: 'too-many-bot-calls' });
+    expect((await start(crypto.randomUUID())).status).toBe(400);
+    expect((await start()).status).toBe(400);
+  });
+
   it('answers the relay without a session with a 401 that carries no x-relay header', async () => {
     const response = await post('relay', { url: 'https://api.example.com/', method: 'GET', headers: {}, body: null });
     expect(response.status).toBe(401);

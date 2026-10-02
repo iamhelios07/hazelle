@@ -29,9 +29,13 @@
     { "tag": "v1", "new_sqlite_classes": ["ReplyStream"] },
     { "tag": "v2", "new_sqlite_classes": ["Relay"] }
   ],
-  // Throttles provider calls per account (src/server/session.ts). namespace_id is any integer unique in the
-  // Cloudflare account. period takes 10 or 60 only.
-  "ratelimits": [{ "name": "CALLS", "namespace_id": "1001", "simple": { "limit": 240, "period": 60 } }],
+  // CALLS throttles provider calls per account (src/server/session.ts). BOT_CALLS limits a chat's bot's own model
+  // calls, keyed account:chat (src/server/streams.ts), so a script in a loop cannot spend the user's money unseen.
+  // namespace_id is any integer unique in the Cloudflare account. period takes 10 or 60 only.
+  "ratelimits": [
+    { "name": "CALLS", "namespace_id": "1001", "simple": { "limit": 240, "period": 60 } },
+    { "name": "BOT_CALLS", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
+  ],
   // The operator's account id (src/server/http.ts). Empty names no one.
   "vars": { "ADMIN_ACCOUNT": "" },
   "r2_buckets": [

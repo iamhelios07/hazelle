@@ -22,7 +22,7 @@ import { chatPrompt } from './prompts';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
-import { callOf, endCall, pageCall } from './streams';
+import { botCall, callOf, endCall } from './streams';
 import { receiptOf } from './talk';
 import { tokenizer } from './tokenizer';
 import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './turn';
@@ -31,7 +31,8 @@ import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './t
 // others are the app's about the bot: a script's error, the functions it called and the block effects it holds that
 // this app does not have, a script that never ended.
 // no-model: the bot called a model of a role the chat has none for. no-character: a module called one in a chat with
-// no character, where there is nobody to allow it for. flood: it called models faster than CALLS_A_MINUTE.
+// no character, where there is nobody to allow it for. flood: it called models faster than the server lets a chat's bot
+// (server/streams).
 // unsaved: what a run did to the chat could not be saved. runaway: the bot's commands were stopped for making too much
 // text.
 type Note =
@@ -95,10 +96,6 @@ export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: str
   };
 }
 
-// A script in a loop must not spend the user's money unseen: past this many model calls in a minute, a chat's bot
-// gets no more until the minute has passed.
-const CALLS_A_MINUTE = 20;
-
 // The bot's scripts, Lua and block triggers, in the life of a chat (design §6.8): on the way to a reply, when it ends,
 // and on a button. The only place that turns what a run did into entries.
 export class Scripts {
@@ -108,7 +105,6 @@ export class Scripts {
   private readonly queues = new Map<string, Promise<unknown>>();
   // What each chat was already told of its bot's errors, so a script failing on every message says so once.
   private readonly told = new Map<string, Set<string>>();
-  private readonly called = new Map<string, number[]>();
   private readonly closing = new AbortController();
   private ids = 0;
 
@@ -380,15 +376,6 @@ export class Scripts {
     }
     if (!allowed) return refused('the user has not allowed this bot to call models');
 
-    const minute = Date.now() - 60_000;
-    const recent = (this.called.get(chat) ?? []).filter((at) => at > minute);
-    this.called.set(chat, recent);
-    if (recent.length >= CALLS_A_MINUTE) {
-      this.tell(chat, 'flood', { kind: 'flood' });
-      return refused('too many model calls in a minute');
-    }
-    recent.push(Date.now());
-
     const route = chatModel(store, stored.value, role);
     const profile = 'kind' in route ? null : modelProfile(store, route.model);
     if ('kind' in route || profile?.kind !== 'profile') {
@@ -396,7 +383,7 @@ export class Scripts {
       return refused('no model is set');
     }
     let text = '';
-    const call = await pageCall();
+    const call = await botCall(chat);
     // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,
@@ -408,6 +395,10 @@ export class Scripts {
       signal: this.closing.signal,
       onText: (phase, chunk) => void (phase === 'text' && (text += chunk)),
     }).finally(() => endCall(store, call.id));
+    if (answer.error?.kind === 'app' && answer.error.code === 'too-many-bot-calls') {
+      this.tell(chat, 'flood', { kind: 'flood' });
+      return refused('too many model calls in a minute');
+    }
     const receipt = receiptOf(callOf(route), answer);
     const last = this.session.read.chat(chat).snapshot()?.messages.at(-1);
     if (last) {
