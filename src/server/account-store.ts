@@ -48,8 +48,9 @@ export const d1Reads = (db: D1Database): StoreReads => ({
 
 const PAGE_ROWS = 500;
 const PAGE_BODY_BYTES = 4_000_000;
-// How far past its cap an account's updates may still grow it, so a full account can move what it means to delete to
-// 지운 캐릭터 (a body that grows a little), while nothing new is created. The account's bytes never pass cap + this.
+// How far past its cap an account's updates may still grow it, so a full account can still mark what it means to delete
+// (a character, module or chat: a body that grows a little), while nothing new is created. The account's bytes never
+// pass cap + this.
 const FULL_MARGIN = 1_000_000;
 // Under blockConcurrencyWhile's 30 s, past which workerd resets the object and the caller gets an exception instead
 // of { unavailable }.
