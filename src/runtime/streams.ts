@@ -15,12 +15,14 @@ export const callOf = (route: Route): Stream['call'] => ({ connection: route.con
 // reload does not pick up), the id its result is saved under, and what that result is.
 export type CallTarget = { id: string; chat: string | null; result: string; for: Stream['for'] };
 
-// A new call's keys, its marker written while the call starts. A marker that fails to save only leaves the call to
-// this page; one that lands after its result was saved is removed by the next pick-up.
+// A new call's keys. Its marker is written once the server holds the call, never before: a pick-up that found the
+// marker of a call not started yet would read no call and save that as its result. A marker that fails to save only
+// leaves the call to this page; one that lands after its result was saved is removed by the next pick-up.
 export async function newCall(store: ObjectStore, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
   const key = await streamKey();
-  if (chat !== null) void store.create('stream', { key: key.private, call: callOf(route), at: Date.now(), result, for: purpose }, { id, parent: chat });
-  return { id, key: key.private, public: key.public };
+  const at = Date.now();
+  const started = chat === null ? undefined : () => void store.create('stream', { key: key.private, call: callOf(route), at, result, for: purpose }, { id, parent: chat });
+  return { id, key: key.private, public: key.public, started };
 }
 
 // A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
