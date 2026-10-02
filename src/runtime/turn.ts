@@ -45,7 +45,9 @@ export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | 
 // A turn also stops before sending on a new chat that was not saved, a pull that failed, a chat or message another
 // device deleted, a user's message that was not translated, a tokenizer that did not load, or a prompt over the
 // model's budget.
-export type TurnFailure =
+// kept: the user's message was saved all the same (a bot with Lua has it saved before its onStart runs), so the
+// screen does not hand its text back.
+export type TurnFailure = (
   | TalkFailure
   | Blocked
   | TooLong
@@ -53,7 +55,8 @@ export type TurnFailure =
   | { kind: 'unstarted'; failure: ApiFailure }
   | { kind: 'unpulled'; failure: ApiFailure }
   | { kind: 'gone' }
-  | { kind: 'untranslated'; failure: TranslateFailure };
+  | { kind: 'untranslated'; failure: TranslateFailure }
+) & { kept?: true };
 
 // Everything one reply needs, read once when it is asked for: the chat, the model, what the prompt is built from (the
 // user's new message last in its messages), the message Talk saves with the reply, and where the reply goes.
@@ -323,11 +326,12 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in translated) return translated;
   const started = await session.scripts.starting(chat, translated, again, signal);
   if ('kind' in started) return started;
-  const countTokens = await tokenizer().catch(() => null);
-  if (!countTokens) return { kind: 'tokenizer' };
   const { route, settings, scope, budget, memory, said, reply } = started.turn;
+  const kept = translated.said !== null && said === null ? { kept: true as const } : {};
+  const countTokens = await tokenizer().catch(() => null);
+  if (!countTokens) return { kind: 'tokenizer', ...kept };
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null, memory });
-  if ('kind' in prompt) return prompt;
+  if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
   const before = [...(reply.before ?? []), ...requested.writes];
   return { route, settings, prompt: { ...prompt, messages: requested.messages }, said, ...(before.length > 0 && { before }) };

@@ -41,8 +41,9 @@ export type ScriptQuestion = { id: number; chat: string; question: Question | { 
 export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
 export type Halted = { kind: 'halted' };
-// turn: as it goes on. Its said is null once the user's message was saved here.
-export type Started = { turn: TurnContext } | Halted | Blocked | { kind: 'gone' } | { kind: 'unsent'; failure: ApiFailure };
+// turn: as it goes on. Its said is null once the user's message was saved here; a failure after that is kept
+// (runtime/turn TurnFailure).
+export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone' }) & { kept?: true }) | { kind: 'unsent'; failure: ApiFailure };
 
 // The Lua triggers of a chat's packs, in order: its character's own, until modules join them (design §6.5).
 export const scriptsOf = (card: Card | null): Script[] => (card?.triggers ?? []).flatMap((trigger) => (trigger.kind === 'lua' ? [{ name: trigger.name || 'Lua', code: trigger.code }] : []));
@@ -126,9 +127,9 @@ export class Scripts {
       let turn = first;
       const regather = (answer: boolean) => {
         const next = again(answer);
-        if (next === null) return { kind: 'gone' } as const;
-        if (!('kind' in next)) turn = next;
-        return 'kind' in next ? next : null;
+        const failed = next === null ? ({ kind: 'gone' } as const) : 'kind' in next ? next : null;
+        if (next && !('kind' in next)) turn = next;
+        return failed && answer ? { ...failed, kept: true as const } : failed;
       };
       const { said } = first;
       if (said) {
