@@ -11,6 +11,7 @@ export const SETTINGS_ID = '00000000-0000-4000-8000-000000000000';
 // prompt is added; translatePrompt the default translation prompt and memoryPrompt the default memory prompt, likewise. persona: the default persona, absent for
 // none. toggles and translate: those of 캐릭터 없이's chats. profile: the default 설정 묶음, absent only until the
 // first is added. memory: every chat's memory settings, absent fields read through runtime/memory memorySetup.
+// modules: the modules on in every chat (항상), in the order they were turned on (design §6.5).
 export type Settings = {
   models: Assignment;
   prompt?: string;
@@ -21,4 +22,5 @@ export type Settings = {
   translate?: TranslateSwitches;
   profile?: string;
   memory?: Partial<MemorySettings>;
+  modules?: string[];
 };

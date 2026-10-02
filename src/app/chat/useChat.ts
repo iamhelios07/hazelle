@@ -27,7 +27,7 @@ import { scriptsOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
-import { blocked, takeTurn, togglesOf, statusBoxes, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, packsOf, takeTurn, togglesOf, statusBoxes, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
@@ -71,7 +71,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const persona = chatPersona(store, chat);
   const toggles = toggleRows(togglesOf(store, chat, prompt), prompt.kind === 'prompt' ? prompt.prompt.value.toggles.length : 0);
   const card = shelf?.character.card ?? null;
-  const lua = scriptsOf(card).length > 0;
+  const lua = scriptsOf(packsOf(store, chat).map(({ pack }) => pack)).length > 0;
   const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
   // A blank greeting keeps its place in the card, but a chat never opens on nothing.

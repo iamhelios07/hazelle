@@ -1,6 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { importCard } from './card';
+import { unpack } from './risum';
 import type { ImportResult, Imported } from './types';
 
 const CRC = Array.from({ length: 256 }, (_, n) => {
@@ -40,7 +41,7 @@ const v2 = (data: Record<string, unknown>) => ({ spec: 'chara_card_v2', spec_ver
 const v3 = (data: Record<string, unknown>) => ({ spec: 'chara_card_v3', spec_version: '3.0', data: { name: 'Mira', description: 'd', first_mes: 'hi', ...data } });
 
 function ok(result: ImportResult): Imported {
-  if (!result.ok) throw new Error(`import failed: ${JSON.stringify(result.failure)}`);
+  if (!result.ok || !('card' in result)) throw new Error(`import failed: ${JSON.stringify(result)}`);
   return result.card;
 }
 // fflate's types leave the buffer open; the importer takes what a File's arrayBuffer gives.
@@ -217,6 +218,41 @@ describe('importCard', () => {
     expect(counts(imported)).toEqual({ 'regex-stage': 1 });
   });
 
+  it('reads a module file as a module, with its pictures by the names its assets list gives them', async () => {
+    const module = {
+      name: 'Phone',
+      description: 'A phone screen.',
+      id: 'risu-id',
+      namespace: 'phone',
+      lowLevelAccess: true,
+      regex: [{ comment: 'screen', in: 'a', out: 'b', type: 'editdisplay' }],
+      trigger: [{ comment: 'tap', type: 'manual', conditions: [], effect: [{ type: 'triggerlua', code: 'function tap() end' }] }],
+      lorebook: [{ key: 'phone', comment: 'Phone', content: 'It rings.', insertorder: 10, bookVersion: 2 }],
+      backgroundEmbedding: '<style>.phone { color: red }</style>',
+      customModuleToggle: 'ring=Ring',
+      assets: [['wall', '', 'png'], ['icon', '', 'png'], ['lost', '', 'png']],
+    };
+    const result = importCard('Phone.risum', risum(module, [new Uint8Array([1, 2, 3]), new Uint8Array([4])]));
+    if (!result.ok || !('module' in result)) throw new Error('not a module');
+    const { assets, ...read } = result.module;
+    expect(read).toEqual({
+      name: 'Phone',
+      description: 'A phone screen.',
+      namespace: 'phone',
+      risu: 'risu-id',
+      pack: {
+        regex: [{ name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }],
+        triggers: [{ kind: 'lua', name: 'tap', code: 'function tap() end' }],
+        background: '<style>.phone { color: red }</style>',
+        toggles: 'ring=Ring',
+      },
+      lore: [expect.objectContaining({ name: 'Phone', keys: ['phone'], content: 'It rings.', folder: null })],
+      loreFolders: [],
+      unsupported: [{ kind: 'asset', count: 1 }],
+    });
+    expect(await Promise.all(assets.map(async ({ name, read }) => [name, [...(await read())!]]))).toEqual([['wall', [1, 2, 3]], ['icon', [4]]]);
+  });
+
   it('imports the card alone when module.risum is unreadable', () => {
     const card = v3({ extensions: { risuai: { customScripts: [{ comment: 'card', in: 'a', out: 'b', type: 'editoutput', ableFlag: false, flag: 'i' }] } } });
     const imported = charx({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': new Uint8Array([111, 0, 255, 255, 255, 255]) });
@@ -277,12 +313,20 @@ describe('importCard', () => {
   it('fails by kind instead of throwing', () => {
     expect(importCard('Mira.png', png(tEXt('chara', 'rcc||rccv1||abc||def||ghi')))).toEqual({ ok: false, failure: { kind: 'encrypted' } });
     expect(importCard('Mira.webp', new Uint8Array())).toEqual({ ok: false, failure: { kind: 'unknown-format' } });
-    expect(importCard('Mira.risum', new Uint8Array([111, 0]))).toEqual({ ok: false, failure: { kind: 'module-file' } });
+    expect(importCard('Mira.risum', new Uint8Array([111, 0]))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.png', own(strToU8('not a png')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.json', own(strToU8('{')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
     expect(importCard('Mira.charx', own(strToU8('PK')))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
   });
 });
+
+// A module file as Risu's exportModuleLegacy writes it, encoded with the inverse of the decode table.
+function risum(module: unknown, assets: Uint8Array[]): Uint8Array<ArrayBuffer> {
+  const encode = new Uint8Array(256);
+  unpack(Uint8Array.from({ length: 256 }, (_, byte) => byte)).forEach((plain, packed) => (encode[plain] = packed));
+  const block = (bytes: Uint8Array) => concat(new Uint8Array(new Uint32Array([bytes.length]).buffer), bytes.map((byte) => encode[byte]!));
+  return concat(new Uint8Array([111, 0]), block(strToU8(JSON.stringify({ type: 'risuModule', module }))), ...assets.flatMap((asset) => [new Uint8Array([1]), block(asset)]), new Uint8Array([0]));
+}
 
 // A module.risum laid out as Risu's exportModuleLegacy writes it and encoded with the encode half of the real
 // rpack_map.bin (RisuAI ca1345fc), so it checks the ported decode table against Risu's own bytes. It holds a Lua

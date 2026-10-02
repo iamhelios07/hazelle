@@ -26,12 +26,16 @@ const MAGIC = 111;
 const VERSION = 0;
 const HEADER = 6;
 
-// The main block of a .risum as exportModuleLegacy writes it (src/ts/process/modules.ts): magic, version,
-// a u32le length, then the RPack'd JSON {type: 'risuModule', module}. The asset blocks after it are not
-// read: Risu's charx import takes only the module's regex, triggers and lorebook.
-export function readRisum(bytes: Uint8Array): Record<string, unknown> | null {
+const ASSET = 1;
+
+// A .risum as exportModuleLegacy writes it (src/ts/process/modules.ts): magic, version, a u32le length, then the
+// RPack'd JSON {type: 'risuModule', module}; then one block per entry of module.assets, in its order (a mark byte, a
+// u32le length, the RPack'd file), and a zero byte. assets reads each block only when asked, so a module of thousands
+// of pictures is never unpacked at once; a file cut short keeps the blocks that are whole.
+export function readRisum(bytes: Uint8Array): { module: Record<string, unknown>; assets: (() => Uint8Array<ArrayBuffer>)[] } | null {
   if (bytes.length < HEADER || bytes[0] !== MAGIC || bytes[1] !== VERSION) return null;
-  const length = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(2, true);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const length = view.getUint32(2, true);
   if (HEADER + length > bytes.length) return null;
   const json = new TextDecoder().decode(unpack(bytes.subarray(HEADER, HEADER + length)));
   let main: unknown;
@@ -40,5 +44,15 @@ export function readRisum(bytes: Uint8Array): Record<string, unknown> | null {
   } catch {
     return null;
   }
-  return isRecord(main) && main.type === 'risuModule' && isRecord(main.module) ? main.module : null;
+  if (!isRecord(main) || main.type !== 'risuModule' || !isRecord(main.module)) return null;
+  const assets: (() => Uint8Array<ArrayBuffer>)[] = [];
+  let at = HEADER + length;
+  while (bytes[at] === ASSET && at + 5 <= bytes.length) {
+    const start = at + 5;
+    const end = start + view.getUint32(at + 1, true);
+    if (end > bytes.length) break;
+    assets.push(() => new Uint8Array(unpack(bytes.subarray(start, end))));
+    at = end;
+  }
+  return { module: main.module, assets };
 }

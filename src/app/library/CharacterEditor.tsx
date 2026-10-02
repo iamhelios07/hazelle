@@ -139,7 +139,7 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
               control={<Switch label="긴 그림 접기" checked={fold} onChange={changeFold} />}
             />
           )}
-          {scriptsOf(initial.card).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={changeBotModels} />} />}
+          {scriptsOf([initial.card]).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={changeBotModels} />} />}
         </SettingGroup>
         {decor && (
           <Disclosure label="그림 크기">

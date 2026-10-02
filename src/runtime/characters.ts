@@ -119,12 +119,15 @@ export function setDeleted(store: ObjectStore, id: string, at: number | null): P
 export const purgeCharacter = (store: ObjectStore, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
   removeOwned(store, { kind: 'character', id }, progress);
 
-// The session runs it when it opens, on whichever device opens first. One that fails is tried again next
-// time. A stop (the vault closing) lets the character under way finish and leaves the rest for next time.
+// Removes for good the deleted characters and modules whose time is up. The session runs it when it opens, on
+// whichever device opens first. One that fails is tried again next time. A stop (the vault closing) lets the one
+// under way finish and leaves the rest for next time.
 export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
-  for (const { id, value } of store.list('character')) {
-    if (signal.aborted) return;
-    if (value.deleted !== undefined && daysLeft(value, now) <= 0) await purgeCharacter(store, id, () => {});
+  for (const kind of ['character', 'module'] as const) {
+    for (const { id, value } of store.list(kind)) {
+      if (signal.aborted) return;
+      if (value.deleted !== undefined && daysLeft(value, now) <= 0) await removeOwned(store, { kind, id }, () => {});
+    }
   }
 }
 

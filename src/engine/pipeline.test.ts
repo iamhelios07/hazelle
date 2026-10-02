@@ -82,8 +82,9 @@ const lore = (id: string, content: string, over: Partial<LoreEntry> = {}) => ({
 
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
 
-const scope = (over: Partial<PromptInput['scope']> = {}): PromptInput['scope'] => ({
-  card: card(),
+const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = {}): PromptInput['scope'] => ({
+  card: own,
+  packs: own ? [own] : [],
   persona: { name: 'jin', description: 'A traveler.' },
   prompt: starter,
   note: 'Rain tonight.',

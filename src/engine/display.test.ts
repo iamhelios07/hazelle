@@ -35,6 +35,7 @@ const card: Card = {
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
 const scope: ChatScope = {
   card,
+  packs: [card],
   persona: { name: 'jin', description: '' },
   prompt: null,
   note: null,

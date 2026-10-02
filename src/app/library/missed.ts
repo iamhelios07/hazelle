@@ -27,15 +27,19 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
   'missing-picture': (count) => `백업에 없는 그림 ${count}개`,
 };
 
-// Assets a card names but lacks and those it holds that could not be kept (skipped), as one count.
-export function assetsMissed(report: ImportReport, skipped: number): string[] {
-  const count = (report.unsupported.find((item) => item.kind === 'asset')?.count ?? 0) + skipped;
+type Unsupported = ImportReport['unsupported'];
+
+// Assets a card or module names but lacks and those it holds that could not be kept (skipped), as one count.
+function assets(unsupported: Unsupported, skipped: number): string[] {
+  const count = (unsupported.find((item) => item.kind === 'asset')?.count ?? 0) + skipped;
   return count ? [UNSUPPORTED.asset(count)] : [];
 }
+export const assetsMissed = (report: ImportReport, skipped: number) => assets(report.unsupported, skipped);
 
-export function cardMissed(report: ImportReport, skipped: number, faceless: boolean): string[] {
-  const missed = report.unsupported.filter((item) => item.kind !== 'asset').map((item) => UNSUPPORTED[item.kind](item.count));
-  return [...(faceless ? ['그림: 읽지 못함'] : []), ...missed, ...assetsMissed(report, skipped)];
+export function moduleMissed(unsupported: Unsupported, skipped: number): string[] {
+  return [...unsupported.filter((item) => item.kind !== 'asset').map((item) => UNSUPPORTED[item.kind](item.count)), ...assets(unsupported, skipped)];
 }
+
+export const cardMissed = (report: ImportReport, skipped: number, faceless: boolean): string[] => [...(faceless ? ['그림: 읽지 못함'] : []), ...moduleMissed(report.unsupported, skipped)];
 
 export const moveMissed = (items: MoveUnsupported[]): string[] => items.map((item) => MOVE_UNSUPPORTED[item.kind](item.count));

@@ -17,16 +17,22 @@ export type Card = {
   version: string;
   tags: string[];
   variables: [string, string][];
-  toggles: string;
   utility: boolean;
   bias: [string, number][];
-  regex: RegexScript[];
-  // The bot's triggers that do something. Its Lua runs (runtime/scripts); block triggers are kept until they do.
-  triggers: Trigger[];
-  // The card's backgroundHTML, absent when it has none. Only its <style> blocks are shown (design §6.4).
-  background?: string;
   // Each setting stands alone, as in CCv3; null leaves it to the global default.
   loreSettings: { scanDepth: number | null; tokenBudget: number | null; recursive: boolean | null; fullWordMatching: boolean | null };
+} & Pack;
+
+// What works on a chat's text without being the character: a character's card holds one as its own, and a module is
+// one with a name (design §6.5). Its lorebook and assets are stored objects of their own, under whichever holds it.
+// A chat reads its packs as one list (runtime/turn packsOf), never a card's or a module's apart.
+export type Pack = {
+  regex: RegexScript[];
+  // The triggers that do something. Lua runs (runtime/scripts); block triggers are kept until they do.
+  triggers: Trigger[];
+  // Risu's backgroundHTML, absent when there is none. Only its <style> blocks are shown (design §6.4).
+  background?: string;
+  toggles: string;
 };
 
 // name is Risu's comment. Risu runs a Lua trigger at every event, whatever its trigger type, so a Lua one keeps no
@@ -84,9 +90,24 @@ export type ImportReport = {
   unsupported: { kind: UnsupportedKind; count: number }[];
 };
 
-export type ImportFailure = { kind: 'unknown-format' | 'module-file' | 'encrypted' | 'unreadable'; detail?: string };
+export type ImportFailure = { kind: 'unknown-format' | 'encrypted' | 'unreadable'; detail?: string };
 
-export type ImportResult = { ok: true; card: Imported } | { ok: false; failure: ImportFailure };
+// A Risu module, read (design §6.5): its pack, with its lorebook and pictures beside it as a card's are.
+export type ImportedModule = {
+  name: string;
+  description: string;
+  namespace: string | null;
+  // Risu's id for it, which a Risu backup's characters and settings name it by.
+  risu: string | null;
+  pack: Pack;
+  lore: LoreEntry[];
+  loreFolders: string[];
+  assets: Imported['assets'];
+  unsupported: ImportReport['unsupported'];
+};
+
+// A file holds a character or a module.
+export type ImportResult = { ok: true; card: Imported } | { ok: true; module: ImportedModule } | { ok: false; failure: ImportFailure };
 
 // A Risu local backup, read (design F7; research/risu-backup-spec.md). Pictures stay in the file until a character
 // or persona is brought.

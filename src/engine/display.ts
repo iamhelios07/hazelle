@@ -4,9 +4,9 @@ import { evaluate } from './cbs/evaluate';
 import type { Box } from './regex/scripts';
 import { contexts, renderChat, type ChatScope, type Missed } from './render';
 
-// texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the card's
+// texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the packs'
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
-// drawn: the display scripts, by place in the card's regex, that drew a box in each message; boxes: each message's
+// drawn: the display scripts, by place among the packs' regex, that drew a box in each message; boxes: each message's
 // boxes taken out of it (상태창 지정), their <style> blocks in css too. pass: what the bot's Lua editDisplay pass has
 // yet to run (scope.lua), with what its run reads: each message past its input or output stage, and the variables
 // the chat starts from.
@@ -24,7 +24,7 @@ export function display(scope: ChatScope, take: ReadonlySet<number> = new Set())
       return '';
     });
   // Read with the variables as the last message left them, as Risu reads it with the chat's current ones.
-  if (scope.card?.background) strip(unescapeCbs(evaluate(scope.card.background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
+  for (const { background } of scope.packs) if (background) strip(unescapeCbs(evaluate(background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
   const shown = texts.map(strip);
   const taken = boxes.map((list) => list.map((box) => ({ ...box, html: strip(box.html) })));
   return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n'), drawn, boxes: taken, pass: missed.length > 0 ? { items: missed, staged, start } : null };

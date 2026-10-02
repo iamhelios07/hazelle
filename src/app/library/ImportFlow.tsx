@@ -1,9 +1,10 @@
 import { MessageSquarePlus } from 'lucide-react';
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import { importCard } from '../../engine/import/card';
-import type { Imported, ImportFailure } from '../../engine/import/types';
+import type { Imported, ImportedModule, ImportFailure } from '../../engine/import/types';
 import { unused } from '../../engine/pipeline';
 import { importCharacter } from '../../runtime/characters';
+import { importModule } from '../../runtime/modules';
 import { fillPictures, risuMatch } from '../../runtime/move';
 import { thumbnail } from '../../runtime/picture';
 import { describeFailure } from '../common/failure';
@@ -11,7 +12,7 @@ import { describeUnused } from '../common/unused';
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Callout, Dialog, DropOverlay, Row, Section, Stack, Text, useFileDrop } from '../ui';
-import { assetsMissed, cardMissed } from './missed';
+import { assetsMissed, cardMissed, moduleMissed } from './missed';
 import { MoveFlow } from './MoveFlow';
 import { describeStep } from './saving';
 
@@ -21,7 +22,9 @@ const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin';
 type Done = { file: string; id: string; imported: Imported; faceless: boolean; lore: number; skipped: number };
 // A card whose name matches a character brought from Risu, put into that character's bot pictures.
 type Filled = { file: string; name: string; kept: number; missed: string[] };
-type Result = Done | Filled | { file: string; failure: string };
+// A module file, saved as a module.
+type DoneModule = { file: string; module: ImportedModule; skipped: number };
+type Result = Done | DoneModule | Filled | { file: string; failure: string };
 type Ask = { name: string; answer: (fill: boolean) => void };
 type State = { busy: string | null; results: Result[]; ask: Ask | null };
 
@@ -34,13 +37,12 @@ export function useImport() {
 }
 
 const FAILURE: Record<ImportFailure['kind'], string> = {
-  'unknown-format': '이 형식은 가져올 수 없어요. PNG · charx · JSON 캐릭터 카드와 Risu 백업(.bin)만 돼요.',
-  'module-file': '.risum 모듈은 아직 따로 가져올 수 없어요. 모듈이 든 charx는 가져올 수 있어요.',
+  'unknown-format': '이 형식은 가져올 수 없어요. PNG · charx · JSON 캐릭터 카드, 모듈(.risum)과 Risu 백업(.bin)만 돼요.',
   encrypted: '암호화된 카드라 열 수 없어요.',
-  unreadable: '파일을 읽지 못했어요. 깨졌거나 캐릭터 카드가 아니에요.',
+  unreadable: '파일을 읽지 못했어요. 깨졌거나 캐릭터 카드나 모듈이 아니에요.',
 };
 
-// Bot import: pick or drop files anywhere, each is saved as a character, and a summary says what came in, what did
+// Bot import: pick or drop files anywhere, each is saved as a character or a module, and a summary says what came in, what did
 // not, and what its chats do not use yet. A Risu backup (.bin) goes to MoveFlow instead, and a card named like a
 // character brought from Risu may only fill that character's pictures.
 export function ImportProvider({ children }: { children: ReactNode }) {
@@ -53,6 +55,11 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   async function save(file: File, progress: (busy: string) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
     const parsed = importCard(file.name, new Uint8Array(await file.arrayBuffer()));
     if (!parsed.ok) return { file: file.name, failure: FAILURE[parsed.failure.kind] };
+    if ('module' in parsed) {
+      const saved = await importModule(store, files, parsed.module, (step) => progress(describeStep(step)));
+      if (!saved.ok) return { file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
+      return { file: file.name, module: parsed.module, skipped: saved.data.skipped };
+    }
     const { name } = parsed.card.card;
     const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
     if (match !== null && (await ask(name))) {
@@ -87,7 +94,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const dragging = useFileDrop((dropped) => void take(dropped));
 
   const done = state?.results.filter((result): result is Done => 'id' in result) ?? [];
-  const came = done.length > 0 || (state?.results.some((result) => 'kept' in result) ?? false);
+  const came = done.length > 0 || (state?.results.some((result) => 'kept' in result || 'module' in result) ?? false);
   const title = state?.ask ? '그림만 채울까요?' : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
   return (
     <ImportContext.Provider value={{ pick: () => input.current?.click() }}>
@@ -104,13 +111,13 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           void take(files);
         }}
       />
-      {dragging && <DropOverlay>여기에 놓으면 봇이나 Risu 백업을 가져와요</DropOverlay>}
+      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈이나 Risu 백업을 가져와요</DropOverlay>}
       {moving && <MoveFlow file={moving.file} aside={moving.aside} onClose={() => setMoving(null)} />}
       {state && (
         <Dialog title={title} onClose={() => state.busy || setState(null)}>
           <Stack>
             {state.results.map((result, index) =>
-              'id' in result ? <Summary key={index} result={result} /> : 'kept' in result ? <FilledSummary key={index} result={result} /> : <Failed key={index} file={result.file} failure={result.failure} />,
+              'id' in result ? <Summary key={index} result={result} /> : 'module' in result ? <ModuleSummary key={index} result={result} /> : 'kept' in result ? <FilledSummary key={index} result={result} /> : <Failed key={index} file={result.file} failure={result.failure} />,
             )}
             {state.ask ? <FillChoice ask={state.ask} onAnswer={() => setState({ ...state, ask: null })} /> : state.busy && <Text variant="note">{state.busy}</Text>}
             {!state.busy && done.length === 1 && (
@@ -148,6 +155,24 @@ function Summary({ result }: { result: Done }) {
       <Text>{came.join(' · ')}</Text>
       {missed.length > 0 && <Callout tone="warn">못 가져온 것: {missed.join(' · ')}</Callout>}
       {notUsed && <Text variant="note">{notUsed}</Text>}
+    </Section>
+  );
+}
+
+function ModuleSummary({ result }: { result: DoneModule }) {
+  const { name, pack, lore, assets, unsupported } = result.module;
+  const came = [
+    lore.length > 0 && `로어북 ${lore.length}개`,
+    pack.regex.length > 0 && `정규식 ${pack.regex.length}개`,
+    pack.triggers.length > 0 && `트리거 ${pack.triggers.length}개`,
+    pack.toggles.trim() && '토글',
+    assets.length - result.skipped > 0 && `에셋 ${assets.length - result.skipped}개`,
+  ].filter(Boolean);
+  const missed = moduleMissed(unsupported, result.skipped);
+  return (
+    <Section title={`모듈 · ${name}`}>
+      <Text>{came.length > 0 ? came.join(' · ') : '담긴 것이 없어요'}</Text>
+      {missed.length > 0 && <Callout tone="warn">못 가져온 것: {missed.join(' · ')}</Callout>}
     </Section>
   );
 }

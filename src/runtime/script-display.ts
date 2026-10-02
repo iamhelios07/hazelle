@@ -51,7 +51,7 @@ export class ScriptDisplay {
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
     // Only a script that names the hook can listen for it, so the others never start the worker for a display.
-    const scripts = scriptsOf(scope.card).filter(({ code }) => code.includes('editDisplay'));
+    const scripts = scriptsOf(scope.packs).filter(({ code }) => code.includes('editDisplay'));
     if (scripts.length === 0) return display(scope, take);
     const held = this.held.get(id);
     const shown = display({ ...scope, lua: (version, text, stamp) => {

@@ -1,5 +1,5 @@
 import type { FileRef } from '../vault/files';
-import type { Card, LoreEntry } from '../engine/import/types';
+import type { Card, LoreEntry, Pack } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from './chat';
 import type { Stored } from './kinds';
 import type { ToggleValues } from './prompt';
@@ -37,6 +37,22 @@ export type Character = {
   greetingTranslations?: GreetingTranslation[];
   // The Risu chaId of a character brought from Risu: a move skips it, and 그림 채우기 finds it.
   risu?: string;
+  // The modules on in its chats, in the order they were turned on (design §6.5). One that is gone reads as off.
+  modules?: string[];
+};
+
+// Kind `module`: a pack with a name, on in every chat (settings.modules, 항상) or in a character's
+// (character.modules). Its lorebook and assets are its children, as a character's are.
+// namespace: Risu's, which {{moduleenabled::…}} asks by. loreFolders only group its lorebook on screen.
+// deleted is when it was deleted: it is off everywhere and listed nowhere, and removed for good KEEP_DELETED later.
+// risu: the Risu id of one brought from a Risu backup, which a move skips.
+export type Module = Pack & {
+  name: string;
+  description: string;
+  namespace: string | null;
+  loreFolders: LoreFolder[];
+  deleted?: number;
+  risu?: string;
 };
 // fold false shows such a picture whole instead of its top until opened. peek is the height its top shows at, most the
 // height no such picture is drawn taller than (shrunk to fit), each in percent of the screen's height.
@@ -52,17 +68,17 @@ export const KEEP_DELETED = 7 * DAY;
 // KEEP_DELETED as the copy names it (7일).
 export const KEEP_DAYS = KEEP_DELETED / DAY;
 
-// Whole days a character in 지운 캐릭터 has left. At 0 or less it is due, and purgeExpired removes it.
 export const greetingTranslation = ({ greetingTranslations }: Character, greeting: string, language: string) =>
   greetingTranslations?.find((each) => each.greeting === greeting && each.language === language)?.translation;
 
-export const daysLeft = (character: Character, now: number) => Math.ceil((character.deleted! + KEEP_DELETED - now) / DAY);
+// Whole days a deleted character (in 지운 캐릭터) or module has left. At 0 or less it is due, and purgeExpired removes it.
+export const daysLeft = ({ deleted }: { deleted?: number }, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);
 
 // The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name, nickname or alias.
 export const matches = ({ card, alias }: Character, query: string) =>
   `${card.name} ${card.nickname ?? ''} ${alias ?? ''}`.toLowerCase().includes(query.trim().toLowerCase());
 
-// Kind `lore`, whose parent is the character. folder is the id of one of its loreFolders.
+// Kind `lore`, whose parent is the character or module it belongs to. folder is the id of one of its loreFolders.
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 
 // Two levels deep: a subfolder's parent is the top folder it sits in, and top folders have
@@ -74,7 +90,7 @@ export type FolderTree = Stored<'folder'> & { children: FolderTree[] };
 // the objects, so lists need no file fetch.
 export type Avatar = { type: string; size: number; thumb: string; file: FileRef };
 
-// Kind `asset`, whose parent is the character: a picture of the bot's own, which its text reaches by name
+// Kind `asset`, whose parent is the character or module: a picture of the bot's own, which its text reaches by name
 // ({{raw::name}}, design §6.4). type is what the bytes are, read from them.
 export type Asset = { name: string; type: string; size: number; file: FileRef };
 

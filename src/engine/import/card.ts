@@ -1,8 +1,9 @@
-import { add, convert, counted, type Converted, type Tally } from './convert';
+import { add, convert, convertModule, counted, type Converted, type Tally } from './convert';
 import { UNSUPPORTED_KINDS, type ImportFailure, type ImportReport, type ImportResult, type Imported } from './types';
 import { readPng } from './png';
 import { readRisum } from './risum';
 import { openZip, type Zip } from './zip';
+import { isRecord } from '../../connectors/values';
 
 const utf8 = new TextDecoder();
 // The same one-liner as vault/aead.ts, which the engine may not import.
@@ -23,7 +24,7 @@ export function importCard(fileName: string, bytes: Uint8Array<ArrayBuffer>): Im
       case 'json':
         return fromJson(bytes);
       case 'risum':
-        return fail('module-file');
+        return fromRisum(bytes);
       default:
         return fail('unknown-format');
     }
@@ -48,15 +49,33 @@ function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   if (!zip || !card) return fail('unreadable', 'no card.json');
   const tally: Tally = new Map();
   const moduleBytes = zip.read('module.risum');
-  const module = moduleBytes ? readRisum(moduleBytes) : null;
+  const module = moduleBytes ? (readRisum(moduleBytes)?.module ?? null) : null;
   if (moduleBytes && !module) add(tally, 'module');
   const converted = convert(JSON.parse(utf8.decode(card)), module, tally);
   return converted ? done('charx', converted, avatar(converted.icon, zip.prefix, zip, tally), { zip }, tally) : fail('unreadable', 'not a character card');
 }
 
+// A module file. Its pictures are the blocks after its main one, each for the entry of module.assets at its place.
+function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
+  const read = readRisum(bytes);
+  if (!read) return fail('unreadable', 'not a module');
+  const tally: Tally = new Map();
+  const { assets: names, ...module } = convertModule(read.module, tally);
+  add(tally, 'asset', Math.max(0, names.length - read.assets.length));
+  const assets = read.assets.slice(0, names.length).map((block, index) => ({ name: names[index]!, read: async () => block() }));
+  return { ok: true, module: { ...module, assets, unsupported: counted(UNSUPPORTED_KINDS, tally) } };
+}
+
 function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const tally: Tally = new Map();
-  const converted = convert(JSON.parse(utf8.decode(bytes)), null, tally);
+  const raw: unknown = JSON.parse(utf8.decode(bytes));
+  // Risu's JSON export of a module, which names its pictures without holding them.
+  if (isRecord(raw) && raw.type === 'risuModule') {
+    const { assets, ...module } = convertModule(raw, tally);
+    add(tally, 'asset', assets.length);
+    return { ok: true, module: { ...module, assets: [], unsupported: counted(UNSUPPORTED_KINDS, tally) } };
+  }
+  const converted = convert(raw, null, tally);
   return converted ? done('json', converted, avatar(converted.icon, null, null, tally), {}, tally) : fail('unreadable', 'not a character card');
 }
 

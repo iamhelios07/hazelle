@@ -1,7 +1,7 @@
 import { modelSettings } from '../connectors/registry';
 import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
-import type { Card } from '../engine/import/types';
+import type { Card, Pack } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
 import { assemble, type Assembled, type PromptInput, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
@@ -64,20 +64,38 @@ export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 
 
 type Reader = Pick<Session, 'store'>;
 
-// What a chat's text is rendered with, on screen and in a turn: its character's card, lore and toggle values,
-// its prompt, persona and note, and the model it talks to. id is null for a chat not saved yet.
+// A chat's packs with what holds each, in order (design §6.5): its character's own, then the modules on in every
+// chat, then the character's, each once. The one place that knows a pack is a card's or a module's; a module that is
+// gone or deleted is off.
+export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character'>): { id: string; pack: Pack; namespace: string | null }[] {
+  const character = chat.character === null ? null : store.get('character', chat.character);
+  const modules = [...new Set([...(store.get('settings', SETTINGS_ID)?.value.modules ?? []), ...(character?.value.modules ?? [])])];
+  return [
+    ...(character ? [{ id: character.id, pack: character.value.card, namespace: null }] : []),
+    ...modules.flatMap((id) => {
+      const module = store.get('module', id)?.value;
+      return module && module.deleted === undefined ? [{ id, pack: module, namespace: module.namespace }] : [];
+    }),
+  ];
+}
+
+// What a chat's text is rendered with, on screen and in a turn: its character's card, its packs with their lore and
+// assets, its toggle values, its prompt, persona and note, and the model it talks to. id is null for a chat not saved
+// yet.
 export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
   const card = character?.card ?? null;
+  const packs = packsOf(store, chat);
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
   const route = chatModel(store, chat, 'main');
   return {
     card,
+    packs: packs.map(({ pack }) => pack),
     persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : null,
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
-    lore: chat.character === null ? [] : store.children('lore', chat.character),
+    lore: packs.flatMap((pack) => store.children('lore', pack.id)),
     messages: messages.map((message) => {
       const version = shown(message);
       const after = [...(version.after ?? []), ...(message.after ?? [])];
@@ -88,7 +106,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     toggle: togglesOf(store, chat, prompt).value,
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    assets: chat.character === null ? [] : store.children('asset', chat.character).map(({ id, value }) => ({ id, name: value.name })),
+    assets: packs.flatMap((pack) => store.children('asset', pack.id).map(({ id, value }) => ({ id, name: value.name }))),
     faces: {
       char: chat.character === null ? null : (store.children('avatar', chat.character)[0]?.value.thumb ?? null),
       user: persona.kind === 'persona' ? persona.persona.value.picture : null,
@@ -103,7 +121,7 @@ export type ChatToggleSet = { declared: Toggle[]; value: (key: string) => string
 // A chat's toggles and their values: what its turns send with, and what its toggle panel lists.
 export function togglesOf(store: Session['store'], chat: Chat, prompt: PromptChoice): ChatToggleSet {
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
-  const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], character ? readToggles(character.card.toggles).toggles : []);
+  const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], packsOf(store, chat).flatMap(({ pack }) => readToggles(pack.toggles).toggles));
   return { declared, value: toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
 }
 

@@ -2,7 +2,7 @@ import { count, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
 import { parseDecorators } from '../lorebook/decorators';
 import { readToggles } from './toggles';
-import type { Card, ImportReport, LoreEntry, RegexScript, Trigger, UnsupportedKind } from './types';
+import type { Card, ImportedModule, ImportReport, LoreEntry, Pack, RegexScript, Trigger, UnsupportedKind } from './types';
 
 type Json = Record<string, unknown>;
 type Entry = Omit<LoreEntry, 'name' | 'folder'>;
@@ -81,21 +81,10 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
       : list(risu.additionalAssets).filter(Array.isArray).map(([name, uri]) => ({ name: text(name), uri: text(uri) }));
   add(tally, 'asset', listed.length - (icon ? 1 : 0) - (spec === 'v3' ? assets.length : 0));
   if (spec === 'v2') add(tally, 'asset', list(risu.emotions).length + Object.keys(record(risu.vits)).length);
-  const triggers: Trigger[] = [];
-  for (const trigger of (module ? list(module.trigger) : list(risu.triggerscript)).map(record)) {
-    const name = text(trigger.comment);
-    const effects = list(trigger.effect).map(record);
-    const code = effects[0]?.type === 'triggerlua' ? text(effects[0].code) : null;
-    if (code === null) {
-      if (effects.some((effect) => !INERT.has(effect.type))) triggers.push({ kind: 'blocks', name, on: text(trigger.type), conditions: list(trigger.conditions), effects });
-    } else if (code.trim()) triggers.push({ kind: 'lua', name, code });
-  }
-  const background = text(risu.backgroundHTML);
-  if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
+  const pack = packOf({ regex: module ? module.regex : risu.customScripts, trigger: module ? module.trigger : risu.triggerscript, background: risu.backgroundHTML, toggles: risu.toggles }, tally);
   if (text(risu.additionalText).trim()) add(tally, 'additional-text');
   if (risu.prebuiltAssetCommand === true) add(tally, 'prebuilt-asset-command');
   if (text(record(extensions.depth_prompt).prompt).trim()) add(tally, 'depth-prompt');
-  add(tally, 'toggle-line', readToggles(text(risu.toggles)).unread);
 
   const greetings = [data.first_mes, ...list(data.alternate_greetings)].map(text);
   while (greetings.at(-1) === '') greetings.pop();
@@ -114,14 +103,11 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
     version: typeof data.character_version === 'number' ? String(data.character_version) : text(data.character_version),
     tags: strings(data.tags),
     variables: variables(risu.defaultVariables),
-    toggles: text(risu.toggles),
     utility: risu.utilityBot === true,
     bias: list(risu.bias)
       .filter((pair): pair is [string, number] => Array.isArray(pair) && typeof pair[0] === 'string' && typeof pair[1] === 'number')
       .map(([key, value]): [string, number] => [key, value]),
-    regex: regexScripts(module ? list(module.regex) : list(risu.customScripts), tally),
-    triggers,
-    ...(background.trim() ? { background } : {}),
+    ...pack,
     loreSettings: {
       scanDepth: count(book.scan_depth),
       tokenBudget: count(book.token_budget),
@@ -133,6 +119,41 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
     module && Array.isArray(module.lorebook) ? lorebook(module.lorebook, RISU_LORE) : lorebook(list(book.entries), BOOK_LORE);
   countInText(card, lore, tally);
   return { card, lore, loreFolders, spec, icon: icon && text(icon.uri), assets };
+}
+
+// A pack from Risu's own fields, a card's or a module's: its scripts, triggers, backgroundHTML and toggle text.
+function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; toggles: unknown }, tally: Tally): Pack {
+  const triggers: Trigger[] = [];
+  for (const trigger of list(raw.trigger).map(record)) {
+    const name = text(trigger.comment);
+    const effects = list(trigger.effect).map(record);
+    const code = effects[0]?.type === 'triggerlua' ? text(effects[0].code) : null;
+    if (code === null) {
+      if (effects.some((effect) => !INERT.has(effect.type))) triggers.push({ kind: 'blocks', name, on: text(trigger.type), conditions: list(trigger.conditions), effects });
+    } else if (code.trim()) triggers.push({ kind: 'lua', name, code });
+  }
+  const background = text(raw.background);
+  if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
+  add(tally, 'toggle-line', readToggles(text(raw.toggles)).unread);
+  return { regex: regexScripts(list(raw.regex), tally), triggers, ...(background.trim() ? { background } : {}), toggles: text(raw.toggles) };
+}
+
+// A Risu module as RisuModule holds it (src/ts/process/modules.ts), without its pictures. Its lowLevelAccess is not
+// kept: what its scripts may do is the user's answer, as for a card (design §6.8).
+export function convertModule(raw: Json, tally: Tally): Omit<ImportedModule, 'assets' | 'unsupported'> & { assets: string[] } {
+  const pack = packOf({ regex: raw.regex, trigger: raw.trigger, background: raw.backgroundEmbedding, toggles: raw.customModuleToggle }, tally);
+  const { lore, loreFolders } = lorebook(list(raw.lorebook), RISU_LORE);
+  countTags([...pack.regex.flatMap((script) => [script.find, script.replace]), pack.background ?? '', ...lore.map((entry) => entry.content)], tally);
+  return {
+    name: text(raw.name),
+    description: text(raw.description),
+    namespace: text(raw.namespace).trim() || null,
+    risu: text(raw.id) || null,
+    pack,
+    lore,
+    loreFolders,
+    assets: list(raw.assets).map((asset) => (Array.isArray(asset) ? text(asset[0]) : '')),
+  };
 }
 
 // Tavern v1, including the char_* names of older exports that Risu's JSON check accepts.
@@ -296,10 +317,14 @@ function countInText(card: Card, lore: LoreEntry[], tally: Tally) {
     card.background ?? '',
     ...lore.map((entry) => entry.content),
   ];
+  countTags(texts, tally);
+  for (const entry of lore) add(tally, 'disable-ui-prompt', parseDecorators(entry.content).decorators.filter(({ name }) => name === 'disable_ui_prompt').length);
+}
+
+function countTags(texts: string[], tally: Tally) {
   for (const value of texts) {
     for (const [, name] of value.matchAll(/\{\{([^{}:]*)/g)) {
       if (isUnsupportedTag(name!)) add(tally, 'cbs-tag');
     }
   }
-  for (const entry of lore) add(tally, 'disable-ui-prompt', parseDecorators(entry.content).decorators.filter(({ name }) => name === 'disable_ui_prompt').length);
 }

@@ -1,4 +1,4 @@
-import { KINDS, type Kind, type Rule } from '../model/kinds';
+import { KINDS, parentKinds, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
 import type { ObjectRow, ObjectStore } from './store';
 
@@ -14,7 +14,7 @@ export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: st
   const rounds: ObjectRow[][] = [];
   const visit = async (object: ObjectRow): Promise<ApiResult<number>> => {
     const children: ObjectRow[] = [];
-    const failed = KIND_NAMES.some((kind) => KINDS[kind].parent === object.kind)
+    const failed = KIND_NAMES.some((kind) => parentKinds(kind).includes(object.kind as Kind))
       ? await store.scan({ parent: object.id, metadata: true }, (row) => { children.push(row); })
       : null;
     if (failed) return failed;
@@ -45,9 +45,9 @@ export function orderOwned<T extends { kind: Kind }>(objects: T[]): T[] {
 }
 
 export function ownershipDepth(kind: Kind): number {
-  const rule: Rule = KINDS[kind];
-  const owner = rule.parent ?? rule.owner?.kind;
-  return owner ? ownershipDepth(owner) + 1 : 0;
+  const { owner }: Rule = KINDS[kind];
+  const owners = owner ? [owner.kind] : parentKinds(kind);
+  return owners.length === 0 ? 0 : Math.max(...owners.map(ownershipDepth)) + 1;
 }
 
 export async function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {

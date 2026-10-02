@@ -1,6 +1,6 @@
 import type { Connection } from '../connectors/types';
 import type { Chat, Entry, Summary } from './chat';
-import type { Asset, Avatar, Character, Folder, Lore } from './library';
+import type { Asset, Avatar, Character, Folder, Lore, Module } from './library';
 import type { Memory } from './memory';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
@@ -11,6 +11,7 @@ import type { Stream } from './stream';
 // Every kind of stored object, with the value its sealed body holds.
 export type Values = {
   character: Character;
+  module: Module;
   folder: Folder;
   lore: Lore;
   avatar: Avatar;
@@ -28,13 +29,13 @@ export type Values = {
 };
 export type Kind = keyof Values;
 
-// parent: the kind an object's parent must be, or null for a top-level object. The server sees this
-// link, and an update never changes it.
+// parent: the kind an object's parent must be (one of them, where a list), or null for a top-level object. The
+// server sees this link, and an update never changes it. Read it through parentKinds.
 // id: the one id a singleton kind lives at. appendOnly: written once, never updated.
 // file: the body names a stored file (`file`, vault/files), whose id the server is told.
 // owner: a body field naming the object that owns this one, for a link the server must not see. The
 // parent cannot carry it: it is bound into each object's sealing (vault/objects) and sent in the clear.
-export type Rule = { parent: Kind | null; id?: string; appendOnly?: true; file?: true; owner?: { field: string; kind: Kind } };
+export type Rule = { parent: Kind | readonly Kind[] | null; id?: string; appendOnly?: true; file?: true; owner?: { field: string; kind: Kind } };
 
 // The body fields of a kind that can hold another object's id.
 type Link<K extends Kind> = { [F in keyof Values[K]]-?: Values[K][F] extends string | null ? F : never }[keyof Values[K]];
@@ -42,10 +43,11 @@ type Link<K extends Kind> = { [F in keyof Values[K]]-?: Values[K][F] extends str
 // The rules runtime/store checks before a write leaves the browser, and the links runtime/removal follows.
 export const KINDS = {
   character: { parent: null },
+  module: { parent: null },
   folder: { parent: null },
-  lore: { parent: 'character' },
+  lore: { parent: ['character', 'module'] },
   avatar: { parent: 'character', file: true },
-  asset: { parent: 'character', file: true },
+  asset: { parent: ['character', 'module'], file: true },
   chat: { parent: null, owner: { field: 'character', kind: 'character' } },
   entry: { parent: 'chat', appendOnly: true },
   summary: { parent: 'chat' },
@@ -57,6 +59,12 @@ export const KINDS = {
   persona: { parent: null },
   profile: { parent: null },
 } as const satisfies Record<Kind, Rule> & { [K in Kind]: { owner?: { field: Link<K> } } };
+
+// The kinds an object of this kind may sit under; none for a top-level kind.
+export function parentKinds(kind: Kind): readonly Kind[] {
+  const { parent }: Rule = KINDS[kind];
+  return parent === null ? [] : typeof parent === 'string' ? [parent] : parent;
+}
 
 export type Singleton = { [K in Kind]: (typeof KINDS)[K] extends { id: string } ? K : never }[Kind];
 export type AppendOnly = { [K in Kind]: (typeof KINDS)[K] extends { appendOnly: true } ? K : never }[Kind];
@@ -108,6 +116,7 @@ const SHAPES = {
     folder: orNull(str),
     loreFolders: listOf(shape({ id: str, name: str })),
   }),
+  module: shape({ name: str, description: str, namespace: orNull(str), regex: listOf(isRecord), triggers: listOf(shape({ kind: str, name: str })), toggles: str, loreFolders: listOf(shape({ id: str, name: str })) }),
   folder: shape({ name: str }),
   lore: shape({
     ...all(bool, 'enabled', 'constant', 'selective', 'useRegex', 'caseSensitive'),

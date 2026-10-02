@@ -1,4 +1,4 @@
-import { KINDS, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
+import { KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
 import { objectKey, openObject, sealObject } from '../vault/objects';
 import type { FileRef } from '../vault/files';
 import type { VaultKey } from '../vault/keys';
@@ -682,10 +682,10 @@ export class ObjectStore {
   // A parent this store has not seen passes: addCharacter writes a character's lore and avatar before
   // the character itself.
   private fits(kind: Kind, parent: string | null): boolean {
-    const rule = KINDS[kind].parent;
-    if (rule === null || parent === null) return rule === parent;
+    const kinds = parentKinds(kind);
+    if (kinds.length === 0 || parent === null) return kinds.length === 0 && parent === null;
     const held = this.live.get(parent);
-    return !held || held.kind === rule;
+    return !held || kinds.includes(held.kind as Kind);
   }
 
   private async pullPages({ signal = this.closing.signal, progress }: PullOptions): Promise<ApiFailure | null> {

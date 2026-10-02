@@ -2,7 +2,7 @@ import type { ConversationPrompt, TextBlock } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, type CbsContext } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
-import type { Card } from './import/types';
+import type { Card, Pack } from './import/types';
 import type { LoreInput } from './lorebook/activate';
 import { applyScripts, type Box } from './regex/scripts';
 
@@ -10,6 +10,8 @@ export type Stage = 'display' | 'prompt';
 
 export type ChatScope = {
   card: Card | null;
+  // In order: the card's own first, so a script's place in the card's regex is its place among all the packs'.
+  packs: Pack[];
   // Each null when the chat's is gone: the display still renders, and a turn stops before sending.
   persona: CbsContext['persona'];
   prompt: ConversationPrompt | null;
@@ -66,7 +68,7 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
 // The one pass that turns a chat's stored text into the text shown or sent, oldest message first. The input or
 // output stage is the only one whose CBS writes variables, so a stage chained after it cannot run a setvar twice;
 // the process or display stage reads a copy, so the display never changes what the prompt sees.
-// take: the display scripts, by place in the card's regex, whose boxes leave the messages (상태창 지정). drawn and
+// take: the display scripts, by place among the packs' regex, whose boxes leave the messages (상태창 지정). drawn and
 // boxes are each message's; only the display reads them. staged: each message's text past its input or output stage,
 // which is what the bot's Lua reads; wrote: the variables that stage's own CBS wrote. missed: the messages whose
 // editDisplay pass (scope.lua) is not fresh.
@@ -76,7 +78,7 @@ export function renderChat(
   take: ReadonlySet<number> = new Set(),
 ): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[] } {
   const context = contexts(scope, stage, null);
-  const scripts = scope.card?.regex ?? [];
+  const scripts = scope.packs.flatMap(({ regex }) => regex);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
   const variables = new Logged(start);
   const lua = stage === 'display' ? scope.lua : undefined;

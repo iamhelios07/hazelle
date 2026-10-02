@@ -1,6 +1,6 @@
 import { strFromU8, strToU8 } from 'fflate';
 import { isRecord } from '../connectors/values';
-import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
+import { KINDS, isValue, parentKinds, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { FileRef } from '../vault/files';
@@ -53,8 +53,8 @@ export async function exportBackup(
     for (const row of metadata.values()) {
       if (!Object.hasOwn(KINDS, row.kind)) continue;
       const kind = row.kind as Kind;
-      const owner = KINDS[kind].parent;
-      if (owner !== null && (row.parent === null || metadata.get(row.parent)?.kind !== owner)) continue;
+      const owners = parentKinds(kind);
+      if (owners.length > 0 && (row.parent === null || !owners.some((owner) => owner === metadata.get(row.parent!)?.kind))) continue;
       reached.add(row.id);
       total += 1 + Number('file' in KINDS[kind]);
     }
