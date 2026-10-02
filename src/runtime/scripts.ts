@@ -305,13 +305,16 @@ export class Scripts {
   }
 
   // What a run or a display pass has to say of the bot's scripts: their errors and the functions this app lacks, or
-  // the error the run itself ended on. Or a display's commands that ran away.
+  // the error the run itself ended on. Or commands that ran away: a display's, or those a script evaluated.
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown) {
     if (result instanceof LuaStuck) return this.note(chat, { kind: 'stuck' });
     if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' });
     if (result instanceof Error) return this.tell(chat, `failed:${result.message}`, { kind: 'failed', message: result.message });
     const { errors, missing } = result as Pick<Outcome, 'errors' | 'missing'>;
-    for (const { script, message } of errors) this.tell(chat, `failed:${message}`, { kind: 'failed', message: `${script}: ${message}` });
+    for (const error of errors) {
+      if ('runaway' in error) this.tell(chat, 'runaway', { kind: 'runaway' });
+      else this.tell(chat, `failed:${error.message}`, { kind: 'failed', message: `${error.script}: ${error.message}` });
+    }
     if (missing.length > 0) this.tell(chat, `missing:${missing.join()}`, { kind: 'missing', names: missing });
   }
 

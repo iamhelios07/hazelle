@@ -103,12 +103,18 @@ describe('Lua runs', () => {
     expect((await run(code, { kind: 'call', name: 'nothing' })).handled).toBe(false);
   });
 
+  it('reports CBS its cbs() call ran away with as a runaway, and leaves one the script catches to it', async () => {
+    const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
+    expect((await run(`function onStart(id) cbs(${doubling}) end`, { kind: 'start' })).errors).toEqual([{ script: 'main', runaway: true }]);
+    expect((await run(`function onStart(id) pcall(cbs, ${doubling}) end`, { kind: 'start' })).errors).toEqual([]);
+  });
+
   it('reports an error with its line, a function this app lacks, and a script that never ends', async () => {
     const failed = await run(`function onStart(id)\n  local none = nil\n  return none.field\nend`, { kind: 'start' });
-    expect(failed.errors[0]!.message).toContain('main:3:');
+    expect(failed.errors[0]).toMatchObject({ message: expect.stringContaining('main:3:') });
     expect((await run(`function onStart(id) generateImage(id, 'x') setChatVar(id, 'after', '1') end`, { kind: 'start' }))).toMatchObject({ missing: ['generateImage'], writes: [['after', '1']] });
     expect((await run(`syntax error here`, { kind: 'start' })).errors).toHaveLength(1);
-    expect((await run(`function onStart(id) while true do end end`, { kind: 'start' })).errors[0]!.message).toContain('timeout');
+    expect((await run(`function onStart(id) while true do end end`, { kind: 'start' })).errors[0]).toMatchObject({ message: expect.stringContaining('timeout') });
   });
 
   it('evaluates CBS with the run\'s writes, reads the lorebook by name and as the prompt would hold it, and takes a whole chat', async () => {
