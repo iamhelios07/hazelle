@@ -106,7 +106,6 @@ export async function beginRestore(env: Env, accountId: string, report: number, 
   const at = 'at' in from ? from.at : null;
   const undoes = 'undoes' in from ? from.undoes : null;
   const now = Date.now();
-  const binds = [accountId, report, at, undoes, now];
   const [inserted] = await db.batch<{ id: number }>([
     db
       .prepare(
@@ -114,7 +113,7 @@ export async function beginRestore(env: Env, accountId: string, report: number, 
          SELECT incarnation, ?2, ?3, ?4, lower(hex(randomblob(16))), 'begun', ?5, ?5 FROM accounts
          WHERE id = ?1 AND ${FREE} AND ${REPORTED} AND (${TIMELY} OR ${undoable('?4', '?5')}) RETURNING id`,
       )
-      .bind(...binds),
+      .bind(accountId, report, at, undoes, now),
     db
       .prepare(
         `UPDATE accounts SET state = 'restoring', operation = (SELECT MAX(id) FROM restores WHERE incarnation = accounts.incarnation AND phase = 'begun')
@@ -133,7 +132,7 @@ export async function beginRestore(env: Env, accountId: string, report: number, 
   if (id !== undefined) return { begun: id };
   const why = await db
     .prepare(`SELECT ${FREE} AS free, ${REPORTED} AS reported FROM accounts WHERE id = ?1`)
-    .bind(...binds)
+    .bind(accountId, report)
     .first<{ free: number; reported: number }>();
   if (!why) return { refused: 'not-found' };
   if (!why.free) return { refused: 'account-busy' };
