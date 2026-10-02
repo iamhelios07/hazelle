@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatScope } from '../engine/render';
+import { liveChat } from '../model/chat';
 import type { Kind } from '../model/kinds';
 import type { AccountFacts, Standing } from '../runtime/account';
 import { memoryId, type Memory } from '../model/memory';
@@ -74,7 +75,7 @@ export function useChats() {
 
 export function useChatModel(id: string | null) {
   const { read, store } = useSession();
-  const exists = id !== null && store.get('chat', id) !== null;
+  const exists = id !== null && liveChat(store.get('chat', id)) !== null;
   const [attempt, retry] = useReducer((value: number) => value + 1, 0);
   useEffect(() => {
     if (id === null || !exists) return;

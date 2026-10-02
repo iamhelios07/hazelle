@@ -27,7 +27,14 @@ export type Chat = {
   memory?: MemorySettings;
   // The variables it starts from, over the card's defaults: a chat brought from Risu keeps Risu's.
   variables?: [string, string][];
+  // deleted and purging as a character's: a deleted chat is kept whole KEEP_DELETED for its 되돌리기, then removed for
+  // good with everything it owns. Until then it reads as gone everywhere (liveChat) but to its purge and its undo.
+  deleted?: number;
+  purging?: true;
 };
+
+// The chat as every reader but its removal sees it: null while it is deleted.
+export const liveChat = (stored: Stored<'chat'> | null): Stored<'chat'> | null => (stored && stored.value.deleted === undefined ? stored : null);
 
 // What a reply's generation left behind. The raw request is never stored.
 export type Receipt = {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, shown } from '../model/chat';
 import { setTranslate } from './characters';
-import { appendUserMessage, startChat } from './chat-log';
+import { appendUserMessage, removeChat, startChat } from './chat-log';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
@@ -97,6 +97,18 @@ describe('a new chat', () => {
         { role: 'assistant', content: '어서 와, jin.' },
         { role: 'user', content: '안녕' },
       ]);
+    }));
+
+  it('takes no turn in a deleted chat', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await removeChat(session.store, chat);
+      const log = stubRelay(inTurn([saying('안녕')]));
+      expect(await takeTurn(session, chat, { kind: 'send', text: 'Hi' })).toBeNull();
+      expect([log, session.store.children('entry', chat)]).toEqual([[], []]);
     }));
 });
 

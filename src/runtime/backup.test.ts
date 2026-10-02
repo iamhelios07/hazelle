@@ -100,7 +100,7 @@ async function oldAccount({ profile = true } = {}) {
   return { store, files, image, smile, chat, gone };
 }
 
-async function exported(store: Pick<ObjectStore, 'scan' | 'pin'>, files: Files) {
+async function exported(store: Pick<ObjectStore, 'scan' | 'pin' | 'list'>, files: Files) {
   const parts: BlobPart[] = [];
   const result = await exportBackup(store, files, {
     write: async (bytes) => { parts.push(bytes); },
@@ -123,7 +123,7 @@ describe('backup', () => {
     const made = await exported(old.store, old.files);
     const backup = await read(made);
     const expected = await held(old.store);
-    for (const [id, { parent }] of expected) if (parent === old.gone) expected.delete(id);
+    for (const [id, { parent }] of expected) if (id === old.gone || parent === old.gone) expected.delete(id);
 
     await server.wipe();
     const { store, files } = await open('someone');
@@ -148,7 +148,7 @@ describe('backup', () => {
     await server.wipe();
     const { store, files } = await open('someone');
     expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
-    for (const [id, { parent }] of expected) if (parent === old.gone) expected.delete(id);
+    for (const [id, { parent }] of expected) if (id === old.gone || parent === old.gone) expected.delete(id);
     expect(await held(store)).toEqual(expected);
   });
 
@@ -160,8 +160,9 @@ describe('backup', () => {
     await store.batch(Array.from({ length: 500 }, (_, index) => ({ type: 'create', kind: 'folder', id: crypto.randomUUID(), parent: null, value: { name: `${index}` } })));
     const other = await open();
     await other.pull();
-    const editing: Pick<ObjectStore, 'scan' | 'pin'> = {
+    const editing: Pick<ObjectStore, 'scan' | 'pin' | 'list'> = {
       pin: () => store.pin(),
+      list: (kind) => store.list(kind),
       scan: (options, visit, pin) => store.scan(options, async (row, value) => {
         await visit(row, value);
         if (!options.metadata && row.id === created.data.id) await other.update('connection', row.id, (current) => ({ ...current, label: 'b' }));

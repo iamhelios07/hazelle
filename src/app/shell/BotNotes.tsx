@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { liveChat } from '../../model/chat';
 import { aliased } from '../common/alias';
 import { RUNAWAY_FIX } from '../common/failure';
 import { MODEL_ROLES, MODULE_VOICE } from '../common/words';
@@ -17,7 +18,7 @@ export function BotNotes() {
       scripts.seen(note.id);
       switch (note.kind) {
         case 'said': {
-          const chat = store.get('chat', note.chat)?.value;
+          const chat = liveChat(store.get('chat', note.chat))?.value;
           const id = chat?.character ?? null;
           const character = id ? store.get('character', id)?.value : null;
           // Its chat or character was deleted while the script ran, and its words go with it.

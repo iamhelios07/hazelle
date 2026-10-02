@@ -1,5 +1,5 @@
 import type { ModelRef } from '../connectors/assignment';
-import { UsageCounter, type ModelUsage } from '../model/chat';
+import { liveChat, UsageCounter, type ModelUsage } from '../model/chat';
 import type { ApiResult } from './api';
 import type { ObjectStore } from './store';
 
@@ -7,7 +7,7 @@ export async function readUsage(store: ObjectStore, ref: ModelRef, signal: Abort
   const failed = await store.pull({ signal });
   if (failed) return failed;
   const counter = new UsageCounter(ref);
-  for (const { id } of store.list('chat')) {
+  for (const { id } of store.list('chat').filter(liveChat)) {
     if (signal.aborted) return { ok: false, error: 'stopped' };
     const result = await store.withChat(id, async () => {
       const projection = store.projection(id);

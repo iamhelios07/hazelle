@@ -5,11 +5,13 @@ import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt
 import type { Stored } from '../model/kinds';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
+import { markDeleted } from './characters';
 import { without, type ObjectStore, type Write } from './store';
 
-// The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment
-// writes with the other layers, a character's purge, which removes them with the character, a backup's
-// restore, which copies them as they were, and a move from Risu, which saves chatWrites' writes with the character.
+// The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
+// the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with
+// its character, a backup's restore, which copies them as they were, and a move from Risu, which saves chatWrites'
+// writes with the character.
 
 // A new chat is saved in this order: the chat with its greetings, the one shown selected, then the user's first
 // message, sent with its reply. Messages stand in the order they were saved, so the greeting leads only when it is
@@ -121,10 +123,11 @@ function copied(id: string, { role, at, versions, selected, after }: Message): {
 // A blank name gives the chat back its first message as its name.
 export const renameChat = (store: ObjectStore, id: string, name: string) => store.update('chat', id, (current) => ({ ...current, title: name.trim() || null }));
 
-// Removes the chat object only. Its entries stay, unreachable, so restoreChat (되돌리기) brings back all of it.
-export const removeChat = (store: ObjectStore, id: string) => store.take('chat', id);
+// The chat stays whole, read as gone (liveChat), until purgeExpired removes it with all it owns; restoreChat
+// (되돌리기) brings it back until then.
+export const removeChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, Date.now());
 
-export const restoreChat = (store: ObjectStore, removed: Stored<'chat'>) => store.restore(removed);
+export const restoreChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, null);
 
 // A chat's own prompt, persona or 작가의 노트; null clears it, and the chat follows the default again.
 function setOwn(store: ObjectStore, chat: string, field: 'prompt' | 'persona' | 'note', value: string | null): Promise<ApiResult<Stored<'chat'>>> {

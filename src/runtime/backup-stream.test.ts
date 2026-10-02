@@ -12,7 +12,7 @@ const missing = async () => ({ ok: true as const, data: new Set<string>() });
 
 // A store whose timeline never changes.
 const PIN = { timeline: 't', epoch: 0 };
-const pins: Pick<ObjectStore, 'pin' | 'pinned'> = { pin: async () => ({ ok: true, data: PIN }), pinned: (run) => run(PIN) };
+const pins: Pick<ObjectStore, 'pin' | 'pinned' | 'list'> = { pin: async () => ({ ok: true, data: PIN }), pinned: (run) => run(PIN), list: () => [] };
 
 function destination() {
   const parts: BlobPart[] = [];
@@ -27,7 +27,7 @@ function destination() {
 function store(objects: Stored<Kind>[] = []) {
   const held = new Map(objects.map((object) => [object.id, object]));
   const written: string[] = [];
-  const api: Pick<ObjectStore, 'scan' | 'batch' | 'pin' | 'pinned'> = {
+  const api: Pick<ObjectStore, 'scan' | 'batch' | 'pin' | 'pinned' | 'list'> = {
     ...pins,
     scan: async (options, visit) => {
       for (const { value, ...row } of [...held.values()].sort((a, b) => a.rev - b.rev)) await visit(row, options.metadata ? undefined : value);

@@ -1,6 +1,7 @@
 import { strFromU8, strToU8 } from 'fflate';
 import { isRecord } from '../connectors/values';
 import { KINDS, isValue, parentKinds, type Kind, type Stored } from '../model/kinds';
+import { liveChat } from '../model/chat';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import { toBase64 } from '../vault/aead';
@@ -33,13 +34,13 @@ export type Backup = { file: Blob; entries: Map<string, ZipEntry>; objects: Obje
 export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' };
 export type { BackupOutput } from './backup-zip';
 
-// Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. Pieces
-// nothing reaches are left out: a deleted chat's entries, and the lore and pictures of an
+// Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. A deleted
+// chat reaches nothing, and is left out with all it owns, as are the pieces nothing reaches: the lore and pictures of an
 // import cut short. left counts the objects that did not open, which no backup can hold. skipped counts the objects
 // naming a picture the operator blocked, which are left out as restore leaves out what the server refuses. Both scans
 // are of one timeline: an account restored between them fails the export, and no archive is written.
 export async function exportBackup(
-  store: Pick<ObjectStore, 'scan' | 'pin'>,
+  store: Pick<ObjectStore, 'scan' | 'pin' | 'list'>,
   files: Pick<Files, 'read' | 'missing'>,
   output: BackupOutput,
   { signal = new AbortController().signal, progress = () => {} }: Options = {},
@@ -50,6 +51,8 @@ export async function exportBackup(
     const pinned = await store.pin(signal);
     if (!pinned.ok) return pinned;
     const pin = pinned.data;
+    // The metadata walk cannot see the mark, which is sealed in the chat's body.
+    const deleted = new Set(store.list('chat').filter((chat) => !liveChat(chat)).map(({ id }) => id));
     const metadata = new Map<string, ObjectRow>();
     const scanned = await store.scan({ metadata: true }, (row) => {
       signal.throwIfAborted();
@@ -59,7 +62,7 @@ export async function exportBackup(
     const reached = new Set<string>();
     let total = 0;
     for (const row of metadata.values()) {
-      if (!Object.hasOwn(KINDS, row.kind)) continue;
+      if (!Object.hasOwn(KINDS, row.kind) || deleted.has(row.id) || (row.parent !== null && deleted.has(row.parent))) continue;
       const kind = row.kind as Kind;
       const owners = parentKinds(kind);
       if (owners.length > 0 && (row.parent === null || !owners.some((owner) => owner === metadata.get(row.parent!)?.kind))) continue;

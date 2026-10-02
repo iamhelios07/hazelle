@@ -67,7 +67,7 @@ export type LoreFolder = { id: string; name: string };
 
 const DAY = 24 * 60 * 60 * 1000;
 
-// How long a deleted character waits in 지운 캐릭터 before it is removed for good.
+// How long a deleted character (in 지운 캐릭터), module or chat waits before it is removed for good.
 export const KEEP_DELETED = 7 * DAY;
 // KEEP_DELETED as the copy names it (7일).
 export const KEEP_DAYS = KEEP_DELETED / DAY;
@@ -75,7 +75,7 @@ export const KEEP_DAYS = KEEP_DELETED / DAY;
 export const greetingTranslation = ({ greetingTranslations }: Character, greeting: string, language: string) =>
   greetingTranslations?.find((each) => each.greeting === greeting && each.language === language)?.translation;
 
-// Whole days a deleted character (in 지운 캐릭터) or module has left. At 0 or less it is due, and purgeExpired removes it.
+// Whole days a deleted character (in 지운 캐릭터), module or chat has left. At 0 or less it is due, and purgeExpired removes it.
 export const daysLeft = ({ deleted }: { deleted?: number }, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);
 
 // The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name, nickname or alias.
