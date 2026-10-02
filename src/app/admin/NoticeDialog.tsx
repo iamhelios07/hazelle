@@ -10,7 +10,7 @@ type Props = {
   title: string;
   note?: string;
   label: string;
-  // An act the notice goes with, such as 정지, leaves the text optional: blank sends no notice.
+  // An act the notice goes with, such as resolving a report, may leave the text optional: blank sends no notice.
   optional?: boolean;
   placeholder?: string;
   confirm: { label: string; icon: LucideIcon };

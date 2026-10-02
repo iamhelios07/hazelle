@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hex } from './http';
-import { readAll } from './admin';
+import { forgetOldRecords, readAll } from './admin';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -98,7 +98,7 @@ describe('the operator', () => {
     const timeline = await t.timeline(other.cookie);
     const write = () => t.post('objects/batch', { timeline, writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }, other.cookie);
 
-    expect((await t.put(`admin/accounts/${other.id}/suspended`, { suspended: true }, admin.cookie)).status).toBe(204);
+    expect((await t.put(`admin/accounts/${other.id}/suspended`, { suspended: true, reason: '도배' }, admin.cookie)).status).toBe(204);
     expect((await write()).status).toBe(403);
     expect((await t.put(`admin/accounts/${other.id}/suspended`, { suspended: false }, admin.cookie)).status).toBe(204);
     expect((await write()).status).toBe(200);
@@ -107,7 +107,7 @@ describe('the operator', () => {
     expect((await t.delete(`admin/accounts/${other.id}`, undefined, admin.cookie)).status).toBe(404);
 
     expect(await log(admin.cookie)).toMatchObject(
-      ['delete-account', 'lift', 'suspend'].map((action) => ({ action, target: other.id, detail: { username: 'other' } })),
+      ['delete-account', 'lift', 'send-notice', 'suspend'].map((action) => ({ action, target: other.id, detail: { username: 'other' } })),
     );
   });
 
@@ -191,4 +191,21 @@ describe('the operator', () => {
     expect((await t.put(`admin/files/${nobody}/blocked`, { blocked: true }, admin.cookie)).status).toBe(204);
     expect(await log(admin.cookie)).toMatchObject([{ action: 'block-file', target: nobody }, { action: 'unblock-file', target: id }, { action: 'block-file', target: id }]);
   });
+});
+
+it('forgets resolved reports and log rows a year old, and keeps an open report of any age', async () => {
+  const year = 365 * 24 * 60 * 60 * 1000;
+  const old = Date.now() - year - 60_000;
+  const recent = Date.now() - year + 60_000;
+  await t.env.DB.batch([
+    ...[
+      [1, old, null],
+      [2, old, old],
+      [3, old, recent],
+    ].map(([id, created, resolved]) => t.env.DB.prepare(`INSERT INTO reports (id, account_id, username, text, created_at, resolved_at) VALUES (?, 'a', 'a', 'text', ?, ?)`).bind(id, created, resolved)),
+    ...[old, recent].map((at) => t.env.DB.prepare(`INSERT INTO admin_log (at, action, target) VALUES (?, 'lift', 'a')`).bind(at)),
+  ]);
+  await forgetOldRecords(t.env.DB);
+  expect((await t.env.DB.prepare('SELECT id FROM reports ORDER BY id').all()).results).toEqual([{ id: 1 }, { id: 3 }]);
+  expect((await t.env.DB.prepare('SELECT at FROM admin_log').all()).results).toEqual([{ at: recent }]);
 });

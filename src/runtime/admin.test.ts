@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { loadSession, markNoticesSeen, readNotices, sendReport } from './account';
-import { beginRestore, continueRestore, readAccounts, readLog, readReports, readRestores, readService, removeAccount, resolveReport, sendNotice, setService, setSuspended, type Restore } from './admin';
+import { beginRestore, continueRestore, readAccounts, readLog, readReports, readRestores, readService, removeAccount, resolveReport, sendNotice, setService, suspend, type Restore } from './admin';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -11,7 +11,7 @@ it('sets the service, suspends an account and resolves its report, each read bac
   expect(await setService({ signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null })).toMatchObject({ ok: true });
   expect(await readService()).toEqual({ ok: true, data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, fileBytes: 0 } });
 
-  expect(await setSuspended(accountId, true)).toMatchObject({ ok: true });
+  expect(await suspend(accountId, '도배')).toMatchObject({ ok: true });
   expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, suspended: true }] } });
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { admin: true, suspended: true } } });
 
@@ -20,7 +20,7 @@ it('sets the service, suspends an account and resolves its report, each read bac
   expect(reports).toMatchObject({ ok: true, data: { rows: [{ accountId, text: '그림이 이상해요', resolvedAt: null }], more: false } });
   expect(await resolveReport(reports.ok ? reports.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
   const log = await readLog(null);
-  expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['resolve-report', 'suspend', 'set-service']);
+  expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['resolve-report', 'send-notice', 'suspend', 'set-service']);
   expect(log.ok && log.data.more).toBe(false);
 });
 
@@ -30,7 +30,7 @@ it('sends notices with a reply, a reason and to everyone, which the account read
   const reports = await readReports(null);
   const report = reports.ok ? reports.data.rows[0]!.id : 0;
   expect(await resolveReport(report, '고쳤어요')).toMatchObject({ ok: true });
-  expect(await setSuspended(accountId, true, '잠시 멈춰요')).toMatchObject({ ok: true });
+  expect(await suspend(accountId, '잠시 멈춰요')).toMatchObject({ ok: true });
   expect(await sendNotice(null, '점검해요')).toMatchObject({ ok: true });
 
   expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 3 } } });
