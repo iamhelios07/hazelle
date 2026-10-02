@@ -5,7 +5,7 @@ import { usePages } from '../common/useLoaded';
 import { NOTICES } from '../common/words';
 import { Button, Callout, Dialog, Empty, List, ListItem, Section, Text } from '../ui';
 
-const REPLY = '내 알림에 답장';
+const REPLY = '내가 알린 것에 답장';
 
 // Opening it marks what it shows as seen. seek: the page was opened at it, from the toast saying notices came.
 export function NoticesSection({ seek }: { seek: boolean }) {
