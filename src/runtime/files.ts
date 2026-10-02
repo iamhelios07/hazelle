@@ -4,13 +4,15 @@ import type { ApiResult, api as realApi } from './api';
 type Api = typeof realApi;
 
 const UPLOADS = 4;
+const REFUSED = new Set(['too-large', 'file-blocked']);
 
 // The stored files (server/files). A file is sealed by its content, so one the server already holds, from this
 // account or any other, is never sent again; an import cut short and tried again sends only what did not arrive.
 export class Files {
   constructor(private readonly request: Api) {}
 
-  // Each file's reference, in order; null for one the server refuses as too large.
+  // Each file's reference, in order; null for one the server refuses: too large, or blocked (taken down by the
+  // operator), which the caller leaves out and counts as it does a picture it cannot read.
   async save(files: Uint8Array<ArrayBuffer>[]): Promise<ApiResult<(FileRef | null)[]>> {
     const sealed = await Promise.all(files.map(sealFile));
     const asked = await this.request<{ missing: string[] }>('POST', 'files/missing', { ids: [...new Set(sealed.map(({ ref }) => ref.id))] });
@@ -21,11 +23,11 @@ export class Files {
       const puts = await Promise.all(
         missing.slice(start, start + UPLOADS).map(async (id) => {
           const put = await this.request('PUT', `files/${id}`, sealed.find(({ ref }) => ref.id === id)!.body);
-          if (!put.ok && put.error === 'too-large') refused.add(id);
+          if (!put.ok && REFUSED.has(put.error)) refused.add(id);
           return put;
         }),
       );
-      const failed = puts.find((put) => !put.ok && put.error !== 'too-large');
+      const failed = puts.find((put) => !put.ok && !REFUSED.has(put.error));
       if (failed && !failed.ok) return failed;
     }
     return { ok: true, data: sealed.map(({ ref }) => (refused.has(ref.id) ? null : ref)) };

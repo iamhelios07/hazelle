@@ -3,7 +3,10 @@ import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, type Character, type Lore } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
+import { sealFile } from '../vault/files';
+import { api } from './api';
 import { addCharacter, copyCharacter, importCharacter, purgeCharacter, purgeExpired, resetToggles, setDeleted, setPictures, setToggle } from './characters';
+import { Files } from './files';
 import { testCard, testServer } from './testing';
 
 const server = testServer();
@@ -50,6 +53,20 @@ describe('importCharacter', () => {
     const avatar = store.children('avatar', id)[0]!.value;
     expect(await files.read(avatar.file)).toEqual({ ok: true, data: image.bytes });
     expect(new Set(steps)).toEqual(new Set(['picture', 'assets', 'saving']));
+  });
+
+  it('leaves out a picture the operator blocked, counted, and keeps the rest of the bot', async () => {
+    const { store } = await server.account();
+    const [blocked, kept] = [png(), png()];
+    const { ref } = await sealFile(blocked);
+    const files = new Files(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'PUT' && args[1] === `files/${ref.id}` ? { ok: false as const, error: 'file-blocked' } : api<T>(...args)));
+    const assets = [
+      { name: 'taken', read: async () => blocked },
+      { name: 'smile', read: async () => kept },
+    ];
+    const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, null, () => {});
+    expect(saved).toMatchObject({ ok: true, data: { skipped: 1 } });
+    expect(store.children('asset', saved.ok ? saved.data.id : '').map(({ value }) => value.name)).toEqual(['smile']);
   });
 });
 

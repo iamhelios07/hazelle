@@ -125,7 +125,7 @@ describe('backup', () => {
 
     await server.wipe();
     const { store, files } = await open('someone');
-    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: null });
+    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
 
     expect(await held(store)).toEqual(expected);
     await server.hold(store, old.chat);
@@ -145,7 +145,7 @@ describe('backup', () => {
     const expected = await held(old.store);
     await server.wipe();
     const { store, files } = await open('someone');
-    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: null });
+    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
     for (const [id, { parent }] of expected) if (parent === old.gone) expected.delete(id);
     expect(await held(store)).toEqual(expected);
   });

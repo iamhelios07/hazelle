@@ -71,7 +71,7 @@ export function BackupSection() {
         return;
       }
       const loaded = await restoreBackup(store, files, read.backup, options);
-      if (loaded.ok) return toast.show('백업을 불러왔어요.');
+      if (loaded.ok) return toast.show('백업을 불러왔어요.', loaded.data.skipped ? { detail: `내려졌거나 너무 큰 그림 ${loaded.data.skipped}개는 빼고 불러왔어요.` } : undefined);
       if (loaded.error === 'not-new') return toast.error('이미 저장한 것이 있는 계정이에요.', { detail: '백업은 새 계정에만 불러올 수 있어요.' });
       if (loaded.error === 'not-backup') return unread('not-backup');
       if (loaded.error === 'stopped') return toast.show('불러오기를 멈췄어요.', { detail: '같은 파일을 다시 불러오면 멈춘 곳부터 이어가요.' });

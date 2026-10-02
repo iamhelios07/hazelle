@@ -174,14 +174,15 @@ async function* readObjects(backup: Backup, signal: AbortSignal) {
 
 // A backup goes only into a new account: one holding nothing but what opening it added, and what this same
 // backup already wrote, so loading the file again after a stop carries on from there.
-// The backup's copies replace what opening added, and what it added that the backup lacks goes, so the
-// account ends as the backup was.
+// The backup's copies replace what opening added, and what it added that the backup lacks goes,
+// so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by the
+// operator, or too large), which are left out.
 export async function restoreBackup(
   store: Pick<ObjectStore, 'scan' | 'batch'>,
   files: Pick<Files, 'save'>,
   backup: Backup,
   { signal = new AbortController().signal, progress = () => {} }: Options = {},
-): Promise<ApiResult<null>> {
+): Promise<ApiResult<{ skipped: number }>> {
   try {
     const ids = new Set(backup.objects.filter(({ kind }) => kind !== 'summary').map(({ id }) => id));
     const present = new Set<string>();
@@ -198,6 +199,7 @@ export async function restoreBackup(
     // Each file seals to the id its objects name, and one the server holds already is not sent again.
     // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
     // would restore a picture that never opens. All files are checked before the first object write.
+    const refused = new Set<string>();
     for (const ref of backup.files.values()) {
       signal.throwIfAborted();
       const bytes = await readEntry(backup.file, backup.entries.get(FILES + ref.id)!, signal);
@@ -205,9 +207,11 @@ export async function restoreBackup(
       const saved = await files.save([bytes]);
       if (!saved.ok) return saved;
       const sealed = saved.data[0];
-      if (!sealed || sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false, error: 'not-backup' };
+      if (!sealed) refused.add(ref.id);
+      else if (sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false, error: 'not-backup' };
       progress(++done, total);
     }
+    let skipped = 0;
     // In their old rev order, so each chat's entries fold as they did; owners follow every owned page.
     const depths = [...new Set(backup.objects.filter(({ id }) => todo.has(id)).map(({ kind }) => ownershipDepth(kind as Kind)))].sort((a, b) => b - a);
     for (const depth of depths) {
@@ -221,6 +225,12 @@ export async function restoreBackup(
       };
       for await (const item of readObjects(backup, signal)) {
         if (!todo.has(item.object.id) || ownershipDepth(item.object.kind) !== depth) continue;
+        const file = fileOf(item.object);
+        if (file && refused.has(file.id)) {
+          skipped++;
+          progress(++done, total);
+          continue;
+        }
         if (writes.length && (writes.length === PAGE_ROWS || size + item.size > PAGE_BYTES)) {
           const result = await flush();
           if (!result.ok) return result;
@@ -233,7 +243,8 @@ export async function restoreBackup(
         if (!result.ok) return result;
       }
     }
-    return await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })), undefined, { signal });
+    const removed = await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })), undefined, { signal });
+    return removed.ok ? { ok: true, data: { skipped } } : removed;
   } catch {
     return { ok: false, error: signal.aborted ? 'stopped' : 'not-backup' };
   }
