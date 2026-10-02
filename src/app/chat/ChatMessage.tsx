@@ -150,9 +150,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         </Failure>
       </>
     );
-  } else if (opening && empty) {
+  } else if (opening && !version.text.trim()) {
     body = <Text variant="note">{`${NO_GREETING} 시작해요.`}</Text>;
-  } else if (!empty || live) {
+  } else if (!empty || hosted.length > 0) {
     const box = ({ script, html }: Box) => (
       <div key={script} ref={actions.watch(script)}>
         <Story html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />
@@ -161,7 +161,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     body = (
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
-        <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />
+        {/* A message may be all box: a status window's script took every word of it. */}
+        {!empty && <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );
