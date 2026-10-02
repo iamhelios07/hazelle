@@ -17,7 +17,10 @@ export type Event =
   | { kind: 'call'; name: string }
   | { kind: 'edit'; stage: EditStage; value: unknown; meta: Record<string, unknown> };
 
-export type ScriptError = { script: string; message: string };
+// runaway: the CBS the script evaluated ran away (cbs/evaluate Runaway), which the app words as its other runaway
+// notices; the message is only what the script itself sees.
+type Failure = { message: string } | { runaway: true };
+export type ScriptError = { script: string } & Failure;
 
 // What a run did, for the caller to save. index is a message's place in the snapshot. value: an edit's result.
 // handled: some script had the function the event calls, or a block trigger answered it. missing: the functions
@@ -55,6 +58,7 @@ const UNSUPPORTED = [
 type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
 
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const failure = (run: Run, error: unknown): Failure => (run.ranAway ? { runaway: true } : { message: describe(error) });
 const roleOf = (value: unknown): Working['role'] => (value === 'user' ? 'user' : 'char');
 const view = ({ role, data, time }: Working) => ({ role, data, time });
 
@@ -82,7 +86,7 @@ export class Lua {
   // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
   // the event is its own.
   async run(owner: string, triggers: Trigger[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
-    const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set() };
+    const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };
     const errors: ScriptError[] = [];
     let value = event.kind === 'edit' ? event.value : undefined;
     let handled = false;
@@ -90,7 +94,7 @@ export class Lua {
       if (script.kind === 'blocks') {
         if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
         handled = true;
-        await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, message: describe(error) }));
+        await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, ...failure(run, error) }));
         continue;
       }
       const engine = await this.engine(owner, 'event', script);
@@ -111,7 +115,7 @@ export class Lua {
           handled = true;
           if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
         } catch (error) {
-          errors.push({ script: script.name, message: describe(error) });
+          errors.push({ script: script.name, ...failure(run, error) });
         } finally {
           engine.run = null;
         }
@@ -149,13 +153,14 @@ export class Lua {
         const variables = new Map(snapshot.variables);
         for (const [at, item] of items.entries()) {
           for (const [name, value] of item.variables) variables.set(name, value);
-          engine.run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing };
+          const run: Run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
+          engine.run = run;
           try {
             const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
             if (edited === DEAF) return void (listening[place] = false);
             if (typeof edited === 'string') texts[at] = edited;
           } catch (error) {
-            if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, message: describe(error) });
+            if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, ...failure(run, error) });
           } finally {
             engine.run = null;
           }

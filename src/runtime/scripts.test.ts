@@ -139,6 +139,14 @@ describe("a turn with the bot's Lua", () => {
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
     }));
 
+  it("tells a script's cbs() that ran away as the runaway note, not as its error", () =>
+    server.withSession(async (session) => {
+      const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
+      const { chat } = await chatWith(session, `function grow(id) cbs(${doubling}) end`);
+      expect(await session.scripts.press(chat, { trigger: 'grow' })).toBe(true);
+      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'runaway' }]);
+    }));
+
   it('answers a button with the block trigger of its name, whose texts are CBS over what it wrote', () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, [
