@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { Story } from './Story';
+import { Story, type BotButton } from './Story';
 import styles from './MarginBox.module.css';
 
 type Props = {
   html: string;
   css: string;
+  buttons: 'live' | 'inert';
+  onPress: (button: BotButton | null) => void;
   // Whether it fits the margin at no less than LEAST of its size.
   onFit: (fits: boolean) => void;
 };
@@ -50,7 +52,7 @@ function drawn(element: HTMLElement): { left: number; right: number; bottom: num
 
 // A bot's box in the story's margin (상태창, 옆에 두기): laid out as wide as the story's text, as in its message, and
 // drawn smaller to fit the margin. Pointed at, it grows to its size over the story, and the margin keeps its place.
-export function MarginBox({ html, css, onFit }: Props) {
+export function MarginBox({ html, css, buttons, onPress, onFit }: Props) {
   const room = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<{ scale: number; width: number; left: number; right: number; bottom: number } | null>(null);
@@ -91,7 +93,7 @@ export function MarginBox({ html, css, onFit }: Props) {
     <div ref={room} className={styles.room}>
       <div className={styles.slot} style={place as CSSProperties}>
         <div ref={card} className={styles.card}>
-          <Story html={html} css={css} />
+          <Story html={html} css={css} buttons={buttons} onPress={onPress} />
         </div>
       </div>
     </div>

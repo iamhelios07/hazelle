@@ -6,6 +6,7 @@ import type { Files } from '../runtime/files';
 import type { Remembering } from '../runtime/memory';
 import type { Session } from '../runtime/session';
 import type { Opening } from '../runtime/read-model';
+import type { ScriptsState } from '../runtime/scripts';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';
@@ -140,6 +141,12 @@ export function useChatMemory(chat: string | null): Memory | null {
     [store, id],
   );
   return useSyncExternalStore(subscribe, () => (id === null ? null : store.children('memory', id).find((memory) => memory.id === memoryId(id)) ?? null))?.value ?? null;
+}
+
+// What the bots' scripts have said and not yet shown, and what they are asking.
+export function useScripts(): ScriptsState {
+  const { scripts } = useSession();
+  return useSyncExternalStore(scripts.subscribe, scripts.snapshot);
 }
 
 export function useRemembering(): Remembering {

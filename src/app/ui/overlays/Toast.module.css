@@ -6,6 +6,7 @@
   --color-bg: var(--palette-cream-100);
   --color-border: var(--palette-ink-line);
   --color-surface-hover: var(--palette-ink-wash);
+  --color-surface-raised: var(--palette-ink-wash);
   --color-accent: var(--palette-ink-800);
   --color-accent-hover: var(--palette-ink-600);
   --color-on-accent: var(--palette-cream-100);
@@ -42,6 +43,51 @@
   font-size: var(--text-sm);
 }
 
+/* Whose words the notice is: a face and a name over them, and the × of one that stays. */
+.from {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: var(--control-tool);
+  padding: var(--space-8) var(--space-8) 0 var(--space-16);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.name {
+  composes: ellipsis from '../foundation/a11y.module.css';
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.from + .row {
+  padding: var(--space-4) var(--space-16) var(--space-16);
+}
+
+.words {
+  white-space: pre-wrap;
+}
+
+.cut {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.whole {
+  display: block;
+  max-height: var(--toast-words-most);
+  overflow-y: auto;
+}
+
+.more {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: start;
+}
+
 .action {
   flex-shrink: 0;
 }
@@ -71,6 +117,19 @@
   padding: var(--space-8) var(--space-16);
   background: var(--color-warn);
   font-weight: var(--weight-semibold);
+}
+
+.error .from {
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-16);
+  background: var(--color-warn);
+}
+
+.error .from button {
+  color: var(--color-text);
+}
+
+.error .from + .row {
+  padding-top: var(--space-12);
 }
 
 .error .row {

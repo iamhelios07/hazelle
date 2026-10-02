@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { PICTURE_PERCENT, type Character, type Pictures } from '../../model/library';
-import { editCharacter, setDecor, setPictures, type CharacterText } from '../../runtime/characters';
+import { editCharacter, setBotModels, setDecor, setPictures, type CharacterText } from '../../runtime/characters';
+import { scriptsOf } from '../../runtime/scripts';
 import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
 import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { BOT_MODELS, BOT_MODELS_HELP } from '../common/words';
 import { useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
@@ -27,6 +29,7 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
   const { status, change: queue } = useAutosave<CharacterText>((patch) => editCharacter(store, id, patch));
   const toast = useToast();
   const [decor, setDecorShown] = useState(initial.decor !== false);
+  const [botModels, setBotModelsShown] = useState(initial.botModels === true);
   const pictureSave = useAutosave<Pictures>((patch) => setPictures(store, id, patch));
   const [fold, setFold] = useState(initial.pictures?.fold !== false);
   const [heights, setHeights] = useState<Record<Height, string>>({ peek: String(initial.pictures?.peek ?? ''), most: String(initial.pictures?.most ?? '') });
@@ -36,6 +39,15 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
     void setDecor(store, id, on).then((saved) => {
       if (saved.ok) return;
       setDecorShown(!on);
+      toast.failed(saved, '저장하지 못했어요.');
+    });
+  }
+
+  function changeBotModels(on: boolean) {
+    setBotModelsShown(on);
+    void setBotModels(store, id, on).then((saved) => {
+      if (saved.ok) return;
+      setBotModelsShown(!on);
       toast.failed(saved, '저장하지 못했어요.');
     });
   }
@@ -127,6 +139,7 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
               control={<Switch label="긴 그림 접기" checked={fold} onChange={changeFold} />}
             />
           )}
+          {scriptsOf(initial.card).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={changeBotModels} />} />}
         </SettingGroup>
         {decor && (
           <Disclosure label="그림 크기">

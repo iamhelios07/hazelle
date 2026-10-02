@@ -26,7 +26,8 @@ export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
             name={box.name}
             html={box.drawn && shownHtml(box.drawn.html, decor)}
             css={decor.css}
-            onInert={actions.inert}
+            buttons={decor.buttons}
+            onPress={actions.press}
             actions={status.length > 1 && unmark(chat, box)}
           />
         ))}
@@ -51,7 +52,7 @@ export function ChatStatusAside({ chat }: { chat: OpenChat }) {
     >
       {status.map((box) =>
         box.drawn ? (
-          <MarginBox key={box.script} html={shownHtml(box.drawn.html, decor)} css={decor.css} onFit={(fits) => actions.fitStatus(box.script, fits)} />
+          <MarginBox key={box.script} html={shownHtml(box.drawn.html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} onFit={(fits) => actions.fitStatus(box.script, fits)} />
         ) : null,
       )}
     </StoryAside>

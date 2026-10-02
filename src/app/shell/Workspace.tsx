@@ -8,6 +8,7 @@ import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
 import { ToastProvider, type Standing } from '../toast';
 import { Brand, Screen, Text } from '../ui';
+import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 
 const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 닿으면 이어서 저장해요.' };
@@ -57,6 +58,7 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   return (
     <SessionProvider session={session} account={account}>
       <ToastProvider standing={waiting ? RECONNECTING : null}>
+        <BotNotes />
         <ImportProvider>
           <Layout />
         </ImportProvider>

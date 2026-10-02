@@ -4,6 +4,7 @@ import { describeTurnFailure } from '../common/failure';
 import { withRo } from '../common/languages';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
 import { Button, Callout, Composer, pressed, pressedKey, SendButton, SendNote, useMenuOpener, useWide } from '../ui';
+import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
 import { ChatNote } from './ChatNote';
 import { ChatPersonaMenu } from './ChatPersonaMenu';
@@ -64,6 +65,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
           {describeTurnFailure(problem)}
         </Callout>
       )}
+      <ChatAsk chat={chat} onTyped={() => input.current?.focus()} />
       <Composer
         inputRef={input}
         compact={scroll.away}

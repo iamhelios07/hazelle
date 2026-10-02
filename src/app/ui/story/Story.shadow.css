@@ -84,10 +84,12 @@ img {
   }
 }
 
-/* Until Lua runs, a bot's buttons do nothing; the story says so when one is pressed. */
-button,
-[risu-btn],
-[risu-trigger] {
+/* data-buttons is the host's (Story.tsx). A button nothing answers looks it, whatever the bot's CSS says. */
+:host([data-buttons='inert']) :is(button, [risu-btn], [risu-trigger]) {
   opacity: var(--story-inert-opacity) !important;
   cursor: not-allowed !important;
+}
+
+:host([data-buttons='live']) :is(button, [risu-btn], [risu-trigger]) {
+  cursor: pointer;
 }
