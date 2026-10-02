@@ -40,7 +40,7 @@ export function AskCard({ from, text, help, answer, onAnswer }: Props) {
       {answer.kind === 'line' ? (
         <Line onSubmit={onAnswer} />
       ) : (
-        <div className={styles.answer}>
+        <div className={`${styles.answer} ${styles.choices}`}>
           {answer.choices.map(({ label, value, primary }, index) => (
             <Button key={index} variant={primary ? 'primary' : 'secondary'} size="sm" onClick={() => onAnswer(value)}>
               {label}

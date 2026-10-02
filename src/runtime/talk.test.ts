@@ -14,6 +14,13 @@ describe('withTurn', () => {
     const [message] = withTurn([], { chat: 'c', said, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '', reasoning: '' }, 'c');
     expect(message!.versions[0]).toMatchObject({ text: 'Hello', translation });
   });
+
+  it('marks the message shown before it is saved, and not the saved one', () => {
+    const turn = { chat: 'c', said: { id: 'said', text: 'Hello' }, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
+    expect(withTurn([], turn, 'c')[0]!.unstored).toBe(true);
+    const stored = { id: 'said', role: 'user' as const, at: 0, versions: [{ id: 'said', seed: 'said', text: 'Hello', receipt: null, edited: false, at: 0 }], selected: 0 };
+    expect(withTurn([stored], turn, 'c')[0]!.unstored).toBeUndefined();
+  });
 });
 
 describe('Talk', () => {

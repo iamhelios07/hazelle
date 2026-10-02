@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
+import { useLayer } from '../overlays/layers';
 import styles from './SidePeek.module.css';
 
 type Props = {
@@ -18,17 +19,7 @@ type Props = {
 export function SidePeek({ label, open, onOpenChange, actions, children }: Props) {
   const root = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => root.current!.contains(event.target as Node) || onOpenChange(false);
-    const escape = (event: KeyboardEvent) => event.key === 'Escape' && onOpenChange(false);
-    document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', outside);
-      document.removeEventListener('keydown', escape);
-    };
-  }, [open, onOpenChange]);
+  useLayer(open, { outside: (target) => !root.current?.contains(target), close: () => onOpenChange(false) });
 
   return (
     <div ref={root} className={open ? `${styles.peek} ${styles.open}` : styles.peek}>

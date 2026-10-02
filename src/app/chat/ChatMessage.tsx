@@ -7,7 +7,6 @@ import { firstLine, shown } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
-import { withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
@@ -29,8 +28,6 @@ type Props = {
   translating: Translating;
   // 답장 번역 will translate this version, being written or just written.
   awaited: boolean;
-  // The label of the language a message is sent translated in.
-  sendLanguage: string;
   flipped: boolean;
   isLast: boolean;
   // The user's message right before the last reply, which 저장하고 새 답장 받기 answers again.
@@ -63,7 +60,7 @@ const NO_GREETING = '첫 메시지 없이';
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, decor, hosted, offered, translating, awaited, sendLanguage, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, found, seek, branching, modelMenu, actions } = props;
+  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, found, seek, branching, modelMenu, actions } = props;
   const { username } = useSession();
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
@@ -150,9 +147,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         </Failure>
       </>
     );
-  } else if (opening && empty) {
+  } else if (opening && !version.text.trim()) {
     body = <Text variant="note">{`${NO_GREETING} 시작해요.`}</Text>;
-  } else if (!empty || live) {
+  } else if (!empty || hosted.length > 0) {
     const box = ({ script, html }: Box) => (
       <div key={script} ref={actions.watch(script)}>
         <Story html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />
@@ -161,7 +158,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     body = (
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
-        <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />
+        {/* A message may be all box: a status window's script took every word of it. */}
+        {!empty && <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );
@@ -180,11 +178,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => actions.translate(message)} />
   );
   const flip = () => actions.flipTranslation(message);
+  // A message sent translated does not keep the language it went out in, so its mark names none: the setting now may
+  // be another.
   const mark =
     !translation || editing !== null
       ? undefined
       : mine
-        ? { label: `${withRo(sendLanguage)} 보냄`, action: flipped ? '내가 쓴 말 보기' : '보낸 말 보기', onClick: flip }
+        ? { label: '옮겨 보냄', action: flipped ? '내가 쓴 말 보기' : '보낸 말 보기', onClick: flip }
         : { label: flipped ? '원문' : '번역', action: flipped ? '번역 보기' : '원문 보기', onClick: flip };
 
   const count = message.versions.length;
@@ -243,7 +243,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       </Menu>
     ) : null;
 
-  const tools = live || editing !== null ? undefined : opening ? (
+  const tools = live || message.unstored || editing !== null ? undefined : opening ? (
     <>
       {translateTool}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
