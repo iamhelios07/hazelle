@@ -38,7 +38,7 @@ describe('objects', () => {
     expect(await response.json()).toEqual({ error: 'cache-reset' });
   });
 
-  it('counts the bytes of the bodies it holds, and at the cap refuses only a batch that grows the account', async () => {
+  it('counts the bytes of the bodies it holds, and at the cap creates nothing while changes may grow it within a margin', async () => {
     const cookie = await signedIn();
     const bytes = () => t.env.DB.prepare('SELECT bytes FROM accounts').first('bytes');
     await write(cookie, A, { kind: 'settings', body: '가'.repeat(10) });
@@ -48,10 +48,13 @@ describe('objects', () => {
     await t.env.DB.prepare('UPDATE service SET account_bytes_cap = 50').run();
     const grown = await write(cookie, crypto.randomUUID(), { kind: 'chat', body: 'x' });
     expect(grown).toEqual({ status: 413, json: { error: 'storage-full' } });
-    expect((await write(cookie, A, { kind: 'settings', body: '가'.repeat(11), baseRev: 1 })).json).toEqual({ error: 'storage-full' });
-    expect(await t.env.DB.prepare('SELECT rev FROM accounts').first('rev')).toBe(2);
+    const changed = await t.post('objects/batch', { writes: [{ id: A, kind: 'settings', parent: null, body: '가'.repeat(11), baseRev: 1 }] }, cookie);
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get('x-account-bytes')).toBe('53');
+    expect((await write(cookie, A, { kind: 'settings', body: 'x'.repeat(1_000_051), baseRev: 3 })).json).toEqual({ error: 'storage-full' });
+    expect(await t.env.DB.prepare('SELECT rev FROM accounts').first('rev')).toBe(3);
 
-    expect((await write(cookie, A, { kind: 'settings', body: 'y'.repeat(30), baseRev: 1 })).status).toBe(200);
+    expect((await write(cookie, A, { kind: 'settings', body: 'y'.repeat(30), baseRev: 3 })).status).toBe(200);
     expect((await write(cookie, B, { kind: 'chat', body: null, baseRev: 2 })).status).toBe(200);
     expect(await bytes()).toBe(30);
     expect((await write(cookie, crypto.randomUUID(), { kind: 'chat', body: 'x'.repeat(20) })).status).toBe(200);

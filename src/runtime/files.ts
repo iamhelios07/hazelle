@@ -4,15 +4,15 @@ import type { ApiResult, api as realApi } from './api';
 type Api = typeof realApi;
 
 const UPLOADS = 4;
-const REFUSED = new Set(['too-large', 'file-blocked']);
+const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
 // The stored files (server/files). A file is sealed by its content, so one the server already holds, from this
 // account or any other, is never sent again; an import cut short and tried again sends only what did not arrive.
 export class Files {
   constructor(private readonly request: Api) {}
 
-  // Each file's reference, in order; null for one the server refuses: too large, or blocked (taken down by the
-  // operator), which the caller leaves out and counts as it does a picture it cannot read.
+  // Each file's reference, in order; null for one the server refuses: too large, blocked (taken down by the operator),
+  // or past the account's picture cap, which the caller leaves out and counts as it does a picture it cannot read.
   async save(files: Uint8Array<ArrayBuffer>[]): Promise<ApiResult<(FileRef | null)[]>> {
     const sealed = await Promise.all(files.map(sealFile));
     const asked = await this.request<{ missing: string[] }>('POST', 'files/missing', { ids: [...new Set(sealed.map(({ ref }) => ref.id))] });

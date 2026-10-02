@@ -7,8 +7,8 @@ const server = testServer();
 
 it('sets the service, suspends an account and resolves its report, each read back newest first in one short page', async () => {
   const { accountId } = await server.operator();
-  expect(await setService({ signupCap: 5, accountBytesCap: 1_000_000 })).toMatchObject({ ok: true });
-  expect(await readService()).toEqual({ ok: true, data: { signupCap: 5, accountBytesCap: 1_000_000, accounts: 1, bytes: 0 } });
+  expect(await setService({ signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null })).toMatchObject({ ok: true });
+  expect(await readService()).toEqual({ ok: true, data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, bytes: 0, fileBytes: 0 } });
 
   expect(await setSuspended(accountId, true)).toMatchObject({ ok: true });
   expect(await readAccounts()).toMatchObject({ ok: true, data: [{ accountId, suspended: true }] });

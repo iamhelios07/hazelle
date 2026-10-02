@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
 import { fail, ID, isAdmin, readObject, type Account, type AppEnv } from './http';
 import { currentAccount, dropSessionCookie, endSession, requireSession, setSessionCookie, startSession } from './session';
@@ -43,7 +44,7 @@ accounts.post('/signup', async (c) => {
   ]);
   if (!created!.results.length) return room!.results[0]!.open ? fail(c, 409, 'username-taken') : fail(c, 403, 'signup-closed');
   setSessionCookie(c, session.token);
-  return c.json(describe(c, { id: accountId, username, suspended: false }), 201);
+  return c.json(await describe(c, { id: accountId, username, suspended: false }), 201);
 });
 
 // Answers like GET /session, so the client opens the vault without another request.
@@ -58,10 +59,11 @@ accounts.post('/login', async (c) => {
   const refused = await checkProof(c, account, method, proof);
   if (refused) return refused;
 
-  const session = await startSession(db, account.id);
-  await db.batch([clearFailures(db, account.id), session.insert]);
-  setSessionCookie(c, session.token);
-  return c.json({ session: describe(c, { ...account, suspended: account.suspended_at !== null }), vault: await readVault(db, account.id) });
+  const started = await startSession(db, account.id);
+  await db.batch([clearFailures(db, account.id), started.insert]);
+  setSessionCookie(c, started.token);
+  const [session, vault] = await Promise.all([describe(c, { ...account, suspended: account.suspended_at !== null }), readVault(db, account.id)]);
+  return c.json({ session, vault });
 });
 
 accounts.post('/logout', async (c) => {
@@ -74,7 +76,8 @@ accounts.post('/logout', async (c) => {
 accounts.get('/session', async (c) => {
   const account = await currentAccount(c);
   if (!account) return c.json({ session: null, signupOpen: Boolean(await c.env.DB.prepare(`SELECT ${ROOM} AS open`).first('open')) });
-  return c.json({ session: describe(c, account), vault: await readVault(c.env.DB, account.id) });
+  const [session, vault] = await Promise.all([describe(c, account), readVault(c.env.DB, account.id)]);
+  return c.json({ session, vault });
 });
 
 // 탈퇴. The proof is asked again, as for a new password, so a stolen session alone cannot delete the account. The
@@ -94,7 +97,11 @@ accounts.delete('/account', requireSession, async (c) => {
   return c.body(null, 204);
 });
 
-// The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account.
-function describe(c: Context<AppEnv>, account: Account) {
-  return { accountId: account.id, username: account.username, admin: isAdmin(c, account.id), suspended: account.suspended };
+// The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:
+// what the account holds and the caps that apply to it, null for none.
+async function describe(c: Context<AppEnv>, account: Account) {
+  const storage = await c.env.DB.prepare(`SELECT bytes, ${CAP.bytes} AS bytesCap, file_bytes AS fileBytes, ${CAP.fileBytes} AS fileBytesCap FROM accounts WHERE id = ?`)
+    .bind(account.id)
+    .first<{ bytes: number; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null }>();
+  return { accountId: account.id, username: account.username, admin: isAdmin(c, account.id), suspended: account.suspended, storage: storage! };
 }

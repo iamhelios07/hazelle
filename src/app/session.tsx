@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatScope } from '../engine/render';
 import type { Kind } from '../model/kinds';
+import type { AccountFacts, Standing } from '../runtime/account';
 import { memoryId, type Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
 import type { Remembering } from '../runtime/memory';
@@ -13,8 +14,8 @@ import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';
 import { Saves } from './common/saveQueue';
 
-// admin and suspended are the server's word on the account when it was opened (GET /session, signup, login).
-export type Account = { admin: boolean; suspended: boolean; onLock: () => void; onLogout: () => Promise<string | null> };
+// admin: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
+export type Account = { admin: boolean; facts: AccountFacts; onLock: () => void; onLogout: () => Promise<string | null> };
 
 // How long leaving waits for the saves still on their way. A save in flight and one queued behind it are two round
 // trips, which from Korea can take seconds each; a store write waiting out a dropped connection never ends on its own.
@@ -49,6 +50,11 @@ export const useAccount = (): Account => useOpen().account;
 export const useSaves = (): Saves => useOpen().saves;
 export const useStore = (): ObjectStore => useSession().store;
 export const useFiles = (): Files => useSession().files;
+
+export function useStanding(): Standing {
+  const { facts } = useAccount();
+  return useSyncExternalStore(facts.subscribe, facts.snapshot);
+}
 export const useTalk = (): Talk => useSession().talk;
 export const useTranslator = (): Translator => useSession().translator;
 

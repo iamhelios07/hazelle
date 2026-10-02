@@ -20,14 +20,28 @@ it('reads a connection that drops inside the answer as offline, and a whole answ
   expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'server-error' });
 });
 
-it('states the account the page holds with every request, and tells the page once when the server names another', async () => {
-  const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json({ error: 'account-mismatch' }, { status: 409 }));
+it('states the account the page holds with every request, and hears what answers say of the account', async () => {
+  const answers = [
+    Response.json({ error: 'suspended' }, { status: 403, headers: { 'x-relay': 'upstream' } }),
+    Response.json({ error: 'suspended' }, { status: 403 }),
+    Response.json({ error: 'storage-full' }, { status: 413 }),
+    Response.json({ revs: [1] }, { headers: { 'x-account-bytes': '120' } }),
+    new Response(null, { status: 204, headers: { 'x-account-file-bytes': '30' } }),
+    Response.json({ error: 'account-mismatch' }, { status: 409 }),
+    Response.json({ error: 'account-mismatch' }, { status: 409 }),
+  ];
+  const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => answers.shift()!);
   vi.stubGlobal('fetch', fetch);
-  const lost = vi.fn();
-  holdAccount('account-a', lost);
+  const heard = vi.fn();
+  holdAccount('account-a', heard);
 
-  expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'account-mismatch' });
-  await api('GET', 'objects?since=0');
-  expect(fetch.mock.calls.map(([, init]) => (init.headers as Record<string, string>)['x-account'])).toEqual(['account-a', 'account-a']);
-  expect(lost).toHaveBeenCalledTimes(1);
+  for (let sent = 0; sent < 7; sent++) await api('POST', 'objects/batch', {});
+  expect(fetch.mock.calls.map(([, init]) => (init.headers as Record<string, string>)['x-account'])).toEqual(Array(7).fill('account-a'));
+  expect(heard.mock.calls.map(([told]) => told)).toEqual([
+    { kind: 'suspended' },
+    { kind: 'storage-full' },
+    { kind: 'bytes', bytes: 120 },
+    { kind: 'file-bytes', fileBytes: 30 },
+    { kind: 'elsewhere' },
+  ]);
 });

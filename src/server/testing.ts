@@ -1,4 +1,5 @@
 import { getPlatformProxy } from 'wrangler';
+import { sha256Hex } from './http';
 import { createRelay, type Upstream } from './relay';
 import { StreamBox, type BoxStorage } from './stream-box';
 import app from './worker';
@@ -18,16 +19,24 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
   }
 
-  const send = (method: string, path: string, body?: unknown, cookie?: string) =>
-    app.request(
+  // As a page holding the cookie's account sends it: stating that account (server/session). raw states only what it is
+  // given. A Uint8Array body goes as bytes.
+  const holding = async (cookie: string): Promise<Record<string, string>> => {
+    const account = await env.DB.prepare('SELECT account_id FROM sessions WHERE token_hash = ?').bind(await sha256Hex(cookie.split('=')[1]!)).first<string>('account_id');
+    return account ? { cookie, 'x-account': account } : { cookie };
+  };
+  const send = async (method: string, path: string, body?: unknown, cookie?: string) => {
+    const bytes = body instanceof Uint8Array;
+    return app.request(
       `/api/${path}`,
       {
         method,
-        headers: { ...(method === 'GET' ? {} : { 'content-type': 'application/json' }), ...(cookie ? { cookie } : {}) },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: { ...(method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' }), ...(cookie ? await holding(cookie) : {}) },
+        body: body === undefined ? undefined : bytes ? (body as Uint8Array<ArrayBuffer>) : JSON.stringify(body),
       },
       env,
     );
+  };
 
   return {
     env,
@@ -37,7 +46,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       env.ADMIN_ACCOUNT = '';
       return env.DB.batch([
         ...['objects', 'files', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
-        env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL'),
+        env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
     },
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),

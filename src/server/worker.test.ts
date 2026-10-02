@@ -18,7 +18,7 @@ describe('accounts', () => {
     const body = signupBody();
     const signup = await post('signup', body);
     expect(signup.status).toBe(201);
-    expect(await signup.json()).toEqual({ accountId: body.accountId, username: 'jin', admin: false, suspended: false });
+    expect(await signup.json()).toEqual({ accountId: body.accountId, username: 'jin', admin: false, suspended: false, storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null } });
     const cookie = signup.headers.get('set-cookie')!;
     expect(cookie).toMatch(/^__Host-session=[0-9a-f]{64};/);
     expect(cookie).toContain('HttpOnly');
@@ -27,7 +27,7 @@ describe('accounts', () => {
 
     const session = await get('session', sessionCookie(signup));
     expect(await session.json()).toEqual({
-      session: { accountId: body.accountId, username: 'jin', admin: false, suspended: false },
+      session: { accountId: body.accountId, username: 'jin', admin: false, suspended: false, storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null } },
       vault: { passwordWrap: body.passwordWrap, recoveryWrap: body.recoveryWrap },
     });
 
@@ -70,7 +70,7 @@ describe('accounts', () => {
       const login = await post('login', { username: 'jin', method, proof: value });
       expect(login.status).toBe(200);
       expect(await login.json()).toEqual({
-        session: { accountId: body.accountId, username: 'jin', admin: false, suspended: false },
+        session: { accountId: body.accountId, username: 'jin', admin: false, suspended: false, storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null } },
         vault: { passwordWrap: body.passwordWrap, recoveryWrap: body.recoveryWrap },
       });
     }
@@ -146,7 +146,7 @@ describe('a suspended account', () => {
 
     const refused = [
       await post('objects/batch', { writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }, cookie),
-      await t.raw(`files/${'a'.repeat(64)}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream', cookie }, body: new Uint8Array([1]) }),
+      await t.put(`files/${'a'.repeat(64)}`, new Uint8Array([1]), cookie),
       await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie),
       await post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null }, cookie),
     ];
@@ -172,6 +172,13 @@ describe('guards', () => {
     expect(await other.json()).toEqual({ error: 'account-mismatch' });
     expect(await t.env.DB.prepare('SELECT rev FROM accounts').first('rev')).toBe(0);
     expect((await send(body.accountId)).status).toBe(200);
+  });
+
+  it('refuses a signed-in request that states no account', async () => {
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    const response = await t.raw('objects?since=0', { headers: { cookie } });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'bad-input' });
   });
 
   it('refuses a body over the bound, signed in or not, and takes more only on the routes listed for it', async () => {

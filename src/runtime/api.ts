@@ -3,27 +3,40 @@ import { isRecord } from '../connectors/values';
 export type ApiFailure = { ok: false; error: string; retryAfter?: number };
 export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
 
-// The account this page is open as. Every request states it, and the server refuses one whose cookie has come to name
-// another account, as it does once another tab signs in as someone else (server/session). onLost hears of that once.
-let held: string | null = null;
-let lost: (() => void) | null = null;
+// What an answer says of the account the page holds rather than of the request: that the cookie has come to name
+// another account (elsewhere, told once), that the operator suspended it, that a write was refused for room, or the
+// account's counts after a write or a sync. The header names are the server's USE_HEADERS (server/caps).
+export type Heard = { kind: 'elsewhere' } | { kind: 'suspended' } | { kind: 'storage-full' } | { kind: 'bytes'; bytes: number } | { kind: 'file-bytes'; fileBytes: number };
 
-export function holdAccount(account: string | null, onLost: (() => void) | null = null) {
+const COUNTS = { bytes: 'x-account-bytes', fileBytes: 'x-account-file-bytes' } as const;
+const REFUSALS: Record<string, 'elsewhere' | 'suspended' | 'storage-full'> = { 'account-mismatch': 'elsewhere', suspended: 'suspended', 'storage-full': 'storage-full' };
+
+// The account this page is open as. Every request states it, and the server refuses one whose cookie has come to name
+// another account, as it does once another tab signs in as someone else (server/session).
+let held: string | null = null;
+let hear: ((heard: Heard) => void) | null = null;
+
+export function holdAccount(account: string | null, onHeard: ((heard: Heard) => void) | null = null) {
   held = account;
-  lost = onLost;
+  hear = onHeard;
 }
 
 // Every request to this app's server leaves through here (api, and runtime/relay's raw ones), so each states the
-// account and every refusal for naming another reaches onLost.
+// account and the page hears what every answer says of it.
 export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {}): Promise<Response> {
   const response = await fetch(`/api/${path}`, { ...init, headers: { ...(held === null ? {} : { 'x-account': held }), ...init.headers } });
-  if (response.status === 409) {
+  const tell = hear;
+  if (!tell) return response;
+  const bytes = response.headers.get(COUNTS.bytes);
+  const fileBytes = response.headers.get(COUNTS.fileBytes);
+  if (bytes !== null) tell({ kind: 'bytes', bytes: Number(bytes) });
+  if (fileBytes !== null) tell({ kind: 'file-bytes', fileBytes: Number(fileBytes) });
+  // A provider's refusal comes through the relay marked x-relay, and its body is the provider's to read.
+  if ((response.status === 403 || response.status === 409 || response.status === 413) && !response.headers.has('x-relay')) {
     const body: unknown = await response.clone().json().catch(() => null);
-    if (isRecord(body) && body.error === 'account-mismatch') {
-      const tell = lost;
-      lost = null;
-      tell?.();
-    }
+    const kind = isRecord(body) && typeof body.error === 'string' ? REFUSALS[body.error] : undefined;
+    if (kind === 'elsewhere') hear = null;
+    if (kind) tell({ kind });
   }
   return response;
 }

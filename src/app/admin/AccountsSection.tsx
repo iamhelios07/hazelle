@@ -1,20 +1,25 @@
-import { Ban, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
+import { Ban, HardDrive, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiResult } from '../../runtime/api';
-import { readAccounts, removeAccount, setSuspended, type AdminAccount } from '../../runtime/admin';
+import { readAccounts, removeAccount, setSuspended, type AdminAccount, type OwnCap } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
+import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Callout, ConfirmDialog, IconButton, List, ListItem, Menu, MenuItem, Section } from '../ui';
-import { megabytes } from './bytes';
+import { CapsDialog } from './CapsDialog';
 import { useLoaded } from './useLoaded';
+
+// What it holds, and its own cap when it has one.
+const held = (name: string, bytes: number, cap: OwnCap) => `${name} ${sizeText(bytes)}${cap === 'default' ? '' : ` / ${cap === null ? '한도 없음' : sizeText(cap)}`}`;
 
 export function AccountsSection({ onActed }: { onActed: () => void }) {
   const { username: own } = useSession();
   const toast = useToast();
   const { data: accounts, failure, reload } = useLoaded(readAccounts);
   const [removing, setRemoving] = useState<AdminAccount | null>(null);
+  const [capping, setCapping] = useState<AdminAccount | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function act(done: Promise<ApiResult<undefined>>, failed: string) {
@@ -41,22 +46,33 @@ export function AccountsSection({ onActed }: { onActed: () => void }) {
               key={account.accountId}
               title={account.username}
               tags={[...(account.username === own ? ['운영자'] : []), ...(account.suspended ? ['정지됨'] : [])]}
-              description={`${monthDay(account.createdAt)} 가입 · 저장 ${megabytes(account.bytes)} · 파일 ${megabytes(account.fileBytes)}`}
+              description={`${monthDay(account.createdAt)} 가입 · ${held('글', account.bytes, account.bytesCap)} · ${held('그림', account.fileBytes, account.fileBytesCap)}`}
               trailing={
-                account.username !== own && (
-                  <Menu place="below-end" label={`${account.username} 관리`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${account.username} 관리`} size="sm" {...opener} />}>
-                    {account.suspended ? (
+                <Menu place="below-end" label={`${account.username} 관리`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${account.username} 관리`} size="sm" {...opener} />}>
+                  <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
+                  {account.username !== own &&
+                    (account.suspended ? (
                       <MenuItem icon={RotateCcw} label="정지 풀기" onClick={() => void act(setSuspended(account.accountId, false), `${account.username} 계정의 정지를 풀지 못했어요.`)} />
                     ) : (
                       <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알리기, 탈퇴만 돼요" onClick={() => void act(setSuspended(account.accountId, true), `${account.username} 계정을 정지하지 못했어요.`)} />
-                    )}
-                    <MenuItem icon={Trash2} label="계정 지우기" tone="warn" onClick={() => setRemoving(account)} />
-                  </Menu>
-                )
+                    ))}
+                  {account.username !== own && <MenuItem icon={Trash2} label="계정 지우기" tone="warn" onClick={() => setRemoving(account)} />}
+                </Menu>
               }
             />
           ))}
         </List>
+      )}
+      {capping && (
+        <CapsDialog
+          account={capping}
+          onClose={() => setCapping(null)}
+          onSaved={() => {
+            setCapping(null);
+            reload();
+            onActed();
+          }}
+        />
       )}
       {removing && (
         <ConfirmDialog title={`${removing.username} 계정을 지울까요?`} confirm="지우기" icon={Trash2} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>

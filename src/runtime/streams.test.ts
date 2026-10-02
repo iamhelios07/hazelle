@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { fetchApi } from './api';
 import { fold, shown } from '../model/chat';
 import { appendUserMessage, startChat } from './chat-log';
 import { openSession, type Session } from './session';
@@ -127,7 +128,7 @@ describe('a detached call', () => {
       session.talk.stop();
       expect(await turn).toBeNull();
       expect(shown(messages(session, chat)[1]!)).toMatchObject({ text: 'Hello', receipt: { state: 'cut', cut: 'stopped' } });
-      await vi.waitFor(async () => expect((await fetch(`/api/streams/${call!.id}`)).status).toBe(404));
+      await vi.waitFor(async () => expect((await fetchApi(`streams/${call!.id}`)).status).toBe(404));
       await vi.waitFor(() => expect(session.store.list('stream')).toEqual([]));
     }));
 

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { CAP, USE_HEADERS } from './caps';
 import { fail, hex, readObject, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
 
@@ -26,6 +27,8 @@ files.post('/missing', async (c) => {
 
 // A body that does not hash to its id is refused, so no one can put other bytes under a real file's id. The same file
 // uploaded again, by anyone, changes nothing.
+// The account that first stores a file pays its bytes into accounts.file_bytes, before they are stored, so a refused
+// upload stores nothing and the server holds no more than the accounts' caps allow. A file held already costs nothing.
 files.put('/:id', canWrite, async (c) => {
   const id = c.req.param('id');
   if (!FILE_ID.test(id)) return fail(c, 400, 'bad-input');
@@ -34,8 +37,26 @@ files.put('/:id', canWrite, async (c) => {
   const body = await c.req.arrayBuffer();
   if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body))) !== id) return fail(c, 400, 'bad-input');
   if (held) return c.body(null, 204);
-  await c.env.BLOBS.put(fileKey(id), body);
-  await c.env.DB.prepare('INSERT OR IGNORE INTO files (id, size, created_at) VALUES (?, ?, ?)').bind(id, body.byteLength, Date.now()).run();
+  const db = c.env.DB;
+  const account = c.get('account').id;
+  const size = body.byteLength;
+  const charged = await db
+    .prepare(`UPDATE accounts SET file_bytes = file_bytes + ?2 WHERE id = ?1 AND COALESCE(file_bytes + ?2 <= ${CAP.fileBytes}, 1) RETURNING file_bytes`)
+    .bind(account, size)
+    .first<number>('file_bytes');
+  if (charged === null) return fail(c, 413, 'files-full');
+  try {
+    await c.env.BLOBS.put(fileKey(id), body);
+  } catch (error) {
+    await db.prepare('UPDATE accounts SET file_bytes = file_bytes - ?2 WHERE id = ?1').bind(account, size).run();
+    throw error;
+  }
+  // Another account storing the same file at once may insert it first, and then pays for it alone.
+  const [, refunded] = await db.batch<{ file_bytes: number }>([
+    db.prepare('INSERT OR IGNORE INTO files (id, size, created_at) VALUES (?, ?, ?)').bind(id, size, Date.now()),
+    db.prepare('UPDATE accounts SET file_bytes = file_bytes - ?2 WHERE id = ?1 AND changes() = 0 RETURNING file_bytes').bind(account, size),
+  ]);
+  c.header(USE_HEADERS.fileBytes, String(refunded!.results[0]?.file_bytes ?? charged));
   return c.body(null, 204);
 });
 

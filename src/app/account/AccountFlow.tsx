@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { changePassword, credentialFor, loadSession, logIn, logOut, signUp, type SessionFacts, type SignedIn } from '../../runtime/account';
+import { AccountFacts, changePassword, credentialFor, loadSession, logIn, logOut, signUp, type SessionFacts, type SignedIn } from '../../runtime/account';
 import { holdAccount } from '../../runtime/api';
 import { forgetVault } from '../../runtime/device-cache';
 import { lockVault, recallVault, rememberVault } from '../../vault/device';
@@ -23,7 +23,7 @@ type State =
   | { kind: 'login'; signupOpen: boolean; notice: string | null }
   | { kind: 'locked'; signedIn: SignedIn; notice: string | null }
   | { kind: 'recovered'; session: SessionFacts; vaultKey: VaultKey; current: Credential }
-  | { kind: 'unlocked'; session: SessionFacts; vaultKey: VaultKey };
+  | { kind: 'unlocked'; session: SessionFacts; vaultKey: VaultKey; facts: AccountFacts };
 
 export type Unlocked = Account & { accountId: string; username: string; vaultKey: VaultKey };
 
@@ -38,7 +38,7 @@ async function loadState(notice: string | null = null, prefer: 'signup' | 'login
     return boot.signupOpen && prefer === 'signup' && notice === null ? { kind: 'signup', step: 'password', draft: null } : { kind: 'login', signupOpen: boot.signupOpen, notice };
   }
   const vaultKey = await recallVault(boot.session.accountId);
-  if (vaultKey) return { kind: 'unlocked', session: boot.session, vaultKey };
+  if (vaultKey) return { kind: 'unlocked', session: boot.session, vaultKey, facts: new AccountFacts(boot.session) };
   return { kind: 'locked', signedIn: boot, notice };
 }
 
@@ -47,12 +47,16 @@ async function loadState(notice: string | null = null, prefer: 'signup' | 'login
 export function AccountFlow({ children }: { children: (unlocked: Unlocked) => ReactNode }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
 
-  // The page holds the account it has open, and goes on holding it while it asks who it is now (loading,
-  // unreachable): a request still leaving for that account stays refused. Once the server says the cookie names
-  // another account, the page asks again and shows that one, which closes what was open.
+  // The page holds the account it is signed in as, locked or not, and goes on holding it while it asks who it is now
+  // (loading, unreachable): a request still leaving for that account stays refused. Once the server says the cookie
+  // names another account, the page asks again and shows that one, which closes what was open. Unlocked, what answers
+  // say of the account goes to its facts.
   function show(next: State) {
-    if (next.kind === 'unlocked') holdAccount(next.session.accountId, () => reload(ELSEWHERE));
-    else if (next.kind !== 'loading' && next.kind !== 'unreachable') holdAccount(null);
+    const facts = next.kind === 'unlocked' ? next.facts : null;
+    if (next.kind === 'locked' || next.kind === 'recovered' || next.kind === 'unlocked') {
+      const session = next.kind === 'locked' ? next.signedIn.session : next.session;
+      holdAccount(session.accountId, (heard) => (heard.kind === 'elsewhere' ? reload(ELSEWHERE) : facts?.heard(heard)));
+    } else if (next.kind !== 'loading' && next.kind !== 'unreachable') holdAccount(null);
     setState(next);
   }
 
@@ -67,7 +71,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
 
   async function unlocked(session: SessionFacts, vaultKey: VaultKey) {
     await rememberVault(session.accountId, vaultKey);
-    show({ kind: 'unlocked', session, vaultKey });
+    show({ kind: 'unlocked', session, vaultKey, facts: new AccountFacts(session) });
   }
 
   // A recovery key opens the vault but then asks for a new password, since the old one is lost.
@@ -175,7 +179,10 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
     }
     case 'unlocked':
       return children({
-        ...state.session,
+        accountId: state.session.accountId,
+        username: state.session.username,
+        admin: state.session.admin,
+        facts: state.facts,
         vaultKey: state.vaultKey,
         onLock: () => void lockVault().then(() => reload()),
         onLogout: () => logout(state.session.accountId),
