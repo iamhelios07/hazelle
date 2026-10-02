@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { usePersisted } from '../../common/usePersisted';
-import { useChats, useLibrary, useTurn } from '../../session';
+import { useChats, useLibrary, useWritingChat } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { enterShelf, HOME, href, shelfOf } from '../routes';
@@ -28,7 +28,7 @@ type Props = {
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { characters, none } = useLibrary();
   const chatById = new Map(useChats().map((item) => [item.id, item]));
-  const turn = useTurn();
+  const writing = useWritingChat();
   const route = useRoute();
   const at = href(route);
   const wide = useWide();
@@ -41,7 +41,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const shelves = [...characters, none];
   const here = shelfOf(route, chatById);
   const current = here === undefined ? undefined : shelves.find((shelf) => shelf.id === here);
-  const typing = (shelf: Shelf<ChatSummary>) => shelf.chats.some((item) => item.id === turn?.chat);
+  const typing = (shelf: Shelf<ChatSummary>) => shelf.chats.some((item) => item.id === writing);
 
   // Picking a character goes inside it, even when its latest chat is the page already open.
   const enter = (shelf: Shelf<ChatSummary>) => {

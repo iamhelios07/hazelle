@@ -142,6 +142,13 @@ export function useTurn(): Turn | null {
   return useSyncExternalStore(talk.subscribe, talk.snapshot);
 }
 
+// The chat whose reply is being written, for what only marks it: the value is the same through every streamed chunk,
+// so nothing that reads it renders again until the turn starts or ends.
+export function useWritingChat(): string | null {
+  const talk = useTalk();
+  return useSyncExternalStore(talk.subscribe, () => talk.snapshot()?.chat ?? null);
+}
+
 export function useTranslating(): Translating {
   const translator = useTranslator();
   return useSyncExternalStore(translator.subscribe, translator.snapshot);

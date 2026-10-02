@@ -10,7 +10,7 @@ import { ObjectStore } from '../runtime/store';
 import type { Turn } from '../runtime/talk';
 import * as display from '../runtime/turn';
 import { randomBytes } from '../vault/aead';
-import { SessionProvider, useChatDisplay } from './session';
+import { SessionProvider, useChatDisplay, useWritingChat } from './session';
 
 it('C: composer and panel re-renders skip display, while streaming recomputes without replacing unchanged rows', async () => {
   let rev = 0;
@@ -72,6 +72,39 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
     read.close();
     lease.release();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it('useWritingChat renders when a reply starts or ends, and not for its chunks', async () => {
+  let turn: Turn | null = null;
+  const listeners = new Set<() => void>();
+  const say = (next: Turn | null) => act(() => {
+    turn = next;
+    for (const listener of listeners) listener();
+  });
+  const talk = { snapshot: () => turn, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
+  const renders: (string | null)[] = [];
+  function Probe() {
+    renders.push(useWritingChat());
+    return null;
+  }
+  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {}, activeElement: null, defaultView: { HTMLIFrameElement: class {} }, documentElement: { namespaceURI: 'http://www.w3.org/1999/xhtml' } };
+  const container = { nodeType: 1, tagName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: document, addEventListener() {}, removeEventListener() {}, textContent: '' } as unknown as HTMLElement;
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('window', document.defaultView);
+  vi.stubGlobal('document', document);
+  const root = createRoot(container);
+  try {
+    await act(() => root.render(<SessionProvider session={{ talk } as Session} account={{ onLock() {}, onLogout: async () => null }}><Probe /></SessionProvider>));
+    const started: Turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
+    await say(started);
+    await say({ ...started, text: 'one' });
+    await say({ ...started, text: 'one two' });
+    await say(null);
+    expect(renders).toEqual([null, 'chat', null]);
+  } finally {
+    await act(() => root.unmount());
     vi.unstubAllGlobals();
   }
 });

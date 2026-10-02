@@ -5,7 +5,7 @@ import type { Shelf } from '../../../model/library';
 import { matches, noResults, SEARCH_FROM } from '../../common/search';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
-import { useLibrary, useTurn } from '../../session';
+import { useLibrary, useWritingChat } from '../../session';
 import { Empty, FaceButton, FaceStrip, ItemRow, NavRow, SearchField, SideTitle, Sidebar } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { characterPage, type Route } from '../routes';
@@ -28,7 +28,7 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
   const [query, setQuery] = useState('');
   const found = shelf.chats.filter((item) => matches(query, item.title, item.preview ?? ''));
   const { characters } = useLibrary();
-  const turn = useTurn();
+  const writing = useWritingChat();
   const route = useRoute();
   const openChat = route.kind === 'chat' ? route.id : undefined;
   const others = characters.filter((candidate) => candidate !== shelf && candidate.chats.length > 0).slice(0, STRIP);
@@ -63,7 +63,7 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
           key={item.id}
           title={item.title}
           time={item.at === null ? '' : ago(item.at)}
-          typing={turn?.chat === item.id}
+          typing={writing === item.id}
           preview={item.preview ?? '아직 불러오지 않은 채팅'}
           current={item.id === openChat}
           onClick={() => navigate({ kind: 'chat', id: item.id })}
