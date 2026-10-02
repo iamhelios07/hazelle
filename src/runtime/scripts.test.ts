@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Trigger } from '../engine/import/types';
 import { fold, modelUsage, shown } from '../model/chat';
 import { startChat } from './chat-log';
@@ -83,11 +83,17 @@ describe("a turn with the bot's Lua", () => {
       expect(shown(messages()[1]!).after).toBeUndefined();
     }));
 
-  it("asks before the bot's first model call, keeps the answer on the character, and counts the call in the chat's usage", () =>
+  it("asks before the bot's first model call, keeps the answer on the character, counts the call in the chat's usage, and ends it on the server", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `onOutput = async(function(id) setChatVar(id, 'made', LLM(id, { { role = 'user', content = 'sum' } }).result) end)`);
       const character = session.store.get('chat', chat)!.value.character!;
       const log = stubRelay(inTurn([saying('reply'), saying('summary')]));
+      const served = globalThis.fetch;
+      const calls: string[] = [];
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/streams/') && init?.method === 'POST') calls.push(url);
+        return served(url, init);
+      });
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
       await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ chat, question: { kind: 'model' } }]);
       expect(log).toHaveLength(1);
@@ -97,6 +103,8 @@ describe("a turn with the bot's Lua", () => {
       expect((JSON.parse(log[1]!.sent.body!) as { messages: unknown }).messages).toEqual([{ role: 'user', content: 'sum' }]);
       expect(shown(messages()[2]!).calls).toMatchObject([{ receipt: { state: 'done', model: 'm' } }]);
       expect(modelUsage([messages()], { connection: shown(messages()[2]!).receipt!.connection, model: 'm' }).calls).toBe(2);
+      expect(calls).toHaveLength(2);
+      await vi.waitFor(async () => expect((await fetch(calls[1]!)).status).toBe(404));
     }));
 
   it("answers a button with the script's function and keeps its writes after the last message", () =>

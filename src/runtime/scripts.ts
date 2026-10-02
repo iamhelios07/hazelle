@@ -21,7 +21,7 @@ import { chatPrompt } from './prompts';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
-import { callOf, pageCall } from './streams';
+import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
 import { tokenizer } from './tokenizer';
 import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './turn';
@@ -376,16 +376,18 @@ export class Scripts {
       return refused('no model is set');
     }
     let text = '';
+    const call = await pageCall();
+    // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,
       connection: route.connection.value,
       model: route.model,
       settings: profile.profile.value.settings,
       messages,
-      call: await pageCall(),
+      call,
       signal: this.closing.signal,
       onText: (phase, chunk) => void (phase === 'text' && (text += chunk)),
-    });
+    }).finally(() => endCall(store, call.id));
     const receipt = receiptOf(callOf(route), answer);
     const last = this.session.read.chat(chat).snapshot()?.messages.at(-1);
     if (last) {
