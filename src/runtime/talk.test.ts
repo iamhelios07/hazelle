@@ -47,7 +47,7 @@ describe('Talk', () => {
       const second = await takeTurn(session, chats[1]!, { kind: 'answer' });
       expect(first).toEqual({ kind: 'unsaved', reply: expect.any(String), failure: { ok: false, error: 'server-error' } });
       expect(second).toEqual({ kind: 'unsaved', reply: expect.any(String), failure: { ok: false, error: 'server-error' } });
-      if (first?.kind !== 'unsaved' || second?.kind !== 'unsaved') throw new Error('Expected unsaved replies');
+      if (first?.kind !== 'unsaved' || second?.kind !== 'unsaved' || !first.reply || !second.reply) throw new Error('Expected kept replies');
       expect(first.reply).not.toBe(second.reply);
       expect(await session.talk.saveAgain(first.reply)).toEqual(first);
       for (const chat of chats) expect(fold(session.store.children('entry', chat))).toHaveLength(1);
@@ -62,6 +62,34 @@ describe('Talk', () => {
         expect(messages.map((message) => shown(message).text)).toEqual(['안녕', index === 0 ? '첫 답장' : '다음 답장']);
         expect(shown(messages[1]!).id).toBe(index === 0 ? first.reply : second.reply);
       }
+    }));
+
+  it('does not keep a reply whose turn a restore ended, nor write it onto the restored chat', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
+
+      let restored = false;
+      stubRelay(() => {
+        restored = true;
+        return saying('답장');
+      });
+      const through = globalThis.fetch;
+      const refused = vi.fn();
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+        if (!restored || url !== '/api/objects/batch') return through(url, init);
+        refused();
+        restored = false;
+        return Promise.resolve(Response.json({ error: 'cache-reset' }, { status: 409 }));
+      });
+
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toEqual({ kind: 'unsaved', reply: null, failure: { ok: false, error: 'timeline-changed' } });
+      expect(refused).toHaveBeenCalledOnce();
+      expect(await session.store.pull()).toBeNull();
+      expect(fold(session.store.children('entry', chat)).map((message) => shown(message).text)).toEqual(['안녕']);
     }));
 
   it('keeps what each reply sent, its address and body and never its headers, while its chat is held', () =>

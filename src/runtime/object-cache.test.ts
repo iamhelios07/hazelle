@@ -356,6 +356,40 @@ it('waits out a restore under way for the time the 503 names, then drops and cou
   store.close();
 });
 
+it('answers timeline-changed to a chat opening a reset cut short, and opens the held chat again after it', async () => {
+  const f = await fixture();
+  await f.add('chat', 'chat', null, { title: null, character: null, models: {} });
+  await f.add('old', 'entry', 'chat', { type: 'delete', message: 'old', at: 1 });
+  const store = await f.open();
+  await store.pull();
+  const respond = f.fetch.getMockImplementation()!;
+  let resume!: () => void;
+  const waiting = new Promise<void>((resolve) => { resume = resolve; });
+  let boot!: () => void;
+  const booting = new Promise<void>((resolve) => { boot = resolve; });
+  f.fetch.mockImplementation(async (path, init) => {
+    if (path.includes('parent=chat')) await waiting;
+    if (path.includes('bootstrap=1') && !path.includes('timeline=')) await booting;
+    return respond(path, init);
+  });
+  const cut = store.retainChat('chat');
+  await vi.waitFor(() => expect(f.fetch.mock.lastCall?.[0]).toContain('parent=chat'));
+  f.restore(f.snapshot(), 't1');
+  const pulled = store.pull();
+  await vi.waitFor(() => expect(f.fetch.mock.lastCall?.[0]).toContain('bootstrap=1'));
+  resume();
+  expect(await cut.ready).toEqual({ ok: false, error: 'timeline-changed' });
+  // Retained while the bootstrap is under way, the chat waits for it and loads, the pull not waiting for the chat.
+  const again = store.retainChat('chat');
+  boot();
+  expect(await pulled).toBeNull();
+  expect(await again.ready).toBeNull();
+  expect(store.children('entry', 'chat').map(({ id }) => id)).toEqual(['old']);
+  again.release();
+  cut.release();
+  store.close();
+});
+
 it('ends a pinned workflow at a switch: a write it makes after the switch is refused before it is sent', async () => {
   const f = await fixture();
   await f.add('kept', 'connection', null, connection);
