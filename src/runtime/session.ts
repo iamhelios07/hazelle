@@ -15,7 +15,7 @@ import { addDefaults } from './prompts';
 import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
-import { LuaWorker, type Runner } from './lua/client';
+import { LuaStuck, LuaWorker, type Runner } from './lua/client';
 import { ReadModels } from './read-model';
 import { ScriptDisplay } from './script-display';
 import { Scripts } from './scripts';
@@ -77,7 +77,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
   let runner: Promise<Runner> | null = null;
-  const machine = () => (runner ??= lua());
+  // Asked for once the session has closed, it makes none: nothing would be left to end it.
+  const machine = () => (closing.signal.aborted ? Promise.reject<Runner>(new LuaStuck('closed')) : (runner ??= lua()));
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
   const read = new ReadModels(store, display);
   const memory = new Rememberer({ store, read, credentials }, reading);
@@ -128,6 +129,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     streams.close();
     talk.close();
     scripts.close();
+    // One still being made is ended as it is made.
+    void runner?.then((made) => made.close());
     translator.close();
     memory.close();
     costs.close();

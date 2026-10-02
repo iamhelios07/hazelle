@@ -32,7 +32,6 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
     return;
   }
   lua ??= Lua.create({ wasm });
-  if (data.kind === 'drop') return void lua.then((machine) => machine.drop(data.owner));
   const { id } = data;
   lua
     .then<Outcome | Displayed>((machine) => (data.kind === 'run' ? machine.run(data.owner, data.triggers, data.snapshot, data.event, host(id)) : machine.display(data.owner, data.scripts, data.snapshot, data.items)))

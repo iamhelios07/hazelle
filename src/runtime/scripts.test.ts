@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Trigger } from '../engine/import/types';
 import { fold, modelUsage, shown } from '../model/chat';
 import { startChat } from './chat-log';
-import type { Session } from './session';
+import type { Runner } from './lua/client';
+import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
 import { displayChat, takeTurn } from './turn';
 
@@ -130,6 +131,26 @@ describe("a turn with the bot's Lua", () => {
       expect(messages()[1]).toMatchObject({ role: 'assistant' });
       expect(shown(messages()[1]!)).toMatchObject({ text: 'The door is open at -1.', staged: true });
     }));
+});
+
+describe("the bot scripts' machine", () => {
+  it('is ended when its session closes, one still being made then too', async () => {
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    const { accountId, vaultKey } = await server.account();
+    let made!: (runner: Runner) => void;
+    const lua = vi.fn(() => new Promise<Runner>((resolve) => (made = resolve)));
+    const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, lua);
+    if (!opened.ok) throw new Error(opened.error);
+    const { chat } = await chatWith(opened.data, `function open(id) end`);
+    const pressed = opened.data.scripts.press(chat, { trigger: 'open' });
+    await vi.waitFor(() => expect(lua).toHaveBeenCalledOnce());
+    opened.data.close();
+    const close = vi.fn();
+    made({ run: () => Promise.reject(new Error('closed')), display: () => Promise.reject(new Error('closed')), close });
+    await pressed;
+    expect(close).toHaveBeenCalledOnce();
+  });
 });
 
 describe("the display with the bot's Lua", () => {

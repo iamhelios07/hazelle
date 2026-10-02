@@ -159,13 +159,10 @@ export class Lua {
     return { texts, errors, missing: [...missing] };
   }
 
-  // Ends the owner's engines, and with them their Lua globals.
-  drop(owner: string) {
-    for (const [key, engine] of this.engines) {
-      if (!key.startsWith(`${owner}\n`)) continue;
-      this.engines.delete(key);
-      void engine.then(({ lua }) => lua.global.close());
-    }
+  // Ends every engine, and with them their Lua globals. A run after it starts its engines anew.
+  close() {
+    for (const engine of this.engines.values()) end(engine);
+    this.engines.clear();
   }
 
   private call(engine: Engine, name: string, ...args: unknown[]): Promise<unknown> {
@@ -188,7 +185,7 @@ export class Lua {
       for (const [oldest, old] of this.engines) {
         if (this.engines.size < ENGINES) break;
         this.engines.delete(oldest);
-        void old.then((ended) => ended.queue.then(() => ended.lua.global.close()));
+        end(old);
       }
     }
     this.engines.set(key, engine);
@@ -301,6 +298,9 @@ export class Lua {
     for (const name of UNSUPPORTED) set(name, (run) => void run.missing.add(name));
   }
 }
+
+// Closed once what it is running has ended.
+const end = (engine: Promise<Engine>) => void engine.then(({ lua, queue }) => queue.then(() => lua.global.close()));
 
 function globals(lua: LuaEngine): string[] {
   const names: string[] = [];
