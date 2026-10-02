@@ -78,7 +78,7 @@ it('round-trips streamed objects and files and filters unreachable objects from 
   const opened = await backup(target.file());
   const next = store();
   const save = vi.fn(async (bytes: Uint8Array<ArrayBuffer>[]) => ({ ok: true as const, data: await Promise.all(bytes.map(async (bytes) => (await sealFile(bytes)).ref)) }));
-  expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: null });
+  expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: { skipped: 0 } });
   expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes]);
   for (const object of source.objects) expect(next.held.get(object.id)).toMatchObject({ ...object, rev: expect.any(Number) });
   expect(next.held.size).toBe(source.objects.length);
@@ -94,7 +94,7 @@ it('restores a backup built by the previous zipSync format', async () => {
   })]);
   const opened = await backup(file);
   const next = store();
-  expect(await restoreBackup(next.api, { save: async () => ({ ok: true, data: [source.ref] }) }, opened)).toEqual({ ok: true, data: null });
+  expect(await restoreBackup(next.api, { save: async () => ({ ok: true, data: [source.ref] }) }, opened)).toEqual({ ok: true, data: { skipped: 0 } });
   expect(next.held.size).toBe(source.objects.length);
 });
 
@@ -163,8 +163,17 @@ it('saves files before their objects, leaves owners until last, and resumes afte
   })).toEqual({ ok: false, error: 'stopped' });
   expect(next.written).toEqual(['avatar']);
   expect(next.held.has('character')).toBe(false);
-  expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: null });
+  expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: { skipped: 0 } });
   expect(next.written).toEqual(['avatar', 'person', 'character']);
+});
+
+it('leaves out what names a picture the server refuses, and counts it', async () => {
+  const source = await pictureObjects();
+  const target = destination();
+  await exportBackup(store(source.objects).api, { read: async () => ({ ok: true, data: source.bytes }) }, target.output);
+  const next = store();
+  expect(await restoreBackup(next.api, { save: async () => ({ ok: true, data: [null] }) }, await backup(target.file()))).toEqual({ ok: true, data: { skipped: 1 } });
+  expect(next.written).toEqual(['person', 'character']);
 });
 
 it('refuses a file with a body its kind cannot hold', async () => {

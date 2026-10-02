@@ -3,6 +3,7 @@ import { isRecord } from '../connectors/values';
 import { KINDS, isValue, parentKinds, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import { toBase64 } from '../vault/aead';
 import type { FileRef } from '../vault/files';
 import { BackupZip, indexZip, readEntry, unzipEntry, type BackupOutput, type ZipEntry } from './backup-zip';
 import type { Files } from './files';
@@ -68,14 +69,17 @@ export async function exportBackup(
     const objects = await zip.entry(OBJECTS, true);
     const named = new Map<string, { ref: FileRef; uses: number }>();
     let first = true;
+    // An object edited elsewhere after it was written comes again later in the walk, at its newer rev. Each id is written
+    // once, as first met, since the importer refuses a second line for an id and the first is already in the zip.
     const failure = await store.scan({}, async (row, value) => {
       signal.throwIfAborted();
+      const due = reached.delete(row.id);
       if (value === undefined || !Object.hasOwn(KINDS, row.kind)) {
         left++;
-        if (reached.has(row.id)) progress(done += 1 + Number('file' in KINDS[row.kind as Kind]), total);
+        if (due) progress(done += 1 + Number('file' in KINDS[row.kind as Kind]), total);
         return;
       }
-      if (!reached.has(row.id)) return;
+      if (!due) return;
       const object = { ...row, kind: row.kind as Kind, value } as Stored<Kind>;
       const ref = fileOf(object);
       if (ref) {
@@ -171,14 +175,15 @@ async function* readObjects(backup: Backup, signal: AbortSignal) {
 
 // A backup goes only into a new account: one holding nothing but what opening it added, and what this same
 // backup already wrote, so loading the file again after a stop carries on from there.
-// The backup's copies replace what opening added, and what it added that the backup lacks goes, so the
-// account ends as the backup was.
+// The backup's copies replace what opening added, whatever it holds now, and what it added that the backup lacks
+// goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
+// the operator, or too large), which are left out.
 export async function restoreBackup(
   store: Pick<ObjectStore, 'scan' | 'batch'>,
   files: Pick<Files, 'save'>,
   backup: Backup,
   { signal = new AbortController().signal, progress = () => {} }: Options = {},
-): Promise<ApiResult<null>> {
+): Promise<ApiResult<{ skipped: number }>> {
   try {
     const ids = new Set(backup.objects.filter(({ kind }) => kind !== 'summary').map(({ id }) => id));
     const present = new Set<string>();
@@ -188,6 +193,20 @@ export async function restoreBackup(
     });
     if (failure) return failure;
     if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
+    // An id is not enough: another backup of the same account shares ids, and carrying on from its copies would mix
+    // the two. What is there besides what opening added must be this backup's copy, as an earlier load wrote it.
+    const kept = new Set([...present].filter((id) => !SEEDED.has(id)));
+    if (kept.size) {
+      const copies = new Map<string, string>();
+      for await (const { object } of readObjects(backup, signal)) if (kept.has(object.id)) copies.set(object.id, await copyOf(object));
+      let other = false;
+      const failure = await store.scan({}, async (row, value) => {
+        signal.throwIfAborted();
+        if (copies.has(row.id) && copies.get(row.id) !== (await copyOf({ ...row, value }))) other = true;
+      });
+      if (failure) return failure;
+      if (other) return { ok: false, error: 'not-new' };
+    }
     const todo = new Set([...ids].filter((id) => SEEDED.has(id) || !present.has(id)));
     const total = backup.files.size + todo.size;
     let done = 0;
@@ -195,6 +214,7 @@ export async function restoreBackup(
     // Each file seals to the id its objects name, and one the server holds already is not sent again.
     // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
     // would restore a picture that never opens. All files are checked before the first object write.
+    const refused = new Set<string>();
     for (const ref of backup.files.values()) {
       signal.throwIfAborted();
       const bytes = await readEntry(backup.file, backup.entries.get(FILES + ref.id)!, signal);
@@ -202,23 +222,30 @@ export async function restoreBackup(
       const saved = await files.save([bytes]);
       if (!saved.ok) return saved;
       const sealed = saved.data[0];
-      if (!sealed || sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false, error: 'not-backup' };
+      if (!sealed) refused.add(ref.id);
+      else if (sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false, error: 'not-backup' };
       progress(++done, total);
     }
+    let skipped = 0;
     // In their old rev order, so each chat's entries fold as they did; owners follow every owned page.
     const depths = [...new Set(backup.objects.filter(({ id }) => todo.has(id)).map(({ kind }) => ownershipDepth(kind as Kind)))].sort((a, b) => b - a);
     for (const depth of depths) {
       let writes: Write[] = [];
       let size = 0;
       const flush = async () => {
-        signal.throwIfAborted();
-        const result = await store.batch(writes, () => progress(++done, total), { unheld: writes.every((write) => write.type !== 'remove' && SCOPED.has(write.kind)) });
+        const result = await store.batch(writes, () => progress(++done, total), { unheld: writes.every((write) => write.type !== 'remove' && SCOPED.has(write.kind)), signal });
         writes = [];
         size = 0;
         return result;
       };
       for await (const item of readObjects(backup, signal)) {
         if (!todo.has(item.object.id) || ownershipDepth(item.object.kind) !== depth) continue;
+        const file = fileOf(item.object);
+        if (file && refused.has(file.id)) {
+          skipped++;
+          progress(++done, total);
+          continue;
+        }
         if (writes.length && (writes.length === PAGE_ROWS || size + item.size > PAGE_BYTES)) {
           const result = await flush();
           if (!result.ok) return result;
@@ -231,11 +258,16 @@ export async function restoreBackup(
         if (!result.ok) return result;
       }
     }
-    signal.throwIfAborted();
-    return await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })));
+    const removed = await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })), undefined, { signal });
+    return removed.ok ? { ok: true, data: { skipped } } : removed;
   } catch {
     return { ok: false, error: signal.aborted ? 'stopped' : 'not-backup' };
   }
+}
+
+async function copyOf({ kind, parent, value }: { kind: string; parent: string | null; value: unknown }): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', strToU8(JSON.stringify([kind, parent, value])));
+  return toBase64(new Uint8Array(digest));
 }
 
 function parse(text: string | undefined): unknown {

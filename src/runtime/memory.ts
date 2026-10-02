@@ -116,12 +116,14 @@ export const restoreRecord = (store: ObjectStore, chat: string, record: MemoryRe
 const sameFact = (a: Pick<Fact, 'about' | 'field'>, b: Pick<Fact, 'about' | 'field'>) => a.about === b.about && a.field === b.field;
 
 // replaces: the about and field of the fact being rewritten, null for a new one. A fact the user writes names no record.
+// A rewrite of a fact deleted meanwhile, on another device, is 'gone': an edit never makes it again.
 export function setFact(store: ObjectStore, chat: string, fact: Fact, replaces: Pick<Fact, 'about' | 'field'> | null): Write {
   const key = replaces ?? fact;
   const written = { ...fact, record: null };
   return changeMemory(store, chat, (memory) => {
     const kept = memory.state.filter((each) => !sameFact(each, fact) || sameFact(each, key));
     const at = kept.findIndex((each) => sameFact(each, key));
+    if (at === -1 && replaces) return null;
     return { ...memory, state: at === -1 ? [...kept, written] : kept.with(at, written) };
   });
 }
@@ -134,9 +136,11 @@ export const removeFact = (store: ObjectStore, chat: string, fact: Pick<Fact, 'a
     (memory, found) => ({ ...memory, state: memory.state.filter((each) => each !== found) }),
   );
 
-export const setThread = (store: ObjectStore, chat: string, thread: Thread): Write =>
+// edit: a rewrite of a thread already there, 'gone' once deleted meanwhile; false adds it (되돌리기 after removeThread).
+export const setThread = (store: ObjectStore, chat: string, thread: Thread, edit: boolean): Write =>
   changeMemory(store, chat, (memory) => {
     const at = memory.threads.findIndex(({ id }) => id === thread.id);
+    if (at === -1 && edit) return null;
     return { ...memory, threads: at === -1 ? [...memory.threads, thread] : memory.threads.with(at, thread) };
   });
 

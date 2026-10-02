@@ -4,7 +4,7 @@ import { fingerprint } from '../engine/memory';
 import { memoryId } from '../model/memory';
 import { appendUserMessage, editMessage, startChat } from './chat-log';
 import { api } from './api';
-import { chatMemory, forgetRecord, removeFact, setDefaultMemory } from './memory';
+import { chatMemory, forgetRecord, removeFact, removeThread, setDefaultMemory, setFact, setThread } from './memory';
 import { addPrompt, editPrompt } from './prompts';
 import { ObjectStore } from './store';
 import { openSession } from './session';
@@ -175,6 +175,26 @@ describe('a deletion from memory', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('an edit of memory', () => {
+  it('does not bring back a fact or a thread another device deleted meanwhile', async () => {
+    const { store, open } = await server.account();
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: null, character: null, models: {} }, null);
+    const fact = { about: 'Luna', field: 'place', value: 'the pier', record: null };
+    const thread = { id: 't0', text: 'They meet again tomorrow.', opened: null };
+    await store.create('memory', { records: [], state: [fact], threads: [thread] }, { id: memoryId(chat), parent: chat });
+    const other = await open();
+    await server.hold(other, chat);
+    await removeFact(other, chat, fact);
+    await removeThread(other, chat, thread.id);
+
+    expect(await setFact(store, chat, { ...fact, value: 'the lighthouse' }, fact)).toEqual({ ok: false, error: 'gone' });
+    expect(await setThread(store, chat, { ...thread, text: 'Tomorrow, at noon.' }, true)).toEqual({ ok: false, error: 'gone' });
+    expect(chatMemory(store, chat)).toEqual({ records: [], state: [], threads: [] });
   });
 });
 

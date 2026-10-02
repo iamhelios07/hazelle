@@ -47,7 +47,7 @@ export function setCharacterModule(store: ObjectStore, character: string, id: st
 }
 
 // at is when it was deleted: it is off everywhere at once, and removed for good with what it owns KEEP_DELETED later
-// (purgeExpired); null brings it back as it was, on where it was on.
+// (purgeExpired); null brings it back as it was, on where it was on, unless its removal has begun ('gone').
 export function setModuleDeleted(store: ObjectStore, id: string, at: number | null): Promise<ApiResult<Stored<'module'>>> {
-  return store.update('module', id, (current) => (at === null ? without(current, 'deleted') : { ...current, deleted: at }));
+  return store.update('module', id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }));
 }

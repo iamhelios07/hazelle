@@ -6,7 +6,7 @@ import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
 import { exportBackup, readBackup, restoreBackup } from './backup';
 import type { Files } from './files';
-import { importCharacter } from './characters';
+import { editCharacter, importCharacter } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
@@ -98,7 +98,7 @@ async function oldAccount({ profile = true } = {}) {
   return { store, files, image, smile, chat, gone };
 }
 
-async function exported(store: ObjectStore, files: Files) {
+async function exported(store: Pick<ObjectStore, 'scan'>, files: Files) {
   const parts: BlobPart[] = [];
   const result = await exportBackup(store, files, {
     write: async (bytes) => { parts.push(bytes); },
@@ -125,7 +125,7 @@ describe('backup', () => {
 
     await server.wipe();
     const { store, files } = await open('someone');
-    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: null });
+    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
 
     expect(await held(store)).toEqual(expected);
     await server.hold(store, old.chat);
@@ -145,10 +145,29 @@ describe('backup', () => {
     const expected = await held(old.store);
     await server.wipe();
     const { store, files } = await open('someone');
-    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: null });
+    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
     for (const [id, { parent }] of expected) if (parent === old.gone) expected.delete(id);
     expect(await held(store)).toEqual(expected);
   });
+
+  it('writes an object edited on another device during the walk once, so its own importer reads the file', async () => {
+    const { store, files, open } = await server.account();
+    const created = await store.create('connection', { type: 'openrouter', label: 'a', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
+    if (!created.ok) throw new Error(created.error);
+    // More than one feed page, so the walk asks again after the edit.
+    await store.batch(Array.from({ length: 500 }, (_, index) => ({ type: 'create', kind: 'folder', id: crypto.randomUUID(), parent: null, value: { name: `${index}` } })));
+    const other = await open();
+    await other.pull();
+    const editing: Pick<ObjectStore, 'scan'> = {
+      scan: (options, visit) => store.scan(options, async (row, value) => {
+        await visit(row, value);
+        if (!options.metadata && row.id === created.data.id) await other.update('connection', row.id, (current) => ({ ...current, label: 'b' }));
+      }),
+    };
+
+    const backup = await read(await exported(editing, files));
+    expect(backup.objects.filter(({ id }) => id === created.data.id)).toHaveLength(1);
+  }, 15_000);
 
   it('refuses a file whose picture was changed, before writing any object', async () => {
     const old = await oldAccount();
@@ -162,6 +181,20 @@ describe('backup', () => {
     const { store, files } = await open('someone');
     const before = await held(store);
     expect(await restoreBackup(store, files, backup)).toEqual({ ok: false, error: 'not-backup' });
+    expect(await held(store)).toEqual(before);
+  });
+
+  it('refuses to carry on with another backup of the same account, whose ids it shares, and writes nothing', async () => {
+    const old = await oldAccount();
+    const first = await read(await exported(old.store, old.files));
+    await editCharacter(old.store, old.store.list('character')[0]!.id, { name: '다른 루나' });
+    const second = await read(await exported(old.store, old.files));
+
+    await server.wipe();
+    const { store, files } = await open('someone');
+    expect(await restoreBackup(store, files, first)).toEqual({ ok: true, data: { skipped: 0 } });
+    const before = await held(store);
+    expect(await restoreBackup(store, files, second)).toEqual({ ok: false, error: 'not-new' });
     expect(await held(store)).toEqual(before);
   });
 

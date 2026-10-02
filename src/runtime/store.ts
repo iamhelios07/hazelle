@@ -443,8 +443,8 @@ export class ObjectStore {
   // appears only once whole and a chat's entries keep their rev order, which model/chat fold reads. An action
   // larger than one request goes as several, the owner in the last; one cut short leaves only unreachable pieces.
   // unheld: the writes' chats are not held or summarized (a restore writing entries before their chats); their next
-  // lease pulls what was written.
-  async batch(writes: Write[], progress: (write: Write) => void = () => {}, { unheld = false }: { unheld?: boolean } = {}): Promise<ApiResult<null>> {
+  // lease pulls what was written. signal: the caller's stop, which also ends a wait for the connection to return.
+  async batch(writes: Write[], progress: (write: Write) => void = () => {}, { unheld = false, signal }: { unheld?: boolean; signal?: AbortSignal } = {}): Promise<ApiResult<null>> {
     const puts = orderOwned(writes.filter((write) => write.type !== 'remove'));
     const ordered = [...puts, ...writes.filter((write) => write.type === 'remove')];
     const chats = new Set<string>();
@@ -465,7 +465,7 @@ export class ObjectStore {
         const failure = await lease.ready;
         if (failure) return failure;
       }
-      const result = await this.commit(ordered.map((write) => this.step(write)), (index) => progress(ordered[index]!));
+      const result = await this.commit(ordered.map((write) => this.step(write)), (index) => progress(ordered[index]!), signal);
       if (!result.ok) return result;
       const summaries = await this.commit([...chats].flatMap((chat) => this.summaryWrite(chat) ?? []).map((write) => this.step(write)));
       if (!summaries.ok) return summaries;
@@ -582,26 +582,27 @@ export class ObjectStore {
     };
   }
 
-  private async retry<T>(attempt: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> {
+  private async retry<T>(attempt: () => Promise<ApiResult<T>>, stop: AbortSignal): Promise<ApiResult<T>> {
     for (let tries = 0; tries < MAX_ATTEMPTS; tries++) {
-      const result = await this.reaching(attempt);
+      const result = await this.reaching(attempt, stop);
       if (result.ok || result.error !== 'conflict') return result;
-      const failure = await this.reaching(() => this.pull());
+      const failure = await this.reaching(() => this.pull(), stop);
       if (failure) return failure;
     }
     return { ok: false, error: 'conflict' };
   }
 
-  // A write that cannot reach the server waits and tries again until it does, or the store closes: a dropped
+  // A write that cannot reach the server waits and tries again until it does, or until stop (the store closing, or the
+  // caller's stop) ends it: a dropped
   // connection does not fail it. A try whose answer was lost after it landed comes back as a conflict and is
   // applied again, so an update's change must read the same applied twice as once (set a value, never add to one).
-  private async reaching<R extends ApiResult<unknown> | null>(attempt: () => Promise<R>): Promise<R | ApiFailure> {
+  private async reaching<R extends ApiResult<unknown> | null>(attempt: () => Promise<R>, stop: AbortSignal): Promise<R | ApiFailure> {
     let result = await attempt();
     if (result?.ok !== false || result.error !== 'offline') return result;
     this.wait(1);
     try {
       for (let tries = 0; result?.ok === false && result.error === 'offline'; tries++) {
-        if (!(await pause(RECONNECT_PAUSES[Math.min(tries, RECONNECT_PAUSES.length - 1)]!, this.closing.signal))) return { ok: false, error: 'stopped' };
+        if (!(await pause(RECONNECT_PAUSES[Math.min(tries, RECONNECT_PAUSES.length - 1)]!, stop))) return { ok: false, error: 'stopped' };
         result = await attempt();
       }
       return result;
@@ -615,10 +616,11 @@ export class ObjectStore {
     for (const listener of this.waitListeners) listener();
   }
 
-  private async commit(steps: Step[], progress: (index: number) => void = () => {}): Promise<ApiResult<(Held | null)[]>> {
-    if (this.closing.signal.aborted) return { ok: false, error: 'stopped' };
+  private async commit(steps: Step[], progress: (index: number) => void = () => {}, signal?: AbortSignal): Promise<ApiResult<(Held | null)[]>> {
+    const stop = signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal;
+    if (stop.aborted) return { ok: false, error: 'stopped' };
     if (!this.limits) {
-      const failure = await this.reaching(() => this.pull());
+      const failure = await this.reaching(() => this.pull(), stop);
       if (failure) return failure;
     }
     const limits = this.limits!;
@@ -652,9 +654,10 @@ export class ObjectStore {
           resolved.push(ready.data);
         }
         if (writes.length) {
-          if (epoch !== this.epoch || this.closing.signal.aborted) return { ok: false, error: 'stopped' };
-          const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { writes }, this.closing.signal);
+          if (epoch !== this.epoch || stop.aborted) return { ok: false, error: 'stopped' };
+          const answer = await this.request<{ revs: number[] }>('POST', 'objects/batch', { writes }, stop);
           if (!answer.ok) return answer;
+          // Only the store closing drops an answer: a caller's stop that arrives after the write landed keeps it held.
           if (epoch !== this.epoch || this.closing.signal.aborted) return { ok: false, error: 'stopped' };
           let index = 0;
           for (const ready of resolved) {
@@ -671,7 +674,7 @@ export class ObjectStore {
           this.changed();
         }
         return { ok: true, data: resolved.map(({ held }) => held) };
-      });
+      }, stop);
       if (!result.ok) return result;
       saved.push(...result.data);
       for (let index = start; index < saved.length; index++) progress(index);

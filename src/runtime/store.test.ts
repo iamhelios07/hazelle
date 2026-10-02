@@ -172,6 +172,30 @@ describe('object store', () => {
     }
   });
 
+  it("ends a batch's wait for a dropped connection when its caller stops it, and writes nothing after", async () => {
+    const { accountId, vaultKey, store: other } = await server.account();
+    let drop = false;
+    const request = async <T,>(...args: Parameters<typeof api>) => (drop && args[1] === 'objects/batch' ? { ok: false as const, error: 'offline' } : api<T>(...args));
+    const store = await ObjectStore.open(accountId, vaultKey, request);
+    await store.pull();
+
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      drop = true;
+      const stop = new AbortController();
+      const saving = store.batch([{ type: 'create', kind: 'connection', id: crypto.randomUUID(), parent: null, value: connection('a') }], () => {}, { signal: stop.signal });
+      await vi.waitFor(() => expect(store.waiting()).toBe(true));
+      stop.abort();
+      expect(await saving).toEqual({ ok: false, error: 'stopped' });
+      drop = false;
+      await vi.advanceTimersByTimeAsync(30_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await other.pull();
+    expect(other.list('connection')).toEqual([]);
+  });
+
   it('counts a body it cannot open and refuses to overwrite it', async () => {
     const { store: mine, open } = await server.account();
     const stranger = await open(randomBytes(32));

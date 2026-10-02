@@ -3,7 +3,10 @@ import type { Card, LoreEntry } from '../engine/import/types';
 import { KEEP_DELETED, type Character, type Lore } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
+import { sealFile } from '../vault/files';
+import { api } from './api';
 import { addCharacter, copyCharacter, importCharacter, purgeCharacter, purgeExpired, resetToggles, setDeleted, setPictures, setToggle } from './characters';
+import { Files } from './files';
 import { testCard, testServer } from './testing';
 
 const server = testServer();
@@ -51,6 +54,20 @@ describe('importCharacter', () => {
     expect(await files.read(avatar.file)).toEqual({ ok: true, data: image.bytes });
     expect(new Set(steps)).toEqual(new Set(['picture', 'assets', 'saving']));
   });
+
+  it('leaves out a picture the operator blocked, counted, and keeps the rest of the bot', async () => {
+    const { store } = await server.account();
+    const [blocked, kept] = [png(), png()];
+    const { ref } = await sealFile(blocked);
+    const files = new Files(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'PUT' && args[1] === `files/${ref.id}` ? { ok: false as const, error: 'file-blocked' } : api<T>(...args)));
+    const assets = [
+      { name: 'taken', read: async () => blocked },
+      { name: 'smile', read: async () => kept },
+    ];
+    const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, null, () => {});
+    expect(saved).toMatchObject({ ok: true, data: { skipped: 1 } });
+    expect(store.children('asset', saved.ok ? saved.data.id : '').map(({ value }) => value.name)).toEqual(['smile']);
+  });
 });
 
 describe('copyCharacter', () => {
@@ -90,6 +107,29 @@ describe('purgeExpired', () => {
     expect(store.list('character').map((kept) => kept.value.card.name)).toEqual(['recent']);
     expect([store.list('chat'), store.children('entry', chat.ok ? chat.data.id : ''), store.list('lore'), store.list('avatar'), store.list('asset')].map((left) => left.length)).toEqual([0, 0, 0, 0, 0]);
   });
+
+  it('leaves a character another device brought back since this one listed it, with its chats', async () => {
+    const { store, open } = await server.account();
+    const now = Date.now();
+    const added = await addCharacter(store, bare('루나', { deleted: now - KEEP_DELETED }), none, () => {});
+    const id = added.ok ? added.data : '';
+    const chat = await store.create('chat', { title: null, character: id, models: {} });
+    const other = await open();
+    await other.pull();
+    await setDeleted(other, id, null);
+
+    await purgeExpired(store, now, new AbortController().signal);
+    expect([store.get('character', id)?.value.deleted, store.get('chat', chat.ok ? chat.data.id : '')?.id]).toEqual([undefined, chat.ok ? chat.data.id : '']);
+  });
+
+  it('finishes a removal begun before, however long the character has left', async () => {
+    const { store } = await server.account();
+    const now = Date.now();
+    await addCharacter(store, bare('루나', { deleted: now, purging: true }), { ...none, lore: [{ name: 'lore' } as Lore] }, () => {});
+
+    await purgeExpired(store, now, new AbortController().signal);
+    expect([store.list('character'), store.list('lore')].map((left) => left.length)).toEqual([0, 0]);
+  });
 });
 
 describe('setToggle', () => {
@@ -120,9 +160,9 @@ describe('setPictures', () => {
 });
 
 describe('purgeCharacter', () => {
-  it('leaves the character in place when a removal fails midway, and finishes when tried again', async () => {
+  it('leaves the character in place when a removal fails midway, past bringing back, and finishes when tried again', async () => {
     const { store, open } = await server.account();
-    const added = await addCharacter(store, bare('루나'), { ...none, lore: [{ name: 'lore' } as Lore] }, () => {});
+    const added = await addCharacter(store, bare('루나', { deleted: Date.now() }), { ...none, lore: [{ name: 'lore' } as Lore] }, () => {});
     const id = added.ok ? added.data : '';
     const chat = await store.create('chat', { title: null, character: id, models: {} });
     const chatId = chat.ok ? chat.data.id : '';
@@ -136,6 +176,7 @@ describe('purgeCharacter', () => {
     expect([other.get('character', id), other.get('chat', chatId)].map((kept) => kept?.id)).toEqual([id, chatId]);
     await server.hold(other, chatId);
     expect([other.children('entry', chatId), other.list('lore')].map((left) => left.length)).toEqual([0, 0]);
+    expect(await setDeleted(other, id, null)).toEqual({ ok: false, error: 'gone' });
 
     vi.stubGlobal('fetch', real);
     const steps: [number, number][] = [];
