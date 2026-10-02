@@ -105,10 +105,11 @@ export type Entry =
   | { type: 'cost'; replyId: string; cost: Cost | null; at: number }
   // A translation made after the version was saved; the latest one for a version is its translation.
   | ({ type: 'translation'; version: string } & Translation)
-  // The variables the bot's Lua wrote once the version stood (after its reply ended, on a button), which the replay
-  // sets after the version's own text is read. They follow the version into its edits and no further: a retried or
-  // continued reply runs the bot's Lua again.
-  | { type: 'vars'; version: string; set: Writes; at: number }
+  // The variables the bot's Lua wrote once the version stood, which the replay sets after the version's own text is
+  // read. What the reply's end wrote follows the version into its edits and no further: a retried, continued or new
+  // reply runs the bot's Lua again. stays: what a button wrote is the user's own act at that place in the story, so
+  // it stays with the message whichever version is shown, and moves to the message before when its own is deleted.
+  | { type: 'vars'; version: string; set: Writes; at: number; stays?: true }
   // A model call the bot's Lua made (LLM, axLLM) while version was the last one shown, kept so usage and cost count
   // it. It follows the version as vars does.
   | { type: 'call'; version: string; receipt: Receipt; at: number };
@@ -118,7 +119,8 @@ export type Writes = [string, string][];
 
 export type Version = { id: string; seed: string; text: string; receipt: Receipt | null; edited: boolean; at: number; translation?: Translation; staged?: true; before?: Writes; after?: Writes; calls?: BotCall[] };
 export type BotCall = { receipt: Receipt; at: number };
-export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number };
+// after: the writes that stay with the message (Entry vars), set after its shown version's own.
+export type Message = { id: string; role: 'user' | 'assistant'; at: number; versions: Version[]; selected: number; after?: Writes };
 
 const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'version' }>, edited: boolean, staged: boolean): Version => ({
   id,
@@ -144,6 +146,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
   // By a version's own id and those of the versions it is an edit of, and those ids by the version.
   const edits = new Map<string, Version>();
   const ids = new Map<Version, string[]>();
+  const home = new Map<Version, Message>();
   const stand = (id: string, version: Version, earlier: string[] = []) => {
     ids.set(version, [...earlier, id]);
     for (const each of ids.get(version)!) edits.set(each, version);
@@ -160,12 +163,15 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       versions.set(id, version);
       own.set(id, version);
       stand(id, version);
-      messages.set(id, { id, role: entry.role, at: entry.at, versions: [version], selected: 0 });
+      const message: Message = { id, role: entry.role, at: entry.at, versions: [version], selected: 0 };
+      messages.set(id, message);
+      home.set(version, message);
       continue;
     }
     if (entry.type === 'vars') {
       const version = edits.get(entry.version);
-      if (version) version.after = [...(version.after ?? []), ...entry.set];
+      const holder = entry.stays ? version && home.get(version) : version;
+      if (holder) holder.after = [...(holder.after ?? []), ...entry.set];
       continue;
     }
     if (entry.type === 'call') {
@@ -194,6 +200,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
         if (edited.calls) version.calls = edited.calls;
       }
       own.set(id, version);
+      home.set(version, message);
       stand(id, version, edited && ids.get(edited));
       if (slot === -1) message.versions.push(version);
       else message.versions[slot] = version;
@@ -215,6 +222,11 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     const own = receipt.cost === 'pending' && receipt.replyId && costs.has(receipt.replyId) ? { ...receipt, cost: costs.get(receipt.replyId)! } : receipt;
     return earlier === receipt.continues ? own : { ...own, continues: earlier };
   };
+  let kept: Message | null = null;
+  for (const message of messages.values()) {
+    if (!deleted.has(message.id)) kept = message;
+    else if (kept && message.after) kept.after = [...(kept.after ?? []), ...message.after];
+  }
   return [...messages.values()]
     .filter((message) => !deleted.has(message.id))
     .map((message) => ({

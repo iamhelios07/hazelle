@@ -89,7 +89,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     (chat, reply) => scripts.ending(chat, reply),
     // The bot's onOutput may rewrite the reply, so what reads the reply waits for it.
     (chat, reply) =>
-      void scripts.ended(chat, reply).then(() => {
+      void scripts.ended(chat, reply).finally(() => {
         translateLatest({ store, read, talk, translator }, chat);
         memory.check(chat);
       }),

@@ -97,7 +97,7 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 // versions: each version's id in the branch, by its id here.
 // A field added to versions or messages must be written here too, or a branch drops it. The calls the bot's Lua made
 // (Version.calls) are dropped on purpose: usage counts a call where it was made.
-function copied(id: string, { role, at, versions, selected }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
+function copied(id: string, { role, at, versions, selected, after }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
   const held = ({ text, receipt, seed, translation, staged, before }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }) });
@@ -115,6 +115,7 @@ function copied(id: string, { role, at, versions, selected }: Message): { entrie
   });
   if (selected !== versions.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: id, version: ids[selected]!, at: versions[selected]!.at }]);
   for (const version of versions) if (version.after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(version.id)!, set: version.after, at: version.at }]);
+  if (after) entries.push([crypto.randomUUID(), { type: 'vars', version: made.get(versions[selected]!.id)!, set: after, at, stays: true }]);
   return { entries, versions: made };
 }
 
@@ -158,12 +159,12 @@ export function appendReply(store: ObjectStore, chat: string, { id, message, rep
 
 // What a run of the bot's Lua did to a chat (engine/lua Outcome), by the messages it read. edits: a message's new
 // text in place of its shown version, with the variables that version's own text wrote, which the new text no
-// longer does. vars: the variables written, standing after a version.
+// longer does. vars: the variables written, standing after a version, or with stays after its message (Entry vars).
 export type Scripted = {
   edits: { message: Message; text: string; wrote: Writes }[];
   removed: string[];
   added: { role: 'user' | 'assistant'; text: string }[];
-  vars: { version: string; set: Writes } | null;
+  vars: { version: string; set: Writes; stays?: true } | null;
 };
 
 // One batch, so a run's changes land together. What Lua writes is already past the input and output scripts.
@@ -176,7 +177,7 @@ export function appendScripted(store: ObjectStore, chat: string, { edits, remove
     }),
     ...removed.map((message): Entry => ({ type: 'delete', message, at })),
     ...added.map(({ role, text }): Entry => ({ type: 'message', role, at, text, receipt: null, staged: true })),
-    ...(vars && vars.set.length > 0 ? [{ type: 'vars', version: vars.version, set: vars.set, at } satisfies Entry] : []),
+    ...(vars && vars.set.length > 0 ? [{ type: 'vars', version: vars.version, set: vars.set, at, ...(vars.stays && { stays: true }) } satisfies Entry] : []),
   ];
   if (entries.length === 0) return Promise.resolve({ ok: true, data: null });
   return store.batch(entries.map((value) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: chat, value })));

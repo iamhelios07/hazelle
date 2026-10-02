@@ -86,7 +86,7 @@ describe("a turn with the bot's Lua", () => {
       const { chat, messages } = await chatWith(session, `function open(id) setChatVar(id, 'door', 'open') alertNormal(id, 'opened') end`);
       expect(await session.scripts.press(chat, { trigger: 'open' })).toBe(true);
       expect(await session.scripts.press(chat, { trigger: 'missing' })).toBe(false);
-      expect(shown(messages()[0]!).after).toEqual([['door', 'open']]);
+      expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
     }));
 });

@@ -80,7 +80,8 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     lore: chat.character === null ? [] : store.children('lore', chat.character),
     messages: messages.map((message) => {
       const version = shown(message);
-      return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at, ...(version.staged && { staged: true }), ...(version.before && { before: version.before }), ...(version.after && { after: version.after }) };
+      const after = [...(version.after ?? []), ...(message.after ?? [])];
+      return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at, ...(version.staged && { staged: true }), ...(version.before && { before: version.before }), ...(after.length > 0 && { after }) };
     }),
     variables: chat.variables ?? [],
     greeting: card && greetingOf(card, messages),

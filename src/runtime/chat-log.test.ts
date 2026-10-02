@@ -49,8 +49,9 @@ describe('branchChat', () => {
     await appendUserMessage(store, source, { id: said, text: '안녕', before: [['order', 'input']] });
     const folded = () => fold(store.children('entry', source));
     await appendScripted(store, source, { edits: [{ message: folded()[0]!, text: '안녕!', wrote: [['typed', '1']] }], removed: [], added: [{ role: 'assistant', text: 'narration' }], vars: { version: said, set: [['hp', '9']] } });
-    const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after]);
-    expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']]], ['narration', true, undefined, undefined]]);
+    await appendScripted(store, source, { edits: [], removed: [], added: [], vars: { version: said, set: [['door', 'open']], stays: true } });
+    const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after, message.after]);
+    expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']], [['door', 'open']]], ['narration', true, undefined, undefined, undefined]]);
 
     const item: ChatItem = { id: source, chat, messages: folded(), count: 2, title: '', preview: '', at: null, order: 0 };
     const branched = await branchChat(store, item, folded()[1]!.id);

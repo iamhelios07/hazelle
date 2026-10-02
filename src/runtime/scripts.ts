@@ -27,13 +27,15 @@ import { scopeOf, togglesOf, type Blocked, type TurnContext } from './turn';
 // What the bot's Lua has for the chat screen. said: the bot's own words (alertNormal, alertError). The others are the
 // app's about the bot: a script's error, functions it called that this app does not have, a script that never ended.
 // no-model: the bot called a model of a role the chat has none for. flood: it called models faster than CALLS_A_MINUTE.
+// unsaved: what a run did to the chat could not be saved.
 type Note =
   | { kind: 'said'; tone: 'normal' | 'error'; text: string }
   | { kind: 'failed'; message: string }
   | { kind: 'missing'; names: string[] }
   | { kind: 'stuck' }
   | { kind: 'no-model'; role: Role }
-  | { kind: 'flood' };
+  | { kind: 'flood' }
+  | { kind: 'unsaved'; failure: ApiFailure };
 export type ScriptNote = { id: number; chat: string } & Note;
 // model: the bot's Lua wants to call a model, which the character has not been allowed or refused yet. Its answer
 // 'yes' allows it and 'no' refuses it, both kept on the character; a dismissal leaves it to be asked again.
@@ -49,6 +51,7 @@ export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone
 export const scriptsOf = (card: Card | null): Script[] => (card?.triggers ?? []).flatMap((trigger) => (trigger.kind === 'lua' ? [{ name: trigger.name || 'Lua', code: trigger.code }] : []));
 
 type Read = { snapshot: Snapshot; wrote: Writes[]; greeting: number };
+type Anchor = { version: string; stays?: true };
 
 // The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
 // variables given.
@@ -151,7 +154,8 @@ export class Scripts {
       const start = await this.event(chat, first.chat, scripts, turn.scope, { kind: 'start' }, null);
       if (start.outcome.stop) {
         const last = turn.scope.messages.at(-1);
-        if (last) await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: start.outcome.writes } });
+        const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: start.outcome.writes } }));
+        if (saved && !saved.ok) this.note(chat, { kind: 'unsaved', failure: saved });
         return halted;
       }
       if (start.changed) {
@@ -195,25 +199,27 @@ export class Scripts {
     });
   }
 
-  // onOutput, once the reply is saved.
+  // onOutput, once the reply is saved. What it writes is the reply version's.
   async ended(chat: string, reply: Written): Promise<void> {
-    if (reply.receipt.state !== 'failed') await this.now(chat, { kind: 'output' }, reply.id);
+    if (reply.receipt.state !== 'failed') await this.now(chat, { kind: 'output' }, (): Anchor => ({ version: reply.id }));
   }
 
-  // A press on a bot's button. false: no script answered it.
+  // A press on a bot's button, whose writes stay with the last message whichever version it shows. false: no script
+  // answered it.
   async press(chat: string, button: { trigger: string } | { data: string }): Promise<boolean> {
-    return (await this.now(chat, 'trigger' in button ? { kind: 'call', name: button.trigger } : { kind: 'button', data: button.data }, null)) ?? false;
+    const event: Event = 'trigger' in button ? { kind: 'call', name: button.trigger } : { kind: 'button', data: button.data };
+    return (await this.now(chat, event, (last) => (last === null ? null : { version: last, stays: true }))) ?? false;
   }
 
-  // An event over the chat as it stands, whose writes stand after anchor, or after the last message shown.
+  // An event over the chat as it stands. anchor: where its writes stand, given the last version shown.
   // null: the chat has no Lua.
-  private now(chat: string, event: Event, anchor: string | null): Promise<boolean | null> {
+  private now(chat: string, event: Event, anchor: (last: string | null) => Anchor | null): Promise<boolean | null> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? scriptsOf(this.card(stored.value)) : [];
     if (!stored || scripts.length === 0) return Promise.resolve(null);
     return this.queued(chat, async () => {
       const scope = scopeOf(this.session, chat, stored.value, this.session.read.chat(chat).snapshot()?.messages ?? []);
-      const { outcome } = await this.event(chat, stored.value, scripts, scope, event, anchor ?? scope.messages.at(-1)?.id ?? null);
+      const { outcome } = await this.event(chat, stored.value, scripts, scope, event, anchor(scope.messages.at(-1)?.id ?? null));
       return outcome.handled;
     });
   }
@@ -222,9 +228,9 @@ export class Scripts {
     return chat.character === null ? null : (this.session.store.get('character', chat.character)?.value.card ?? null);
   }
 
-  // One run over scope, and what it did to the chat saved. anchor: the version its writes stand after; null leaves
-  // them to the caller. changed: it wrote to the chat's messages.
-  private async event(chat: string, value: Chat, scripts: Script[], scope: ChatScope, event: Event, anchor: string | null): Promise<{ outcome: Outcome; changed: boolean }> {
+  // One run over scope, and what it did to the chat saved. anchor: where its writes stand; null leaves them to the
+  // caller. changed: it wrote to the chat's messages.
+  private async event(chat: string, value: Chat, scripts: Script[], scope: ChatScope, event: Event, anchor: Anchor | null): Promise<{ outcome: Outcome; changed: boolean }> {
     const read = this.reading(value, scope);
     const outcome = await this.run(chat, scripts, read.snapshot, event);
     const messages = new Map((this.session.read.chat(chat).snapshot()?.messages ?? []).map((message) => [shown(message).id, message]));
@@ -238,7 +244,8 @@ export class Scripts {
     });
     const removed = outcome.removed.flatMap((index) => at(index)?.message.id ?? []);
     const added = outcome.added.map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
-    await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor === null ? null : { version: anchor, set: outcome.writes } });
+    const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
+    if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved });
     if (outcome.reload) this.session.display.stale(chat);
     return { outcome, changed: edits.length + removed.length + added.length > 0 };
   }

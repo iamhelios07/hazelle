@@ -110,6 +110,14 @@ describe("fold with the bot's Lua writes", () => {
     const retried = shown(fold([...entries, version('r1', 'b1', '다시', 'e2')])[0]!);
     expect([retried.before, retried.after]).toEqual([undefined, undefined]);
   });
+
+  it('keeps what a button wrote with its message whichever version is shown, and with the message before once its own is deleted', () => {
+    const entries = [user('u1', '안녕'), bot('b1', '하나'), entry('w1', { type: 'vars', version: 'b1', set: [['door', 'open']], at: rev, stays: true }), version('v2', 'b1', '둘')];
+    expect(fold(entries)[1]).toMatchObject({ after: [['door', 'open']] });
+    expect(shown(fold(entries)[1]!).after).toBeUndefined();
+    const [left] = fold([...entries, entry('d1', { type: 'delete', message: 'b1', at: rev })]);
+    expect(left).toMatchObject({ id: 'u1', after: [['door', 'open']] });
+  });
 });
 
 const asStored = (messages: Message[]) => messages.map((message) => shown(message).text);
