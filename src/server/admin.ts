@@ -1,7 +1,9 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { FILE_ID } from './files';
-import { fail, ID, isAdmin, readObject, type AppEnv } from './http';
+import type { Phase } from './account-store';
+import { FILE_BYTES, fileBlocks } from './files';
+import { fail, ID, isAdmin, readObject, refused, type AppEnv, type State } from './http';
+import { beginRestore, cancelRestore, leaveAccount, restoreActions, runRestore, store, undoable, UNDO_LIFE_MS } from './lifecycle';
 import { requireSession } from './session';
 
 const MAX_REPORT_LENGTH = 4000;
@@ -33,8 +35,8 @@ admin.use(createMiddleware<AppEnv>(async (c, next) => (isAdmin(c, c.get('account
 // never holds one that did not. The row comes first and is written only if the target is there: a delete could not
 // name its target afterwards.
 // values: what detail names from ?4 on.
-function logged(db: D1Database, action: string, table: 'accounts' | 'files', id: string, detail = 'NULL', ...values: unknown[]) {
-  return db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?1, ?2, id, ${detail} FROM ${table} WHERE id = ?3`).bind(Date.now(), action, id, ...values);
+function logged(db: D1Database, action: string, id: string, detail = 'NULL', ...values: unknown[]) {
+  return db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?1, ?2, id, ${detail} FROM accounts WHERE id = ?3`).bind(Date.now(), action, id, ...values);
 }
 
 const USERNAME = `json_object('username', username)`;
@@ -44,23 +46,90 @@ async function act(c: Context<AppEnv>, log: D1PreparedStatement, action: D1Prepa
   return done!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
 }
 
-// fileBytes: the files the account was first to store (files.ts). bytesCap, fileBytesCap: its own caps, 'default' while
-// the service's apply.
+// At most this many store calls are in flight, and the page is answered by the deadline with what was read by then.
+const USAGE_SLOTS = 50;
+const USAGE_DEADLINE_MS = 10_000;
+
+// bytes, disk: what the account's store answered, null for an account not read by the deadline, failing, or not
+// active (restoring and leaving accounts are not called). fileBytes: the sum of its pictures. bytesCap, fileBytesCap:
+// its own caps, 'default' while the service's apply. totals: a reading of the accounts that answered, at readAt.
 admin.get('/accounts', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id AS accountId, username, created_at AS createdAt, suspended_at IS NOT NULL AS suspended, bytes, file_bytes AS fileBytes,
+    `SELECT id AS accountId, username, created_at AS createdAt, suspended_at IS NOT NULL AS suspended, state, incarnation, ${FILE_BYTES} AS fileBytes,
        own_bytes_cap, bytes_cap, own_file_bytes_cap, file_bytes_cap
      FROM accounts ORDER BY created_at, id`,
-  ).all<{ suspended: number; own_bytes_cap: number; bytes_cap: number | null; own_file_bytes_cap: number; file_bytes_cap: number | null }>();
-  return c.json({
-    accounts: results.map(({ own_bytes_cap, bytes_cap, own_file_bytes_cap, file_bytes_cap, ...row }) => ({
-      ...row,
+  ).all<{
+    accountId: string;
+    username: string;
+    createdAt: number;
+    suspended: number;
+    state: State;
+    incarnation: string;
+    fileBytes: number;
+    own_bytes_cap: number;
+    bytes_cap: number | null;
+    own_file_bytes_cap: number;
+    file_bytes_cap: number | null;
+  }>();
+  const usages = await readAll(
+    results.map(({ state, incarnation }) => (state === 'active' ? () => store(c.env, incarnation).usage(incarnation) : null)),
+    USAGE_SLOTS,
+    USAGE_DEADLINE_MS,
+  );
+  const accounts = results.map((row, index) => {
+    const usage = usages[index];
+    const read = usage && 'bytes' in usage ? usage : null;
+    return {
+      accountId: row.accountId,
+      username: row.username,
+      createdAt: row.createdAt,
       suspended: Boolean(row.suspended),
-      bytesCap: own_bytes_cap ? bytes_cap : 'default',
-      fileBytesCap: own_file_bytes_cap ? file_bytes_cap : 'default',
-    })),
+      state: row.state,
+      bytes: read?.bytes ?? null,
+      disk: read?.disk ?? null,
+      fileBytes: row.fileBytes,
+      bytesCap: row.own_bytes_cap ? row.bytes_cap : 'default',
+      fileBytesCap: row.own_file_bytes_cap ? row.file_bytes_cap : 'default',
+    };
+  });
+  const answered = accounts.filter(({ bytes }) => bytes !== null);
+  return c.json({
+    accounts,
+    totals: {
+      bytes: answered.reduce((sum, { bytes }) => sum + bytes!, 0),
+      disk: answered.reduce((sum, { disk }) => sum + disk!, 0),
+      unread: accounts.length - answered.length,
+      readAt: Date.now(),
+    },
   });
 });
+
+// Runs each call that is not null with at most slots of them in flight, a slot held until its call settles, since a
+// call cannot be aborted. At the deadline no call starts any more, and what has not settled is answered as undefined:
+// a call that settles later changes nothing.
+export async function readAll<T>(calls: ((() => Promise<T>) | null)[], slots: number, deadlineMs: number): Promise<(T | undefined)[]> {
+  const settled: (T | undefined)[] = calls.map(() => undefined);
+  let next = 0;
+  let open = true;
+  const slot = async () => {
+    while (open && next < calls.length) {
+      const index = next++;
+      const call = calls[index];
+      if (!call) continue;
+      const answer = await call().catch(() => undefined);
+      if (open) settled[index] = answer;
+    }
+  };
+  let reached = () => {};
+  const deadline = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const timer = setTimeout(reached, deadlineMs);
+  await Promise.race([Promise.all(Array.from({ length: slots }, slot)), deadline]);
+  open = false;
+  clearTimeout(timer);
+  return settled;
+}
 
 admin.put('/accounts/:id/suspended', async (c) => {
   const id = c.req.param('id');
@@ -69,7 +138,7 @@ admin.put('/accounts/:id/suspended', async (c) => {
   const db = c.env.DB;
   return act(
     c,
-    logged(db, suspended ? 'suspend' : 'lift', 'accounts', id, USERNAME),
+    logged(db, suspended ? 'suspend' : 'lift', id, USERNAME),
     db.prepare('UPDATE accounts SET suspended_at = ? WHERE id = ? RETURNING id').bind(suspended ? Date.now() : null, id),
   );
 });
@@ -85,32 +154,89 @@ admin.put('/accounts/:id/caps', async (c) => {
   const own = (cap: unknown) => [cap === 'default' ? 0 : 1, cap === 'default' ? null : cap];
   return act(
     c,
-    logged(db, 'set-caps', 'accounts', id, `json_object('username', username, 'bytesCap', json(?4), 'fileBytesCap', json(?5))`, JSON.stringify(bytesCap), JSON.stringify(fileBytesCap)),
+    logged(db, 'set-caps', id, `json_object('username', username, 'bytesCap', json(?4), 'fileBytesCap', json(?5))`, JSON.stringify(bytesCap), JSON.stringify(fileBytesCap)),
     db.prepare('UPDATE accounts SET own_bytes_cap = ?2, bytes_cap = ?3, own_file_bytes_cap = ?4, file_bytes_cap = ?5 WHERE id = ?1 RETURNING id').bind(id, ...own(bytesCap), ...own(fileBytesCap)),
   );
 });
 
-// What stays is what stays after 탈퇴 (accounts.ts).
+// What stays is what stays after 탈퇴 (accounts.ts). Repeatable: it finishes a leaving account (마무리).
 admin.delete('/accounts/:id', async (c) => {
   const id = c.req.param('id');
   if (!ID.test(id)) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
-  return act(c, logged(db, 'delete-account', 'accounts', id, USERNAME), db.prepare('DELETE FROM accounts WHERE id = ? RETURNING id').bind(id));
+  const incarnation = await c.env.DB.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
+  if (incarnation === null) return fail(c, 404, 'not-found');
+  const left = await leaveAccount(c.env, id, incarnation, true);
+  if (left === 'busy') return fail(c, 409, 'account-busy');
+  if (left === 'unavailable') return refused(c, { unavailable: true });
+  return c.body(null, 204);
 });
 
-// bytes: every account's object bodies, the part of the database that grows. fileBytes: every stored file, a deleted
-// account's too.
+// A restore of the account's store, on a report it sent: { report, at } for its state at a time, or { report, undoes }
+// to undo its latest finished restore. The operation runs in this request (lifecycle.ts).
+admin.post('/accounts/:id/restores', async (c) => {
+  const id = c.req.param('id');
+  const body = await readObject(c);
+  const report = body?.report;
+  const at = body?.at;
+  const undoes = body?.undoes;
+  const from = at === undefined ? (positive(undoes) ? { undoes } : null) : undoes === undefined && count(at) ? { at } : null;
+  if (!ID.test(id) || !positive(report) || !from) return fail(c, 400, 'bad-input');
+  const begun = await beginRestore(c.env, id, report, from);
+  if ('refused' in begun) return fail(c, REFUSAL_STATUS[begun.refused], begun.refused);
+  return c.json(await runRestore(c.env, begun.begun));
+});
+
+const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 400, 'bad-time': 400, 'cannot-undo': 400 } as const;
+
+// Newest first. canUndo, undoExpiresAt: whether and until when an undo of this restore can begin. actions: what its
+// phase allows.
+admin.get('/accounts/:id/restores', async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
+       r.checkpoint_at, ${undoable('r.id', '?2')} AS canUndo
+     FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
+  )
+    .bind(c.req.param('id'), Date.now())
+    .all<{ phase: Phase; verified: number; canUndo: number; checkpoint_at: number | null }>();
+  return c.json({
+    restores: results.map(({ checkpoint_at, canUndo, ...row }) => ({
+      ...row,
+      verified: Boolean(row.verified),
+      canUndo: Boolean(canUndo),
+      undoExpiresAt: canUndo ? checkpoint_at! + UNDO_LIFE_MS : null,
+      actions: restoreActions(row.phase, Boolean(row.verified)),
+    })),
+  });
+});
+
+// Resume and finalize both run the operation on from its phase: they are retries of it.
+admin.post('/restores/:id/:action{resume|finalize}', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!positive(id)) return fail(c, 400, 'bad-input');
+  const ran = await runRestore(c.env, id);
+  return ran ? c.json(ran) : fail(c, 404, 'not-found');
+});
+
+admin.post('/restores/:id/cancel', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!positive(id)) return fail(c, 400, 'bad-input');
+  const ran = await cancelRestore(c.env, id);
+  if (ran === 'too-late') return fail(c, 409, 'cannot-cancel');
+  return ran ? c.json(ran) : fail(c, 404, 'not-found');
+});
+
+// fileBytes: the pictures every account holds.
 admin.get('/service', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
-       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(bytes), 0) FROM accounts) AS bytes,
-       (SELECT COALESCE(SUM(size), 0) FROM files) AS fileBytes
+       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(size), 0) FROM account_files) AS fileBytes
      FROM service`,
   ).first();
   return c.json(row);
 });
 
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const positive = (value: unknown): value is number => count(value) && value > 0;
 const cap = (value: unknown) => value === null || count(value);
 const ownCap = (value: unknown) => value === 'default' || cap(value);
 
@@ -151,14 +277,7 @@ admin.post('/reports/:id/resolve', async (c) => {
   );
 });
 
-// A block refuses the file to every account (files.ts). The body stays in R2, so lifting the block brings it back.
-admin.put('/files/:id/blocked', async (c) => {
-  const id = c.req.param('id');
-  const blocked = (await readObject(c))?.blocked;
-  if (!FILE_ID.test(id) || typeof blocked !== 'boolean') return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
-  return act(c, logged(db, blocked ? 'block-file' : 'unblock-file', 'files', id), db.prepare('UPDATE files SET blocked_at = ? WHERE id = ? RETURNING id').bind(blocked ? Date.now() : null, id));
-});
+admin.route('/', fileBlocks);
 
 admin.get('/log', async (c) => {
   const rows = page(c, 'SELECT id, at, action, target, detail FROM admin_log');

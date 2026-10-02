@@ -7,10 +7,13 @@ import { StreamBox, type BoxStorage } from './stream-box';
 import app from './worker';
 
 const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
+// The cutover's destructive migration, which waits outside migrations/ for its step: tests run on the schema it leaves.
+const cutover = import.meta.glob<string>('../../scripts/cutover/*.sql', { query: '?raw', import: 'default', eager: true });
 
-// An in-memory local D1 with every migration applied, a local R2, and a client that calls the app in-process. upstream
-// answers the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the options each Durable
-// Object was got with. stores: the accounts' stores in process (store-db-node), whose bookmarks are stamped by clock.
+// An in-memory local D1 with every migration and the cutover's applied, a local R2, and a client that calls the app
+// in-process. upstream answers the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the
+// options each Durable Object was got with. stores: the accounts' stores in process (store-db-node), whose bookmarks
+// are stamped by clock.
 export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.'))) {
   const proxy = await getPlatformProxy<Env>({ configPath: 'wrangler.test.jsonc', persist: false, remoteBindings: false });
   const placed: unknown[] = [];
@@ -24,8 +27,8 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     STORES: stores as unknown as Env['STORES'],
     ADMIN_ACCOUNT: '' as string,
   };
-  for (const name of Object.keys(migrations).sort()) {
-    const statements = migrations[name]!.split(';').filter((s) => s.trim());
+  for (const sql of [...Object.keys(migrations).sort().map((name) => migrations[name]!), ...Object.values(cutover)]) {
+    const statements = sql.split(';').filter((s) => s.trim());
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
   }
 
@@ -47,6 +50,8 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       env,
     );
   };
+  // The account's timeline, as a device that holds nothing learns it.
+  const timeline = async (cookie: string) => ((await (await send('GET', 'objects?since=0', undefined, cookie)).json()) as { timeline: string }).timeline;
 
   return {
     env,
@@ -58,7 +63,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       env.ADMIN_ACCOUNT = '';
       clock.now = () => Date.now();
       await env.DB.batch([
-        ...['objects', 'files', 'file_blocks', 'restores', 'account_files', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+        ...['file_blocks', 'restores', 'account_files', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
         env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
       for (let listed = await env.BLOBS.list(); listed.objects.length; listed = await env.BLOBS.list()) {
@@ -70,6 +75,14 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     put: (path: string, body?: unknown, cookie?: string) => send('PUT', path, body, cookie),
     delete: (path: string, body?: unknown, cookie?: string) => send('DELETE', path, body, cookie),
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env),
+    timeline,
+    // The account's row changed in D1, then its store restarted, as every lifecycle change is made (server/lifecycle).
+    lifecycle: async (accountId: string, set: string) => {
+      const incarnation = await env.DB.prepare(`UPDATE accounts SET ${set} WHERE id = ? RETURNING incarnation`).bind(accountId).first<string>('incarnation');
+      await stores.getByName(incarnation!).restart(incarnation!).catch(() => {});
+    },
+    // A batch on the account's current timeline.
+    batch: async (writes: unknown[], cookie: string) => send('POST', 'objects/batch', { timeline: await timeline(cookie), writes }, cookie),
   };
 }
 

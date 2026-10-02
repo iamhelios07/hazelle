@@ -1,8 +1,10 @@
 import { Hono, type Context } from 'hono';
 import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
-import { fail, ID, isAdmin, readObject, type Account, type AppEnv } from './http';
-import { currentAccount, dropSessionCookie, endSession, requireSession, setSessionCookie, startSession } from './session';
+import { FILE_BYTES } from './files';
+import { fail, ID, isAdmin, readObject, refused, type Account, type AppEnv } from './http';
+import { leaveAccount, store } from './lifecycle';
+import { currentAccount, dropSessionCookie, endSession, requireOwnSession, setSessionCookie, startSession } from './session';
 import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
@@ -47,7 +49,7 @@ accounts.post('/signup', async (c) => {
   ]);
   if (!created!.results.length) return room!.results[0]!.open ? fail(c, 409, 'username-taken') : fail(c, 403, 'signup-closed');
   setSessionCookie(c, session.token);
-  return c.json(await describe(c, { id: accountId, username, suspended: false }), 201);
+  return c.json(await describe(c, { id: accountId, username, suspended: false, incarnation: created!.results[0]!.incarnation!, state: 'active' }), 201);
 });
 
 // Answers like GET /session, so the client opens the vault without another request.
@@ -59,8 +61,9 @@ accounts.post('/login', async (c) => {
   const db = c.env.DB;
   const account = await findAccount(db, 'username', body.username);
   if (!account) return fail(c, 401, 'wrong-login');
-  const refused = await checkProof(c, account, method, proof);
-  if (refused) return refused;
+  const wrong = await checkProof(c, account, method, proof);
+  if (wrong) return wrong;
+  if (account.state === 'leaving') return fail(c, 403, 'account-leaving');
 
   const started = await startSession(db, account.id);
   await db.batch([clearFailures(db, account.id), started.insert]);
@@ -83,28 +86,42 @@ accounts.get('/session', async (c) => {
   return c.json({ session, vault });
 });
 
-// 탈퇴. The proof is asked again, as for a new password, so a stolen session alone cannot delete the account. The
-// delete cascades to its sessions, vault and objects. Its stored files stay: they are kept by content and may be
-// another account's too (files.ts). The reports it sent and the operator's log rows about it stay as well.
-accounts.delete('/account', requireSession, async (c) => {
+// 탈퇴. The proof is asked again, as for a new password, so a stolen session alone cannot delete the account. An
+// account whose deletion was cut off is still admitted, to finish it. The reports it sent and the operator's log rows
+// about it stay.
+accounts.delete('/account', requireOwnSession, async (c) => {
   const body = await readObject(c);
   const method = readMethod(body?.method);
   const proof = readProof(body?.proof);
   if (!method || !proof) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
-  const id = c.get('account').id;
-  const refused = await checkProof(c, (await findAccount(db, 'id', id))!, method, proof);
-  if (refused) return refused;
-  await db.prepare('DELETE FROM accounts WHERE id = ?').bind(id).run();
+  const { id, incarnation } = c.get('account');
+  const wrong = await checkProof(c, (await findAccount(c.env.DB, 'id', id))!, method, proof);
+  if (wrong) return wrong;
+  const left = await leaveAccount(c.env, id, incarnation, false);
+  if (left === 'busy') return fail(c, 409, 'account-busy');
+  if (left === 'unavailable') return refused(c, { unavailable: true });
   dropSessionCookie(c);
   return c.body(null, 204);
 });
 
 // The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:
-// what the account holds and the caps that apply to it, null for none.
-async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended'>) {
-  const storage = await c.env.DB.prepare(`SELECT bytes, ${CAP.bytes} AS bytesCap, file_bytes AS fileBytes, ${CAP.fileBytes} AS fileBytesCap FROM accounts WHERE id = ?`)
-    .bind(account.id)
-    .first<{ bytes: number; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null }>();
-  return { accountId: account.id, username: account.username, admin: isAdmin(c, account.id), suspended: account.suspended, storage: storage! };
+// what the account holds and the caps that apply to it, null for none. bytes: null while the store does not answer,
+// restoring among the reasons.
+async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended' | 'incarnation' | 'state'>) {
+  const { incarnation } = account;
+  const [usage, caps] = await Promise.all([
+    store(c.env, incarnation).usage(incarnation),
+    c.env.DB.prepare(`SELECT ${CAP.bytes} AS bytesCap, ${FILE_BYTES} AS fileBytes, ${CAP.fileBytes} AS fileBytesCap FROM accounts WHERE incarnation = ?`)
+      .bind(incarnation)
+      .first<{ bytesCap: number | null; fileBytes: number; fileBytesCap: number | null }>(),
+  ]);
+  return {
+    accountId: account.id,
+    username: account.username,
+    admin: isAdmin(c, account.id),
+    suspended: account.suspended,
+    state: account.state,
+    incarnation,
+    storage: { bytes: 'bytes' in usage ? usage.bytes : null, ...caps! },
+  };
 }

@@ -1,8 +1,17 @@
 import type { Context } from 'hono';
-import { fail, sha256Hex, type AppEnv } from './http';
+import { fail, sha256Hex, type AppEnv, type State } from './http';
 
 export type Method = 'password' | 'recovery';
-export type StoredAccount = { id: string; username: string; login_hash: string; recovery_hash: string; locked_until: number | null; suspended_at: number | null };
+export type StoredAccount = {
+  id: string;
+  username: string;
+  login_hash: string;
+  recovery_hash: string;
+  locked_until: number | null;
+  suspended_at: number | null;
+  incarnation: string;
+  state: State;
+};
 
 // 256 bits in base64: what the client derives from the password or the recovery key.
 const PROOF = /^[A-Za-z0-9+/]{43}=$/;
@@ -23,7 +32,7 @@ export const hashProof = sha256Hex;
 export function findAccount(db: D1Database, column: 'id' | 'username', value: string) {
   return db
     .prepare(
-      `SELECT a.id, a.username, a.login_hash, v.recovery_hash, a.locked_until, a.suspended_at FROM accounts a JOIN vaults v ON v.account_id = a.id WHERE a.${column} = ?`,
+      `SELECT a.id, a.username, a.login_hash, v.recovery_hash, a.locked_until, a.suspended_at, a.incarnation, a.state FROM accounts a JOIN vaults v ON v.account_id = a.id WHERE a.${column} = ?`,
     )
     .bind(value)
     .first<StoredAccount>();
