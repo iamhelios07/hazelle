@@ -177,16 +177,10 @@ export function normalizeBaseUrl(text: string): string | null {
 
 // The hosted relay can never reach these, so the form says so before the first try.
 // Other LAN names cannot be recognized in advance and fail on first use.
+// hostname is a URL's: an IPv6 address stands in brackets and an IPv4 one is four numbers, which is how the server
+// tells an address from a name (server/ssrf.ts). A name that only starts like an address is a name.
 function isLocal(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, '');
-  return (
-    host === 'localhost' ||
-    /\.(localhost|local)$/.test(host) ||
-    /^(127|10)\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    host === '::1' ||
-    /^f[cd]/i.test(host)
-  );
+  if (hostname.startsWith('[')) return hostname === '[::1]' || /^\[f[cd][0-9a-f]{2}:/.test(hostname);
+  if (/^\d+(\.\d+){3}$/.test(hostname)) return /^(127|10)\./.test(hostname) || /^192\.168\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) || /^169\.254\./.test(hostname);
+  return hostname === 'localhost' || /\.(localhost|local)$/.test(hostname);
 }
