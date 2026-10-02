@@ -5,17 +5,19 @@ import { useToast } from '../toast';
 import { PAGES } from '../common/words';
 import { Avatar, Button, FaceRow, NavBar, Screen, SettingGroup, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
+import { LeaveSection } from './LeaveSection';
+import { ReportSection } from './ReportSection';
 
 export function AccountScreen({ back }: { back: Back | null }) {
   const { username } = useSession();
-  const { onLock, onLogout } = useAccount();
+  const { suspended, onLock, onLogout } = useAccount();
   const toast = useToast();
   return (
     <Screen width="form" top={<NavBar title={PAGES.account} {...backBar(back)} />}>
       <FaceRow face={<Avatar face={username} tone="you" />}>
         <Text>{username}</Text>
         <Text variant="note">
-          지금 로그인한 계정
+          {suspended ? '지금 로그인한 계정 · 운영자가 정지함' : '지금 로그인한 계정'}
         </Text>
       </FaceRow>
       <SettingGroup label="계정">
@@ -39,6 +41,8 @@ export function AccountScreen({ back }: { back: Back | null }) {
         />
       </SettingGroup>
       <BackupSection />
+      <ReportSection />
+      <LeaveSection />
     </Screen>
   );
 }
