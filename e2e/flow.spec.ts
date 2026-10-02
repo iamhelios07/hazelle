@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { strFromU8, unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
-import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE, SCRIPTED } from './helpers';
+import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED } from './helpers';
 
 const CSP = /Content-Security-Policy: (.+)/.exec(readFileSync(new URL('../public/_headers', import.meta.url), 'utf8'))![1];
 const PASSWORD = 'e2e-password';
@@ -161,7 +161,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(greeting.locator('em')).toHaveText('nods');
     await expect(greeting.locator('mark')).toHaveText('"hello"');
     await greeting.getByRole('button', { name: '누르기', exact: true }).click();
-    await expect(page.getByText('봇의 버튼은 아직 동작하지 않아요.', { exact: true })).toBeVisible();
+    await expect(page.getByText('이 버튼에는 이어진 동작이 없어요.', { exact: true })).toBeVisible();
     expect(await page.evaluate('window.ran')).toBeUndefined();
     expect(violations).toEqual([]);
   });
@@ -180,6 +180,25 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByLabel('메시지', { exact: true }).fill('hi');
     await page.getByRole('button', { name: '보내기', exact: true }).click();
     await expect(messages.nth(2)).toContainText('Scripted smiles. [[bow]] (seen) [door:open]');
+    expect(violations).toEqual([]);
+  });
+
+  await test.step('a module file becomes a module, and once always on it works on a chat already there: its display script draws and its block trigger answers a button', async () => {
+    const chat = page.url();
+    await page.goto('/');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
+    await (await chooser).setFiles(MODULE);
+    await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '모듈 보기', exact: true }).click();
+    await page.getByRole('switch', { name: '항상 켜기', exact: true }).click();
+    await expect(page.getByRole('switch', { name: '항상 켜기', exact: true })).toBeChecked();
+    await page.goto(chat);
+    const last = messages.nth(2);
+    await expect(last).toContainText('[bell:]');
+    await last.getByRole('button', { name: '벨 울리기', exact: true }).click();
+    await expect(page.getByText('따르릉', { exact: true })).toBeVisible();
+    await expect(last).toContainText('[bell:2]');
+    await expect(messages.first()).toContainText('[bell:]');
     expect(violations).toEqual([]);
   });
 });

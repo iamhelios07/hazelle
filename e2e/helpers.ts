@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { unpack } from '../src/engine/import/risum';
 import { StreamBox, type BoxStorage } from '../src/server/stream-box';
 
 export const FAKE_MODEL = 'fake-model';
@@ -128,3 +129,35 @@ function memory(): BoxStorage {
     setAlarm: async () => {},
   };
 }
+
+// A module file as Risu writes one (src/engine/import/risum.ts), encoded with the inverse of the decode table.
+function risum(module: unknown): Buffer {
+  const encode = new Uint8Array(256);
+  unpack(Uint8Array.from({ length: 256 }, (_, byte) => byte)).forEach((plain, packed) => (encode[plain] = packed));
+  const main = Buffer.from(JSON.stringify({ type: 'risuModule', module })).map((byte) => encode[byte]!);
+  return Buffer.concat([Buffer.from([111, 0]), Buffer.from(new Uint32Array([main.length]).buffer), main, Buffer.from([0])]);
+}
+
+// A module whose display script draws a state and a button under every message, and whose block trigger answers the
+// button (design §6.5): its operand is CBS, which the run evaluates in its worker.
+export const MODULE = {
+  name: 'bell.risum',
+  mimeType: 'application/octet-stream',
+  buffer: risum({
+    name: 'Bell',
+    description: '',
+    id: 'e2e-bell',
+    regex: [{ comment: 'bell', in: '$', out: ' [bell:{{getvar::bell}}] {{button::벨 울리기::ring}}', type: 'editdisplay' }],
+    trigger: [
+      {
+        comment: 'ring',
+        type: 'manual',
+        conditions: [],
+        effect: [
+          { type: 'setvar', operator: '=', var: 'bell', value: '{{? 1+1}}' },
+          { type: 'showAlert', alertType: 'normal', value: '따르릉' },
+        ],
+      },
+    ],
+  }),
+};
