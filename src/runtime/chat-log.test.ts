@@ -65,7 +65,7 @@ describe('branchChat', () => {
     const source = crypto.randomUUID();
     await server.hold(store, source);
     const chat: Chat = { title: '기숙사의 밤', character: null, models: {}, note: '노트' };
-    const pending: Receipt = { connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: 'pending', replyId: 'r1', firstTextMs: 100, totalMs: 900, cache: null };
+    const pending: Receipt = { id: 'call', connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: 'pending', replyId: 'r1', firstTextMs: 100, totalMs: 900, cache: null };
     const said = crypto.randomUUID();
     const deleted = crypto.randomUUID();
     const split = crypto.randomUUID();

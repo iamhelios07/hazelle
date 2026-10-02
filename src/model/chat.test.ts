@@ -6,6 +6,7 @@ let rev = 0;
 const entry = (id: string, value: Entry): Stored<'entry'> => ({ id, kind: 'entry', parent: 'chat', rev: ++rev, value });
 const user = (id: string, text: string) => entry(id, { type: 'message', role: 'user', at: rev, text, receipt: null });
 const receipt = (over: Partial<Receipt> = {}): Receipt => ({
+  id: crypto.randomUUID(),
   connection: 'c1',
   source: 'OpenRouter',
   model: 'm1',
@@ -185,6 +186,15 @@ describe('modelUsage', () => {
       costs: [{ unit: 'usd', amount: 0.75, estimated: true }],
       costUnknown: 0,
     });
+  });
+});
+
+describe('modelUsage of a call held twice', () => {
+  it('counts it once though a branch holds it under a later edit and the original has continued it since', () => {
+    const cut = receipt({ state: 'cut', cut: 'length' });
+    const original = fold([bot('b1', '하나 둘', { continues: cut })]);
+    const branch = fold([bot('b9', '하나', cut), entry('e9', { type: 'version', message: 'b9', replaces: 'b9', edit: true, at: 999, text: '하나.', receipt: cut })]);
+    expect(modelUsage([original, branch], { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 2 });
   });
 });
 

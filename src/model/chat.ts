@@ -31,6 +31,9 @@ export type Chat = {
 
 // What a reply's generation left behind. The raw request is never stored.
 export type Receipt = {
+  // The call's own id (runtime/streams newCall, pageCall), the same in every copy of the receipt: an edit, a branch's
+  // copy and a continued reply keep the receipt whole, so usage counts the call once wherever it is held.
+  id: string;
   connection: string;
   // The connection's and the model's names when the reply was made; either may be renamed or deleted later.
   source: string;
@@ -314,8 +317,8 @@ type Tally = { total: number; unknown: number };
 export type ModelUsage = { calls: number; last: number | null; input: Tally; output: Tally; costs: { unit: Cost['unit']; amount: number; estimated: boolean }[]; costUnknown: number };
 
 // Every call to one model in the chats kept, a continued reply counting each of its calls and a translation its own.
-// A branch copies the replies it holds with their receipts, so a call is counted once however many chats hold it; the
-// cost stays out of the key, as the original settles it later than a copy made after.
+// A branch copies the replies it holds with their receipts, so a call is counted once, by its id, however many chats
+// hold it; the cost is read from whichever copy has settled it, as the original settles later than a copy made after.
 export class UsageCounter {
   private readonly usage: Omit<ModelUsage, 'costs' | 'costUnknown'> = { calls: 0, last: null, input: { total: 0, unknown: 0 }, output: { total: 0, unknown: 0 } };
   private readonly seen = new Map<string, Cost | null>();
@@ -347,15 +350,14 @@ export class UsageCounter {
       ]);
     for (const { at, call } of made) {
       if (call.connection !== this.ref.connection || call.model !== this.ref.model) continue;
-      const key = JSON.stringify([at, call.replyId, call.totalMs, call.firstTextMs, call.usage, call.state]);
       const cost = call.cost === 'pending' ? null : call.cost;
-      if (this.seen.has(key)) {
+      if (this.seen.has(call.id)) {
         // A branch can be walked before the original that later settled the same call.
-        const previous = this.seen.get(key);
-        if (cost && (!previous || (previous.source === 'price-list' && cost.source === 'reported'))) this.seen.set(key, cost);
+        const previous = this.seen.get(call.id);
+        if (cost && (!previous || (previous.source === 'price-list' && cost.source === 'reported'))) this.seen.set(call.id, cost);
         continue;
       }
-      this.seen.set(key, cost);
+      this.seen.set(call.id, cost);
       usage.calls++;
       usage.last = Math.max(usage.last ?? 0, at);
       add(usage.input, call.usage?.inputTokens ?? null);

@@ -254,6 +254,7 @@ export class Talk {
 // What a call leaves in a saved chat: a reply's receipt, or a translation's.
 export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
   return {
+    id: answer.call,
     ...call,
     state: answer.state,
     cut: answer.cut,
