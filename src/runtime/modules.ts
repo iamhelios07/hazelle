@@ -7,15 +7,15 @@ import type { Files } from './files';
 import { without, type ObjectStore, type Write } from './store';
 
 // A module as the importer read it (design §6.5). Its pictures are stored first; then it is written with its lorebook
-// and assets in one batch, itself last, so a module appears only once whole. risu: its Risu id, when a move from Risu
-// brings it. skipped: its pictures that were not kept.
-export async function importModule(store: ObjectStore, files: Files, imported: ImportedModule, progress: Progress, risu?: string): Promise<ApiResult<{ id: string; skipped: number }>> {
+// and assets in one batch, itself last, so a module appears only once whole. brought: a move from Risu's, with its
+// Risu id and the id the move already turned on. skipped: its pictures that were not kept.
+export async function importModule(store: ObjectStore, files: Files, imported: ImportedModule, progress: Progress, brought?: { id: string; risu: string }): Promise<ApiResult<{ id: string; skipped: number }>> {
   const stored = await saveAssets(files, imported.assets, progress);
   if (!stored.ok) return stored;
-  const id = crypto.randomUUID();
+  const id = brought?.id ?? crypto.randomUUID();
   const folders = imported.loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const { name, description, namespace } = imported;
-  const module: Module = { ...imported.pack, name, description, namespace, loreFolders: folders, ...(risu !== undefined && { risu }) };
+  const module: Module = { ...imported.pack, name, description, namespace, loreFolders: folders, ...(brought && { risu: brought.risu }) };
   const writes: Write[] = [
     { type: 'create', kind: 'module', id, parent: null, value: module },
     ...stored.data.kept.map((asset): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: id, value: asset })),

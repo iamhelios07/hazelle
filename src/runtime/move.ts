@@ -29,8 +29,9 @@ export const modulesFromRisu = (store: ObjectStore): Map<string, string> => new 
 
 // Personas first, so the chats bound to one use it, and modules before the characters they are on for. The first
 // failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is sound
-// because each one lands whole: its chats go in its own batch (runtime/characters addCharacter). So is a module, but
-// its 항상 is a write of its own after it: a move cut between the two leaves the module here and off.
+// because each one lands whole: its chats go in its own batch (runtime/characters addCharacter). So is a module: its
+// 항상 is written before it, under the id it is then saved at, so a move cut between the two leaves only an id that
+// names nothing, which reads as off, and the next run brings the module again.
 export async function moveFromRisu(store: ObjectStore, files: Files, { characters, personas, presets, modules, alwaysModules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
   const personaIds = new Map<string, string>();
   for (const [done, persona] of personas.entries()) {
@@ -55,16 +56,16 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
   const movedModules: MovedModule[] = [];
   for (const [done, module] of dueModules.entries()) {
     progress({ kind: 'modules', done, total: dueModules.length });
-    const saved = await importModule(store, files, module, () => {}, module.risu ?? undefined);
-    if (!saved.ok) return saved;
-    movedModules.push({ module, skipped: saved.data.skipped });
-    if (module.risu === null) continue;
-    moduleIds.set(module.risu, saved.data.id);
-    // Only one this run brought: one already here keeps the 항상 the user has since given it.
-    if (alwaysModules.includes(module.risu)) {
-      const always = await setModuleAlways(store, saved.data.id, true);
+    const id = crypto.randomUUID();
+    // Only one this run brings: one already here keeps the 항상 the user has since given it.
+    if (module.risu !== null && alwaysModules.includes(module.risu)) {
+      const always = await setModuleAlways(store, id, true);
       if (!always.ok) return always;
     }
+    const saved = await importModule(store, files, module, () => {}, module.risu === null ? undefined : { id, risu: module.risu });
+    if (!saved.ok) return saved;
+    movedModules.push({ module, skipped: saved.data.skipped });
+    if (module.risu !== null) moduleIds.set(module.risu, saved.data.id);
   }
 
   const brought = broughtFromRisu(store);
