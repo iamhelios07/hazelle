@@ -21,6 +21,7 @@ const OBJECTS = 'objects.jsonl';
 const FILES = 'files/';
 const PAGE_BYTES = 1024 * 1024;
 const PAGE_ROWS = 128;
+const HELD_BYTES = 8 * 1024 * 1024;
 
 // What opening an account adds by itself.
 const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
@@ -38,7 +39,7 @@ export type { BackupOutput } from './backup-zip';
 // naming a picture the operator blocked, which are left out as restore leaves out what the server refuses.
 export async function exportBackup(
   store: Pick<ObjectStore, 'scan'>,
-  files: Pick<Files, 'read'>,
+  files: Pick<Files, 'read' | 'missing'>,
   output: BackupOutput,
   { signal = new AbortController().signal, progress = () => {} }: Options = {},
 ): Promise<ApiResult<{ left: number; skipped: number }>> {
@@ -73,6 +74,38 @@ export async function exportBackup(
     const blocked = new Set<string>();
     let skipped = 0;
     let first = true;
+    // readBackup refuses a line naming a file the archive lacks, so a blocked picture must be known before the first
+    // line naming it is written. Lines are held from the first naming a picture not yet asked about, and the held
+    // pictures are asked about together; only one the server does not hold is read early, to tell a block from a failure.
+    let held: { line: string; ref: FileRef | null }[] = [];
+    let heldBytes = 0;
+    const unasked = new Map<string, FileRef>();
+    const settle = async () => {
+      if (unasked.size) {
+        const missing = await files.missing([...unasked.keys()]);
+        if (!missing.ok) throw (refused = missing);
+        for (const id of missing.data) {
+          const read = await files.read(unasked.get(id)!);
+          if (!read.ok && read.error !== 'file-blocked') throw (refused = read);
+          if (!read.ok) blocked.add(id);
+        }
+        unasked.clear();
+      }
+      for (const { line, ref } of held) {
+        signal.throwIfAborted();
+        if (ref && blocked.has(ref.id)) {
+          skipped++;
+          progress(done += 2, total);
+          continue;
+        }
+        if (ref) named.set(ref.id, { ref, uses: (named.get(ref.id)?.uses ?? 0) + 1 });
+        await objects(strToU8(`${first ? '' : '\n'}${line}`));
+        first = false;
+        progress(++done, total);
+      }
+      held = [];
+      heldBytes = 0;
+    };
     // An object edited elsewhere after it was written comes again later in the walk, at its newer rev. Each id is written
     // once, as first met, since the importer refuses a second line for an id and the first is already in the zip.
     const failure = await store.scan({}, async (row, value) => {
@@ -86,29 +119,14 @@ export async function exportBackup(
       if (!due) return;
       const object = { ...row, kind: row.kind as Kind, value } as Stored<Kind>;
       const ref = fileOf(object);
-      // readBackup refuses a line naming a file the archive lacks, so a blocked picture must be known before the first
-      // line naming it is written. The bytes read here are read again after the objects; the server lets the browser
-      // keep its answer.
-      if (ref && !named.has(ref.id) && !blocked.has(ref.id)) {
-        const read = await files.read(ref);
-        if (!read.ok && read.error !== 'file-blocked') throw (refused = read);
-        if (!read.ok) blocked.add(ref.id);
-      }
-      if (ref && blocked.has(ref.id)) {
-        skipped++;
-        progress(done += 2, total);
-        return;
-      }
-      if (ref) {
-        const previous = named.get(ref.id);
-        named.set(ref.id, { ref, uses: (previous?.uses ?? 0) + 1 });
-      }
-      const bytes = strToU8(`${first ? '' : '\n'}${JSON.stringify(object)}`);
-      first = false;
-      await objects(bytes);
-      progress(++done, total);
+      if (ref && !named.has(ref.id) && !blocked.has(ref.id)) unasked.set(ref.id, ref);
+      const line = JSON.stringify(object);
+      held.push({ line, ref });
+      heldBytes += line.length;
+      if (!unasked.size || heldBytes > HELD_BYTES) await settle();
     });
     if (failure) return failure;
+    await settle();
     await objects(new Uint8Array(), true);
     for (const { ref, uses } of named.values()) {
       signal.throwIfAborted();

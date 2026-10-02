@@ -16,7 +16,7 @@ it('does not download Blob parts when an export is stopped', async () => {
       await visit({ id: 'person', kind: 'persona', parent: null, rev: 1 }, options.metadata ? undefined : { name: '달', description: '', picture: null });
       return null;
     },
-  }, { read: vi.fn() }, output, { signal: abort.signal, progress: (done) => { if (done) abort.abort(); } });
+  }, { read: vi.fn(), missing: vi.fn() }, output, { signal: abort.signal, progress: (done) => { if (done) abort.abort(); } });
   expect(result).toEqual({ ok: false, error: 'stopped' });
   expect(click).not.toHaveBeenCalled();
   expect(url).not.toHaveBeenCalled();

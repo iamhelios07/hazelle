@@ -7,6 +7,9 @@ import type { ObjectStore } from './store';
 
 const persona = (id: string, rev: number): Stored<'persona'> => ({ id, rev, kind: 'persona', parent: null, value: { name: id, description: '이야기 '.repeat(100), picture: null } });
 
+// The server holds every file asked about.
+const missing = async () => ({ ok: true as const, data: new Set<string>() });
+
 function destination() {
   const parts: BlobPart[] = [];
   const output: BackupOutput = {
@@ -74,7 +77,8 @@ it('round-trips streamed objects and files and filters unreachable objects from 
   const old = store([...source.objects, orphan]);
   const target = destination();
   const read = vi.fn(async () => ({ ok: true as const, data: source.bytes }));
-  expect(await exportBackup(old.api, { read }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
+  const asked = vi.fn(missing);
+  expect(await exportBackup(old.api, { read, missing: asked }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
   const opened = await backup(target.file());
   const next = store();
   const save = vi.fn(async (bytes: Uint8Array<ArrayBuffer>[]) => ({ ok: true as const, data: await Promise.all(bytes.map(async (bytes) => (await sealFile(bytes)).ref)) }));
@@ -82,7 +86,8 @@ it('round-trips streamed objects and files and filters unreachable objects from 
   expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes]);
   for (const object of source.objects) expect(next.held.get(object.id)).toMatchObject({ ...object, rev: expect.any(Number) });
   expect(next.held.size).toBe(source.objects.length);
-  expect(read).toHaveBeenCalledTimes(2);
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(asked).toHaveBeenCalledExactlyOnceWith([source.ref.id]);
 });
 
 it('restores a backup built by the previous zipSync format', async () => {
@@ -124,7 +129,7 @@ it('serializes each decrypted body before releasing it and backpressures a slow 
     }
     return null;
   };
-  expect(await exportBackup({ scan }, { read: vi.fn() }, output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
+  expect(await exportBackup({ scan }, { read: vi.fn(), missing }, output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
   expect(decrypted).toBe(count);
   expect(written).toBeGreaterThan(1);
   expect(streamed).toBe(true);
@@ -134,7 +139,7 @@ it('aborts a stopped export without completing its destination', async () => {
   const target = destination();
   const abort = new AbortController();
   const source = store([persona('first', 1), persona('second', 2)]);
-  const result = await exportBackup(source.api, { read: vi.fn() }, target.output, {
+  const result = await exportBackup(source.api, { read: vi.fn(), missing }, target.output, {
     signal: abort.signal,
     progress: (done) => { if (done === 1) abort.abort(); },
   });
@@ -147,7 +152,7 @@ it('aborts a stopped export without completing its destination', async () => {
 it('saves files before their objects, leaves owners until last, and resumes after a stop', async () => {
   const source = await pictureObjects();
   const target = destination();
-  await exportBackup(store(source.objects).api, { read: async () => ({ ok: true, data: source.bytes }) }, target.output);
+  await exportBackup(store(source.objects).api, { read: async () => ({ ok: true, data: source.bytes }), missing }, target.output);
   const opened = await backup(target.file());
   const next = store();
   const abort = new AbortController();
@@ -170,7 +175,7 @@ it('saves files before their objects, leaves owners until last, and resumes afte
 it('leaves out what names a picture the server refuses, and counts it', async () => {
   const source = await pictureObjects();
   const target = destination();
-  await exportBackup(store(source.objects).api, { read: async () => ({ ok: true, data: source.bytes }) }, target.output);
+  await exportBackup(store(source.objects).api, { read: async () => ({ ok: true, data: source.bytes }), missing }, target.output);
   const next = store();
   expect(await restoreBackup(next.api, { save: async () => ({ ok: true, data: [null] }) }, await backup(target.file()))).toEqual({ ok: true, data: { skipped: 1 } });
   expect(next.written).toEqual(['person', 'character']);
@@ -180,7 +185,8 @@ it('exports without a picture the operator blocked and what names it, and counts
   const source = await pictureObjects();
   const target = destination();
   const read = async () => ({ ok: false as const, error: 'file-blocked' });
-  expect(await exportBackup(store(source.objects).api, { read }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 1 } });
+  const blocked = async (ids: string[]) => ({ ok: true as const, data: new Set(ids) });
+  expect(await exportBackup(store(source.objects).api, { read, missing: blocked }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 1 } });
   const opened = await backup(target.file());
   expect(opened.objects.map(({ id }) => id)).toEqual(['person', 'character']);
   expect(opened.files.size).toBe(0);
