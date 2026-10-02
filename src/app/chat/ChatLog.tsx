@@ -9,7 +9,7 @@ import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, decor, hosted, offered, translating, awaited, sendLanguage, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, found, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, decor, hosted, offered, translating, awaited, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, found, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -52,7 +52,6 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         offered={offered[index]!}
         translating={translating}
         awaited={awaited === shown(message).id}
-        sendLanguage={sendLanguage}
         flipped={flipped.has(shown(message).id)}
         isLast={index === messages.length - 1}
         beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
