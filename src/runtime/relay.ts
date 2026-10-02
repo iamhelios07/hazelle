@@ -127,9 +127,15 @@ export const dropStream = (id: string) => void fetchApi(`streams/${id}`, { metho
 // again, ever more slowly; gone: the server holds no such call. Throws once signal stops the read.
 async function reach(id: string, from: number, tries: number, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | 'gone'> {
   for (; ; tries++) {
+    signal.throwIfAborted();
     if (tries) await new Promise<void>((resolve) => {
-      const wait = setTimeout(resolve, Math.min(1000 * 2 ** (tries - 1), 30_000));
-      signal.addEventListener('abort', () => (clearTimeout(wait), resolve()), { once: true });
+      const done = () => {
+        clearTimeout(wait);
+        signal.removeEventListener('abort', done);
+        resolve();
+      };
+      const wait = setTimeout(done, Math.min(1000 * 2 ** (tries - 1), 30_000));
+      signal.addEventListener('abort', done);
     });
     signal.throwIfAborted();
     const response = await fetchApi(`streams/${id}?from=${from}`, { signal }).catch(() => null);

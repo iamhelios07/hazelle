@@ -25,6 +25,17 @@ describe('relayJson', () => {
   });
 });
 
+it('ends a read at once when it is stopped while it cannot reach the server', async () => {
+  const abort = new AbortController();
+  vi.stubGlobal('fetch', async () => {
+    abort.abort();
+    throw new TypeError('Failed to fetch');
+  });
+  const began = Date.now();
+  expect(await stream({ id: crypto.randomUUID(), key: {} }, null, abort.signal)).toEqual({ kind: 'stopped' });
+  expect(Date.now() - began).toBeLessThan(500);
+});
+
 it('states the account the page holds on the relay and on every stream request', async () => {
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => Response.json({ error: 'stream-exists' }, { status: 409 }));
   vi.stubGlobal('fetch', fetch);
