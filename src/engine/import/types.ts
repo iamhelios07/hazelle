@@ -21,10 +21,8 @@ export type Card = {
   utility: boolean;
   bias: [string, number][];
   regex: RegexScript[];
-  // The bot's triggers that do something, kept for when triggers run and not run before.
+  // The bot's triggers that do something. Its Lua runs (runtime/scripts); block triggers are kept until they do.
   triggers: Trigger[];
-  // The bot asks for Risu's lowLevelAccess, which lets its triggers call models; nothing grants it yet.
-  lowLevelAccess: boolean;
   // The card's backgroundHTML, absent when it has none. Only its <style> blocks are shown (design §6.4).
   background?: string;
   // Each setting stands alone, as in CCv3; null leaves it to the global default.

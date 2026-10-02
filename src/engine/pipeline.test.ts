@@ -69,7 +69,6 @@ const card = (over: Partial<Card> = {}): Card => ({
   bias: [],
   regex: [],
   triggers: [],
-  lowLevelAccess: false,
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
   ...over,
 });
@@ -384,7 +383,6 @@ describe('unused', () => {
     expect(unused(card({ bias: [['a', 1]], utility: true, triggers }))).toEqual([
       { kind: 'bias', count: 1 },
       { kind: 'utility', count: 1 },
-      { kind: 'lua', count: 1 },
       { kind: 'trigger', count: 1 },
     ]);
   });

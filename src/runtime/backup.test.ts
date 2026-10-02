@@ -46,7 +46,6 @@ const card: Card = {
   bias: [],
   regex: [],
   triggers: [],
-  lowLevelAccess: false,
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 const lore: Lore = {

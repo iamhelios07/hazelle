@@ -261,7 +261,6 @@ describe('importCard', () => {
       { kind: 'lua', name: 'hp', code: 'setChatVar("hp", "1")' },
       { kind: 'blocks', name: 'set', on: 'manual', conditions: [], effects: [{ type: 'setvar' }] },
     ]);
-    expect(imported.card.lowLevelAccess).toBe(true);
     expect(imported.report.unsupported).toEqual([
       { kind: 'asset', count: 1 },
       { kind: 'background-html', count: 1 },

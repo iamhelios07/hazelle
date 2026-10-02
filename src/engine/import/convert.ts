@@ -121,7 +121,6 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
       .map(([key, value]): [string, number] => [key, value]),
     regex: regexScripts(module ? list(module.regex) : list(risu.customScripts), tally),
     triggers,
-    lowLevelAccess: risu.lowLevelAccess === true,
     ...(background.trim() ? { background } : {}),
     loreSettings: {
       scanDepth: count(book.scan_depth),

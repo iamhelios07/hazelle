@@ -30,7 +30,6 @@ const SAMPLE: CbsContext = {
     bias: [],
     regex: [],
     triggers: [],
-    lowLevelAccess: false,
     loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
   },
   persona: { name: '나', description: '' },

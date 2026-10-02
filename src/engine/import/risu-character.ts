@@ -139,7 +139,6 @@ function cardJson(char: Json): Json {
           lorePlus: char.lorePlus,
           inlayViewScreen: char.inlayViewScreen,
           newGenData: char.newGenData,
-          lowLevelAccess: char.lowLevelAccess,
           defaultVariables: char.defaultVariables,
           prebuiltAssetCommand: char.prebuiltAssetCommand,
           prebuiltAssetExclude: char.prebuiltAssetExclude,

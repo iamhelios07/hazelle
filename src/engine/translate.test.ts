@@ -24,7 +24,6 @@ const card: Card = {
   utility: false,
   bias: [],
   triggers: [],
-  lowLevelAccess: false,
   regex: [{ name: 'shout', find: 'lamp', replace: 'LAMP', stage: 'display', flags: null }],
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };

@@ -102,7 +102,6 @@ const SHAPES = {
       regex: listOf(isRecord),
       triggers: listOf(shape({ kind: str, name: str })),
       utility: bool,
-      lowLevelAccess: bool,
       loreSettings: isRecord,
     }),
     folder: orNull(str),

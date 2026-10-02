@@ -24,7 +24,6 @@ const card = (over: Partial<Card> = {}): Card => ({
   bias: [],
   regex: [],
   triggers: [],
-  lowLevelAccess: false,
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
   ...over,
 });

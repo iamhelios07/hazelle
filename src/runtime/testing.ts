@@ -19,7 +19,7 @@ const lua = Lua.create();
 
 export const testCard = (name: string): Card => ({
   name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '',
-  creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [], lowLevelAccess: false,
+  creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [],
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 });
 

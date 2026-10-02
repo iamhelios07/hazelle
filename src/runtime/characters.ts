@@ -149,6 +149,10 @@ export function setDecor(store: ObjectStore, id: string, decor: boolean): Promis
   return store.update('character', id, (current) => ({ ...current, decor }));
 }
 
+export function setBotModels(store: ObjectStore, id: string, botModels: boolean): Promise<ApiResult<Stored<'character'>>> {
+  return store.update('character', id, (current) => ({ ...current, botModels }));
+}
+
 // 상태창으로 지정 for one display script of the character's card, or on false its 지정 풀기.
 export function setStatusScript(store: ObjectStore, id: string, script: number, on: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => {

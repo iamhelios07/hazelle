@@ -16,7 +16,9 @@ import { scopeOf, togglesOf, type Blocked, type TurnContext } from './turn';
 // app's about the bot: a script's error, functions it called that this app does not have, a script that never ended.
 type Note = { kind: 'said'; tone: 'normal' | 'error'; text: string } | { kind: 'failed'; message: string } | { kind: 'missing'; names: string[] } | { kind: 'stuck' };
 export type ScriptNote = { id: number; chat: string } & Note;
-export type ScriptQuestion = { id: number; chat: string; question: Question };
+// model: the bot's Lua wants to call a model, which the character has not been allowed or refused yet. Its answer
+// 'yes' allows it and 'no' refuses it, both kept on the character; a dismissal leaves it to be asked again.
+export type ScriptQuestion = { id: number; chat: string; question: Question | { kind: 'model' } };
 export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
 export type Halted = { kind: 'halted' };
