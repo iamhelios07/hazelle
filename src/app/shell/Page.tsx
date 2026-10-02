@@ -98,7 +98,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         if (at.character === null) return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={null} back={sideBack(at)} side={side} />;
         return withCharacter(at, at.character, (shelf) => <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
       case 'chat': {
-        if (!chatById.has(at.id)) return missing(at, 'chat');
+        if (!chatById.has(at.id)) return missing(at, library.deletedChats.some((chat) => chat.id === at.id) ? 'deleted-chat' : 'chat');
         const item = chatModel.model;
         if (!item || chatModel.state !== 'loaded') return (
           <Screen align="center" top={<NavBar title={chatById.get(at.id)!.title} {...backBar(back(at))} />}>

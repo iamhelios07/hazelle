@@ -1,4 +1,5 @@
 import type { Role } from '../../connectors/assignment';
+import { KEEP_DAYS } from '../../model/library';
 
 // The words several screens use for one thing, so it reads the same wherever it appears. Sentences stay in their
 // screen and are built from these; the phrases these replaced are refused by lint (RETIRED_COPY in eslint.config.js).
@@ -19,6 +20,8 @@ export const SETTINGS = '설정';
 
 // Where deleted characters and chats wait KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
 export const BIN = '휴지통';
+// What the toast of a deletion that goes there adds.
+export const BIN_KEEPS = `${KEEP_DAYS}일 안에는 ‘${BIN}’에서 되살릴 수 있어요.`;
 
 // A {{…}} tag in a prompt or a card's text.
 export const COMMAND = '명령어';

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { ChatSummary } from '../../model/chat';
-import { KEEP_DAYS, type CharacterShelf } from '../../model/library';
+import type { CharacterShelf } from '../../model/library';
 import { copyCharacter, markDeleted, purgeNow, setDeleted } from '../../runtime/characters';
-import { BIN } from '../common/words';
+import { BIN_KEEPS } from '../common/words';
 import { useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -49,7 +49,7 @@ export function useCharacterActions() {
   async function remove(shelf: Shelf): Promise<boolean> {
     const { id, character } = shelf;
     if (!(await mark(id, Date.now()))) return false;
-    toast.undoable(`‘${character.card.name}’ ${withChats(shelf)} 지웠어요.`, () => void mark(id, null), `${KEEP_DAYS}일 안에는 ‘${BIN}’에서 되살릴 수 있어요.`);
+    toast.undoable(`‘${character.card.name}’ ${withChats(shelf)} 지웠어요.`, () => void mark(id, null), BIN_KEEPS);
     return true;
   }
 
