@@ -1,5 +1,5 @@
 import { Copy, Cpu, Ellipsis, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { slotsOf, SLOTS, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
@@ -88,22 +88,18 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const connections = useConnections();
   const uses = usePromptUse().get(stored.id) ?? EMPTY_USE;
   const split = layout === 'split';
-  const save = useAutosave<PromptPatch>((patch) => editPrompt(store, stored.id, patch));
+  const save = useAutosave<PromptPatch>(`prompt:${stored.id}`, (patch) => editPrompt(store, stored.id, patch));
   const sort = sortOf(stored.value);
   const words = SORT_WORDS[sort];
 
-  const [draft, setDraft] = useState<Draft>(() => draftOf(stored.value));
+  // The stored prompt under what waits to be saved, so another device's edit to a field nothing here changed shows.
+  const draft: Draft = { ...draftOf(stored.value), ...save.unsaved };
+  // The draft with the edits made since this render, for one made right after another.
   const latest = useRef(draft);
-  // Another device's edit comes in while nothing here waits to be saved.
-  useEffect(() => {
-    if (Object.keys(save.unsaved).length) return;
-    latest.current = draftOf(stored.value);
-    setDraft(latest.current);
-  }, [stored]);
+  latest.current = draft;
   const update = (change: (current: Draft) => PromptPatch) => {
     const patch = change(latest.current);
     latest.current = { ...latest.current, ...patch };
-    setDraft(latest.current);
     save.change(patch);
   };
 
@@ -232,7 +228,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   const isDefault = isDefaultPrompt(settings, stored);
   const copy = async () => {
-    await save.flush();
+    if (!(await save.flush())) return;
     const copied = await copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`);
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
     onCopied(copied.data.id);
@@ -243,8 +239,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (!saved.ok) toast.failed(saved, '기본으로 정하지 못했어요.');
   };
   const erase = async () => {
-    await save.flush();
-    const removed = await removePrompt(store, stored.id);
+    const removed = await save.remove(() => removePrompt(store, stored.id));
+    if (!removed) return;
     if (!removed.ok) return removed.error === 'default' ? toast.error(words.refused[0], { detail: words.refused[1] }) : toast.failed(removed, '지우지 못했어요.');
     onErased();
     toast.undoable(`‘${promptName(removed.data.value.name)}’을(를) 지웠어요.`, () => {

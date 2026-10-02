@@ -14,6 +14,7 @@ import {
   withSettings,
   type ProfileUser,
 } from '../../runtime/profiles';
+import { typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -24,6 +25,12 @@ import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMB
 import { count, readTyped } from './typedNumber';
 
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
+// undefined: left empty, which unsets it. null: not a number the field takes.
+const readNumber = (text: string, field: Field | 'budget') => {
+  if (text.trim() === '') return undefined;
+  const typed = readTyped(text, whole(field));
+  return typed.ok ? typed.value : null;
+};
 const BUDGET_START = 8000;
 
 type Choice = 'unset' | 'off' | 'adaptive' | 'budget' | `level:${string}`;
@@ -45,9 +52,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   const { id } = stored;
   const isDefault = settings.profile === id;
 
-  const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget', string>>>({});
-  const [name, setName] = useState(stored.value.name);
-  const { status, unsaved, change, save, flush } = useAutosave<Saved>(async (patch) => {
+  const [drafts, setDrafts] = useState<Partial<Record<Field | 'budget' | 'name', string>>>({});
+  const { status, unsaved, change, save, flush, remove: removing } = useAutosave<Saved>(`profile:${id}`, async (patch) => {
     const { name: renamed, settings: values } = split(patch);
     if (renamed !== undefined) {
       const done = await renameProfile(store, id, renamed);
@@ -57,6 +63,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   });
   // What waits to be saved shows at once, over the stored copy.
   const shown = withSettings(stored.value.settings, split(unsaved).settings);
+  const name = typedText(drafts.name, (typed) => typed.trim() || null, unsaved.name ?? stored.value.name, String);
   const set = (values: ModelSettings) => void save(values);
 
   // An invalid draft shows its error and is never saved, and takes back a valid one still waiting; an empty one unsets.
@@ -69,7 +76,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   }
 
   function rename(next: string) {
-    setName(next);
+    setDrafts((current) => ({ ...current, name: next }));
     // A blank name is never saved; the field shows its placeholder until one is typed.
     change({ name: next.trim() }, !!next.trim());
   }
@@ -91,7 +98,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   function numberRow(field: Field): ReactNode {
     const { label, help, unit, unset } = NUMBER[field];
     const value = shown[field];
-    const draft = drafts[field] ?? (value === undefined ? '' : String(value));
+    const draft = typedText(drafts[field], (text) => readNumber(text, field), value, (number) => (number === undefined ? '' : String(number)));
     const typed = draft.trim() === '' ? null : readTyped(draft, whole(field));
     return (
       <SettingRow
@@ -132,7 +139,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         choice === 'unset' ? undefined : choice === 'off' ? { kind: 'off' } : choice === 'adaptive' ? { kind: 'adaptive', level: null } : { kind: 'level', level: choice.slice('level:'.length) };
       set({ reasoning: next });
     };
-    const draft = drafts.budget ?? (reasoning?.kind === 'budget' ? String(reasoning.tokens) : '');
+    const draft = typedText(drafts.budget, (text) => readNumber(text, 'budget') ?? null, reasoning?.kind === 'budget' ? reasoning.tokens : undefined, (tokens) => (tokens === undefined ? '' : String(tokens)));
     const typed = reasoning?.kind === 'budget' ? readTyped(draft, true) : null;
     return (
       <SettingRow
@@ -217,7 +224,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   const attach = (connection: string, model: string) => void setModelProfile(store, connection, model, isDefault ? null : id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
 
   async function copy() {
-    await flush();
+    if (!(await flush())) return;
     const made = await addProfile(store, { name: `${name.trim() || stored.value.name} (사본)`, settings: shown });
     if (!made.ok) return toast.failed(made, '사본을 만들지 못했어요.');
     navigate({ kind: 'profile', id: made.data.id });
@@ -232,8 +239,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   }
 
   async function remove() {
-    await flush();
-    const removed = await removeProfile(store, id);
+    const removed = await removing(() => removeProfile(store, id));
+    if (!removed) return;
     if (!removed.ok) {
       if (removed.error === 'default') return toast.error('기본 설정은 지울 수 없어요.', { detail: '다른 설정을 기본으로 정한 뒤 지워 주세요.' });
       return toast.failed(removed, '지우지 못했어요.');

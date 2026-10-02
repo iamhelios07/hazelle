@@ -7,6 +7,7 @@ import { thumbnail } from '../../runtime/picture';
 import { useSettings, useStore } from '../session';
 import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
+import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { useToast } from '../toast';
 import { Avatar, Button, Checkbox, FaceRow, FileButton, Row, TextField } from '../ui';
@@ -25,19 +26,20 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   const toast = useToast();
   const settings = useSettings();
   const { id } = stored;
-  const [persona, setPersona] = useState(stored.value);
-  const { status, save, flush, change: queue } = useAutosave<Persona>((patch) => editPersona(store, id, patch));
+  const autosave = useAutosave<Persona>(`persona:${id}`, (patch) => editPersona(store, id, patch));
+  const [typedName, setTypedName] = useState<string>();
+  const held = { ...stored.value, ...autosave.unsaved };
+  const persona = { ...held, name: typedText(typedName, filled, held.name, String) };
 
   function change(field: 'name' | 'alias' | 'description', value: string) {
-    setPersona((current) => ({ ...current, [field]: value }));
-    queue({ [field]: value }, field !== 'name' || !!value.trim());
+    if (field === 'name') setTypedName(value);
+    autosave.change({ [field]: value }, field !== 'name' || !!value.trim());
   }
 
   async function picture(file: File) {
     const made = await thumbnail({ bytes: new Uint8Array(await file.arrayBuffer()), type: file.type }).catch(() => null);
     if (made === null) return toast.error('이 그림은 열 수 없어요.');
-    setPersona((current) => ({ ...current, picture: made }));
-    await save({ picture: made });
+    await autosave.save({ picture: made });
   }
 
   async function makeDefault() {
@@ -46,8 +48,8 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
   }
 
   async function remove() {
-    await flush();
-    const removed = await removePersona(store, id);
+    const removed = await autosave.remove(() => removePersona(store, id));
+    if (!removed) return;
     if (!removed.ok) {
       if (removed.error === 'default') return toast.error('기본 페르소나는 지울 수 없어요.', { detail: '다른 페르소나를 기본으로 정한 뒤 지워 주세요.' });
       return toast.failed(removed, '지우지 못했어요.');
@@ -76,5 +78,5 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       </Row>
     </>
   );
-  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: status ? SAVE_STATUS[status] : undefined }, body });
+  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined }, body });
 }

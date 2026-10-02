@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { MemorySettings } from '../../model/memory';
+import { typedText } from './typed';
 import { Disclosure, NumberInput, SettingGroup, SettingRow, Switch } from '../ui';
 
 type Count = 'budget' | 'window' | 'batch';
@@ -18,12 +19,12 @@ const readCount = (draft: string) => {
 };
 
 // The memory settings, the account's default or a chat's own. A number is passed on only once it is valid. A caller
-// that resets the values from outside remounts this, so numbers typed before do not stand over the reset.
+// that resets the values from outside remounts this, so a number typed and not valid does not stand over the reset.
 export function MemoryFields({ value, onChange }: { value: MemorySettings; onChange: (change: Partial<MemorySettings>) => void }) {
   const [drafts, setDrafts] = useState<Partial<Record<Count, string>>>({});
   const row = (field: Count) => {
     const { label, unit, help } = COUNTS[field];
-    const draft = drafts[field] ?? String(value[field]);
+    const draft = typedText(drafts[field], readCount, value[field], String);
     const invalid = readCount(draft) === null;
     const type = (next: string) => {
       setDrafts((current) => ({ ...current, [field]: next }));
