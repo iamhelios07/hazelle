@@ -72,6 +72,7 @@ const mira = {
       lastDate: 500,
       scriptstate: { $mood: 'calm', $count: 3, plain: 'x' },
       bookmarks: ['c1'],
+      modules: ['m1', 'm2'],
       localLore: [],
       message: [
         { role: 'user', data: 'hey', time: 1000 },
@@ -79,7 +80,7 @@ const mira = {
       ],
     },
     { name: 'Cold', note: 'n', localLore: [], scriptstate: {}, message: [{ role: 'char', data: COLD + CHAT_KEY, time: 900 }] },
-    { name: 'Empty', note: '', localLore: [], message: [] },
+    { name: 'Empty', note: '', localLore: [], modules: ['m3'], message: [] },
     { name: 'Lost', note: '', localLore: [], message: [{ role: 'char', data: `${COLD}33333333-3333-4333-8333-333333333333`, time: 1 }] },
   ],
 };
@@ -96,7 +97,21 @@ const db = {
     { type: 'character', chaId: 'gone', coldstorage: '44444444-4444-4444-8444-444444444444', chats: [] },
   ],
   characterOrder: [{ name: 'Fav', data: ['sleeper'] }, 'mira'],
-  modules: [{ id: 'm1' }],
+  modules: [
+    {
+      id: 'm1',
+      name: 'Bell',
+      description: 'rings',
+      namespace: 'bell',
+      lorebook: [{ key: 'bell', secondkey: '', insertorder: 10, comment: 'Bell', content: 'It rings.', mode: 'normal', alwaysActive: true, selective: false }],
+      regex: [{ comment: 'ring', in: 'ding', out: 'dong', type: 'editdisplay' }],
+      assets: [
+        ['bell', 'assets/bell.png', 'png'],
+        ['lost', 'assets/lost.png', 'png'],
+      ],
+    },
+  ],
+  enabledModules: ['m1'],
   personas: [
     { id: 'p1', name: 'old', personaPrompt: 'stale', icon: '' },
     { id: 'p2', name: 'Bob', personaPrompt: 'b', icon: 'assets/bob.png' },
@@ -120,6 +135,7 @@ const backupFile = () =>
     ['mira.png', PNG],
     ['map.png', PNG],
     ['ann.png', PNG],
+    ['bell.png', PNG],
     [`coldstorage_${CHAT_KEY}.json`, json({ message: [{ role: 'user', data: 'old', time: 10 }], scriptstate: { $x: { a: 1 } }, localLore: [{ key: 'k' }], hypaV3Data: { summaries: [{}] } })],
     [`coldstorage_${CHARACTER_KEY}.json`, json({ character: { chaId: 'sleeper', name: 'Sleeper', firstMessage: 'zzz', chats: [{ name: 'Nap', message: [{ role: 'user', data: 'wake', time: 5 }] }] } })],
     ['database.risudat', database(db)],
@@ -212,7 +228,6 @@ describe('readBackup', () => {
     expect(characters[0]!.chats).toEqual([{ title: 'Nap', note: null, persona: null, greeting: 0, variables: [], messages: [{ role: 'user', text: 'wake', at: 5 }] }]);
     expect(unsupported).toEqual([
       { kind: 'group-chat', count: 1 },
-      { kind: 'module', count: 1 },
       { kind: 'cold-missing', count: 1 },
     ]);
     const card = characters[1]!;
@@ -248,8 +263,30 @@ describe('readBackup', () => {
       { title: 'Cold', note: 'n', persona: null, greeting: 0, variables: [['x', '{"a":1}']], messages: [{ role: 'user', text: 'old', at: 10 }] },
     ]);
     expect(card.missed).toEqual(
-      (['chat-lore', 'memory', 'inlay', 'module', 'chat-folder', 'bookmark', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
+      (['chat-lore', 'memory', 'inlay', 'chat-folder', 'bookmark', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
     );
+  });
+
+  it('reads a module with its pictures from the asset storage, and where Risu had it on as Risu ids', async () => {
+    const { modules, alwaysModules, characters } = await read();
+    expect(modules).toMatchObject([
+      {
+        name: 'Bell',
+        description: 'rings',
+        namespace: 'bell',
+        risu: 'm1',
+        pack: { regex: [{ name: 'ring', find: 'ding', replace: 'dong', stage: 'display', flags: null }] },
+        lore: [{ name: 'Bell', keys: ['bell'], content: 'It rings.', constant: true }],
+        unsupported: [{ kind: 'asset', count: 1 }],
+      },
+    ]);
+    expect(modules[0]!.assets.map(({ name }) => name)).toEqual(['bell']);
+    expect(await modules[0]!.assets[0]!.read()).toEqual(PNG);
+    expect(alwaysModules).toEqual(['m1']);
+    expect(characters.map(({ id, modules }) => [id, modules])).toEqual([
+      ['sleeper', []],
+      ['mira', ['m1', 'm2']],
+    ]);
   });
 
   it('takes the selected persona and the active preset from their live values, without keys', async () => {

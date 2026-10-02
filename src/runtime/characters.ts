@@ -63,8 +63,9 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
   return { ok: true, data: { kept, skipped } };
 }
 
-// A character brought from Risu (runtime/move): its library folder, its Risu id, and its chats, which name it by id.
-export type Brought = { id: string; folder: string | null; risu: string; chats: Write[] };
+// A character brought from Risu (runtime/move): its library folder, its Risu id, the modules on for it, and its chats,
+// which name it by id.
+export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; chats: Write[] };
 
 // A card as the importer read it, in no library folder unless brought. Its picture and assets are stored first; its
 // lorebook folders get ids, and each entry names its folder by that id instead of the importer's index.
@@ -89,7 +90,7 @@ export async function importCharacter(
   const { kept, skipped } = stored.data;
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const entries = lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id }));
-  const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...(brought && { risu: brought.risu }) };
+  const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...(brought && { risu: brought.risu, ...(brought.modules.length > 0 && { modules: brought.modules }) }) };
   const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries, chats: brought?.chats }, progress, brought?.id);
   return added.ok ? { ok: true, data: { id: added.data, skipped, faceless: picture !== null && avatar === null } } : added;
 }

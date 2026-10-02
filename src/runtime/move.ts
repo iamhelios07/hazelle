@@ -1,4 +1,4 @@
-import type { Card, Imported, RisuCharacter, RisuChat, RisuPersona, RisuPreset } from '../engine/import/types';
+import type { Card, Imported, ImportedModule, RisuCharacter, RisuChat, RisuPersona, RisuPreset } from '../engine/import/types';
 import type { Chat } from '../model/chat';
 import type { MemorySettings } from '../model/memory';
 import type { ApiResult } from './api';
@@ -6,24 +6,32 @@ import { createFolder, importCharacter, saveAssets } from './characters';
 import { chatWrites } from './chat-log';
 import type { Files } from './files';
 import { defaultMemory } from './memory';
+import { importModule, setModuleAlways } from './modules';
 import { addPersona } from './personas';
 import { thumbnail } from './picture';
 import { savePreset } from './prompts';
 import type { ObjectStore, Write } from './store';
 
-export type MovePick = { characters: RisuCharacter[]; personas: RisuPersona[]; presets: RisuPreset[] };
-export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts'; done: number; total: number };
+// alwaysModules: the Risu ids of the modules Risu had on in every chat.
+export type MovePick = { characters: RisuCharacter[]; personas: RisuPersona[]; presets: RisuPreset[]; modules: ImportedModule[]; alwaysModules: string[] };
+export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules'; done: number; total: number };
 // risu: its Risu chaId. skipped as in runtime/characters ImportedCharacter; faceless also when the picture did not read.
 export type MovedCharacter = { id: string; risu: string; name: string; chats: number; skipped: number; faceless: boolean };
-export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number };
+// skipped: its pictures that were not kept.
+export type MovedModule = { module: ImportedModule; skipped: number };
+export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[] };
 
 // Those in 지운 캐릭터 too, until they are removed for good.
 export const broughtFromRisu = (store: ObjectStore): Set<string> => new Set(store.list('character').flatMap(({ value }) => (value.risu === undefined ? [] : [value.risu])));
 
-// Personas first, so the chats bound to one use it. The first failure stops the rest, and what was saved before it
-// stays. A character already brought is skipped, which is sound because each one lands whole: its chats go in its own
-// batch (runtime/characters addCharacter).
-export async function moveFromRisu(store: ObjectStore, files: Files, { characters, personas, presets }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+// By Risu id, the deleted ones too, until they are removed for good.
+export const modulesFromRisu = (store: ObjectStore): Map<string, string> => new Map(store.list('module').flatMap(({ id, value }) => (value.risu === undefined ? [] : [[value.risu, id]])));
+
+// Personas first, so the chats bound to one use it, and modules before the characters they are on for. The first
+// failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is sound
+// because each one lands whole: its chats go in its own batch (runtime/characters addCharacter). So is a module, but
+// its 항상 is a write of its own after it: a move cut between the two leaves the module here and off.
+export async function moveFromRisu(store: ObjectStore, files: Files, { characters, personas, presets, modules, alwaysModules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
   const personaIds = new Map<string, string>();
   for (const [done, persona] of personas.entries()) {
     progress({ kind: 'personas', done, total: personas.length });
@@ -42,6 +50,23 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
     else if (saved.failure.kind === 'save') return saved.failure.failure;
   }
 
+  const moduleIds = modulesFromRisu(store);
+  const dueModules = modules.filter(({ risu }) => risu === null || !moduleIds.has(risu));
+  const movedModules: MovedModule[] = [];
+  for (const [done, module] of dueModules.entries()) {
+    progress({ kind: 'modules', done, total: dueModules.length });
+    const saved = await importModule(store, files, module, () => {}, module.risu ?? undefined);
+    if (!saved.ok) return saved;
+    movedModules.push({ module, skipped: saved.data.skipped });
+    if (module.risu === null) continue;
+    moduleIds.set(module.risu, saved.data.id);
+    // Only one this run brought: one already here keeps the 항상 the user has since given it.
+    if (alwaysModules.includes(module.risu)) {
+      const always = await setModuleAlways(store, saved.data.id, true);
+      if (!always.ok) return always;
+    }
+  }
+
   const brought = broughtFromRisu(store);
   const due = characters.filter(({ id }) => !brought.has(id));
   const chatTotal = due.reduce((sum, { chats }) => sum + chats.length, 0);
@@ -58,14 +83,14 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
     // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
     const memory = { ...defaultMemory(store), on: false };
     const chats = character.chats.flatMap((chat) => chatOf(id, character.card, chat, personaIds, memory));
-    const saved = await importCharacter(store, files, character, avatar && thumb ? { ...avatar, thumb } : null, () => {}, { id, folder: folder?.data ?? null, risu: character.id, chats });
+    const saved = await importCharacter(store, files, character, avatar && thumb ? { ...avatar, thumb } : null, () => {}, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats });
     if (!saved.ok) return saved;
     chatsDone += character.chats.length;
     progress({ kind: 'chats', done: chatsDone, total: chatTotal });
     const { skipped, faceless } = saved.data;
     moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless: faceless || (avatar !== null && thumb === null) });
   }
-  return { ok: true, data: { characters: moved, personas: personas.length, prompts } };
+  return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
 }
 
 async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<string>> {

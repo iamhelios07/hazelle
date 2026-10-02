@@ -1,15 +1,20 @@
 import type { RisuBackup } from '../../engine/import/types';
 import type { MovePick } from '../../runtime/move';
 
-export type Ticks = { characters: boolean[]; personas: boolean[]; presets: boolean[] };
+export type Ticks = { characters: boolean[]; personas: boolean[]; presets: boolean[]; modules: boolean[] };
+// The Risu ids of what was already brought from Risu.
+export type Have = { characters: ReadonlySet<string>; modules: ReadonlySet<string> };
 
-// What can be ticked, which is also what starts ticked: a character already brought from Risu (have holds its Risu id)
-// and a preset the importer refused cannot.
-export function tickable(backup: RisuBackup, have: Set<string>): Ticks {
+export const hasModule = (have: Have, risu: string | null): boolean => risu !== null && have.modules.has(risu);
+
+// What can be ticked, which is also what starts ticked: a character or module already brought from Risu and a preset
+// the importer refused cannot.
+export function tickable(backup: RisuBackup, have: Have): Ticks {
   return {
-    characters: backup.characters.map((character) => !have.has(character.id)),
+    characters: backup.characters.map((character) => !have.characters.has(character.id)),
     personas: backup.personas.map(() => true),
     presets: backup.presets.map((preset) => preset.result.ok),
+    modules: backup.modules.map((module) => !hasModule(have, module.risu)),
   };
 }
 
@@ -18,7 +23,9 @@ export function toPick(backup: RisuBackup, ticks: Ticks): MovePick {
     characters: backup.characters.filter((_, index) => ticks.characters[index]),
     personas: backup.personas.filter((_, index) => ticks.personas[index]),
     presets: backup.presets.filter((_, index) => ticks.presets[index]),
+    modules: backup.modules.filter((_, index) => ticks.modules[index]),
+    alwaysModules: backup.alwaysModules,
   };
 }
 
-export const tickCount = (ticks: Ticks): number => [...ticks.characters, ...ticks.personas, ...ticks.presets].filter(Boolean).length;
+export const tickCount = (ticks: Ticks): number => Object.values(ticks).flat().filter(Boolean).length;
