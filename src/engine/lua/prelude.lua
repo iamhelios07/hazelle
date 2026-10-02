@@ -1,0 +1,110 @@
+-- The Lua side of Risu's scripting API, as its bots were written against it (RisuAI process/scriptings.ts,
+-- luaCodeWrapper), over the functions engine/lua/run.ts sets. Only text, numbers, booleans and promises cross.
+
+json = require 'json'
+
+io = nil
+require = nil
+package = nil
+debug = nil
+dofile = nil
+loadfile = nil
+load = nil
+string.dump = nil
+os = { date = os.date, time = os.time, clock = os.clock, difftime = os.difftime }
+
+function getChat(id, index)
+    return json.decode(getChatMain(id, index))
+end
+
+function getFullChat(id)
+    return json.decode(getFullChatMain(id))
+end
+
+function getRecentChats(id, count)
+    return json.decode(getRecentChatsMain(id, count))
+end
+
+function log(value)
+    logMain(json.encode(value))
+end
+
+function LLM(id, prompt, useMultimodal, options)
+    return json.decode(LLMMain(id, json.encode(prompt)):await())
+end
+
+function axLLM(id, prompt, useMultimodal, options)
+    return json.decode(axLLMMain(id, json.encode(prompt)):await())
+end
+
+function simpleLLM(id, prompt)
+    return json.decode(LLMMain(id, json.encode({ { role = 'user', content = prompt } })):await())
+end
+
+local listeners = { editRequest = {}, editDisplay = {}, editInput = {}, editOutput = {} }
+
+function listenEdit(type, func)
+    local list = listeners[type]
+    if list == nil then
+        error('Invalid type')
+    end
+    list[#list + 1] = func
+end
+
+function getState(id, name)
+    return json.decode(getChatVar(id, "__" .. name))
+end
+
+function setState(id, name, value)
+    setChatVar(id, "__" .. name, json.encode(value))
+end
+
+function setStateChanged(id, name, value)
+    return setChatVarChanged(id, "__" .. name, json.encode(value))
+end
+
+function async(callback)
+    return function(...)
+        local co = coroutine.create(callback)
+        local safe, result = coroutine.resume(co, ...)
+
+        return Promise.create(function(resolve, reject)
+            local checkresult
+            local step = function()
+                if coroutine.status(co) == "dead" then
+                    local send = safe and resolve or reject
+                    return send(result)
+                end
+
+                safe, result = coroutine.resume(co)
+                checkresult()
+            end
+
+            checkresult = function()
+                if safe and result == Promise.resolve(result) then
+                    result:finally(step)
+                else
+                    step()
+                end
+            end
+
+            checkresult()
+        end)
+    end
+end
+
+callListenMain = async(function(type, id, value, meta)
+    local realValue = json.decode(value)
+    local realMeta = json.decode(meta)
+
+    -- A listener that returns nothing leaves the value as it was. Risu passes its nil on, which drops what the
+    -- listeners before it did.
+    for _, func in ipairs(listeners[type]) do
+        local edited = func(id, realValue, realMeta)
+        if edited ~= nil then
+            realValue = edited
+        end
+    end
+
+    return json.encode(realValue)
+end)
