@@ -1,13 +1,12 @@
 import { Hono } from 'hono';
-import { bodyLimit } from 'hono/body-limit';
 import { FILE_ID } from './files';
 import { fail, ID, readObject, type AppEnv } from './http';
-import { requireSession } from './session';
+import { canWrite, requireSession } from './session';
 
 const KIND = /^[a-z][a-z-]{0,31}$/;
 // https://developers.cloudflare.com/d1/platform/limits/: 1,000 queries per invocation on Workers Paid, which this
 // account runs on, 100 binds/query, 2 MB/row. A batch uses items + 2 statements (at most 8 binds each), plus session queries.
-// The 4 MB HTTP budget stays below Workers' 100 MB request and 128 MB memory limits.
+// The 4 MB HTTP budget, which worker.ts enforces, stays below Workers' 100 MB request and 128 MB memory limits.
 export const BATCH_LIMITS = { items: 200, bytes: 4_000_000, body: 1_500_000 };
 const PAGE_ROWS = 500;
 const PAGE_BODY_LENGTH = 4_000_000;
@@ -31,8 +30,6 @@ objects.get('/', async (c) => {
   const metadata = c.req.query('metadata') === '1';
   if (excluded.length > 32 || excluded.some((kind) => !KIND.test(kind)) || (parent !== undefined && !ID.test(parent))) return fail(c, 400, 'bad-input');
   const account = c.get('account').id;
-  const expected = c.req.query('account');
-  if (expected !== undefined && expected !== account) return fail(c, 409, 'account-mismatch');
   const head = Number(await c.env.DB.prepare('SELECT rev FROM accounts WHERE id = ?').bind(account).first('rev'));
   const known = Number(c.req.query('known') ?? since);
   if (!Number.isSafeInteger(known) || known < 0) return fail(c, 400, 'bad-input');
@@ -78,16 +75,21 @@ type Write = { id: string; kind: string; parent: string | null; body: string | n
 // the object's parent: one naming another parent is bad input, not a conflict, since pulling and trying again could
 // never make it fit. A deleted object stays as a row without a body, so other devices learn of the deletion by sync;
 // writing it again with its current rev restores it (되돌리기).
-objects.post('/batch', bodyLimit({ maxSize: BATCH_LIMITS.bytes, onError: (c) => fail(c, 413, 'too-large') }), async (c) => {
+// The same statement keeps accounts.bytes, the bytes of the account's bodies, and holds it under the operator's cap. A
+// batch that does not grow the account always passes, so a full account can still delete.
+objects.post('/batch', canWrite, async (c) => {
   const input = await readObject(c);
   if (!input || !Array.isArray(input.writes) || !input.writes.length) return fail(c, 400, 'bad-input');
   if (input.writes.length > BATCH_LIMITS.items) return fail(c, 413, 'too-large');
   const writes: Write[] = [];
   const ids = new Set<string>();
+  let bytes = 0;
   for (const item of input.writes) {
     const write = readWrite(item);
     if (!write || ids.has(write.id)) return fail(c, 400, 'bad-input');
-    if (write.body !== null && new TextEncoder().encode(write.body).length > BATCH_LIMITS.body) return fail(c, 413, 'too-large');
+    const size = write.body === null ? 0 : new TextEncoder().encode(write.body).length;
+    if (size > BATCH_LIMITS.body) return fail(c, 413, 'too-large');
+    bytes += size;
     ids.add(write.id);
     writes.push(write);
   }
@@ -96,26 +98,31 @@ objects.post('/batch', bodyLimit({ maxSize: BATCH_LIMITS.bytes, onError: (c) => 
   const checks = JSON.stringify(writes.map(({ id, kind, parent, baseRev, body }) => ({ id, kind, parent, baseRev, remove: body === null })));
   const candidates = `FROM json_each(?2) AS w LEFT JOIN objects AS o ON o.account_id = ?1 AND o.id = json_extract(w.value, '$.id')`;
   const moved = `o.id IS NOT NULL AND o.parent_id IS NOT json_extract(w.value, '$.parent')`;
+  const conflict = `EXISTS (SELECT 1 ${candidates} WHERE
+    CASE WHEN json_extract(w.value, '$.baseRev') IS NULL THEN o.id IS NOT NULL
+    ELSE o.id IS NULL OR o.kind != json_extract(w.value, '$.kind')
+      OR o.rev != json_extract(w.value, '$.baseRev') OR ${moved}
+      OR (json_extract(w.value, '$.remove') AND o.body IS NULL) END)`;
   // changes() gates the entire chain on the first statement. No read outside this transaction
   // decides whether to write; a later item's conflict must leave even accounts.rev untouched.
-  const results = await db.batch<{ rev: number; moved: number }>([
-    db.prepare(`UPDATE accounts SET rev = rev + ?3 WHERE id = ?1 AND NOT EXISTS (
-      SELECT 1 ${candidates} WHERE
-        CASE WHEN json_extract(w.value, '$.baseRev') IS NULL THEN o.id IS NOT NULL
-        ELSE o.id IS NULL OR o.kind != json_extract(w.value, '$.kind')
-          OR o.rev != json_extract(w.value, '$.baseRev') OR ${moved}
-          OR (json_extract(w.value, '$.remove') AND o.body IS NULL) END
-      ) RETURNING rev`).bind(account, checks, writes.length),
+  // replaced: the bytes of the bodies these writes replace, counted as the migration counted them.
+  const results = await db.batch<{ rev: number; moved: number; conflict: number }>([
+    db.prepare(`WITH replaced (bytes) AS MATERIALIZED (SELECT COALESCE(SUM(LENGTH(CAST(o.body AS BLOB))), 0) ${candidates})
+      UPDATE accounts SET rev = rev + ?3, bytes = bytes + ?4 - (SELECT bytes FROM replaced)
+      WHERE id = ?1 AND NOT ${conflict}
+        AND (?4 <= (SELECT bytes FROM replaced) OR COALESCE(bytes + ?4 - (SELECT bytes FROM replaced) <= (SELECT account_bytes_cap FROM service), 1))
+      RETURNING rev`).bind(account, checks, writes.length, bytes),
     ...writes.map(({ id, kind, parent, body, file }, index) =>
       db.prepare(`INSERT INTO objects (account_id, id, kind, parent_id, rev, body, deleted_at, file_id)
         SELECT ?1, ?2, ?3, ?4, rev - ?5, ?6, ?7, ?8 FROM accounts WHERE id = ?1 AND changes() = 1
         ON CONFLICT (account_id, id) DO UPDATE SET rev = excluded.rev, body = excluded.body, deleted_at = excluded.deleted_at, file_id = excluded.file_id
         RETURNING rev`).bind(account, id, kind, parent, writes.length - index - 1, body, body === null ? Date.now() : null, body === null ? null : file),
     ),
-    db.prepare(`SELECT EXISTS (SELECT 1 ${candidates} WHERE json_extract(w.value, '$.baseRev') IS NOT NULL AND ${moved}) AS moved`).bind(account, checks),
+    db.prepare(`SELECT EXISTS (SELECT 1 ${candidates} WHERE json_extract(w.value, '$.baseRev') IS NOT NULL AND ${moved}) AS moved, ${conflict} AS conflict`).bind(account, checks),
   ]);
   if (!results[0]!.results.length) {
-    return results.at(-1)!.results[0]!.moved ? fail(c, 400, 'bad-input') : fail(c, 409, 'conflict');
+    const refused = results.at(-1)!.results[0]!;
+    return refused.moved ? fail(c, 400, 'bad-input') : refused.conflict ? fail(c, 409, 'conflict') : fail(c, 413, 'storage-full');
   }
   return c.json({ revs: results.slice(1, -1).map(({ results }) => results[0]!.rev) });
 });

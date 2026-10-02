@@ -11,7 +11,8 @@ const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '
 export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.'))) {
   const proxy = await getPlatformProxy<Env>({ configPath: 'wrangler.test.jsonc', persist: false, remoteBindings: false });
   const placed: unknown[] = [];
-  const env = { ...proxy.env, STREAMS: streamObjects(upstream, placed), RELAY: relayObjects(upstream, placed) };
+  // ADMIN_ACCOUNT: a test names its operator after signing it up, since nobody signs up as the operator's id.
+  const env = { ...proxy.env, STREAMS: streamObjects(upstream, placed), RELAY: relayObjects(upstream, placed), ADMIN_ACCOUNT: '' as string };
   for (const name of Object.keys(migrations).sort()) {
     const statements = migrations[name]!.split(';').filter((s) => s.trim());
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
@@ -32,7 +33,13 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     env,
     placed,
     dispose: () => proxy.dispose(),
-    reset: () => env.DB.batch(['objects', 'files', 'vaults', 'sessions', 'accounts'].map((table) => env.DB.prepare(`DELETE FROM ${table}`))),
+    reset: () => {
+      env.ADMIN_ACCOUNT = '';
+      return env.DB.batch([
+        ...['objects', 'files', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+        env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL'),
+      ]);
+    },
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),
     post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),
     put: (path: string, body?: unknown, cookie?: string) => send('PUT', path, body, cookie),
