@@ -113,6 +113,22 @@ describe("a turn with the bot's Lua", () => {
       await vi.waitFor(async () => expect((await fetch(calls[1]!)).status).toBe(404));
     }));
 
+  it("tells the chat when the server turns its bot's model call away for coming too often", () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `onOutput = async(function(id) setChatVar(id, 'made', LLM(id, { { role = 'user', content = 'sum' } }).result) end)`);
+      stubRelay(inTurn([saying('reply')]));
+      const served = globalThis.fetch;
+      let starts = 0;
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+        url.startsWith('/api/streams/') && init?.method === 'POST' && starts++ ? Promise.resolve(Response.json({ error: 'too-many-bot-calls' }, { status: 429 })) : served(url, init),
+      );
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(1);
+      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      await expect.poll(() => shown(messages()[2]!).after).toEqual([['made', 'Error: too many model calls in a minute']]);
+      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'flood' }]);
+    }));
+
   it("answers a button with the script's function and keeps its writes after the last message", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `function open(id) setChatVar(id, 'door', 'open') alertNormal(id, 'opened') end`);

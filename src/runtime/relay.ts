@@ -83,15 +83,16 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
 // A generation call through its ReplyStream on the server (tech-spec §6, Detached replies), which goes on when this
 // page stops reading. With a request it starts the call; without one it reads the call already started, from the
 // start. The answer is the provider's as relay gives it. key: the call's private key; public: its public half, to start.
-// took: how long the call ran, as the server measured it, once its end has been read.
-export type StreamCall = { id: string; key: JsonWebKey; public?: string; took?: number };
+// bot: the chat whose bot's script makes the call, which the server limits per chat. took: how long the call ran, as
+// the server measured it, once its end has been read.
+export type StreamCall = { id: string; key: JsonWebKey; public?: string; bot?: string; took?: number };
 
 export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal): Promise<Response | RelayFailure> {
   let response: Response;
   try {
     response = await fetchApi(
       `streams/${call.id}`,
-      request ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request }), signal } : { signal },
+      request ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request, ...(call.bot && { bot: call.bot }) }), signal } : { signal },
     );
   } catch {
     return lost(signal);
