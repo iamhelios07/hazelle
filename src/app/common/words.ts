@@ -11,6 +11,10 @@ export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '
 
 export const AUX_HELP = '번역과 장기 기억 정리처럼 대화 밖에서 하는 일에 써요. 번역 프롬프트나 기억 프롬프트에서 모델을 고르면 그 일은 그 모델로 해요.';
 
+// 캐릭터 편집's switch for a bot whose script calls a model, and what the card that asks it in the chat says first.
+export const BOT_MODELS = '봇이 모델 부르기';
+export const BOT_MODELS_HELP = '봇의 스크립트가 답장과 별개로 모델에 요청을 보내요. 그만큼 요금이 더 들 수 있어요.';
+
 export const SETTINGS = '설정';
 
 // A {{…}} tag in a prompt or a card's text.

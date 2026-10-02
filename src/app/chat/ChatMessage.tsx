@@ -19,8 +19,8 @@ type Props = {
   message: Shown;
   // The shown version's text as it is displayed. Editing starts from the stored text.
   text: string;
-  // 봇 꾸밈: whether the bot's HTML is drawn, its CSS for the chat, and its pictures' URLs.
-  decor: { bot: boolean; css: string; url: (id: string) => string | undefined };
+  // 봇 꾸밈: whether the bot's HTML is drawn, its CSS for the chat, its pictures' URLs, and whether its buttons run.
+  decor: { bot: boolean; css: string; url: (id: string) => string | undefined; buttons: 'live' | 'inert' };
   // The status window's boxes this message draws, being the latest to draw them, at the end each stood at.
   hosted: Box[];
   // The boxes the bot drew in this message, by the script that draws each, and whether it is the status window's.
@@ -129,7 +129,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     body = (
       <>
         {/* A continuation that failed still holds the text it continued, and 다시 시도 continues it again. */}
-        {receipt.continues && <Story html={shownHtml(original, decor)} css={decor.css} onInert={actions.inert} />}
+        {receipt.continues && <Story html={shownHtml(original, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />}
         <Failure
           title="답장을 받지 못했어요"
           actions={
@@ -150,13 +150,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   } else if (!empty || live) {
     const box = ({ script, html }: Box) => (
       <div key={script} ref={actions.watch(script)}>
-        <Story html={shownHtml(html, decor)} css={decor.css} onInert={actions.inert} />
+        <Story html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />
       </div>
     );
     body = (
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
-        <Story html={html} css={decor.css} onInert={actions.inert} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />
+        <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );
@@ -278,7 +278,7 @@ function sameRow(previous: Props, next: Props): boolean {
   const { decor: aDecor, hosted: aHosted, offered: aOffered, character: aCharacter, translating: aTranslating, ...a } = previous;
   const { decor: bDecor, hosted: bHosted, offered: bOffered, character: bCharacter, translating: bTranslating, ...b } = next;
   if ((Object.keys(a) as (keyof typeof a)[]).some((key) => a[key] !== b[key])) return false;
-  if (aDecor.bot !== bDecor.bot || aDecor.css !== bDecor.css || aDecor.url !== bDecor.url) return false;
+  if (aDecor.bot !== bDecor.bot || aDecor.css !== bDecor.css || aDecor.url !== bDecor.url || aDecor.buttons !== bDecor.buttons) return false;
   if (aCharacter?.name !== bCharacter?.name || aCharacter?.image !== bCharacter?.image) return false;
   if (aHosted.length !== bHosted.length || aHosted.some((box, index) => box.script !== bHosted[index]!.script || box.html !== bHosted[index]!.html || box.at !== bHosted[index]!.at)) return false;
   if (aOffered.length !== bOffered.length || aOffered.some((box, index) => box.script !== bOffered[index]!.script || box.name !== bOffered[index]!.name || box.marked !== bOffered[index]!.marked)) return false;

@@ -6,7 +6,9 @@ import { Toast, ToastStack, type ToastAction } from './ui';
 
 type Action = { label: string; onClick: () => void };
 type Extra = { detail?: string; action?: Action };
-type Notice = { key: number; message: string; detail?: string; tone: 'plain' | 'error'; action?: ToastAction; undo: boolean; life: number; ends: number };
+type From = { name: string; face: string | null };
+// said: whose words the message is, and what its Toast does once they are opened.
+type Notice = { key: number; message: string; detail?: string; tone: 'plain' | 'error'; action?: ToastAction; said?: { from: From; keep: () => void; close: () => void }; undo: boolean; life: number; ends: number };
 
 export type Toasts = {
   // detail: what it was done to, under the message.
@@ -17,6 +19,9 @@ export type Toasts = {
   failed: (failure: ApiFailure, prefix?: string) => void;
   // Deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog; Ctrl+Z does it too.
   undoable: (message: string, undo: () => void, detail?: string) => void;
+  // Someone else's words, such as a bot's, under their face and name. Long ones are cut until pressed, and once
+  // opened stay until closed.
+  said: (from: From, text: string, tone: Notice['tone']) => void;
 };
 
 // Three at most: more would only stack edges nobody reads.
@@ -40,18 +45,20 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
   const heldSince = useRef(0);
   const toasts = useMemo<Toasts>(() => {
     let next = 0;
-    const add = (message: string, tone: Notice['tone'], { detail, action }: Extra = {}, undo = false) => {
+    const add = (message: string, tone: Notice['tone'], { detail, action, from }: Extra & { from?: From } = {}, undo = false) => {
       const key = ++next;
       const life = lifeOf(tone, `${message}${detail ?? ''}`, action !== undefined);
       const close = () => setNotices((all) => all.filter((notice) => notice.key !== key));
+      const keep = () => setNotices((all) => all.map((notice) => (notice.key === key ? { ...notice, ends: Infinity } : notice)));
       const pressed = action && { ...action, onClick: () => (close(), action.onClick()), ...(undo && { keys: SHORTCUTS.undoToast.keys }) };
-      setNotices((all) => [{ key, message, detail, tone, action: pressed, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
+      setNotices((all) => [{ key, message, detail, tone, action: pressed, said: from && { from, keep, close }, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
     };
     return {
       show: (message, extra) => add(message, 'plain', extra),
       error: (message, extra) => add(message, 'error', extra),
       failed: (failure, prefix) => add(prefix ?? describeFailure(failure), 'error', prefix ? { detail: describeFailure(failure) } : {}),
       undoable: (message, undo, detail) => add(message, 'plain', { detail, action: { label: '되돌리기', onClick: undo } }, true),
+      said: (from, text, tone) => add(text, tone, { from }),
     };
   }, []);
 
@@ -59,6 +66,8 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
     if (held || notices.length === 0) return;
     const now = Date.now();
     const soonest = Math.min(...notices.map(({ ends }) => ends));
+    // Only notices kept open are left, and those have no end.
+    if (soonest === Infinity) return;
     const timer = setTimeout(() => setNotices((all) => all.filter(({ ends }) => ends > Date.now())), Math.max(0, soonest - now));
     return () => clearTimeout(timer);
   }, [held, notices]);
@@ -86,9 +95,9 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       <ToastStack
         items={[
           ...(standing ? [{ key: 'standing', toast: <Toast message={standing.message} detail={standing.detail} tone="plain" life={0} paused={held} /> }] : []),
-          ...notices.map(({ key, message, detail, tone, action, life }) => ({
+          ...notices.map(({ key, message, detail, tone, action, said, life }) => ({
             key,
-            toast: <Toast message={message} detail={detail} tone={tone} action={action} life={life} paused={held} />,
+            toast: <Toast message={message} detail={detail} tone={tone} action={action} from={said?.from} onKeep={said?.keep} onClose={said?.close} life={life} paused={held} />,
           })),
         ]}
         onHold={hold}

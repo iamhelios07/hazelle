@@ -151,7 +151,7 @@
   --prose-sans-shrink: 1px;
   --prose-sans-tighten: 0.1;
   --prose-faded-opacity: 0.5;
-  /* A bot's button that nothing can run yet (design §6.4). */
+  /* A bot's button that nothing answers (design §6.4). */
   --story-inert-opacity: 0.45;
   /* A picture line's defaults (Story.shadow.css); a character's own replace them (ChatFrame's pictures). */
   --story-picture-peek: 40vh;
@@ -190,6 +190,8 @@
   /* How far each notice behind the front one shows, and how much smaller it is. */
   --toast-peek: var(--space-8);
   --toast-shrink: 0.05;
+  /* The most a notice's long words take once opened; past it they scroll. */
+  --toast-words-most: 50vh;
   --screen-offset-top: 10vh;
   --sidebar-width: 272px;
   --rail-width: 64px;

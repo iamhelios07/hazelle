@@ -3,6 +3,9 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import styles from './Story.module.css';
 import shadowCss from './Story.shadow.css?inline';
 
+// One of the bot's buttons, as its HTML names it: risu-trigger names a function of its script, risu-btn carries data to it.
+export type BotButton = { trigger: string } | { data: string };
+
 type Props = {
   // The engine's HTML for the text: markdown's, with a bot's own HTML where it was kept.
   html: string;
@@ -12,11 +15,13 @@ type Props = {
   // original while its translation is awaited.
   cursor?: boolean;
   tone?: 'plain' | 'faded';
-  // A press on one of the bot's buttons, which nothing runs yet.
-  onInert?: () => void;
+  // inert: nothing answers the bot's buttons, so they are dimmed. live: they keep the bot's own look.
+  buttons?: 'live' | 'inert';
+  // A press on one of the bot's buttons; null for a plain button, which names nothing to run.
+  onPress?: (button: BotButton | null) => void;
 };
 
-const INERT = 'button, [risu-btn], [risu-trigger]';
+const NAMED = '[risu-trigger], [risu-btn]';
 // Named in Story.shadow.css.
 const PICTURE = 'data-picture';
 const OPEN = 'data-open';
@@ -104,7 +109,7 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
-export function Story({ html, css = '', cursor = false, tone = 'plain', onInert }: Props) {
+export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
 
@@ -127,9 +132,13 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', onInert 
         event.preventDefault();
         return;
       }
-      if (!(event.target as Element).closest(INERT)) return;
+      // The nearest element that names what to run: a plain button inside one is that one's press.
+      const named = (event.target as Element).closest(NAMED);
+      if (!named && !(event.target as Element).closest('button')) return;
       event.preventDefault();
-      onInert?.();
+      // An element with both is its trigger, as in Risu.
+      const trigger = named?.getAttribute('risu-trigger') ?? null;
+      onPress?.(trigger !== null ? { trigger } : named ? { data: named.getAttribute('risu-btn')! } : null);
     };
     // transitionend, not transitionstart: it lands in the frame of the new size, before that frame's resize observers.
     const resized = (event: Event) => {
@@ -142,11 +151,11 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', onInert 
       shadow.removeEventListener('click', press);
       shadow.removeEventListener('transitionend', resized);
     };
-  }, [onInert]);
+  }, [onPress]);
 
   return (
     <div className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
-      <div ref={host}>{cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}</div>
+      <div ref={host} data-buttons={buttons}>{cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}</div>
     </div>
   );
 }

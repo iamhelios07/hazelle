@@ -100,9 +100,10 @@ and only this folder styles elements.**
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark; a small form opened the same way (kind dialog), and a menu opened inside it |
-| overlays | `Toast` | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys) or error (a warn band, why, where to fix it). Its action's time runs down as a line |
+| overlays | `Toast` | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys) or error (a warn band, why, where to fix it). Its action's time runs down as a line. Someone else's words, such as a bot's, under their face and name: line breaks kept, four lines until pressed, then whole with a × |
 | overlays | `ToastStack` | `ToastStack.module.css` | Notices, newest in front, bottom right (under the header on a phone); pointing at it opens it and holds their time. Above every layer but the file drop |
 | feedback | `ActionCard` | `ActionCard.module.css` | A large choice with a description |
+| feedback | `AskCard` (`AskAnswer`) | `AskCard.module.css` | A question that waits beside what the user is doing, such as a bot's above the composer: who asks, the question with an ⓘ explanation, a line to type or a few choices, and a × that puts it away |
 | feedback | `Callout` | `Callout.module.css` | A warning or success note, with an optional action under it |
 | feedback | `CodeBlock` | `CodeBlock.module.css` | Text as a program sent it, such as a request's address and body in 요청 원문; in body letters, what a prompt example gives |
 | feedback | `CodeCard` | `CodeCard.module.css` | A code to copy, such as the recovery key |
@@ -110,7 +111,7 @@ and only this folder styles elements.**
 | feedback | `Intro` | `Intro.module.css` | A screen's large title and lead |
 | feedback | `Outcome` | `Outcome.module.css` | What an import brought and did not, a line each with why under it |
 | feedback | `Steps` | `Steps.module.css` | Progress through steps |
-| story | `Story` | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons dimmed; the streaming caret; faded while another text will take its place |
+| story | `Story` (`BotButton`) | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons live or dimmed, and which one was pressed (`BotButton`); the streaming caret; faded while another text will take its place |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its quiet tag by the name (such as 번역, which flips it), its tools bar and markers; a ring that fades from a message looked for, such as a memory record's source, and the view taken to it |
 | layout | `SidePeek` | `SidePeek.module.css` | A tab at the story's right edge, clear of its scrollbar, whose drawer slides over the story once the pointer rests on the tab, or held open (a key, a tap) with its own close, such as 상태; ChatFrame's `peek` slot places it |
 | layout | `StoryAside` | `StoryAside.module.css` | A column in the story's right margin, over the page, its tools faint until pointed at, laid out even while not shown; ChatFrame's `aside` slot places it |

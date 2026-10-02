@@ -19,9 +19,11 @@ import {
   setChatNote,
   setChatPersona,
   setChatPrompt,
+  startChat,
 } from '../../runtime/chat-log';
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
+import { scriptsOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
@@ -32,7 +34,7 @@ import { describeUnused } from '../common/unused';
 import { useAssetUrl, useChatDisplay, useChatMemory, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, useViewport } from '../ui';
+import { useMenuHandle, useViewport, type BotButton } from '../ui';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
@@ -69,6 +71,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const persona = chatPersona(store, chat);
   const toggles = toggleRows(togglesOf(store, chat, prompt), prompt.kind === 'prompt' ? prompt.prompt.value.toggles.length : 0);
   const card = shelf?.character.card ?? null;
+  const lua = scriptsOf(card).length > 0;
   const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
   // A blank greeting keeps its place in the card, but a chat never opens on nothing.
@@ -177,6 +180,20 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setPinned(null);
   }
 
+  // The new chat as it is saved: by its first send, or by a press on a button of its greeting.
+  function starting() {
+    return {
+      chat,
+      greetings: opening && {
+        ids: opening.versions.map((version) => version.id),
+        texts: opening.versions.map((version) => version.text),
+        selected: opening.selected,
+        translations: new Map(opening.versions.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
+      },
+      started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
+    };
+  }
+
   async function send() {
     const text = draft.text.trim();
     if (!text || busy) return;
@@ -185,24 +202,31 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setStopped(false);
     draft.set('');
     follow();
-    const start =
-      id === null
-        ? {
-            chat,
-            greetings: opening && {
-              ids: opening.versions.map((version) => version.id),
-              texts: opening.versions.map((version) => version.text),
-              selected: opening.selected,
-              translations: new Map(opening.versions.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
-            },
-            started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
-          }
-        : null;
-    const failure = await takeTurn(session, chatId, { kind: 'send', text }, start);
+    const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
     // Only an unsaved reply means the user's message was saved. A new chat that was not saved stays on this screen.
     if (failure?.kind === 'unstarted') draft.set(text);
     else if (failure && failure.kind !== 'unsaved') draft.putBack(chatId, text);
     report(failure);
+  }
+
+  // The save a press started for a new chat, which every press made before the chat is here waits for: a second
+  // save would be refused.
+  const saving = useRef<Promise<ApiFailure | null> | null>(null);
+  async function press(button: BotButton | null) {
+    if (!lua) return toast.show('봇의 버튼은 아직 동작하지 않아요.');
+    if (button === null) return;
+    // A script runs over a saved chat only, so a press on a new chat's greeting saves it first.
+    if (id === null) {
+      const start = starting();
+      saving.current ??= startChat(store, chatId, start.chat, start.greetings).then((unstarted) => {
+        if (unstarted) saving.current = null;
+        else start.started();
+        return unstarted;
+      });
+      const unstarted = await saving.current;
+      if (unstarted) return toast.failed(unstarted);
+    }
+    if (!(await session.scripts.press(chatId, button))) toast.show('이 버튼은 아직 동작하지 않아요.');
   }
 
   function ask(target: Target) {
@@ -376,7 +400,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
-    decor: { bot, css: bot ? resolveAssets(css, url) : '', url },
+    decor: { bot, css: bot ? resolveAssets(css, url) : '', url, buttons: lua ? ('live' as const) : ('inert' as const) },
     status,
     hosted,
     offered,
@@ -428,7 +452,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       setTranslate: setSwitches,
       remove,
       copy,
-      inert: () => toast.show('봇의 버튼은 아직 동작하지 않아요.'),
+      press: (button: BotButton | null) => void press(button),
       branch,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
