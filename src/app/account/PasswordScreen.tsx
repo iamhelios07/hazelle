@@ -8,11 +8,13 @@ type Props = {
   // reset: after the recovery key opened the vault, a new password is required.
   mode: 'signup' | 'reset';
   username: string;
+  // signup: for someone who already has an account.
+  onSignIn?: () => void;
   onDone: (username: string, password: string) => Promise<string | null>;
 };
 
 // The server never sees the password, so its rules are checked here and nowhere else.
-export function PasswordScreen({ mode, username: initialUsername, onDone }: Props) {
+export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDone }: Props) {
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
@@ -40,9 +42,16 @@ export function PasswordScreen({ mode, username: initialUsername, onDone }: Prop
       }
       onSubmit={submit}
       actions={
-        <Button type="submit" busy={busy}>
-          {signup ? '다음' : '저장'}
-        </Button>
+        <>
+          <Button type="submit" busy={busy}>
+            {signup ? '다음' : '저장'}
+          </Button>
+          {onSignIn && (
+            <Button variant="ghost" onClick={onSignIn}>
+              계정이 있으면 로그인
+            </Button>
+          )}
+        </>
       }
     >
       {signup && <Steps current={1} total={2} />}

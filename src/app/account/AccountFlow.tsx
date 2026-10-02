@@ -1,19 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { api, holdAccount } from '../../runtime/api';
+import { changePassword, credentialFor, loadSession, logIn, logOut, signUp, type SessionFacts, type SignedIn } from '../../runtime/account';
+import { holdAccount } from '../../runtime/api';
 import { forgetVault } from '../../runtime/device-cache';
 import { lockVault, recallVault, rememberVault } from '../../vault/device';
-import {
-  canonicalUsername,
-  createVault,
-  openVault,
-  passwordCredential,
-  recoveryCredential,
-  wrapWithPassword,
-  type Credential,
-  type Method,
-  type VaultKey,
-  type VaultRecord,
-} from '../../vault/keys';
+import { canonicalUsername, createVault, openVault, passwordCredential, wrapWithPassword, type Credential, type VaultKey } from '../../vault/keys';
 import { describeFailure, wrongSecret } from '../common/failure';
 import type { Account } from '../session';
 import { PasswordScreen } from './PasswordScreen';
@@ -21,36 +11,36 @@ import { RecoveryKeyScreen } from './RecoveryKeyScreen';
 import { SignInScreen } from './SignInScreen';
 import { UnreachableScreen } from './UnreachableScreen';
 
-type LoginSession = { accountId: string; username: string };
-type SignedIn = { session: LoginSession; vault: VaultRecord };
-type Boot = { session: null; signupOpen: boolean } | SignedIn;
 // Kept in memory until the recovery key is saved. Going back keeps the vault key and the recovery
 // key, so a file already downloaded stays valid.
-type Draft = { session: LoginSession } & Awaited<ReturnType<typeof createVault>>;
+type Draft = { session: { accountId: string; username: string } } & Awaited<ReturnType<typeof createVault>>;
 
 type State =
   | { kind: 'loading' }
   | { kind: 'unreachable'; message: string }
   | { kind: 'signup'; step: 'password' | 'recovery'; draft: Draft | null }
-  | { kind: 'login' }
-  | { kind: 'locked'; signedIn: SignedIn }
-  | { kind: 'recovered'; session: LoginSession; vaultKey: VaultKey; current: Credential }
-  | { kind: 'unlocked'; session: LoginSession; vaultKey: VaultKey };
+  // notice: why this shows instead of what was open.
+  | { kind: 'login'; signupOpen: boolean; notice: string | null }
+  | { kind: 'locked'; signedIn: SignedIn; notice: string | null }
+  | { kind: 'recovered'; session: SessionFacts; vaultKey: VaultKey; current: Credential }
+  | { kind: 'unlocked'; session: SessionFacts; vaultKey: VaultKey };
 
 export type Unlocked = Account & { accountId: string; username: string; vaultKey: VaultKey };
 
-async function loadState(): Promise<State> {
-  const result = await api<Boot>('GET', 'session');
+const ELSEWHERE = '다른 탭에서 다른 계정으로 로그인해서 이 탭에 열려 있던 계정을 닫았어요.';
+
+// Signed out, the page opens on signup while there is room, unless it came from leaving an account.
+async function loadState(notice: string | null = null, prefer: 'signup' | 'login' = 'signup'): Promise<State> {
+  const result = await loadSession();
   if (!result.ok) return { kind: 'unreachable', message: describeFailure(result) };
   const boot = result.data;
-  if (boot.session === null) return boot.signupOpen ? { kind: 'signup', step: 'password', draft: null } : { kind: 'login' };
+  if (boot.session === null) {
+    return boot.signupOpen && prefer === 'signup' && notice === null ? { kind: 'signup', step: 'password', draft: null } : { kind: 'login', signupOpen: boot.signupOpen, notice };
+  }
   const vaultKey = await recallVault(boot.session.accountId);
   if (vaultKey) return { kind: 'unlocked', session: boot.session, vaultKey };
-  return { kind: 'locked', signedIn: boot };
+  return { kind: 'locked', signedIn: boot, notice };
 }
-
-const vaultCredential = (username: string, method: Method, secret: string) =>
-  method === 'password' ? passwordCredential(username, secret) : recoveryCredential(secret);
 
 // Up to an open vault: loading → signed out → vault setup → locked → unlocked. children renders what is
 // behind it, so account/ never imports the shell.
@@ -61,21 +51,21 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
   // unreachable): a request still leaving for that account stays refused. Once the server says the cookie names
   // another account, the page asks again and shows that one, which closes what was open.
   function show(next: State) {
-    if (next.kind === 'unlocked') holdAccount(next.session.accountId, reload);
+    if (next.kind === 'unlocked') holdAccount(next.session.accountId, () => reload(ELSEWHERE));
     else if (next.kind !== 'loading' && next.kind !== 'unreachable') holdAccount(null);
     setState(next);
   }
 
-  function reload() {
+  function reload(notice: string | null = null, prefer: 'signup' | 'login' = 'signup') {
     show({ kind: 'loading' });
-    void loadState().then(show);
+    void loadState(notice, prefer).then(show);
   }
 
   useEffect(() => {
     void loadState().then(show);
   }, []);
 
-  async function unlocked(session: LoginSession, vaultKey: VaultKey) {
+  async function unlocked(session: SessionFacts, vaultKey: VaultKey) {
     await rememberVault(session.accountId, vaultKey);
     show({ kind: 'unlocked', session, vaultKey });
   }
@@ -90,10 +80,10 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
   }
 
   async function logout(accountId: string): Promise<string | null> {
-    const result = await api('POST', 'logout');
+    const result = await logOut();
     if (!result.ok) return describeFailure(result);
     await forgetVault(accountId);
-    show({ kind: 'login' });
+    reload(null, 'login');
     return null;
   }
 
@@ -111,9 +101,9 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
             recoveryKey={draft.recoveryKey}
             onBack={() => show({ kind: 'signup', step: 'password', draft })}
             onStart={async () => {
-              const result = await api('POST', 'signup', { ...draft.session, ...draft.signup });
+              const result = await signUp({ ...draft.session, ...draft.signup });
               if (!result.ok) return describeFailure(result);
-              await unlocked(draft.session, draft.vaultKey);
+              await unlocked(result.data, draft.vaultKey);
               return null;
             }}
           />
@@ -123,6 +113,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
         <PasswordScreen
           mode="signup"
           username={draft?.session.username ?? ''}
+          onSignIn={() => show({ kind: 'login', signupOpen: true, notice: null })}
           onDone={async (typed, password) => {
             const username = canonicalUsername(typed);
             const credential = await passwordCredential(username, password);
@@ -140,11 +131,13 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
       return (
         <SignInScreen
           account={null}
+          notice={state.notice}
+          signup={state.signupOpen ? () => show({ kind: 'signup', step: 'password', draft: null }) : 'full'}
           onSubmit={async (typed, method, secret) => {
             const username = canonicalUsername(typed);
-            const credential = await vaultCredential(username, method, secret);
+            const credential = await credentialFor(username, method, secret);
             if (!credential) return wrongSecret(method, true);
-            const result = await api<SignedIn>('POST', 'login', { username, method, proof: credential.proof });
+            const result = await logIn(username, credential);
             if (!result.ok) return result.error === 'wrong-login' ? wrongSecret(method, true) : describeFailure(result);
             return open(result.data, credential);
           }}
@@ -155,8 +148,9 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
       return (
         <SignInScreen
           account={signedIn.session.username}
+          notice={state.notice}
           onSubmit={async (username, method, secret) => {
-            const credential = await vaultCredential(username, method, secret);
+            const credential = await credentialFor(username, method, secret);
             return credential ? open(signedIn, credential) : wrongSecret(method, false);
           }}
           onLogout={() => void logout(signedIn.session.accountId).then((failure) => failure && show({ kind: 'unreachable', message: failure }))}
@@ -171,7 +165,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
           username={session.username}
           onDone={async (username, password) => {
             const next = await wrapWithPassword(session.accountId, vaultKey, await passwordCredential(username, password));
-            const result = await api('PUT', 'vault/password', { method: current.method, proof: current.proof, ...next });
+            const result = await changePassword(current, next);
             if (!result.ok) return describeFailure(result);
             await unlocked(session, vaultKey);
             return null;
@@ -181,10 +175,9 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
     }
     case 'unlocked':
       return children({
-        accountId: state.session.accountId,
-        username: state.session.username,
+        ...state.session,
         vaultKey: state.vaultKey,
-        onLock: () => void lockVault().then(reload),
+        onLock: () => void lockVault().then(() => reload()),
         onLogout: () => logout(state.session.accountId),
       });
   }

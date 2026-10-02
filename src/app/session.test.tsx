@@ -44,7 +44,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   vi.stubGlobal('window', document.defaultView);
   vi.stubGlobal('document', document);
   const root = createRoot(container);
-  const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
+  const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ admin: false, suspended: false, onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
   const displayed = vi.spyOn(display, 'displayChat');
   try {
     await act(() => render('', false));
@@ -96,7 +96,7 @@ it('useWritingChat renders when a reply starts or ends, and not for its chunks',
   vi.stubGlobal('document', document);
   const root = createRoot(container);
   try {
-    await act(() => root.render(<SessionProvider session={{ talk } as Session} account={{ onLock() {}, onLogout: async () => null }}><Probe /></SessionProvider>));
+    await act(() => root.render(<SessionProvider session={{ talk } as Session} account={{ admin: false, suspended: false, onLock() {}, onLogout: async () => null }}><Probe /></SessionProvider>));
     const started: Turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
     await say(started);
     await say({ ...started, text: 'one' });

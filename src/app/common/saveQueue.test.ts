@@ -162,4 +162,15 @@ describe('Saves', () => {
     expect(await note.flush()).toBe(true);
     expect(written).toEqual([]);
   });
+
+  it('writes what waits its pause at once for leaving, and stops waiting at the bound for a save that is not answered', async () => {
+    const saves = new Saves(page().target);
+    const written: Partial<Note>[] = [];
+    saves.queue<Note>('note', async (patch) => (written.push(patch), { ok: true }), () => {}).change({ title: 'a' });
+    expect(await saves.settled(1000)).toBe(true);
+    expect(written).toEqual([{ title: 'a' }]);
+
+    saves.queue<Note>('other', () => new Promise<Answer>(() => {}), () => {}).change({ body: 'x' });
+    expect(await saves.settled(10)).toBe(false);
+  });
 });
