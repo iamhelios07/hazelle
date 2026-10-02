@@ -22,8 +22,14 @@ export function SidePanel({ title, subtitle, top, page, actions, footer, onClose
     // A toast lies over the page too and is no part of it.
     outside: (target) => !panel.current?.contains(target) && !(target instanceof Element ? target : target.parentElement)?.closest('[role="status"], [role="alert"]'),
     // A press closes it once its click is done, and only if the panel is still there: the header button that opened
-    // it closes it by itself, and another panel's button has put its own in this one's place.
-    close: (refocus) => (refocus ? onClose() : document.addEventListener('click', () => panel.current && latest.current(), { once: true })),
+    // it closes it by itself, and another panel's button has put its own in this one's place. A press that ends as a
+    // drag has no click, so the next press starts over instead of finding this one still waiting.
+    close: (refocus) => {
+      if (refocus) return onClose();
+      const done = () => panel.current && latest.current();
+      document.addEventListener('click', done, { once: true });
+      document.addEventListener('pointerdown', () => document.removeEventListener('click', done), { once: true });
+    },
   });
   useLayoutEffect(() => {
     body.current?.scrollTo({ top: 0 });
