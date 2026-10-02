@@ -6,7 +6,7 @@ import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
 import { exportBackup, readBackup, restoreBackup } from './backup';
 import type { Files } from './files';
-import { importCharacter } from './characters';
+import { editCharacter, importCharacter } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
@@ -181,6 +181,20 @@ describe('backup', () => {
     const { store, files } = await open('someone');
     const before = await held(store);
     expect(await restoreBackup(store, files, backup)).toEqual({ ok: false, error: 'not-backup' });
+    expect(await held(store)).toEqual(before);
+  });
+
+  it('refuses to carry on with another backup of the same account, whose ids it shares, and writes nothing', async () => {
+    const old = await oldAccount();
+    const first = await read(await exported(old.store, old.files));
+    await editCharacter(old.store, old.store.list('character')[0]!.id, { name: '다른 루나' });
+    const second = await read(await exported(old.store, old.files));
+
+    await server.wipe();
+    const { store, files } = await open('someone');
+    expect(await restoreBackup(store, files, first)).toEqual({ ok: true, data: { skipped: 0 } });
+    const before = await held(store);
+    expect(await restoreBackup(store, files, second)).toEqual({ ok: false, error: 'not-new' });
     expect(await held(store)).toEqual(before);
   });
 

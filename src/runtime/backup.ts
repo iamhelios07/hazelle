@@ -3,6 +3,7 @@ import { isRecord } from '../connectors/values';
 import { KINDS, isValue, parentKinds, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import { toBase64 } from '../vault/aead';
 import type { FileRef } from '../vault/files';
 import { BackupZip, indexZip, readEntry, unzipEntry, type BackupOutput, type ZipEntry } from './backup-zip';
 import type { Files } from './files';
@@ -174,9 +175,9 @@ async function* readObjects(backup: Backup, signal: AbortSignal) {
 
 // A backup goes only into a new account: one holding nothing but what opening it added, and what this same
 // backup already wrote, so loading the file again after a stop carries on from there.
-// The backup's copies replace what opening added, and what it added that the backup lacks goes,
-// so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by the
-// operator, or too large), which are left out.
+// The backup's copies replace what opening added, whatever it holds now, and what it added that the backup lacks
+// goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
+// the operator, or too large), which are left out.
 export async function restoreBackup(
   store: Pick<ObjectStore, 'scan' | 'batch'>,
   files: Pick<Files, 'save'>,
@@ -192,6 +193,20 @@ export async function restoreBackup(
     });
     if (failure) return failure;
     if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
+    // An id is not enough: another backup of the same account shares ids, and carrying on from its copies would mix
+    // the two. What is there besides what opening added must be this backup's copy, as an earlier load wrote it.
+    const kept = new Set([...present].filter((id) => !SEEDED.has(id)));
+    if (kept.size) {
+      const copies = new Map<string, string>();
+      for await (const { object } of readObjects(backup, signal)) if (kept.has(object.id)) copies.set(object.id, await copyOf(object));
+      let other = false;
+      const failure = await store.scan({}, async (row, value) => {
+        signal.throwIfAborted();
+        if (copies.has(row.id) && copies.get(row.id) !== (await copyOf({ ...row, value }))) other = true;
+      });
+      if (failure) return failure;
+      if (other) return { ok: false, error: 'not-new' };
+    }
     const todo = new Set([...ids].filter((id) => SEEDED.has(id) || !present.has(id)));
     const total = backup.files.size + todo.size;
     let done = 0;
@@ -248,6 +263,11 @@ export async function restoreBackup(
   } catch {
     return { ok: false, error: signal.aborted ? 'stopped' : 'not-backup' };
   }
+}
+
+async function copyOf({ kind, parent, value }: { kind: string; parent: string | null; value: unknown }): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', strToU8(JSON.stringify([kind, parent, value])));
+  return toBase64(new Uint8Array(digest));
 }
 
 function parse(text: string | undefined): unknown {
