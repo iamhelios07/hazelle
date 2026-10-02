@@ -12,6 +12,7 @@ it('does not download Blob parts when an export is stopped', async () => {
   const abort = new AbortController();
   const output = await downloadOutput('backup.zip');
   const result = await exportBackup({
+    pin: async () => ({ ok: true, data: { timeline: 't', epoch: 0 } }),
     scan: async (options, visit) => {
       await visit({ id: 'person', kind: 'persona', parent: null, rev: 1 }, options.metadata ? undefined : { name: '달', description: '', picture: null });
       return null;

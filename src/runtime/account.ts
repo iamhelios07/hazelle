@@ -1,11 +1,13 @@
 import { passwordCredential, recoveryCredential, type Credential, type Method, type VaultRecord } from '../vault/keys';
 import { api, type Heard } from './api';
 
-// What the account holds and the caps that apply to it, null for none. fileBytes: the files it was first to store,
-// which deleting pictures does not lower (server/files).
-export type Storage = { bytes: number; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
-// What the server says about the signed-in account, on GET /session, signup and login alike.
-export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; storage: Storage };
+// What the account holds and the caps that apply to it, null for none. bytes is null while the account is restored or
+// its store does not answer. fileBytes: the files it was first to store, which deleting pictures does not lower
+// (server/files).
+export type Storage = { bytes: number | null; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
+// What the server says about the signed-in account, on GET /session, signup and login alike. state: restoring while the
+// operator restores it, at the account's own request.
+export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: 'active' | 'restoring'; storage: Storage };
 export type SignedIn = { session: SessionFacts; vault: VaultRecord };
 export type Boot = { session: null; signupOpen: boolean } | SignedIn;
 export type Signup = { accountId: string; username: string; passwordProof: string; passwordWrap: string; recoveryProof: string; recoveryWrap: string };
@@ -19,7 +21,8 @@ type Proof = Pick<Credential, 'method' | 'proof'>;
 const proven = ({ method, proof }: Proof) => ({ method, proof });
 
 // full: a write was refused for room and the account has not shrunk since, which another write or sync shows.
-export type Standing = { suspended: boolean; full: boolean; storage: Storage };
+// restoring: the server refused this account's objects while the operator restores it, and no store has answered since.
+export type Standing = { suspended: boolean; full: boolean; restoring: boolean; storage: Storage };
 
 // The open account as the server last described it: the session answer, then whatever later answers say (runtime/api).
 // A cap the operator changes is learned on the next page load.
@@ -27,8 +30,8 @@ export class AccountFacts {
   private now: Standing;
   private readonly listeners = new Set<() => void>();
 
-  constructor({ suspended, storage }: SessionFacts) {
-    this.now = { suspended, full: false, storage };
+  constructor({ suspended, state, storage }: SessionFacts) {
+    this.now = { suspended, full: false, restoring: state === 'restoring', storage };
   }
 
   readonly snapshot = (): Standing => this.now;
@@ -45,8 +48,11 @@ export class AccountFacts {
         return this.set({ ...now, suspended: true });
       case 'storage-full':
         return this.set({ ...now, full: true });
+      case 'restoring':
+        return this.set({ ...now, restoring: true });
+      // Only the account's store states its bytes, and it answers only once the restore is over.
       case 'bytes':
-        return this.set({ ...now, full: now.full && heard.bytes >= now.storage.bytes, storage: { ...now.storage, bytes: heard.bytes } });
+        return this.set({ ...now, restoring: false, full: now.full && now.storage.bytes !== null && heard.bytes >= now.storage.bytes, storage: { ...now.storage, bytes: heard.bytes } });
       case 'file-bytes':
         return this.set({ ...now, storage: { ...now.storage, fileBytes: heard.fileBytes } });
     }

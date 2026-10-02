@@ -16,7 +16,8 @@ export type Toasts = {
   // Something did not happen: message says what, detail why, action where to fix it.
   error: (message: string, extra?: Extra) => void;
   // Why a write failed, in failure.ts's words, led by prefix when it names what did not happen. A full account is
-  // left to its standing notice (shell/Workspace), which says it once.
+  // left to its standing notice (shell/Workspace), which says it once, and a write a restore dropped to the toast that
+  // counts them (shell/Workspace); a prefixed failure, a whole task such as a backup, is still said.
   failed: (failure: ApiFailure, prefix?: string) => void;
   // Deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog; Ctrl+Z does it too.
   // Answers what takes the toast away.
@@ -60,7 +61,7 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       show: (message, extra) => void add(message, 'plain', extra),
       error: (message, extra) => void add(message, 'error', extra),
       failed: (failure, prefix) => {
-        if (failure.error !== 'storage-full') add(prefix ?? describeFailure(failure), 'error', prefix ? { detail: describeFailure(failure) } : {});
+        if (failure.error !== 'storage-full' && (failure.error !== 'timeline-changed' || prefix)) add(prefix ?? describeFailure(failure), 'error', prefix ? { detail: describeFailure(failure) } : {});
       },
       undoable: (message, undo, detail) => add(message, 'plain', { detail, action: { label: '되돌리기', onClick: undo } }, true),
       said: (from, text, tone) => void add(text, tone, { from }),

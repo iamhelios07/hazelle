@@ -36,6 +36,23 @@ describe('SaveQueue', () => {
     expect(saves.status).toBe('saved');
   });
 
+  it('drops a patch a restore dropped, and what was typed meanwhile, without telling a failure', async () => {
+    const failures: unknown[] = [];
+    const writes: { answer: (answer: Answer) => void }[] = [];
+    const saves = new SaveQueue<Note>(() => new Promise((answer) => writes.push({ answer })), (failure) => failures.push(failure));
+    saves.change({ title: 'a' });
+    const first = saves.flush();
+    await settle();
+    saves.change({ body: 'x' });
+    writes[0]!.answer({ ok: false, error: 'timeline-changed' });
+    expect(await first).toBe(false);
+    expect(saves.unsaved).toEqual({});
+    expect(saves.status).toBeNull();
+    expect(failures.filter(Boolean)).toEqual([]);
+    expect(await saves.flush()).toBe(true);
+    expect(writes).toHaveLength(1);
+  });
+
   it('starts the next save only once the one in flight is answered', async () => {
     const { saves, writes } = queue();
     saves.change({ title: 'a' });

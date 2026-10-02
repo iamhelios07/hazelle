@@ -1,21 +1,22 @@
 import { KINDS, parentKinds, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
-import type { ObjectRow, ObjectStore } from './store';
+import type { ObjectRow, ObjectStore, Pin } from './store';
 
 const KIND_NAMES = Object.keys(KINDS) as Kind[];
 
 // The ids of everything that goes when root is removed for good, as rounds to run one after another; the removals
 // in one round may run together. The invariant: an object is removed only after everything it owns, so a removal
 // that fails midway leaves the owner in place and can be tried again. Stored files stay: other objects, in this
-// account or another, may name the same one (runtime/files).
-export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }): Promise<ApiResult<ObjectRow[][]>> {
+// account or another, may name the same one (runtime/files). pin: the removal's, so the plan and the removal are of one
+// timeline.
+export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: string }, pin: Pin): Promise<ApiResult<ObjectRow[][]>> {
   const pulled = await store.pull();
   if (pulled) return pulled;
   const rounds: ObjectRow[][] = [];
   const visit = async (object: ObjectRow): Promise<ApiResult<number>> => {
     const children: ObjectRow[] = [];
     const failed = KIND_NAMES.some((kind) => parentKinds(kind).includes(object.kind as Kind))
-      ? await store.scan({ parent: object.id, metadata: true }, (row) => { children.push(row); })
+      ? await store.scan({ parent: object.id, metadata: true }, (row) => { children.push(row); }, pin)
       : null;
     if (failed) return failed;
     for (const kind of KIND_NAMES) {
@@ -50,9 +51,13 @@ export function ownershipDepth(kind: Kind): number {
   return owners.length === 0 ? 0 : Math.max(...owners.map(ownershipDepth)) + 1;
 }
 
-export async function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
+export function removeOwned(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void): Promise<ApiResult<null>> {
+  return store.pinned((pin) => removeOn(store, root, progress, pin));
+}
+
+async function removeOn(store: ObjectStore, root: { kind: Kind; id: string }, progress: (done: number, total: number) => void, pin: Pin): Promise<ApiResult<null>> {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const plan = await planRemoval(store, root);
+    const plan = await planRemoval(store, root, pin);
     if (!plan.ok) return plan;
     const total = plan.data.reduce((sum, round) => sum + round.length, 0);
     let done = 0;

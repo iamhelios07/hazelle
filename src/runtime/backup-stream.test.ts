@@ -10,6 +10,10 @@ const persona = (id: string, rev: number): Stored<'persona'> => ({ id, rev, kind
 // The server holds every file asked about.
 const missing = async () => ({ ok: true as const, data: new Set<string>() });
 
+// A store whose timeline never changes.
+const PIN = { timeline: 't', epoch: 0 };
+const pins: Pick<ObjectStore, 'pin' | 'pinned'> = { pin: async () => ({ ok: true, data: PIN }), pinned: (run) => run(PIN) };
+
 function destination() {
   const parts: BlobPart[] = [];
   const output: BackupOutput = {
@@ -23,7 +27,8 @@ function destination() {
 function store(objects: Stored<Kind>[] = []) {
   const held = new Map(objects.map((object) => [object.id, object]));
   const written: string[] = [];
-  const api: Pick<ObjectStore, 'scan' | 'batch'> = {
+  const api: Pick<ObjectStore, 'scan' | 'batch' | 'pin' | 'pinned'> = {
+    ...pins,
     scan: async (options, visit) => {
       for (const { value, ...row } of [...held.values()].sort((a, b) => a.rev - b.rev)) await visit(row, options.metadata ? undefined : value);
       return null;
@@ -129,7 +134,7 @@ it('serializes each decrypted body before releasing it and backpressures a slow 
     }
     return null;
   };
-  expect(await exportBackup({ scan }, { read: vi.fn(), missing }, output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
+  expect(await exportBackup({ ...pins, scan }, { read: vi.fn(), missing }, output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
   expect(decrypted).toBe(count);
   expect(written).toBeGreaterThan(1);
   expect(streamed).toBe(true);

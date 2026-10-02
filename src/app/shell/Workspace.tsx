@@ -7,7 +7,7 @@ import { describeFailure } from '../common/failure';
 import { inSettings } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
-import { ToastProvider, type Standing } from '../toast';
+import { ToastProvider, useToast, type Standing } from '../toast';
 import { Brand, Screen, Text } from '../ui';
 import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
@@ -19,8 +19,18 @@ const SUSPENDED: Standing = {
 };
 // Said once, and standing until the account shrinks: each refused write saying it again would be a stream of toasts.
 const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: '새로 만든 것은 저장되지 않아요. 채팅을 지우거나 지운 캐릭터를 완전히 지우면 자리가 생겨요.' };
+// Ahead of 연결이 불안정해요: writes wait out a restore as they wait out a dropped connection.
+const RESTORING: Standing = { message: '계정을 복원하는 중이에요', detail: '' };
 const subscribeNothing = () => () => {};
 const notWaiting = () => false;
+
+// Said once each time the store hears the account was restored: what the tab shows was loaded again, and the writes
+// the restore dropped are counted.
+function Restored({ store }: { store: Session['store'] }) {
+  const toast = useToast();
+  useEffect(() => store.subscribeRewound((dropped) => toast.show('계정을 복원해서 다시 불러왔어요', dropped ? { detail: `방금 바꾼 내용 ${dropped}개는 저장되지 않았어요` } : {})), [store, toast]);
+  return null;
+}
 
 // Everything behind an open vault is one session, opened before the first screen and closed when this unmounts,
 // which 잠그기 and 로그아웃 both do.
@@ -33,8 +43,8 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   // The notice alone, not the facts, so the counts every write brings render nothing here.
   const { facts } = account;
   const noticeOf = () => {
-    const { suspended, full } = facts.snapshot();
-    return suspended ? SUSPENDED : full ? FULL : null;
+    const { restoring, suspended, full } = facts.snapshot();
+    return restoring ? RESTORING : suspended ? SUSPENDED : full ? FULL : null;
   };
   const notice = useSyncExternalStore(facts.subscribe, noticeOf, noticeOf);
 
@@ -71,7 +81,8 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
   );
   return (
     <SessionProvider session={session} account={account}>
-      <ToastProvider standing={waiting ? RECONNECTING : notice}>
+      <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
+        <Restored store={session.store} />
         <BotNotes />
         <ImportProvider>
           <Layout />

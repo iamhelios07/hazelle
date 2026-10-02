@@ -5,11 +5,17 @@ export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
 
 // What an answer says of the account the page holds rather than of the request: that the cookie has come to name
 // another account (elsewhere, told once), that the operator suspended it, that a write was refused for room, or the
-// account's counts after a write or a sync. The header names are the server's USE_HEADERS (server/caps).
-export type Heard = { kind: 'elsewhere' } | { kind: 'suspended' } | { kind: 'storage-full' } | { kind: 'bytes'; bytes: number } | { kind: 'file-bytes'; fileBytes: number };
+// account's counts after a write or a sync, or that the operator is restoring it. The header names are the server's
+// USE_HEADERS (server/caps).
+export type Heard = { kind: 'elsewhere' } | { kind: 'suspended' } | { kind: 'storage-full' } | { kind: 'restoring' } | { kind: 'bytes'; bytes: number } | { kind: 'file-bytes'; fileBytes: number };
 
 const COUNTS = { bytes: 'x-account-bytes', fileBytes: 'x-account-file-bytes' } as const;
-const REFUSALS: Record<string, 'elsewhere' | 'suspended' | 'storage-full'> = { 'account-mismatch': 'elsewhere', suspended: 'suspended', 'storage-full': 'storage-full' };
+const REFUSALS: Record<string, 'elsewhere' | 'suspended' | 'storage-full' | 'restoring'> = {
+  'account-mismatch': 'elsewhere',
+  suspended: 'suspended',
+  'storage-full': 'storage-full',
+  'account-restoring': 'restoring',
+};
 
 // The account this page is open as. Every request states it, and the server refuses one whose cookie has come to name
 // another account, as it does once another tab signs in as someone else (server/session).
@@ -32,7 +38,7 @@ export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> 
   if (bytes !== null) tell({ kind: 'bytes', bytes: Number(bytes) });
   if (fileBytes !== null) tell({ kind: 'file-bytes', fileBytes: Number(fileBytes) });
   // A provider's refusal comes through the relay marked x-relay, and its body is the provider's to read.
-  if ((response.status === 403 || response.status === 409 || response.status === 413) && !response.headers.has('x-relay')) {
+  if ((response.status === 403 || response.status === 409 || response.status === 413 || response.status === 503) && !response.headers.has('x-relay')) {
     const body: unknown = await response.clone().json().catch(() => null);
     const kind = isRecord(body) && typeof body.error === 'string' ? REFUSALS[body.error] : undefined;
     if (kind === 'elsewhere') hear = null;

@@ -31,8 +31,13 @@ export const modulesFromRisu = (store: ObjectStore): Map<string, string> => new 
 // failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is sound
 // because each one lands whole: its chats go in its own batch (runtime/characters addCharacter). So is a module: its
 // 항상 is written before it, under the id it is then saved at, so a move cut between the two leaves only an id that
-// names nothing, which reads as off, and the next run brings the module again.
-export async function moveFromRisu(store: ObjectStore, files: Files, { characters, personas, presets, modules, alwaysModules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+// names nothing, which reads as off, and the next run brings the module again. Every write is of the timeline the move
+// began on: an account restored meanwhile stops it.
+export function moveFromRisu(store: ObjectStore, files: Files, pick: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+  return store.pinned(() => move(store, files, pick, progress));
+}
+
+async function move(store: ObjectStore, files: Files, { characters, personas, presets, modules, alwaysModules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
   const personaIds = new Map<string, string>();
   for (const [done, persona] of personas.entries()) {
     progress({ kind: 'personas', done, total: personas.length });

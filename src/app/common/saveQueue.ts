@@ -97,8 +97,15 @@ export class SaveQueue<T extends object> {
     this.changed();
     const saved = await this.write(patch);
     this.writing = null;
+    // A failed patch is kept for the next flush to try again, under anything typed since, unless a restore dropped it:
+    // then what was typed since goes too, since each patch carries a whole field typed over the old timeline's value.
+    if (!saved.ok && saved.error === 'timeline-changed') {
+      this.pending = {};
+      this.last = null;
+      this.changed();
+      return false;
+    }
     this.last = saved.ok ? 'saved' : 'failed';
-    // Kept for the next flush to try again, under anything typed since.
     if (!saved.ok && !this.ended) this.pending = { ...patch, ...this.pending };
     this.changed(saved.ok ? undefined : saved);
     return saved.ok;
