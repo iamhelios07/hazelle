@@ -1,0 +1,50 @@
+import { readLog, type LogRow } from '../../runtime/admin';
+import { ago } from '../common/time';
+import { Button, Callout, Empty, List, ListItem, Section } from '../ui';
+import { megabytes } from './bytes';
+import { usePages } from './useLoaded';
+
+// The actions server/admin logs. One it does not list shows as the server wrote it.
+const ACTIONS: Record<string, string> = {
+  suspend: '정지',
+  lift: '정지 풀기',
+  'delete-account': '계정 지우기',
+  'set-service': '서비스 설정',
+  'resolve-report': '알림 확인',
+  'block-file': '파일 차단',
+  'unblock-file': '파일 차단 풀기',
+};
+
+function detailOf({ action, detail }: LogRow): string | undefined {
+  if (detail === null) return undefined;
+  const values = detail as Record<string, unknown>;
+  if (typeof values.username === 'string') return values.username;
+  if (action === 'set-service' && typeof values.signupCap === 'number') {
+    const cap = values.accountBytesCap;
+    return `가입 정원 ${values.signupCap}명 · 계정당 저장 한도 ${typeof cap === 'number' ? megabytes(cap) : '없음'}`;
+  }
+  return JSON.stringify(detail);
+}
+
+export function LogSection() {
+  const pages = usePages(readLog);
+  const { rows } = pages;
+  return (
+    <Section title="기록">
+      {pages.failure && <Callout tone="warn">{pages.failure}</Callout>}
+      {rows && rows.length === 0 && <Empty variant="section">아직 한 일이 없어요.</Empty>}
+      {rows && rows.length > 0 && (
+        <List label="기록">
+          {rows.map((row) => (
+            <ListItem key={row.id} title={ACTIONS[row.action] ?? row.action} code={row.target} description={detailOf(row)} aside={ago(row.at)} />
+          ))}
+        </List>
+      )}
+      {pages.more && (
+        <Button variant="ghost" size="sm" busy={pages.busy} onClick={pages.older}>
+          더 보기
+        </Button>
+      )}
+    </Section>
+  );
+}

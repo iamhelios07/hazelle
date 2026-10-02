@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
+import { AdminScreen } from '../admin/AdminScreen';
 import { ChatScreen, type SideAt } from '../chat/ChatScreen';
 import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
@@ -24,7 +25,7 @@ import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
-import { useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
+import { useAccount, useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
@@ -56,6 +57,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const profiles = useProfiles();
   const modules = useModules();
   const { pick } = useImport();
+  const { admin } = useAccount();
   const chatModel = useChatModel(route.kind === 'chat' ? route.id : null);
   const wide = useWide();
   const split = useSplit();
@@ -91,7 +93,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         if (at.character === null) return <CharacterScreen key="none" shelf={null} back={sideBack(at)} />;
         return withCharacter(at, at.character, (shelf) => <CharacterScreen key={shelf.id} shelf={shelf} back={sideBack(at)} />);
       case 'edit':
-        return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} initial={shelf.character} back={back(at)} />);
+        return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} character={shelf.character} back={back(at)} />);
       case 'new-chat':
         if (at.character === null) return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={null} back={sideBack(at)} side={side} />;
         return withCharacter(at, at.character, (shelf) => <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
@@ -160,6 +162,9 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <AccountScreen back={sideBack(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
+      // Its path can be typed by anyone; the server refuses every call but the operator's.
+      case 'admin':
+        return admin ? <AdminScreen back={sideBack(at)} /> : <SettingsList onClose={closeSettings} />;
     }
   }
 

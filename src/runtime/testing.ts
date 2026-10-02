@@ -162,6 +162,14 @@ export function testServer() {
         opened.data.close();
       }
     },
+    // The password proof account() signs up with, for what asks for the password again, such as 탈퇴.
+    passwordProof: { method: 'password', proof: signupBody().passwordProof } as const,
+    // An account the Worker names as its operator.
+    async operator() {
+      const opened = await harness.account();
+      app.env.ADMIN_ACCOUNT = opened.accountId;
+      return opened;
+    },
   };
   return harness;
 }
