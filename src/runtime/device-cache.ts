@@ -142,7 +142,13 @@ function database(): Promise<IDBDatabase> {
       }
       req.result.createObjectStore('generations');
     };
-    req.onsuccess = () => resolve(req.result);
+    // A tab of an older version holding the database open blocks the upgrade: this tab goes on without the cache rather
+    // than wait, and this version lets go of it for a newer one.
+    req.onblocked = () => reject(new Error('An older tab holds the cache open'));
+    req.onsuccess = () => {
+      req.result.onversionchange = () => req.result.close();
+      resolve(req.result);
+    };
     req.onerror = () => reject(req.error);
   });
   return opened;
