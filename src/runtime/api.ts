@@ -13,6 +13,21 @@ export function holdAccount(account: string | null, onLost: (() => void) | null 
   lost = onLost;
 }
 
+// Every request to this app's server leaves through here (api, and runtime/relay's raw ones), so each states the
+// account and every refusal for naming another reaches onLost.
+export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {}): Promise<Response> {
+  const response = await fetch(`/api/${path}`, { ...init, headers: { ...(held === null ? {} : { 'x-account': held }), ...init.headers } });
+  if (response.status === 409) {
+    const body: unknown = await response.clone().json().catch(() => null);
+    if (isRecord(body) && body.error === 'account-mismatch') {
+      const tell = lost;
+      lost = null;
+      tell?.();
+    }
+  }
+  return response;
+}
+
 // A Uint8Array body goes out as bytes, and a byte answer comes back as a Uint8Array; everything else
 // is JSON. 'offline' means no whole answer came: the request never reached the server, or the connection
 // dropped while its answer was being read. 'server-error' means it answered without the JSON error shape
@@ -22,13 +37,10 @@ export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   let response: Response;
   let answer: Uint8Array | string;
   try {
-    response = await fetch(`/api/${path}`, {
+    response = await fetchApi(path, {
       method,
       signal,
-      headers: {
-        ...(held === null ? {} : { 'x-account': held }),
-        ...(method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' }),
-      },
+      headers: method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' },
       body: body === undefined ? undefined : (bytes ?? JSON.stringify(body)),
     });
     if (response.status === 204) return { ok: true, data: undefined as T };
@@ -41,11 +53,6 @@ export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   const data = typeof answer === 'string' ? parse(answer) : answer;
   if (response.ok && data !== null) return { ok: true, data: data as T };
   if (isRecord(data) && typeof data.error === 'string') {
-    if (data.error === 'account-mismatch') {
-      const tell = lost;
-      lost = null;
-      tell?.();
-    }
     const retryAfter = typeof data.retryAfter === 'number' ? data.retryAfter : undefined;
     return { ok: false, error: data.error, retryAfter };
   }

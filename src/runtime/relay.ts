@@ -2,6 +2,7 @@ import { providerMessage } from '../connectors/errors';
 import { isRecord } from '../connectors/values';
 import type { HttpRequest } from '../connectors/types';
 import { streamOpener } from '../vault/streams';
+import { fetchApi } from './api';
 
 // Whose refusal it was decides what the user is told: the provider's answer, the relay's
 // own refusal (X-Relay: error), the app's (no X-Relay header, such as an expired session), or no
@@ -21,7 +22,7 @@ const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 
 async function send(request: HttpRequest, signal?: AbortSignal): Promise<Response | RelayFailure> {
   let response: Response;
   try {
-    response = await fetch('/api/relay', {
+    response = await fetchApi('relay', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(request),
@@ -88,8 +89,8 @@ export type StreamCall = { id: string; key: JsonWebKey; public?: string; took?: 
 export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal): Promise<Response | RelayFailure> {
   let response: Response;
   try {
-    response = await fetch(
-      `/api/streams/${call.id}`,
+    response = await fetchApi(
+      `streams/${call.id}`,
       request ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request }), signal } : { signal },
     );
   } catch {
@@ -100,10 +101,10 @@ export async function stream(call: StreamCall, request: HttpRequest | null, sign
 }
 
 // 멈추기: the call ends and the server keeps what came. A refused stop leaves the call running until it is dropped.
-export const stopStream = (id: string) => void fetch(`/api/streams/${id}/stop`, { method: 'POST', headers: { 'content-type': 'application/json' } }).catch(() => {});
+export const stopStream = (id: string) => void fetchApi(`streams/${id}/stop`, { method: 'POST', headers: { 'content-type': 'application/json' } }).catch(() => {});
 
 // Once the call's result is saved. A refused drop leaves the server's copy until it expires on its own.
-export const dropStream = (id: string) => void fetch(`/api/streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
+export const dropStream = (id: string) => void fetchApi(`streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
 
 // Frame types and layout as server/stream-box writes them.
 const HEAD = 1;
@@ -163,7 +164,7 @@ async function* framesOf(id: string, first: ReadableStream<Uint8Array>, signal: 
       if (signal.aborted || tries >= RECONNECTS) throw error;
     }
     await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** tries));
-    const again = await fetch(`/api/streams/${id}?from=${next}`, { signal }).catch(() => null);
+    const again = await fetchApi(`streams/${id}?from=${next}`, { signal }).catch(() => null);
     if (again?.headers.get('x-stream') === 'frames' && again.body) body = again.body;
     else if (again) return;
   }
