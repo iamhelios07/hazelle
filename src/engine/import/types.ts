@@ -28,7 +28,7 @@ export type Card = {
 // A chat reads its packs as one list (runtime/turn packsOf), never a card's or a module's apart.
 export type Pack = {
   regex: RegexScript[];
-  // The triggers that do something. Lua runs (runtime/scripts); block triggers are kept until they do.
+  // The triggers that do something, in Risu's order, which is the order a run walks them in (runtime/scripts).
   triggers: Trigger[];
   // Risu's backgroundHTML, absent when there is none. Only its <style> blocks are shown (design §6.4).
   background?: string;
@@ -36,8 +36,8 @@ export type Pack = {
 };
 
 // name is Risu's comment. Risu runs a Lua trigger at every event, whatever its trigger type, so a Lua one keeps no
-// `on`. A block trigger keeps Risu's type, conditions and effects verbatim: they are the bot's behavior, like its regex
-// sources, until trigger support gives them a model of their own.
+// `on`. A block trigger keeps Risu's type, conditions and effects verbatim, like a regex's source: engine/lua/blocks
+// reads them as it runs, so an effect it learns to run later needs no new import.
 export type Trigger = { kind: 'lua'; name: string; code: string } | { kind: 'blocks'; name: string; on: string; conditions: unknown[]; effects: unknown[] };
 
 // flags: the custom flag string, <…> meta blocks included; null runs the default `g`.

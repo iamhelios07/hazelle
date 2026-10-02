@@ -23,7 +23,7 @@ import {
 } from '../../runtime/chat-log';
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
-import { scriptsOf } from '../../runtime/scripts';
+import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
@@ -71,7 +71,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const persona = chatPersona(store, chat);
   const toggles = toggleRows(togglesOf(store, chat, prompt), prompt.kind === 'prompt' ? prompt.prompt.value.toggles.length : 0);
   const card = shelf?.character.card ?? null;
-  const lua = scriptsOf(packsOf(store, chat).map(({ pack }) => pack)).length > 0;
+  // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
+  const scripted = triggersOf(packsOf(store, chat).map(({ pack }) => pack)).length > 0;
   const [greeting, setGreeting] = useState(0);
   const [openedAt] = useState(() => Date.now());
   // A blank greeting keeps its place in the card, but a chat never opens on nothing.
@@ -214,7 +215,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // save would be refused.
   const saving = useRef<Promise<ApiFailure | null> | null>(null);
   async function press(button: BotButton | null) {
-    if (!lua) return toast.show('봇의 버튼은 아직 동작하지 않아요.');
+    const unanswered = () => toast.show('이 버튼에는 이어진 동작이 없어요.');
+    if (!scripted) return unanswered();
     if (button === null) return;
     // A script runs over a saved chat only, so a press on a new chat's greeting saves it first.
     if (id === null) {
@@ -227,7 +229,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       const unstarted = await saving.current;
       if (unstarted) return toast.failed(unstarted);
     }
-    if (!(await session.scripts.press(chatId, button))) toast.show('이 버튼은 아직 동작하지 않아요.');
+    if (!(await session.scripts.press(chatId, button))) unanswered();
   }
 
   function ask(target: Target) {
@@ -401,7 +403,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
-    decor: { bot, css: bot ? resolveAssets(css, url) : '', url, buttons: lua ? ('live' as const) : ('inert' as const) },
+    decor: { bot, css: bot ? resolveAssets(css, url) : '', url, buttons: scripted ? ('live' as const) : ('inert' as const) },
     status,
     hosted,
     offered,

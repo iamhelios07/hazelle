@@ -1,11 +1,13 @@
-import type { DisplayItem, Displayed, Event, Host, Lua, Outcome, Script, Snapshot } from '../../engine/lua/run';
+import type { Trigger } from '../../engine/import/types';
+import type { DisplayItem, Displayed, Event, Lua, Outcome, Script } from '../../engine/lua/run';
+import type { Host, Snapshot } from '../../engine/lua/state';
 import workerUrl from './worker?worker&url';
 
 // What the runtime asks of the bot scripts' machines: the engine itself in tests, a worker in the browser.
 export type Runner = Pick<Lua, 'run' | 'display' | 'drop'>;
 
 export type Down =
-  | { kind: 'run'; id: number; owner: string; scripts: Script[]; snapshot: Snapshot; event: Event }
+  | { kind: 'run'; id: number; owner: string; triggers: Trigger[]; snapshot: Snapshot; event: Event }
   | { kind: 'display'; id: number; owner: string; scripts: Script[]; snapshot: Snapshot; items: DisplayItem[] }
   | { kind: 'drop'; owner: string }
   | { kind: 'answer'; call: number; value: unknown }
@@ -17,6 +19,7 @@ export type Up =
   | { kind: 'ask'; id: number; call: number; args: Parameters<Host['ask']> }
   | { kind: 'model'; id: number; call: number; args: Parameters<Host['model']> }
   | { kind: 'tokens'; id: number; call: number; args: Parameters<Host['tokens']> }
+  | { kind: 'cbs'; id: number; call: number; args: Parameters<Host['cbs']> }
   | { kind: 'pong' };
 
 const BEAT_MS = 1000;
@@ -44,8 +47,8 @@ export class LuaWorker implements Runner {
   private beat: ReturnType<typeof setInterval> | null = null;
   private pinged: number | null = null;
 
-  run(owner: string, scripts: Script[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
-    return this.send((id) => ({ kind: 'run', id, owner, scripts, snapshot, event }), host) as Promise<Outcome>;
+  run(owner: string, triggers: Trigger[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
+    return this.send((id) => ({ kind: 'run', id, owner, triggers, snapshot, event }), host) as Promise<Outcome>;
   }
 
   display(owner: string, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<Displayed> {
@@ -91,7 +94,7 @@ export class LuaWorker implements Runner {
     }
     if (!run.host) return;
     if (message.kind === 'say') return run.host.say(...message.args);
-    const answering: Promise<unknown> = message.kind === 'ask' ? run.host.ask(...message.args) : message.kind === 'model' ? run.host.model(...message.args) : run.host.tokens(...message.args);
+    const answering: Promise<unknown> = message.kind === 'ask' ? run.host.ask(...message.args) : message.kind === 'model' ? run.host.model(...message.args) : message.kind === 'cbs' ? run.host.cbs(...message.args) : run.host.tokens(...message.args);
     const worker = this.worker;
     void answering.then((value) => worker?.postMessage({ kind: 'answer', call: message.call, value } satisfies Down));
   }

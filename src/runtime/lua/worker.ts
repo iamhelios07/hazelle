@@ -1,5 +1,6 @@
 import wasm from 'wasmoon/dist/glue.wasm?url';
-import { Lua, type Displayed, type Host, type Outcome } from '../../engine/lua/run';
+import { Lua, type Displayed, type Outcome } from '../../engine/lua/run';
+import type { Host } from '../../engine/lua/state';
 import type { Down, Up } from './client';
 
 const scope = self as unknown as { postMessage(message: Up): void };
@@ -19,6 +20,7 @@ const host = (id: number): Host => {
     ask: (...args) => asked((call) => ({ kind: 'ask', id, call, args })),
     model: (...args) => asked((call) => ({ kind: 'model', id, call, args })),
     tokens: (...args) => asked((call) => ({ kind: 'tokens', id, call, args })),
+    cbs: (...args) => asked((call) => ({ kind: 'cbs', id, call, args })),
   };
 };
 
@@ -33,7 +35,7 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
   if (data.kind === 'drop') return void lua.then((machine) => machine.drop(data.owner));
   const { id } = data;
   lua
-    .then<Outcome | Displayed>((machine) => (data.kind === 'run' ? machine.run(data.owner, data.scripts, data.snapshot, data.event, host(id)) : machine.display(data.owner, data.scripts, data.snapshot, data.items)))
+    .then<Outcome | Displayed>((machine) => (data.kind === 'run' ? machine.run(data.owner, data.triggers, data.snapshot, data.event, host(id)) : machine.display(data.owner, data.scripts, data.snapshot, data.items)))
     .then(
       (result) => scope.postMessage({ kind: 'done', id, result }),
       (error: unknown) => scope.postMessage({ kind: 'failed', id, message: String(error) }),

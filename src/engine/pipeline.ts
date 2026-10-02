@@ -428,7 +428,7 @@ function describe(card: Card | null): string[] {
   ];
 }
 
-export type Unused = { kind: 'bias' | 'utility' | 'trigger'; count: number };
+export type Unused = { kind: 'bias' | 'utility'; count: number };
 
 // What the character brought that its chats do not use yet, so they can say so instead of quietly behaving unlike
 // the bot.
@@ -436,7 +436,6 @@ export function unused(card: Card): Unused[] {
   const found: Unused[] = [
     { kind: 'bias', count: card.bias.length },
     { kind: 'utility', count: card.utility ? 1 : 0 },
-    { kind: 'trigger', count: card.triggers.filter((trigger) => trigger.kind === 'blocks').length },
   ];
   return found.filter((item) => item.count > 0);
 }
