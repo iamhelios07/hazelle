@@ -83,6 +83,15 @@ describe('moveFromRisu', () => {
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
   });
 
+  it('writes what was talked in last last, so the lists open on it', async () => {
+    const { store, files } = await server.account();
+    const chatAt = (title: string, at: number) => ({ ...luna.chats[0]!, title, messages: [{ role: 'user' as const, text: title, at }] });
+    const recent = { ...luna, id: 'risu-recent', chats: [chatAt('어제', 20), chatAt('작년', 5)] };
+    const old = { ...luna, id: 'risu-old', chats: [chatAt('옛날', 1)] };
+    await moveFromRisu(store, files, { characters: [recent, old], personas: [], presets: [], modules: [], alwaysModules: [] }, () => {});
+    expect(store.list('chat').sort((a, b) => a.rev - b.rev).map(({ value }) => value.title)).toEqual(['옛날', '작년', '어제']);
+  });
+
   it('brings a module before the character it is on for, on where Risu had it on, and a second run brings neither again nor turns 항상 back on', async () => {
     const { store, files } = await server.account();
     const pick: MovePick = { characters: [{ ...luna, modules: ['risu-bell', 'risu-gone'] }], personas: [], presets: [], modules: [bell], alwaysModules: ['risu-bell', 'risu-gone'] };

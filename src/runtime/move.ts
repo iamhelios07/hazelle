@@ -69,7 +69,9 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
   }
 
   const brought = broughtFromRisu(store);
-  const due = characters.filter(({ id }) => !brought.has(id));
+  // Chats and characters are listed by the server's rev, the latest first, and a batch takes its revs in the order
+  // written. So what was talked in last is written last, whatever order Risu kept it in.
+  const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => Math.max(0, ...a.chats.map(lastTalk)) - Math.max(0, ...b.chats.map(lastTalk)));
   const chatTotal = due.reduce((sum, { chats }) => sum + chats.length, 0);
   let chatsDone = 0;
   const moved: MovedCharacter[] = [];
@@ -83,7 +85,7 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
     // Moved chats start with long-term memory off: on, opening a long one would summarize its whole past at once (user,
     // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
     const memory = { ...defaultMemory(store), on: false };
-    const chats = character.chats.flatMap((chat) => chatOf(id, character.card, chat, personaIds, memory));
+    const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).flatMap((chat) => chatOf(id, character.card, chat, personaIds, memory));
     const saved = await importCharacter(store, files, character, avatar && thumb ? { ...avatar, thumb } : null, () => {}, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats });
     if (!saved.ok) return saved;
     chatsDone += character.chats.length;
@@ -93,6 +95,8 @@ export async function moveFromRisu(store: ObjectStore, files: Files, { character
   }
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
 }
+
+const lastTalk = (chat: RisuChat) => chat.messages.at(-1)?.at ?? 0;
 
 async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<string>> {
   const held = store.list('folder').find(({ value }) => value.parent === undefined && value.name === name);
