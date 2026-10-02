@@ -50,6 +50,14 @@ describe('fold', () => {
     expect(shown(fold(entries)[0]!).text).toBe('하나 고침');
   });
 
+  it('leads a version replaced more than once to the one standing in its place, for a device that still shows the first', () => {
+    const twice = [user('m1', 'v0'), version('v1', 'm1', 'v1', 'm1'), version('v2', 'm1', 'v2', 'v1'), version('other', 'm1', 'other')];
+    const selected = fold([...twice, entry('s1', { type: 'select', message: 'm1', version: 'm1', at: 0 })])[0]!;
+    expect([selected.versions.map(({ text }) => text), selected.selected]).toEqual([['v2', 'other'], 0]);
+    const edited = fold([...twice, version('v3', 'm1', 'v3', 'm1')])[0]!;
+    expect([edited.versions.map(({ text }) => text), edited.selected]).toEqual([['v3', 'other'], 0]);
+  });
+
   it('keeps a text past the scripts staged through its edit, never through a retry or a new version', () => {
     const edit = (id: string, replaces: string) => entry(id, { type: 'version', message: 'b1', replaces, edit: true, at: rev, text: '고침', receipt: null });
     const entries = [entry('b1', { type: 'message', role: 'assistant', at: rev, text: '하나', receipt: null, staged: true }), edit('e1', 'b1'), version('v2', 'b1', '둘'), edit('e2', 'v2')];

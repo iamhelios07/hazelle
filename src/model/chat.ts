@@ -142,10 +142,11 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
 export function fold(entries: Stored<'entry'>[]): Message[] {
   const messages = new Map<string, Message>();
   const deleted = new Set<string>();
-  // A replaced version's id keeps leading to the version that took its place.
-  const versions = new Map<string, Version>();
   // By a version's own id only: a translation of a replaced version is not its replacement's.
   const own = new Map<string, Version>();
+  // A version's place among its message's versions, by its id. A place never moves, so a replaced version's id keeps
+  // leading to whichever version stands there now, however many times it was replaced since.
+  const places = new Map<string, number>();
   // By a version's own id and those of the versions it is an edit of, and those ids by the version.
   const edits = new Map<string, Version>();
   const ids = new Map<Version, string[]>();
@@ -156,15 +157,15 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
   };
   const costs = new Map<string, Cost | null>();
   const locate = (message: Message, id: string) => {
-    const version = versions.get(id);
-    return version ? message.versions.indexOf(version) : -1;
+    const version = own.get(id);
+    return version && home.get(version) === message ? places.get(id)! : -1;
   };
 
   for (const { id, value: entry } of [...entries].sort((a, b) => a.rev - b.rev)) {
     if (entry.type === 'message') {
       const version = versionOf(id, entry, false, entry.staged === true);
-      versions.set(id, version);
       own.set(id, version);
+      places.set(id, 0);
       stand(id, version);
       const message: Message = { id, role: entry.role, at: entry.at, versions: [version], selected: 0 };
       messages.set(id, message);
@@ -208,9 +209,8 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
       stand(id, version, edited && ids.get(edited));
       if (slot === -1) message.versions.push(version);
       else message.versions[slot] = version;
-      versions.set(id, version);
-      if (entry.replaces !== null && slot !== -1) versions.set(entry.replaces, version);
       message.selected = slot === -1 ? message.versions.length - 1 : slot;
+      places.set(id, message.selected);
     } else if (entry.type === 'select') {
       const slot = locate(message, entry.version);
       if (slot !== -1) message.selected = slot;
