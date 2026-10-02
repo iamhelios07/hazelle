@@ -23,4 +23,11 @@ describe('chatWarning', () => {
     expect(chatWarning([chat(2, null)])).toBe('앞부분이(가) 어느 ‘채팅’ 자리에도 들어가지 않아요.');
     expect(chatWarning([chat(0, 3)])).toBe('뒷부분이(가) 어느 ‘채팅’ 자리에도 들어가지 않아요.');
   });
+
+  it('reads ranges whose ends are far past any chat', () => {
+    const far = 2147483647;
+    expect(chatWarning([chat(0, -far), chat(-far, null)])).toBeNull();
+    expect(chatWarning([chat(far, null)])).toBe('앞부분이(가) 어느 ‘채팅’ 자리에도 들어가지 않아요.');
+    expect(chatWarning([chat(0, far), chat(-far, null)])).toBe('중간 메시지이(가) 어느 ‘채팅’ 자리에도 들어가지 않아요.');
+  });
 });

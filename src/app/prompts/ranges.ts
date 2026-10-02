@@ -14,23 +14,20 @@ export function chatWarning(blocks: readonly Block[]): string | null {
   if (ranges.length === 0) return '‘채팅’ 자리가 없어서 주고받은 메시지가 하나도 들어가지 않아요.';
   const reach = Math.max(...ranges.flatMap(({ from, to }) => [Math.abs(from), Math.abs(to ?? 0)]));
   const length = 2 * reach + 2;
-  const sent = new Array<number>(length).fill(0);
-  for (const range of ranges) {
-    const [start, end] = span(range, length);
-    for (let index = start; index < end; index++) sent[index]! += 1;
-  }
-  if (sent.some((times) => times > 1)) return '같은 메시지가 두 번 들어가요. ‘채팅’ 자리들의 범위가 겹쳐요.';
+  // Read span by span, never message by message: a range's ends are any integers, so the chat it is read on has no
+  // size a list could take.
+  const spans = ranges
+    .map((range) => span(range, length))
+    .filter(([start, end]) => start < end)
+    .sort((a, b) => a[0] - b[0]);
   const missed: string[] = [];
-  let index = 0;
-  while (index < length) {
-    if (sent[index]) {
-      index += 1;
-      continue;
-    }
-    const start = index;
-    while (index < length && !sent[index]) index += 1;
-    missed.push(describeRun(start, index - 1, length, reach));
+  let next = 0;
+  for (const [start, end] of spans) {
+    if (start < next) return '같은 메시지가 두 번 들어가요. ‘채팅’ 자리들의 범위가 겹쳐요.';
+    if (start > next) missed.push(describeRun(next, start - 1, length, reach));
+    next = end;
   }
+  if (next < length) missed.push(describeRun(next, length - 1, length, reach));
   return missed.length ? `${missed.join(', ')}이(가) 어느 ‘채팅’ 자리에도 들어가지 않아요.` : null;
 }
 
