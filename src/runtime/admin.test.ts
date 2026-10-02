@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
-import { loadSession, sendReport } from './account';
-import { beginRestore, continueRestore, readAccounts, readLog, readReports, readRestores, readService, removeAccount, resolveReport, setService, setSuspended, type Restore } from './admin';
+import { loadSession, markNoticesSeen, readNotices, sendReport } from './account';
+import { beginRestore, continueRestore, readAccounts, readLog, readReports, readRestores, readService, removeAccount, resolveReport, sendNotice, setService, setSuspended, type Restore } from './admin';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -22,6 +22,22 @@ it('sets the service, suspends an account and resolves its report, each read bac
   const log = await readLog(null);
   expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['resolve-report', 'suspend', 'set-service']);
   expect(log.ok && log.data.more).toBe(false);
+});
+
+it('sends notices with a reply, a reason and to everyone, which the account reads newest first, counted unread until seen', async () => {
+  const { accountId } = await server.operator();
+  await sendReport('도와주세요');
+  const reports = await readReports(null);
+  const report = reports.ok ? reports.data.rows[0]!.id : 0;
+  expect(await resolveReport(report, '고쳤어요')).toMatchObject({ ok: true });
+  expect(await setSuspended(accountId, true, '잠시 멈춰요')).toMatchObject({ ok: true });
+  expect(await sendNotice(null, '점검해요')).toMatchObject({ ok: true });
+
+  expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 3 } } });
+  const notices = await readNotices(null);
+  expect(notices).toMatchObject({ ok: true, data: { rows: [{ text: '점검해요' }, { text: '잠시 멈춰요', reportId: null }, { text: '고쳤어요', reportId: report }], more: false } });
+  expect(await markNoticesSeen(notices.ok ? notices.data.rows[0]!.id : 0)).toMatchObject({ ok: true });
+  expect(await loadSession()).toMatchObject({ ok: true, data: { session: { unreadNotices: 0 } } });
 });
 
 it('restores an account to a time on its report: its open device drops to the objects of that time, and the restore reads back with its undo', async () => {
