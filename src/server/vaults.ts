@@ -20,9 +20,10 @@ export async function readVault(db: D1Database, accountId: string) {
   return row && { passwordWrap: row.password_wrap, recoveryWrap: row.recovery_wrap };
 }
 
+// Written only if the statement before it in the batch wrote a row: signup's account.
 export function insertVault(db: D1Database, accountId: string, vault: { passwordWrap: string; recoveryWrap: string; recoveryHash: string }, now: number) {
   return db
-    .prepare('INSERT INTO vaults (account_id, password_wrap, recovery_wrap, recovery_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO vaults (account_id, password_wrap, recovery_wrap, recovery_hash, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ? WHERE changes() = 1')
     .bind(accountId, vault.passwordWrap, vault.recoveryWrap, vault.recoveryHash, now, now);
 }
 

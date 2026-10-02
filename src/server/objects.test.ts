@@ -38,11 +38,24 @@ describe('objects', () => {
     expect(await response.json()).toEqual({ error: 'cache-reset' });
   });
 
-  it('refuses a device feed for an account other than its authenticated session', async () => {
+  it('counts the bytes of the bodies it holds, and at the cap refuses only a batch that grows the account', async () => {
     const cookie = await signedIn();
-    const response = await t.get(`objects?since=0&account=${A}`, cookie);
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'account-mismatch' });
+    const bytes = () => t.env.DB.prepare('SELECT bytes FROM accounts').first('bytes');
+    await write(cookie, A, { kind: 'settings', body: '가'.repeat(10) });
+    await write(cookie, B, { kind: 'chat', body: 'x'.repeat(20) });
+    expect(await bytes()).toBe(50);
+
+    await t.env.DB.prepare('UPDATE service SET account_bytes_cap = 50').run();
+    const grown = await write(cookie, crypto.randomUUID(), { kind: 'chat', body: 'x' });
+    expect(grown).toEqual({ status: 413, json: { error: 'storage-full' } });
+    expect((await write(cookie, A, { kind: 'settings', body: '가'.repeat(11), baseRev: 1 })).json).toEqual({ error: 'storage-full' });
+    expect(await t.env.DB.prepare('SELECT rev FROM accounts').first('rev')).toBe(2);
+
+    expect((await write(cookie, A, { kind: 'settings', body: 'y'.repeat(30), baseRev: 1 })).status).toBe(200);
+    expect((await write(cookie, B, { kind: 'chat', body: null, baseRev: 2 })).status).toBe(200);
+    expect(await bytes()).toBe(30);
+    expect((await write(cookie, crypto.randomUUID(), { kind: 'chat', body: 'x'.repeat(20) })).status).toBe(200);
+    expect(await bytes()).toBe(50);
   });
 
   it('bootstraps without scoped kinds, feeds omitted revisions and deletions, and reads only the requested parent', async () => {

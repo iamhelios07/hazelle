@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { accounts } from './accounts';
-import { files } from './files';
+import { files, MAX_FILE_BYTES } from './files';
 import { fail, type AppEnv } from './http';
-import { objects } from './objects';
+import { BATCH_LIMITS, objects } from './objects';
 import { EXIT } from './relay';
-import { requireSession } from './session';
+import { canCall, requireSession } from './session';
 import { streams } from './streams';
 import { vaults } from './vaults';
 
@@ -22,11 +23,26 @@ app.use(async (c, next) => {
   await next();
 });
 
+// Every body is bounded here, before a route reads it, signed in or not. A route that takes more than BODY_BYTES is
+// listed. A provider call carries a whole prompt.
+const BODY_BYTES = 100_000;
+const CALL_BYTES = 32 * 1024 * 1024;
+const LARGER: [method: string, path: RegExp, bytes: number][] = [
+  ['POST', /^\/api\/objects\/batch$/, BATCH_LIMITS.bytes],
+  ['PUT', /^\/api\/files\/[^/]+$/, MAX_FILE_BYTES],
+  ['POST', /^\/api\/(relay|streams\/[^/]+)$/, CALL_BYTES],
+];
+
+app.use((c, next) => {
+  const maxSize = LARGER.find(([method, path]) => method === c.req.method && path.test(c.req.path))?.[2] ?? BODY_BYTES;
+  return bodyLimit({ maxSize, onError: () => fail(c, 413, 'too-large') })(c, next);
+});
+
 app.route('/', accounts);
 app.route('/vault', vaults);
 app.route('/objects', objects);
 app.route('/files', files);
-app.post('/relay', requireSession, (c) => c.env.RELAY.get(c.env.RELAY.newUniqueId(), EXIT).fetch(c.req.raw));
+app.post('/relay', requireSession, canCall, (c) => c.env.RELAY.get(c.env.RELAY.newUniqueId(), EXIT).fetch(c.req.raw));
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 

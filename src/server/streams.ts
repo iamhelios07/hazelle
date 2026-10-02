@@ -3,7 +3,7 @@ import { createMiddleware } from 'hono/factory';
 import { fail, ID, readObject, type AppEnv } from './http';
 import { EXIT } from './relay';
 import { StreamBox } from './stream-box';
-import { requireSession } from './session';
+import { canCall, requireSession } from './session';
 
 // The Durable Object around StreamBox, one per account and call id.
 export class ReplyStream {
@@ -29,7 +29,7 @@ export const streams = new Hono<AppEnv>()
   .use(requireSession)
   .use('/:id', checkId)
   .use('/:id/*', checkId)
-  .post('/:id', async (c) => {
+  .post('/:id', canCall, async (c) => {
     const body = await readObject(c);
     if (!body) return fail(c, 400, 'bad-body');
     return box(c).fetch('https://stream/start', { method: 'POST', body: JSON.stringify({ id: c.req.param('id'), key: body.key, request: body.request }) });

@@ -1,11 +1,14 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-export type Account = { id: string; username: string };
+export type Account = { id: string; username: string; suspended: boolean };
 // Account and object ids are UUIDs made by the client.
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export type AppEnv = { Bindings: Env; Variables: { account: Account } };
+
+// The operator is the one account this Worker var names, so no stored value can make another.
+export const isAdmin = (c: Context<AppEnv>, accountId: string) => accountId === c.env.ADMIN_ACCOUNT;
 
 export function fail(c: Context, status: ContentfulStatusCode, error: string, detail: Record<string, unknown> = {}) {
   return c.json({ error, ...detail }, status);
