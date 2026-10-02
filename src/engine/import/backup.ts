@@ -1,14 +1,16 @@
 import { gunzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
-import { add, counted, type Tally } from './convert';
+import { add, convertModule, counted, type Tally } from './convert';
 import { readMsgpack } from './msgpack';
 import { convertPreset } from './preset';
 import { picture, risuCharacter, type Entry, type Read } from './risu-character';
 import {
   MOVE_UNSUPPORTED_KINDS,
+  UNSUPPORTED_KINDS,
   type BackupFailure,
   type BackupResult,
   type BackupSource,
+  type ImportedModule,
   type MoveUnsupportedKind,
   type RisuBackup,
   type RisuCharacter,
@@ -148,7 +150,6 @@ async function fromDatabase(db: Json, source: BackupSource, files: Map<string, S
   }));
   const characters = loaded.filter((char) => char !== null);
   characters.sort((a, b) => (order.get(a.id) ?? order.size) - (order.get(b.id) ?? order.size));
-  add(unsupported, 'module', list(db.modules).length);
 
   // Risu builds one persona from the live values when the list is absent (setDatabase).
   const selected = typeof db.selectedPersona === 'number' ? db.selectedPersona : 0;
@@ -164,7 +165,25 @@ async function fromDatabase(db: Json, source: BackupSource, files: Map<string, S
     isRecord(raw) ? [{ name: text(raw.name), result: convertPreset(index === db.botPresetsId ? live(raw, db) : raw) }] : [],
   );
 
-  return { characters, personas, presets, unsupported: counted(MOVE_UNSUPPORTED_KINDS, unsupported) };
+  const modules = list(db.modules).filter(isRecord).map((raw) => risuModule(raw, entry));
+  const alwaysModules = list(db.enabledModules).filter((id) => typeof id === 'string');
+
+  return { characters, personas, presets, modules, alwaysModules, unsupported: counted(MOVE_UNSUPPORTED_KINDS, unsupported) };
+}
+
+// A module's pictures are in the backup's asset storage, each under the key its entry of module.assets holds. One the
+// backup lacks is counted as an asset the module names without holding, as for a module file.
+function risuModule(raw: Json, entry: Entry): ImportedModule {
+  const tally: Tally = new Map();
+  const { assets: names, ...module } = convertModule(raw, tally);
+  const assets = list(raw.assets).flatMap((asset, index) => {
+    const key = Array.isArray(asset) ? text(asset[1]) : '';
+    // Any key other than a Risu asset key points outside the backup.
+    const read = key.startsWith('assets/') ? entry(key) : null;
+    if (!read) add(tally, 'asset');
+    return read ? [{ name: names[index]!, read }] : [];
+  });
+  return { ...module, assets, unsupported: counted(UNSUPPORTED_KINDS, tally) };
 }
 
 // Classed by the payload's type: a stub says 'character' even for a group.

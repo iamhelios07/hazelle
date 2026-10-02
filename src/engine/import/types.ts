@@ -109,8 +109,8 @@ export type ImportedModule = {
 // A file holds a character or a module.
 export type ImportResult = { ok: true; card: Imported } | { ok: true; module: ImportedModule } | { ok: false; failure: ImportFailure };
 
-// A Risu local backup, read (design F7; research/risu-backup-spec.md). Pictures stay in the file until a character
-// or persona is brought.
+// A Risu local backup, read (design F7; research/risu-backup-spec.md). Pictures stay in the file until a character,
+// persona or module is brought.
 export type BackupSource = { size: number; read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>> };
 export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string };
 
@@ -133,7 +133,6 @@ export const MOVE_UNSUPPORTED_KINDS = [
   'chat-lore',
   'memory',
   'inlay',
-  'module',
   'chat-folder',
   'bookmark',
   'hidden-message',
@@ -151,6 +150,8 @@ export type RisuCharacter = Omit<Imported, 'avatar'> & {
   // The Risu folder it sits in, by name.
   folder: string | null;
   chats: RisuChat[];
+  // The Risu ids of the modules on for it, whether or not the backup holds them.
+  modules: string[];
   // What its chats held that does not come.
   missed: MoveUnsupported[];
 };
@@ -160,7 +161,11 @@ export type RisuBackup = {
   characters: RisuCharacter[];
   personas: RisuPersona[];
   presets: RisuPreset[];
-  // What the backup held outside its characters that does not come (group chats, modules).
+  // Each with its pictures read from the backup when it is brought.
+  modules: ImportedModule[];
+  // The Risu ids of the modules on in every chat, whether or not the backup holds them.
+  alwaysModules: string[];
+  // What the backup held outside its characters that does not come (group chats).
   unsupported: MoveUnsupported[];
 };
 export type BackupFailure = { kind: 'encrypted' | 'no-database' | 'unreadable'; detail?: string };

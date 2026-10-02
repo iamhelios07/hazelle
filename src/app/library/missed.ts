@@ -19,7 +19,6 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
   'chat-lore': (count) => `채팅 로어북 ${count}개`,
   memory: (count) => `Risu 장기 기억 ${count}개`,
   inlay: (count) => `메시지 속 그림 ${count}개`,
-  module: (count) => `모듈 ${count}개`,
   'chat-folder': (count) => `채팅 폴더 ${count}개`,
   bookmark: (count) => `북마크 ${count}개`,
   'hidden-message': (count) => `숨김·코멘트 메시지 ${count}개(일반 메시지로 들어옴)`,

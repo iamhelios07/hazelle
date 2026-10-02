@@ -39,18 +39,21 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
   const page = Number.isInteger(char.chatPage) && chats[char.chatPage as number] ? (char.chatPage as number) : 0;
   const fmIndex = number(char.firstMsgIndex) ?? -1;
   const greetings = imported.card.greetings.length;
+  // Risu turns a module on for one chat too, a place this app does not have: a chat's are on for its character
+  // (design §6.5). Only a chat that comes brings its own.
+  const modules = new Set(list(char.modules).filter((id) => typeof id === 'string'));
   const brought = chats.flatMap((chat, index) => {
     if (!chat) {
       add(missed, 'cold-missing');
       return [];
     }
     if (list(chat.message).length === 0) return [];
+    for (const id of list(chat.modules)) if (typeof id === 'string') modules.add(id);
     // Risu moves the old post-history text into the open chat's note when the character is next opened.
     const note = index === page && text(char.postHistoryInstructions) ? `${text(chat.note)}\n${text(char.postHistoryInstructions)}`.trim() : text(chat.note);
     return [risuChat(chat, note, fmIndex, greetings, missed)];
   });
   add(missed, 'chat-folder', list(char.chatFolders).length);
-  add(missed, 'module', list(char.modules).length);
 
   return {
     ...imported,
@@ -58,6 +61,7 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
     avatar: image ? () => picture(image) : () => Promise.resolve(null),
     folder,
     chats: brought,
+    modules: [...modules],
     missed: counted(MOVE_UNSUPPORTED_KINDS, missed),
   };
 }
