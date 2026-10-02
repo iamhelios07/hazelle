@@ -152,7 +152,7 @@ export function nodeStores(reads: StoreReads, now: () => number) {
         get: (_, method) => {
           if (method === 'restart') return restart;
           if (typeof method !== 'string' || !(method in StoreRules.prototype)) return undefined;
-          return (...args: unknown[]) => (live()[method as keyof StoreRules] as (...args: unknown[]) => unknown).apply(live(), args);
+          return async (...args: unknown[]) => (live()[method as keyof StoreRules] as (...args: unknown[]) => unknown).apply(live(), args);
         },
       });
     },

@@ -187,7 +187,7 @@ export class StoreRules {
   async usage(incarnation: string): Promise<Refused | { bytes: number; disk: number }> {
     const life = await this.lifecycle(incarnation);
     if (!active(life)) return refusal(life);
-    return { bytes: this.db.transaction(() => this.head()).bytes, disk: this.db.size() };
+    return { bytes: this.head().bytes, disk: this.db.size() };
   }
 
   async checkpoint(incarnation: string, operation: number): Promise<Refused | WrongPhase | { checkpoint: string }> {
