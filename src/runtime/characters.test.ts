@@ -10,8 +10,8 @@ import { addCharacter, copyCharacter, importCharacter, markDeleted, purgeExpired
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
 import { thumbnail } from './picture';
-import type { ObjectStore } from './store';
-import { testCard, testServer } from './testing';
+import type { ObjectStore, Write } from './store';
+import { BATCH_LIMITS, testCard, testServer } from './testing';
 
 const server = testServer();
 vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
@@ -100,6 +100,20 @@ describe('importCharacter', () => {
     expect(await importCharacter(store, refused, card, picture(), () => {})).toMatchObject({ ok: true, data: { faceless: true } });
     expect(store.list('avatar')).toEqual([]);
     expect(store.list('character')).toHaveLength(3);
+  });
+});
+
+describe('addCharacter', () => {
+  it('sends a batch over one request with its chat roots in the character’s request', async () => {
+    const { store } = await server.account();
+    const id = crypto.randomUUID();
+    const roots = Array.from({ length: 2 }, (): Write => ({ type: 'create', kind: 'chat', id: crypto.randomUUID(), parent: null, value: { title: null, character: id, models: {} } }));
+    const lore = Array.from({ length: BATCH_LIMITS.items - roots.length }, (_, index) => ({ name: `lore ${index}` }) as Lore);
+    const requests = vi.spyOn(globalThis, 'fetch');
+    expect((await addCharacter(store, bare('루나'), { ...none, lore }, () => {}, { id, chats: roots })).ok).toBe(true);
+    const batches = requests.mock.calls.filter(([url]) => url === '/api/objects/batch').map(([, init]) => (JSON.parse(init!.body as string) as { writes: { id: string }[] }).writes.map((write) => write.id));
+    expect(batches).toHaveLength(2);
+    expect(batches.at(-1)!.slice(-3)).toEqual([...roots.map((root) => root.id), id]);
   });
 });
 

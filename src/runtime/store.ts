@@ -878,15 +878,18 @@ export class ObjectStore {
     const halt = AbortSignal.any([stop, this.ended.signal]);
     while (saved.length < steps.length) {
       const start = saved.length;
+      // Requests are counted from the back, so the last one is full: an owner, written last, goes with the owned objects
+      // just before it (runtime/characters addCharacter puts a move's chat roots there).
+      const end = start + ((steps.length - start - 1) % limits.items) + 1;
       const result = await this.retry(async (): Promise<ApiResult<(Held | null)[]>> => {
         const resolved: Resolved[] = [];
         const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null }[] = [];
         let bytes = new TextEncoder().encode(JSON.stringify({ timeline, writes: [] })).length;
         // Resolve and seal afresh INSIDE every retry. Keep only a small value window, not the server's entire
         // item page. Future failures stay in their slots until the byte-limited prefix reaches them.
-        filling: for (let from = start; from < Math.min(steps.length, start + limits.items); from += SEAL_ITEMS) {
+        filling: for (let from = start; from < end; from += SEAL_ITEMS) {
           if (halt.aborted) return this.halted(epoch);
-          const window = steps.slice(from, Math.min(from + SEAL_ITEMS, start + limits.items)).map((step) => {
+          const window = steps.slice(from, Math.min(from + SEAL_ITEMS, end)).map((step) => {
             try { return { ready: step.resolve() }; }
             catch (error) { return { error }; }
           });
