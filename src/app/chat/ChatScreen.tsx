@@ -31,8 +31,8 @@ type Props = {
 };
 
 export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
-  const chat = useChat(chatId, item, shelf);
   const reading = useReading();
+  const chat = useChat(chatId, item, shelf, reading.value.reply);
   const { id, streaming, panel, scroll, prompt, persona, actions } = chat;
   useShortcut('personas', () => actions.toggleSide('personas'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));

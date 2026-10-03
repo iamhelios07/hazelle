@@ -7,8 +7,8 @@ import { StoryGutterContext } from './story-gutter';
 
 type Spacing = 'narrow' | 'normal' | 'wide';
 
-// How the story reads (읽기 설정). tokens.css holds each choice's look.
-export type Reading = { font: 'serif' | 'sans'; size: number; leading: Spacing; width: Spacing };
+// How the story reads (읽기 설정). tokens.css holds each look; reply is how the view meets a reply (useFollow).
+export type Reading = { font: 'serif' | 'sans'; size: number; leading: Spacing; width: Spacing; reply: 'follow' | 'stay' };
 
 // The look before any reading setting. The size is read from tokens.css, not repeated here, since Story keeps it
 // outside the chat.
@@ -17,6 +17,7 @@ export const readingDefault = (): Reading => ({
   size: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--prose-size')),
   leading: 'normal',
   width: 'normal',
+  reply: 'follow',
 });
 
 const LEADING: Record<Spacing, string> = { narrow: styles.leadingNarrow, normal: styles.leadingNormal, wide: styles.leadingWide };

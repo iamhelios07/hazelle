@@ -11,4 +11,4 @@ export { SettingGroup, SettingRow } from './SettingGroup';
 export { SideTitle } from './SideTitle';
 export { Tab, Tabs } from './Tabs';
 export { Tile, Tiles } from './Tiles';
-export { ROWS_RESIZED, Viewport } from './Viewport';
+export { ROWS_RESIZED, Viewport, type Seek } from './Viewport';

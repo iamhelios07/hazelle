@@ -21,7 +21,6 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const character = card && { name: card.nickname || card.name, image: shelf!.face };
   const me = chat.persona.kind === 'persona' ? { name: chat.persona.persona.value.name, image: chat.persona.persona.value.picture } : null;
   const modelName = 'kind' in route ? null : route.model.name;
-  const seek = useMemo(() => found && { key: found.first, revision: found.at }, [found]);
   if (chat.displayPending) return chat.displayError === undefined ? <Text>채팅을 불러오는 중</Text> : <>
     <Text>채팅 표시를 계산하지 못했어요.</Text>
     <Button variant="secondary" size="sm" onClick={chat.retryDisplay}>다시 시도</Button>
@@ -30,7 +29,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
     {notUsed && <Text variant="note" align="center">{notUsed}</Text>}
     {messages.length === 0 ? <Empty variant="story">
       {card ? '첫인사가 없는 캐릭터예요. 먼저 말을 걸어 보세요.' : '캐릭터 없이 모델과 바로 이야기하는 채팅이에요. 모델은 오른쪽 위 버튼에서 이 채팅만 바꿀 수 있어요.'}
-    </Empty> : <Viewport keys={messages.map((message) => message.id)} variant="story" keep={editing ? [editing.id] : []} seek={seek}
+    </Empty> : <Viewport keys={messages.map((message) => message.id)} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}
       // Story bodies are shadow roots, whose controls a row's light-DOM query cannot see: Tab stays the browser's.
       traverse={false}>{(index) => {
       const message = messages[index]!;

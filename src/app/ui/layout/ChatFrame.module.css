@@ -113,6 +113,7 @@
   flex-grow: 1;
   min-height: 0;
   overflow-y: auto;
+  scroll-padding-top: var(--header-height);
   scrollbar-width: thin;
   scrollbar-color: var(--color-surface-raised) transparent;
 }

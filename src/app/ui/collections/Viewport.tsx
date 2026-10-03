@@ -13,10 +13,13 @@ type Props = {
   // brought into it: a chat opened from a menu or a link may sit hundreds of rows down.
   current?: string;
   keep?: readonly string[];
-  seek?: { key: string; revision: number } | null;
+  seek?: Seek | null;
   // Tab past a row's last control mounts the next row and focuses its first; false leaves Tab to the browser.
   traverse?: boolean;
 };
+
+// top: the row's top at the scroller's scroll-padding-top, which a header floating over it sets.
+export type Seek = { key: string; revision: number; align: 'center' | 'top' };
 
 // Sent from the root once a row's new height is in place, before the scroll events of that frame: a follower that waits
 // for its own resize observer would read the old bottom from them.
@@ -30,7 +33,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
   // Rows rise in while the view opens; once the reader or a seek has moved it, only rows of keys added since do.
   const [initial] = useState(() => new Set(keys));
   const opened = useRef(false);
-  const reveal = useMemo(() => current ? { key: current, revision: 0 } : null, [current]);
+  const reveal = useMemo<Seek | null>(() => current ? { key: current, revision: 0, align: 'center' } : null, [current]);
   const target = seek ?? reveal;
   const keyboard = useRef<{ key: string; back: boolean } | null>(null);
   const root = useRef<HTMLDivElement & HTMLUListElement>(null);
@@ -54,6 +57,32 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
   // A seek or reveal holds its row where it put it: measuring the rows above corrects the scroll, until the reader
   // moves the view.
   const held = useRef<string | null>(null);
+  // A top seek keeps room below its row for it to stay at the top while what follows it is shorter than the view:
+  // below is from the row's top to the root's end, so rows above it may still change size.
+  const room = useRef<{ key: string; below: number } | null>(null);
+  const rootHeight = () => {
+    const index = room.current ? keys.indexOf(room.current.key) : -1;
+    return Math.max(sizes.offset(keys.length), index < 0 ? 0 : sizes.offset(index) + room.current!.below);
+  };
+  // Measured again whenever the scroller's space after the rows changes, such as the composer's as it unfolds: a
+  // shrink would clamp the held row below its line, and nothing would bring it back.
+  const fit = useRef<(seek?: boolean) => void>(() => {});
+  fit.current = (seek = false) => {
+    const frame = scroll.current;
+    const element = root.current;
+    const index = room.current ? keys.indexOf(room.current.key) : -1;
+    if (!frame || !element || index < 0) return;
+    // auto, the scroller's default, is no padding.
+    const line = parseFloat(getComputedStyle(frame).scrollPaddingTop) || 0;
+    const offset = offsetIn(element, frame);
+    const end = frame.scrollHeight - offset - element.offsetHeight;
+    room.current!.below = frameHeight(frame) - line - end;
+    // Before the scroll, which the old height would clamp.
+    element.style.height = `${rootHeight()}px`;
+    // After the seek, only up to the line: a scroll past it is the view sent down from outside, such as to follow the reply.
+    const at = offset + sizes.offset(index) - line;
+    if (seek || (held.current === room.current!.key && frame.scrollTop < at)) frame.scrollTop = at;
+  };
   const reading = useRef<Reading | null>(null);
   const update = useRef<() => void>(() => {});
   const active = useRef(sizes);
@@ -84,10 +113,12 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
         cache.current.forEach((row) => { row.height = 0; });
         setWidthRevision((revision) => revision + 1);
       }
+      fit.current();
       read();
     });
     observer.observe(element);
     observer.observe(frame);
+    if (element.parentElement !== frame) observer.observe(element.parentElement!, { box: 'border-box' });
     events.addEventListener('scroll', read, { passive: true });
     window.addEventListener('resize', read);
     const moved = () => { held.current = null; opened.current = true; };
@@ -128,8 +159,11 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
         const top = offset + sizes.offset(index);
         const bottom = offset + sizes.offset(index + 1);
         if (seek || top < frame.scrollTop || bottom > frame.scrollTop + frameHeight(frame)) {
-          frame.scrollTop = (top + bottom) / 2 - frameHeight(frame) / 2;
           held.current = target.key;
+          if (target.align === 'top') {
+            room.current = { key: target.key, below: 0 };
+            fit.current(true);
+          } else frame.scrollTop = (top + bottom) / 2 - frameHeight(frame) / 2;
           opened.current = true;
         }
       }
@@ -180,7 +214,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
         : position < top && crossed ? inside(crossed) - crossed.inside : 0;
       // The root takes its height before the render that sets it, so the correction is not clamped to the old one; and
       // from the position read before, so a clamp to the new one is not counted twice.
-      root.current!.style.height = `${sizes.offset(keys.length)}px`;
+      root.current!.style.height = `${rootHeight()}px`;
       if (correction) frame.scrollTop = scrolled + correction;
       reading.current = across(root.current!, frame);
       root.current!.dispatchEvent(new Event(ROWS_RESIZED, { bubbles: true }));
@@ -189,7 +223,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
   }
 
   const Root = list === undefined ? 'div' : 'ul';
-  return <Root ref={root} className={`${styles.viewport} ${styles[variant]}`} style={{ height: sizes.offset(keys.length) }} aria-label={list}>
+  return <Root ref={root} className={`${styles.viewport} ${styles[variant]}`} style={{ height: rootHeight() }} aria-label={list}>
     {[...indexes].sort((a, b) => a - b).map((index) => {
       const key = keys[index]!;
       let row = cache.current.get(key);
