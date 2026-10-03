@@ -1,3 +1,4 @@
+import { isRecord } from '../connectors/values';
 import type { Change, Fact, Line, Memory, MemoryRecord, Source, Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 
@@ -237,7 +238,6 @@ export const memoryFormat = (count: number) =>
 export type Drafted = Pick<MemoryRecord, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome' | 'state' | 'opens'> & { to: number; closes: string[] };
 export type Invalid = 'unreadable' | 'fields' | 'lines';
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === 'string';
 const textOrNull = (value: unknown): value is string | null => value === null || isText(value);
 const textsOf = (value: unknown): value is string[] => Array.isArray(value) && value.every(isText);

@@ -25,6 +25,7 @@ describe('parseRecords', () => {
 
   it('refuses an answer that is not JSON, one with a field missing or a gap left, and a key line the messages never said', () => {
     expect(parseRecords('Here is the summary.', span)).toEqual({ ok: false, reason: 'unreadable' });
+    expect(parseRecords(answer([[]]), span)).toEqual({ ok: false, reason: 'fields' });
     expect(parseRecords(answer([{ ...record(3), opens: undefined }]), span)).toEqual({ ok: false, reason: 'fields' });
     expect(parseRecords(answer([record(2)]), span)).toEqual({ ok: false, reason: 'fields' });
     expect(parseRecords(answer([record(3, [{ speaker: 'Luna', text: 'I will always wait for you.' }])]), span)).toEqual({ ok: false, reason: 'lines' });
