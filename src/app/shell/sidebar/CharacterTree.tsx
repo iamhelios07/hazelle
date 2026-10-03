@@ -1,4 +1,4 @@
-import { Import, LayoutGrid } from 'lucide-react';
+import { Import, LayoutGrid, PackageOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import { holds, matches, shownFolders, type FolderTree, type Shelf } from '../../../model/library';
@@ -28,7 +28,7 @@ type Props = {
 export function CharacterTree({ page, onCollapse, current, typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
   const { characters, none, folders } = useLibrary();
   const wide = useWide();
-  const { pick } = useImport();
+  const { pick, move } = useImport();
   const empty = characters.length === 0 && none.chats.length === 0;
   const words = query.trim();
   const filed = shownFolders(folders);
@@ -72,6 +72,7 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
             <Button variant="secondary" size="sm" icon={Import} onClick={pick}>
               봇 가져오기
             </Button>
+            <IconButton icon={PackageOpen} label="Risu에서 이사" size="sm" onClick={move} />
             <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate(wide ? HOME : { kind: 'gallery' })} />
           </Row>
           {characters.length > 0 && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={onQuery} />}

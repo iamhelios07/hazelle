@@ -14,6 +14,7 @@ import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Callout, Dialog, DropOverlay, Row, Section, Stack, Text, useFileDrop } from '../ui';
 import { assetsMissed, cardMissed, moduleMissed } from './missed';
+import { MoveDialog } from './MoveDialog';
 import { MoveFlow } from './MoveFlow';
 import { describeStep } from './saving';
 
@@ -29,7 +30,8 @@ type Result = Done | DoneModule | Filled | { file: string; failure: string };
 type Ask = { name: string; answer: (fill: boolean) => void };
 type State = { busy: string | null; results: Result[]; ask: Ask | null };
 
-const ImportContext = createContext<{ pick: () => void } | null>(null);
+// pick opens the file picker of 봇 가져오기; move opens Risu에서 이사.
+const ImportContext = createContext<{ pick: () => void; move: () => void } | null>(null);
 
 export function useImport() {
   const context = useContext(ImportContext);
@@ -52,6 +54,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State | null>(null);
   const [moving, setMoving] = useState<{ files: File[]; aside: number } | null>(null);
+  const [asking, setAsking] = useState(false);
 
   async function save(file: File, progress: (busy: string) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
     const parsed = importCard(file.name, new Uint8Array(await file.arrayBuffer()));
@@ -99,7 +102,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const came = done.length > 0 || modules.length > 0 || (state?.results.some((result) => 'kept' in result) ?? false);
   const title = state?.ask ? '그림만 채울까요?' : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
   return (
-    <ImportContext.Provider value={{ pick: () => input.current?.click() }}>
+    <ImportContext.Provider value={{ pick: () => input.current?.click(), move: () => setAsking(true) }}>
       {children}
       <input
         ref={input}
@@ -114,6 +117,15 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         }}
       />
       {dragging && <DropOverlay>여기에 놓으면 봇, 모듈이나 Risu 백업을 가져와요</DropOverlay>}
+      {asking && (
+        <MoveDialog
+          onRead={(files) => {
+            setAsking(false);
+            setMoving({ files, aside: 0 });
+          }}
+          onClose={() => setAsking(false)}
+        />
+      )}
       {moving && <MoveFlow files={moving.files} aside={moving.aside} onClose={() => setMoving(null)} />}
       {state && (
         <Dialog title={title} onClose={() => state.busy || setState(null)}>

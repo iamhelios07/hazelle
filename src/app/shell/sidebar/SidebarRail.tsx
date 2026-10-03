@@ -1,4 +1,4 @@
-import { Import, LayoutGrid, Settings } from 'lucide-react';
+import { Import, LayoutGrid, PackageOpen, Settings } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { useImport } from '../../library/ImportFlow';
@@ -18,13 +18,14 @@ type Props = {
 };
 
 export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Props) {
-  const { pick } = useImport();
+  const { pick, move } = useImport();
   return (
     <Rail
       onExpand={onExpand}
       actions={
         <>
           <IconButton icon={Import} label="봇 가져오기" onClick={pick} />
+          <IconButton icon={PackageOpen} label="Risu에서 이사" onClick={move} />
           <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" onClick={() => navigate(HOME)} />
         </>
       }
