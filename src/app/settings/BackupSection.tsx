@@ -1,7 +1,7 @@
 import { Download, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { exportBackup, readBackup, restoreBackup } from '../../runtime/backup';
-import { downloadOutput } from '../common/download';
+import { clearDownloadOutputs, downloadOutput, DownloadUnavailable, pendingDownloadOutputs } from '../common/download';
 import { describeFailure } from '../common/failure';
 import { useSession } from '../session';
 import { useToast } from '../toast';
@@ -19,6 +19,12 @@ const today = () => new Date().toLocaleDateString('sv-SE');
 export function BackupSection() {
   const { username, store, files } = useSession();
   const toast = useToast();
+  const [temporary, setTemporary] = useState(0);
+  useEffect(() => {
+    let here = true;
+    void pendingDownloadOutputs().then((count) => { if (here) setTemporary(count); }, () => {});
+    return () => { here = false; };
+  }, []);
   const [active, setActive] = useState<{ direction: 'save' | 'load'; done: number; total: number } | null>(null);
   const running = useRef<AbortController | null>(null);
   useEffect(() => () => running.current?.abort(), []);
@@ -54,11 +60,23 @@ export function BackupSection() {
       const detail = [left ? `금고 열쇠로 열리지 않는 항목 ${left}개는 담지 못했어요.` : '', skipped ? `내려진 그림 ${skipped}개는 빼고 담았어요.` : ''].filter(Boolean).join(' ');
       toast.show('백업을 받았어요.', detail ? { detail } : undefined);
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('백업을 저장하지 못했어요.');
+      if (error instanceof DownloadUnavailable) {
+        if (error.reason === 'pending') toast.error('앞서 받은 백업의 임시 파일이 남아 있어요.', { detail: '다운로드가 끝난 것을 확인한 뒤 아래에서 임시 파일을 지워 주세요.' });
+        else toast.error('이 브라우저에서는 큰 백업 파일을 저장할 수 없어요.', { detail: '파일에 바로 저장할 수 있는 브라우저에서 다시 시도해 주세요.' });
+      } else if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('백업을 저장하지 못했어요.');
     } finally {
       running.current = null;
       setActive(null);
+      void pendingDownloadOutputs().then(setTemporary, () => {});
     }
+  }
+
+  async function clearTemporary() {
+    try {
+      await clearDownloadOutputs();
+      setTemporary(0);
+      toast.show('임시 백업 파일을 지웠어요.');
+    } catch { toast.error('임시 파일을 지우지 못했어요.'); }
   }
 
   const unread = (error: keyof typeof UNREAD) => toast.error(UNREAD[error].message, { detail: UNREAD[error].detail });
@@ -92,11 +110,19 @@ export function BackupSection() {
           sub={saving ? `받는 중 · ${active.done} / ${active.total}` : '잠기지 않은 파일이라 비밀번호처럼 보관해 주세요.'}
           control={
             saving ? <Button variant="secondary" size="sm" onClick={() => running.current?.abort()}>중지</Button> :
-              <Button variant="secondary" size="sm" icon={Download} disabled={active !== null} onClick={() => void save()}>
+              <Button variant="secondary" size="sm" icon={Download} disabled={active !== null || temporary > 0} onClick={() => void save()}>
                 받기
               </Button>
           }
         />
+        {temporary > 0 && (
+          <SettingRow
+            label="다운로드 임시 파일"
+            help="백업 파일이 다운로드 폴더에 모두 저장된 것을 확인한 뒤 지워 주세요. 받는 중에 지우면 다운로드가 끊겨요."
+            sub={`임시 파일 ${temporary}개는 이 화면을 닫아도 남아요. 다음 백업을 받기 전에 지워 주세요.`}
+            control={<Button variant="secondary" size="sm" disabled={active !== null} onClick={() => void clearTemporary()}>임시 파일 지우기</Button>}
+          />
+        )}
         <SettingRow
           label="백업 불러오기"
           help="아직 아무것도 저장하지 않은 새 계정에만 불러올 수 있어요."
