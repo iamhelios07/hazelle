@@ -20,6 +20,8 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   stop?: string[];
   reasoning?: Reasoning;
   systemAsUser?: true;
+  // Off asks for the whole reply in one response. Every model takes it, so fit() never leaves it out.
+  streaming?: false;
   // How long a cache point's cache lives: 5 minutes, or an hour at a dearer write.
   cache?: Cache;
 };

@@ -1,0 +1,22 @@
+{
+  "id": "gen-1759550000-AbCdEfGhIjKlMnOp",
+  "object": "chat.completion",
+  "created": 1759550000,
+  "model": "deepseek/deepseek-r1",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "안녕하세요, 반가워요!", "reasoning": "인사를 생각해요.", "refusal": null },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 12,
+    "completion_tokens": 20,
+    "total_tokens": 32,
+    "prompt_tokens_details": { "cached_tokens": 0 },
+    "completion_tokens_details": { "reasoning_tokens": 8 },
+    "cost": 0.00042
+  }
+}

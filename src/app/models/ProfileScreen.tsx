@@ -215,6 +215,27 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     />
   );
 
+  const streamingRow = (
+    <SettingRow
+      key="streaming"
+      label="스트리밍"
+      help="프록시가 답장을 중간에 끊을 때나 답장을 통째로 받고 싶을 때 꺼요"
+      changed={shown.streaming !== undefined}
+      control={
+        <ChoiceGroup
+          layout="segmented"
+          label="스트리밍"
+          options={[
+            { value: 'on', label: '켬' },
+            { value: 'off', label: '끔' },
+          ]}
+          value={shown.streaming === false ? 'off' : 'on'}
+          onChange={(value) => set({ streaming: value === 'off' ? false : undefined })}
+        />
+      }
+    />
+  );
+
   const summary = (user: User) => (user.schema ? changeWords(user.changes) : NOT_CALLABLE);
 
   const using = new Set(users.map((user) => `${user.connection.id}/${user.model.id}`));
@@ -253,7 +274,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     toast.undoable(`${removed.data.value.name} 설정을 지웠어요.`, () => void restoreProfile(store, id), note);
   }
 
-  const detailSet = DETAIL.filter((field) => shown[field] !== undefined).length + (shown.stop ? 1 : 0) + (shown.systemAsUser ? 1 : 0);
+  const detailSet = DETAIL.filter((field) => shown[field] !== undefined).length + (shown.stop ? 1 : 0) + (shown.systemAsUser ? 1 : 0) + (shown.streaming === false ? 1 : 0);
 
   return (
     <Screen
@@ -336,6 +357,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           {DETAIL.map(numberRow)}
           {stopRow}
           {systemRow}
+          {streamingRow}
         </SettingGroup>
       </Disclosure>
 

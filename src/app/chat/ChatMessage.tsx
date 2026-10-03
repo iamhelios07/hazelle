@@ -53,6 +53,8 @@ type Props = {
   branching: boolean;
   // The header's model menu, which a failed reply's 다른 모델로 opens.
   modelMenu: MenuHandle;
+  // The 답장 정보 drawer's id, which ⓘ holds open.
+  infoDrawer: string;
   actions: ChatActions;
 };
 
@@ -64,7 +66,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, branching, modelMenu, actions } = props;
+  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, branching, modelMenu, infoDrawer, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -77,7 +79,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const text = flipped ? original : translatingText || (translation?.text ?? original);
   // What shows until a translation's first text comes stays faded, and the translation then streams in its place.
   const pending = !translatingText && (awaited || translatingText === '');
-  const reveal = useReveal(version.id, text, live);
+  const reveal = useReveal(version.id, text, live && !message.whole);
   const html = useMemo(() => shownHtml(reveal.text, decor), [reveal.text, decor.bot, decor.url]);
   const failed = receipt?.state === 'failed';
   const empty = original === '';
@@ -259,7 +261,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message)} />}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 갈라지기" disabled={branching} onClick={() => void actions.branch(message)} />}
-      {!mine && <IconButton icon={Info} size="xs" label="답장 정보" onClick={() => actions.info(message.id)} />}
+      {!mine && <IconButton icon={Info} size="xs" label="답장 정보" controls={infoDrawer} onClick={() => actions.info(message.id)} />}
       {statusTool}
       <Divider variant="tools" />
       <IconButton icon={Trash2} size="xs" label="지우기 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />

@@ -30,6 +30,9 @@ export type Character = Mark & {
   // 옆에 두기: 상태 rests in the panel beside the story whenever a chat of it opens with room for one, instead of
   // peeking from the story's edge.
   keepStatus?: true;
+  // 생각을 본문에 둠: its replies keep the thinking blocks they write inside the text (connectors/thoughts) where they
+  // are, for a bot that draws them itself. Absent: they move to the reply's reasoning.
+  keepThoughts?: true;
   // A greeting's translation, made before any chat of it was saved, which every new chat opens with. Keyed by the
   // greeting as the card holds it and the language, so an edited greeting or a changed language translates anew.
   greetingTranslations?: GreetingTranslation[];

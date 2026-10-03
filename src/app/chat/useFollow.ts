@@ -1,6 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { READER_RESIZED, ROWS_RESIZED, type Seek } from '../ui';
 
+// Whether the view is at the story's end, given how far above it the view is and whether it was there: it stays
+// there until it is well above, and comes back only at the very end, so scrolling into the band does not snap it down.
+export const atEnd = (distance: number, was: boolean) => distance < (was ? 48 : 1);
+
 // The view starts at the bottom and follows the story while it is there; scrolled up, it stays, and a new message
 // lights the 새 답장 pill instead. count and streaming are the story's; its scroller takes scrollRef.
 // stay (보낸 자리에 멈추기): a reply starting here puts answered, the message it answers, at the top, and from then on
@@ -40,7 +44,7 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
 
   // A reply grows between the renders of the story as it is revealed (useReveal), so the view follows its size too, a
   // row's as soon as the story has it (ROWS_RESIZED); not a size the reader changed (Story sends READER_RESIZED), which
-  // moves the bottom without a scroll.
+  // moves the bottom without a scroll. The border box holds the room kept for the composer, which grows as it is typed in.
   useLayoutEffect(() => {
     const element = scrollRef.current;
     const content = element?.firstElementChild;
@@ -55,7 +59,7 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
       kept = false;
       onScroll();
     });
-    observer.observe(content);
+    observer.observe(content, { box: 'border-box' });
     element.addEventListener(READER_RESIZED, keep);
     element.addEventListener(ROWS_RESIZED, grown);
     return () => {
@@ -68,7 +72,8 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
   function onScroll() {
     const element = scrollRef.current!;
     if (element.scrollTop === placed.current) return;
-    const bottom = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+    placed.current = null;
+    const bottom = atEnd(element.scrollHeight - element.scrollTop - element.clientHeight, stick.current);
     stick.current = bottom;
     setAway(!bottom);
     if (bottom) setUnread(false);

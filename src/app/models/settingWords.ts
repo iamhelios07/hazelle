@@ -32,7 +32,7 @@ export const settingLabel = (setting: Change['setting']) => (setting === 'stop' 
 
 // The values set, in short words, in the order the editor shows them; empty when none is.
 export function valueWords(settings: ModelSettings): string[] {
-  const { reasoning, stop, systemAsUser, cache } = settings;
+  const { reasoning, stop, systemAsUser, streaming, cache } = settings;
   const number = (field: Field) => {
     const value = settings[field];
     return value === undefined ? [] : [`${NUMBER[field].label} ${count(value)}`];
@@ -40,7 +40,7 @@ export function valueWords(settings: ModelSettings): string[] {
   const thinking = !reasoning
     ? []
     : [`생각 ${reasoning.kind === 'off' ? '끔' : reasoning.kind === 'budget' ? `예산 ${count(reasoning.tokens)}` : reasoning.kind === 'adaptive' ? (reasoning.level === null ? '적응형' : `적응형 · ${levelName(reasoning.level)}`) : levelName(reasoning.level)}`];
-  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : [])];
+  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : [])];
 }
 
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').

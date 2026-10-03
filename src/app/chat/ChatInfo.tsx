@@ -1,24 +1,14 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { calls, shown, type Receipt } from '../../model/chat';
-import type { Shown } from '../../runtime/talk';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
-import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
+import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePeek, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest } from './ChatSent';
 import { cost, seconds, speed, tokens, UNKNOWN } from '../common/receipt';
-
-type Props = {
-  chat: string | null;
-  messages: Shown[];
-  // The reply shown; the latest when it is gone.
-  id: string | null;
-  onShow: (id: string) => void;
-  // Opens a memory record in the memory panel.
-  onRecord: (record: string) => void;
-  onClose: () => void;
-};
+import { infoReply } from './infoReply';
+import type { OpenChat } from './useChat';
 
 const CUT = { length: '길이 한도', stopped: '직접 멈춤', 'no-terminal': '끝 표시 없이 끊김' } as const;
 
@@ -45,12 +35,13 @@ const timeFacts = (receipt: Receipt) => [
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
 ];
 
-export function ChatInfo({ chat, messages, id, onShow, onRecord, onClose }: Props) {
+export function ChatInfo({ chat: open }: { chat: OpenChat }) {
+  const { id: chat, messages, held, infoPick, infoDrawer, actions } = open;
   const { talk, costs } = useSession();
   const memory = useChatMemory(chat);
   const [tab, setTab] = useState<(typeof TABS)[number]['value']>('reply');
   const replies = messages.filter((message) => message.role === 'assistant');
-  const reply = replies.find((message) => message.id === id) ?? replies.at(-1);
+  const reply = infoReply(replies, infoPick);
   const at = reply ? replies.indexOf(reply) : -1;
   const version = reply && shown(reply);
   const receipt = version?.receipt ?? null;
@@ -63,10 +54,16 @@ export function ChatInfo({ chat, messages, id, onShow, onRecord, onClose }: Prop
     for (const call of [...(receipt ? calls(receipt) : []), ...(translated ? [translated] : [])]) costs.settle(chat, call);
   }, [chat, receipt, translated, costs]);
 
+  // A record is read in the memory panel beside the story, so the drawer over the story lets go.
+  const record = (id: string) => {
+    actions.hold('info', false);
+    actions.memory(id);
+  };
+
   const stepper = (
     <>
-      <IconButton icon={ChevronLeft} label="이전 답장 정보" size="sm" disabled={at <= 0} onClick={() => onShow(replies[at - 1]!.id)} />
-      <IconButton icon={ChevronRight} label="다음 답장 정보" size="sm" disabled={at >= replies.length - 1} onClick={() => onShow(replies[at + 1]!.id)} />
+      <IconButton icon={ChevronLeft} label="이전 답장 정보" size="sm" disabled={at <= 0} onClick={() => actions.pickInfo(replies[at - 1]!.id)} />
+      <IconButton icon={ChevronRight} label="다음 답장 정보" size="sm" disabled={at >= replies.length - 1} onClick={() => actions.pickInfo(replies[at + 1]!.id)} />
     </>
   );
 
@@ -130,16 +127,17 @@ export function ChatInfo({ chat, messages, id, onShow, onRecord, onClose }: Prop
           </>
         )}
         {tab === 'lore' && <SentLore sent={sent} />}
-        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={onRecord} />}
+        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={record} />}
         {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
       </>
     );
   }
 
   return (
-    <SidePanel title="답장 정보" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper} onClose={onClose}>
+    <SidePeek label="답장 정보" tab="정보" id={infoDrawer} open={held === 'info'} onOpenChange={(on) => actions.hold('info', on)} actions={replies.length > 1 && stepper}>
+      {version && <Text variant="note">{ago(version.at)}</Text>}
       {body}
-    </SidePanel>
+    </SidePeek>
   );
 }
 
@@ -149,7 +147,7 @@ function TranslationCall({ receipt }: { receipt: Receipt }) {
       <Text variant="note">{`${receipt.modelName} · ${receipt.source}`}</Text>
       <Facts
         variant="tiles"
-        items={[...tokenFacts(receipt), costFact(receipt), finish(receipt)]}
+        items={[...tokenFacts(receipt), costFact(receipt), finish(receipt), ...timeFacts(receipt)]}
       />
     </Section>
   );

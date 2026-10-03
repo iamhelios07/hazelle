@@ -31,7 +31,7 @@ type Props = {
   above: ReactNode;
   footer: ReactNode;
   panel?: ReactNode;
-  // Over the story at its right edge: a SidePeek, such as 상태.
+  // Over the story at its right edge: SidePeeks, such as 상태 and 답장 정보.
   peek?: ReactNode;
   // In the story's right margin: a StoryAside, such as 상태 kept there.
   aside?: ReactNode;
@@ -44,33 +44,37 @@ type Props = {
   onScroll: () => void;
 };
 
-// The chat page: a header, the story column that scrolls, the composer, and the 정보 panel beside it. The header and
+// The chat page: a header, the story column that scrolls, the composer, and a panel beside it. The header and
 // the composer float over the story: the header hides while the story is read down, and comes back when it is scrolled
 // up, reached at its top or pointed at the page's top edge.
 export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, pictures, compact, scrollRef, onScroll }: Props) {
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
   const footerRef = useRef<HTMLDivElement>(null);
-  const folded = useRef(compact);
-  // The story ends above the composer as it is whole, folded or not: space that shrank with the fold would move the
-  // story's end, which would unfold it again at once.
+  // The story ends above the composer as it is whole, never folded or midway: space that moved with the fold would
+  // move the story's end, and the view with it. Only a transition is skipped, so a spinner in the composer does not
+  // stop the measuring.
   const [space, setSpace] = useState(0);
   // The story's scrollbar, which the peek and the aside keep clear of.
   const [scrollbar, setScrollbar] = useState(0);
 
   useLayoutEffect(() => {
-    folded.current = compact;
-  });
-
-  useLayoutEffect(() => {
     const element = footerRef.current!;
     const measure = () => {
-      if (!folded.current || element.matches(':focus-within')) setSpace(element.offsetHeight);
+      if (element.matches(`.${styles.compact}:not(:focus-within)`)) return;
+      if (element.getAnimations({ subtree: true }).some((animation) => animation instanceof CSSTransition)) return;
+      setSpace(element.offsetHeight);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    return () => observer.disconnect();
+    element.addEventListener('transitionend', measure);
+    element.addEventListener('transitioncancel', measure);
+    return () => {
+      observer.disconnect();
+      element.removeEventListener('transitionend', measure);
+      element.removeEventListener('transitioncancel', measure);
+    };
   }, []);
 
   useLayoutEffect(() => {

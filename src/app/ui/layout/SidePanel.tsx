@@ -10,7 +10,7 @@ import styles from './SidePanel.module.css';
 // footer: stays under the body while it scrolls, such as a summary and its action.
 type Props = { title: string; subtitle?: string; top?: ReactNode; page?: string; actions?: ReactNode; footer?: ReactNode; onClose: () => void; children: ReactNode };
 
-// A panel beside the page, such as 답장 정보. Where the page is too narrow for it, it covers the page, and there Esc or
+// A panel beside the page, such as 토글. Where the page is too narrow for it, it covers the page, and there Esc or
 // a press on the page closes it (user, 2026-10-02). Beside the page it stays: the page is read with it open, and Esc is
 // the page's own (답장 멈추기).
 export function SidePanel({ title, subtitle, top, page, actions, footer, onClose, children }: Props) {

@@ -8,14 +8,12 @@ import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../library/ImportFlow';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary } from '../../session';
-import { Button, Empty, FolderRow, IconButton, ItemRow, Row, SearchField, Sidebar, TreeRow, Viewport, useWide } from '../../ui';
+import { Button, Empty, FolderRow, IconButton, ItemRow, Row, SearchField, Sidebar, TreeRow, Viewport } from '../../ui';
 import { navigate } from '../router';
-import { HOME } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
 
 type Props = {
   page: boolean;
-  onCollapse: (() => void) | undefined;
   current: Shelf<ChatSummary> | undefined;
   typing: (shelf: Shelf<ChatSummary>) => boolean;
   onEnter: (shelf: Shelf<ChatSummary>) => void;
@@ -25,9 +23,8 @@ type Props = {
   onToggleFolder: (id: string) => void;
 };
 
-export function CharacterTree({ page, onCollapse, current, typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
+export function CharacterTree({ page, current, typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
   const { characters, none, folders, byFolder, loose } = useLibrary();
-  const wide = useWide();
   const { pick, move } = useImport();
   const empty = characters.length === 0 && none.chats.length === 0;
   const words = query.trim();
@@ -66,20 +63,19 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
   return (
     <Sidebar
       page={page}
-      onCollapse={onCollapse}
       actions={
         <>
-          <Row kind="toolbar">
+          {page && <Row kind="toolbar">
             <Button variant="secondary" size="sm" icon={Import} onClick={pick}>
               봇 가져오기
             </Button>
             <IconButton icon={PackageOpen} label="Risu에서 이사" size="sm" onClick={move} />
-            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate(wide ? HOME : { kind: 'gallery' })} />
-          </Row>
+            <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery' })} />
+          </Row>}
           {characters.length > 0 && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={onQuery} />}
         </>
       }
-      footer={<SidebarFooter />}
+      footer={page && <SidebarFooter />}
     >
       {empty && (page ? <Welcome /> : <Empty variant="side">아직 캐릭터가 없어요. 봇을 가져와 보세요.</Empty>)}
       {!empty && words && items.length === 0 && <Empty variant="side">{noResults(words)}</Empty>}

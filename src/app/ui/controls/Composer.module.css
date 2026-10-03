@@ -1,26 +1,17 @@
 .composer {
-  align-self: center;
   width: 100%;
-  max-width: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
   padding: var(--space-12) var(--space-8) var(--space-8) var(--space-16);
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  transition:
-    border-color var(--duration-fast),
-    max-width var(--duration-slow) var(--ease-enter),
-    padding var(--duration-slow) var(--ease-enter),
-    gap var(--duration-slow) var(--ease-enter);
+  transition: border-color var(--duration-fast);
 }
 
-/* Focus anywhere inside, the text or a tool's menu, keeps it whole. */
+/* Focus anywhere inside, the text or a tool's menu, keeps it whole. The fold changes only heights, the text's and the
+   tools', so it reads as one motion. */
 .compact:not(:focus-within) {
-  max-width: var(--composer-compact-width);
-  gap: 0;
-  padding: var(--space-8) var(--space-16);
   cursor: text;
 }
 
@@ -64,14 +55,22 @@
   transition: grid-template-rows var(--duration-slow) var(--ease-enter);
 }
 
+/* The row folds to nothing only around a box without padding: the bar's space above it folds inside. */
+.tools {
+  min-height: 0;
+}
+
 /* The bar clips only while folded: open, its tools' menus rise out of it. It shows once the fold has mostly grown, so
    the moment it spills below the fold is not seen. */
 .compact:not(:focus-within) .fold {
   grid-template-rows: 0fr;
 }
 
-.compact:not(:focus-within) .bar {
+.compact:not(:focus-within) .tools {
   overflow: hidden;
+}
+
+.compact:not(:focus-within) .bar {
   visibility: hidden;
   opacity: 0;
   transition:
@@ -80,13 +79,13 @@
 }
 
 .bar {
-  min-height: 0;
   transition:
     opacity var(--duration-fast) var(--duration-fast),
     visibility var(--duration-fast) var(--duration-fast);
   display: flex;
   align-items: center;
   gap: var(--space-8);
+  padding-top: var(--space-8);
 }
 
 .hint {

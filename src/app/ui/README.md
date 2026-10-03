@@ -55,7 +55,7 @@ and only this folder styles elements.**
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
-| layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, its rail, faces; a layer's own sidebar with its title and ×, which Esc closes too |
+| layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | controls | `Button` | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |
@@ -114,7 +114,7 @@ and only this folder styles elements.**
 | feedback | `Steps` | `Steps.module.css` | Progress through steps |
 | story | `Story` (`BotButton`) | `Story.module.css`, `Story.shadow.css` | Story text from the engine's HTML, in a shadow root: narration, dialogue, actions, a bot's own HTML and CSS sanitized and kept inside the message, its buttons live or dimmed, and which one was pressed (`BotButton`); the streaming caret; faded while another text will take its place |
 | story | `StoryMessage` (`Waiting`, `Switcher`, `Marker`, `Failure`) | `StoryMessage.module.css` | One message of the story, its quiet tag by the name (such as 번역, which flips it), its tools bar and markers; a ring that fades from a message looked for, such as a memory record's source, and the view taken to it |
-| layout | `SidePeek` | `SidePeek.module.css` | A tab at the story's right edge, clear of its scrollbar, whose drawer slides over the story once the pointer rests on the tab, or held open (a key, a tap) with its own close, such as 상태; ChatFrame's `peek` slot places it |
+| layout | `SidePeek` (`SidePeeks`) | `SidePeek.module.css` | A tab at the story's right edge, clear of its scrollbar, whose drawer slides over the story once the pointer rests on the tab, or held open (a key, a tap, a button elsewhere naming it by `controls`) with its own close, such as 상태 and 답장 정보; `SidePeeks` stacks their tabs, in ChatFrame's `peek` slot |
 | layout | `StoryAside` | `StoryAside.module.css` | A column in the story's right margin, over the page, its tools faint until pointed at, laid out even while not shown; ChatFrame's `aside` slot places it |
 | story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text: its script's name and actions among several |
 | story | `MarginBox` | `MarginBox.module.css` | A bot's box in `StoryAside`: laid out at the story's text width, drawn smaller to fit the margin by what it visibly draws, whole over the story while pointed at; tells whether it fits at half its size or more |

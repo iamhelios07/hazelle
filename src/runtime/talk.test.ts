@@ -21,6 +21,12 @@ describe('withTurn', () => {
     const stored = { id: 'said', role: 'user' as const, at: 0, versions: [{ id: 'said', seed: 'said', text: 'Hello', receipt: null, edited: false, at: 0 }], selected: 0 };
     expect(withTurn([stored], turn, 'c')[0]!.unstored).toBeUndefined();
   });
+
+  it('marks a reply asked for whole, so the chat shows it when it lands', () => {
+    const turn = { chat: 'c', said: null, reply: { id: 'r', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
+    expect(withTurn([], { ...turn, whole: true }, 'c')[0]).toMatchObject({ live: 'r', whole: true });
+    expect(withTurn([], turn, 'c')[0]!.whole).toBeUndefined();
+  });
 });
 
 describe('Talk', () => {

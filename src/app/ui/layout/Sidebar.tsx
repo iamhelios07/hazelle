@@ -1,5 +1,5 @@
 import { PanelLeft, X } from 'lucide-react';
-import { useId, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { IconButton } from '../controls/IconButton';
 import { Brand } from '../foundation/Brand';
 import { Divider } from '../foundation/Divider';
@@ -9,22 +9,21 @@ import styles from './Sidebar.module.css';
 type Props = {
   // On phones the chat list is the home screen and fills it.
   page?: boolean;
-  onCollapse?: () => void;
   actions: ReactNode;
   children: ReactNode;
-  footer: ReactNode;
+  footer?: ReactNode;
 };
 
-export function Sidebar({ page = false, onCollapse, actions, children, footer }: Props) {
+// Beside the rail on wide screens, which holds the toggle that folds it.
+export function Sidebar({ page = false, actions, children, footer }: Props) {
   return (
     <aside className={page ? `${styles.sidebar} ${styles.page}` : styles.sidebar} aria-label="캐릭터 목록">
       <div className={styles.head}>
         <Brand />
-        {onCollapse && <IconButton icon={PanelLeft} label="사이드바 접기" size="sm" onClick={onCollapse} />}
       </div>
       <div className={styles.actions}>{actions}</div>
       <div className={styles.list}>{children}</div>
-      <div className={styles.footer}>{footer}</div>
+      {footer && <div className={styles.footer}>{footer}</div>}
     </aside>
   );
 }
@@ -46,11 +45,11 @@ export function LayerSidebar({ title, onClose, children }: { title: string; onCl
   );
 }
 
-// The collapsed sidebar: a face per character and an icon per place.
-export function Rail({ onExpand, actions, children, footer }: { onExpand: () => void; actions: ReactNode; children: ReactNode; footer: ReactNode }) {
+// A face per character and an icon per place, left of the sidebar or alone while it is folded.
+export function Rail({ open, onToggle, actions, children, footer }: { open: boolean; onToggle: () => void; actions: ReactNode; children: ReactNode; footer: ReactNode }) {
   return (
-    <aside className={styles.rail} aria-label="캐릭터 목록">
-      <IconButton icon={PanelLeft} label="사이드바 펼치기" onClick={onExpand} />
+    <aside className={styles.rail} aria-label="캐릭터 바로가기">
+      <IconButton icon={PanelLeft} label={open ? '사이드바 접기' : '사이드바 펼치기'} onClick={onToggle} />
       {actions}
       <Divider variant="rail" />
       <div className={styles.railList}>{children}</div>
@@ -67,18 +66,5 @@ export function FaceButton({ label, current = false, dot, onClick, children }: F
       {children}
       {dot && <span className={`${styles.dot} ${styles[dot]}`} />}
     </button>
-  );
-}
-
-// Recent characters in one row, to jump between them without going back to the list.
-export function FaceStrip({ label, children }: { label: string; children: ReactNode }) {
-  const caption = useId();
-  return (
-    <div className={styles.stripBox} role="group" aria-labelledby={caption}>
-      <span id={caption} className={styles.caption}>
-        {label}
-      </span>
-      <div className={styles.strip}>{children}</div>
-    </div>
   );
 }

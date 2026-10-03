@@ -4,7 +4,7 @@ import type { CharacterShelf } from '../../model/library';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useShortcut } from '../shortcuts';
-import { ChatFrame, Pill } from '../ui';
+import { ChatFrame, Pill, SidePeeks } from '../ui';
 import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
@@ -33,7 +33,7 @@ type Props = {
 export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
   const reading = useReading();
   const chat = useChat(chatId, item, shelf, reading.value.reply);
-  const { id, messages, streaming, panel, scroll, prompt, persona, actions } = chat;
+  const { id, streaming, panel, scroll, prompt, persona, actions } = chat;
   useShortcut('personas', () => actions.toggleSide('personas'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));
   useShortcut('status', () => {
@@ -50,9 +50,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
         above={scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
         footer={<ChatComposer chat={chat} />}
         panel={
-          panel?.kind === 'info' ? (
-            <ChatInfo chat={id} messages={messages} id={panel.id} onShow={actions.info} onRecord={actions.memory} onClose={actions.closePanel} />
-          ) : panel?.kind === 'toggles' ? (
+          panel?.kind === 'toggles' ? (
             <ChatToggles chat={chat} />
           ) : panel?.kind === 'memory' ? (
             // The panel opens only from a saved chat.
@@ -61,7 +59,12 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
             panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           )
         }
-        peek={chat.peeking && <ChatStatusPeek chat={chat} />}
+        peek={
+          <SidePeeks>
+            {chat.peeking && <ChatStatusPeek chat={chat} />}
+            <ChatInfo chat={chat} />
+          </SidePeeks>
+        }
         aside={chat.status.length > 0 && <ChatStatusAside chat={chat} />}
         reading={reading.value}
         pictures={shelf?.character.pictures}

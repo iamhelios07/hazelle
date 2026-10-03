@@ -1,4 +1,5 @@
 import type { ModelSettings } from '../connectors/settings';
+import type { InlineThoughts } from '../connectors/stream';
 import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
 import type { Message, Receipt, ReceiptError, Writes } from '../model/chat';
@@ -24,11 +25,14 @@ export type Turn = {
   reply: { id: string; message: string | null; replaces: string | null; continues: { text: string; receipt: Receipt; seed: string; reasoning?: string } | null; before?: Writes };
   text: string;
   reasoning: string;
+  // whole: asked for in one piece (ModelSettings streaming), so it is shown when it lands, not paced as bursts are.
+  whole?: true;
 };
 
-// A message on screen: live marks the version being written. unstored: the user's message shown before the store has
-// it. Nothing may be saved against it yet: fold skips, for good, an entry that names a message saved after it.
-export type Shown = Message & { live: string | null; unstored?: true };
+// A message on screen: live marks the version being written, whole that it comes in one piece (Turn). unstored: the
+// user's message shown before the store has it. Nothing may be saved against it yet: fold skips, for good, an entry
+// that names a message saved after it.
+export type Shown = Message & { live: string | null; whole?: true; unstored?: true };
 
 // What one reply is sent with, ready once its prompt is built: the model and the prompt, which the reply's id
 // seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model. said: the user's message
@@ -68,8 +72,9 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
     out.push(message);
   }
   const version = { id: reply.id, seed: reply.continues?.seed ?? reply.id, text: turn.text, receipt: null, edited: false, at: now, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
+  const live = { live: reply.id, ...(turn.whole && { whole: true as const }) };
   if (reply.message === null) {
-    if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: now, versions: [version], selected: 0, live: reply.id });
+    if (!out.some((message) => message.id === reply.id)) out.push({ id: reply.id, role: 'assistant', at: now, versions: [version], selected: 0, ...live });
     return out;
   }
   const index = out.findIndex((message) => message.id === reply.message);
@@ -77,7 +82,7 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   if (!message || message.versions.some((existing) => existing.id === reply.id)) return out;
   const slot = reply.replaces === null ? -1 : message.versions.findIndex((existing) => existing.id === reply.replaces);
   const versions = slot === -1 ? [...message.versions, version] : message.versions.with(slot, version);
-  out[index] = { ...message, versions, selected: slot === -1 ? versions.length - 1 : slot, live: reply.id };
+  out[index] = { ...message, versions, selected: slot === -1 ? versions.length - 1 : slot, ...live };
   return out;
 }
 
@@ -208,12 +213,12 @@ export class Talk {
     const { route, settings, prompt } = ready;
     const reply = ready.before ? { ...asked, before: ready.before } : asked;
     // A message sent translated or changed by the bot shows as it is saved from the moment it is made so.
-    this.set({ ...this.turn!, reply, said: ready.said ?? said });
+    this.set({ ...this.turn!, reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
     const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
     const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, continues: reply.continues, ...(reply.before && { before: reply.before }) } });
     this.reading.add(call.id);
     this.calling = call.id;
-    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write });
+    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write, inline: this.inline(chat) });
     const sent = await sending;
     if (sent && !sent.ok) {
       abort.abort();
@@ -245,7 +250,7 @@ export class Talk {
     try {
       await this.store.pinned(async () => {
         if (await lease.ready) return;
-        const answer = await resume(this.store, stream, abort.signal, this.write);
+        const answer = await resume(this.store, stream, abort.signal, this.write, this.inline(chat));
         if (!this.closed) await this.save(chat, await this.ended(chat, this.written(reply, stream.value.call, answer)), stream.id);
       });
     } finally {
@@ -259,6 +264,13 @@ export class Talk {
   }
 
   private readonly write = (phase: Phase, chunk: string) => this.set({ ...this.turn!, [phase]: this.turn![phase] + chunk });
+
+  // A chat without a character has no 생각을 본문에 둠, and strips.
+  private inline(chat: string): InlineThoughts {
+    const character = this.store.get('chat', chat)?.value.character;
+    const keep = character ? this.store.get('character', character)?.value.keepThoughts === true : false;
+    return { keep, takeBack: (chars) => this.set({ ...this.turn!, reasoning: this.turn!.reasoning.slice(0, this.turn!.reasoning.length - chars) }) };
+  }
 
   private written(reply: Turn['reply'], call: Stream['call'], answer: Reply): Written {
     const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };

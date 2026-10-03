@@ -1,3 +1,4 @@
+import { splitThoughts } from '../../connectors/thoughts';
 import { isRecord, list } from '../../connectors/values';
 import { assemble, imageType, type Resolve } from './card';
 import { add, convert, counted, type Tally } from './convert';
@@ -80,10 +81,6 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
   };
 }
 
-// Risu keeps a reply's reasoning inside its text, in these blocks, and takes them out again before it draws or sends
-// the text (ParseMarkdown, and the prompt builder).
-const THOUGHTS = /<Thoughts>([\s\S]*?)<\/Thoughts>/g;
-
 function risuChat(chat: Json, note: string, fmIndex: number, greetings: number, missed: Tally<MoveUnsupportedKind>): RisuChat {
   const messages = list(chat.message).filter(isRecord);
   let at = number(chat.lastDate) ?? 0;
@@ -106,10 +103,10 @@ function risuChat(chat: Json, note: string, fmIndex: number, greetings: number, 
     ),
     messages: messages.map((message) => {
       at = number(message.time) ?? at;
-      const thoughts: string[] = [];
-      const said = text(message.data).replace(THOUGHTS, (_, thought: string) => (thoughts.push(thought.trim()), ''));
-      const reasoning = thoughts.filter(Boolean).join('\n\n');
-      return { role: message.role === 'user' ? 'user' : 'assistant', text: thoughts.length > 0 ? said.trimStart() : said, at, ...(reasoning && { reasoning }) };
+      // Risu keeps a reply's reasoning inside its text as <Thoughts> blocks, and takes them out again before it draws or
+      // sends the text (ParseMarkdown, and the prompt builder).
+      const { text: said, reasoning } = splitThoughts(text(message.data));
+      return { role: message.role === 'user' ? 'user' : 'assistant', text: said, at, ...(reasoning && { reasoning }) };
     }),
   };
 }
