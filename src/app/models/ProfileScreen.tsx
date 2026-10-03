@@ -4,6 +4,7 @@ import { fit, WHOLE, type Cache, type Change, type ModelSettings, type Reasoning
 import type { Stored } from '../../model/kinds';
 import {
   addProfile,
+  modelProfile,
   profileUsers,
   removeProfile,
   renameProfile,
@@ -49,7 +50,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   const toast = useToast();
   const settings = useSettings();
   const connections = useConnections();
-  const profiles = useProfiles();
+  // modelProfile reads the store directly; profile edits must still refresh the attach-menu labels.
+  useProfiles();
   const { id } = stored;
   const isDefault = settings.profile === id;
 
@@ -217,8 +219,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
   const using = new Set(users.map((user) => `${user.connection.id}/${user.model.id}`));
   const profileName = (model: ProfileUser['model']) => {
-    const named = model.profile ?? settings.profile;
-    return profiles.find((profile) => profile.id === named)?.value.name ?? '없음';
+    const choice = modelProfile(store, model);
+    return choice.kind === 'profile' ? choice.profile.value.name : '없음';
   };
   const others = connections.map((connection) => ({ connection, models: connection.value.starred.filter((model) => !using.has(`${connection.id}/${model.id}`)) })).filter((group) => group.models.length > 0);
   // The default 묶음 is what a model without its own uses, so taking a model onto it clears the model's own.
