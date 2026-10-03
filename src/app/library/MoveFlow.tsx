@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { readBackup } from '../../engine/import/backup';
 import type { PresetFailure } from '../../engine/import/preset';
-import type { BackupFailure, BackupSource, RisuBackup } from '../../engine/import/types';
+import type { BackupFailure, BackupSource, RisuBackup, RisuCharacter } from '../../engine/import/types';
 import { unused, type Unused } from '../../engine/pipeline';
 import { broughtFromRisu, modulesFromRisu, moveFromRisu, type Moved, type MovePick, type MoveStep } from '../../runtime/move';
 import { aliased } from '../common/alias';
@@ -198,9 +198,11 @@ function Picks({ title, rows, can, ticks, onChange }: PicksProps) {
 
 function Summary({ backup, pick, moved }: { backup: RisuBackup; pick: MovePick; moved: Moved }) {
   const chats = moved.characters.reduce((sum, character) => sum + character.chats, 0);
+  const sources = new Map<string, RisuCharacter>();
+  for (const source of pick.characters) if (!sources.has(source.id)) sources.set(source.id, source);
   const missed = [
     ...moved.characters.flatMap((character) => {
-      const source = pick.characters.find(({ id }) => id === character.risu)!;
+      const source = sources.get(character.risu)!;
       const lines = [...cardMissed(source.report, character.skipped, character.faceless), ...moveMissed(source.missed)];
       return lines.length ? [{ tone: 'missed' as const, title: character.name, note: lines.join(' · ') }] : [];
     }),
