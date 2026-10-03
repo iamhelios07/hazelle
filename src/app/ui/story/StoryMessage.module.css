@@ -80,14 +80,36 @@
   background: var(--color-surface);
 }
 
-.tools {
+/* As tall as the message, so the bar, stuck to the story's bottom edge above the composer, rides along a long message
+   and never leaves it. Sticky holds only while no ancestor up to the story's scroller is transformed: see .row in
+   Viewport.module.css. */
+.rail {
   position: absolute;
-  top: calc(var(--space-16) * -1);
+  top: 0;
   right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+/* Beside the column in its own gutter, never at the story's edge, where SidePeek's tabs and the StoryAside margin
+   live: ChatFrame decides when there is room. */
+.gutter .rail {
+  right: auto;
+  left: 100%;
+  width: var(--read-gutter);
+  align-items: center;
+}
+
+.tools {
+  position: sticky;
+  bottom: calc(var(--footer-space) + var(--space-8));
   z-index: var(--layer-raised);
   display: flex;
   align-items: center;
-  gap: 0;
   padding: var(--space-2);
   border: var(--border-thin) solid var(--color-border);
   border-radius: var(--radius-md);
@@ -99,6 +121,13 @@
     opacity var(--duration-fast),
     transform var(--duration-fast);
   pointer-events: none;
+}
+
+/* In the gutter the rail takes the pointer while the bar shows, so a pointer crossing from the text to the bar stays on
+   the message. Over the corner it must not, or it would take the presses on the text beneath. */
+.gutter:focus-within .rail,
+.gutter.pinned .rail {
+  pointer-events: auto;
 }
 
 .message:focus-within .tools,
@@ -114,6 +143,10 @@
     opacity: 1;
   }
 
+  .gutter:hover .rail {
+    pointer-events: auto;
+  }
+
   .message:hover .tools {
     opacity: 1;
     transform: none;
@@ -124,6 +157,10 @@
     background: var(--color-surface-hover);
     color: var(--color-text);
   }
+}
+
+.gutter .tools {
+  flex-direction: column;
 }
 
 .waiting {

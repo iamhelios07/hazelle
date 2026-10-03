@@ -6,6 +6,7 @@ import { Icon } from '../foundation/Icon';
 import { useHover } from '../foundation/media';
 import { Menu, MenuItem } from '../overlays/Menu';
 import { RowMemoryContext } from '../collections/row-memory';
+import { StoryGutterContext } from '../layout/story-gutter';
 import styles from './StoryMessage.module.css';
 
 type Props = {
@@ -34,13 +35,14 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
   const foundDelay = useMemo(() => `-${Math.max(0, Date.now() - found)}ms`, [found]);
   const memory = useContext(RowMemoryContext);
   const revisited = useRef(memory?.visited ?? false);
+  const gutter = useContext(StoryGutterContext);
   // Phones have no hover, so a tap on the message itself shows its tools; not one the story took, such as on a picture.
   const tap = (event: MouseEvent) => {
     if (hover || event.defaultPrevented || (event.target as HTMLElement).closest('button, a, textarea')) return;
     onTap();
   };
   return (
-    <article className={`${styles.message} ${pinned ? styles.pinned : ''} ${revisited.current ? styles.revisited : ''}`} onClick={tap}>
+    <article className={`${styles.message} ${pinned ? styles.pinned : ''} ${revisited.current ? styles.revisited : ''} ${gutter ? styles.gutter : ''}`} onClick={tap}>
       {found !== 0 && <span key={found} className={styles.found} style={{ animationDelay: foundDelay }} aria-hidden />}
       {avatar}
       <div className={styles.main}>
@@ -56,7 +58,11 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
         {mine ? <div className={styles.bubble}>{children}</div> : children}
         {after}
       </div>
-      {tools && <div className={styles.tools}>{tools}</div>}
+      {tools && (
+        <div className={styles.rail}>
+          <div className={styles.tools}>{tools}</div>
+        </div>
+      )}
     </article>
   );
 }
