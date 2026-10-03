@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
+import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
 import { displayChat } from './turn';
 
@@ -16,20 +17,18 @@ describe('startChat', () => {
       const id = crypto.randomUUID();
       await server.hold(store, id);
       const chat: Chat = { title: null, character: null, models: {} };
-      const versions = texts.map((text) => {
-        const id = crypto.randomUUID();
-        return { id, seed: id, text, receipt: null, edited: false, at: 0 };
-      });
-      const before = displayChat(reader, id, chat, [{ id: 'opening', role: 'assistant', at: 0, versions, selected }]);
+      const greetings = projectGreetings(texts, texts.map(() => crypto.randomUUID()), selected)!;
+      const preview = greetingPreview(greetings, 0)!;
+      const before = displayChat(reader, id, chat, [preview]);
       let bare = false;
       const leave = store.subscribe(() => {
         bare ||= store.get('chat', id) !== null && store.children('entry', id).length === 0;
       });
-      expect(await startChat(store, id, chat, { ids: versions.map((version) => version.id), texts, selected, translations: new Map() })).toBeNull();
+      expect(await startChat(store, id, chat, greetings)).toBeNull();
       leave();
       expect(bare).toBe(false);
       const messages = fold(store.children('entry', id));
-      expect(messages[0]!.versions.map((version) => version.id)).toEqual(versions.map((version) => version.id));
+      expect(messages[0]!.versions.map((version) => version.id)).toEqual(preview.versions.map((version) => version.id));
       expect(displayChat(reader, id, chat, messages)).toEqual(before);
       return [shown(messages[0]!).text, messages[0]!.versions.length];
     };
@@ -71,7 +70,7 @@ describe('branchChat', () => {
     const split = crypto.randomUUID();
     const folded = () => fold(store.children('entry', source));
 
-    await startChat(store, source, chat, { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['하나', '둘 {{random::빨강::파랑::노랑::초록}} {{pick::봄::여름::가을::겨울}}', '셋'], selected: 1, translations: new Map() });
+    await startChat(store, source, chat, projectGreetings(['하나', '둘 {{random::빨강::파랑::노랑::초록}} {{pick::봄::여름::가을::겨울}}', '셋'], [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], 1));
     await appendUserMessage(store, source, { id: said, text: '안녕' });
     await editMessage(store, source, folded().find((message) => message.id === said)!, '안녕하세요', null);
     // A reply cut at its limit, then continued (이어 쓰기), whose cut call's cost is booked later.
@@ -110,7 +109,7 @@ describe('branchChat', () => {
     expect(batches.at(-1)!.at(-1)!.id).toBe(branched.data);
     const copy = fold(entries);
     const withoutIds = (messages: Message[]) =>
-      messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ seed, text, receipt, edited, at: written, translation }) => ({ seed, text, receipt, edited, written, translation })) }));
+      messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ seed, text, receipt, edited, at: written, translation, greeting }) => ({ seed, text, receipt, edited, written, translation, greeting })) }));
     expect(withoutIds(copy)).toEqual(withoutIds(item.messages.slice(0, -1)));
     expect([copy[0]!.versions.length, shown(copy[1]!).text, shown(copy[1]!).edited]).toEqual([3, '안녕하세요', true]);
     expect([shown(copy[2]!).text, copy[2]!.versions.length, calls(shown(copy[2]!).receipt!).map((call) => call.cost)]).toEqual(['답장', 1, [{ unit: 'usd', amount: 0.01, source: 'reported' }, null]]);

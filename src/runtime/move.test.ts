@@ -75,7 +75,8 @@ describe('moveFromRisu', () => {
       ['user', '안녕', true],
       ['assistant', '반가워 [HP 7]', true],
     ]);
-    expect(messages[0]!.versions).toHaveLength(2);
+    expect(messages[0]!.versions).toHaveLength(3);
+    expect(shown(messages[0]!).greeting).toBe(2);
     expect(risuMatch(store, '루나')).toBe(id);
 
     expect(await moveFromRisu(store, files, { ...pick, personas: [] }, () => {})).toEqual({ ok: true, data: { characters: [], personas: 0, prompts: 0, modules: [] } });

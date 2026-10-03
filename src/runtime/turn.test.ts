@@ -3,6 +3,7 @@ import type { Card } from '../engine/import/types';
 import { fold, shown } from '../model/chat';
 import { setTranslate } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
+import { projectGreetings } from './greetings';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
@@ -70,7 +71,7 @@ describe('a new chat', () => {
         { kind: 'send', text: '안녕' },
         {
           chat: { title: null, character: character.ok ? character.data.id : null, models: {} },
-          greetings: { ids: [crypto.randomUUID(), crypto.randomUUID()], texts: luna.greetings, selected: 0, translations: new Map() },
+          greetings: projectGreetings(luna.greetings, [crypto.randomUUID(), crypto.randomUUID()], 0),
           started: () => (preview = session.read.chat(chat).snapshot()?.preview),
         },
       );

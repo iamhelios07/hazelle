@@ -5,6 +5,7 @@ import type { ApiResult } from './api';
 import { createFolder, importCharacter, saveAssets, type Progress } from './characters';
 import { chatWrites } from './chat-log';
 import type { Files } from './files';
+import { projectGreetings, startingGreetings } from './greetings';
 import { defaultMemory } from './memory';
 import { importModule, setModuleAlways } from './modules';
 import { addPersona } from './personas';
@@ -118,12 +119,8 @@ async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<
   return made.ok ? { ok: true, data: made.data.id } : made;
 }
 
-// The chat opens on the greeting Risu showed, among the card's greetings that are not blank as a new chat's does
-// (runtime/turn greetingOf); a blank one shown leaves the chat without one, as Risu showed none.
 function chatOf(character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, memory: MemorySettings): Write[] {
-  const shown = card.greetings.flatMap((text, index) => (text.trim() ? [index] : []));
-  const selected = shown.indexOf(greeting);
-  const greetings = selected === -1 ? null : { ids: shown.map(() => crypto.randomUUID()), texts: shown.map((index) => card.greetings[index]!), selected, translations: new Map() };
+  const greetings = startingGreetings(projectGreetings(card.greetings, card.greetings.map(() => crypto.randomUUID()), greeting));
   const own = persona === null ? undefined : personaIds.get(persona);
   const chat: Chat = { title: title.trim() || null, character, models: {}, memory, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }) };
   return chatWrites(crypto.randomUUID(), chat, greetings, messages);

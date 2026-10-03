@@ -1,7 +1,7 @@
 import { modelSettings } from '../connectors/registry';
 import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
-import type { Card, Pack } from '../engine/import/types';
+import type { Pack } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
 import { assemble, rewritten, type Assembled, type PromptInput, type RanAway, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
@@ -24,7 +24,8 @@ import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { CacheSend } from './cache';
 import type { Halted } from './scripts';
-import { appendUserMessage, startChat, type Greetings, type Said } from './chat-log';
+import { appendUserMessage, startChat, type Said } from './chat-log';
+import { greetingOf, type Greetings } from './greetings';
 import { cacheViewOf } from './generate';
 import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
 import { tokenizer } from './tokenizer';
@@ -105,7 +106,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
       return { id: version.id, seed: version.seed, role: message.role, text: version.text, time: version.at, ...(version.staged && { staged: true }), ...(version.before && { before: version.before }), ...(after.length > 0 && { after }) };
     }),
     variables: chat.variables ?? [],
-    greeting: card && greetingOf(card, messages),
+    greeting: card && greetingOf(messages),
     toggle: togglesOf(store, chat, prompt).value,
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
@@ -127,15 +128,6 @@ export function togglesOf(store: Session['store'], chat: Chat, prompt: PromptCho
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
   const declared = chatToggles(prompt.kind === 'prompt' ? prompt.prompt.value.toggles : [], packsOf(store, chat).flatMap(({ pack }) => readToggles(pack.toggles).toggles));
   return { declared, value: toggleValue(declared, (character ? character.toggles : store.get('settings', SETTINGS_ID)?.value.toggles) ?? {}) };
-}
-
-// A chat's greeting is its first message when that is an assistant message the model did not write. Its index in the card is that of the shown version among the card's greetings that are not blank, which
-// are the ones a chat saves.
-function greetingOf(card: Card, messages: Message[]): ChatScope['greeting'] {
-  const first = messages[0];
-  if (first?.role !== 'assistant' || first.versions[0]!.receipt !== null) return null;
-  const greetings = card.greetings.flatMap((text, index) => (text.trim() ? [index] : []));
-  return { index: shown(first).receipt === null ? (greetings[first.selected] ?? null) : null };
 }
 
 // The 묶음's settings as this model is sent them; null while its 묶음 is missing, which a turn stops on.

@@ -5,6 +5,7 @@ import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown } from '../model/chat';
 import { setToggle } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
+import { projectGreetings } from './greetings';
 import type { Runner } from './lua/client';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
@@ -22,7 +23,7 @@ async function chatWith(session: Session, script: string | Trigger[], toggles = 
   const chat = crypto.randomUUID();
   await server.hold(session.store, chat);
   const greeting = crypto.randomUUID();
-  await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, { ids: [greeting], texts: card.greetings, selected: 0, translations: new Map() });
+  await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, projectGreetings(card.greetings, [greeting], 0));
   const messages = () => fold(session.store.children('entry', chat));
   const shownTexts = () => displayChat(session, chat, session.store.get('chat', chat)!.value, messages()).texts;
   return { chat, messages, shownTexts };

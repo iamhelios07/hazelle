@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fold } from '../model/chat';
 import { startChat } from './chat-log';
+import { projectGreetings } from './greetings';
 import { importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleDeleted } from './modules';
 import { chatPrompt } from './prompts';
 import { answerable, saying, stubRelay, testCard, testServer } from './testing';
@@ -30,7 +31,7 @@ describe('modules', () => {
 
       const chat = crypto.randomUUID();
       await server.hold(store, chat);
-      await startChat(store, chat, { title: null, character: character.data.id, models: {} }, { ids: [crypto.randomUUID()], texts: card.greetings, selected: 0, translations: new Map() });
+      await startChat(store, chat, { title: null, character: character.data.id, models: {} }, projectGreetings(card.greetings, [crypto.randomUUID()], 0));
       const value = () => store.get('chat', chat)!.value;
       const shown = () => displayChat(session, chat, value(), fold(store.children('entry', chat)));
       const toggles = () => togglesOf(store, value(), chatPrompt(store, value())).declared.map(({ key }) => key);

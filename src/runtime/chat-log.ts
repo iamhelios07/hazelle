@@ -6,6 +6,7 @@ import type { Stored } from '../model/kinds';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
 import { markDeleted } from './characters';
+import type { Greetings } from './greetings';
 import { without, type ObjectStore, type Write } from './store';
 
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
@@ -31,20 +32,15 @@ export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, 
   return [...(greetings ? greetingWrites(id, greetings, messages[0]?.at ?? Date.now()) : []), ...held, { type: 'create', kind: 'chat', id, parent: null, value: chat }];
 }
 
-// ids are the ones the greetings were shown under before the chat was saved, which seed their random tags.
-// translations: those made before the chat was saved, by the greeting's id.
-export type Greetings = { ids: string[]; texts: string[]; selected: number; translations: ReadonlyMap<string, Translation> };
-
 // A character's chat opens on its greeting, and the other greetings are versions of it. They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
-function greetingWrites(chat: string, { ids, texts, selected, translations }: Greetings, at: number): Write[] {
-  const first = ids[0]!;
-  const entries: [string, Entry][] = texts.map((text, index) => {
-    const translation = translations.get(ids[index]!);
-    const common = { at, text, receipt: null, ...(translation && { translation }) };
-    return [ids[index]!, index === 0 ? { type: 'message', role: 'assistant', ...common } : { type: 'version', message: first, replaces: null, edit: false, ...common }];
+function greetingWrites(chat: string, { choices, selected }: Greetings, at: number): Write[] {
+  const first = choices[0]!.id;
+  const entries: [string, Entry][] = choices.map(({ id, index: greeting, text, translation }, index) => {
+    const common = { at, text, receipt: null, greeting, ...(translation && { translation }) };
+    return [id, index === 0 ? { type: 'message', role: 'assistant', ...common } : { type: 'version', message: first, replaces: null, edit: false, ...common }];
   });
   // Adding a version selects it, so without a select the chat would open on the last greeting.
-  if (selected !== texts.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: ids[selected]!, at }]);
+  if (selected !== choices.length - 1) entries.push([crypto.randomUUID(), { type: 'select', message: first, version: choices[selected]!.id, at }]);
   return entries.map(([id, value]) => ({ type: 'create', kind: 'entry', id, parent: chat, value }));
 }
 
@@ -101,7 +97,7 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 function copied(id: string, { role, at, versions, selected, after }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));
   const [first, ...rest] = versions;
-  const held = ({ text, receipt, seed, translation, staged, before, reasoning }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }), ...(reasoning && { reasoning }) });
+  const held = ({ text, receipt, seed, translation, staged, before, reasoning, greeting }: Message['versions'][number]) => ({ text, receipt, seed, ...(translation && { translation }), ...(staged && { staged }), ...(before && { before }), ...(reasoning && { reasoning }), ...(greeting !== undefined && { greeting }) });
   // The first version said again holds its own writes: an edit would add them to the message entry's.
   const repeated = first!.edited || first!.at !== at;
   const entries: [string, Entry][] = [[id, { type: 'message', role, at, ...held(repeated ? { ...first!, before: undefined } : first!) }]];
@@ -175,7 +171,7 @@ export function appendScripted(store: ObjectStore, chat: string, { edits, remove
   const entries: Entry[] = [
     ...edits.map(({ message, text, wrote }): Entry => {
       const current = shown(message);
-      return { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, staged: true, ...(wrote.length > 0 && { before: wrote }) };
+      return { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, staged: true, ...(wrote.length > 0 && { before: wrote }), ...(current.greeting !== undefined && { greeting: current.greeting }) };
     }),
     ...removed.map((message): Entry => ({ type: 'delete', message, at })),
     ...added.map(({ role, text }): Entry => ({ type: 'message', role, at, text, receipt: null, staged: true })),
@@ -196,7 +192,7 @@ export function editMessage(store: ObjectStore, chat: string, message: Message, 
   const current = shown(message);
   const at = Date.now();
   const kept = translation?.trim() && current.translation && { translation: { ...current.translation, text: translation, at } };
-  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...kept });
+  return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...(current.greeting !== undefined && { greeting: current.greeting }), ...kept });
 }
 
 // id: the call's, so a call another device saved too is known as saved (runtime/streams).

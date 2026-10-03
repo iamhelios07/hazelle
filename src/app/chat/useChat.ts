@@ -21,6 +21,7 @@ import {
   setChatPrompt,
   startChat,
 } from '../../runtime/chat-log';
+import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
 import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
@@ -75,34 +76,22 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
   const scripted = triggersOf(packsOf(store, chat).map(({ pack }) => pack)).length > 0;
   const [openedAt] = useState(() => Date.now());
-  // A blank greeting is a choice like the others: picked, the chat starts with no first message (user, 2026-10-02).
-  // The chat still opens on the first greeting that says something.
   const greetings = card?.greetings ?? [];
-  const firstSaid = () => Math.max(0, greetings.findIndex((text) => text.trim()));
-  const [picked, setGreeting] = useState(firstSaid);
-  // The greetings change under an open new chat when its character is edited beside it: a pick whose greeting was
-  // removed goes back to the first.
-  const greeting = picked < greetings.length ? picked : firstSaid();
+  const [picked, setGreeting] = useState<number | null>(null);
   // The ids the greetings are saved under, so their random tags roll the same before and after the first send, and the
   // greeting keeps its place in the story rather than being drawn again. A greeting added since gets its own.
   const [madeIds, setOpeningIds] = useState(() => greetings.map(() => crypto.randomUUID()));
   const openingIds = madeIds.length < greetings.length ? [...madeIds, ...greetings.slice(madeIds.length).map(() => crypto.randomUUID())] : madeIds;
   if (openingIds !== madeIds) setOpeningIds(openingIds);
   const translate = translateSwitches(store, chat.character);
-  const unstarted: Shown | null = useMemo(() =>
-    item === null && card && greetings.some((text) => text.trim())
-      ? {
-          id: openingIds[0]!,
-          role: 'assistant',
-          at: openedAt,
-          versions: greetings.map((text, index) => {
-            const translation = greetingTranslation(shelf!.character, text, translate.replyLanguage);
-            return { id: openingIds[index]!, seed: openingIds[index]!, text, receipt: null, edited: false, at: openedAt, ...(translation && { translation }) };
-          }),
-          selected: greeting,
-          live: null,
-        }
-      : null, [item === null, card, shelf?.character.greetingTranslations, translate.replyLanguage, openedAt, openingIds, greeting]);
+  const choices = useMemo(() => item === null && card
+    ? projectGreetings(greetings, openingIds, picked, (text) => greetingTranslation(shelf!.character, text, translate.replyLanguage))
+    : null, [item === null, card, shelf?.character.greetingTranslations, translate.replyLanguage, openingIds, picked]);
+  const greeting = choices?.selected ?? 0;
+  const unstarted: Shown | null = useMemo(() => {
+    const preview = greetingPreview(choices, openedAt);
+    return preview && { ...preview, live: null };
+  }, [choices, openedAt]);
   // A new chat shows its turn while it is saved, under the id it is saved as.
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
@@ -194,17 +183,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   // The new chat as it is saved: by its first send, or by a press on a button of its greeting.
   function starting() {
-    // A chat saves the greetings that say something (runtime/turn greetingOf), and none when it starts on a blank one.
-    const said = opening?.versions.filter((version) => version.text.trim()) ?? [];
-    const selected = opening ? said.indexOf(shown(opening)) : -1;
     return {
       chat,
-      greetings: selected === -1 ? null : {
-        ids: said.map((version) => version.id),
-        texts: said.map((version) => version.text),
-        selected,
-        translations: new Map(said.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
-      },
+      greetings: startingGreetings(choices),
       started: () => {
         drafts.move(draft.key, chatId);
         navigate({ kind: 'chat', id: chatId }, { replace: true });

@@ -8,6 +8,7 @@ import { exportBackup, readBackup, restoreBackup } from './backup-testing';
 import type { Files } from './files';
 import { editCharacter, importCharacter, setDeleted } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
+import { projectGreetings } from './greetings';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
 import { addDefaults, addPrompt, removePrompt } from './prompts';
@@ -90,7 +91,7 @@ async function oldAccount({ profile = true } = {}) {
   const chat = crypto.randomUUID();
   await server.hold(store, chat);
   const opened: Chat = { title: null, character, models: {} };
-  const greetings = { ids: [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], texts: ['안녕', '반가워', '어서 와'], selected: 1, translations: new Map() };
+  const greetings = projectGreetings(['안녕', '반가워', '어서 와'], [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], 1);
   await startChat(store, chat, opened, greetings);
   await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '등대에 가자' });
   const gone = crypto.randomUUID();
