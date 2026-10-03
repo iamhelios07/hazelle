@@ -12,6 +12,8 @@ export const ROLES: Record<Role, { needs: Modality; fallsBackTo: Role | null }> 
 export type ModelRef = { connection: string; model: string };
 export type Assignment = Partial<Record<Role, ModelRef>>;
 
+export const sameModelRef = (a: ModelRef, b: ModelRef): boolean => a.connection === b.connection && a.model === b.model;
+
 // Layers run from the most specific to 기본값. Every layer is asked for the role before the chain
 // moves on, so a 보조 모델 set in 기본값 outranks a 대화 모델 set in the chat.
 export function resolveRole(role: Role, layers: Assignment[]): ModelRef | null {

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { fitsRole, resolveRole } from './assignment';
+import { fitsRole, resolveRole, sameModelRef } from './assignment';
 import type { Model } from './types';
 
 describe('model assignment', () => {
+  it('identifies models by both their connection and model IDs', () => {
+    const selected = { connection: 'c1', model: 'shared' };
+    expect(sameModelRef(selected, { ...selected })).toBe(true);
+    expect(sameModelRef(selected, { connection: 'c2', model: 'shared' })).toBe(false);
+    expect(sameModelRef(selected, { connection: 'c1', model: 'other' })).toBe(false);
+  });
+
   it('takes the most specific layer that sets the role', () => {
     const general = { main: { connection: 'c1', model: 'claude' } };
     const chat = { main: { connection: 'c2', model: 'gemini' } };

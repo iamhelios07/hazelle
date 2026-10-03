@@ -1,9 +1,7 @@
-import { fitsRole, type ModelRef, type Role } from '../../connectors/assignment';
+import { fitsRole, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { ChipButton, Empty, Menu, MenuItem, SettingRow } from '../ui';
 import { MODEL_ROLES, NOT_STARRED, noStarred } from './words';
-
-const same = (a: ModelRef, b: ModelRef) => a.connection === b.connection && a.model === b.model;
 
 export function starredModels(connections: readonly Stored<'connection'>[], role: Role) {
   return connections.flatMap((connection) =>
@@ -56,7 +54,7 @@ export function RolePicker({ role, label = MODEL_ROLES[role], help, own, follow,
                 key={`${choice.ref.connection}/${choice.ref.model}`}
                 label={choice.name}
                 sub={choice.source}
-                checked={!!own && same(own, choice.ref)}
+                checked={!!own && sameModelRef(own, choice.ref)}
                 onClick={() => onPick(choice.ref)}
               />
             ))

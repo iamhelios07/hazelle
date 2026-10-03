@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { fitsRole, type ModelRef } from '../../connectors/assignment';
+import { sameModelRef, type ModelRef } from '../../connectors/assignment';
 import { recentModels } from '../../model/chat';
 import { modelProfile } from '../../runtime/profiles';
+import { starredModels } from '../common/RolePicker';
 import { noResults } from '../common/search';
 import { noStarred } from '../common/words';
 import { useSummaries, useConnections, useStore } from '../session';
@@ -18,7 +19,6 @@ type Props = {
 };
 
 const RECENT = 3;
-const same = (a: ModelRef, b: ModelRef | null) => b !== null && a.connection === b.connection && a.model === b.model;
 
 // Starred models only, recent ones first. It never lists providers.
 export function ChatModelMenu({ current, label, onPick, handle }: Props) {
@@ -49,19 +49,17 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
   const summaries = useSummaries();
   const [query, setQuery] = useState('');
 
-  const starred = connections.flatMap((connection) =>
-    connection.value.starred.filter((model) => fitsRole(model, 'main')).map((model) => ({ ref: { connection: connection.id, model: model.id }, name: model.name, source: connection.value.label })),
-  );
+  const starred = starredModels(connections, 'main');
   const recent = recentModels(
     summaries.map(({ value }) => value.recent),
     RECENT,
-  ).flatMap((ref) => starred.filter((choice) => same(choice.ref, ref)));
+  ).flatMap((ref) => starred.filter((choice) => sameModelRef(choice.ref, ref)));
   const rest = starred.filter((choice) => !recent.includes(choice));
   const words = query.trim().toLowerCase();
   const found = starred.filter((choice) => `${choice.name} ${choice.source}`.toLowerCase().includes(words));
 
   const item = (choice: (typeof starred)[number]) => (
-    <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={choice.source} checked={same(choice.ref, current)} onClick={() => onPick(choice.ref)} />
+    <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={choice.source} checked={!!current && sameModelRef(choice.ref, current)} onClick={() => onPick(choice.ref)} />
   );
 
   if (starred.length === 0) return <Empty variant="menu">{noStarred('고를 수 있어요')}</Empty>;
