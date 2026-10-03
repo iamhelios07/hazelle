@@ -127,8 +127,9 @@ export const fileBlocks = new Hono<AppEnv>().put('/files/:id/blocked', async (c)
 const CLEANUP_PAGE = 1000;
 const CLEANUP_BUDGET = 20;
 
-// Safe to repeat: the account's deletion reruns it after a crash (lifecycle.ts). Finish this direct request: leaving
-// accounts cannot sign in again, so a scheduled-work budget must not deliberately strand their own deletion.
+// Unbounded, unlike the sweep: 탈퇴 runs it after its answer, once the account's row is gone (lifecycle.ts), so what a
+// cut-off run leaves is a dead prefix, queued with the row's delete, that sweepDeadPrefixes removes. Safe to run beside
+// the sweep.
 export async function removeAccountFiles(env: Env, incarnation: string): Promise<void> {
   for (;;) {
     if (await removePrefixPage(env.BLOBS, `files/${incarnation}/`)) return;

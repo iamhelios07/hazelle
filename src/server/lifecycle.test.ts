@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FeedPage, Phase, Write } from './account-store';
-import { MAX_FILE_BYTES } from './files';
+import { MAX_FILE_BYTES, sweepDeadPrefixes } from './files';
 import { hex } from './http';
 import { beginRestore, cancelRestore, leaveAccount, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
@@ -111,6 +111,14 @@ function watched(hook: (what: string) => void | Promise<void>) {
     },
   });
   return { env: { ...env(), DB, STORES, BLOBS }, arms, checkpoints: () => checkpoints };
+}
+
+// A deletion with the work it leaves running after its answer awaited, so a crash there fails the run too.
+async function leave(on: Env, id: string, incarnation: string, operator: boolean) {
+  const after: Promise<unknown>[] = [];
+  const left = await leaveAccount(on, { waitUntil: (work) => void after.push(work) }, id, incarnation, operator);
+  await Promise.all(after);
+  return left;
 }
 
 // Counts the boundaries of a run, crashes after the nth, or pauses after the nth until released.
@@ -376,25 +384,75 @@ describe('a deletion', () => {
     expect((await t.env.BLOBS.list({ prefix: `files/${incarnation}/` })).objects).toEqual([]);
   };
 
-  it('finishes when run again after a crash at every durable boundary, and logs the deletion once', async () => {
+  const queued = ({ incarnation }: { incarnation: string }) =>
+    t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup WHERE prefix = ?').bind(`files/${incarnation}/`).first<number>('n');
+
+  it('finishes after a crash at every durable boundary, by running again or by the hourly sweep once the row is gone, and logs the deletion once', async () => {
     const probe = counting();
     const first = await holding();
-    expect(await leaveAccount(probe.env, first.id, first.incarnation, true)).toBe('left');
+    expect(await leave(probe.env, first.id, first.incarnation, true)).toBe('left');
     const total = probe.count();
     expect(total).toBeGreaterThan(4);
     for (let n = 1; n <= total; n++) {
       const held = await holding();
-      await expect(leaveAccount(crashing(n).env, held.id, held.incarnation, true)).rejects.toThrow(Crash);
-      expect(await leaveAccount(env(), held.id, held.incarnation, true)).toBe('left');
+      await expect(leave(crashing(n).env, held.id, held.incarnation, true)).rejects.toThrow(Crash);
+      expect(await leave(env(), held.id, held.incarnation, true)).toBe('left');
+      expect(await queued(held)).toBe(1);
+      await sweepDeadPrefixes(env());
+      expect(await queued(held)).toBe(0);
       await gone(held);
       expect(await t.env.DB.prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'delete-account' AND target = ?").bind(held.id).first('n')).toBe(1);
     }
   }, 60_000);
 
+  // R2 deletes wait until released, as a removal still running after the answer.
+  function heldDeletes() {
+    const blobs = t.env.BLOBS;
+    let release = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
+      delete: async (keys: string | string[]) => {
+        await released;
+        await blobs.delete(keys);
+      },
+    });
+    return () => {
+      t.env.BLOBS = blobs;
+      release();
+    };
+  }
+  const pictures = async ({ incarnation }: { incarnation: string }) => (await t.env.BLOBS.list({ prefix: `files/${incarnation}/` })).objects.length;
+
+  it('answers 탈퇴 once the store is emptied and the row gone, and removes the pictures after the answer', async () => {
+    const held = await holding();
+    const release = heldDeletes();
+    expect((await t.delete('account', { method: 'password', proof: held.body.passwordProof }, held.cookie)).status).toBe(204);
+    expect(await account(held.id)).toBeNull();
+    expect(t.stores.db(held.incarnation).tables()).toEqual([]);
+    expect(await pictures(held)).toBe(1);
+    release();
+    await t.settle();
+    await gone(held);
+  });
+
+  it('frees the username and the signup place while the pictures are still being removed', async () => {
+    const held = await holding();
+    await t.env.DB.prepare('UPDATE service SET signup_cap = 1').run();
+    const release = heldDeletes();
+    expect((await t.delete('account', { method: 'password', proof: held.body.passwordProof }, held.cookie)).status).toBe(204);
+    const again = signupBody(held.body.username);
+    expect((await t.post('signup', again)).status).toBe(201);
+    expect(await pictures(held)).toBe(1);
+    release();
+    await t.settle();
+    await gone(held);
+    expect(await account(again.accountId)).toMatchObject({ state: 'active' });
+  });
+
   it('answers busy while the account restores', async () => {
     const seed = await seeded();
     await begin(seed);
-    expect(await leaveAccount(env(), seed.id, seed.incarnation, false)).toBe('busy');
+    expect(await leave(env(), seed.id, seed.incarnation, false)).toBe('busy');
     expect(await account(seed.id)).toMatchObject({ state: 'restoring' });
   });
 
@@ -409,12 +467,12 @@ describe('a deletion', () => {
           }),
       } as unknown as Env['STORES'],
     };
-    expect(await leaveAccount(unreached, held.id, held.incarnation, false)).toBe('unavailable');
+    expect(await leave(unreached, held.id, held.incarnation, false)).toBe('unavailable');
     expect(await account(held.id)).toMatchObject({ state: 'leaving' });
     expect(t.stores.db(held.incarnation).tables()).not.toEqual([]);
     expect((await t.env.BLOBS.list({ prefix: `files/${held.incarnation}/` })).objects).toHaveLength(1);
 
-    expect(await leaveAccount(env(), held.id, held.incarnation, false)).toBe('left');
+    expect(await leave(env(), held.id, held.incarnation, false)).toBe('left');
     await gone(held);
   });
 });
@@ -424,7 +482,7 @@ describe('an operation id', () => {
     const old = await seeded();
     const id = await begin(old);
     expect(await cancelRestore(env(), id)).toMatchObject({ phase: 'cancelled', verified: true });
-    expect(await leaveAccount(env(), old.id, old.incarnation, false)).toBe('left');
+    expect(await leave(env(), old.id, old.incarnation, false)).toBe('left');
 
     const next = await seeded();
     const current = await begin(next);
@@ -440,7 +498,7 @@ describe('an account id used again', () => {
     const bytes = new Uint8Array([7]);
     const file = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
     await t.put(`files/${file}`, bytes, seed.cookie);
-    expect(await leaveAccount(env(), seed.id, seed.incarnation, false)).toBe('left');
+    expect(await leave(env(), seed.id, seed.incarnation, false)).toBe('left');
 
     const again = sessionCookie(await t.post('signup', { ...signupBody(), accountId: seed.id }));
     expect((await account(seed.id))!.incarnation).not.toBe(seed.incarnation);
@@ -455,15 +513,15 @@ describe('an account id used again', () => {
     await expect(runRestore(pausedAt('done').env, id)).rejects.toThrow(Crash);
     // The old account's deletion, paused just before it deletes the row; another run of it finishes meanwhile.
     const probe = counting();
-    await leaveAccount(probe.env, seed.id, seed.incarnation, false);
+    await leave(probe.env, seed.id, seed.incarnation, false);
     await fresh();
     const old = await seeded();
     const finishing = await begin(old);
     await expect(runRestore(pausedAt('done').env, finishing)).rejects.toThrow(Crash);
     const late = pausing(probe.count() - 1);
-    const leaving = leaveAccount(late.env, old.id, old.incarnation, false);
+    const leaving = leave(late.env, old.id, old.incarnation, false);
     await late.reached;
-    expect(await leaveAccount(env(), old.id, old.incarnation, false)).toBe('left');
+    expect(await leave(env(), old.id, old.incarnation, false)).toBe('left');
 
     const again = sessionCookie(await t.post('signup', { ...signupBody(), accountId: old.id }));
     await t.batch([{ id: B, kind: 'chat', parent: null, body: 'mine', baseRev: null }], again);

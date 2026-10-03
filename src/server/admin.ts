@@ -281,7 +281,7 @@ admin.delete('/accounts/:id', async (c) => {
   if (!ID.test(id)) return fail(c, 400, 'bad-input');
   const incarnation = await c.env.DB.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
   if (incarnation === null) return fail(c, 404, 'not-found');
-  const left = await leaveAccount(c.env, id, incarnation, true);
+  const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, true);
   if (left === 'busy') return fail(c, 409, 'account-busy');
   if (left === 'unavailable') return refused(c, { unavailable: true });
   return c.body(null, 204);
