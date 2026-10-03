@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { fileBlocks, FILE_BYTES, removeAccountFiles, sweepDeadPrefixes } from './files';
+import { fileBlocks, removeAccountFiles, sweepDeadPrefixes } from './files';
 import { hex, type AppEnv } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
 
@@ -23,7 +23,7 @@ const signup = async (body = signupBody()) => {
 const put = (id: string, bytes: Uint8Array<ArrayBuffer>, cookie?: string) => t.put(`files/${id}`, bytes, cookie);
 const missing = async (ids: string[], cookie: string) => ((await (await t.post('files/missing', { ids }, cookie)).json()) as { missing: string[] }).missing;
 const rows = (incarnation: string) => t.env.DB.prepare('SELECT size, stored FROM account_files WHERE incarnation = ?').bind(incarnation).all().then(({ results }) => results);
-const sum = (incarnation: string) => t.env.DB.prepare(`SELECT ${FILE_BYTES} AS sum FROM accounts WHERE incarnation = ?`).bind(incarnation).first<number>('sum');
+const sum = (incarnation: string) => t.env.DB.prepare('SELECT file_bytes AS sum FROM accounts WHERE incarnation = ?').bind(incarnation).first<number>('sum');
 const stored = async (incarnation: string, id: string) => (await t.env.BLOBS.get(`files/${incarnation}/${id}`))?.arrayBuffer();
 const operator = new Hono<AppEnv>().route('/', fileBlocks);
 const block = (id: string, blocked: boolean) =>
@@ -125,6 +125,27 @@ describe('files', () => {
 
     await t.env.DB.prepare('UPDATE accounts SET own_file_bytes_cap = 1, file_bytes_cap = 6 WHERE id = ?').bind(jin.id).run();
     expect((await put(await idOf(large), large, jin.cookie)).headers.get('x-account-file-bytes')).toBe('6');
+  });
+
+  it('charges only one concurrent reservation near the cap and retries it after a cap reduction', async () => {
+    const { cookie, incarnation } = await signup();
+    await t.env.DB.prepare('UPDATE service SET account_file_bytes_cap = 3').run();
+    const bodies = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
+    const ids = await Promise.all(bodies.map(idOf));
+    const replies = await Promise.all(bodies.map((body, index) => put(ids[index]!, body, cookie)));
+    expect(replies.map(({ status }) => status).sort()).toEqual([204, 413]);
+    expect(await sum(incarnation)).toBe(3);
+    expect(await rows(incarnation)).toEqual([{ size: 3, stored: 1 }]);
+
+    const kept = replies.findIndex(({ status }) => status === 204);
+    await t.env.DB.prepare('UPDATE account_files SET stored = 0 WHERE incarnation = ?').bind(incarnation).run();
+    await t.env.DB.prepare('UPDATE service SET account_file_bytes_cap = 0').run();
+    const retried = await Promise.all([put(ids[kept]!, bodies[kept]!, cookie), put(ids[kept]!, bodies[kept]!, cookie)]);
+    expect(retried.map(({ status }) => status)).toEqual([204, 204]);
+    expect(await sum(incarnation)).toBe(3);
+    await t.env.DB.prepare('DELETE FROM accounts WHERE incarnation = ?').bind(incarnation).run();
+    expect(await rows(incarnation)).toEqual([]);
+    expect(await sum(incarnation)).toBeNull();
   });
 
   it('refuses blocked content to every account that holds it, and brings every copy back when lifted', async () => {

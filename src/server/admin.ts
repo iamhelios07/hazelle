@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { Phase } from './account-store';
-import { FILE_BYTES, fileBlocks } from './files';
+import { fileBlocks } from './files';
 import { fail, ID, isAdmin, readObject, refused, type AppEnv, type State } from './http';
 import { beginRestore, cancelRestore, leaveAccount, restoreActions, runRestore, store, undoable, UNDO_LIFE_MS } from './lifecycle';
 import { requireSession } from './session';
@@ -118,7 +118,7 @@ const USAGE_DEADLINE_MS = 10_000;
 // its own caps, 'default' while the service's apply. totals: a reading of the accounts that answered, at readAt.
 admin.get('/accounts', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id AS accountId, username, created_at AS createdAt, suspended_at IS NOT NULL AS suspended, state, incarnation, ${FILE_BYTES} AS fileBytes,
+    `SELECT id AS accountId, username, created_at AS createdAt, suspended_at IS NOT NULL AS suspended, state, incarnation, file_bytes AS fileBytes,
        own_bytes_cap, bytes_cap, own_file_bytes_cap, file_bytes_cap
      FROM accounts ORDER BY created_at, id`,
   ).all<{
@@ -306,7 +306,7 @@ admin.post('/restores/:id/cancel', async (c) => {
 admin.get('/service', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
-       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(size), 0) FROM account_files) AS fileBytes
+       (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes
      FROM service`,
   ).first();
   return c.json(row);

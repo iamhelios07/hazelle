@@ -9,10 +9,6 @@ export const FILE_ID = /^[0-9a-f]{64}$/;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_ASKED = 1000;
 
-// An account's picture bytes, as SQL in a statement over its accounts row: the sum of its own rows, stored or still
-// reserved, each file once. The one count of them; no stored counter is kept beside it.
-export const FILE_BYTES = '(SELECT COALESCE(SUM(size), 0) FROM account_files WHERE incarnation = accounts.incarnation)';
-
 // Each account holds its own copy of a file under its incarnation, so nothing is shared between accounts and removing
 // one account's pictures races no one else. Nothing removes a file while its account lives: an import asks /missing
 // before the objects naming the file are written (runtime/files), and a restore may bring back an object naming it.
@@ -60,20 +56,23 @@ files.put('/:id', canWrite, async (c) => {
   if (held!.blocked) return fail(c, 403, 'file-blocked');
   if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body))) !== id) return fail(c, 400, 'bad-input');
   if (held!.stored) return c.body(null, 204);
-  const [, reserved] = await db.batch([
+  const [, , reserved] = await db.batch([
     db
       .prepare(
         `INSERT INTO account_files (incarnation, id, size, created_at)
-         SELECT incarnation, ?2, ?3, ?4 FROM accounts WHERE incarnation = ?1 AND COALESCE(${FILE_BYTES} + ?3 <= ${CAP.fileBytes}, 1)
+         SELECT incarnation, ?2, ?3, ?4 FROM accounts WHERE incarnation = ?1 AND COALESCE(file_bytes + ?3 <= ${CAP.fileBytes}, 1)
          ON CONFLICT DO NOTHING`,
       )
       .bind(incarnation, id, body.byteLength, Date.now()),
+    // The batch is one transaction: only an actually inserted reservation charges bytes. Existing reservations
+    // remain retryable even after the cap is lowered. Deletion removes both the account's counter and its file rows.
+    db.prepare('UPDATE accounts SET file_bytes = file_bytes + ?2 WHERE incarnation = ?1 AND changes() = 1').bind(incarnation, body.byteLength),
     db.prepare('SELECT 1 FROM account_files WHERE incarnation = ? AND id = ?').bind(incarnation, id),
   ]);
   if (!reserved!.results.length) return fail(c, 413, 'files-full');
   await c.env.BLOBS.put(fileKey(incarnation, id), body);
   const fileBytes = await db
-    .prepare(`UPDATE account_files SET stored = 1 WHERE incarnation = ?1 AND id = ?2 RETURNING (SELECT ${FILE_BYTES} FROM accounts WHERE incarnation = ?1) AS fileBytes`)
+    .prepare(`UPDATE account_files SET stored = 1 WHERE incarnation = ?1 AND id = ?2 RETURNING (SELECT file_bytes FROM accounts WHERE incarnation = ?1) AS fileBytes`)
     .bind(incarnation, id)
     .first<number>('fileBytes');
   // Only the account's deletion removes its rows, so a finalize that matches none is a request outliving its account.

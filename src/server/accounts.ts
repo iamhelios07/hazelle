@@ -2,7 +2,6 @@ import { Hono, type Context } from 'hono';
 import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
 import { VISIBLE } from './admin';
-import { FILE_BYTES } from './files';
 import { fail, ID, isAdmin, readObject, refused, type Account, type AppEnv } from './http';
 import { leaveAccount, store } from './lifecycle';
 import { currentAccount, dropSessionCookie, endSession, requireOwnSession, setSessionCookie, startSession } from './session';
@@ -113,7 +112,7 @@ async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'usern
   const [usage, facts] = await Promise.all([
     store(c.env, incarnation).usage(incarnation),
     c.env.DB.prepare(
-      `SELECT ${CAP.bytes} AS bytesCap, ${FILE_BYTES} AS fileBytes, ${CAP.fileBytes} AS fileBytesCap,
+      `SELECT ${CAP.bytes} AS bytesCap, file_bytes AS fileBytes, ${CAP.fileBytes} AS fileBytesCap,
          (SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AND notices.id > accounts.notices_seen) AS unreadNotices
        FROM accounts WHERE incarnation = ?`,
     )
