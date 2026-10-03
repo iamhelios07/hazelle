@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { exportBackup } from '../../runtime/backup';
+import { exportBackup } from '../../runtime/backup-testing';
 import { clearDownloadOutputs, downloadOutput, DownloadUnavailable, pendingDownloadOutputs } from './download';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });

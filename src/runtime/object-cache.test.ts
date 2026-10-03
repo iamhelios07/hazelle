@@ -7,7 +7,7 @@ import { forgetVault } from './device-cache';
 import type { SealedChange } from './object-cache';
 import { openSession } from './session';
 import { ObjectStore } from './store';
-import { exportBackup } from './backup';
+import { exportBackup } from './backup-testing';
 import { GENERATION_STEPS, generationSteps, MemoryCache } from './testing/cache';
 
 vi.mock('../vault/device', () => ({ lockVault: vi.fn(async () => {}) }));

@@ -2,8 +2,9 @@ import { strToU8, zipSync } from 'fflate';
 import { expect, it, vi } from 'vitest';
 import type { Kind, Stored } from '../model/kinds';
 import { sealFile } from '../vault/files';
-import { exportBackup, readBackup, restoreBackup, type BackupOutput } from './backup';
+import { exportBackup, readBackup, restoreBackup, type BackupOutput } from './backup-testing';
 import type { ObjectStore } from './store';
+import * as zip from './backup-zip';
 
 const persona = (id: string, rev: number): Stored<'persona'> => ({ id, rev, kind: 'persona', parent: null, value: { name: id, description: '이야기 '.repeat(100), picture: null } });
 
@@ -231,4 +232,41 @@ it('restores pictures in bounded uploader windows before writing objects', async
   };
   expect(await restoreBackup(next.api, { save }, await backup(file))).toEqual({ ok: true, data: { skipped: 0 } });
   expect(windows).toEqual([12, 12, 1]);
+});
+
+it('decodes JSONL once and replays staged depths in source order when resuming', async () => {
+  const messages: Stored<'entry'>[] = Array.from({ length: 140 }, (_, i) => ({
+    id: `message-${140 - i}`, kind: 'entry', parent: 'chat', rev: 1,
+    value: { type: 'message', role: 'user', at: i, text: String(i), receipt: null },
+  }));
+  const chat: Stored<'chat'> = { id: 'chat', kind: 'chat', parent: null, rev: 2, value: { title: null, character: null, models: {} } };
+  const objects = [...messages, chat, persona('person', 3)];
+  const file = new Blob([zipSync({
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'objects.jsonl': strToU8(objects.map((object) => JSON.stringify(object)).join('\n')),
+  })]);
+  const inflate = vi.spyOn(zip, 'unzipEntry');
+  const opened = await backup(file);
+  const next = store();
+  const abort = new AbortController();
+  const files = { save: async () => ({ ok: true as const, data: [] }) };
+  expect(await restoreBackup(next.api, files, opened, {
+    signal: abort.signal, progress: (done) => { if (done === 128) abort.abort(); },
+  })).toEqual({ ok: false, error: 'stopped' });
+  expect(await restoreBackup(next.api, files, opened)).toEqual({ ok: true, data: { skipped: 0 } });
+  expect(next.written).toEqual(objects.map(({ id }) => id));
+  expect(inflate.mock.calls.filter(([, entry]) => entry.name === 'objects.jsonl')).toHaveLength(1);
+  await opened.records.close();
+  inflate.mockRestore();
+});
+
+it('captures trash exclusions after pin hydrates a fresh or rewound store', async () => {
+  const removed = { ...persona('removed', 1), value: { ...persona('removed', 1).value, deleted: 1 } };
+  let pinned = false;
+  const source = store([removed]);
+  source.api.pin = async () => { pinned = true; return { ok: true, data: PIN }; };
+  source.api.list = ((kind: Kind) => pinned && kind === 'persona' ? [removed] : []) as ObjectStore['list'];
+  const target = destination();
+  expect(await exportBackup(source.api, { read: vi.fn(), missing }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
+  expect((await backup(target.file())).objects).toEqual([]);
 });

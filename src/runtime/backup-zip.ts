@@ -9,6 +9,34 @@ export type BackupOutput = {
 
 const MAX32 = 0xffffffff;
 const CHUNK = 64 * 1024;
+// Codec output includes tiny fragments (and empty deflate flushes). A worker crosses to the host only with a bounded
+// page, so awaiting a slow destination still bounds memory without one IPC/write per message.
+export function bufferedBackupOutput(output: BackupOutput, signal: AbortSignal): BackupOutput {
+  const buffer = new Uint8Array(CHUNK);
+  let size = 0;
+  const flush = async () => {
+    signal.throwIfAborted();
+    if (!size) return;
+    const bytes = buffer.slice(0, size);
+    size = 0;
+    await output.write(bytes);
+  };
+  return {
+    write: async (bytes) => {
+      signal.throwIfAborted();
+      for (let at = 0; at < bytes.length;) {
+        const take = Math.min(buffer.length - size, bytes.length - at);
+        buffer.set(bytes.subarray(at, at + take), size);
+        size += take;
+        at += take;
+        if (size === buffer.length) await flush();
+      }
+    },
+    close: async () => { await flush(); signal.throwIfAborted(); await output.close(); },
+    abort: async () => { size = 0; await output.abort(); },
+  };
+}
+
 const view = (bytes: Uint8Array) => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 const u16 = (bytes: Uint8Array, at: number) => view(bytes).getUint16(at, true);
 const u32 = (bytes: Uint8Array, at: number) => view(bytes).getUint32(at, true);
@@ -31,6 +59,7 @@ export class BackupZip {
 
   private async write(bytes: Uint8Array<ArrayBuffer>) {
     this.signal.throwIfAborted();
+    if (!bytes.length) return;
     await this.output.write(bytes);
     this.offset += bytes.length;
   }

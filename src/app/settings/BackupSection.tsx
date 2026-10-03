@@ -1,15 +1,16 @@
 import { Download, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { exportBackup, readBackup, restoreBackup } from '../../runtime/backup';
+import { exportBackup, readBackup, restoreBackup, type Backup } from '../../runtime/backup';
 import { clearDownloadOutputs, downloadOutput, DownloadUnavailable, pendingDownloadOutputs } from '../common/download';
 import { describeFailure } from '../common/failure';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, FileButton, Section, SettingGroup, SettingRow } from '../ui';
 
-const UNREAD: Record<'not-backup' | 'other-version', { message: string; detail?: string }> = {
+const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage', { message: string; detail?: string }> = {
   'not-backup': { message: 'risu-alpha 백업 파일이 아니거나 망가진 파일이에요.' },
   'other-version': { message: '이 버전이 모르는 백업 파일이에요.', detail: '새로고침한 뒤 다시 해 보세요.' },
+  'backup-storage': { message: '백업을 준비할 임시 저장 공간을 열지 못했어요.', detail: '기기의 저장 공간과 브라우저의 저장 설정을 확인해 주세요.' },
 };
 
 // sv-SE writes the local date as 2026-09-29.
@@ -82,6 +83,7 @@ export function BackupSection() {
   const unread = (error: keyof typeof UNREAD) => toast.error(UNREAD[error].message, { detail: UNREAD[error].detail });
 
   async function load(file: File) {
+    let backup: Backup | null = null;
     const options = begin('load');
     try {
       const read = await readBackup(file, options);
@@ -89,13 +91,15 @@ export function BackupSection() {
         if (read.error !== 'stopped') unread(read.error);
         return;
       }
-      const loaded = await restoreBackup(store, files, read.backup, options);
+      backup = read.backup;
+      const loaded = await restoreBackup(store, files, backup, options);
       if (loaded.ok) return toast.show('백업을 불러왔어요.', loaded.data.skipped ? { detail: `내려졌거나 너무 큰 그림 ${loaded.data.skipped}개는 빼고 불러왔어요.` } : undefined);
       if (loaded.error === 'not-new') return toast.error('이미 저장한 것이 있는 계정이에요.', { detail: '백업은 새 계정에만 불러올 수 있어요.' });
-      if (loaded.error === 'not-backup') return unread('not-backup');
+      if (loaded.error === 'not-backup' || loaded.error === 'backup-storage') return unread(loaded.error);
       if (loaded.error === 'stopped') return toast.show('불러오기를 멈췄어요.', { detail: '같은 파일을 다시 불러오면 멈춘 곳부터 이어가요.' });
       toast.error('불러오다 멈췄어요.', { detail: `${describeFailure(loaded)} 같은 파일을 다시 불러오면 멈춘 곳부터 이어가요.` });
     } finally {
+      await backup?.close();
       running.current = null;
       setActive(null);
     }

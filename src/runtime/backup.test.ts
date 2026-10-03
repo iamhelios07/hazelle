@@ -4,7 +4,7 @@ import type { Card } from '../engine/import/types';
 import { fold, type Chat } from '../model/chat';
 import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
-import { exportBackup, readBackup, restoreBackup } from './backup';
+import { exportBackup, readBackup, restoreBackup } from './backup-testing';
 import type { Files } from './files';
 import { editCharacter, importCharacter, setDeleted } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';

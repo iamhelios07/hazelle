@@ -4,7 +4,7 @@ import * as chatModel from '../model/chat';
 import type { Chat } from '../model/chat';
 import { randomBytes } from '../vault/aead';
 import * as sealedObjects from '../vault/objects';
-import { exportBackup, readBackup } from './backup';
+import { exportBackup, readBackup } from './backup-testing';
 import { removeChat, restoreChat } from './chat-log';
 import { Files } from './files';
 import { backfillSummaries, summaryId, summaryStale } from './summary';
