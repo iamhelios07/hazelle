@@ -36,6 +36,7 @@ export async function addCharacter(store: ObjectStore, character: Character, { a
   return result.ok ? { ok: true, data: id } : result;
 }
 
+// skipped: assets not kept, as not a picture this app reads or too large to store.
 // Both import entrances use faceless for thumbnail failures and refused uploads, not absent source pictures.
 export type ImportedCharacter = { id: string; skipped: number; faceless: boolean };
 

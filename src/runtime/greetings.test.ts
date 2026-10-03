@@ -36,6 +36,13 @@ it('preserves original indexes, blank choices, duplicate text, ids and translati
   expect(projectGreetings(['', ' '], ['a', 'b'], null)).toBeNull();
 });
 
+it('saves only the greetings that say something, each under its card index', () => {
+  const saved = startingGreetings(projectGreetings(['', 'a', '', 'b'], ['g0', 'g1', 'g2', 'g3'], 3))!;
+  const message = fold(entries(chatWrites('chat', chat, saved, [])))[0]!;
+  expect(message.versions.map(({ text, greeting }) => [text, greeting])).toEqual([['a', 1], ['b', 3]]);
+  expect(shown(message).id).toBe('g3');
+});
+
 it('keeps greeting identity through user and script edits instead of matching their new text', async () => {
   const choices = projectGreetings(['', 'same', 'same'], ['g0', 'g1', 'g2'], 2)!;
   const held = entries(chatWrites('chat', chat, choices, []));
