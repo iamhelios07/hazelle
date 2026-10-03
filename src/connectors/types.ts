@@ -100,6 +100,9 @@ export type Codec = {
   chat(endpoint: Endpoint, request: ChatRequest, fields: Record<string, unknown>): HttpRequest;
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
   terminal(event: unknown): Terminal | null;
+  // A reply asked for without streaming, read into the same facts as a stream's events. null when the payload is not
+  // this format's reply at all.
+  whole(payload: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): Terminal | null;
   truncated(finishReason: string): boolean;
   usage(raw: Record<string, unknown>): Usage;
 };

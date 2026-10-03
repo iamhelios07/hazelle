@@ -77,7 +77,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const text = flipped ? original : translatingText || (translation?.text ?? original);
   // What shows until a translation's first text comes stays faded, and the translation then streams in its place.
   const pending = !translatingText && (awaited || translatingText === '');
-  const reveal = useReveal(version.id, text, live);
+  const reveal = useReveal(version.id, text, live && !message.whole);
   const html = useMemo(() => shownHtml(reveal.text, decor), [reveal.text, decor.bot, decor.url]);
   const failed = receipt?.state === 'failed';
   const empty = original === '';

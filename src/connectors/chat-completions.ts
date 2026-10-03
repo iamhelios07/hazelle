@@ -33,6 +33,13 @@ function effort(reasoning: Reasoning | undefined) {
   return {};
 }
 
+// reasoning_content (DeepSeek and others) and reasoning (OpenRouter) are the two spellings of reasoning text in
+// compatible replies, streamed in a delta or whole in a message. A server that sends neither is unaffected.
+function reasoningOf(part: Record<string, unknown>) {
+  const reasoning = typeof part.reasoning_content === 'string' && part.reasoning_content ? part.reasoning_content : part.reasoning;
+  return typeof reasoning === 'string' ? reasoning : null;
+}
+
 // The OpenAI-compatible wire format, the generic base every connection type builds on.
 export const chatCompletions: Codec = {
   authHeaders: (secret): Record<string, string> => (secret ? { authorization: `Bearer ${secret}` } : {}),
@@ -81,24 +88,22 @@ export const chatCompletions: Codec = {
     body: JSON.stringify({
       model: model.id,
       messages: messages.map((message) => wireMessage(message, settings.cache)),
-      stream: true,
-      stream_options: { include_usage: true },
+      // OpenAI refuses stream_options on a request that does not stream.
+      ...(settings.streaming === false ? { stream: false } : { stream: true, stream_options: { include_usage: true } }),
       ...Object.fromEntries(CARRIED.filter((setting) => settings[setting] !== undefined).map((setting) => [FIELDS[setting], settings[setting]])),
       ...effort(settings.reasoning),
       ...fields,
     }),
   }),
 
-  // reasoning_content (DeepSeek and others) and reasoning (OpenRouter) are the two spellings of
-  // reasoning text in compatible streams. A server that sends neither is unaffected.
   read(event, facts, append) {
     if (!isRecord(event)) return;
     if (typeof event.id === 'string' && event.id) facts.id ??= event.id;
     for (const choice of list(event.choices)) {
       if (!isRecord(choice)) continue;
       const delta = isRecord(choice.delta) ? choice.delta : {};
-      const reasoning = typeof delta.reasoning_content === 'string' && delta.reasoning_content ? delta.reasoning_content : delta.reasoning;
-      if (typeof reasoning === 'string') append('reasoning', reasoning);
+      const reasoning = reasoningOf(delta);
+      if (reasoning !== null) append('reasoning', reasoning);
       if (typeof delta.content === 'string') append('text', delta.content);
       if (typeof choice.finish_reason === 'string') facts.finishReason = choice.finish_reason;
     }
@@ -109,6 +114,24 @@ export const chatCompletions: Codec = {
     if (event === '[DONE]') return { state: 'completed' };
     if (isRecord(event) && event.error !== undefined && event.error !== null) return { state: 'failed', error: streamError(event.error) };
     return null;
+  },
+
+  // A chat.completion object: the first choice's whole message, with the usage a stream sends last.
+  whole(payload, facts, append) {
+    const failed = chatCompletions.terminal(payload);
+    if (failed) return failed;
+    if (!isRecord(payload) || !Array.isArray(payload.choices)) return null;
+    if (typeof payload.id === 'string' && payload.id) facts.id = payload.id;
+    const [choice] = payload.choices;
+    if (isRecord(choice)) {
+      const message = isRecord(choice.message) ? choice.message : {};
+      const reasoning = reasoningOf(message);
+      if (reasoning !== null) append('reasoning', reasoning);
+      if (typeof message.content === 'string') append('text', message.content);
+      if (typeof choice.finish_reason === 'string') facts.finishReason = choice.finish_reason;
+    }
+    if (isRecord(payload.usage)) Object.assign(facts.rawUsage, payload.usage);
+    return { state: 'completed' };
   },
 
   truncated: (finishReason) => finishReason === 'length',

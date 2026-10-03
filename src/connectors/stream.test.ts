@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import anthropicMessage from './fixtures/anthropic-message.json';
+import chatCompletion from './fixtures/chat-completion.json';
 import { resolveConnection, type Resolved } from './registry';
 import { decodeStream } from './stream';
 import type { Connection, Model, Phase } from './types';
@@ -22,9 +24,10 @@ function body(text: string, cuts = 7): ReadableStream<Uint8Array> {
   });
 }
 
-async function decode(resolved: Resolved, stream: ReadableStream<Uint8Array>, controller = new AbortController()) {
+async function decode(resolved: Resolved, stream: ReadableStream<Uint8Array>, controller = new AbortController(), media = 'text/event-stream') {
   const parts: [Phase, string][] = [];
-  const outcome = await decodeStream(resolved, model, stream, controller.signal, (phase, text) => parts.push([phase, text]));
+  const response = new Response(stream, { headers: { 'content-type': media } });
+  const outcome = await decodeStream(resolved, model, response, controller.signal, (phase, text) => parts.push([phase, text]));
   const joined = (phase: Phase) => parts.filter(([p]) => p === phase).map(([, text]) => text).join('');
   return { outcome, text: joined('text'), reasoning: joined('reasoning') };
 }
@@ -148,4 +151,45 @@ it('uses unquoted string errors in both streams without changing their terminal 
   expect((await decode(anthropic, body(sse({ type: 'error', error: 'Overloaded' })))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Overloaded' } });
   expect(anthropic.codec.terminal({ error: 'Not an Anthropic terminal' })).toBeNull();
   expect(openRouter.codec.terminal({ error: null })).toBeNull();
+});
+
+describe('a reply asked for whole', () => {
+  const whole = (resolved: Resolved, payload: unknown) => decode(resolved, body(JSON.stringify(payload)), new AbortController(), 'application/json; charset=utf-8');
+
+  it('reads a chat.completion into the same outcome as its stream', async () => {
+    expect(await whole(openRouter, chatCompletion)).toEqual({
+      text: '안녕하세요, 반가워요!',
+      reasoning: '인사를 생각해요.',
+      outcome: {
+        state: 'done',
+        cut: null,
+        error: null,
+        finishReason: 'stop',
+        usage: { inputTokens: 12, cachedInputTokens: 0, cacheWriteInputTokens: null, outputTokens: 20, reasoningTokens: 8 },
+        cost: { unit: 'usd', amount: 0.00042, source: 'reported' },
+        replyId: 'gen-1759550000-AbCdEfGhIjKlMnOp',
+      },
+    });
+  });
+
+  it('reads a Messages message into the same outcome as its stream', async () => {
+    expect(await whole(anthropic, anthropicMessage)).toEqual({
+      text: '안녕하세요!',
+      reasoning: '짧게 답하자.',
+      outcome: {
+        state: 'done',
+        cut: null,
+        error: null,
+        finishReason: 'end_turn',
+        usage: { inputTokens: 125, cachedInputTokens: 100, cacheWriteInputTokens: 20, outputTokens: 15, reasoningTokens: null },
+        cost: null,
+        replyId: 'msg_01XFDUDYJgAACzvnptvVoYEL',
+      },
+    });
+  });
+
+  it('fails on a JSON answer that is not a reply, and on an error body', async () => {
+    expect((await whole(anthropic, chatCompletion)).outcome).toMatchObject({ state: 'failed', error: { kind: 'bad-event' } });
+    expect((await whole(openRouter, { error: { message: 'Overloaded' } })).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Overloaded' } });
+  });
 });

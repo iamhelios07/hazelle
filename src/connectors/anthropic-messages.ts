@@ -124,15 +124,16 @@ export const anthropicMessages: Codec = {
         ...(settings.stop === undefined ? {} : { stop_sequences: settings.stop }),
         ...reasoningFields(settings.reasoning),
         ...fields,
-        stream: true,
+        stream: settings.streaming !== false,
       }),
     };
   },
 
   read(event, facts, append) {
     if (!isRecord(event)) return;
-    if (event.type === 'message_start' && isRecord(event.message) && isRecord(event.message.usage)) {
-      Object.assign(facts.rawUsage, event.message.usage);
+    if (event.type === 'message_start' && isRecord(event.message)) {
+      if (typeof event.message.id === 'string') facts.id ??= event.message.id;
+      if (isRecord(event.message.usage)) Object.assign(facts.rawUsage, event.message.usage);
     } else if (event.type === 'content_block_start' && isRecord(event.content_block)) {
       const block = event.content_block;
       if (block.type === 'text' && typeof block.text === 'string') append('text', block.text);
@@ -152,6 +153,22 @@ export const anthropicMessages: Codec = {
     if (event.type === 'message_stop') return { state: 'completed' };
     if (event.type === 'error') return { state: 'failed', error: streamError(event.error) };
     return null;
+  },
+
+  // The message object a stream's events build up: its content blocks, stop_reason and usage at once.
+  whole(payload, facts, append) {
+    const failed = anthropicMessages.terminal(payload);
+    if (failed) return failed;
+    if (!isRecord(payload) || payload.type !== 'message' || !Array.isArray(payload.content)) return null;
+    if (typeof payload.id === 'string') facts.id = payload.id;
+    for (const block of payload.content) {
+      if (!isRecord(block)) continue;
+      if (block.type === 'text' && typeof block.text === 'string') append('text', block.text);
+      if (block.type === 'thinking' && typeof block.thinking === 'string') append('reasoning', block.thinking);
+    }
+    if (typeof payload.stop_reason === 'string') facts.finishReason = payload.stop_reason;
+    if (isRecord(payload.usage)) Object.assign(facts.rawUsage, payload.usage);
+    return { state: 'completed' };
   },
 
   truncated: (finishReason) => finishReason === 'max_tokens',

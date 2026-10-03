@@ -258,6 +258,14 @@ describe('chat requests', () => {
     expect(() => chatRequest(anthropic, { model: model(), messages, settings: {} })).toThrow(ConnectorError);
   });
 
+  it('asks both formats for the whole reply when streaming is off, with no stream options', () => {
+    const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
+    const anthropic = connection('anthropic');
+    const off = { model: model({ maxOutput: 64000 }), messages, settings: { streaming: false as const } };
+    expect(JSON.parse(chatRequest(generic, off).body!)).toEqual({ model: 'm', messages, stream: false });
+    expect(JSON.parse(chatRequest(anthropic, off).body!)).toMatchObject({ stream: false });
+  });
+
   it('reads a request for the cache in the order its wire sends it, with the points it keeps', () => {
     const sent = [{ role: 'user' as const, content: '안녕', cache: true as const }, { role: 'system' as const, content: '짧게 답해.', cache: true as const }];
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });

@@ -76,7 +76,7 @@ export async function generate({ credentials, connection, model, settings, messa
   if (!credential.ok) return failed(credential.failure);
   const response = await stream(call, withCredential(route, request, credential.credential), signal);
   if (!(response instanceof Response)) return failed(response);
-  const outcome = await decoded(route, model, response, signal, (phase, text) => {
+  const outcome = await decodeStream(route, model, response, signal, (phase, text) => {
     firstText ??= performance.now();
     onText(phase, text);
   });
@@ -106,10 +106,6 @@ export async function resume(store: ObjectStore, { id, value }: Stored<'stream'>
   if ('kind' in route || !resolved) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'model-gone' });
   const response = await stream(call, null, signal);
   if (!(response instanceof Response)) return response.kind === 'stopped' ? reply({ state: 'cut', cut: 'stopped', ...empty }, null) : reply({ state: 'failed', cut: null, ...empty }, response);
-  const outcome = await decoded(resolveModel(resolved, route.model), route.model, response, signal, onText);
+  const outcome = await decodeStream(resolveModel(resolved, route.model), route.model, response, signal, onText);
   return reply(outcome, outcome.error);
 }
-
-// A 204 carries no body: the same as a stream that closed before anything came.
-const decoded = (route: Resolved, model: Starred, response: Response, signal: AbortSignal, onText: GenerateInput['onText']) =>
-  decodeStream(route, model, response.body ?? new ReadableStream<Uint8Array>({ start: (controller) => controller.close() }), signal, onText);
