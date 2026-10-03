@@ -149,7 +149,7 @@ function TranslationCall({ receipt }: { receipt: Receipt }) {
       <Text variant="note">{`${receipt.modelName} · ${receipt.source}`}</Text>
       <Facts
         variant="tiles"
-        items={[...tokenFacts(receipt), costFact(receipt), finish(receipt)]}
+        items={[...tokenFacts(receipt), costFact(receipt), finish(receipt), ...timeFacts(receipt)]}
       />
     </Section>
   );
