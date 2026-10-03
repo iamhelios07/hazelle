@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import type { FeedQuery, Write } from './account-store';
 import { USE_HEADERS } from './caps';
-import { FILE_ID } from './files';
 import { fail, ID, readObject, refused, type AppEnv } from './http';
 import { store } from './lifecycle';
 import { canWrite, requireSession } from './session';
@@ -91,13 +90,12 @@ function count(value: string | undefined): number | null {
 
 function readWrite(input: unknown): Write | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
-  const { id, kind, parent, body, baseRev, file = null } = input as Record<string, unknown>;
+  const { id, kind, parent, body, baseRev } = input as Record<string, unknown>;
   if (typeof id !== 'string' || !ID.test(id)) return null;
   if (typeof kind !== 'string' || !KIND.test(kind)) return null;
   if (parent !== null && (typeof parent !== 'string' || !ID.test(parent))) return null;
   if (baseRev !== null && (typeof baseRev !== 'number' || !Number.isSafeInteger(baseRev) || baseRev < 1)) return null;
   if (body !== null && (typeof body !== 'string' || !body)) return null;
   if (body === null && baseRev === null) return null;
-  if (file !== null && (typeof file !== 'string' || !FILE_ID.test(file))) return null;
-  return { id, kind, parent, body, baseRev, file };
+  return { id, kind, parent, body, baseRev };
 }

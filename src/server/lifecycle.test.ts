@@ -148,9 +148,9 @@ async function seeded(username = `u${crypto.randomUUID().slice(0, 8)}`) {
   const { incarnation, timeline } = (await account(body.accountId))!;
   // Straight to the store, as the batch route would: these tests are about what happens around it.
   const write = (...writes: Write[]) => t.stores.getByName(incarnation).batch(incarnation, timeline, writes, null);
-  await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null, file: null });
+  await write({ id: A, kind: 'chat', parent: null, body: 'old', baseRev: null });
   t.clock.now = () => now - HOUR_MS / 2;
-  await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1, file: null }, { id: B, kind: 'chat', parent: null, body: 'b', baseRev: null, file: null });
+  await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 }, { id: B, kind: 'chat', parent: null, body: 'b', baseRev: null });
   t.clock.now = () => Date.now();
   const report = await reported(body.accountId);
   return { id: body.accountId, body, cookie, report, incarnation, timeline, at: now - (3 * HOUR_MS) / 4 };

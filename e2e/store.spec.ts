@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext, type APIResponse } from '@playwri
 import { createHash, randomUUID } from 'node:crypto';
 import { STORE_ADMIN } from './store-harness';
 
-type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null; file: string | null };
+type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null };
 type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null };
 type FeedPage = { timeline: string; bytes?: number; changes: { id: string; rev: number; body?: string | null }[]; cursor: number; until: number; more: boolean };
 type Actor = { accountId: string; cookie: string };
@@ -30,7 +30,7 @@ type Listing = {
 const PROOF = Buffer.alloc(32, 7).toString('base64');
 const headers = (actor: Actor) => ({ cookie: actor.cookie, 'x-account': actor.accountId });
 const hash = (body: string | Buffer) => createHash('sha256').update(body).digest('hex');
-const write = (body: string, id: string = randomUUID()): Write => ({ id, kind: 'chat', parent: null, body, baseRev: null, file: null });
+const write = (body: string, id: string = randomUUID()): Write => ({ id, kind: 'chat', parent: null, body, baseRev: null });
 const query = (timeline: string | null = null): FeedQuery => ({ timeline, since: 0, known: 0, until: null, bootstrap: true, metadata: false, excluded: [], parent: null });
 let operator: Actor;
 
@@ -285,7 +285,7 @@ test('reusing an account id gets a fresh incarnation with no old objects, usage,
   const body = Buffer.from('old incarnation picture');
   const lateBody = Buffer.from('old incarnation upload completing after reuse');
   await put(request, old, body);
-  await json(await batch(request, old, [{ ...write('old object'), file: hash(body) }]));
+  await json(await batch(request, old, [write('old object')]));
   const upload = await heldUpload(request, old, lateBody);
   try {
     await leave(request, old);

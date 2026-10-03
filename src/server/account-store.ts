@@ -6,8 +6,7 @@ export type Life = { state: 'active' | 'restoring' | 'leaving' | 'gone'; timelin
 export type Unavailable = { unavailable: true };
 // unavailable: the wake's D1 read failed, threw, timed out or answered something that is neither a row nor no row.
 export type Refused = { refused: 'restoring' | 'leaving' | 'gone' } | Unavailable;
-// file: the stored file the object names (server/files), which the server sees; a deletion names none.
-export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null; file: string | null };
+export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null };
 export type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
 export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null };
 export type Phase = 'begun' | 'fenced' | 'checkpointed' | 'targeted' | 'armed' | 'rewound' | 'done' | 'failed' | 'cancelled';
@@ -58,7 +57,7 @@ const READ_MS = 5_000;
 
 const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS head (id INTEGER PRIMARY KEY CHECK (id = 1), rev INTEGER NOT NULL, bytes INTEGER NOT NULL, timeline TEXT NOT NULL)',
-  'CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, kind TEXT NOT NULL, parent_id TEXT, rev INTEGER NOT NULL, body TEXT, deleted_at INTEGER, file_id TEXT)',
+  'CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, kind TEXT NOT NULL, parent_id TEXT, rev INTEGER NOT NULL, body TEXT, deleted_at INTEGER)',
   // The global cursor stays in revision order, including omitted bodies.
   'CREATE INDEX IF NOT EXISTS objects_rev ON objects (rev, kind, parent_id, id, deleted_at)',
   'CREATE INDEX IF NOT EXISTS objects_parent_rev ON objects (parent_id, rev)',
@@ -176,11 +175,11 @@ export class StoreRules {
       if (added > found!.replaced && cap !== null && bytes > cap + margin) return { refused: 'storage-full' };
       this.db.exec('UPDATE head SET rev = ?, bytes = ?', head.rev + writes.length, bytes);
       const revs = writes.map((_, index) => head.rev + index + 1);
-      writes.forEach(({ id, kind, parent, body, file }, index) =>
+      writes.forEach(({ id, kind, parent, body }, index) =>
         this.db.exec(
-          `INSERT INTO objects (id, kind, parent_id, rev, body, deleted_at, file_id) VALUES (?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (id) DO UPDATE SET rev = excluded.rev, body = excluded.body, deleted_at = excluded.deleted_at, file_id = excluded.file_id`,
-          id, kind, parent, revs[index]!, body, body === null ? Date.now() : null, body === null ? null : file,
+          `INSERT INTO objects (id, kind, parent_id, rev, body, deleted_at) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET rev = excluded.rev, body = excluded.body, deleted_at = excluded.deleted_at`,
+          id, kind, parent, revs[index]!, body, body === null ? Date.now() : null,
         ),
       );
       return { revs, bytes, timeline: head.timeline };

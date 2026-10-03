@@ -1,6 +1,5 @@
 import { KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
 import { objectKey, openObject, sealObject } from '../vault/objects';
-import type { FileRef } from '../vault/files';
 import type { VaultKey } from '../vault/keys';
 import type { ApiFailure, ApiResult, api as realApi } from './api';
 import { pause } from './pause';
@@ -781,7 +780,7 @@ export class ObjectStore {
       const start = saved.length;
       const result = await this.retry(async (): Promise<ApiResult<(Held | null)[]>> => {
         const resolved: Resolved[] = [];
-        const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null; file: string | null }[] = [];
+        const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null }[] = [];
         let bytes = new TextEncoder().encode(JSON.stringify({ timeline, writes: [] })).length;
         for (const step of steps.slice(start, start + limits.items)) {
           const ready = step.resolve();
@@ -791,9 +790,7 @@ export class ObjectStore {
             const { id, kind, parent, baseRev, value } = pending;
             const body = value === undefined ? null : await sealObject(this.key, this.accountId, { id, kind, parent }, value);
             if (body !== null && body.length > limits.body) return { ok: false, error: 'too-large' };
-            // The server is told which stored file the object names; the file itself went up before (runtime/files).
-            const file = body !== null && 'file' in KINDS[kind as Kind] ? (value as { file: FileRef }).file.id : null;
-            const write = { id, kind, parent, baseRev, body, file };
+            const write = { id, kind, parent, baseRev, body };
             const size = new TextEncoder().encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
             if (bytes + size > limits.bytes) {
               if (!resolved.length) return { ok: false, error: 'too-large' };

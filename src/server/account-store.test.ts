@@ -26,7 +26,7 @@ beforeEach(() => {
   stores = nodeStores(reads, () => now);
 });
 
-const put = (id: string, input: Partial<Write> = {}): Write => ({ id, kind: 'chat', parent: null, body: 'x', baseRev: null, file: null, ...input });
+const put = (id: string, input: Partial<Write> = {}): Write => ({ id, kind: 'chat', parent: null, body: 'x', baseRev: null, ...input });
 const write = (input: Write | Write[], cap: number | null = null, timeline = 't1') => store().batch(INC, timeline, Array.isArray(input) ? input : [input], cap);
 const query = (input: Partial<FeedQuery> = {}): FeedQuery => ({ timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, ...input });
 const feed = (input: Partial<FeedQuery> = {}) => store().feed(INC, query(input));
@@ -493,4 +493,11 @@ describe('the node double', () => {
     await expect(stale.status(INC)).rejects.toThrow(/fresh/);
     expect(await store().status(INC)).toEqual(active());
   });
+});
+
+it('stores file-bearing encrypted bodies without a plaintext file-reference column', async () => {
+  expect(await write(put(A, { kind: 'asset', body: 'sealed-file-reference' }))).toMatchObject({ revs: [1] });
+  expect(await feed()).toMatchObject({ changes: [{ id: A, kind: 'asset', body: 'sealed-file-reference' }] });
+  const [schema] = stores.db(INC).exec<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name = 'objects'");
+  expect(schema!.sql).not.toContain('file_id');
 });

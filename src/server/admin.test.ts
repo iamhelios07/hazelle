@@ -51,8 +51,8 @@ describe('the operator', () => {
     const admin = await operator();
     const other = await account('other');
     const leaving = await account('leaving');
-    const file = await stored(new Uint8Array([1, 2, 3]), other.cookie);
-    const writes = ['a', 'b'].map((body) => ({ id: crypto.randomUUID(), kind: 'asset', parent: null, body: body.repeat(10), baseRev: null, file }));
+    await stored(new Uint8Array([1, 2, 3]), other.cookie);
+    const writes = ['a', 'b'].map((body) => ({ id: crypto.randomUUID(), kind: 'asset', parent: null, body: body.repeat(10), baseRev: null }));
     await t.batch(writes, other.cookie);
     await t.batch(writes.map((write) => ({ ...write, id: crypto.randomUUID() })), admin.cookie);
     await t.lifecycle(leaving.id, "state = 'leaving'");
