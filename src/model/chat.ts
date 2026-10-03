@@ -2,10 +2,11 @@ import type { Assignment, ModelRef } from '../connectors/assignment';
 import type { Cache } from '../connectors/settings';
 import type { Cost, Usage } from '../connectors/types';
 import type { Kind, Stored } from './kinds';
+import type { Mark } from './library';
 import type { MemorySettings } from './memory';
 
 // Its messages are `entry` objects whose parent is the chat.
-export type Chat = {
+export type Chat = Mark & {
   // null until the user names the chat; until then it is called by its first message, or a branch after its
   // origin (chatTitle).
   title: string | null;
@@ -27,10 +28,6 @@ export type Chat = {
   memory?: MemorySettings;
   // The variables it starts from, over the card's defaults: a chat brought from Risu keeps Risu's.
   variables?: [string, string][];
-  // A deleted chat is kept whole KEEP_DELETED for its 되돌리기, then removed for good with everything it owns (model/library
-  // Mark).
-  deleted?: number;
-  purging?: true;
 };
 
 // What a reply's generation left behind. The raw request is never stored.

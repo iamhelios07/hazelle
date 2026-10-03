@@ -6,19 +6,15 @@ import type { ToggleValues } from './prompt';
 
 // folder is the library folder it sits in; loreFolders only group its lorebook on screen.
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
-// deleted is when it went to 휴지통; it and its chats are removed for good KEEP_DELETED later. purging: that removal
-// has begun (runtime/characters purge), so it can no longer be brought back, and the next purge finishes it.
 // toggles holds the values set for it, over the declared defaults; translate, its chats' 번역.
 // alias: 별명, the user's own note to tell apart characters (or personas) of one name. It is never sent, unlike the
 // card's nickname (부르는 이름), which CCv3 puts in {{char}}'s place.
-export type Character = {
+export type Character = Mark & {
   card: Card;
   alias?: string;
   folder: string | null;
   loreFolders: LoreFolder[];
   origin?: { id: string; name: string };
-  deleted?: number;
-  purging?: true;
   toggles?: ToggleValues;
   translate?: TranslateSwitches;
   // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
@@ -46,16 +42,12 @@ export type Character = {
 // Kind `module`: a pack with a name, on in every chat (settings.modules, 항상) or in a character's
 // (character.modules). Its lorebook and assets are its children, as a character's are.
 // namespace: Risu's, which {{moduleenabled::…}} asks by. loreFolders only group its lorebook on screen.
-// deleted is when it was deleted: it is off everywhere and listed nowhere, and removed for good KEEP_DELETED later.
-// purging as a character's.
 // risu: the Risu id of one brought from a Risu backup, which a move skips.
-export type Module = Pack & {
+export type Module = Pack & Mark & {
   name: string;
   description: string;
   namespace: string | null;
   loreFolders: LoreFolder[];
-  deleted?: number;
-  purging?: true;
   risu?: string;
 };
 // fold false shows such a picture whole instead of its top until opened. peek is the height its top shows at, most the
@@ -69,6 +61,8 @@ const DAY = 24 * 60 * 60 * 1000;
 
 // What goes to 휴지통 when deleted: it waits KEEP_DELETED, then goes for good with everything it owns (runtime/characters
 // purgeExpired). deleted is when it went there; purging: that removal has begun, so it can no longer be brought back.
+// A character's chats go with it; a deleted chat stays whole for undo until that purge. A deleted module is off
+// everywhere and absent from live lists. The next purge finishes a removal interrupted after purging was marked.
 export const REMOVABLE = ['character', 'module', 'chat', 'prompt', 'persona', 'profile'] as const;
 export type Removable = (typeof REMOVABLE)[number];
 export type Mark = { deleted?: number; purging?: true };
