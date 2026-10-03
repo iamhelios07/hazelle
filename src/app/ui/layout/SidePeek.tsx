@@ -14,6 +14,10 @@ type Props = {
   // Held open by a key or a tap; pointing at the tab shows it only while the pointer stays.
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // panel: the story's full height at its edge, as a SidePanel beside the story, such as 답장 정보; card (the default):
+  // a box the size of its content at the story's middle, such as 상태.
+  variant?: 'card' | 'panel';
+  subtitle?: string;
   actions: ReactNode;
   children: ReactNode;
 };
@@ -26,7 +30,7 @@ export function SidePeeks({ children }: { children: ReactNode }) {
 // A tab at the story's right edge whose drawer slides over the story while the tab or the drawer is pointed at,
 // such as 상태. Held open, it has its own close: on a phone the drawer covers nearly all the story, and what is left
 // outside it is the composer, whose press raises the keyboard.
-export function SidePeek({ label, tab = label, id, open, onOpenChange, actions, children }: Props) {
+export function SidePeek({ label, tab = label, id, open, onOpenChange, variant = 'card', subtitle, actions, children }: Props) {
   const root = useRef<HTMLDivElement>(null);
 
   useLayer(open, {
@@ -39,13 +43,16 @@ export function SidePeek({ label, tab = label, id, open, onOpenChange, actions, 
       <button type="button" className={styles.tab} aria-expanded={open} aria-controls={id} onClick={() => onOpenChange(!open)}>
         {tab}
       </button>
-      <aside id={id} className={styles.drawer} aria-label={label}>
+      <aside id={id} className={variant === 'panel' ? `${styles.drawer} ${styles.panel}` : styles.drawer} aria-label={label}>
         <div className={styles.head}>
-          <h2 className={styles.title}>{label}</h2>
+          <div className={styles.titles}>
+            <h2 className={styles.title}>{label}</h2>
+            {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
+          </div>
           {actions}
           {open && <IconButton icon={X} size="xs" label={`${label} 닫기`} onClick={() => onOpenChange(false)} />}
         </div>
-        {children}
+        <div className={styles.body}>{children}</div>
       </aside>
     </div>
   );

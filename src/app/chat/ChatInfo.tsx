@@ -134,8 +134,7 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
   }
 
   return (
-    <SidePeek label="답장 정보" tab="정보" id={infoDrawer} open={held === 'info'} onOpenChange={(on) => actions.hold('info', on)} actions={replies.length > 1 && stepper}>
-      {version && <Text variant="note">{ago(version.at)}</Text>}
+    <SidePeek label="답장 정보" tab="정보" id={infoDrawer} open={held === 'info'} onOpenChange={(on) => actions.hold('info', on)} variant="panel" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper}>
       {body}
     </SidePeek>
   );
