@@ -4,12 +4,11 @@ import { fit } from '../../connectors/settings';
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import type { ModelUsage } from '../../model/chat';
-import { readUsage } from '../../runtime/usage';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { money } from '../common/money';
 import { UNKNOWN } from '../common/receipt';
 import { ago } from '../common/time';
-import { useProfiles, useSettings, useStore } from '../session';
+import { useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -37,7 +36,7 @@ function spent({ costs, costUnknown }: ModelUsage): string {
 
 // One starred model: the settings it uses, which it picks here, what it is, and what it has cost.
 export function ModelScreen({ connection, model, back }: { connection: Stored<'connection'>; model: Starred; back: Back }) {
-  const store = useStore();
+  const { store, usage: usageIndex } = useSession();
   const toast = useToast();
   const profiles = useProfiles();
   const settings = useSettings();
@@ -48,13 +47,13 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
     const abort = new AbortController();
     setUsage(null);
     setUsageFailed(false);
-    void readUsage(store, { connection: connection.id, model: model.id }, abort.signal).then((result) => {
+    void usageIndex.read({ connection: connection.id, model: model.id }, abort.signal).then((result) => {
       if (abort.signal.aborted) return;
       if (result.ok) setUsage(result.data);
       else setUsageFailed(true);
     });
     return () => abort.abort();
-  }, [store, connection.id, model.id, usageAttempt]);
+  }, [usageIndex, connection.id, model.id, usageAttempt]);
   const choice = modelProfile(store, model);
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);

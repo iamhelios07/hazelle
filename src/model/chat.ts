@@ -320,6 +320,19 @@ type Tally = { total: number; unknown: number };
 // costs: one per unit, never summed together; estimated once any part came from a price list. last: the newest reply's time.
 export type ModelUsage = { calls: number; last: number | null; input: Tally; output: Tally; costs: { unit: Cost['unit']; amount: number; estimated: boolean }[]; costUnknown: number };
 
+export type UsageCall = { at: number; call: Pick<Receipt, 'id' | 'connection' | 'model' | 'usage' | 'cost'> };
+
+export function* usageCalls(messages: Iterable<Message>): Generator<UsageCall> {
+  const take = ({ id, connection, model, usage, cost }: Receipt, at: number): UsageCall => ({ at, call: { id, connection, model, usage, cost } });
+  for (const message of messages) {
+    for (const { at, receipt, translation, calls: bot = [] } of message.versions) {
+      if (receipt) for (const call of calls(receipt)) yield take(call, at);
+      if (translation?.receipt) yield take(translation.receipt, translation.at);
+      for (const { receipt, at } of bot) yield take(receipt, at);
+    }
+  }
+}
+
 // Every call to one model in the chats kept, a continued reply counting each of its calls and a translation its own.
 // A branch copies the replies it holds with their receipts, so a call is counted once, by its id, however many chats
 // hold it; the cost is read from whichever copy has settled it, as the original settles later than a copy made after.
@@ -342,16 +355,9 @@ export class UsageCounter {
     return { ...this.usage, costs, costUnknown };
   }
 
-  add(messages: Message[]) {
+  add(made: Iterable<UsageCall>) {
     const usage = this.usage;
     const add = (tally: Tally, value: number | null) => (value === null ? tally.unknown++ : (tally.total += value));
-    const made = messages
-      .flatMap((message) => message.versions)
-      .flatMap(({ at, receipt, translation, calls: bot = [] }) => [
-        ...(receipt ? calls(receipt).map((call) => ({ at, call })) : []),
-        ...(translation?.receipt ? [{ at: translation.at, call: translation.receipt }] : []),
-        ...bot.map((call) => ({ at: call.at, call: call.receipt })),
-      ]);
     for (const { at, call } of made) {
       if (call.connection !== this.ref.connection || call.model !== this.ref.model) continue;
       const cost = call.cost === 'pending' ? null : call.cost;
@@ -372,7 +378,7 @@ export class UsageCounter {
 
 export function modelUsage(chats: Message[][], ref: ModelRef): ModelUsage {
   const counter = new UsageCounter(ref);
-  for (const messages of chats) counter.add(messages);
+  for (const messages of chats) counter.add(usageCalls(messages));
   return counter.value;
 }
 

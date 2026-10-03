@@ -16,6 +16,7 @@ import { addDefaults } from './prompts';
 import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
+import { Usage } from './usage';
 import { LuaStuck, LuaWorker, type Runner } from './lua/client';
 import { ReadModels } from './read-model';
 import { ScriptDisplay } from './script-display';
@@ -31,6 +32,7 @@ export type Session = {
   assets: AssetUrls;
   talk: Talk;
   costs: Costs;
+  usage: Usage;
   translator: Translator;
   memory: Rememberer;
   drafts: Drafts;
@@ -76,6 +78,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
   const costs = new Costs(store);
+  const usage = new Usage(store);
   const drafts = new Drafts();
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
@@ -139,10 +142,11 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     memory.close();
     drafts.close();
     costs.close();
+    usage.close();
     catalogs.close();
     credentials.close();
     assets.close();
     store.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, drafts, streams, scripts, credentials, catalogs, read, close, startBackground } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, usage, translator, memory, drafts, streams, scripts, credentials, catalogs, read, close, startBackground } };
 }

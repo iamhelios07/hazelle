@@ -7,6 +7,7 @@ import { forgetVault } from './device-cache';
 import type { SealedChange } from './object-cache';
 import { openSession } from './session';
 import { ObjectStore } from './store';
+import { Usage } from './usage';
 import { exportBackup } from './testing/backup';
 import { GENERATION_STEPS, generationSteps, MemoryCache } from './testing/cache';
 
@@ -491,4 +492,29 @@ it('aborts an export when the timeline changes while its final picture is being 
   } finally {
     store.close();
   }
+});
+
+it('invalidates session usage on a rewind even when chat IDs and entry heads are unchanged', async () => {
+  const f = await fixture();
+  const chat = { title: null, character: null, models: {} };
+  await f.add('chat', 'chat', null, chat);
+  const receipt = { id: 'call', connection: 'c', source: 'source', model: 'm', modelName: 'model', state: 'done', cut: null, error: null, finishReason: null, usage: null, cost: null, replyId: null, firstTextMs: null, totalMs: 1, cache: null };
+  const message = { type: 'message', role: 'assistant', at: 1, text: 'reply', receipt };
+  await f.add('entry', 'entry', 'chat', message);
+  const original = f.snapshot();
+  const store = await f.open();
+  const usage = new Usage(store);
+  const signal = new AbortController().signal;
+  expect(await usage.read({ connection: 'c', model: 'm' }, signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  const head = store.entryHead('chat');
+  f.wipe();
+  await f.add('chat', 'chat', null, chat);
+  await f.add('entry', 'entry', 'chat', { ...message, receipt: null });
+  f.restore(f.snapshot(), 't1');
+  expect(await usage.read({ connection: 'c', model: 'm' }, signal)).toMatchObject({ ok: true, data: { calls: 0 } });
+  expect(store.entryHead('chat')).toBe(head);
+  f.restore(original, 't2');
+  expect(await usage.read({ connection: 'c', model: 'm' }, signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  usage.close();
+  store.close();
 });
