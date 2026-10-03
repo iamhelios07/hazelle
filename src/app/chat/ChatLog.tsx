@@ -4,7 +4,7 @@ import { shown } from '../../model/chat';
 import { day } from '../common/time';
 import { useChatSummary } from '../session';
 import { navigate } from '../shell/router';
-import { Divider, Empty, Text, Viewport } from '../ui';
+import { Button, Divider, Empty, Text, Viewport } from '../ui';
 import { ChatMessage } from './ChatMessage';
 import type { OpenChat } from './useChat';
 
@@ -20,19 +20,18 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const origin = item?.chat.origin;
   const character = card && { name: card.nickname || card.name, image: shelf!.face };
   const modelName = 'kind' in route ? null : route.model.name;
-  const priorKeys = useRef<readonly string[]>([]);
-  const keys = useMemo(() => {
-    if (priorKeys.current.length !== messages.length || messages.some((message, index) => message.id !== priorKeys.current[index])) priorKeys.current = messages.map((message) => message.id);
-    return priorKeys.current;
-  }, [messages]);
   const seek = useMemo(() => found && { key: found.first, revision: found.at }, [found]);
-  if (chat.displayError) return <Text>채팅 표시를 계산하지 못했어요.</Text>;
-  if (chat.displayPending) return <Text>채팅을 불러오는 중</Text>;
+  if (chat.displayPending) return chat.displayError === undefined ? <Text>채팅을 불러오는 중</Text> : <>
+    <Text>채팅 표시를 계산하지 못했어요.</Text>
+    <Button variant="secondary" size="sm" onClick={chat.retryDisplay}>다시 시도</Button>
+  </>;
   return <>
     {notUsed && <Text variant="note" align="center">{notUsed}</Text>}
     {messages.length === 0 ? <Empty variant="story">
       {card ? '첫인사가 없는 캐릭터예요. 먼저 말을 걸어 보세요.' : '캐릭터 없이 모델과 바로 이야기하는 채팅이에요. 모델은 오른쪽 위 버튼에서 이 채팅만 바꿀 수 있어요.'}
-    </Empty> : <Viewport keys={keys} variant="story" end keep={editing ? [editing.id] : []} seek={seek}>{(index) => {
+    </Empty> : <Viewport keys={messages.map((message) => message.id)} variant="story" keep={editing ? [editing.id] : []} seek={seek}
+      // Story bodies are shadow roots, whose controls a row's light-DOM query cannot see: Tab stays the browser's.
+      traverse={false}>{(index) => {
       const message = messages[index]!;
       const label = day(message.at);
       const divider = index === 0 || day(messages[index - 1]!.at) !== label;

@@ -201,8 +201,9 @@
   --list-pane-width: 400px;
   --pane-max-width: 560px;
   --form-max-width: 688px;
-  /* 캐릭터 둘러보기: the narrowest face card, and the widest the grid grows. */
+  /* 캐릭터 둘러보기: the narrowest face card, the space between cards, and the widest the grid grows. */
   --card-min-width: 152px;
+  --card-gap: var(--space-16);
   --gallery-max-width: 1120px;
   --portrait-width: 200px;
   --header-height: 60px;

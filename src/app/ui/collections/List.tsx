@@ -1,12 +1,26 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { Tag } from '../foundation/Tag';
 import { Item } from './Item';
+import { Viewport } from './Viewport';
 import styles from './List.module.css';
 
-export function List({ label, children }: { label: string; children: ReactNode }) {
+// In the windowed form the Viewport's rows are the li, so an item renders none of its own.
+const Windowed = createContext(false);
+
+// With keys, only the rows near the view are made, each by children(index).
+export function List(props: { label: string; children: ReactNode } | { label: string; keys: readonly string[]; children: (index: number) => ReactNode }) {
+  if ('keys' in props) {
+    return (
+      <Windowed value>
+        <Viewport keys={props.keys} variant="items" list={props.label}>
+          {props.children}
+        </Viewport>
+      </Windowed>
+    );
+  }
   return (
-    <ul className={styles.list} aria-label={label}>
-      {children}
+    <ul className={styles.list} aria-label={props.label}>
+      {props.children}
     </ul>
   );
 }
@@ -37,6 +51,7 @@ type ItemProps = {
 };
 
 export function ListItem({ leading, title, badge, code, description, tags = [], aside, trailing, onClick, control, children, selected, current }: ItemProps) {
+  const windowed = useContext(Windowed);
   const meta =
     code || tags.length > 0 ? (
       <>
@@ -76,8 +91,8 @@ export function ListItem({ leading, title, badge, code, description, tags = [], 
       onClick={onClick}
     />
   );
-  return (
-    <li className={styles.item}>
+  const content = (
+    <>
       {control ? (
         <div className={styles.withControl}>
           {row}
@@ -87,6 +102,7 @@ export function ListItem({ leading, title, badge, code, description, tags = [], 
         row
       )}
       {children && <ul className={styles.nested}>{children}</ul>}
-    </li>
+    </>
   );
+  return windowed ? content : <li className={styles.item}>{content}</li>;
 }

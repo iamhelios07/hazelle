@@ -181,7 +181,8 @@ export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['
   useLayoutEffect(() => {
     model.setInputs(opening, screen);
   }, [model, opening.chat, opening.messages, screen?.width, screen?.height]);
-  return useSyncExternalStore(model.subscribe, model.snapshot);
+  const snapshot = useSyncExternalStore(model.subscribe, model.snapshot);
+  return useMemo(() => ({ ...snapshot, retry: () => void model.refresh() }), [snapshot, model]);
 }
 
 export function useTurn(): Turn | null {

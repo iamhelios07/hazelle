@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Import, LayoutGrid, PackageOpen, Settings } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
@@ -20,7 +19,6 @@ type Props = {
 
 export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Props) {
   const { pick, move } = useImport();
-  const keys = useMemo(() => shelves.map((shelf) => shelf.id ?? 'none'), [shelves]);
   return (
     <Rail
       onExpand={onExpand}
@@ -33,7 +31,7 @@ export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Pro
       }
       footer={<IconButton icon={Settings} label={SETTINGS} onClick={() => navigate(settingsEntry(true))} />}
     >
-      <Viewport keys={keys} variant="rail" current={current && (current.id ?? 'none')}>{(index) => {
+      <Viewport keys={shelves.map((shelf) => shelf.id ?? 'none')} variant="rail">{(index) => {
         const shelf = shelves[index]!;
         return (
         <FaceButton key={shelf.id ?? 'none'} label={shelfName(shelf)} current={shelf === current} dot={typing(shelf) ? 'accent' : undefined} onClick={() => onEnter(shelf)}>

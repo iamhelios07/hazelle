@@ -1,4 +1,3 @@
-// Prefix sums change in logarithmic time when a picture, editor or streamed row changes height.
 export class RowSizes {
   private readonly tree: Float64Array;
   private readonly sizes: Float64Array;

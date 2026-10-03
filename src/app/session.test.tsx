@@ -1,5 +1,4 @@
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 import type { ChatScope } from '../engine/render';
 import type { Chat } from '../model/chat';
@@ -12,6 +11,7 @@ import type { Turn } from '../runtime/talk';
 import * as display from '../runtime/turn';
 import { randomBytes } from '../vault/aead';
 import { SessionProvider, useChatDisplay, useWritingChat } from './session';
+import { probeRoot } from './common/probe';
 
 const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 });
 
@@ -40,13 +40,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
     void panel;
     return null;
   }
-  // A null-rendering probe needs only React's host container, not a browser or a DOM implementation.
-  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {}, activeElement: null, defaultView: { HTMLIFrameElement: class {} }, documentElement: { namespaceURI: 'http://www.w3.org/1999/xhtml' } };
-  const container = { nodeType: 1, tagName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: document, addEventListener() {}, removeEventListener() {}, textContent: '' } as unknown as HTMLElement;
-  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  vi.stubGlobal('window', document.defaultView);
-  vi.stubGlobal('document', document);
-  const root = createRoot(container);
+  const root = probeRoot();
   const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ admin: false, facts, onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
   const displayed = vi.spyOn(display, 'evaluateChat');
   try {
@@ -92,12 +86,7 @@ it('useWritingChat renders when a reply starts or ends, and not for its chunks',
     renders.push(useWritingChat());
     return null;
   }
-  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {}, activeElement: null, defaultView: { HTMLIFrameElement: class {} }, documentElement: { namespaceURI: 'http://www.w3.org/1999/xhtml' } };
-  const container = { nodeType: 1, tagName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: document, addEventListener() {}, removeEventListener() {}, textContent: '' } as unknown as HTMLElement;
-  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  vi.stubGlobal('window', document.defaultView);
-  vi.stubGlobal('document', document);
-  const root = createRoot(container);
+  const root = probeRoot();
   try {
     await act(() => root.render(<SessionProvider session={{ talk } as Session} account={{ admin: false, facts, onLock() {}, onLogout: async () => null }}><Probe /></SessionProvider>));
     const started: Turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: '', reasoning: '' };

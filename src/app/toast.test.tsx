@@ -1,7 +1,7 @@
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import { ToastProvider, useOwnUndo, type Toasts } from './toast';
+import { ToastProvider, useOwnUndo, useToast, type Toasts } from './toast';
+import { probeRoot } from './common/probe';
 
 let shown: unknown[] = [];
 vi.mock('./ui', () => ({
@@ -13,18 +13,12 @@ vi.mock('./ui', () => ({
 }));
 
 it('takes a screen\'s own 되돌리기 away when the screen is left', async () => {
-  // A null-rendering probe needs only React's host container, not a browser or a DOM implementation.
-  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {}, activeElement: null, defaultView: { HTMLIFrameElement: class {}, addEventListener() {}, removeEventListener() {} }, documentElement: { namespaceURI: 'http://www.w3.org/1999/xhtml' } };
-  const container = { nodeType: 1, tagName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: document, addEventListener() {}, removeEventListener() {}, textContent: '' } as unknown as HTMLElement;
-  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  vi.stubGlobal('window', document.defaultView);
-  vi.stubGlobal('document', document);
   let undoable: Toasts['undoable'];
   function Editor() {
     undoable = useOwnUndo();
     return null;
   }
-  const root = createRoot(container);
+  const root = probeRoot();
   const render = (open: boolean) => root.render(<ToastProvider standing={null}>{open && <Editor />}</ToastProvider>);
   try {
     await act(() => render(true));
@@ -32,6 +26,25 @@ it('takes a screen\'s own 되돌리기 away when the screen is left', async () =
     expect(shown).toHaveLength(1);
     await act(() => render(false));
     expect(shown).toHaveLength(0);
+  } finally {
+    await act(() => root.unmount());
+    vi.unstubAllGlobals();
+  }
+});
+
+it('shows a plain notice said again while it is up once, but every 되돌리기', async () => {
+  let toasts: Toasts;
+  function Probe() {
+    toasts = useToast();
+    return null;
+  }
+  const root = probeRoot();
+  try {
+    await act(() => root.render(<ToastProvider standing={null}><Probe /></ToastProvider>));
+    await act(() => { toasts!.show('계정을 복원해서 다시 불러왔어요'); toasts!.show('계정을 복원해서 다시 불러왔어요'); });
+    expect(shown).toHaveLength(1);
+    await act(() => { toasts!.undoable('지웠어요', () => {}); toasts!.undoable('지웠어요', () => {}); });
+    expect(shown).toHaveLength(3);
   } finally {
     await act(() => root.unmount());
     vi.unstubAllGlobals();

@@ -62,7 +62,6 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
     else { folders.forEach((folder) => visit(folder, 0)); loose.forEach((shelf) => add(shelf, 0)); add(none, 0); }
     return result;
   }, [words, characters, query, folders, loose, none, opened, byFolder]);
-  const keys = useMemo(() => items.map(({ key }) => key), [items]);
 
   return (
     <Sidebar
@@ -84,7 +83,7 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
     >
       {empty && (page ? <Welcome /> : <Empty variant="side">아직 캐릭터가 없어요. 봇을 가져와 보세요.</Empty>)}
       {!empty && words && items.length === 0 && <Empty variant="side">{noResults(words)}</Empty>}
-      {!empty && <Viewport keys={keys} current={current && (current.id ?? 'none')}>{(index) => {
+      {!empty && <Viewport keys={items.map(({ key }) => key)}>{(index) => {
         const item = items[index]!;
         return <TreeRow depth={item.depth}>{'shelf' in item ? row(item.shelf) :
           <FolderRow name={item.folder.value.name} count={byFolder.get(item.folder.id)!.characters.length}

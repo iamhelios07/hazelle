@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
 import styles from './CardGrid.module.css';
@@ -16,11 +16,11 @@ export function CardGrid({ label, keys, children }: { label: string; keys: reado
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const rows = useMemo(() => Array.from({ length: Math.ceil(keys.length / columns) }, (_, i) => JSON.stringify(keys.slice(i * columns, (i + 1) * columns))), [keys, columns]);
+  const rows = Array.from({ length: Math.ceil(keys.length / columns) }, (_, i) => JSON.stringify(keys.slice(i * columns, (i + 1) * columns)));
   return <div ref={root} className={styles.grid} role="group" aria-label={label}>
     <div className={styles.window}>
       <Viewport keys={rows} variant="grid">{(row) => <div className={styles.cards} style={{ '--card-columns': columns } as CSSProperties}>
-        {keys.slice(row * columns, (row + 1) * columns).map((key, column) => <div className={styles.cardBox} key={key}>{children(row * columns + column)}</div>)}
+        {keys.slice(row * columns, (row + 1) * columns).map((key, column) => <Fragment key={key}>{children(row * columns + column)}</Fragment>)}
       </div>}</Viewport>
     </div>
   </div>;
