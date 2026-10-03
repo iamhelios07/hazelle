@@ -8,10 +8,9 @@ import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
 import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
+import { loreName } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
-
-const loreName = (name: string) => name.trim() || '이름 없는 항목';
 
 export function partName(from: From, role: Role): string {
   switch (from.kind) {

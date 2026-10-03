@@ -1,6 +1,7 @@
 import type { Stored } from '../../model/kinds';
 import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { aliased } from '../common/alias';
+import { LoreEditor } from '../common/LoreEditor';
 import { ALWAYS, BIN_KEEPS, moduleName } from '../common/words';
 import { useLibrary, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -60,6 +61,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
           <Empty variant="section">{always ? '따로 켠 캐릭터는 없어요.' : '아직 켠 캐릭터가 없어요. 캐릭터 편집의 ‘모듈’에서 켤 수 있어요.'}</Empty>
         )}
       </Section>
+      <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <Row kind="actions">
         <Button variant="danger" size="sm" onClick={() => void remove()}>
           이 모듈 지우기

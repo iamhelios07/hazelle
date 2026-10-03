@@ -45,7 +45,7 @@ const STAGES = new Map<unknown, RegexScript['stage']>([
 ]);
 const ROLES = ['system', 'user', 'assistant'];
 // Risu's order for a new entry. CCv3 requires insertion_order, so only a malformed file goes without one.
-const DEFAULT_ORDER = 100;
+export const DEFAULT_ORDER = 100;
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const flag = (value: unknown) => (typeof value === 'boolean' ? value : null);

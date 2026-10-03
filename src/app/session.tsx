@@ -143,12 +143,26 @@ export function useBin() {
   const profiles = useKind('profile');
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
-// How many lorebook entries or assets something holds, such as a module. A number, since a fresh array of them would
-// make React re-render forever.
-export function useCount(kind: 'lore' | 'asset', parent: string): number {
+// The lorebook entries or assets something holds, such as a character or a module. The array is held until one of
+// them changes, since a fresh array on every read would make React re-render forever. Subscribing reads it anew, so
+// a change between the render and the subscription is not missed.
+export function useChildren<K extends 'lore' | 'asset'>(kind: K, parent: string): Stored<K>[] {
   const store = useStore();
-  const subscribe = useCallback((listener: () => void) => store.subscribe((changes) => changes.some((change) => change.kind === kind && change.parent === parent) && listener()), [store, kind, parent]);
-  return useSyncExternalStore(subscribe, () => store.children(kind, parent).length);
+  const model = useMemo(() => {
+    let held: Stored<K>[] | null = null;
+    return {
+      subscribe: (listener: () => void) => {
+        held = null;
+        return store.subscribe((changes) => {
+          if (!changes.some((change) => change.kind === kind && change.parent === parent)) return;
+          held = null;
+          listener();
+        });
+      },
+      snapshot: () => (held ??= store.children(kind, parent)),
+    };
+  }, [store, kind, parent]);
+  return useSyncExternalStore(model.subscribe, model.snapshot);
 }
 export function useSettings() {
   const { read } = useSession();

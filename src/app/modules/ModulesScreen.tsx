@@ -2,13 +2,13 @@ import { Import } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { packHolds } from '../common/pack';
 import { ALWAYS, moduleName, PAGES } from '../common/words';
-import { useCount, useModules, useSettings } from '../session';
+import { useChildren, useModules, useSettings } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Empty, List, ListItem, NavBar, Screen } from '../ui';
 
 export function useHolds({ id, value }: Stored<'module'>): string {
-  return packHolds(value, useCount('lore', id), useCount('asset', id));
+  return packHolds(value, useChildren('lore', id).length, useChildren('asset', id).length);
 }
 
 // onImport opens the app's file picker, which the shell hands over: a feature folder may not import the library's.

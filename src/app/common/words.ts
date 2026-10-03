@@ -50,6 +50,7 @@ export const follows = (source: string) => `${source} 따르기`;
 // A module Risu kept without a name still needs one to be told apart in a list.
 export const moduleName = (name: string) => name.trim() || '이름 없는 모듈';
 export const promptName = (name: string) => name || '이름 없는 프롬프트';
+export const loreName = (name: string) => name.trim() || '이름 없는 항목';
 
 export const NOT_STARRED = '별표한 모델에 없음';
 
