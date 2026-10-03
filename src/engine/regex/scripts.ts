@@ -1,4 +1,4 @@
-import type { HistoryMessage } from '../history';
+import type { RepeatMatches } from './repeat';
 import type { RegexScript } from '../import/types';
 
 export type Skipped = { script: RegexScript; reason: { kind: 'invalid'; detail: string } | { kind: 'emotion' } };
@@ -14,7 +14,7 @@ export type Context = {
   take?: ReadonlySet<number>;
   // The chat as shown, oldest first, and the place in it of the message the text belongs to: the stored
   // message index display uses, never a position in a filtered history.
-  messages: readonly HistoryMessage[];
+  repeat: RepeatMatches;
   index: number;
   cbs: (text: string) => string;
 };
@@ -46,7 +46,7 @@ const TAKEN = new RegExp(`${OPEN}([\\s\\S]*?)${CLOSE}`, 'g');
 export function applyScripts(
   stage: RegexScript['stage'],
   text: string,
-  { scripts, take = new Set(), messages, index, cbs }: Context,
+  { scripts, take = new Set(), repeat, index, cbs }: Context,
 ): { text: string; skipped: Skipped[]; drawn: number[]; boxes: Box[] } {
   const skipped: Skipped[] = [];
   const drawn: number[] = [];
@@ -82,8 +82,8 @@ export function applyScripts(
       for (const box of boxes) if (box.html.search(regex) !== -1) box.html = cbs(box.html.replace(regex, kind === 'inject' ? '' : argument));
     }
     if (kind === 'repeat_back') {
-      const copied = matched ? null : repeatBack(result, once, argument.trim(), messages, index);
-      if (copied !== null) result = cbs(copied);
+      const copied = matched ? null : repeat.find(once(), index, actions.has('cbs'));
+      if (copied !== null) result = cbs((PLACEMENTS.get(argument.trim()) ?? append)(result, copied));
     } else if (!matched) {
       continue;
     } else if (kind === 'move_top' || kind === 'move_bottom') {
@@ -144,15 +144,3 @@ function cut(text: string, once: () => RegExp, block: string): { block: string; 
   return { block: replaced.slice(at, replaced.length - (rest.length - at)), rest };
 }
 
-// Risu copied from the previous same-role message only, and carried a match forward because the output stage
-// rewrote that message in storage. Stored text stays as written, so the search goes back to
-// the latest same-role message that has a match.
-function repeatBack(text: string, once: () => RegExp, mode: string, messages: readonly HistoryMessage[], index: number): string | null {
-  const { role } = messages[index]!;
-  for (let at = index - 1; at >= 0; at--) {
-    const earlier = messages[at]!;
-    const found = earlier.role === role ? once().exec(earlier.text) : null;
-    if (found) return (PLACEMENTS.get(mode) ?? append)(text, found[0]);
-  }
-  return null;
-}

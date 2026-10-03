@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
 import type { RegexScript } from '../import/types';
 import { applyScripts, type Context } from './scripts';
+import { RepeatMatches } from './repeat';
 
 const script = (find: string, replace: string, over: Partial<RegexScript> = {}): RegexScript => ({ name: find, find, replace, stage: 'display', flags: null, ...over });
 const message = (role: HistoryMessage['role'], text: string, index: number): HistoryMessage => ({ id: `m${index}`, seed: `m${index}`, role, text, time: null });
 const cbs = (text: string) => text.replaceAll('{{user}}', 'jin');
 const apply = (scripts: RegexScript[], text: string, over: Partial<Context> = {}) =>
-  applyScripts('display', text, { scripts, messages: [message('assistant', text, 0)], index: 0, cbs, ...over });
+  applyScripts('display', text, { scripts, repeat: new RepeatMatches([message('assistant', text, 0)]), index: 0, cbs, ...over });
 
 describe('applyScripts', () => {
   it('runs only its stage, globally by default; a custom flag string replaces g and keeps only valid flag letters', () => {
@@ -65,11 +66,26 @@ describe('applyScripts', () => {
       message('assistant', 'still none', 4),
     ];
     const at = (out: string, text: string, flags: string | null = null) =>
-      applyScripts('display', text, { scripts: [script('<hp>\\d+</hp>', out, { flags })], messages, index: 4, cbs }).text;
+      applyScripts('display', text, { scripts: [script('<hp>\\d+</hp>', out, { flags })], repeat: new RepeatMatches(messages), index: 4, cbs }).text;
     expect(at('@@repeat_back end_nl', 'still none')).toBe('still none\n<hp>9</hp>');
     expect(at('@@repeat_back start', 'still none')).toBe('<hp>9</hp>still none');
     expect(at('', 'still none', '<repeat_back>')).toBe('still none<hp>9</hp>');
     expect(at('@@repeat_back end', 'now <hp>4</hp>')).toBe('now <hp>4</hp>');
+  });
+
+  it('shares raw-history matches within a pass without mixing roles, expanded patterns, flags or edited snapshots', () => {
+    const messages = [message('assistant', '<HP>9</HP>', 0), message('user', '<hp>1</hp>', 1), message('assistant', '<hp>8</hp>', 2), message('assistant', 'none', 3)];
+    const repeat = new RepeatMatches(messages);
+    const scripts = [script('{{pattern}}', '@@repeat_back end', { flags: 'i<cbs>' })];
+    const at = (index: number, pattern: string) => apply(scripts, 'none', { repeat, index, cbs: (text) => text.replaceAll('{{pattern}}', pattern) }).text;
+    expect(at(1, '<hp>.*?</hp>')).toBe('none');
+    expect(at(2, '<hp>.*?</hp>')).toBe('none<HP>9</HP>');
+    expect(at(3, '<hp>9</hp>')).toBe('none<HP>9</HP>');
+    expect(at(3, '<hp>.*?</hp>')).toBe('none<hp>8</hp>');
+    expect(repeat.find(/<hp>9<\/hp>/, 3, true)).toBeNull();
+    expect(repeat.find(/<hp>.*?<\/hp>/i, 2, true)).toBe('<HP>9</HP>');
+    const edited = [message('assistant', '<hp>4</hp>', 0), ...messages.slice(1)];
+    expect(new RepeatMatches(edited).find(/<hp>.*?<\/hp>/, 2, false)).toBe('<hp>4</hp>');
   });
 
   it('removes the matches on inject, whatever the replacement says (design §5 row 19)', () => {

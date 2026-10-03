@@ -6,6 +6,7 @@ import type { HistoryMessage } from './history';
 import type { Card, Pack } from './import/types';
 import type { LoreInput } from './lorebook/activate';
 import { applyScripts, type Box } from './regex/scripts';
+import { RepeatMatches } from './regex/repeat';
 
 export type Stage = 'display' | 'prompt';
 
@@ -84,6 +85,7 @@ export function renderChat(
 ): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; stopped: Runaway | null } {
   const context = contexts(scope, stage, null);
   const scripts = scope.packs.flatMap(({ regex }) => regex);
+  const repeat = new RepeatMatches(scope.messages);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
   const variables = new Logged();
   const lua = stage === 'display' ? scope.lua : undefined;
@@ -110,7 +112,7 @@ export function renderChat(
   };
   const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
-    const at = { messages: scope.messages, index };
+    const at = { repeat, index };
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
     // CBS still writes.
     const written = (index === 0 && scope.greeting !== null) || staged ? [] : scripts;
