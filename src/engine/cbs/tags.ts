@@ -309,7 +309,7 @@ define('messageunixtimearray', 0, (_, { context }) => serialize(context.messages
 // Chat tags read stored text, tags and all: risu-alpha never bakes a message.
 const lastOf = (context: CbsContext, role: 'user' | 'assistant') => {
   const before = messageIndex(context) ?? context.messages.length;
-  return context.messages.slice(0, before).findLast((message) => message.role === role)?.text ?? '';
+  return context.messages[context.previous[role][before]!]?.text ?? '';
 };
 define('lastmessage', 0, (_, { context }) => context.messages.at(-1)?.text ?? '');
 define('lastmessageid lastmessageindex', 0, (_, { context }) => (context.messages.length ? String(context.messages.length - 1 - opened(context)) : null));

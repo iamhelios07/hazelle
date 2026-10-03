@@ -1,3 +1,4 @@
+import { previousMessages } from '../../engine/cbs/history';
 import { unescapeCbs } from '../../engine/cbs/escape';
 import { evaluate, Runaway, type CbsContext } from '../../engine/cbs/evaluate';
 
@@ -5,6 +6,8 @@ export type GuideId = 'basics' | 'when' | 'vars' | 'lists' | 'func' | 'random' |
 // inMessage: the example runs as a chat message's own text, the only place setvar and addvar write.
 export type Example = { written: string; result: string; inMessage?: true };
 export type Guide = { title: string; steps: readonly { text: string; example?: Example }[] };
+
+const messages: CbsContext['messages'] = [{ id: 'm1', seed: 'm1', role: 'user', text: '안녕', time: null }];
 
 // The chat every example runs in, which SAMPLE_NOTE describes to the reader. Its seed and clock are fixed, so an example
 // gives the result written beside it; guides.test.ts runs every one.
@@ -35,7 +38,8 @@ const SAMPLE: CbsContext = {
   persona: { name: '나', description: '' },
   prompt: null,
   lore: [],
-  messages: [{ id: 'm1', seed: 'm1', role: 'user', text: '안녕', time: null }],
+  messages,
+  previous: previousMessages(messages),
   source: { seed: 'sample' },
   greeting: null,
   variables: new Map([

@@ -3,6 +3,7 @@ import type { HistoryMessage } from '../history';
 import type { Card } from '../import/types';
 import { unescapeCbs } from './escape';
 import { evaluate, Runaway, type CbsContext } from './evaluate';
+import { previousMessages } from './history';
 
 const card = (over: Partial<Card> = {}): Card => ({
   name: 'Luna',
@@ -30,27 +31,31 @@ const card = (over: Partial<Card> = {}): Card => ({
 
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
 
-const context = (over: Partial<CbsContext> = {}): CbsContext => ({
-  stage: 'prompt',
-  card: card(),
-  persona: { name: 'jin', description: '' },
-  prompt: { main: '', globalNote: '', authorNote: '' },
-  lore: [],
-  messages: [message('v1', 'assistant', 'Hello')],
-  source: { seed: 'request-1' },
-  greeting: { index: 0 },
-  variables: new Map(),
-  toggle: () => null,
-  model: { id: 'model', maxContext: null, prefill: null },
-  screen: null,
-  clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
-  language: null,
-  assets: [],
-  modules: [],
-  faces: { char: null, user: null },
-  pickSeed: 'pick-1',
-  ...over,
-});
+const context = (over: Partial<CbsContext> = {}): CbsContext => {
+  const messages = over.messages ?? [message('v1', 'assistant', 'Hello')];
+  return {
+    stage: 'prompt',
+    card: card(),
+    persona: { name: 'jin', description: '' },
+    prompt: { main: '', globalNote: '', authorNote: '' },
+    lore: [],
+    messages,
+    previous: previousMessages(messages),
+    source: { seed: 'request-1' },
+    greeting: { index: 0 },
+    variables: new Map(),
+    toggle: () => null,
+    model: { id: 'model', maxContext: null, prefill: null },
+    screen: null,
+    clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
+    language: null,
+    assets: [],
+    modules: [],
+    faces: { char: null, user: null },
+    pickSeed: 'pick-1',
+    ...over,
+  };
+};
 const run = (text: string, over: Partial<CbsContext> = {}) => evaluate(text, context(over));
 const inMessage = { source: { message: 0 } };
 
@@ -172,6 +177,17 @@ describe('evaluate', () => {
 
   it('reads {{? …}} as calc with $name from the chat variables, and leaves an expression it cannot read as written', () => {
     expect(run('{{? $hp * 2 + 1}} {{calc::2 + abc}}', { variables: new Map([['hp', '4']]) })).toBe('9 {{calc::2 + abc}}');
+  });
+
+  it('indexes previous roles across same-role runs while returning raw text relative to the source', () => {
+    const messages = [message('a', 'assistant', '{{char}} raw'), message('u1', 'user', 'first'), message('u2', 'user', 'second'), message('u3', 'user', 'third')];
+    const previous = previousMessages(messages);
+    const tags = '{{previouscharchat}}|{{lastusermessage}}';
+    expect(run(tags, { messages, previous, source: { message: 0 } })).toBe('|');
+    expect(run(tags, { messages, previous, source: { message: 3 } })).toBe('{{char}} raw|second');
+    expect(run(tags, { messages, previous, source: { seed: 'request' } })).toBe('{{char}} raw|third');
+    const edited = [...messages.slice(0, 2), message('a2', 'assistant', 'edited'), messages[3]!];
+    expect(run(tags, { messages: edited, source: { message: 3 } })).toBe('edited|first');
   });
 
   it('numbers messages as Risu does: the greeting -1 and the message after it 0, or from 0 with no greeting', () => {

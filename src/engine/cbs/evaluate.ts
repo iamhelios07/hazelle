@@ -4,6 +4,7 @@ import type { Card, LoreEntry } from '../import/types';
 import { seeded } from '../random';
 import type { Stage } from '../render';
 import { escapeCbs } from './escape';
+import type { PreviousMessages } from './history';
 import { parse, type Block, type Node, type Tag } from './parse';
 import { bool, handlerFor, items, normalize, readToggle, readVar, Return, truthy, type Env } from './tags';
 
@@ -18,6 +19,7 @@ export type CbsContext = {
   prompt: { main: string; globalNote: string; authorNote: string } | null;
   lore: readonly Omit<LoreEntry, 'folder'>[];
   messages: HistoryMessage[];
+  previous: PreviousMessages;
   // A chat message, by its index in messages: its seed rolls its random tags, and its setvar, addvar
   // and setdefaultvar write the variables. Or text outside messages: its random tags roll from a seed fresh
   // for each request, and its variable writes are removed without effect.

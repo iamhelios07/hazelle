@@ -1,5 +1,6 @@
 import type { ConversationPrompt, TextBlock } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
+import { previousMessages } from './cbs/history';
 import { evaluate, Runaway, type CbsContext } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card, Pack } from './import/types';
@@ -54,6 +55,7 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
     prompt: prompt && { main: marked(prompt, 'main'), globalNote: marked(prompt, 'globalNote'), authorNote: authorNote(note, prompt) },
     lore: scope.lore.map(({ value }) => value),
     messages,
+    previous: previousMessages(messages),
     greeting,
     toggle,
     model,
