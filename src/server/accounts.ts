@@ -97,7 +97,7 @@ accounts.delete('/account', requireOwnSession, async (c) => {
   const { id, incarnation } = c.get('account');
   const wrong = await checkProof(c, (await findAccount(c.env.DB, 'id', id))!, method, proof);
   if (wrong) return wrong;
-  const left = await leaveAccount(c.env, id, incarnation, false);
+  const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, false);
   if (left === 'busy') return fail(c, 409, 'account-busy');
   if (left === 'unavailable') return refused(c, { unavailable: true });
   dropSessionCookie(c);

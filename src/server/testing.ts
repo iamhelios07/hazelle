@@ -30,6 +30,13 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
   }
 
+  // The Worker's waitUntil: the work a request leaves running after its answer, which settle() waits out.
+  const pending: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (work: Promise<unknown>) => void pending.push(work), passThroughOnException: () => {}, props: {} } as unknown as ExecutionContext;
+  const settle = async () => {
+    while (pending.length) await Promise.all(pending.splice(0));
+  };
+
   // As a page holding the cookie's account sends it: stating that account (server/session). raw states only what it is
   // given. A Uint8Array body goes as bytes.
   const holding = async (cookie: string): Promise<Record<string, string>> => {
@@ -46,6 +53,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
         body: body === undefined ? undefined : bytes ? (body as Uint8Array<ArrayBuffer>) : JSON.stringify(body),
       },
       env,
+      ctx,
     );
   };
   // The account's timeline, as a device that holds nothing learns it.
@@ -58,6 +66,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     clock,
     dispose: () => proxy.dispose(),
     reset: async () => {
+      await settle();
       env.ADMIN_ACCOUNT = '';
       clock.now = () => Date.now();
       await env.DB.batch([
@@ -73,7 +82,8 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),
     put: (path: string, body?: unknown, cookie?: string) => send('PUT', path, body, cookie),
     delete: (path: string, body?: unknown, cookie?: string) => send('DELETE', path, body, cookie),
-    raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env),
+    raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env, ctx),
+    settle,
     timeline,
     // The account's row changed in D1, then its store restarted, as every lifecycle change is made (server/lifecycle).
     lifecycle: async (accountId: string, set: string) => {

@@ -35,8 +35,14 @@ async function reload(env: Env, incarnation: string): Promise<Life | Unavailable
 
 // --- Deletion
 
-// left: the account is deleted, by this run or an earlier one. Its pictures still uploading are the hourly sweep's.
-export async function leaveAccount(env: Env, accountId: string, incarnation: string, operator: boolean): Promise<'left' | 'busy' | 'unavailable'> {
+// left: the account's row is deleted, by this run or an earlier one. Its pictures are removed after the answer.
+export async function leaveAccount(
+  env: Env,
+  ctx: Pick<ExecutionContext, 'waitUntil'>,
+  accountId: string,
+  incarnation: string,
+  operator: boolean,
+): Promise<'left' | 'busy' | 'unavailable'> {
   const db = env.DB;
   // The operator's log row is written with the intent, before anything is destroyed.
   const [intent] = await db.batch([
@@ -62,8 +68,10 @@ export async function leaveAccount(env: Env, accountId: string, incarnation: str
     const destroyed = await store(env, incarnation).destroy(incarnation);
     if ('unavailable' in destroyed) return 'unavailable';
   }
-  await removeAccountFiles(env, incarnation);
   await db.prepare("DELETE FROM accounts WHERE id = ? AND incarnation = ? AND state = 'leaving'").bind(accountId, incarnation).run();
+  // The pictures follow the row: their prefix then names no account, so whatever a cut-off removal or an upload still
+  // in flight leaves is the hourly sweep's (files.ts), and no later run of this has to find it.
+  ctx.waitUntil(removeAccountFiles(env, incarnation));
   return 'left';
 }
 
