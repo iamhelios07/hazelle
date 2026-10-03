@@ -15,7 +15,6 @@ import { openSession } from './session';
 import { Streams } from './streams';
 import { ObjectStore, type StoreChange } from './store';
 import type { Turn } from './talk';
-import * as turnDisplay from './turn';
 
 type Wire = StoreChange & { rev: number; body: string | null };
 async function account() {
@@ -90,7 +89,7 @@ describe('selective account reads', () => {
     ]);
     const decrypt = vi.spyOn(sealedObjects, 'openObject');
     const folded = vi.spyOn(chatModel, 'fold');
-    const displayed = vi.spyOn(turnDisplay, 'displayChat');
+    const displayed = vi.spyOn(store.evaluation, 'display');
     vi.stubGlobal('window', new EventTarget());
     vi.stubGlobal('document', { visibilityState: 'hidden' });
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
@@ -354,14 +353,14 @@ describe('per-chat read models', () => {
     const bChanged = vi.fn();
     read.chat('b').subscribe(bChanged);
     const folded = vi.spyOn(chatModel, 'fold');
-    const displayed = vi.spyOn(turnDisplay, 'displayChat');
+    const displayed = vi.spyOn(store.evaluation, 'display');
     await store.create('entry', { type: 'translation', version: 'a1', text: '번역', receipt: null, at: 1 }, { parent: 'a' });
     const phone = await open();
     await phone.create('entry', message('later'), { parent: 'a' });
     await store.pull();
     expect(folded.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(folded.mock.calls.every(([entries]) => entries.every((entry) => entry.parent === 'a'))).toBe(true);
-    expect(displayed.mock.calls.every(([, id]) => id === 'a')).toBe(true);
+    expect(displayed.mock.calls.every(([lane]) => lane.endsWith(':a'))).toBe(true);
     expect(read.chat('b').snapshot()).toBe(b);
     expect(bChanged).not.toHaveBeenCalled();
     expect(read.library.snapshot()).not.toBe(folders);
@@ -384,11 +383,11 @@ describe('per-chat read models', () => {
     const read = new ReadModels(store);
     const b = read.chat('b').snapshot();
     const folded = vi.spyOn(chatModel, 'fold');
-    const displayed = vi.spyOn(turnDisplay, 'displayChat');
+    const displayed = vi.spyOn(store.evaluation, 'display');
     await store.update('character', 'ca', (current) => ({ ...current, card: { ...current.card, name: 'Luna' } }));
     await store.update('prompt', 'pa', (current) => ({ ...current, authorNote: 'night' }));
     await store.update('persona', 'ua', (current) => ({ ...current, name: 'Mina' }));
-    expect(displayed.mock.calls.map(([, id]) => id)).toEqual(['a', 'a', 'a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a', 'a', 'a']);
     expect(folded).not.toHaveBeenCalled();
     expect(read.chat('b').snapshot()).toBe(b);
     expect(read.chat('a').snapshot()?.display.texts).toEqual(['Luna / Mina / night']);
@@ -397,9 +396,44 @@ describe('per-chat read models', () => {
     await store.update('persona', 'ua', (current) => ({ ...current, name: 'unused' }));
     expect(displayed).not.toHaveBeenCalled();
     await store.create('persona', { name: 'arrived', description: '', picture: null }, { id: 'missing' });
-    expect(displayed.mock.calls.map(([, id]) => id)).toEqual(['a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a']);
     expect(read.chat('a').snapshot()?.preview).toBe('Luna / arrived / night');
     read.close();
+  });
+
+  it('never publishes an evaluated projection whose dependencies changed while the worker was busy', async () => {
+    const { store } = await account();
+    await store.create('persona', { name: 'first', description: '', picture: null }, { id: 'person' });
+    await store.batch([
+      { type: 'create', kind: 'chat', id: 'a', parent: null, value: { ...chat, persona: 'person' } },
+      { type: 'create', kind: 'entry', id: 'a1', parent: 'a', value: message('{{user}}') },
+    ]);
+    const release = await hold(store, 'a');
+    const read = new ReadModels(store);
+    const seen: string[] = [];
+    read.chat('a').subscribe(() => { const text = read.chat('a').snapshot()?.display.texts[0]; if (text) seen.push(text); });
+    const display = store.evaluation.display.bind(store.evaluation);
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    let started = false;
+    vi.spyOn(store.evaluation, 'display').mockImplementationOnce(async (...args) => {
+      const result = await display(...args);
+      started = true;
+      await gate;
+      return result;
+    });
+    const old = store.update('persona', 'person', (value) => ({ ...value, name: 'obsolete' }));
+    await vi.waitFor(() => expect(started).toBe(true));
+    const latest = store.update('persona', 'person', (value) => ({ ...value, name: 'latest' }));
+    await vi.waitFor(() => expect(store.get('persona', 'person')?.value.name).toBe('latest'));
+    finish();
+    await Promise.all([old, latest]);
+    expect(seen).toEqual(['latest']);
+    await store.saveSummary('a');
+    expect(read.summary('a').snapshot()?.preview).toBe('latest');
+    read.close();
+    release();
+    store.close();
   });
 
   it('keeps transient sent messages stable across chunks and resizes only the open chat', async () => {
@@ -415,7 +449,8 @@ describe('per-chat read models', () => {
     const leave = screen.subscribe(() => {});
     await hold(store, screen.id);
     screen.setInputs(opening, { width: 800, height: 600 });
-    const displayed = vi.spyOn(turnDisplay, 'displayChat');
+    await vi.waitFor(() => expect(screen.snapshot().pending).not.toBe(true));
+    const displayed = vi.spyOn(store.evaluation, 'display');
     const first = screen.snapshot();
     // A composer or panel render has new wrapper objects, not new display inputs.
     screen.setInputs({ ...opening }, { width: 800, height: 600 });
@@ -424,10 +459,12 @@ describe('per-chat read models', () => {
     expect(displayed).not.toHaveBeenCalled();
     const turn: Turn = { chat: 'a', said: { id: 'said', text: 'question' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'one', reasoning: '' };
     talk.set(turn);
+    await vi.waitFor(() => expect(screen.snapshot().display.texts[0]).toBe('latest: one'));
     const chunk = screen.snapshot();
     talk.set({ ...turn, text: 'one two' });
+    await vi.waitFor(() => expect(screen.snapshot().display.texts[0]).toBe('latest: one two'));
     const next = screen.snapshot();
-    expect(displayed.mock.calls.map(([, id]) => id)).toEqual(['a', 'a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a', 'a']);
     expect(next.display.texts[0]).toBe('latest: one two');
     expect(next.messages[0]).toBe(chunk.messages[0]);
     expect(next.messages[1]).toBe(chunk.messages[1]);
@@ -437,7 +474,7 @@ describe('per-chat read models', () => {
     expect(displayed).toHaveBeenCalledTimes(2);
     const b = read.chat('b').snapshot();
     screen.setInputs(opening, { width: 900, height: 600 });
-    expect(displayed.mock.calls.map(([, id]) => id)).toEqual(['a', 'a', 'a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a', 'a', 'a']);
     expect(read.chat('b').snapshot()).toBe(b);
     leave();
     read.close();
@@ -480,20 +517,20 @@ describe('per-chat read models', () => {
     const leave = screen.subscribe(() => {});
     await hold(store, screen.id);
     screen.setInputs(opening, { width: 800, height: 600 });
-    expect(screen.snapshot().display.texts).toEqual(['800']);
-    expect(read.displayed('new')?.display.texts).toEqual(['{{screenwidth}}']);
-    const displayed = vi.spyOn(turnDisplay, 'displayChat');
-    read.displayed('new');
+    await vi.waitFor(() => expect(screen.snapshot().display.texts).toEqual(['800']));
+    expect((await read.displayed('new'))?.display.texts).toEqual(['{{screenwidth}}']);
+    const displayed = vi.spyOn(store.evaluation, 'display');
+    await read.displayed('new');
     expect(displayed).not.toHaveBeenCalled();
     talk.set({ chat: 'new', said: { id: 'said', text: 'hi' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'hello', reasoning: '' });
-    expect(screen.snapshot().messages.map((message) => message.id)).toEqual(['opening', 'said', 'reply']);
+    await vi.waitFor(() => expect(screen.snapshot().messages.map((message) => message.id)).toEqual(['opening', 'said', 'reply']));
     await store.batch([
       { type: 'create', kind: 'entry', id: 'g', parent: 'new', value: { ...message('{{screenwidth}}'), role: 'assistant' } },
       { type: 'create', kind: 'chat', id: 'new', parent: null, value: chat },
     ]);
-    expect(screen.snapshot().messages.map((message) => message.id)).toEqual(['g', 'said', 'reply']);
+    await vi.waitFor(() => expect(screen.snapshot().messages.map((message) => message.id)).toEqual(['g', 'said', 'reply']));
     expect(screen.snapshot().display.texts).toEqual(['800', 'hi', 'hello']);
-    expect(read.displayed('new')?.display.texts).toEqual(['{{screenwidth}}']);
+    expect((await read.displayed('new'))?.display.texts).toEqual(['{{screenwidth}}']);
     leave();
     read.close();
   });
@@ -524,6 +561,8 @@ describe('per-chat read models', () => {
     await store.update('chat', 'a', (current) => ({ ...current, title: 'A' }));
     expect(read.chats.snapshot().map(({ id }) => id)).toEqual(['b', 'a']);
     expect(read.chat('a').snapshot()?.messages).toBe(messages);
+    await store.saveSummary('a');
+    await store.saveSummary('b');
     const summaries = read.chats.snapshot();
     const library = read.library.snapshot();
     await store.upsert('settings', () => ({ models: {} }));

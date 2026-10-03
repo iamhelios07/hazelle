@@ -177,10 +177,9 @@ export function useStored<K extends Kind>(kind: K, id: string | null): Stored<K>
 export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['screen']) {
   const { read, talk } = useSession();
   const model = useMemo(() => read.screen(id, talk, opening), [read, talk, id]);
-  const [, refresh] = useReducer((version: number) => version + 1, 0);
-  // The first layout runs before the external-store subscription; paint the viewport/greeting update without waiting for it.
+  // The first layout installs viewport/greeting inputs before the external-store subscription; evaluation publishes asynchronously.
   useLayoutEffect(() => {
-    if (model.setInputs(opening, screen)) refresh();
+    model.setInputs(opening, screen);
   }, [model, opening.chat, opening.messages, screen?.width, screen?.height]);
   return useSyncExternalStore(model.subscribe, model.snapshot);
 }

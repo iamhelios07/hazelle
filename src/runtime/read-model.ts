@@ -4,10 +4,11 @@ import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/c
 import type { Kind, Stored, Values } from '../model/kinds';
 import { indexFolders, isLive, live, nest, shelve, type CharacterShelf, type FolderContents, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
+import { EvaluationStopped } from './evaluation';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
 import { withTurn, type Shown, type Talk, type Turn } from './talk';
-import { displayChat } from './turn';
+import { evaluateChat } from './turn';
 import { summaryId, type ChatModel } from './summary';
 
 class Snapshot<T> {
@@ -85,7 +86,7 @@ export class ReadModels {
 
   constructor(
     readonly store: ObjectStore,
-    readonly open: OpenDisplay = { display: (id, chat, messages, screen) => displayChat({ store }, id, chat, messages, screen), subscribe: () => () => {} },
+    readonly open: OpenDisplay = { display: (id, chat, messages, screen, signal) => evaluateChat({ store }, id, chat, messages, screen, signal), subscribe: () => () => {} },
   ) {
     this.folders = nest(store.list('folder'));
     this.settings = new Snapshot(store.get('settings', SETTINGS_ID)?.value ?? EMPTY_SETTINGS);
@@ -159,7 +160,8 @@ export class ReadModels {
     };
   }
 
-  displayed(id: string): ScreenChat | null {
+  async displayed(id: string): Promise<ScreenChat | null> {
+    await this.store.evaluated(id);
     const model = this.chat(id).snapshot();
     if (model) return { chat: model.chat, messages: withTurn(model.messages, null, id), display: model.display };
     return this.screens.get(id)?.forTranslation() ?? null;
@@ -244,12 +246,14 @@ export class ReadModels {
 }
 
 export type Opening = { chat: Chat; messages: Message[] };
-export type ScreenChat = { chat: Chat; messages: Shown[]; display: Display };
+export type ScreenChat = { chat: Chat; messages: Shown[]; display: Display; pending?: boolean; error?: unknown };
 
 export class ChatScreenRead {
   private readonly state: Snapshot<ScreenChat>;
   private reads: StoreRead[] = [];
-  private translationDisplay: Display | null = null;
+  private translationDisplay: Promise<Display> | null = null;
+  private evaluation: AbortController | null = null;
+  private revision = 0;
   private screen: ChatScope['screen'] = null;
   private turn: Turn | null;
   private model: ChatModel | null;
@@ -259,7 +263,7 @@ export class ChatScreenRead {
   constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, readonly id: string, private opening: Opening) {
     this.model = models.chat(id).snapshot();
     this.turn = this.currentTurn();
-    this.state = new Snapshot(this.compute());
+    this.state = new Snapshot<ScreenChat>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: null, stopped: null }, pending: true });
   }
 
   readonly snapshot = () => this.state.snapshot();
@@ -280,11 +284,11 @@ export class ChatScreenRead {
         this.refresh();
       });
       const passed = this.models.open.subscribe(this.id, () => this.refresh());
-      this.leave = () => { detach(); store(); talk(); passed(); lease.release(); };
+      this.leave = () => { this.revision++; this.evaluation?.abort(); detach(); store(); talk(); passed(); lease.release(); };
       const model = this.models.chat(this.id).snapshot();
       const turn = this.currentTurn();
       // A pass the display was missing while nobody listened was not run: it is asked for again now.
-      if (model !== this.model || turn !== this.turn || this.state.snapshot().display.pass) {
+      if (model !== this.model || turn !== this.turn || this.state.snapshot().display.pass || this.state.snapshot().pending) {
         this.model = model;
         this.turn = turn;
         this.refresh();
@@ -304,14 +308,13 @@ export class ChatScreenRead {
     this.opening = opening;
     this.screen = screen;
     if (changed) this.refresh();
-    return changed;
   }
 
   // Translation has always read without a viewport; an open screen must not change which replies qualify.
-  forTranslation(): ScreenChat {
+  async forTranslation(): Promise<ScreenChat> {
     const view = this.snapshot();
-    this.translationDisplay ??= this.screen === null ? view.display : displayChat({ store: this.models.store }, this.id, view.chat, view.messages);
-    return { ...view, display: this.translationDisplay };
+    this.translationDisplay ??= evaluateChat({ store: this.models.store }, this.id, view.chat, view.messages);
+    return { ...view, display: await this.translationDisplay };
   }
 
   private currentTurn() {
@@ -321,19 +324,20 @@ export class ChatScreenRead {
 
   private refresh() {
     this.translationDisplay = null;
-    this.state.set(this.compute());
-  }
-
-  private compute(): ScreenChat {
+    this.evaluation?.abort();
+    const evaluation = new AbortController();
+    this.evaluation = evaluation;
+    const revision = ++this.revision;
     const chat = this.model ? this.model.chat : this.opening.chat;
     const messages = withTurn(this.model ? this.model.messages : this.opening.messages, this.turn, this.id);
-    // CBS can read later messages and threads variables forward: always display the whole chat, never only its tail.
-    if (this.model && !this.turn && this.screen === null) {
-      this.reads = [];
-      return { chat, messages, display: this.model.display };
-    }
-    const { value: display, reads } = this.models.store.capture(() => this.models.open.display(this.id, chat, messages, this.screen));
+    const { value, reads } = this.models.store.capture(() => this.models.open.display(this.id, chat, messages, this.screen, evaluation.signal));
     this.reads = reads;
-    return { chat, messages, display };
+    return value.then((display) => {
+      if (evaluation.signal.aborted || revision !== this.revision) return;
+      this.state.set({ chat, messages, display });
+    }, (error: unknown) => {
+      if (evaluation.signal.aborted || revision !== this.revision || error instanceof EvaluationStopped) return;
+      this.state.set({ ...this.state.snapshot(), pending: false, error });
+    });
   }
 }

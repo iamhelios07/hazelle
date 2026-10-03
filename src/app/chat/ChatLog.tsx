@@ -20,6 +20,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const origin = item?.chat.origin;
   const character = card && { name: card.nickname || card.name, image: shelf!.face };
   const modelName = 'kind' in route ? null : route.model.name;
+  if (chat.displayError) return <Text>채팅 표시를 계산하지 못했어요.</Text>;
+  if (chat.displayPending) return <Text>채팅을 불러오는 중</Text>;
   const rows: ReactNode[] = [];
   if (notUsed) {
     rows.push(

@@ -24,6 +24,7 @@ const MESSAGES: Record<string, string> = {
   'no-session': '로그인이 풀렸어요. 새로고침한 뒤 다시 로그인해 주세요.',
   conflict: '다른 기기에서 같은 것을 동시에 고치고 있어서 저장하지 못했어요. 다시 해 주세요.',
   unreadable: '금고 열쇠로 열리지 않는 항목이라 고칠 수 없어요.',
+  'evaluation-unavailable': '채팅을 계산하지 못했어요. 새로고침한 뒤 다시 해 주세요.',
   'codec-unavailable': '저장한 항목을 읽거나 쓸 수 없어요. 새로고침한 뒤 다시 해 주세요.',
   gone: '다른 곳에서 지워진 항목이라 고칠 수 없어요.',
   'too-large': '너무 커서 저장할 수 없어요.',

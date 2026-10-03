@@ -26,8 +26,8 @@ function useView(id: string, busy: boolean, inputs: unknown[]): MemoryView | nul
   useEffect(() => {
     if (busy) return;
     let live = true;
-    void tokenizer().then(
-      (countTokens) => live && setView(memoryView(session, id, countTokens)),
+    void tokenizer().then((countTokens) => memoryView(session, id, countTokens)).then(
+      (view) => live && setView(view),
       () => live && setView(null),
     );
     return () => {

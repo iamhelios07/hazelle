@@ -5,7 +5,7 @@ import { projectGreetings } from './greetings';
 import { importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleDeleted } from './modules';
 import { chatPrompt } from './prompts';
 import { answerable, saying, stubRelay, testCard, testServer } from './testing';
-import { displayChat, takeTurn, togglesOf } from './turn';
+import { evaluateChat, takeTurn, togglesOf } from './turn';
 
 const server = testServer();
 
@@ -33,27 +33,27 @@ describe('modules', () => {
       await server.hold(store, chat);
       await startChat(store, chat, { title: null, character: character.data.id, models: {} }, projectGreetings(card.greetings, [crypto.randomUUID()], 0));
       const value = () => store.get('chat', chat)!.value;
-      const shown = () => displayChat(session, chat, value(), fold(store.children('entry', chat)));
+      const shown = () => evaluateChat(session, chat, value(), fold(store.children('entry', chat)));
       const toggles = () => togglesOf(store, value(), chatPrompt(store, value())).declared.map(({ key }) => key);
-      expect(shown().texts).toEqual(['the LAMP']);
+      expect((await shown()).texts).toEqual(['the LAMP']);
 
       await setCharacterModule(store, character.data.id, module, true);
-      expect(shown()).toMatchObject({ texts: ['the STAR'], css: '.bell { color: red }' });
+      expect(await shown()).toMatchObject({ texts: ['the STAR'], css: '.bell { color: red }' });
       expect(toggles()).toContain('ring');
       const log = stubRelay(() => saying('noon'));
       expect(await takeTurn(session, chat, { kind: 'send', text: 'hi' })).toBeNull();
-      await expect.poll(() => shown().texts.at(-1)).toBe('noon (module)');
+      await expect.poll(async () => (await shown()).texts.at(-1)).toBe('noon (module)');
       expect(log[0]!.sent.body).toContain('A bell rings at noon.');
 
       await setCharacterModule(store, character.data.id, module, false);
-      expect(shown().texts[0]).toBe('the LAMP');
+      expect((await shown()).texts[0]).toBe('the LAMP');
       await setModuleAlways(store, module, true);
-      expect(shown().texts[0]).toBe('the STAR');
+      expect((await shown()).texts[0]).toBe('the STAR');
 
       await setModuleDeleted(store, module, Date.now());
-      expect(shown().texts[0]).toBe('the LAMP');
+      expect((await shown()).texts[0]).toBe('the LAMP');
       expect(modulesOf(store)).toEqual([]);
       await setModuleDeleted(store, module, null);
-      expect(shown().texts[0]).toBe('the STAR');
+      expect((await shown()).texts[0]).toBe('the STAR');
     }));
 });

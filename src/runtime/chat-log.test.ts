@@ -4,7 +4,7 @@ import { memoryId, type MemoryRecord } from '../model/memory';
 import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
 import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
-import { displayChat } from './turn';
+import { evaluateChat } from './turn';
 
 const server = testServer();
 
@@ -19,7 +19,7 @@ describe('startChat', () => {
       const chat: Chat = { title: null, character: null, models: {} };
       const greetings = projectGreetings(texts, texts.map(() => crypto.randomUUID()), selected)!;
       const preview = greetingPreview(greetings, 0)!;
-      const before = displayChat(reader, id, chat, [preview]);
+      const before = await evaluateChat(reader, id, chat, [preview]);
       let bare = false;
       const leave = store.subscribe(() => {
         bare ||= store.get('chat', id) !== null && store.children('entry', id).length === 0;
@@ -29,7 +29,7 @@ describe('startChat', () => {
       expect(bare).toBe(false);
       const messages = fold(store.children('entry', id));
       expect(messages[0]!.versions.map((version) => version.id)).toEqual(preview.versions.map((version) => version.id));
-      expect(displayChat(reader, id, chat, messages)).toEqual(before);
+      expect(await evaluateChat(reader, id, chat, messages)).toEqual(before);
       return [shown(messages[0]!).text, messages[0]!.versions.length];
     };
     expect(await opened(0)).toEqual(['하나 {{pick}} {{random}}', 3]);
@@ -116,7 +116,7 @@ describe('branchChat', () => {
     const stored = store.get('chat', branched.data)!;
     expect(stored.value).toEqual({ ...chat, title: null, origin: { id: source, name: '기숙사의 밤', after: copy.at(-1)!.id }, seed: source });
     const reader = { store, username: 'jin' };
-    expect(displayChat(reader, branched.data, stored.value, copy)).toEqual(displayChat(reader, source, chat, item.messages.slice(0, -1)));
+    expect(await evaluateChat(reader, branched.data, stored.value, copy)).toEqual(await evaluateChat(reader, source, chat, item.messages.slice(0, -1)));
     expect(stored.rev).toBeGreaterThan(Math.max(...entries.map((entry) => entry.rev)));
   }, 15_000);
   it('carries the memory records whose every message lies before the split, their sources remapped, with the facts and threads as they stood before a later record changed them', async () => {

@@ -2,7 +2,7 @@ import type { Display } from '../engine/display';
 import { chatTitle, fold, previewLine, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
 import { live } from '../model/library';
 import type { ObjectStore } from './store';
-import { displayChat } from './turn';
+import { pinned, scopeOf } from './turn';
 import { pause } from './pause';
 
 const VERSION = 1;
@@ -17,21 +17,23 @@ export function summaryStale(store: ObjectStore, id: string, summary: Summary, h
     || summary.dependencies.some((read) => store.revision(read) !== read.rev);
 }
 
-export function projectChat(store: ObjectStore, id: string, previous?: Projection): Projection | null {
+export async function projectChat(store: ObjectStore, id: string, previous?: Projection, signal?: AbortSignal): Promise<Projection | null> {
   const stored = live(store.get('chat', id));
   if (!stored) return null;
   const entries = store.children('entry', id);
   const head = store.loadedHead(id);
   const messages = previous?.summary.head === head ? previous.model.messages : fold(entries);
   const rendered = { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
-  const { value: display, reads } = store.capture(() => displayChat({ store }, id, stored.value, messages, null, rendered));
+  const { value: input, reads } = store.capture(() => ({ scope: { ...scopeOf({ store }, id, stored.value, messages), clock: rendered }, take: pinned({ store }, stored.value) }));
+  const dependencies = [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()];
+  const display = await store.evaluation.display(`projection:${id}`, input.scope, input.take, signal);
   const latest = entries.reduce<(typeof entries)[number] | null>((last, entry) => last && last.rev > entry.rev ? last : entry, null);
   // A message is named as the reader reads it: its translation when it has one.
   const texts = display.texts.map((text, index) => shown(messages[index]!).translation?.text ?? text);
   const last = texts.at(-1);
   const summary: Summary = {
     version: VERSION, head, chatRev: stored.rev, rendered,
-    dependencies: [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()],
+    dependencies,
     character: stored.value.character, count: messages.length,
     title: chatTitle(stored.value, messages, texts).slice(0, 256),
     preview: last === undefined ? '' : previewLine(last).slice(0, 256),

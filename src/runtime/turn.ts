@@ -3,8 +3,8 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Pack } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
-import { assemble, rewritten, type Assembled, type PromptInput, type RanAway, type TooLong } from '../engine/pipeline';
-import { display, type Display } from '../engine/display';
+import type { Assembled, PromptInput, RanAway, TooLong } from '../engine/pipeline';
+import type { Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
@@ -28,7 +28,7 @@ import { appendUserMessage, startChat, type Said } from './chat-log';
 import { greetingOf, type Greetings } from './greetings';
 import { cacheViewOf } from './generate';
 import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
-import { tokenizer } from './tokenizer';
+import { EvaluationFailed, EvaluationStopped } from './evaluation';
 import { endCall, type CallTarget } from './streams';
 import { resumeTranslation, translate, type TranslateFailure, type TranslateInput } from './translate';
 
@@ -164,8 +164,8 @@ export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) 
 
 // Each message's text as the chat shows it, for its log, its title and its preview, and the bot's CSS for its log.
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
-export const displayChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, clock?: ChatScope['clock']): Display =>
-  display({ ...scopeOf(reader, id, chat, messages), screen, ...(clock && { clock }) }, pinned(reader, chat));
+export const evaluateChat = (reader: Reader, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, signal?: AbortSignal): Promise<Display> =>
+  reader.store.evaluation.display(`headless:${id}`, { ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat), signal);
 
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
 // 봇 꾸밈 is off; the chat draws the latest box itself.
@@ -196,8 +196,11 @@ export function translationInput(reader: Reader, id: string, chat: Chat, message
 }
 
 // An unsaved chat is read from its open screen, the only place it exists.
-export function translateLatest(session: Pick<Session, 'store' | 'read' | 'talk' | 'translator'>, id: string) {
-  const view = session.read.displayed(id);
+export async function translateLatest(session: Pick<Session, 'store' | 'read' | 'talk' | 'translator'>, id: string) {
+  const view = await session.read.displayed(id).catch((error: unknown) => {
+    if (error instanceof EvaluationStopped || error instanceof EvaluationFailed) return null;
+    throw error;
+  });
   if (!view) return;
   const { chat } = view;
   if ( !translateSwitches(session.store, chat.character).replies) return;
@@ -274,10 +277,15 @@ function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, targ
 // The request the chat would send for target now; null while it cannot send, or the prompt is over the model's budget.
 export type Sending = { turn: TurnContext; prompt: Assembled };
 
-export function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, countTokens: (text: string) => number): Sending | null {
-  const turn = gatherTurn(session, chat, target);
+export async function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, signal?: AbortSignal): Promise<Sending | null> {
+  const projection = await session.store.evaluated(chat);
+  if (!projection) return null;
+  const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
+  const revisions = reads.map((read) => session.store.revision(read));
   if (turn === null || 'kind' in turn) return null;
-  const prompt = assemble({ scope: turn.scope, seed: turn.reply.id, countTokens, budget: turn.budget, continuing: false, memory: turn.memory });
+  const lane = `forecast:${turn.reply.id}`;
+  const prompt = await session.store.evaluation.prompt(lane, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, continuing: false, memory: turn.memory }, signal).finally(() => session.store.evaluation.forget(lane));
+  if (signal?.aborted || session.store.loadedHead(chat) !== projection.summary.head || reads.some((read, at) => session.store.revision(read) !== revisions[at])) return null;
   return 'kind' in prompt ? null : { turn, prompt };
 }
 
@@ -325,7 +333,7 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
       return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);
     }));
   };
-  const sending = session.store.scopeState(chat) === 'loaded' ? send() : lease.ready.then((failure): Promise<TurnFailure | null> => failure ? Promise.resolve({ kind: 'unpulled', failure }) : send());
+  const sending = lease.ready.then((failure): Promise<TurnFailure | null> => failure ? Promise.resolve({ kind: 'unpulled', failure }) : send());
   return sending.finally(lease.release);
 }
 
@@ -341,12 +349,10 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in started) return started;
   const { route, settings, scope, budget, memory, said, reply } = started.turn;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const countTokens = await tokenizer().catch(() => null);
-  if (!countTokens) return { kind: 'tokenizer', ...kept };
-  const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null, memory });
+  const prompt = await session.store.evaluation.prompt(`send:${chat}`, { scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal).catch((error: unknown) => ({ kind: 'unsent' as const, failure: { ok: false as const, error: error instanceof EvaluationStopped ? 'stopped' : 'evaluation-unavailable' } }));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
-  const sent = requested.messages === prompt.messages ? prompt : rewritten(prompt, requested.messages, countTokens, budget);
+  const sent = requested.messages === prompt.messages ? prompt : await session.store.evaluation.rewrite(`send:${chat}`, scope, { prompt, messages: requested.messages, budget }, signal);
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
   return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }) };

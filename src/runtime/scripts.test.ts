@@ -9,7 +9,7 @@ import { projectGreetings } from './greetings';
 import type { Runner } from './lua/client';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
-import { displayChat, takeTurn } from './turn';
+import { evaluateChat, takeTurn } from './turn';
 
 const server = testServer();
 
@@ -25,7 +25,7 @@ async function chatWith(session: Session, script: string | Trigger[], toggles = 
   const greeting = crypto.randomUUID();
   await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, projectGreetings(card.greetings, [greeting], 0));
   const messages = () => fold(session.store.children('entry', chat));
-  const shownTexts = () => displayChat(session, chat, session.store.get('chat', chat)!.value, messages()).texts;
+  const shownTexts = async () => (await evaluateChat(session, chat, session.store.get('chat', chat)!.value, messages())).texts;
   return { chat, messages, shownTexts };
 }
 
@@ -57,7 +57,7 @@ describe("a turn with the bot's Lua", () => {
       await expect.poll(() => shown(messages()[3]!).edited).toBe(true);
       expect(shown(messages()[3]!)).toMatchObject({ text: '왔구나 1:안녕 [input] (1:안녕 [input])!', staged: true, before: [['turn', '1:안녕 [input]']], after: [['__seen', '"왔구나 1:안녕 [input] (1:안녕 [input])"']] });
       expect(reply!.versions).toHaveLength(1);
-      expect(shownTexts().at(-1)).toBe('왔구나 1:안녕 [input] (1:안녕 [input])!');
+      expect((await shownTexts()).at(-1)).toBe('왔구나 1:안녕 [input] (1:안녕 [input])!');
       expect(JSON.stringify(log[0]!.sent.body)).toContain('turn 1:안녕 [input]');
       expect(JSON.stringify(log[0]!.sent.body)).toContain('narration');
       expect((JSON.parse(log[0]!.sent.body!) as { messages: unknown[] }).messages.at(-1)).toEqual({ role: 'system', content: 'from lua' });
@@ -198,7 +198,8 @@ describe("the display with the bot's Lua", () => {
       const screen = session.read.screen(chat, session.talk, opening);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
-      expect(screen.snapshot().display.texts).toEqual(['', '', '']);
+      expect(screen.snapshot().pending).toBe(true);
+      expect(screen.snapshot().display.texts).toEqual([]);
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
       await session.scripts.press(chat, { trigger: 'hit' });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:9>']);
@@ -258,7 +259,7 @@ describe("the display with the bot's Lua", () => {
       };
       const display = vi.spyOn(Lua.prototype, 'display');
       const named = await open(`-- editDisplay\nfunction onStart(id) end`);
-      expect(named.texts()).toEqual(['']);
+      expect(named.texts()).toEqual([]);
       await expect.poll(named.texts).toEqual(['어서 와.']);
       named.again();
       expect(named.texts()).toEqual(['어서 와.']);
@@ -266,7 +267,7 @@ describe("the display with the bot's Lua", () => {
       named.leave();
 
       const computed = await open(`listenEdit('edit' .. 'Display', function(id, value) return value .. '!' end)`);
-      expect(computed.texts()).toEqual(['어서 와.']);
+      expect(computed.texts()).toEqual([]);
       await expect.poll(computed.texts).toEqual(['어서 와.!']);
       computed.leave();
 

@@ -26,7 +26,6 @@ import { chatPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
-import { preloadTokenizer } from '../../runtime/tokenizer';
 import { translatorOf } from '../../runtime/translate';
 import { blocked, packsOf, takeTurn, togglesOf, statusBoxes, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
@@ -95,7 +94,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // A new chat shows its turn while it is saved, under the id it is saved as.
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
-  const { messages, display: view } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
+  const { messages, display: view, pending: displayPending, error: displayError } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
   const opening = unstarted && messages[0]!;
   const { texts, css } = view;
   // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
@@ -149,8 +148,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
   const problem = stopped ? blocked(session, chat) : null;
-
-  useEffect(preloadTokenizer, []);
 
   useEffect(() => {
     if (id) session.memory.check(id);
@@ -401,6 +398,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   return {
+    displayPending, displayError,
     id,
     item,
     shelf,

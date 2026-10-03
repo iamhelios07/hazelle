@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, shown } from '../model/chat';
 import { setTranslate } from './characters';
@@ -7,7 +7,7 @@ import { projectGreetings } from './greetings';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
-import { statusBoxes, takeTurn } from './turn';
+import { statusBoxes, takeTurn, wouldSend } from './turn';
 
 const server = testServer();
 
@@ -53,6 +53,30 @@ const luna: Card = {
   triggers: [],
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
+
+it('discards a draft forecast when a dependency changes before worker completion', () =>
+  server.withSession(async (session) => {
+    await answerable(session);
+    const chat = crypto.randomUUID();
+    await server.hold(session.store, chat);
+    await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+    const prompt = session.store.evaluation.prompt.bind(session.store.evaluation);
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    let started = false;
+    const spy = vi.spyOn(session.store.evaluation, 'prompt').mockImplementationOnce(async (...args) => {
+      const result = await prompt(...args);
+      started = true;
+      await gate;
+      return result;
+    });
+    const forecast = wouldSend(session, chat, { kind: 'send', text: 'draft' });
+    await vi.waitFor(() => expect(started).toBe(true));
+    await session.store.update('chat', chat, (value) => ({ ...value, note: 'changed while evaluating' }));
+    finish();
+    expect(await forecast).toBeNull();
+    spy.mockRestore();
+  }));
 
 describe('a new chat', () => {
   it('shows the message at once, then is saved as the chat behind its greetings as written with the shown one selected, then the first message; names are filled where shown and sent', () =>

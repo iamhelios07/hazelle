@@ -48,7 +48,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   vi.stubGlobal('document', document);
   const root = createRoot(container);
   const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ admin: false, facts, onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
-  const displayed = vi.spyOn(display, 'displayChat');
+  const displayed = vi.spyOn(display, 'evaluateChat');
   try {
     await act(() => render('', false));
     const initial = view!;

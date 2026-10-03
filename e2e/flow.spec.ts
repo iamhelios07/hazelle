@@ -10,6 +10,8 @@ const GREETING = /Welcome to the inn\. Tonight's omen is (amber|birch)\./;
 
 test('a new account imports a card, chats through the fake provider and finds the chat after a reload', async ({ page }) => {
   const sent = await fakeProvider(page);
+  const evaluations: number[] = [];
+  page.on('response', (response) => { if (/evaluation-worker-[\w-]+\.js$/.test(response.url())) evaluations.push(response.status()); });
   const violations: string[] = [];
   page.on('console', (message) => {
     if (message.text().includes('Content Security Policy')) violations.push(message.text());
@@ -63,11 +65,10 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(messages.first()).toContainText(GREETING);
   });
 
-  await test.step('send "hi" and see the fake reply rendered, after the tokenizer chunk loads under the CSP', async () => {
-    const tokenizer = page.waitForResponse(/o200k_base-[\w-]+\.js$/);
+  await test.step('send "hi" and see the fake reply rendered, through the evaluation worker under the CSP', async () => {
     await page.getByLabel('메시지', { exact: true }).fill('hi');
     await page.getByRole('button', { name: '보내기', exact: true }).click();
-    expect((await tokenizer).status()).toBe(200);
+    expect(evaluations).toContain(200);
     await expect(messages.nth(2)).toHaveText(/Mira smiles\. \(bows\)/);
     // Shown once the reply is saved and the turn is over.
     await expect(page.getByRole('button', { name: '새 답장 받기', exact: true })).toBeAttached();

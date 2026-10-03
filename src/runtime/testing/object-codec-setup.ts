@@ -1,15 +1,22 @@
+import { Evaluator, type EvaluationDown, type EvaluationUp } from '../evaluation-core';
 import { codeObjects, type CodecDown, type CodecJob, type CodecResult, type CodecUp } from '../object-codec-core';
 
 // Plain Node has no browser Worker. The object codec's real transport talks to this in-process one; a test scripts
 // replies or a crash with vi.stubGlobal, which vi.unstubAllGlobals puts back to this.
 export class CodecWorker {
-  onmessage: ((event: { data: CodecUp }) => void) | null = null;
+  onmessage: ((event: { data: CodecUp | EvaluationUp }) => void) | null = null;
   onerror: (() => void) | null = null;
   onmessageerror: (() => void) | null = null;
+  private readonly evaluator = new Evaluator();
   private account = '';
   private key: CryptoKey | null = null;
 
-  postMessage(message: CodecDown) {
+  postMessage(message: CodecDown | EvaluationDown) {
+    if ('forget' in message) return this.evaluator.forget(message.forget);
+    if ('input' in message) {
+      void this.evaluator.run(structuredClone(message.input)).then((result) => this.onmessage?.({ data: { id: message.id, result } }), (error: unknown) => this.onmessage?.({ data: { id: message.id, error: String(error) } }));
+      return;
+    }
     if (message.kind === 'init') {
       this.account = message.account;
       this.key = message.key;
