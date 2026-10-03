@@ -5,7 +5,7 @@ import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
-import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreInput, type Operation } from './lorebook/activate';
+import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation } from './lorebook/activate';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { memoryBefore, memoryBudget, memoryFormat, spanText, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import type { TranslationRequest } from './translate';
@@ -277,6 +277,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory }: 
 
 // The budget drops the oldest chat messages first and never the last one; what does not fit even then is not sent.
 // size: the request's tokens with the oldest of its count chat messages dropped. Gives how many to drop.
+// size may only be called with non-decreasing dropped; budgetSize advances its windows in place.
 function dropOldest(budget: number | null, count: number, size: (dropped: number) => number): number | TooLong {
   if (budget === null) return 0;
   let dropped = 0;
@@ -491,13 +492,13 @@ function remembered(measure: (text: string) => number): (text: string) => number
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
-function loreInput(scope: ChatScope, history: HistoryMessage[], end: number, afterMatch: string[], seed: string, cost: LoreInput['cost']): Parameters<LoreBook['activate']>[0] {
-  return { history, end, turn: end, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost };
+function loreInput(scope: ChatScope, history: HistoryMessage[], turn: number, afterMatch: string[], seed: string, cost: LoreTurn['cost']): LoreTurn {
+  return { history, turn, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost };
 }
 
 // Which after-match entries went into the prompts of the replies before this one. It is not stored: like the
 // variables, it is replayed from the chat, each earlier reply's activation rolled again from its seed.
-function afterMatch(scope: ChatScope, book: LoreBook, cost: LoreInput['cost']): string[] {
+function afterMatch(scope: ChatScope, book: LoreBook, cost: LoreTurn['cost']): string[] {
   let state: string[] = [];
   if (!book.sticky) return state;
   scope.messages.forEach((message, index) => {

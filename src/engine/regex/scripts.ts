@@ -1,5 +1,4 @@
 import type { HistoryMessage } from '../history';
-import { RepeatMatches } from './repeat';
 import type { RegexScript } from '../import/types';
 
 // A box a script drew, taken out of the text (상태창 지정, design §6.4). script is its place in the caller's scripts.
@@ -9,7 +8,8 @@ export type Box = { script: number; html: string; at: 'top' | 'bottom' };
 export type Context = {
   // The scripts, by place, whose boxes are taken out of the text instead of drawn in it.
   take?: ReadonlySet<number>;
-  // The stored message index display uses, never a position in a filtered history.
+  // The place, in the messages the Scripts were built over, of the message the text belongs to: the stored message index
+  // display uses, never a position in a filtered history.
   index: number;
   cbs: (text: string) => string;
 };
@@ -35,23 +35,28 @@ const CLOSE = '\uFDD1';
 const TAKEN = new RegExp(`${OPEN}([\\s\\S]*?)${CLOSE}`, 'g');
 
 type Pattern = { regex: RegExp; first: RegExp };
+// pattern: null for a dynamic plan, compiled anew per message.
 type Plan = { source: string; place: number; order: number; flags: string; dynamic: boolean; kind: string; argument: string; pattern: Pattern | null };
 
 export class Scripts {
   private readonly plans: Record<RegexScript['stage'], Plan[]> = { input: [], output: [], process: [], display: [] };
-  private readonly repeat: RepeatMatches;
+  private readonly repeat: (pattern: RegExp, index: number, dynamic: boolean) => string | null;
 
   // Scripts are in source order (spec §c); <order N> reorders them here. History is raw, oldest first.
   constructor(scripts: readonly RegexScript[], messages: readonly HistoryMessage[]) {
-    this.repeat = new RepeatMatches(messages);
+    this.repeat = latestMatches(messages);
     scripts.forEach((script, place) => {
       const { flags, actions, order } = options(script.flags);
       const out = prepare(script.replace, actions);
       const directive = DIRECTIVE.exec(out);
       const kind = directive?.[1] ?? ACTIONS.find((action) => actions.has(action)) ?? 'replace';
+      // Emotion images are not supported: an emo script does nothing.
+      if (kind === 'emo') return;
       const dynamic = actions.has('cbs');
       const source = script.find;
-      this.plans[script.stage].push({ source, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern: dynamic || kind === 'emo' ? null : compile(source, flags) });
+      const pattern = dynamic ? null : compile(source, flags);
+      if (!dynamic && !pattern) return;
+      this.plans[script.stage].push({ source, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern });
     });
     for (const plans of Object.values(this.plans)) plans.sort((a, b) => b.order - a.order);
   }
@@ -65,7 +70,6 @@ export class Scripts {
     const boxes: Box[] = [];
     let result = cbs(text);
     for (const { source, place, flags, dynamic, kind, argument, pattern: fixed } of this.plans[stage]) {
-      if (kind === 'emo') continue;
       const pattern = dynamic ? compile(cbs(source), flags) : fixed;
       if (!pattern) continue;
       const regex = () => reset(pattern.regex);
@@ -75,7 +79,7 @@ export class Scripts {
         for (const box of boxes) if (box.html.search(regex()) !== -1) box.html = cbs(box.html.replace(regex(), kind === 'inject' ? '' : argument));
       }
       if (kind === 'repeat_back') {
-        const copied = matched ? null : this.repeat.find(once(), index, dynamic);
+        const copied = matched ? null : this.repeat(once(), index, dynamic);
         if (copied !== null) result = cbs((PLACEMENTS.get(argument.trim()) ?? append)(result, copied));
       } else if (!matched) {
         continue;
@@ -104,6 +108,32 @@ export class Scripts {
     }
     return { text: result, drawn, boxes };
   }
+}
+
+// Risu copied from the previous same-role message only, and carried a match forward because the output stage
+// rewrote that message in storage. Stored text stays as written, so the copy comes from the latest earlier same-role
+// message that has a match, read raw.
+// Calls come in message order within the one pass that owns the Scripts, so each key holds only its latest match.
+function latestMatches(messages: readonly HistoryMessage[]): (pattern: RegExp, index: number, dynamic: boolean) => string | null {
+  const fixed = new Map<string, { through: number; last: string | null }>();
+  const dynamic = new Map<string, { through: number; last: string | null }>();
+  return (pattern, index, expanded) => {
+    const role = messages[index]!.role;
+    const key = JSON.stringify([pattern.source, pattern.flags, role]);
+    const cache = expanded ? dynamic : fixed;
+    const state = cache.get(key) ?? { through: 0, last: null };
+    cache.delete(key);
+    cache.set(key, state);
+    // CBS may produce a different pattern for every message. Its cache must not retain a history per expansion.
+    if (expanded && cache.size > 16) cache.delete(cache.keys().next().value!);
+    for (; state.through < index; state.through++) {
+      const message = messages[state.through]!;
+      if (message.role !== role) continue;
+      const match = reset(pattern).exec(message.text);
+      if (match) state.last = match[0];
+    }
+    return state.last;
+  };
 }
 
 function compile(source: string, flags: string): Pattern | null {

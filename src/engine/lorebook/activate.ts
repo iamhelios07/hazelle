@@ -31,10 +31,11 @@ export type Fate =
 
 export type Fired = { id: string; why: Why; fate: Fate };
 
-export type LoreInput = {
-  // In lorebook order. The ids key the after-match state, so they must outlive the send.
-  entries: { id: string; value: Omit<LoreEntry, 'folder'> }[];
-  settings: Card['loreSettings'];
+// In lorebook order. The ids key the after-match state, so they must outlive the send.
+export type LoreEntries = { id: string; value: Omit<LoreEntry, 'folder'> }[];
+
+export type LoreTurn = {
+  // Only the messages before turn are scanned: the after-match replay passes the whole chat for every earlier reply.
   history: HistoryMessage[];
   // Risu's chatLength, which @@activate_only_after and @@activate_only_every compare with: the messages
   // before the reply being written, the greeting counted.
@@ -115,10 +116,9 @@ const SIDES = new Map<string, 'before' | 'after'>([
 ]);
 const NEVER: Matcher = () => false;
 
-type LoreTurn = Omit<LoreInput, 'entries' | 'settings'> & { end: number };
 export type LoreBook = { sticky: boolean; activate: (input: LoreTurn) => Activation };
 
-export function prepareLore(entries: LoreInput['entries'], settings: LoreInput['settings']): LoreBook {
+export function prepareLore(entries: LoreEntries, settings: Card['loreSettings']): LoreBook {
   const invalidKeys: Activation['invalidKeys'] = [];
   const books = entries.filter(({ value }) => value.enabled).map((entry) => prepare(entry, settings.fullWordMatching ?? DEFAULTS.fullWordMatching, invalidKeys));
   // A prepared book belongs to one replay; edits/settings changes start another and cannot reuse stale text.
@@ -142,7 +142,7 @@ export function prepareLore(entries: LoreInput['entries'], settings: LoreInput['
   };
 }
 
-function activate(books: Book[], settings: LoreInput['settings'], invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], end: number, depth: number) => Scanned[], { history, end, turn, greeting, afterMatch: before, seed, cost }: LoreTurn): Activation {
+function activate(books: Book[], settings: Card['loreSettings'], invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], end: number, depth: number) => Scanned[], { history, turn, greeting, afterMatch: before, seed, cost }: LoreTurn): Activation {
   const afterMatch = new Set(before);
   const scanDepth = settings.scanDepth ?? DEFAULTS.scanDepth;
   const recursive = settings.recursive ?? DEFAULTS.recursive;
@@ -168,7 +168,7 @@ function activate(books: Book[], settings: LoreInput['settings'], invalidKeys: A
     for (const pending of waited) {
       const { book, evidence } = pending;
       const why = triggered(book, afterMatch, () => {
-        if (first) consume(book.matchers, evidence, window(history, end, book.rules.scanDepth ?? scanDepth));
+        if (first) consume(book.matchers, evidence, window(history, turn, book.rules.scanDepth ?? scanDepth));
         if (book.rules.searchRecursion) consume(book.matchers, evidence, frontier);
         return evidence;
       });
@@ -228,7 +228,7 @@ function activate(books: Book[], settings: LoreInput['settings'], invalidKeys: A
   };
 }
 
-function prepare({ id, value }: LoreInput['entries'][number], fullWordMatching: boolean, invalidKeys: Activation['invalidKeys']): Book {
+function prepare({ id, value }: LoreEntries[number], fullWordMatching: boolean, invalidKeys: Activation['invalidKeys']): Book {
   const { decorators, body } = parseDecorators(value.content);
   const rules: Rules = {
     trigger: 'keys',

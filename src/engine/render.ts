@@ -4,7 +4,7 @@ import { previousMessages } from './cbs/history';
 import { evaluate, Runaway, type CbsContext } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card, Pack } from './import/types';
-import type { LoreInput } from './lorebook/activate';
+import type { LoreEntries } from './lorebook/activate';
 import { Scripts, type Box } from './regex/scripts';
 
 export type Stage = 'display' | 'prompt';
@@ -18,7 +18,7 @@ export type ChatScope = {
   prompt: ConversationPrompt | null;
   // The chat's own 작가의 노트; null follows the prompt's.
   note: string | null;
-  lore: LoreInput['entries'];
+  lore: LoreEntries;
   // Oldest first, each as its shown version.
   messages: HistoryMessage[];
   // The chat's own starting variables, over the card's defaults.
@@ -110,13 +110,12 @@ export function renderChat(
   };
   const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
-    const at = { index };
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
     // CBS still writes.
     const written = !((index === 0 && scope.greeting !== null) || staged);
     for (const [name, value] of before) variables.set(name, value);
     variables.log = [];
-    const replayed = guarded(() => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { ...at, cbs: cbs(variables) }).text : cbs(variables)(text), text);
+    const replayed = guarded(() => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { index, cbs: cbs(variables) }).text : cbs(variables)(text), text);
     wrote.push(variables.log);
     variables.log = null;
     for (const [name, value] of after) variables.set(name, value);
@@ -136,7 +135,7 @@ export function renderChat(
       }
       edited = held?.text ?? '';
     }
-    const shown = guarded(() => scripts.apply(stage === 'prompt' ? 'process' : 'display', edited, { ...at, take, cbs: cbs(new Map(variables)) }), { text: edited, drawn: [], boxes: [] });
+    const shown = guarded(() => scripts.apply(stage === 'prompt' ? 'process' : 'display', edited, { index, take, cbs: cbs(new Map(variables)) }), { text: edited, drawn: [], boxes: [] });
     drawn.push(shown.drawn);
     boxes.push(shown.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })));
     return unescapeCbs(shown.text);

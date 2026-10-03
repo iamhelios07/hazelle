@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
 import type { RegexScript } from '../import/types';
 import { Scripts, type Context } from './scripts';
-import { RepeatMatches } from './repeat';
 
 const script = (find: string, replace: string, over: Partial<RegexScript> = {}): RegexScript => ({ name: find, find, replace, stage: 'display', flags: null, ...over });
 const message = (role: HistoryMessage['role'], text: string, index: number): HistoryMessage => ({ id: `m${index}`, seed: `m${index}`, role, text, time: null });
@@ -95,7 +94,6 @@ describe('Scripts', () => {
 
   it('shares raw-history matches within a pass without mixing roles, expanded patterns, flags or edited snapshots', () => {
     const messages = [message('assistant', '<HP>9</HP>', 0), message('user', '<hp>1</hp>', 1), message('assistant', '<hp>8</hp>', 2), message('assistant', 'none', 3)];
-    const repeat = new RepeatMatches(messages);
     const scripts = [script('{{pattern}}', '@@repeat_back end', { flags: 'i<cbs>' })];
     const executor = new Scripts(scripts, messages);
     const at = (index: number, pattern: string) => executor.apply('display', 'none', { index, cbs: (text) => text.replaceAll('{{pattern}}', pattern) }).text;
@@ -103,10 +101,8 @@ describe('Scripts', () => {
     expect(at(2, '<hp>.*?</hp>')).toBe('none<HP>9</HP>');
     expect(at(3, '<hp>9</hp>')).toBe('none<HP>9</HP>');
     expect(at(3, '<hp>.*?</hp>')).toBe('none<hp>8</hp>');
-    expect(repeat.find(/<hp>9<\/hp>/, 3, true)).toBeNull();
-    expect(repeat.find(/<hp>.*?<\/hp>/i, 2, true)).toBe('<HP>9</HP>');
     const edited = [message('assistant', '<hp>4</hp>', 0), ...messages.slice(1)];
-    expect(new RepeatMatches(edited).find(/<hp>.*?<\/hp>/, 2, false)).toBe('<hp>4</hp>');
+    expect(new Scripts([script('<hp>.*?</hp>', '@@repeat_back end')], edited).apply('display', 'none', { index: 2, cbs }).text).toBe('none<hp>4</hp>');
   });
 
   it('removes the matches on inject, whatever the replacement says (design §5 row 19)', () => {
