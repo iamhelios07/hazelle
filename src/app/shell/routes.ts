@@ -50,8 +50,6 @@ export const HOME: Route = { kind: 'home' };
 type Kind<K extends Route['kind']> = Extract<Route, { kind: K }>;
 // Every route but home has somewhere to go back up to.
 export type Below = Exclude<Route, Kind<'home'>>;
-// The chats by id, for the routes that sit inside a chat's character (shelfOf, up).
-export type ChatShelves = ReadonlyMap<string, { chat: { character: string | null } }>;
 
 const ID = /^[0-9a-f-]{36}$/;
 const NONE = 'none';
@@ -245,7 +243,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
 
 // Which shelf a route is inside: a character's id, null for 캐릭터 없이, or undefined outside every
 // shelf. A chat is inside its character's, which only the chat knows; undefined when it is not there.
-export function shelfOf(route: Route, chats: ChatShelves): string | null | undefined {
+export function shelfOf(route: Route, chatShelf?: string | null): string | null | undefined {
   switch (route.kind) {
     case 'shelf':
     case 'about':
@@ -253,7 +251,7 @@ export function shelfOf(route: Route, chats: ChatShelves): string | null | undef
     case 'new-chat':
       return route.character;
     case 'chat':
-      return chats.get(route.id)?.chat.character;
+      return chatShelf;
     default:
       return undefined;
   }
@@ -271,7 +269,7 @@ export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
 
 // Where 뒤로 goes. On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is
 // the way back), so only phones use their answer.
-export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
+export function up(route: Below, wide: boolean, chatShelf?: string | null): Route {
   switch (route.kind) {
     case 'gallery':
     case 'shelf':
@@ -280,7 +278,7 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     case 'new-chat':
       return { kind: 'shelf', character: route.character };
     case 'chat': {
-      const shelf = shelfOf(route, chats);
+      const shelf = shelfOf(route, chatShelf);
       return shelf === undefined ? HOME : { kind: 'shelf', character: shelf };
     }
     case 'edit':

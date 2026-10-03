@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { usePersisted } from '../../common/usePersisted';
-import { useChats, useLibrary, useWritingChat } from '../../session';
+import { useChatSummary, useLibrary, useWritingChat } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { enterShelf, HOME, href, shelfOf } from '../routes';
@@ -26,10 +26,10 @@ type Props = {
 // Inside a character, the list is its chats, and "모든 캐릭터" goes back up without leaving the open chat. The search
 // and the open folders outlast a visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
-  const { characters, none } = useLibrary();
-  const chatById = new Map(useChats().map((item) => [item.id, item]));
+  const { characters, none, byCharacter } = useLibrary();
   const writing = useWritingChat();
   const route = useRoute();
+  const chat = useChatSummary(route.kind === 'chat' ? route.id : null);
   const at = href(route);
   const wide = useWide();
   const [query, setQuery] = useState('');
@@ -38,9 +38,9 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   if (upAt !== null && upAt !== at) setUpAt(null);
   const [openFolders, setOpenFolders] = usePersisted(OPEN_FOLDERS, openFolderIds, []);
 
-  const shelves = [...characters, none];
-  const here = shelfOf(route, chatById);
-  const current = here === undefined ? undefined : shelves.find((shelf) => shelf.id === here);
+  const here = shelfOf(route, chat?.chat.character);
+  const shelf = here === undefined ? undefined : here === null ? none : byCharacter.get(here);
+  const current = shelf?.character?.deleted === undefined ? shelf : undefined;
   const typing = (shelf: Shelf<ChatSummary>) => shelf.chats.some((item) => item.id === writing);
 
   // Picking a character goes inside it, even when its latest chat is the page already open.
@@ -49,7 +49,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
     navigate(enterShelf(shelf, wide));
   };
 
-  if (collapsed && !page) return <SidebarRail shelves={shelves} current={current} typing={typing} onEnter={enter} onExpand={() => onCollapse(false)} />;
+  if (collapsed && !page) return <SidebarRail shelves={[...characters, none]} current={current} typing={typing} onEnter={enter} onExpand={() => onCollapse(false)} />;
   const fold = page ? undefined : () => onCollapse(true);
   if (current && upAt !== at) {
     return <ShelfChats key={current.id ?? 'none'} page={page} onCollapse={fold} shelf={current} typing={typing} onEnter={enter} onUp={() => (page ? navigate(HOME) : setUpAt(at))} />;

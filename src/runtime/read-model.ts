@@ -96,6 +96,7 @@ export class ReadModels {
   private readonly byChat = new Map<string, Snapshot<ChatModel | null>>();
   private readonly bySummary = new Map<string, Snapshot<ChatSummary | null>>();
   private readonly byKind = new Map<Kind, Snapshot<Stored<Kind>[]>>();
+  private readonly byObject = new Map<string, { kind: Kind; state: Snapshot<Stored<Kind> | null> }>();
   private readonly byCharacter = new Map<string, Snapshot<CharacterShelf<ChatSummary> | null>>();
   private folders: FolderTree[];
   private readonly screens = new Map<string, ChatScreenRead>();
@@ -151,6 +152,16 @@ export class ReadModels {
     return snapshot as Snapshot<Stored<K>[]>;
   }
 
+  object<K extends Kind>(kind: K, id: string): Snapshot<Stored<K> | null> {
+    const key = `${kind}:${id}`;
+    let object = this.byObject.get(key);
+    if (!object) {
+      object = { kind, state: new Snapshot(this.store.get(kind, id)) };
+      this.byObject.set(key, object);
+    }
+    return object.state as Snapshot<Stored<K> | null>;
+  }
+
   // The characters not in 휴지통.
   character(id: string): Snapshot<CharacterShelf<ChatSummary> | null> {
     let snapshot = this.byCharacter.get(id);
@@ -201,6 +212,10 @@ export class ReadModels {
       const library = this.buildLibrary();
       this.library.set(library);
       for (const [id, snapshot] of this.byCharacter) snapshot.set(liveShelf(library.byCharacter.get(id)));
+    }
+    for (const change of changes) {
+      const object = this.byObject.get(`${change.kind}:${change.id}`);
+      if (object) object.state.set(this.store.get(object.kind, change.id));
     }
   }
 

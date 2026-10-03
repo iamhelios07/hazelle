@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONNECTION_TYPES } from '../../connectors/registry';
-import { backTo, HOME, href, parseRoute, up, type Route } from './routes';
+import { backTo, HOME, href, parseRoute, shelfOf, up, type Route } from './routes';
 
 const CHARACTER = '6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
 const CHAT = 'a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d';
@@ -77,14 +77,19 @@ describe('routes', () => {
   );
 
   it('sends 뒤로 from a chat to its character’s chats, or home when the chat is not there', () => {
-    const chats = new Map([[CHAT, { chat: { character: CHARACTER } }]]);
-    expect(backTo(up({ kind: 'chat', id: CHAT }, false, chats), false)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '채팅 목록' });
-    expect(up({ kind: 'chat', id: CHARACTER }, false, chats)).toEqual(HOME);
+    expect(backTo(up({ kind: 'chat', id: CHAT }, false, CHARACTER), false)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '채팅 목록' });
+    expect(up({ kind: 'chat', id: CHAT }, false, null)).toEqual({ kind: 'shelf', character: null });
+    expect(up({ kind: 'chat', id: CHARACTER }, false)).toEqual(HOME);
+    expect(shelfOf({ kind: 'chat', id: CHAT }, CHARACTER)).toBe(CHARACTER);
+    expect(shelfOf({ kind: 'chat', id: CHAT }, null)).toBeNull();
+    expect(shelfOf({ kind: 'chat', id: CHAT })).toBeUndefined();
+    expect(shelfOf({ kind: 'about', character: CHARACTER })).toBe(CHARACTER);
+    expect(shelfOf(HOME, CHARACTER)).toBeUndefined();
   });
 
   it('sends 뒤로 from the editor to the character’s page for the layout', () => {
     const edit = { kind: 'edit', character: CHARACTER } as const;
-    expect(backTo(up(edit, true, new Map()), true)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '캐릭터' });
-    expect(backTo(up(edit, false, new Map()), false)).toEqual({ to: { kind: 'about', character: CHARACTER }, label: '캐릭터' });
+    expect(backTo(up(edit, true), true)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '캐릭터' });
+    expect(backTo(up(edit, false), false)).toEqual({ to: { kind: 'about', character: CHARACTER }, label: '캐릭터' });
   });
 });
