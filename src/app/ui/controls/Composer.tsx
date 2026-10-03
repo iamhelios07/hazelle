@@ -39,10 +39,12 @@ export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placehol
         onBlur={onBlur}
       />
       <div className={styles.fold}>
-        <div className={styles.bar}>
-          {tools}
-          <span className={styles.hint}>{hint}</span>
-          {actions}
+        <div className={styles.tools}>
+          <div className={styles.bar}>
+            {tools}
+            <span className={styles.hint}>{hint}</span>
+            {actions}
+          </div>
         </div>
       </div>
     </div>
