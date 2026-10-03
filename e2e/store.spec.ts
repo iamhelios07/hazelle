@@ -302,7 +302,7 @@ test('reusing an account id gets a fresh incarnation with no old objects, usage,
     expect(page).toMatchObject({ changes: [], cursor: 0, until: 0, more: false });
     expect(await json(await request.get('/api/session', { headers: headers(replacement) }))).toMatchObject({ session: { storage: { bytes: 0, fileBytes: 0 } } });
     const ids = [hash(body), hash(lateBody)];
-    expect(await json(await request.post('/api/files/missing', { headers: headers(replacement), data: { ids } }))).toEqual({ missing: ids });
+    expect(await json(await request.post('/api/files/missing', { headers: headers(replacement), data: { ids } }))).toEqual({ missing: ids, maxBytes: 25 * 1024 * 1024 });
     for (const id of ids) expect((await request.get(`/api/files/${id}`, { headers: headers(replacement) })).status()).toBe(404);
     expect(await json(await batch(request, old, [write('late old cookie')]), 401)).toEqual({ error: 'no-session' });
     expect(await json(await batch(request, replacement, [write('new object')]))).toEqual({ revs: [1], timeline: replacement.timeline });

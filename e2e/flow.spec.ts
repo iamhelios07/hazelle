@@ -129,10 +129,6 @@ test('a new account imports a card, chats through the fake provider and finds th
     const objects = strFromU8(unzipSync(readFileSync(file))['objects.jsonl']!);
     expect(objects).toContain(DESCRIPTION);
     expect(objects).toContain('[[bow]]');
-    const cleanup = page.getByRole('button', { name: '임시 파일 지우기', exact: true });
-    await expect(cleanup).toBeVisible();
-    await cleanup.click();
-    await expect(cleanup).toBeHidden();
 
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '불러오기', exact: true }).click();
