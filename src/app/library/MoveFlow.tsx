@@ -30,7 +30,7 @@ const STEP: Record<MoveStep['kind'], string> = { characters: '캐릭터 저장 �
 
 type Phase =
   | { kind: 'reading' }
-  | { kind: 'failed'; message: string }
+  | { kind: 'failed'; message: string; again: (() => void) | null }
   | { kind: 'picking'; backup: RisuBackup; have: Have; can: Ticks; ticks: Ticks }
   | { kind: 'running'; step: MoveStep | null }
   | { kind: 'done'; backup: RisuBackup; pick: MovePick; moved: Moved };
@@ -52,7 +52,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
     let live = true;
     void readBackup(dropped.map(sourceOf)).then((read) => {
       if (!live) return;
-      if (!read.ok) return setPhase({ kind: 'failed', message: FAILURE[read.failure.kind] });
+      if (!read.ok) return setPhase({ kind: 'failed', message: FAILURE[read.failure.kind], again: null });
       const have: Have = { characters: broughtFromRisu(store), modules: new Set(modulesFromRisu(store).keys()) };
       const can = tickable(read.backup, have);
       // Personas and presets carry no Risu id, so once anything was brought they start unticked rather than come twice.
@@ -66,9 +66,15 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
 
   async function run(backup: RisuBackup, ticks: Ticks) {
     const pick = toPick(backup, ticks);
+    const seen: { last: MoveStep | null } = { last: null };
     setPhase({ kind: 'running', step: null });
-    const moved = await moveFromRisu(store, files, pick, (step) => setPhase({ kind: 'running', step }));
-    setPhase(moved.ok ? { kind: 'done', backup, pick, moved: moved.data } : { kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}` });
+    const moved = await moveFromRisu(store, files, pick, (step) => setPhase({ kind: 'running', step: (seen.last = step) }));
+    if (moved.ok) return setPhase({ kind: 'done', backup, pick, moved: moved.data });
+    // What a failed run saved stays, and the move skips characters and modules already here by itself. Personas and
+    // presets carry no Risu id, so a run that got past them is not asked for them again.
+    const past = seen.last !== null && seen.last.kind !== 'personas' && seen.last.kind !== 'prompts';
+    const rest = past ? { ...ticks, personas: ticks.personas.map(() => false), presets: ticks.presets.map(() => false) } : ticks;
+    setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, rest) });
   }
 
   const names = dropped.map((file) => file.name).join(' + ');
@@ -89,8 +95,25 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   }
   if (phase.kind === 'failed') {
     return (
-      <Dialog title="가져오지 못했어요" note={note} onClose={onClose} actions={close}>
+      <Dialog
+        title="가져오지 못했어요"
+        note={note}
+        onClose={onClose}
+        actions={
+          phase.again ? (
+            <>
+              <Button size="md" onClick={phase.again}>
+                다시 하기
+              </Button>
+              {close}
+            </>
+          ) : (
+            close
+          )
+        }
+      >
         <Callout tone="warn">{phase.message}</Callout>
+        {phase.again && <Text variant="note">저장한 것은 그대로 있어요. 다시 하면 이어서 가져와요.</Text>}
       </Dialog>
     );
   }

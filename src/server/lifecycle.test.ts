@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FeedPage, Phase, Write } from './account-store';
+import { MAX_FILE_BYTES } from './files';
 import { hex } from './http';
 import { beginRestore, cancelRestore, leaveAccount, runRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
@@ -444,7 +445,7 @@ describe('an account id used again', () => {
     const again = sessionCookie(await t.post('signup', { ...signupBody(), accountId: seed.id }));
     expect((await account(seed.id))!.incarnation).not.toBe(seed.incarnation);
     expect(await contents(again)).toEqual({});
-    expect(await (await t.post('files/missing', { ids: [file] }, again)).json()).toEqual({ missing: [file] });
+    expect(await (await t.post('files/missing', { ids: [file] }, again)).json()).toEqual({ missing: [file], maxBytes: MAX_FILE_BYTES });
     expect(await (await t.get('session', again)).json()).toMatchObject({ session: { storage: { bytes: 0, fileBytes: 0 } } });
   });
 

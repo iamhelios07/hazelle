@@ -8,7 +8,7 @@ import type { ObjectStore } from './store';
 const persona = (id: string, rev: number): Stored<'persona'> => ({ id, rev, kind: 'persona', parent: null, value: { name: id, description: '이야기 '.repeat(100), picture: null } });
 
 // The server holds every file asked about.
-const missing = async () => ({ ok: true as const, data: new Set<string>() });
+const missing = async () => ({ ok: true as const, data: { missing: new Set<string>(), maxBytes: 0 } });
 
 // A store whose timeline never changes.
 const PIN = { timeline: 't', epoch: 0 };
@@ -190,7 +190,7 @@ it('exports without a picture the operator blocked and what names it, and counts
   const source = await pictureObjects();
   const target = destination();
   const read = async () => ({ ok: false as const, error: 'file-blocked' });
-  const blocked = async (ids: string[]) => ({ ok: true as const, data: new Set(ids) });
+  const blocked = async (ids: string[]) => ({ ok: true as const, data: { missing: new Set(ids), maxBytes: 0 } });
   expect(await exportBackup(store(source.objects).api, { read, missing: blocked }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 1 } });
   const opened = await backup(target.file());
   expect(opened.objects.map(({ id }) => id)).toEqual(['person', 'character']);

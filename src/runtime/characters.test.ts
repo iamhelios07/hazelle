@@ -74,7 +74,7 @@ describe('importCharacter', () => {
     const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
       const error = args[0] === 'PUT' ? refusals.get(args[1].slice('files/'.length)) : undefined;
       return error ? { ok: false as const, error } : api<T>(...args);
-    });
+    }, store);
     const assets = [
       { name: 'taken', read: async () => blocked },
       { name: 'over', read: async () => over },

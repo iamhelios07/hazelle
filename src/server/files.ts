@@ -20,8 +20,10 @@ export const files = new Hono<AppEnv>();
 
 files.use(requireSession);
 
-// Which of the ids the asking account does not hold, so an import uploads only those. A blocked id counts as not held:
-// the upload is then refused by name, where 'held' would let an object name a file nobody can read.
+// Which of the ids the asking account does not hold, so an import uploads only those, and the largest body a PUT
+// takes, so the client sends none past it: worker.ts refuses one before reading it, which the browser reports as a
+// dropped connection, not as the 413. A blocked id counts as not held: the upload is then refused by name, where
+// 'held' would let an object name a file nobody can read.
 files.post('/missing', async (c) => {
   const input = await readObject(c);
   const ids = input?.ids;
@@ -32,7 +34,7 @@ files.post('/missing', async (c) => {
   )
     .bind(c.get('account').incarnation, JSON.stringify(ids))
     .all<{ id: string }>();
-  return c.json({ missing: results.map(({ id }) => id) });
+  return c.json({ missing: results.map(({ id }) => id), maxBytes: MAX_FILE_BYTES });
 });
 
 // A body that does not hash to its id is refused: a block names content across every account and GET's answer is
@@ -46,14 +48,18 @@ files.put('/:id', canWrite, async (c) => {
   if (!FILE_ID.test(id)) return fail(c, 400, 'bad-input');
   const db = c.env.DB;
   const { incarnation } = c.get('account');
-  const held = (await db
-    .prepare('SELECT EXISTS (SELECT 1 FROM file_blocks WHERE id = ?2) AS blocked, (SELECT stored FROM account_files WHERE incarnation = ?1 AND id = ?2) AS stored')
-    .bind(incarnation, id)
-    .first<{ blocked: number; stored: number | null }>())!;
-  if (held.blocked) return fail(c, 403, 'file-blocked');
-  const body = await c.req.arrayBuffer();
+  // The body is read before any refusal: one answered while it is still being sent reaches the browser as a dropped
+  // connection, which the client would wait out instead of taking the answer.
+  const [held, body] = await Promise.all([
+    db
+      .prepare('SELECT EXISTS (SELECT 1 FROM file_blocks WHERE id = ?2) AS blocked, (SELECT stored FROM account_files WHERE incarnation = ?1 AND id = ?2) AS stored')
+      .bind(incarnation, id)
+      .first<{ blocked: number; stored: number | null }>(),
+    c.req.arrayBuffer(),
+  ]);
+  if (held!.blocked) return fail(c, 403, 'file-blocked');
   if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body))) !== id) return fail(c, 400, 'bad-input');
-  if (held.stored) return c.body(null, 204);
+  if (held!.stored) return c.body(null, 204);
   const [, reserved] = await db.batch([
     db
       .prepare(

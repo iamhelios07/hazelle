@@ -1,7 +1,9 @@
 import { openFile, sealFile, type FileRef } from '../vault/files';
 import type { ApiResult, api as realApi } from './api';
+import type { ObjectStore } from './store';
 
 type Api = typeof realApi;
+type Missing = { missing: Set<string>; maxBytes: number };
 
 // A PUT is three or four D1 round trips, so a window this wide keeps a move at a few pictures a second on a far link.
 const UPLOADS = 12;
@@ -10,21 +12,30 @@ const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
 // The stored files (server/files). A file is sealed by its content, so one the server already holds, from this
 // account or any other, is never sent again; an import cut short and tried again sends only what did not arrive.
+// Asking and uploading wait out a dropped connection the way the store's writes do (store.reaching).
 export class Files {
-  constructor(private readonly request: Api) {}
+  constructor(
+    private readonly request: Api,
+    private readonly store: ObjectStore,
+  ) {}
 
   // Each file's reference, in order; null for one the server refuses: too large, blocked (taken down by the operator),
   // or past the account's picture cap, which the caller leaves out and counts as it does a picture it cannot read.
   async save(files: Uint8Array<ArrayBuffer>[]): Promise<ApiResult<(FileRef | null)[]>> {
     const sealed = await Promise.all(files.map(sealFile));
-    const asked = await this.missing([...new Set(sealed.map(({ ref }) => ref.id))]);
+    const bodies = new Map(sealed.map(({ ref, body }) => [ref.id, body]));
+    const asked = await this.missing([...bodies.keys()]);
     if (!asked.ok) return asked;
-    const missing = [...asked.data];
     const refused = new Set<string>();
+    const missing: string[] = [];
+    for (const id of asked.data.missing) {
+      if (bodies.get(id)!.length > asked.data.maxBytes) refused.add(id);
+      else missing.push(id);
+    }
     for (let start = 0; start < missing.length; start += UPLOADS) {
       const puts = await Promise.all(
         missing.slice(start, start + UPLOADS).map(async (id) => {
-          const put = await this.request('PUT', `files/${id}`, sealed.find(({ ref }) => ref.id === id)!.body);
+          const put = await this.store.reaching(() => this.request('PUT', `files/${id}`, bodies.get(id)!));
           if (!put.ok && REFUSED.has(put.error)) refused.add(id);
           return put;
         }),
@@ -35,16 +46,18 @@ export class Files {
     return { ok: true, data: sealed.map(({ ref }) => (refused.has(ref.id) ? null : ref)) };
   }
 
-  // The ids the server holds no readable file for: never stored, or blocked. Asked ASKED at a time, the server's
-  // MAX_ASKED (server/files).
-  async missing(ids: string[]): Promise<ApiResult<Set<string>>> {
+  // The ids the server holds no readable file for (never stored, or blocked) and the largest sealed body it takes.
+  // Asked ASKED at a time, the server's MAX_ASKED (server/files).
+  async missing(ids: string[]): Promise<ApiResult<Missing>> {
     const missing = new Set<string>();
+    let maxBytes = 0;
     for (let start = 0; start < ids.length; start += ASKED) {
-      const asked = await this.request<{ missing: string[] }>('POST', 'files/missing', { ids: ids.slice(start, start + ASKED) });
+      const asked = await this.store.reaching(() => this.request<{ missing: string[]; maxBytes: number }>('POST', 'files/missing', { ids: ids.slice(start, start + ASKED) }));
       if (!asked.ok) return asked;
       for (const id of asked.data.missing) missing.add(id);
+      maxBytes = asked.data.maxBytes;
     }
-    return { ok: true, data: missing };
+    return { ok: true, data: { missing, maxBytes } };
   }
 
   // A body that does not open answers 'unreadable', never empty bytes.

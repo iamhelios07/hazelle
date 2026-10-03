@@ -153,7 +153,8 @@ export function testServer() {
         stores.push(store);
         return store;
       };
-      return { accountId, vaultKey, store: await open(), files: new Files(api), open };
+      const store = await open();
+      return { accountId, vaultKey, store, files: new Files(api, store), open };
     },
     // The operator deletes the account on the server, which opens signup again (server/accounts): how a user
     // who lost both the password and the recovery key starts over.

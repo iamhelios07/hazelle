@@ -278,7 +278,7 @@ describe('selective account reads', () => {
     }
     const store = await open();
     const parts: BlobPart[] = [];
-    const exported = await exportBackup(store, new Files(request), {
+    const exported = await exportBackup(store, new Files(request, store), {
       write: async (bytes) => { parts.push(bytes); }, close: async () => {}, abort: async () => { parts.length = 0; },
     });
     if (!exported.ok) throw new Error(exported.error);

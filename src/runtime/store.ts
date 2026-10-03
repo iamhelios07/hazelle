@@ -735,7 +735,8 @@ export class ObjectStore {
   // caller's stop, or a reset) ends it: a dropped connection, a restore under way or a store not answering yet does not
   // fail it. A try whose answer was lost after it landed comes back as a conflict and is
   // applied again, so an update's change must read the same applied twice as once (set a value, never add to one).
-  private async reaching<R extends ApiResult<unknown> | null>(attempt: () => Promise<R>, stop: AbortSignal): Promise<R | ApiFailure> {
+  // A file's upload (runtime/files) waits the same way, and shows as the same waiting.
+  async reaching<R extends ApiResult<unknown> | null>(attempt: () => Promise<R>, stop: AbortSignal = this.closing.signal): Promise<R | ApiFailure> {
     let result: R | ApiFailure = await attempt();
     if (!waits(result)) return result;
     this.wait(1);

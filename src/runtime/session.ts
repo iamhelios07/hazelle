@@ -63,7 +63,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
       return pulled;
     }
   }
-  const files = new Files(api);
+  const files = new Files(api, store);
   const assets = new AssetUrls(store, files);
   // A new account sees its defaults on the first screen; a cached account fills missing defaults after catch-up.
   const defaults = () => Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store)]);
