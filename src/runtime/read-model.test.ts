@@ -542,6 +542,32 @@ describe('per-chat read models', () => {
     read.close();
   });
 
+  it('keeps a shown display through a failed one, and stays pending when none was shown', async () => {
+    const { store } = await account();
+    await store.create('chat', chat, { id: 'a' });
+    await store.create('entry', message('hi'), { parent: 'a' });
+    await hold(store, 'a');
+    const read = new ReadModels(store);
+    const opening = { chat, messages: [] };
+    const screen = read.screen('a', liveTalk(), opening);
+    const failing = vi.spyOn(read.open, 'display').mockRejectedValue(new Error('crash'));
+    const leave = screen.subscribe(() => {});
+    screen.setInputs(opening, { width: 800, height: 600 });
+    await vi.waitFor(() => expect(screen.snapshot().error).toBeInstanceOf(Error));
+    expect(screen.snapshot()).toMatchObject({ pending: true, messages: [] });
+    failing.mockRestore();
+    await screen.refresh();
+    const shown = screen.snapshot();
+    expect(shown.pending).toBeUndefined();
+    expect(shown.error).toBeUndefined();
+    expect(shown.messages).toHaveLength(1);
+    vi.spyOn(read.open, 'display').mockRejectedValueOnce(new Error('again'));
+    await screen.refresh();
+    expect(screen.snapshot()).toEqual({ ...shown, error: new Error('again') });
+    leave();
+    read.close();
+  });
+
   it('emits kind/id/parent for batch, remove, restore and paginated pull, and ignores stale echoes', async () => {
     const { store, open } = await account();
     const observed: StoreChange[][] = [];

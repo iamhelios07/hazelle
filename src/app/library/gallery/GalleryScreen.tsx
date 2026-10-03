@@ -10,7 +10,7 @@ import { BIN, PAGES } from '../../common/words';
 import { useBin, useLibrary } from '../../session';
 import { backBar } from '../../shell/router';
 import type { Back } from '../../shell/routes';
-import { Avatar, Button, CardGrid, Empty, List, NavBar, Row, Screen, SearchField, Section, Text, Viewport } from '../../ui';
+import { Avatar, Button, CardGrid, Empty, List, NavBar, Row, Screen, SearchField, Section, Text } from '../../ui';
 import { ShelfFace, shelfName } from '../shelf';
 import { binnedCharacter, binnedChat, binnedModule, binnedPersona, binnedProfile, binnedPrompt, useCharacterActions, type Binned } from '../useCharacterActions';
 import { useFolderActions } from '../useFolderActions';
@@ -47,7 +47,6 @@ export function GalleryScreen({ back }: { back: Back | null }) {
     if (byName) result.sort((a, b) => a.character.card.name.localeCompare(b.character.card.name, 'ko'));
     return result;
   }, [candidates, query, byName]);
-  const keys = useMemo(() => shown.map(({ id }) => id), [shown]);
   // shelve lists only the deleted chats of a character not deleted, or of none.
   const shelfOf = ({ chat }: ChatSummary): Shelf<ChatSummary> => (chat.character === null ? none : byCharacter.get(chat.character)!);
   const named = (name: string) => name.toLowerCase().includes(words.toLowerCase());
@@ -116,7 +115,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
       <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />
       {binned && <Text variant="note">{`${BIN}에 든 것은 ${KEEP_DAYS}일이 지나면 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
       {shown.length > 0 && (
-        <CardGrid label="캐릭터" keys={keys}>
+        <CardGrid label="캐릭터" keys={shown.map(({ id }) => id)}>
           {(index) => { const shelf = shown[index]!; return (
             <CharacterCard
               key={shelf.id}
@@ -133,7 +132,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
       )}
       {listed.map(([title, items]) => (
         <Section key={title} title={title}>
-          <List label={`${BIN}의 ${title}`}><Viewport keys={items.map(({ key }) => key)}>{(index) => items[index]!.render()}</Viewport></List>
+          <List label={`${BIN}의 ${title}`} keys={items.map(({ key }) => key)}>{(index) => items[index]!.render()}</List>
         </Section>
       ))}
       {shown.length === 0 && listed.length === 0 && (

@@ -94,8 +94,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // A new chat shows its turn while it is saved, under the id it is saved as.
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
-  const { messages, display: view, pending: displayPending, error: displayError } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
+  const { messages, display: view, pending: displayPending, error: displayError, retry: retryDisplay } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
   const opening = unstarted && messages[0]!;
+  // A display that fails after one was shown leaves that one up; one that never showed says so in the log (ChatLog).
+  useEffect(() => {
+    if (displayError === undefined || displayPending) return;
+    toast.error('채팅 표시를 계산하지 못했어요.', { detail: displayError instanceof Error ? displayError.message : undefined, action: { label: '다시 시도', onClick: retryDisplay } });
+  }, [displayError]);
   const { texts, css } = view;
   // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
   const bot = shelf?.character.decor !== false;
@@ -398,7 +403,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   return {
-    displayPending, displayError,
+    displayPending, displayError, retryDisplay,
     id,
     item,
     shelf,

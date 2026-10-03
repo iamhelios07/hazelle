@@ -12,5 +12,5 @@ export function FolderRow({ name, count, open, onToggle }: Props) {
 export function TreeRow({ depth, children }: { depth: number; children: ReactNode }) {
   let row = children;
   for (let i = 0; i < depth; i++) row = <div className={styles.folderItems}>{row}</div>;
-  return <div className={styles.folder}>{row}</div>;
+  return row;
 }

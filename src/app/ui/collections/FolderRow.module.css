@@ -1,13 +1,9 @@
-.folder,
-.folderItems {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* The guide line hangs from the chevron's centre, so every row inside reads as the folder's. */
+/* The guide line hangs from the chevron's centre, so every row inside reads as the folder's. It reaches down through
+   the Viewport row's gap (--viewport-gap, Viewport.module.css), so the line runs on from row to row. */
 .folderItems {
   margin-left: var(--space-16);
+  margin-bottom: calc(var(--viewport-gap) * -1);
+  padding-bottom: var(--viewport-gap);
   padding-left: var(--space-8);
   border-left: var(--border-thin) solid var(--color-border);
 }

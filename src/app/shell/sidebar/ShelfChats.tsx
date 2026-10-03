@@ -31,7 +31,6 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
   const writing = useWritingChat();
   const route = useRoute();
   const openChat = route.kind === 'chat' ? route.id : undefined;
-  const keys = useMemo(() => found.map(({ id }) => id), [found]);
   const others = characters.filter((candidate) => candidate !== shelf && candidate.chats.length > 0).slice(0, STRIP);
   // 캐릭터 없이 has a page only beside its chats.
   const about: Route | null = shelf.id !== null ? characterPage(shelf.id, !page) : page ? null : { kind: 'shelf', character: null };
@@ -58,7 +57,7 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
       }
       footer={<SidebarFooter />}
     >
-      <Viewport keys={keys} current={openChat}>{(index) => {
+      <Viewport keys={found.map(({ id }) => id)} current={openChat}>{(index) => {
         const item = found[index]!;
         return (
         <ItemRow

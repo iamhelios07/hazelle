@@ -37,9 +37,9 @@ function LeaveDialog({ onClose }: { onClose: () => void }) {
 
   const leave = () =>
     run(async () => {
-      const credential = await credentialFor(username, method, secret);
-      if (!credential) return wrongSecret(method, false);
-      const left = await deleteAccount(credential);
+      const login = await credentialFor(username, method, secret);
+      if (!login) return wrongSecret(method, false);
+      const left = await deleteAccount(login);
       if (!left.ok) return left.error === 'wrong-login' ? wrongSecret(method, false) : describeFailure(left);
       return onLogout();
     });

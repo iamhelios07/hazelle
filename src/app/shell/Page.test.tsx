@@ -1,5 +1,4 @@
 import { act, Profiler, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Card } from '../../engine/import/types';
 import type { Kind, Stored } from '../../model/kinds';
@@ -11,6 +10,7 @@ import type { ObjectStore, StoreChange } from '../../runtime/store';
 import { SessionProvider, type Account } from '../session';
 import { Page } from './Page';
 import type { Route } from './routes';
+import { probeRoot } from '../common/probe';
 
 const seen = vi.hoisted(() => ({ chats: [] as string[], mounts: 0, unmounts: 0, prompts: [] as string[], missing: [] as string[] }));
 vi.mock('../chat/ChatScreen', () => ({ ChatScreen: ({ id }: { id: string }) => {
@@ -33,12 +33,6 @@ afterEach(() => {
 const prompt = (id: string, name: string): Stored<'prompt'> => ({ id, kind: 'prompt', parent: null, rev: 1, value: { name, blocks: [], toggles: [], models: {}, authorNote: '' } });
 
 function page(initial: Stored<Kind>[]) {
-  // Null-rendering screen probes need only React's host container, not a browser or a DOM implementation.
-  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {}, activeElement: null, defaultView: { HTMLIFrameElement: class {}, addEventListener() {}, removeEventListener() {} }, documentElement: { namespaceURI: 'http://www.w3.org/1999/xhtml' } };
-  const container = { nodeType: 1, tagName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: document, addEventListener() {}, removeEventListener() {}, textContent: '' } as unknown as HTMLElement;
-  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  vi.stubGlobal('window', document.defaultView);
-  vi.stubGlobal('document', document);
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
   const items = new Map(initial.map((item) => [item.id, item]));
   const models = new Map<string, ChatModel>();
@@ -59,7 +53,7 @@ function page(initial: Stored<Kind>[]) {
   const read = new ReadModels(store);
   const session = { store, read } as Session;
   const account: Account = { admin: false, facts: {} as AccountFacts, onLock() {}, onLogout: async () => null };
-  const root = createRoot(container);
+  const root = probeRoot();
   const commits = vi.fn();
   const closeSettings = () => {};
   list.mockClear();

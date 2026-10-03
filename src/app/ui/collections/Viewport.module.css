@@ -30,6 +30,18 @@
   padding-bottom: 0;
 }
 
+.items {
+  --viewport-estimate: var(--row-min-height);
+  --viewport-gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.items > .row:not(.last) {
+  border-bottom: var(--border-thin) solid var(--color-surface-raised);
+}
+
 .rail {
   --viewport-estimate: var(--control-md);
   --viewport-gap: var(--space-4);
@@ -38,5 +50,5 @@
 
 .grid {
   --viewport-estimate: var(--viewport-card-estimate);
-  --viewport-gap: var(--space-16);
+  --viewport-gap: var(--card-gap);
 }

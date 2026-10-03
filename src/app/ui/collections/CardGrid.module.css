@@ -1,7 +1,7 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
-  gap: var(--space-16);
+  gap: var(--card-gap);
 }
 
 .cardBox {
@@ -131,5 +131,5 @@
 .cards {
   display: grid;
   grid-template-columns: repeat(var(--card-columns), minmax(0, 1fr));
-  gap: var(--space-16);
+  gap: var(--card-gap);
 }

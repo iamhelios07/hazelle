@@ -328,7 +328,7 @@ export class ChatScreenRead {
     return turn?.chat === this.id ? turn : null;
   }
 
-  private refresh() {
+  refresh() {
     this.translationDisplay = null;
     this.evaluation?.abort();
     const evaluation = new AbortController();
@@ -343,7 +343,7 @@ export class ChatScreenRead {
       this.state.set({ chat, messages, display });
     }, (error: unknown) => {
       if (evaluation.signal.aborted || revision !== this.revision || error instanceof EvaluationStopped) return;
-      this.state.set({ ...this.state.snapshot(), pending: false, error });
+      this.state.set({ ...this.state.snapshot(), error });
     });
   }
 }

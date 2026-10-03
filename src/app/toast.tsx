@@ -54,7 +54,10 @@ export function ToastProvider({ standing, children }: { standing: Standing | nul
       const close = () => setNotices((all) => all.filter((notice) => notice.key !== key));
       const keep = () => setNotices((all) => all.map((notice) => (notice.key === key ? { ...notice, ends: Infinity } : notice)));
       const pressed = action && { ...action, onClick: () => (close(), action.onClick()), ...(undo && { keys: SHORTCUTS.undoToast.keys }) };
-      setNotices((all) => [{ key, message, detail, tone, action: pressed, said: from && { from, keep, close }, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
+      // A notice with nothing to press, said again while it is up, stays one notice. One with an action or a speaker is
+      // never merged: each carries its own 되돌리기 or words.
+      const repeats = (notice: Notice) => !action && !from && !notice.action && !notice.said && notice.message === message && notice.detail === detail && notice.tone === tone;
+      setNotices((all) => all.some(repeats) ? all : [{ key, message, detail, tone, action: pressed, said: from && { from, keep, close }, undo, life, ends: Date.now() + life }, ...all].slice(0, KEPT));
       return close;
     };
     return {
