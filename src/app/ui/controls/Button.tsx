@@ -37,7 +37,7 @@ export function Button({ variant = 'primary', size = 'lg', type = 'button', icon
       onClick={onClick}
     >
       {icon && <Icon icon={icon} />}
-      <span className={styles.label}>{children}</span>
+      <span>{children}</span>
       {busy && <span className={styles.spinner} aria-hidden />}
     </button>
   );

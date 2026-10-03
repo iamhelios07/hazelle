@@ -111,8 +111,9 @@
   cursor: progress;
 }
 
-/* The label stays in place, invisible but still read by screen readers, so the width never jumps. */
-.busy .label {
+/* The icon and label stay in place, invisible but still read by screen readers, so the width never jumps and nothing
+   sits beside the spinner. */
+.busy > :not(.spinner) {
   opacity: 0;
 }
 
