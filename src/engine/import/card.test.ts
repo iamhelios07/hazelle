@@ -295,7 +295,7 @@ describe('importCard', () => {
     expect(imported.avatar).toBeNull();
     expect(imported.card.triggers).toEqual([
       { kind: 'lua', name: 'hp', code: 'setChatVar("hp", "1")' },
-      { kind: 'blocks', name: 'set', on: 'manual', conditions: [], effects: [{ type: 'setvar' }] },
+      { kind: 'blocks', name: 'set', on: 'manual', conditions: [], effects: [{ kind: 'set', name: '', operator: null, value: { kind: 'text', text: '' } }] },
     ]);
     expect(imported.report.unsupported).toEqual([
       { kind: 'asset', count: 1 },

@@ -1,12 +1,8 @@
-import { isRecord } from '../../connectors/values';
+import type { Comparison, Operand } from '../import/blocks';
 import type { Trigger } from '../import/types';
-import { add, cbs as evaluated, read, text, write, type Acting } from './state';
+import { add, cbs as evaluated, read, write, type Acting } from './state';
 
 export type Blocks = Extract<Trigger, { kind: 'blocks' }>;
-// A condition or an effect as Risu wrote it. It comes from a bot's file, so every field is read as it may be.
-type Fields = Record<string, unknown>;
-
-const fields = (value: unknown): Fields => (isRecord(value) ? value : {});
 const isTrue = (value: string) => value === 'true' || value === '1';
 const numbers = (left: string, right: string) => !Number.isNaN(Number(left)) && !Number.isNaN(Number(right));
 const same = (left: string, right: string) => (numbers(left, right) ? Number(left) === Number(right) : left === right);
@@ -19,140 +15,100 @@ const holds = (list: string, item: string) => {
   }
 };
 
-// A trigger's own conditions: the variable's value (or the chat's length, or a text) against the condition's value.
-// An operator Risu does not have passes, as it does there.
-const CONDITION = new Map<string, (value: string, wanted: string) => boolean>([
-  ['true', isTrue],
-  ['null', (value) => value === 'null'],
-  ['=', (value, wanted) => value === wanted],
-  ['!=', (value, wanted) => value !== wanted],
-  ['>', (value, wanted) => Number(value) > Number(wanted)],
-  ['<', (value, wanted) => Number(value) < Number(wanted)],
-  ['>=', (value, wanted) => Number(value) >= Number(wanted)],
-  ['<=', (value, wanted) => Number(value) <= Number(wanted)],
-]);
+// Trigger conditions compare equality as text; v2 branches compare numerically when both texts are numbers.
+const COMPARE: Record<Comparison['operator'], (source: string, target: string, equality: Comparison['equality']) => boolean> = {
+  equal: (source, target, equality) => equality === 'numeric' ? same(source, target) : source === target,
+  unequal: (source, target, equality) => equality === 'numeric' ? !same(source, target) : source !== target,
+  greater: (source, target) => Number(source) > Number(target),
+  less: (source, target) => Number(source) < Number(target),
+  'at-least': (source, target) => Number(source) >= Number(target),
+  'at-most': (source, target) => Number(source) <= Number(target),
+  truthy: isTrue,
+  unset: (source) => source === 'null',
+  in: (source, target) => holds(target, source),
+  contains: (source, target) => holds(source, target),
+  'not-in': (source, target) => !holds(target, source),
+  'not-contains': (source, target) => !holds(source, target),
+  near: (source, target) => numbers(source, target) ? Math.abs(Number(source) - Number(target)) < 0.0001 : source.toLowerCase().replaceAll(' ', '') === target.toLowerCase().replaceAll(' ', ''),
+  'same-truth': (source, target) => target === 'true' ? isTrue(source) : target === 'false' ? !isTrue(source) : source === target,
+};
+const compare = ({ operator, equality }: Comparison, source: string, target: string) => COMPARE[operator](source, target, equality);
+const ARITHMETIC = {
+  add: (had: number, by: number) => had + by,
+  subtract: (had: number, by: number) => had - by,
+  multiply: (had: number, by: number) => had * by,
+  divide: (had: number, by: number) => had / by,
+  remainder: (had: number, by: number) => had % by,
+};
 
-// v2If and v2IfAdvanced. Unlike a trigger's conditions, = and != compare as numbers when both sides are numbers.
-const COMPARE = new Map<string, (source: string, target: string) => boolean>([
-  ['=', same],
-  ['!=', (source, target) => !same(source, target)],
-  ['>', (source, target) => Number(source) > Number(target)],
-  ['<', (source, target) => Number(source) < Number(target)],
-  ['>=', (source, target) => Number(source) >= Number(target)],
-  ['<=', (source, target) => Number(source) <= Number(target)],
-  ['∈', (source, target) => holds(target, source)],
-  ['∋', (source, target) => holds(source, target)],
-  ['∉', (source, target) => !holds(target, source)],
-  ['∌', (source, target) => !holds(source, target)],
-  ['≒', (source, target) => (numbers(source, target) ? Math.abs(Number(source) - Number(target)) < 0.0001 : source.toLowerCase().replaceAll(' ', '') === target.toLowerCase().replaceAll(' ', ''))],
-  ['≡', (source, target) => (target === 'true' ? isTrue(source) : target === 'false' ? !isTrue(source) : source === target)],
-]);
-
-const ARITHMETIC = new Map<string, (had: number, by: number) => number>([
-  ['+=', (had, by) => had + by],
-  ['-=', (had, by) => had - by],
-  ['*=', (had, by) => had * by],
-  ['/=', (had, by) => had / by],
-  ['%=', (had, by) => had % by],
-]);
-
-// The v2EndIndent that closes the block opened at or before `from`, or the end of the trigger.
-function closing(effects: Fields[], from: number, indent: number): number {
-  const at = effects.findIndex((effect, index) => index >= from && effect.type === 'v2EndIndent' && effect.indent === indent);
-  return at === -1 ? effects.length : at;
-}
-
-// One of Risu's block triggers, as its runTrigger runs it: the conditions, then, when all pass, the effects, V1 and V2.
-// Only the effects the surveyed bots use are here (docs/research/bot-survey.md); any other does nothing and is named in
-// run.missing, as a Lua function this app lacks is. The texts of conditions and effects are CBS.
+// Only effects the surveyed bots use execute (docs/research/bot-survey.md); opaque effects do nothing and are named
+// in run.missing, as a Lua function this app lacks is. Conditions and effect operands evaluate CBS at execution.
 export async function runBlocks(trigger: Blocks, run: Acting): Promise<void> {
-  const cbs = (value: unknown) => evaluated(run, text(value));
-  // V2 operands say what they are: a text, or with <field>Type 'var' the name of the variable to read. V1's have no
-  // type and are texts.
-  const operand = (effect: Fields, field: string) => (effect[`${field}Type`] === 'var' ? read(run, cbs(effect[field])) : cbs(effect[field]));
-
-  for (const condition of trigger.conditions.map(fields)) {
-    if (condition.type === 'exists') {
+  const cbs = (value: string) => evaluated(run, value);
+  const operand = (value: Operand) => value.kind === 'variable' ? read(run, cbs(value.name)) : cbs(value.text);
+  for (const condition of trigger.conditions) {
+    if (condition.kind === 'exists') {
       const wanted = cbs(condition.value);
-      const recent = run.messages.slice(-Number(condition.depth)).map((message) => message.data).join(' ');
-      const found = condition.type2 === 'strict' ? recent.split(' ').includes(wanted) : condition.type2 === 'loose' ? recent.toLowerCase().includes(wanted.toLowerCase()) : condition.type2 !== 'regex' || new RegExp(wanted).test(recent);
+      const recent = condition.depth === null ? '' : run.messages.slice(-condition.depth).map((message) => message.data).join(' ');
+      const found = condition.match === 'strict' ? recent.split(' ').includes(wanted) : condition.match === 'loose' ? recent.toLowerCase().includes(wanted.toLowerCase()) : condition.match !== 'regex' || new RegExp(wanted).test(recent);
       if (!found) return;
-    } else if (condition.type === 'var' || condition.type === 'chatindex' || condition.type === 'value') {
-      const value = cbs(condition.type === 'var' ? read(run, text(condition.var)) : condition.type === 'chatindex' ? run.messages.length : condition.var);
-      if (CONDITION.get(text(condition.operator))?.(value, cbs(condition.value)) === false) return;
+    } else if (condition.kind === 'compare' || condition.kind === 'probe') {
+      // Conditions evaluate the variable's value as CBS, not its name; effect operands do the opposite.
+      const { source } = condition;
+      const value = cbs(source.kind === 'variable' ? read(run, source.name) : source.kind === 'length' ? String(run.messages.length) : source.text);
+      if (condition.kind === 'compare' && !compare(condition.comparison, value, cbs(condition.value))) return;
     }
   }
-
-  const effects = trigger.effects.map(fields);
+  const effects = trigger.effects;
   for (let index = 0; index < effects.length; index++) {
     const effect = effects[index]!;
-    const type = text(effect.type);
-    switch (type) {
-      case 'v2Header':
-      case 'v2Comment':
-      case 'v2EndIndent':
-        break;
-      case 'setvar':
-      case 'v2SetVar': {
-        const value = operand(effect, 'value');
-        const name = cbs(effect.var);
-        const made = effect.operator === '=' ? value : ARITHMETIC.get(text(effect.operator))?.(Number(read(run, name)) || 0, Number(value));
+    switch (effect.kind) {
+      case 'noop': break;
+      case 'set': {
+        const value = operand(effect.value);
+        const name = cbs(effect.name);
+        const made = effect.operator === 'set' ? value : effect.operator === null ? undefined : ARITHMETIC[effect.operator](Number(read(run, name)) || 0, Number(value));
         if (made !== undefined) write(run, name, made);
         break;
       }
-      case 'v2If':
-      case 'v2IfAdvanced': {
-        // v2If has no sourceType: its source is always a variable's name.
-        const source = type === 'v2If' ? read(run, cbs(effect.source)) : operand(effect, 'source');
-        if (COMPARE.get(text(effect.condition))?.(source, operand(effect, 'target'))) break;
-        // A failed if goes on after its block, and into the else that follows it, past the else's own line.
-        index = closing(effects, index, Number(effect.indent) + 1);
-        const next = effects[index + 1];
-        if (next?.type === 'v2Else' && next.indent === effect.indent) index++;
+      case 'if': {
+        const source = operand(effect.source);
+        if (!effect.comparison || !compare(effect.comparison, source, operand(effect.target))) index = effect.otherwise - 1;
         break;
       }
-      // Reached only after an if that passed, since a failed one steps past this line.
-      case 'v2Else':
-        index = closing(effects, index, Number(effect.indent) + 1);
-        break;
-      case 'impersonate':
-      case 'v2Impersonate': {
-        const value = operand(effect, 'value');
-        if (effect.role === 'user' || effect.role === 'char') add(run, effect.role, value);
+      case 'else': index = effect.next - 1; break;
+      case 'add': {
+        const value = operand(effect.value);
+        if (effect.role !== null) add(run, effect.role, value);
         break;
       }
-      case 'modifychat':
-      case 'v2ModifyChat': {
-        const message = run.messages[Number(operand(effect, 'index'))];
-        const value = operand(effect, 'value');
+      case 'modify': {
+        const message = run.messages[Number(operand(effect.index))];
+        const value = operand(effect.value);
         if (message) message.data = value;
         break;
       }
-      case 'cutchat':
-      case 'v2CutChat': {
-        const start = Number(operand(effect, 'start'));
-        const end = Number(operand(effect, 'end'));
+      case 'cut': {
+        const start = Number(operand(effect.start));
+        const end = Number(operand(effect.end));
         run.messages = run.messages.slice(Number.isNaN(start) ? 0 : start, Number.isNaN(end) ? undefined : end);
         break;
       }
-      case 'showAlert': {
+      case 'alert': {
         const value = cbs(effect.value);
-        const kind = effect.alertType;
+        const kind = effect.tone;
         if (kind === 'normal' || kind === 'error') run.host.say(kind, value);
-        else if (kind === 'input') write(run, cbs(effect.inputVar), (await run.host.ask({ kind, text: value })) ?? '');
-        else if (kind === 'select') write(run, cbs(effect.inputVar), (await run.host.ask({ kind, options: value.split('§') })) ?? '');
+        else if (kind === 'input') write(run, cbs(effect.input), (await run.host.ask({ kind, text: value })) ?? '');
+        else if (kind === 'select') write(run, cbs(effect.input), (await run.host.ask({ kind, options: value.split('§') })) ?? '');
         break;
       }
-      case 'stop':
-        run.stop = true;
-        break;
-      case 'extractRegex': {
-        const found = new RegExp(text(effect.regex), text(effect.flags)).exec(cbs(effect.value));
-        write(run, text(effect.inputVar), text(effect.result).replace(/\$(\d+|&|\$)/g, (_, group: string) => (group === '$' ? '$' : (found?.[group === '&' ? 0 : Number(group)] ?? ''))));
+      case 'stop': run.stop = true; break;
+      case 'extract': {
+        const found = new RegExp(effect.regex, effect.flags).exec(cbs(effect.value));
+        write(run, effect.input, effect.result.replace(/\$(\d+|&|\$)/g, (_, group: string) => (group === '$' ? '$' : (found?.[group === '&' ? 0 : Number(group)] ?? ''))));
         break;
       }
-      default:
-        run.missing.add(type);
+      case 'opaque': run.missing.add(effect.type); break;
     }
   }
 }

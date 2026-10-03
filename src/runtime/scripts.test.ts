@@ -151,8 +151,8 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, [
         { kind: 'blocks', name: 'open', on: 'manual', conditions: [], effects: [
-          { type: 'v2SetVar', operator: '=', var: 'door', value: 'open', valueType: 'value', indent: 0 },
-          { type: 'impersonate', role: 'char', value: 'The door is {{getvar::door}} at {{lastmessageid}}.' },
+          { kind: 'set', operator: 'set', name: 'door', value: { kind: 'text', text: 'open' } },
+          { kind: 'add', role: 'char', value: { kind: 'text', text: 'The door is {{getvar::door}} at {{lastmessageid}}.' } },
         ] },
       ]);
       expect(await session.scripts.press(chat, { trigger: 'open' })).toBe(true);

@@ -2,6 +2,7 @@ import { count, isRecord, list } from '../../connectors/values';
 import { isUnsupportedTag } from '../cbs/tags';
 import { parseDecorators } from '../lorebook/decorators';
 import { readToggles } from './toggles';
+import { blockConditions, blockEffects } from './blocks';
 import type { Card, ImportedModule, ImportReport, LoreEntry, Pack, RegexScript, Trigger, UnsupportedKind } from './types';
 
 type Json = Record<string, unknown>;
@@ -131,7 +132,7 @@ function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; to
     const effects = list(trigger.effect).map(record);
     const code = effects[0]?.type === 'triggerlua' ? text(effects[0].code) : null;
     if (code === null) {
-      if (effects.some((effect) => !INERT.has(effect.type))) triggers.push({ kind: 'blocks', name, on: text(trigger.type), conditions: list(trigger.conditions), effects });
+      if (effects.some((effect) => !INERT.has(effect.type))) triggers.push({ kind: 'blocks', name, on: text(trigger.type), conditions: blockConditions(trigger.conditions), effects: blockEffects(trigger.effect) });
     } else if (code.trim()) triggers.push({ kind: 'lua', name, code });
   }
   const background = text(raw.background);
