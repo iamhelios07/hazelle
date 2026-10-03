@@ -27,7 +27,7 @@ import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { translatorOf } from '../../runtime/translate';
-import { blocked, packsOf, takeTurn, togglesOf, statusBoxes, translateLatest, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import { blocked, packsOf, takeTurn, togglesOf, statusBoxes, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
@@ -86,7 +86,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const choices = useMemo(() => item === null && card
     ? projectGreetings(greetings, openingIds, picked, (text) => greetingTranslation(shelf!.character, text, translate.replyLanguage))
     : null, [item === null, card, shelf?.character.greetingTranslations, translate.replyLanguage, openingIds, picked]);
-  const greeting = choices?.selected ?? 0;
   const unstarted: Shown | null = useMemo(() => {
     const preview = greetingPreview(choices, openedAt);
     return preview && { ...preview, live: null };
@@ -158,11 +157,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (id) session.memory.check(id);
   }, [id]);
 
-  // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateLatest's.
+  // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
-  useEffect(() => {
-    translateLatest(session, chatId);
-  }, [item, turn, translating, translate.replies, greeting]);
 
   // A reply starting here while 정보 is open shows its own information.
   const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;

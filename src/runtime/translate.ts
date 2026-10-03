@@ -116,7 +116,7 @@ export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt
 export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }>;
 
 // live: the text so far of each translation being made, by the version's id. failed: why the last try at a version
-// did not translate it, kept for the session so a chat does not try it again on its own.
+// did not translate it, kept for the session.
 export type Translating = { live: ReadonlyMap<string, string>; failed: ReadonlyMap<string, TranslatorFailure> };
 
 // The translations of the chats' messages. Unlike replies, several run at once, one per version, and each goes

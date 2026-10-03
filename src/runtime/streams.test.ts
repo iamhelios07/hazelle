@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fetchApi } from './api';
 import { fold, shown } from '../model/chat';
+import { setTranslate } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
@@ -87,6 +88,31 @@ describe('a detached call', () => {
       expect(await turn).toBeNull();
       expect(order.slice(0, 2)).toEqual(['started', 'marker']);
     }));
+
+  it('translates a reply it picked up once it finishes on this load', async () => {
+    const open = await pages();
+    const first = await open();
+    const { chat, writer } = await streaming(first);
+    await setTranslate(first.store, null, { replies: true });
+    const turn = takeTurn(first, chat, { kind: 'send', text: 'Hi' });
+    await writer.write(delta('Hello, '));
+    await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
+    first.close();
+    expect(await turn).toBeNull();
+
+    const log = stubRelay(inTurn([saying('안녕, 여행자.')]));
+    const second = await open();
+    await server.hold(second.store, chat);
+    try {
+      await vi.waitFor(() => expect(second.talk.snapshot()?.text).toBe('Hello, '), { timeout: 3000 });
+      await writer.write(delta('traveler.'));
+      await writer.write(ending);
+      await vi.waitFor(() => expect(shown(messages(second, chat)[1]!).translation?.text).toBe('안녕, 여행자.'));
+      expect(log).toHaveLength(1);
+    } finally {
+      second.close();
+    }
+  });
 
   it('keeps reading a call it picked up when its own first try cannot reach the server', async () => {
     const open = await pages();
