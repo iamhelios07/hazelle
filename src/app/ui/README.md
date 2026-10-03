@@ -55,7 +55,7 @@ and only this folder styles elements.**
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
 | layout | `Shell` | `Shell.module.css` | The sidebar beside the page |
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
-| layout | `Sidebar` (`Rail`, `FaceButton`, `FaceStrip`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, its rail, faces; a layer's own sidebar with its title and ×, which Esc closes too |
+| layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | controls | `Button` | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |
