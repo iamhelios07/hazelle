@@ -1,7 +1,8 @@
 import { ExternalLink, RotateCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DeviceCode } from '../../connectors/device-code';
-import type { Connection, ConnectionType, SignIn } from '../../connectors/types';
+import type { ConnectionType, SignIn } from '../../connectors/types';
+import { providerConnection } from '../../runtime/connections';
 import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
 import { describeSignInFailure } from '../common/failure';
 import { useSession } from '../session';
@@ -35,15 +36,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
       setStage({ step: 'connecting' });
       const account = await accountName(signIn, approved.secret, signal);
       if (!account.ok) return fail(describeSignInFailure(account.failure, signIn.site));
-      const connection: Connection = {
-        type: type.id,
-        label: type.label,
-        account: account.name,
-        baseUrl: null,
-        protocol: null,
-        secret: approved.secret,
-        starred: [],
-      };
+      const connection = providerConnection(type, approved.secret, account.name);
       const failure = await connect(session, connection, signal);
       if (failure) fail(failure);
     })();

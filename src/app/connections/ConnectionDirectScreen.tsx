@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { detect, GENERIC } from '../../connectors/registry';
 import type { Connection, Protocol } from '../../connectors/types';
+import { providerConnection } from '../../runtime/connections';
 import { HTTPS_ONLY } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
 import { useSession } from '../session';
@@ -32,7 +33,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
   const secret = key.trim();
   let draft: Connection | null = null;
   if (place?.kind === 'url' && secret) {
-    draft = { type: place.type.id, label: place.type.label, baseUrl: null, protocol: null, secret, starred: [] };
+    draft = providerConnection(place.type, secret);
   } else if (place?.kind === 'generic-url' && !place.problem && protocol) {
     draft = { type: GENERIC, label: new URL(place.baseUrl).host, baseUrl: place.baseUrl, protocol, secret, starred: [] };
   }

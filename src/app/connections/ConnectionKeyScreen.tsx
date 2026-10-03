@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { detect } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
+import { providerConnection } from '../../runtime/connections';
 import { useAttempt } from '../common/useAttempt';
 import { useSession } from '../session';
 import { backBar } from '../shell/router';
@@ -19,7 +20,7 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!secret) return;
-    await run((signal) => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }, signal));
+    await run((signal) => connect(session, providerConnection(type, secret), signal));
   }
 
   return (

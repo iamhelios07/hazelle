@@ -1,15 +1,27 @@
 import { describe, expect, it } from 'vitest';
+import { CONNECTION_TYPES } from '../connectors/registry';
 import type { Connection } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
-import { addConnection, setStarred } from './connections';
+import { addConnection, providerConnection, setStarred } from './connections';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
 
 const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-v1-x', starred: [] };
 const KEY = 'https://openrouter.ai/api/v1/key';
+
+describe('providerConnection', () => {
+  it('initializes the provider-backed stored shape, with account metadata only for sign-in', () => {
+    const type = CONNECTION_TYPES.find((entry) => entry.id === 'openrouter')!;
+    expect(providerConnection(type, 'sk-or-v1-x')).toEqual(openRouter);
+    expect(providerConnection(type, 'signed-in', '사용자')).toEqual({ ...openRouter, secret: 'signed-in', account: '사용자' });
+    const first = providerConnection(type, 'first');
+    const second = providerConnection(type, 'second');
+    expect(first.starred).not.toBe(second.starred);
+  });
+});
 
 describe('addConnection', () => {
   it('saves nothing for a key the meters refuse, though the public model list loaded, and answers the new id otherwise', () =>

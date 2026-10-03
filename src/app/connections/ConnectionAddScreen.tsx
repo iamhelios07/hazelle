@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
+import { providerConnection } from '../../runtime/connections';
 import { useAttempt } from '../common/useAttempt';
 import { useConnections, useSession } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
@@ -27,7 +28,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
   const search = searchTypes(query);
   const shown = search.kind === 'types' ? search.types : search.kind === 'key' ? [search.type] : [];
   const connected = (type: ConnectionType) => connections.filter((entry) => resolveConnection(entry.value)?.type === type).length;
-  const connectKey = (type: ConnectionType, secret: string) => run((signal) => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }, signal));
+  const connectKey = (type: ConnectionType, secret: string) => run((signal) => connect(session, providerConnection(type, secret), signal));
 
   return (
     <Screen top={<NavBar title="연결 추가" {...backBar(back)} />}>

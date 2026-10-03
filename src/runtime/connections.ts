@@ -1,5 +1,5 @@
 import { fitsRole } from '../connectors/assignment';
-import type { Connection, Model } from '../connectors/types';
+import type { Connection, ConnectionType, Model } from '../connectors/types';
 import type { Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
@@ -8,6 +8,10 @@ import type { CatalogFailure } from './catalog';
 import { loadMeters, type MetersFailure } from './meters';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
+
+export function providerConnection(type: ConnectionType, secret: string, account?: string): Connection {
+  return { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [], ...(account === undefined ? {} : { account }) };
+}
 
 // models: the model list did not load. key: the provider refused the key the meters asked with.
 // stopped: the caller gave up (signal) before the save.
