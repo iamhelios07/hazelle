@@ -63,4 +63,4 @@ CREATE TABLE file_blocks (
 INSERT INTO file_blocks SELECT id, blocked_at FROM files WHERE blocked_at IS NOT NULL;
 
 -- 300 MB for every account at launch. The app counts 1 MB as 1,000,000 bytes.
-UPDATE service SET account_bytes_cap = 300000000;
+UPDATE service SET account_bytes_cap = 300000000, account_file_bytes_cap = 3000000000;
