@@ -12,23 +12,22 @@ import { without, type ObjectStore, type Write } from './store';
 
 export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 
-// What a character owns, its files stored already. chats: a move's, with their entries.
-type Owned = { avatar: Avatar | null; assets: Asset[]; lore: Lore[]; chats?: Write[] };
+// What a character owns, its files stored already.
+type Owned = { avatar: Avatar | null; assets: Asset[]; lore: Lore[] };
 
 // Files are read and sent this many at a time, so a bot of thousands never holds them all at once.
 const FILE_WINDOW = 32;
 
 // The character goes last with what it owns (store.batch), so a failure midway leaves pieces nothing points at, never
-// a character missing some of its own, its chats included, which a move from Risu relies on to skip a character already brought.
-// id: the one its chats already name.
-export async function addCharacter(store: ObjectStore, character: Character, { avatar, assets, lore, chats = [] }: Owned, progress: Progress, id: string = crypto.randomUUID()): Promise<ApiResult<string>> {
+// a character missing some of its own. A move stages its complete chats before this call and relies on this final
+// character publication to skip a character already brought. id: the one its staged chats already name.
+export async function addCharacter(store: ObjectStore, character: Character, { avatar, assets, lore }: Owned, progress: Progress, id: string = crypto.randomUUID()): Promise<ApiResult<string>> {
   const owned = <K extends 'avatar' | 'asset' | 'lore'>(kind: K, value: Values[K]): Write => ({ type: 'create', kind, id: crypto.randomUUID(), parent: id, value });
   const writes: Write[] = [
     { type: 'create', kind: 'character', id, parent: null, value: character },
     ...(avatar ? [owned('avatar', avatar)] : []),
     ...assets.map((asset) => owned('asset', asset)),
     ...lore.map((entry) => owned('lore', entry)),
-    ...chats,
   ];
   let done = 0;
   progress({ kind: 'saving', done, total: writes.length });
@@ -62,9 +61,8 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
   return { ok: true, data: { kept, skipped } };
 }
 
-// A character brought from Risu (runtime/move): its library folder, its Risu id, the modules on for it, and its chats,
-// which name it by id.
-export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; chats: Write[] };
+// A moved character's id is already named by its staged chats.
+export type Brought = { id: string; folder: string | null; risu: string; modules: string[] };
 
 // A card as the importer read it, in no library folder unless brought. Its picture and assets are stored first; its
 // lorebook folders get ids, and each entry names its folder by that id instead of the importer's index.
@@ -93,7 +91,7 @@ export async function importCharacter(
   const folders = loreFolders.map((name) => ({ id: crypto.randomUUID(), name }));
   const entries = lore.map((entry) => ({ ...entry, folder: entry.folder === null ? null : folders[entry.folder]!.id }));
   const character: Character = { card, folder: brought?.folder ?? null, loreFolders: folders, ...(brought && { risu: brought.risu, ...(brought.modules.length > 0 && { modules: brought.modules }) }) };
-  const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries, chats: brought?.chats }, progress, brought?.id);
+  const added = await addCharacter(store, character, { avatar, assets: kept, lore: entries }, progress, brought?.id);
   return added.ok ? { ok: true, data: { id: added.data, skipped, faceless: picture !== null && avatar === null } } : added;
 }
 

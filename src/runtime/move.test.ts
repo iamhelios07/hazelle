@@ -7,6 +7,7 @@ import { MEMORY_DEFAULTS } from './memory';
 import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch } from './move';
 import { setModuleAlways } from './modules';
 import { testCard, testServer } from './testing';
+import { summaryId, summaryStale } from './summary';
 
 const server = testServer();
 
@@ -102,6 +103,55 @@ describe('moveFromRisu', () => {
     expect(store.list('character')).toHaveLength(1);
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
   });
+
+  it.each(['entry', 'root', 'character'] as const)('bounds staged writes and summary leases, and retries a cut at the %s boundary without a visible partial character', async (cut) => {
+    const { store, files } = await server.account();
+    const chats = Array.from({ length: 2 }, (_, index) => ({
+      ...luna.chats[0]!, greeting: 0,
+      messages: Array.from({ length: 130 }, (_, at) => ({ role: 'user' as const, text: `chat ${index} / ${at}`, at: index * 1000 + at })),
+    }));
+    const backup = source({ characters: [{ ...luna, chats }] });
+    const batch = store.batch.bind(store);
+    let armed = true;
+    let largestWindow = 0;
+    vi.spyOn(store, 'batch').mockImplementation(async (writes, progress, options) => {
+      largestWindow = Math.max(largestWindow, writes.length);
+      const character = writes.find((write) => write.type === 'create' && write.kind === 'character');
+      if (character) {
+        expect(store.list('chat').filter(({ value }) => value.character === character.id)).toHaveLength(2);
+        expect(store.list('chat').every(({ id }) => store.scopeState(id) === 'unloaded')).toBe(true);
+      }
+      const boundary = character ? 'character' : writes.some((write) => write.type === 'create' && write.kind === 'chat') ? 'root' : 'entry';
+      if (armed && cut === boundary && cut === 'character') { armed = false; return { ok: false, error: 'stopped' }; }
+      const result = await batch(writes, progress, options);
+      if (armed && cut === boundary) { armed = false; return { ok: false, error: 'stopped' }; }
+      return result;
+    });
+    let peak = 0;
+    const evaluate = store.evaluated.bind(store);
+    vi.spyOn(store, 'evaluated').mockImplementation((id) => {
+      peak = Math.max(peak, store.list('chat').filter(({ id }) => store.scopeState(id) === 'loaded').length);
+      return evaluate(id);
+    });
+    expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toEqual({ ok: false, error: 'stopped' });
+    expect(store.list('character')).toHaveLength(0);
+    expect(broughtFromRisu(store).size).toBe(0);
+    const retried = await moveFromRisu(store, files, backup, backup.catalog, () => {});
+    expect(retried.ok).toBe(true);
+    expect(store.list('character')).toHaveLength(1);
+    const id = store.list('character')[0]!.id;
+    const visible = store.list('chat').filter(({ value }) => value.character === id);
+    expect(visible).toHaveLength(2);
+    for (const chat of visible) {
+      const summary = store.get('summary', summaryId(chat.id))!.value;
+      expect(summary.count).toBe(130);
+      expect(summaryStale(store, chat.id, summary)).toBe(false);
+      expect(store.scopeState(chat.id)).toBe('unloaded');
+    }
+    expect(largestWindow).toBe(128);
+    expect(peak).toBe(1);
+    expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toMatchObject({ ok: true, data: { characters: [] } });
+  }, 30_000);
 
   it('writes what was talked in last last, so the lists open on it', async () => {
     const { store, files } = await server.account();

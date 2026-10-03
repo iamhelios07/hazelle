@@ -6,7 +6,7 @@ import { greetingOf, greetingPreview, projectGreetings, startingGreetings } from
 import type { ObjectStore, Write } from './store';
 
 const chat: Chat = { title: null, character: 'character', models: {} };
-const entries = (writes: Write[]): Stored<'entry'>[] => writes.flatMap((write, index) =>
+const entries = (writes: Iterable<Write>): Stored<'entry'>[] => [...writes].flatMap((write, index) =>
   write.type === 'create' && write.kind === 'entry' ? [{ id: write.id, kind: 'entry', parent: write.parent, rev: index + 1, value: write.value as Entry }] : []);
 
 it('preserves original indexes, blank choices, duplicate text, ids and translations from preview through saving', () => {
