@@ -3,7 +3,8 @@
 .peeks {
   position: absolute;
   inset: var(--header-height) var(--story-scrollbar) var(--footer-space) 0;
-  z-index: var(--layer-menu);
+  /* The panel variant stands over the header and the composer, as a SidePanel does. */
+  z-index: var(--layer-panel);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -64,14 +65,14 @@
     visibility var(--duration-instant) linear calc(var(--duration-slow) + var(--duration-fast));
 }
 
-/* The panel 답장 정보 was beside the story (user, 2026-10-04: keep that design): the story's full height at its edge,
-   over it, sliding in from the edge. */
+/* The panel 답장 정보 was beside the story (user, 2026-10-04: keep that design, "옛날의 그 전체 크기"): the page's full
+   height at its edge, over the header and the composer too, sliding in from the edge. */
 .panel {
   --peek-hidden: translateX(100%);
   --peek-shown: none;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: calc(-1 * var(--header-height));
+  right: calc(-1 * var(--story-scrollbar));
+  bottom: calc(-1 * var(--footer-space));
   width: min(var(--panel-width), 100%);
   max-height: none;
   border: 0;
