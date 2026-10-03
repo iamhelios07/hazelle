@@ -9,7 +9,6 @@ import { openRouter } from './openrouter';
 import { vercel } from './vercel';
 import {
   cacheView,
-  catalogRequest,
   chatRequest,
   CONNECTION_TYPES,
   detect,
@@ -180,7 +179,7 @@ describe('catalogs', () => {
 
   it('reads a generic list as ids with every capability unknown', () => {
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
-    expect(withCredential(generic, catalogRequest(generic), 'k')).toEqual({ url: 'https://api.example.com/v1/models', method: 'GET', headers: { authorization: 'Bearer k' }, body: null });
+    expect(withCredential(generic, generic.codec.listModels(generic.endpoint), 'k')).toEqual({ url: 'https://api.example.com/v1/models', method: 'GET', headers: { authorization: 'Bearer k' }, body: null });
     expect(parseCatalog(generic, { data: [{ id: 'deepseek-chat' }, { id: '' }, 'junk'] })).toEqual([model({ id: 'deepseek-chat', name: 'deepseek-chat' })]);
     expect(parseCatalog(generic, { models: [] })).toBeNull();
   });
@@ -306,7 +305,7 @@ describe('copilot', () => {
   });
 
   it('sends each model to its own endpoint with the editor identity and the exchanged token only', () => {
-    expect(withCredential(resolved, catalogRequest(resolved), 'tid')).toEqual({ url: 'https://api.githubcopilot.com/models', method: 'GET', headers: identity, body: null });
+    expect(withCredential(resolved, resolved.codec.listModels(resolved.endpoint), 'tid')).toEqual({ url: 'https://api.githubcopilot.com/models', method: 'GET', headers: identity, body: null });
 
     const claude = resolveModel(resolved, find('claude-opus-4.6'));
     const request = withCredential(claude, chatRequest(claude, { model: find('claude-opus-4.6'), messages, settings: {} }), 'tid');

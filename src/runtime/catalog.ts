@@ -1,4 +1,4 @@
-import { catalogRequest, parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
+import { parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
 import type { Connection, Model } from '../connectors/types';
 import type { CredentialFailure, Credentials } from './credential';
 import { relayJson } from './relay';
@@ -38,7 +38,7 @@ export class Catalogs {
     if (!resolved) return { ok: false, failure: { kind: 'refused', code: 'unknown-connection-type' } };
     const credential = await this.credentials.get(resolved, connection.secret);
     if (!credential.ok) return credential;
-    const response = await relayJson(withCredential(resolved, catalogRequest(resolved), credential.credential));
+    const response = await relayJson(withCredential(resolved, resolved.codec.listModels(resolved.endpoint), credential.credential));
     if (!response.ok) return response;
     const models = parseCatalog(resolved, response.data);
     return models ? { ok: true, models } : { ok: false, failure: { kind: 'not-a-catalog' } };

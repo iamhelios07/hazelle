@@ -44,10 +44,6 @@ export function resolveModel(resolved: Resolved, model: Model): Resolved {
   return { type: resolved.type, endpoint: { baseUrl, protocol }, codec };
 }
 
-export function catalogRequest({ codec, endpoint }: Resolved): HttpRequest {
-  return codec.listModels(endpoint);
-}
-
 export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model[] | null {
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
