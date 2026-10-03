@@ -500,14 +500,15 @@ export class ObjectStore {
     });
   }
 
+  // signal: the caller's stop, seen once the chat is ready; the lease is held until run ends, so run never finds its
+  // chat let go under it.
   async withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
     if (signal?.aborted) return { ok: false, error: 'stopped' };
     const lease = this.retainChat(chat);
-    signal?.addEventListener('abort', lease.release, { once: true });
     try {
       const failure = await lease.ready;
       return signal?.aborted ? { ok: false, error: 'stopped' } : failure ?? await run();
-    } finally { signal?.removeEventListener('abort', lease.release); lease.release(); }
+    } finally { lease.release(); }
   }
 
   refreshChat(chat: string): Promise<ApiFailure | null> {
@@ -516,8 +517,7 @@ export class ObjectStore {
     if (scope.loading) return scope.loading;
     if (scope.state !== 'loaded') scope.state = 'loading';
     scope.error = null;
-    const abort = new AbortController();
-    scope.abort = abort;
+    const abort = scope.abort;
     const epoch = this.epoch;
     scope.loading = this.pullParent(chat, scope, abort.signal).catch((error: unknown) => this.codecFailure(error, epoch)).then(async (failure) => {
       if (abort.signal.aborted || this.scopes.get(chat) !== scope) return this.halted(epoch);
@@ -557,34 +557,26 @@ export class ObjectStore {
   async saveSummary(chat: string): Promise<ApiFailure | null> {
     const pending = this.summarizing.get(chat);
     if (pending) return pending;
+    const epoch = this.epoch;
     const save = async (): Promise<ApiFailure | null> => {
       for (;;) {
+        // The scope's own controller, ended when its last lease is let go, the timeline resets or the store closes: no
+        // retry of a summary write outlives the chat being held.
+        const scope = this.scopes.get(chat);
+        if (!scope || scope.abort.signal.aborted) return this.halted(epoch);
         if (this.loadedHead(chat) < this.entryHead(chat)) {
           const failed = await this.refreshChat(chat);
           if (failed) return failed;
         }
         const write = await this.summaryWrite(chat);
         if (!write) return null;
-        const result = await this.commit([this.step(write)], undefined, this.scopes.get(chat)?.abort.signal);
+        const result = await this.commit([this.step(write)], undefined, scope.abort.signal);
         if (!result.ok) return result;
       }
     };
-    const epoch = this.epoch;
     const saving = save().catch((error: unknown) => this.codecFailure(error, epoch)).finally(() => this.summarizing.delete(chat));
     this.summarizing.set(chat, saving);
     return saving;
-  }
-
-  async saveSummaries(chats: Iterable<string>, signal?: AbortSignal): Promise<ApiFailure | null> {
-    for (const chat of chats) {
-      if (signal?.aborted) return { ok: false, error: 'stopped' };
-      const result = await this.withChat(chat, async () => {
-        if (signal?.aborted) return { ok: false, error: 'stopped' };
-        return await this.saveSummary(chat) ?? { ok: true, data: null };
-      }, signal);
-      if (!result.ok) return result;
-    }
-    return null;
   }
 
   private async summaryWrite(chat: string): Promise<Write | null> {
@@ -597,8 +589,9 @@ export class ObjectStore {
     return { type: 'restore', id, kind: 'summary', parent: chat, value: projection.summary };
   }
 
-  // An explicit account/parent walk for backup, usage and ownership operations, on its workflow's pin (pinned); it never fills
-  // the held chat scopes. No row is visited once the pin's epoch has ended.
+  // An explicit account/parent walk; it never fills the held chat scopes. Backup and ownership walks run on their
+  // workflow's pin (pinned); usage reads on a bare pin, since it writes nothing. No row is visited once the pin's epoch
+  // has ended.
   async scan(options: { parent?: string; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>, pin: Pin, signal?: AbortSignal): Promise<ApiFailure | null> {
     const stop = AbortSignal.any([this.closing.signal, this.ended.signal, ...(signal ? [signal] : [])]);
     let cursor = 0;

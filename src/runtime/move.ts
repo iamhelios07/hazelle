@@ -2,7 +2,7 @@ import type { BackupCatalog, Card, Imported, ImportReport, MoveUnsupported, Risu
 import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';
 import type { MemorySettings } from '../model/memory';
-import type { ApiFailure, ApiResult } from './api';
+import type { ApiResult } from './api';
 import { createFolder, importCharacter, saveAssets, type Progress } from './characters';
 import { chatWrites } from './chat-log';
 import type { Files } from './files';
@@ -12,6 +12,7 @@ import { importModule, setModuleAlways } from './modules';
 import { addPersona } from './personas';
 import { thumbnail } from './picture';
 import { savePreset } from './prompts';
+import { saveSummaries } from './summary';
 import type { ObjectStore, Write } from './store';
 
 export type MovePick = Pick<BackupCatalog, 'characters' | 'personas' | 'presets' | 'modules'>;
@@ -31,7 +32,8 @@ export const modulesFromRisu = (store: ObjectStore): Map<string, string> => new 
 
 // Personas first, so the chats bound to one use it, and modules before the characters they are on for. The first
 // failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is sound
-// because each one lands whole: all chats are staged before runtime/characters publishes the character. So is a module: its
+// because each one lands whole: its chats' entries are written first, and their roots go with the character in its own
+// batch (runtime/characters addCharacter), so a cut leaves only entries no chat names. So is a module: its
 // 항상 is written before it, under the id it is then saved at, so a move cut between the two leaves only an id that
 // names nothing, which reads as off, and the next run brings the module again. Every write is of the timeline the move
 // began on: an account restored meanwhile stops it.
@@ -102,18 +104,19 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     // Moved chats start with long-term memory off: on, opening a long one would summarize its whole past at once (user,
     // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
     const memory = { ...defaultMemory(store), on: false };
-    const chats: string[] = [];
+    // One chat's entries per batch: the source holds the whole character already, so this holds no more than it.
+    const roots: Write[] = [];
     for (const chat of [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b))) {
-      const chatId = crypto.randomUUID();
-      const failure = await stageChat(store, chatOf(chatId, id, character.card, chat, personaIds, memory));
-      if (failure) return failure;
-      chats.push(chatId);
+      const { entries, root } = chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, memory);
+      const staged = await store.batch(entries, undefined, { unheld: true });
+      if (!staged.ok) return staged;
+      roots.push(root);
       progress({ kind: 'chats', done: ++chatsDone, total: chatTotal });
     }
-    const saved = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []) });
+    const saved = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats: roots });
     if (!saved.ok) return saved;
-    // Canonical summaries read the published card and its actual revision; only primary objects precede publication.
-    const summarized = await store.saveSummaries(chats);
+    // A summary reads the published card and its revision, so it is written once the character is.
+    const summarized = await saveSummaries(store, roots.map(({ id }) => id));
     if (summarized) return summarized;
     picturesDone += character.assets.length;
     const { skipped, faceless } = saved.data;
@@ -131,26 +134,12 @@ async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<
   return made.ok ? { ok: true, data: made.data.id } : made;
 }
 
-function chatOf(id: string, character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, memory: MemorySettings): Iterable<Write> {
+function chatOf(id: string, character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, memory: MemorySettings): ReturnType<typeof chatWrites> {
   // The chat opens on the greeting Risu showed; a blank one shown leaves the chat without one, as Risu showed none.
   const greetings = startingGreetings(projectGreetings(card.greetings, card.greetings.map(() => crypto.randomUUID()), greeting));
   const own = persona === null ? undefined : personaIds.get(persona);
   const chat: Chat = { title: title.trim() || null, character, models: {}, memory, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }) };
   return chatWrites(id, chat, greetings, messages);
-}
-
-async function stageChat(store: ObjectStore, writes: Iterable<Write>): Promise<ApiFailure | null> {
-  let window: Write[] = [];
-  for (const write of writes) {
-    window.push(write);
-    if (window.length < 128) continue;
-    const saved = await store.batch(window, undefined, { unheld: true });
-    if (!saved.ok) return saved;
-    window = [];
-  }
-  if (!window.length) return null;
-  const saved = await store.batch(window, undefined, { unheld: true });
-  return saved.ok ? null : saved;
 }
 
 export const risuMatch = (store: ObjectStore, name: string): string | null =>

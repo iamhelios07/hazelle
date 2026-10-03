@@ -104,27 +104,31 @@ describe('moveFromRisu', () => {
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
   });
 
-  it.each(['entry', 'root', 'character'] as const)('bounds staged writes and summary leases, and retries a cut at the %s boundary without a visible partial character', async (cut) => {
+  it.each(['entry', 'character'] as const)('writes one chat per batch, publishes the chat roots with their character, and retries a cut at the %s write leaving no chat without its character', async (cut) => {
     const { store, files } = await server.account();
     const chats = Array.from({ length: 2 }, (_, index) => ({
       ...luna.chats[0]!, greeting: 0,
       messages: Array.from({ length: 130 }, (_, at) => ({ role: 'user' as const, text: `chat ${index} / ${at}`, at: index * 1000 + at })),
     }));
     const backup = source({ characters: [{ ...luna, chats }] });
+    const orphans = () => store.list('chat').filter(({ value }) => !store.get('character', value.character!));
     const batch = store.batch.bind(store);
     let armed = true;
-    let largestWindow = 0;
     vi.spyOn(store, 'batch').mockImplementation(async (writes, progress, options) => {
-      largestWindow = Math.max(largestWindow, writes.length);
       const character = writes.find((write) => write.type === 'create' && write.kind === 'character');
+      const roots = writes.flatMap((write) => (write.type === 'create' && write.kind === 'chat' ? [write.id] : []));
       if (character) {
-        expect(store.list('chat').filter(({ value }) => value.character === character.id)).toHaveLength(2);
-        expect(store.list('chat').every(({ id }) => store.scopeState(id) === 'unloaded')).toBe(true);
+        expect(roots).toHaveLength(2);
+        expect(store.list('chat')).toHaveLength(0);
+      } else {
+        expect(roots).toHaveLength(0);
+        expect(new Set(writes.map((write) => write.type === 'create' && write.parent)).size).toBe(1);
       }
-      const boundary = character ? 'character' : writes.some((write) => write.type === 'create' && write.kind === 'chat') ? 'root' : 'entry';
-      if (armed && cut === boundary && cut === 'character') { armed = false; return { ok: false, error: 'stopped' }; }
+      if (armed && cut === 'character' && character) { armed = false; return { ok: false, error: 'stopped' }; }
       const result = await batch(writes, progress, options);
-      if (armed && cut === boundary) { armed = false; return { ok: false, error: 'stopped' }; }
+      // Leased, a new root would be summarized from an empty scope.
+      expect(roots.every((id) => store.scopeState(id) === 'unloaded')).toBe(true);
+      if (armed && cut === 'entry') { armed = false; return { ok: false, error: 'stopped' }; }
       return result;
     });
     let peak = 0;
@@ -135,12 +139,13 @@ describe('moveFromRisu', () => {
     });
     expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toEqual({ ok: false, error: 'stopped' });
     expect(store.list('character')).toHaveLength(0);
+    expect(orphans()).toEqual([]);
     expect(broughtFromRisu(store).size).toBe(0);
     const retried = await moveFromRisu(store, files, backup, backup.catalog, () => {});
     expect(retried.ok).toBe(true);
     expect(store.list('character')).toHaveLength(1);
-    const id = store.list('character')[0]!.id;
-    const visible = store.list('chat').filter(({ value }) => value.character === id);
+    expect(orphans()).toEqual([]);
+    const visible = store.list('chat');
     expect(visible).toHaveLength(2);
     for (const chat of visible) {
       const summary = store.get('summary', summaryId(chat.id))!.value;
@@ -148,7 +153,6 @@ describe('moveFromRisu', () => {
       expect(summaryStale(store, chat.id, summary)).toBe(false);
       expect(store.scopeState(chat.id)).toBe('unloaded');
     }
-    expect(largestWindow).toBe(128);
     expect(peak).toBe(1);
     expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toMatchObject({ ok: true, data: { characters: [] } });
   }, 30_000);

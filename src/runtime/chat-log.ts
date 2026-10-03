@@ -12,7 +12,7 @@ import { without, type ObjectStore, type Write } from './store';
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
 // the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with
 // its character, a backup's restore, which copies them as they were, and a move from Risu, which saves chatWrites'
-// writes before publishing the character.
+// entries before its character and the chat root with it (runtime/characters addCharacter).
 
 // A new chat is saved in this order: the chat with its greetings, the one shown selected, then the user's first
 // message, sent with its reply. Messages stand in the order they were saved, so the greeting leads only when it is
@@ -20,18 +20,20 @@ import { without, type ObjectStore, type Write } from './store';
 // chat is never there without them: its screen would show it greeting-less until they landed.
 // id is the one the chat was shown under before it was saved, which seeds its greeting's pick and rollp tags.
 export async function startChat(store: ObjectStore, id: string, chat: Chat, greetings: Greetings | null): Promise<ApiFailure | null> {
-  const saved = await store.batch([...chatWrites(id, chat, greetings, [])]);
+  const { entries, root } = chatWrites(id, chat, greetings, []);
+  const saved = await store.batch([...entries, root]);
   return saved.ok ? null : saved;
 }
 
-// Greetings precede existing messages, and the root follows both; a staged move can consume this without holding all writes.
-export function* chatWrites(id: string, chat: Chat, greetings: Greetings | null, messages: RisuMessage[]): Generator<Write> {
+// A new chat's writes: its greetings, then the messages it already holds (a chat brought from Risu), in the order they
+// fold, and its root, which is written with or after them.
+export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, messages: RisuMessage[]): { entries: Write[]; root: Write } {
   // A moved chat's greeting takes its first message's time, so it does not read as newer than what follows it.
-  if (greetings) yield* greetingWrites(id, greetings, messages[0]?.at ?? Date.now());
+  const entries = greetings ? greetingWrites(id, greetings, messages[0]?.at ?? Date.now()) : [];
   for (const { role, text, at, reasoning } of messages) {
-    yield { type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: id, value: { type: 'message', role, at, text, receipt: null, staged: true, ...(reasoning && { reasoning }) } };
+    entries.push({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: id, value: { type: 'message', role, at, text, receipt: null, staged: true, ...(reasoning && { reasoning }) } });
   }
-  yield { type: 'create', kind: 'chat', id, parent: null, value: chat };
+  return { entries, root: { type: 'create', kind: 'chat', id, parent: null, value: chat } };
 }
 
 // A character's chat opens on its greeting, and the other greetings are versions of it. They are saved as the card wrote them; engine/render fills them each time they are shown or sent.

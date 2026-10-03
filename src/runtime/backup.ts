@@ -1,10 +1,11 @@
 import { REMOVABLE } from '../model/library';
 import type { ApiResult } from './api';
 import type { BackupFailure, BackupPin, Options } from './backup-core';
-import type { BackupInput, BatchAnswer, BatchCall, ExportFiles, ExportStore, OutputCall, Progress, ReadAnswer, RestoreFiles, RestoreStore, SaveFilesCall, ScanCall, ScanRows } from './backup-job';
+import type { BackupInput, BatchAnswer, BatchCall, ExportFiles, ExportStore, OutputCall, Progress, ReadAnswer, RestoreFiles, SaveFilesCall, ScanCall, ScanRows } from './backup-job';
 import { BackupPeer, type BackupMessage } from './backup-peer';
 import type { BackupOutput } from './backup-zip';
 import type { ObjectStore } from './store';
+import { saveSummaries } from './summary';
 import { moduleWorker } from './worker';
 import type { FileRef } from '../vault/files';
 import workerUrl from './backup-worker?worker&url';
@@ -13,7 +14,7 @@ export type { BackupOutput } from './backup-zip';
 export type { BackupFailure } from './backup-core';
 export type Backup = { close: () => Promise<void>; worker: BackupWorker };
 
-type Host = { store: ExportStore; files: ExportFiles; output: BackupOutput } | { store: RestoreStore; files: RestoreFiles };
+type Host = { store: ExportStore; files: ExportFiles; output: BackupOutput } | { store: ObjectStore; files: RestoreFiles };
 
 // The metadata scan cannot see a deletion mark or a chat's character: both are sealed in the body. Only their ids
 // cross to the backup worker, never the library's complete character cards and chat values. Pin can hydrate a fresh
@@ -113,7 +114,7 @@ class BackupWorker {
         const result = await host.store.batch(writes, () => { count++; }, { signal, unheld });
         return { result, count } satisfies BatchAnswer;
       }
-      if (name === 'saveSummaries') return host.store.saveSummaries(args as string[], signal);
+      if (name === 'saveSummaries') return saveSummaries(host.store, args as string[], signal);
       if (name === 'saveFiles') {
         return host.files.save((args as SaveFilesCall).bytes, { signal });
       }
@@ -148,7 +149,7 @@ export async function readBackup(file: Blob, options: Options = {}): Promise<{ o
   }
 }
 
-export async function restoreBackup(store: RestoreStore, files: RestoreFiles, backup: Backup, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
+export async function restoreBackup(store: ObjectStore, files: RestoreFiles, backup: Backup, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
   try {
     return await store.pinned((pin) => backup.worker.run({ kind: 'restore', pin }, { store, files }, options), options.signal);
   } catch {

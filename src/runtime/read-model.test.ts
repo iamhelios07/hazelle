@@ -7,7 +7,7 @@ import * as sealedObjects from '../vault/objects';
 import { exportBackup, readBackup } from './testing/backup';
 import { removeChat, restoreChat } from './chat-log';
 import { Files } from './files';
-import { backfillSummaries, summaryId, summaryStale } from './summary';
+import { backfillSummaries, saveSummaries, summaryId, summaryStale } from './summary';
 import type { api, ApiResult } from './api';
 import { EvaluationFailed } from './evaluation';
 import { ReadModels } from './read-model';
@@ -243,6 +243,56 @@ describe('selective account reads', () => {
       expect(take).not.toHaveBeenCalled();
       expect(store.scopeState('a')).toBe('unloaded');
     } finally { streams.close(); }
+  });
+
+  it('ends a summary write waiting on the server once its chat is let go, though a catch-up ran during it', async () => {
+    const { request, key, seed } = await account();
+    await seed('a', 'chat', null, chat);
+    await seed('a1', 'entry', 'a', message('one'));
+    let blocked = false;
+    let waiting = false;
+    const store = await ObjectStore.open('account', key, async (method, path, body, signal) => {
+      if (!blocked || method !== 'POST') return request(method, path, body, signal);
+      waiting = true;
+      return new Promise((resolve) => signal!.addEventListener('abort', () => resolve({ ok: false, error: 'stopped' }), { once: true }));
+    });
+    await store.pull();
+    const lease = store.retainChat('a');
+    expect(await lease.ready).toBeNull();
+    await seed('a2', 'entry', 'a', message('two'));
+    expect(await store.refreshChat('a')).toBeNull();
+    blocked = true;
+    const saving = store.saveSummary('a');
+    await vi.waitFor(() => expect(waiting).toBe(true));
+    await seed('a3', 'entry', 'a', message('three'));
+    expect(await store.refreshChat('a')).toBeNull();
+    lease.release();
+    expect(await saving).toEqual({ ok: false, error: 'stopped' });
+    store.close();
+  });
+
+  it('stops a summary pass whose write lands as it is cancelled, holding the chat until the write ends', async () => {
+    const { request, key, seed } = await account();
+    await seed('a', 'chat', null, chat);
+    await seed('a1', 'entry', 'a', message('one'));
+    let land: (() => void) | null = null;
+    const store = await ObjectStore.open('account', key, async (method, path, body, signal) => {
+      if (method !== 'POST') return request(method, path, body, signal);
+      return new Promise((resolve) => {
+        land = () => resolve(request(method, path, body, signal));
+        signal!.addEventListener('abort', land, { once: true });
+      });
+    });
+    await store.pull();
+    const stop = new AbortController();
+    const saving = saveSummaries(store, ['a'], stop.signal);
+    await vi.waitFor(() => expect(land).not.toBeNull());
+    stop.abort();
+    expect(store.scopeState('a')).toBe('loaded');
+    land!();
+    expect(await saving).toEqual({ ok: false, error: 'stopped' });
+    expect(store.scopeState('a')).toBe('unloaded');
+    store.close();
   });
 
   it('backfills missing summaries one chat at a time and resumes without revisiting completed chats', async () => {

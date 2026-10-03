@@ -153,9 +153,11 @@ describe('backup', () => {
     await server.wipe();
     const { store, files } = await open('new');
     const held = new Map<string, number>();
+    const retained: string[] = [];
     let peak = 0;
     const retain = store.retainChat.bind(store);
     vi.spyOn(store, 'retainChat').mockImplementation((id, created) => {
+      retained.push(id);
       const lease = retain(id, created);
       held.set(id, (held.get(id) ?? 0) + 1);
       peak = Math.max(peak, held.size);
@@ -177,7 +179,11 @@ describe('backup', () => {
     });
     expect(await restoreBackup(store, files, backup, { signal: stop.signal })).toEqual({ ok: false, error: 'stopped' });
     summary.mockRestore();
+    const summarized = new Set<string>(chats.filter((id) => store.get('summary', summaryId(id))));
+    expect(summarized.size).toBeGreaterThan(0);
+    retained.length = 0;
     expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
+    expect(retained.filter((id) => summarized.has(id))).toEqual([]);
     expect(peak).toBe(1);
     expect(held.size).toBe(0);
     for (const id of chats) {

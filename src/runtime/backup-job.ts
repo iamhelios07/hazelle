@@ -1,5 +1,5 @@
 import type { ApiFailure, ApiResult } from './api';
-import { exportBackup, readBackup, restoreBackup, type BackupFailure, type BackupPin, type Options, type ReadArchive } from './backup-core';
+import { exportBackup, readBackup, restoreBackup, type BackupFailure, type BackupPin, type Options, type ReadArchive, type RestoreStore } from './backup-core';
 import type { BackupPeer } from './backup-peer';
 import type { BackupRecords } from './backup-records';
 import { bufferedBackupOutput } from './backup-zip';
@@ -7,7 +7,6 @@ import type { Files } from './files';
 import type { ObjectRow, ObjectStore, Pin, Write } from './store';
 
 export type ExportStore = Pick<ObjectStore, 'scan' | 'pin' | 'list'>;
-export type RestoreStore = Pick<ObjectStore, 'scan' | 'batch' | 'pinned' | 'saveSummaries'>;
 export type ExportFiles = Pick<Files, 'read' | 'missing'>;
 export type RestoreFiles = Pick<Files, 'save'>;
 export type BackupInput =
@@ -99,7 +98,7 @@ export class BackupJobs {
       const store: RestoreStore = {
         scan,
         pinned: (run) => run(task.pin),
-        saveSummaries: (chats) => this.peer.call('saveSummaries', [...chats]),
+        saveSummaries: (chats) => this.peer.call('saveSummaries', chats),
         batch: async (writes, progress, batchOptions) => {
           const { result, count } = await this.peer.call<BatchAnswer>('batch', { writes, unheld: batchOptions?.unheld } satisfies BatchCall);
           for (let index = 0; index < count; index++) progress?.(writes[index]!);

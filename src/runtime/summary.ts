@@ -1,6 +1,7 @@
 import type { Display } from '../engine/display';
 import { chatTitle, fold, previewLine, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
 import { live } from '../model/library';
+import type { ApiFailure } from './api';
 import type { ObjectStore } from './store';
 import { pinned, scopeOf } from './turn';
 import { pause } from './pause';
@@ -42,14 +43,20 @@ export async function projectChat(store: ObjectStore, id: string, previous?: Pro
   return { summary, model: { ...summary, id, chat: stored.value, messages, display } };
 }
 
+// One chat held at a time, so a pass over a whole account never holds more than one history. A chat with a summary is
+// passed over: what rewrites a summary its chat outgrew is opening that chat (ObjectStore.retainChat), and a stopped
+// restore carries on from the first chat it did not reach. An unreadable chat is passed over too; its screen says so.
+export async function saveSummaries(store: ObjectStore, chats: Iterable<string>, signal = new AbortController().signal): Promise<ApiFailure | null> {
+  for (const id of chats) {
+    if (signal.aborted) return { ok: false, error: 'stopped' };
+    if (store.get('summary', summaryId(id))) continue;
+    const result = await store.withChat(id, async () => await store.saveSummary(id) ?? { ok: true, data: null }, signal);
+    if (!result.ok && result.error !== 'unreadable') return result;
+    if (!await pause(0, signal)) return { ok: false, error: 'stopped' };
+  }
+  return null;
+}
+
 // A chat lacks its summary when the write that follows its messages failed (ObjectStore.writeOne). Opening it writes one
 // too, so this catches the chats nobody opens.
-export async function backfillSummaries(store: ObjectStore, signal: AbortSignal): Promise<void> {
-  for (const { id } of store.list('chat').filter(live)) {
-    if (signal.aborted) return;
-    if (store.get('summary', summaryId(id))) continue;
-    const result = await store.withChat(id, async () => await store.saveSummary(id) ?? { ok: true, data: null });
-    if (!result.ok && result.error !== 'unreadable') return;
-    if (!await pause(0, signal)) return;
-  }
-}
+export const backfillSummaries = (store: ObjectStore, signal: AbortSignal) => saveSummaries(store, store.list('chat').filter(live).map(({ id }) => id), signal);

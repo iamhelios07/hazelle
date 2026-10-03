@@ -2,7 +2,8 @@ import { strToU8, zipSync } from 'fflate';
 import { expect, it, vi } from 'vitest';
 import type { Kind, Stored } from '../model/kinds';
 import { sealFile } from '../vault/files';
-import { exportBackup, readBackup, restoreBackup, type BackupOutput } from './testing/backup';
+import { restoreBackup, type RestoreStore } from './backup-core';
+import { exportBackup, readBackup, type BackupOutput } from './testing/backup';
 import type { ObjectStore } from './store';
 import * as zip from './backup-zip';
 
@@ -28,7 +29,7 @@ function destination() {
 function store(objects: Stored<Kind>[] = []) {
   const held = new Map(objects.map((object) => [object.id, object]));
   const written: string[] = [];
-  const api: Pick<ObjectStore, 'scan' | 'batch' | 'pin' | 'pinned' | 'list' | 'saveSummaries'> = {
+  const api: Pick<ObjectStore, 'scan' | 'batch' | 'pin' | 'pinned' | 'list'> & RestoreStore = {
     ...pins,
     saveSummaries: async () => null,
     scan: async (options, visit) => {

@@ -242,12 +242,15 @@ async function* readObjects(backup: ReadArchive, signal: AbortSignal) {
 // The backup's copies replace what opening added, whatever it holds now, and what it added that the backup lacks
 // goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
 // the operator, or too large), which are left out. What is checked and what is written are of one timeline.
-export function restoreBackup(store: Pick<ObjectStore, 'scan' | 'batch' | 'pinned' | 'saveSummaries'>, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
+// The store as a restore in the backup worker sees it. saveSummaries: runtime/summary's, run by the host on its store.
+export type RestoreStore = Pick<ObjectStore, 'scan' | 'batch' | 'pinned'> & { saveSummaries: (chats: string[], signal: AbortSignal) => Promise<ApiFailure | null> };
+
+export function restoreBackup(store: RestoreStore, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
   return store.pinned((pin) => restoreOn(store, files, backup, options, pin), options.signal);
 }
 
 async function restoreOn(
-  store: Pick<ObjectStore, 'scan' | 'batch' | 'saveSummaries'>,
+  store: Omit<RestoreStore, 'pinned'>,
   files: Pick<Files, 'save'>,
   backup: ReadArchive,
   { signal = new AbortController().signal, progress = () => {} }: Options,
@@ -264,21 +267,26 @@ async function restoreOn(
     if ([...present].some((id) => !ids.has(id) && !SEEDED.has(id))) return { ok: false, error: 'not-new' };
     // An id is not enough: another backup of the same account shares ids, and carrying on from its copies would mix
     // the two. What is there besides what opening added must be this backup's copy, as an earlier load wrote it.
-    const kept = new Set([...present].filter((id) => !SEEDED.has(id)));
-    if (kept.size) {
+    // What opening added is written over unless it is the backup's copy already: rewritten, its new revision would leave
+    // stale every summary an earlier load wrote, which the summary pass then passes over (runtime/summary saveSummaries).
+    const held = new Set([...present].filter((id) => ids.has(id)));
+    const same = new Set<string>();
+    if (held.size) {
       const copies = new Map<string, string>();
-      for (const depth of depthsOf(backup, kept)) {
-        for await (const { object } of backup.records.read(depth, kept, signal)) copies.set(object.id, await copyOf(object));
+      for (const depth of depthsOf(backup, held)) {
+        for await (const { object } of backup.records.read(depth, held, signal)) copies.set(object.id, await copyOf(object));
       }
       let other = false;
       const failure = await store.scan({}, async (row, value) => {
         signal.throwIfAborted();
-        if (copies.has(row.id) && copies.get(row.id) !== (await copyOf({ ...row, value }))) other = true;
+        if (!copies.has(row.id)) return;
+        if (copies.get(row.id) === (await copyOf({ ...row, value }))) same.add(row.id);
+        else if (!SEEDED.has(row.id)) other = true;
       }, pin);
       if (failure) return failure;
       if (other) return { ok: false, error: 'not-new' };
     }
-    const todo = new Set([...ids].filter((id) => SEEDED.has(id) || !present.has(id)));
+    const todo = new Set([...ids].filter((id) => !same.has(id)));
     const total = backup.files.size + todo.size;
     let done = 0;
     progress(done, total);

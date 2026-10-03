@@ -4,6 +4,7 @@ import type { Stored } from '../model/kinds';
 import { removeChat, restoreChat } from './chat-log';
 import type { ObjectStore, Write } from './store';
 import { testServer } from './testing';
+import { randomBytes } from '../vault/aead';
 import { Usage } from './usage';
 
 const server = testServer();
@@ -96,20 +97,28 @@ it('aborts a blocked parent request and rebuilds it on a later read rather than 
   usage.close();
 });
 
-it('reports failed decryption or an unreadable entry instead of caching a partial total', async () => {
-  const { store } = await server.account();
+it('reports an unreadable entry or a stored body that does not open instead of caching a partial total', async () => {
+  const { store, open } = await server.account();
   const chat = crypto.randomUUID();
-  await seed(store, [chat], [write(chat, message(receipt('call')))]);
-  const scan = vi.spyOn(store, 'scan').mockRejectedValueOnce(new DOMException('invalid ciphertext', 'OperationError'));
+  const foreign = crypto.randomUUID();
+  await seed(store, [chat, foreign], [write(chat, message(receipt('call')))]);
+  // A device with another vault key writes an entry this one cannot decrypt.
+  const other = await open(randomBytes(32));
+  expect((await other.batch([write(foreign, message(receipt('other')))], undefined, { unheld: true })).ok).toBe(true);
   const usage = new Usage(store);
   const signal = new AbortController().signal;
-  expect(await usage.read(ref, signal)).toEqual({ ok: false, error: 'usage-unavailable' });
-  scan.mockImplementationOnce(async (_options, visit) => {
-    await visit({ id: 'bad', kind: 'entry', parent: chat, rev: 1 }, undefined);
-    return null;
-  });
   expect(await usage.read(ref, signal)).toEqual({ ok: false, error: 'unreadable' });
-  scan.mockRestore();
+  expect((await store.remove(foreign)).ok).toBe(true);
   expect(await usage.read(ref, signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  const broken = crypto.randomUUID();
+  const real = fetch;
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    if (url !== '/api/objects/batch') return real(url, init);
+    const sent = JSON.parse(init!.body as string) as { writes: { id: string; body: string | null }[] };
+    return real(url, { ...init, body: JSON.stringify({ ...sent, writes: sent.writes.map((write) => (write.id === broken ? { ...write, body: 'not base64!' } : write)) }) });
+  });
+  await seed(store, [], [write(chat, message(receipt('late')), broken)]);
+  vi.stubGlobal('fetch', real);
+  expect(await usage.read(ref, signal)).toEqual({ ok: false, error: 'usage-unavailable' });
   usage.close();
 });
