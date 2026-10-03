@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { anthropicMessages } from './anthropic-messages';
 import { copilot } from './copilot';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterKey from './fixtures/openrouter-key.json';
@@ -93,9 +94,9 @@ describe('the 연결 추가 list', () => {
     expect(ids('sk-1234')).toBe('none');
   });
 
-  it('hands an address saved as a direct connection to the provider that later claims its host', () => {
+  it('keeps a generic connection’s explicit endpoint and protocol even on a known host', () => {
     const saved: Connection = { type: 'generic', label: 'openrouter.ai', baseUrl: 'https://openrouter.ai/api/v1', protocol: 'anthropic-messages', secret: 'k', starred: [] };
-    expect(resolveConnection(saved)).toMatchObject({ type: { id: 'openrouter' }, endpoint: { baseUrl: 'https://openrouter.ai/api/v1', protocol: 'chat-completions' } });
+    expect(resolveConnection(saved)).toMatchObject({ type: null, endpoint: { baseUrl: saved.baseUrl, protocol: 'anthropic-messages' }, codec: anthropicMessages });
   });
 });
 

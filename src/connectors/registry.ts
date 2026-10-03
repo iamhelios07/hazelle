@@ -23,9 +23,6 @@ export type Resolved = { type: ConnectionType | null; endpoint: Endpoint; codec:
 // null for a type this version does not know, such as one saved by a newer version of the app.
 export function resolveConnection(connection: Connection): Resolved | null {
   if (connection.type === GENERIC) {
-    // An address saved before its provider joined the list is that provider now.
-    const claimed = connection.baseUrl && URL.canParse(connection.baseUrl) ? typeForHost(new URL(connection.baseUrl).hostname) : undefined;
-    if (claimed) return { type: claimed, endpoint: claimed.endpoint, codec: CODECS[claimed.endpoint.protocol]! };
     const codec = connection.protocol && CODECS[connection.protocol];
     if (!connection.baseUrl || !connection.protocol || !codec) return null;
     return { type: null, endpoint: { baseUrl: connection.baseUrl, protocol: connection.protocol }, codec };
