@@ -14,14 +14,17 @@ type Props = {
   current: Shelf<ChatSummary> | undefined;
   typing: (shelf: Shelf<ChatSummary>) => boolean;
   onEnter: (shelf: Shelf<ChatSummary>) => void;
-  onExpand: () => void;
+  open: boolean;
+  onToggle: () => void;
 };
 
-export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Props) {
+// On wide screens these places live only here; the panel beside the rail shows them on phones.
+export function SidebarRail({ shelves, current, typing, onEnter, open, onToggle }: Props) {
   const { pick, move } = useImport();
   return (
     <Rail
-      onExpand={onExpand}
+      open={open}
+      onToggle={onToggle}
       actions={
         <>
           <IconButton icon={Import} label="봇 가져오기" onClick={pick} />
@@ -31,7 +34,7 @@ export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Pro
       }
       footer={<IconButton icon={Settings} label={SETTINGS} onClick={() => navigate(settingsEntry(true))} />}
     >
-      <Viewport keys={shelves.map((shelf) => shelf.id ?? 'none')} variant="rail">{(index) => {
+      <Viewport keys={shelves.map((shelf) => shelf.id ?? 'none')} variant="rail" current={current && (current.id ?? 'none')}>{(index) => {
         const shelf = shelves[index]!;
         return (
         <FaceButton key={shelf.id ?? 'none'} label={shelfName(shelf)} current={shelf === current} dot={typing(shelf) ? 'accent' : undefined} onClick={() => onEnter(shelf)}>

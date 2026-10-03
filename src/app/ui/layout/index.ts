@@ -8,7 +8,7 @@ export { Row } from './Row';
 export { Screen } from './Screen';
 export { Section } from './Section';
 export { Shell } from './Shell';
-export { FaceButton, FaceStrip, LayerSidebar, Rail, Sidebar } from './Sidebar';
+export { FaceButton, LayerSidebar, Rail, Sidebar } from './Sidebar';
 export { SidePanel } from './SidePanel';
 export { SidePeek } from './SidePeek';
 export { Stack } from './Stack';

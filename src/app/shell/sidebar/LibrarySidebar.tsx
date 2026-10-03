@@ -23,7 +23,8 @@ type Props = {
   onCollapse: (collapsed: boolean) => void;
 };
 
-// Inside a character, the list is its chats, and "모든 캐릭터" goes back up without leaving the open chat. The search
+// Wide screens: the rail of every character, and beside it the panel unless folded. Phones: the panel alone, as a page.
+// Inside a character, the panel is its chats, and "모든 캐릭터" goes back up without leaving the open chat. The search
 // and the open folders outlast a visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { characters, none } = useLibrary();
@@ -49,15 +50,10 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
     navigate(enterShelf(shelf, wide));
   };
 
-  if (collapsed && !page) return <SidebarRail shelves={[...characters, none]} current={current} typing={typing} onEnter={enter} onExpand={() => onCollapse(false)} />;
-  const fold = page ? undefined : () => onCollapse(true);
-  if (current && upAt !== at) {
-    return <ShelfChats key={current.id ?? 'none'} page={page} onCollapse={fold} shelf={current} typing={typing} onEnter={enter} onUp={() => (page ? navigate(HOME) : setUpAt(at))} />;
-  }
-  return (
-    <CharacterTree
+  const panel = current && upAt !== at
+    ? <ShelfChats key={current.id ?? 'none'} page={page} shelf={current} onUp={() => (page ? navigate(HOME) : setUpAt(at))} />
+    : <CharacterTree
       page={page}
-      onCollapse={fold}
       current={current}
       typing={typing}
       onEnter={enter}
@@ -65,6 +61,12 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
       onQuery={setQuery}
       openFolders={openFolders}
       onToggleFolder={(id) => setOpenFolders(openFolders.includes(id) ? openFolders.filter((open) => open !== id) : [...openFolders, id])}
-    />
+    />;
+  if (page) return panel;
+  return (
+    <>
+      <SidebarRail shelves={[...characters, none]} current={current} typing={typing} onEnter={enter} open={!collapsed} onToggle={() => onCollapse(!collapsed)} />
+      {!collapsed && panel}
+    </>
   );
 }
