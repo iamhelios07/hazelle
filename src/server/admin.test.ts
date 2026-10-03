@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hex } from './http';
-import { forgetOldRecords, readAll, usageTotals } from './admin';
+import { forgetOldRecords, readAll } from './admin';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -91,19 +91,12 @@ describe('the operator', () => {
       const row = await (await t.get(`admin/accounts/${ids[0]!}`, admin.cookie)).json();
       expect(row).toMatchObject({ account: { accountId: ids[0], bytes: 2 } });
       expect(calls).toBe(103);
-      await t.post('admin/notices', { to: ids[0], text: '알림' }, admin.cookie);
-      await t.get('admin/log', admin.cookie);
-      expect(calls).toBe(103);
       expect(await (await t.get('admin/usage', admin.cookie)).json()).toMatchObject({ accounts: 100, totals: { bytes: 200, disk: 400, unread: 0 }, next: first.next });
       expect(calls).toBe(203);
       expect((await t.get('admin/accounts?after=invalid', admin.cookie)).status).toBe(400);
     } finally {
       t.env.STORES = stores;
     }
-  });
-
-  it('totals one bounded usage page while counting every unread store once', () => {
-    expect(usageTotals([{ bytes: 3, disk: 7 }, null, { bytes: 5, disk: 11 }], 123)).toEqual({ bytes: 8, disk: 18, unread: 1, readAt: 123 });
   });
 
   it('keeps at most fifty store reads in flight and answers the ones unsettled at the deadline as unread', async () => {

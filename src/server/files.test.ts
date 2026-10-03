@@ -294,18 +294,29 @@ describe('files', () => {
     }
     const kept = `files/${live.incarnation}/${'f'.repeat(64)}`;
     keys.add(kept);
+    // Pre-0009 keys with no incarnation, sorting between incarnations 2 and 3: a page of only these holds no prefix.
+    const bare = [0, 1].map((file) => `files/${(2).toString(16).padStart(32, '0')}${file.toString(16).padStart(32, '0')}`);
+    for (const key of bare) keys.add(key);
     const blobs = t.env.BLOBS;
     let failDelete = true;
     let largest = 0;
     let listings = 0;
+    const markers: (string | undefined)[] = [];
     t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
       list: async (options: R2ListOptions) => {
         expect(options.cursor).toBeUndefined();
         listings++;
         const sorted = [...keys].filter((key) => key.startsWith(options.prefix!) && (!options.startAfter || key > options.startAfter)).sort();
         if (options.delimiter) {
-          const all = [...new Set(sorted.map((key) => key.slice(0, key.lastIndexOf('/') + 1)))];
-          return { objects: [], delimitedPrefixes: all.slice(0, 2), truncated: all.length > 2 };
+          markers.push(options.startAfter);
+          const at = options.prefix!.length;
+          const all = [...new Set(sorted.map((key) => key.includes('/', at) ? key.slice(0, key.indexOf('/', at) + 1) : key))];
+          const shown = all.slice(0, 2);
+          return {
+            objects: shown.filter((entry) => !entry.endsWith('/')).map((key) => ({ key })),
+            delimitedPrefixes: shown.filter((entry) => entry.endsWith('/')),
+            truncated: all.length > 2,
+          };
         }
         const objects = sorted.slice(0, options.limit).map((key) => ({ key }));
         largest = Math.max(largest, objects.length);
@@ -322,14 +333,15 @@ describe('files', () => {
     try {
       await expect(sweepDeadPrefixes(env())).rejects.toThrow('cut before deleting');
       expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBe(2);
-      for (let attempts = 0; keys.size > 1 && attempts < 10; attempts++) {
+      for (let attempts = 0; keys.size > 3 && attempts < 10; attempts++) {
         listings = 0;
         await sweepDeadPrefixes(env());
         expect(listings).toBeLessThanOrEqual(20);
         expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBeLessThanOrEqual(2);
       }
       expect(largest).toBe(1000);
-      expect([...keys]).toEqual([kept]);
+      expect([...keys].sort()).toEqual([...bare, kept].sort());
+      expect(markers).toContain(bare[1]);
       expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBe(0);
     } finally {
       t.env.BLOBS = blobs;

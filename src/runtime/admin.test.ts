@@ -96,7 +96,7 @@ it('refreshes a single account and explicitly sums usage pages without retaining
   );
   expect(await readAdminAccount('gone')).toEqual({ ok: true, data: { account: null } });
   const progress = vi.fn();
-  expect(await readServiceUsage(progress, new AbortController().signal)).toEqual({ ok: true, data: { accounts: 101, bytes: 2, disk: 4, unread: 1, readAt: 11 } });
+  expect(await readServiceUsage(progress, new AbortController().signal)).toEqual({ ok: true, data: { accounts: 101, bytes: 2, disk: 4, unread: 1, readAt: 10 } });
   expect(progress).toHaveBeenCalledTimes(2);
   expect(sent.map(({ url }) => url)).toEqual(['/api/admin/accounts/gone', '/api/admin/usage', '/api/admin/usage?after=10%3Aaccount']);
 });

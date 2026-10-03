@@ -161,7 +161,10 @@ export async function sweepDeadPrefixes(env: Env): Promise<void> {
     // Incarnations are 32 lowercase hex digits (signup) and keys under them are file hashes. Replacing the slash
     // after one incarnation with '0' sorts after EVERY key of that incarnation and before EVERY later incarnation.
     // This lexical bound remains valid when prefixes disappear: unlike an R2 cursor, it names no deleted listing.
-    const next = page.truncated ? `${prefixes.at(-1)!.slice(0, -1)}0` : '';
+    // Bare keys directly under files/ (the pre-0009 shared layout, files/<64 hex>) arrive in objects and count toward
+    // the limit, so a page can hold no prefix: the marker is the later of both ends, or such a page stalls it.
+    const ends = [...prefixes.map((prefix) => `${prefix.slice(0, -1)}0`), ...page.objects.map(({ key }) => key)];
+    const next = page.truncated ? ends.sort().at(-1)! : '';
     await env.DB.batch([
       // Check only the listed incarnations, after the listing. Never reuse an all-account snapshot here. The
       // queue and marker commit together, so a crash cannot skip a prefix; concurrent sweeps use the same CAS.

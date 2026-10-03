@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { readAccounts, readAdminAccount, type AccountsPage } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 
-// Navigation replaces the current page rather than accumulating every visited account in the DOM. Only cursor
-// strings are kept for going back; an account action refreshes that account, not all pages or all store usage.
+// Not usePages: navigation replaces the page and goes back through the server's string cursors rather than appending
+// after the last row's id, and an account action refetches that account (gone when null) rather than patching it.
 // A failed reload keeps the same page visible; navigation never presents the previous page as the newly asked one.
 export function useAccounts() {
   const [history, setHistory] = useState<(string | null)[]>([null]);

@@ -162,7 +162,15 @@ admin.get('/usage', async (c) => {
   const page = accountPage(c, 'id AS accountId, created_at AS createdAt, state, incarnation');
   if (!page) return fail(c, 400, 'bad-input');
   const { results } = await page.all<Pick<AccountRow, 'accountId' | 'createdAt' | 'state' | 'incarnation'>>();
-  return c.json({ totals: usageTotals(await accountUsage(c.env, results), Date.now()), accounts: results.length, next: afterAccounts(results) });
+  const totals = { bytes: 0, disk: 0, unread: 0 };
+  for (const usage of await accountUsage(c.env, results)) {
+    if (usage === null) totals.unread++;
+    else {
+      totals.bytes += usage.bytes;
+      totals.disk += usage.disk;
+    }
+  }
+  return c.json({ totals: { ...totals, readAt: Date.now() }, accounts: results.length, next: afterAccounts(results) });
 });
 
 // A change refreshes only its row. A deleted account is absent rather than a reason to reload the service.
@@ -196,20 +204,6 @@ function shownAccount(row: AccountRow, usage: Usage) {
     bytesCap: row.own_bytes_cap ? row.bytes_cap : 'default',
     fileBytesCap: row.own_file_bytes_cap ? row.file_bytes_cap : 'default',
   };
-}
-
-export function usageTotals(usages: readonly Usage[], readAt: number) {
-  let bytes = 0;
-  let disk = 0;
-  let unread = 0;
-  for (const usage of usages) {
-    if (usage === null) unread++;
-    else {
-      bytes += usage.bytes;
-      disk += usage.disk;
-    }
-  }
-  return { bytes, disk, unread, readAt };
 }
 
 // Runs each call that is not null with at most slots of them in flight, a slot held until its call settles, since a

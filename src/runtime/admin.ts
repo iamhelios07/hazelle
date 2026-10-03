@@ -35,6 +35,7 @@ export type AccountsPage = { accounts: AdminAccount[]; next: string | null };
 const afterQuery = (after: string | null) => after === null ? '' : `?after=${encodeURIComponent(after)}`;
 export const readAccounts = (after: string | null = null, signal?: AbortSignal) => api<AccountsPage>('GET', `admin/accounts${afterQuery(after)}`, undefined, signal);
 export const readAdminAccount = (account: string) => api<{ account: AdminAccount | null }>('GET', `admin/accounts/${account}`);
+// readAt: when the first page was read; later pages were read after it.
 export type ServiceUsage = Totals & { accounts: number };
 type UsagePage = { totals: Totals; accounts: number; next: string | null };
 
@@ -42,17 +43,18 @@ type UsagePage = { totals: Totals; accounts: number; next: string | null };
 // an obsolete/unmounted view from continuing to fan out through the service.
 export async function readServiceUsage(progress: (totals: ServiceUsage) => void, signal: AbortSignal): Promise<ApiResult<ServiceUsage>> {
   let next: string | null = null;
-  let total: ServiceUsage = { bytes: 0, disk: 0, unread: 0, accounts: 0, readAt: 0 };
+  let total: ServiceUsage | null = null;
   do {
     if (signal.aborted) return { ok: false, error: 'stopped' };
     const page: ApiResult<UsagePage> = await api<UsagePage>('GET', `admin/usage${afterQuery(next)}`, undefined, signal);
     if (!page.ok) return page;
-    total = {
-      bytes: total.bytes + page.data.totals.bytes,
-      disk: total.disk + page.data.totals.disk,
-      unread: total.unread + page.data.totals.unread,
-      accounts: total.accounts + page.data.accounts,
-      readAt: page.data.totals.readAt,
+    const read: ServiceUsage = { ...page.data.totals, accounts: page.data.accounts };
+    total = total === null ? read : {
+      bytes: total.bytes + read.bytes,
+      disk: total.disk + read.disk,
+      unread: total.unread + read.unread,
+      accounts: total.accounts + read.accounts,
+      readAt: total.readAt,
     };
     progress(total);
     next = page.data.next;
