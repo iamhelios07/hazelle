@@ -17,13 +17,32 @@ export const MEDIA = {
   reducedMotion: '(prefers-reduced-motion: reduce)',
 } as const;
 
-function watch(query: string) {
-  const subscribe = (listener: () => void) => {
-    const list = matchMedia(query);
-    list.addEventListener('change', listener);
-    return () => list.removeEventListener('change', listener);
+type Query = { subscribe: (listener: () => void) => () => void; read: () => boolean };
+const queries = new Map<string, Query>();
+
+export function mediaQuery(query: string): Query {
+  const found = queries.get(query);
+  if (found) return found;
+  let list: MediaQueryList | undefined;
+  const readList = () => (list ??= matchMedia(query));
+  const listeners = new Set<() => void>();
+  const changed = () => {
+    for (const listener of [...listeners]) listener();
   };
-  const read = () => matchMedia(query).matches;
+  const subscribe = (listener: () => void) => {
+    if (listeners.size === 0) readList().addEventListener('change', changed);
+    listeners.add(listener);
+    return () => {
+      if (listeners.delete(listener) && listeners.size === 0) readList().removeEventListener('change', changed);
+    };
+  };
+  const state = { subscribe, read: () => readList().matches };
+  queries.set(query, state);
+  return state;
+}
+
+function watch(query: string) {
+  const { subscribe, read } = mediaQuery(query);
   return () => useSyncExternalStore(subscribe, read);
 }
 
