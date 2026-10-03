@@ -99,6 +99,7 @@ type Book = {
   id: string;
   value: Omit<LoreEntry, 'folder'>;
   body: string;
+  scanned: Scanned;
   rules: Rules;
   queries: { primary: Query; secondary: Query; additional: Query[]; exclude: Query[]; excludeAll: Query[] };
 };
@@ -112,13 +113,37 @@ const SIDES = new Map<string, 'before' | 'after'>([
 ]);
 const NEVER: Matcher = () => false;
 
-export function activate({ entries, settings, history, turn, greeting, afterMatch: before, seed, cost }: LoreInput): Activation {
+type LoreTurn = Omit<LoreInput, 'entries' | 'settings'> & { end: number };
+export type LoreBook = { sticky: boolean; activate: (input: LoreTurn) => Activation };
+
+export function prepareLore(entries: LoreInput['entries'], settings: LoreInput['settings']): LoreBook {
+  const invalidKeys: Activation['invalidKeys'] = [];
+  const books = entries.filter(({ value }) => value.enabled).map((entry) => prepare(entry, settings.fullWordMatching ?? DEFAULTS.fullWordMatching, invalidKeys));
+  // A prepared book belongs to one replay; edits/settings changes start another and cannot reuse stale text.
+  const scanned = new WeakMap<HistoryMessage, Scanned>();
+  const window = (history: HistoryMessage[], end: number, depth: number) => {
+    const messages: Scanned[] = [];
+    for (let at = Math.max(end - depth, 0); at < end; at++) {
+      const message = history[at]!;
+      let text = scanned.get(message);
+      if (!text) {
+        text = scan({ kind: 'message', id: message.id }, message.text);
+        scanned.set(message, text);
+      }
+      messages.push(text);
+    }
+    return messages;
+  };
+  return {
+    sticky: books.some(({ rules }) => rules.trigger !== 'never' && rules.afterMatch !== null),
+    activate: (input) => activate(books, settings, invalidKeys, window, input),
+  };
+}
+
+function activate(books: Book[], settings: LoreInput['settings'], invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], end: number, depth: number) => Scanned[], { history, end, turn, greeting, afterMatch: before, seed, cost }: LoreTurn): Activation {
   const afterMatch = new Set(before);
   const scanDepth = settings.scanDepth ?? DEFAULTS.scanDepth;
   const recursive = settings.recursive ?? DEFAULTS.recursive;
-  const invalidKeys: Activation['invalidKeys'] = [];
-  const books = entries.filter(({ value }) => value.enabled).map((entry) => prepare(entry, settings.fullWordMatching ?? DEFAULTS.fullWordMatching, invalidKeys));
-  const messages = history.map(({ id, text }) => scan({ kind: 'message', id }, text));
 
   const open = ({ id, rules }: Book) =>
     rules.trigger !== 'never' &&
@@ -139,7 +164,7 @@ export function activate({ entries, settings, history, turn, greeting, afterMatc
     waiting = [];
     for (const book of waited) {
       const depth = book.rules.scanDepth ?? scanDepth;
-      const sources = [...messages.slice(Math.max(messages.length - depth, 0)), ...(book.rules.searchRecursion ? recursion : [])];
+      const sources = () => [...window(history, end, depth), ...(book.rules.searchRecursion ? recursion : [])];
       const why = triggered(book, afterMatch, sources);
       if (!why) {
         waiting.push(book);
@@ -150,7 +175,7 @@ export function activate({ entries, settings, history, turn, greeting, afterMatc
       else fates.set(book.id, { kind: 'dropped', cause: 'probability' });
     }
     active.push(...now);
-    const bodies = now.filter(({ rules }) => rules.recursive ?? recursive).map(({ id, body }) => scan({ kind: 'entry', id }, body));
+    const bodies = now.filter(({ rules }) => rules.recursive ?? recursive).map(({ scanned }) => scanned);
     if (bodies.length === 0) break;
     recursion = [...recursion, ...bodies];
   }
@@ -238,6 +263,7 @@ function prepare({ id, value }: LoreInput['entries'][number], fullWordMatching: 
     id,
     value,
     body,
+    scanned: scan({ kind: 'entry', id }, body),
     rules,
     queries: {
       primary: query(value.keys),
@@ -358,10 +384,11 @@ function apply(rules: Rules, { name, value }: DecoratorLine): boolean {
   }
 }
 
-function triggered({ id, value, rules, queries }: Book, afterMatch: ReadonlySet<string>, sources: Scanned[]): Why | null {
+function triggered({ id, value, rules, queries }: Book, afterMatch: ReadonlySet<string>, readSources: () => Scanned[]): Why | null {
   if (value.constant) return { kind: 'constant' };
   if (rules.trigger === 'activate') return { kind: 'decorator', name: 'activate' };
   if (rules.afterMatch === 'keep' && afterMatch.has(id)) return { kind: 'decorator', name: 'keep_activate_after_match' };
+  const sources = readSources();
   const matched: KeyMatch[] = [];
   const needs = (query: Query, name: KeyMatch['query']) => {
     const hit = find(query, sources);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
 import type { LoreEntry } from '../import/types';
-import { activate, type Activation, type LoreInput } from './activate';
+import { prepareLore, type Activation, type LoreInput } from './activate';
 
 const NULLS = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
@@ -25,7 +25,7 @@ const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
 });
 const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
 const run = (entries: LoreInput['entries'], history: HistoryMessage[], more: Partial<LoreInput> = {}) =>
-  activate({ entries, history, settings: NULLS, turn: history.length + 1, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, ...more });
+  prepareLore(entries, more.settings ?? NULLS).activate({ history, end: history.length, turn: history.length + 1, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, ...more });
 const order = (activation: Activation) => activation.placed.map(({ id }) => id);
 const ids = (activation: Activation) => order(activation).sort();
 const why = (activation: Activation, id: string) => activation.fired.find((fired) => fired.id === id)?.why;
@@ -143,6 +143,22 @@ describe('activate', () => {
     expect(ids(quiet)).toEqual(['sticky']);
     expect(why(quiet, 'sticky')).toEqual({ kind: 'decorator', name: 'keep_activate_after_match' });
     expect(ids(run(entries, chat('a bell'), { afterMatch: first.afterMatch }))).toEqual(['plain', 'sticky']);
+  });
+
+  it('prepares effective sticky entries once and scans only demanded messages across replay end indexes', () => {
+    let reads = 0;
+    const history = chat('bell', 'quiet', 'quiet', 'quiet').map((message) => ({ ...message, get text() { reads++; return message.text; } }));
+    const entries = [lore('sticky', { keys: ['bell'], content: '@@scan_depth 3\n@@unknown\n@@@keep_activate_after_match\nsticky' })];
+    const book = prepareLore(entries, { ...NULLS, scanDepth: 1 });
+    const input = { history, turn: 3, greeting: null, afterMatch: [], seed: 'send', cost: (_: string, body: string) => body.length };
+    const first = book.activate({ ...input, end: 3 });
+    expect(book.sticky).toBe(true);
+    expect(first.afterMatch).toEqual(['sticky']);
+    expect(why(book.activate({ ...input, end: 4, turn: 4, afterMatch: first.afterMatch }), 'sticky')).toEqual({ kind: 'decorator', name: 'keep_activate_after_match' });
+    expect(reads).toBe(3);
+    expect(book.activate({ ...input, end: 3 }).fired).toEqual(first.fired);
+    expect(reads).toBe(3);
+    expect(prepareLore([{ ...entries[0]!, value: { ...entries[0]!.value, enabled: false } }], NULLS).sticky).toBe(false);
   });
 
   it('gates on the turn and the greeting, and fires @@activate without keys under the same gates', () => {

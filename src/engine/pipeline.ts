@@ -5,8 +5,7 @@ import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
-import { activate, merge, type Activation, type Fired, type LoreInput, type Operation } from './lorebook/activate';
-import { parseDecorators } from './lorebook/decorators';
+import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreInput, type Operation } from './lorebook/activate';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { memoryBefore, memoryBudget, memoryFormat, spanText, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import type { TranslationRequest } from './translate';
@@ -96,7 +95,8 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
   // One merged into another entry or set inside another text is evaluated there, and its count is of its own body.
   // The replays below count the same bodies again.
   const count = (id: string, body: string) => tokens(render(body, id));
-  const activation = card || scope.lore.length > 0 ? activate(loreInput(scope, history, afterMatch(scope, count), seed, count)) : null;
+  const book = prepareLore(scope.lore, card?.loreSettings ?? NO_SETTINGS);
+  const activation = card || scope.lore.length > 0 ? book.activate(loreInput(scope, history, history.length, afterMatch(scope, book, count), seed, count)) : null;
   const names = new Map(scope.lore.map(({ id, value }) => [id, value.name]));
 
   const lorebook: Lore[] = [];
@@ -491,22 +491,18 @@ function remembered(measure: (text: string) => number): (text: string) => number
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
-function loreInput(scope: ChatScope, history: HistoryMessage[], afterMatch: string[], seed: string, cost: LoreInput['cost']): LoreInput {
-  return { entries: scope.lore, settings: scope.card?.loreSettings ?? NO_SETTINGS, history, turn: history.length, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost };
+function loreInput(scope: ChatScope, history: HistoryMessage[], end: number, afterMatch: string[], seed: string, cost: LoreInput['cost']): Parameters<LoreBook['activate']>[0] {
+  return { history, end, turn: end, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost };
 }
-
-const AFTER_MATCH = new Set(['keep_activate_after_match', 'dont_activate_after_match']);
-const declaresAfterMatch = (content: string) =>
-  parseDecorators(content).decorators.some(({ name, fallbacks }) => [name, ...fallbacks.map((line) => line.name)].some((each) => AFTER_MATCH.has(each)));
 
 // Which after-match entries went into the prompts of the replies before this one. It is not stored: like the
 // variables, it is replayed from the chat, each earlier reply's activation rolled again from its seed.
-function afterMatch(scope: ChatScope, cost: LoreInput['cost']): string[] {
+function afterMatch(scope: ChatScope, book: LoreBook, cost: LoreInput['cost']): string[] {
   let state: string[] = [];
-  if (!scope.lore.some(({ value }) => declaresAfterMatch(value.content))) return state;
+  if (!book.sticky) return state;
   scope.messages.forEach((message, index) => {
     if (message.role === 'user' || (index === 0 && scope.greeting !== null)) return;
-    state = activate(loreInput(scope, scope.messages.slice(0, index), state, message.seed, cost)).afterMatch;
+    state = book.activate(loreInput(scope, scope.messages, index, state, message.seed, cost)).afterMatch;
   });
   return state;
 }
