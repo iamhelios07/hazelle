@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Import, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { PromptSort } from '../../model/prompt';
 import { addPrompt, isDefaultPrompt, ofSort } from '../../runtime/prompts';
@@ -13,6 +13,7 @@ import { PAGES, promptName } from '../common/words';
 import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles } from '../ui';
 import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, usePromptUse, type PromptUse } from './usePromptUse';
+import { byPromptName, groupPrompts } from './copies';
 
 const RECENT = 4;
 const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트' } satisfies Record<PromptSort, string>;
@@ -32,6 +33,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   const store = useStore();
   const toast = useToast();
   const prompts = usePrompts();
+  const grouped = useMemo(() => groupPrompts(prompts), [prompts]);
   const settings = useSettings();
   const uses = usePromptUse();
   const [query, setQuery] = useState('');
@@ -44,7 +46,6 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   const tags = (id: string) => (id === inUse ? ['사용 중'] : []);
   // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역.
   const description = (prompt: Stored<'prompt'>) => (ofSort(prompt, 'conversation') ? used(use(prompt.id)) : undefined);
-  const byName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => a.value.name.localeCompare(b.value.name, 'ko');
 
   async function add(sort: PromptSort) {
     setAdding(sort);
@@ -54,13 +55,10 @@ export function PromptList({ onPick, inUse, frame }: Props) {
     onPick(added.data.id);
   }
 
-  const ids = new Set(prompts.map((prompt) => prompt.id));
-  // A copy sits under its original while that is still here.
-  const copiesOf = (id: string) => prompts.filter((prompt) => prompt.value.origin?.id === id).sort(byName);
   const topOf = (sort: PromptSort) =>
-    prompts
-      .filter((prompt) => ofSort(prompt, sort) && (!prompt.value.origin || !ids.has(prompt.value.origin.id)))
-      .sort((a, b) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byName(a, b));
+    grouped.top
+      .filter((prompt) => ofSort(prompt, sort))
+      .sort((a, b) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byPromptName(a, b));
   const conversations = prompts.filter((prompt) => ofSort(prompt, 'conversation'));
   const translators = prompts.filter((prompt) => ofSort(prompt, 'translate'));
   const memorizers = prompts.filter((prompt) => ofSort(prompt, 'memory'));
@@ -70,7 +68,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
     .slice(0, RECENT);
 
   const row = (prompt: Stored<'prompt'>) => {
-    const copies = copiesOf(prompt.id);
+    const copies = grouped.copies.get(prompt.id) ?? [];
     const expanded = open.has(prompt.id);
     const flip = () => setOpen((current) => new Set(current.has(prompt.id) ? [...current].filter((id) => id !== prompt.id) : [...current, prompt.id]));
     return (
@@ -95,7 +93,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   };
 
   const words = query.trim().toLowerCase();
-  const found = prompts.filter((prompt) => promptName(prompt.value.name).toLowerCase().includes(words)).sort(byName);
+  const found = prompts.filter((prompt) => promptName(prompt.value.name).toLowerCase().includes(words)).sort(byPromptName);
 
   const actions = (
     <Row kind="actions">
