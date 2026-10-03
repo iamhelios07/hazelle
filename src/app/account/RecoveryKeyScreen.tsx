@@ -1,8 +1,9 @@
 import { ChevronLeft, Download } from 'lucide-react';
 import { useState } from 'react';
 import { useAttempt } from '../common/useAttempt';
-import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Screen, Steps, Text } from '../ui';
+import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Link, Screen, Steps, Text } from '../ui';
 import { download } from '../common/download';
+import { PRIVACY, TERMS } from '../common/legal';
 
 const FILENAME = 'risu-alpha-recovery.txt';
 
@@ -51,6 +52,12 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
           <Button disabled={!downloaded || !saved} busy={busy} onClick={() => void run(onStart)}>
             시작하기
           </Button>
+          <Text variant="note" align="center">
+            시작하기를 누르면 아래 두 문서에 동의하게 됩니다.
+          </Text>
+          <Text variant="note" align="center">
+            <Link href={TERMS.path}>{TERMS.title}</Link> · <Link href={PRIVACY.path}>{PRIVACY.title}</Link>
+          </Text>
           <Text variant="note" align="center">
             이 단계는 건너뛸 수 없어요.
           </Text>

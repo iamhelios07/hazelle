@@ -1,3 +1,4 @@
+import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
 import { memoryId } from '../model/memory';
 import type { Stream } from '../model/stream';
@@ -15,19 +16,21 @@ export const callOf = (route: Route): Stream['call'] => ({ connection: route.con
 // reload does not pick up), the id its result is saved under, and what that result is.
 export type CallTarget = { id: string; chat: string | null; result: string; for: Stream['for'] };
 
-// A new call's keys, its marker written while the call starts. A marker that fails to save only leaves the call to
-// this page; one that lands after its result was saved is removed by the next pick-up.
+// A new call's keys. Its marker is written once the server holds the call, never before: a pick-up that found the
+// marker of a call not started yet would read no call and save that as its result. A marker that fails to save only
+// leaves the call to this page; one that lands after its result was saved is removed by the next pick-up.
 export async function newCall(store: ObjectStore, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
-  const call = await pageCall(id);
-  if (chat !== null) void store.create('stream', { key: call.key, call: callOf(route), at: Date.now(), result, for: purpose }, { id, parent: chat });
-  return call;
+  const key = await streamKey();
+  const at = Date.now();
+  const started = chat === null ? undefined : () => void store.create('stream', { key: key.private, call: callOf(route), at, result, for: purpose }, { id, parent: chat });
+  return { id, key: key.private, public: key.public, started };
 }
 
-// A call no marker keeps, which only this page reads: one a reload has no use for, such as a bot's Lua asking a model
-// in the middle of a run.
-export async function pageCall(id: string = crypto.randomUUID()): Promise<StreamCall> {
+// A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
+// reload has no use for. The server limits these per chat.
+export async function botCall(chat: string): Promise<StreamCall> {
   const key = await streamKey();
-  return { id, key: key.private, public: key.public };
+  return { id: crypto.randomUUID(), key: key.private, public: key.public, bot: chat };
 }
 
 // Once the call's result is saved, here or by another device.
@@ -56,7 +59,8 @@ export class Streams {
   pickUp() {
     if (this.closed) return;
     for (const stream of this.store.list('stream')) {
-      if (this.reading.has(stream.id) || this.checking.has(stream.id)) continue;
+      // A deleted chat's calls stay untaken: they go with its purge, or after its 되돌리기 the next pick-up takes them.
+      if (this.reading.has(stream.id) || this.checking.has(stream.id) || !live(this.store.get('chat', stream.parent!))) continue;
       this.checking.add(stream.id);
       void this.store.withChat(stream.parent!, async () => {
         if (!this.closed && !this.reading.has(stream.id)) {

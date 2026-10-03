@@ -5,14 +5,15 @@ import { forecast, lastCache, type Forecast } from '../../runtime/cache';
 import { leaving } from '../../runtime/memory';
 import type { Shown } from '../../runtime/talk';
 import { tokenizer } from '../../runtime/tokenizer';
-import { nextSend } from '../../runtime/turn';
+import { cacheSend, wouldSend } from '../../runtime/turn';
 import { useSession } from '../session';
 
 // Typing waits this long before the next send's prompt is built again.
 const SETTLE_MS = 400;
 
 // What sending the draft now would do, beside the send button: until when the chat's last call keeps the prompt cache
-// and what the draft would read of it, and how many messages would leave the prompt with no memory standing for them.
+// and what the draft would read of it, and how many messages would leave the prompt with no memory standing for them,
+// both read from one request built for the draft.
 // The forecast needs the last call's request, which only the page that sent it holds (Talk.sent).
 export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean) {
   const session = useSession();
@@ -30,9 +31,11 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
       void tokenizer().then(
         (countTokens) => {
           if (!live) return;
-          setLeft(leaving(session, id, text, countTokens));
-          const next = cached && nextSend(session, id, text, countTokens);
-          if (next) setRead(forecast(cached, next));
+          // A message sent translated goes out as its translation, which is not made yet, so it stands in as typed.
+          const next = wouldSend(session, id, { kind: 'send', text }, countTokens);
+          setLeft(next && leaving(next.prompt));
+          const send = cached && next && cacheSend(next);
+          if (send) setRead(forecast(cached, send));
         },
         () => {
           setRead(null);

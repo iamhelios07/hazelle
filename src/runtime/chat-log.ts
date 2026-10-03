@@ -1,14 +1,17 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
+import { memoryThrough } from '../engine/memory';
 import { shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
+import { markDeleted } from './characters';
 import { without, type ObjectStore, type Write } from './store';
 
-// The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment
-// writes with the other layers, a character's purge, which removes them with the character, a backup's
-// restore, which copies them as they were, and a move from Risu, which saves chatWrites' writes with the character.
+// The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
+// the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with
+// its character, a backup's restore, which copies them as they were, and a move from Risu, which saves chatWrites'
+// writes with the character.
 
 // A new chat is saved in this order: the chat with its greetings, the one shown selected, then the user's first
 // message, sent with its reply. Messages stand in the order they were saved, so the greeting leads only when it is
@@ -80,15 +83,13 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
 
 // The records whose every message lies before the split, their sources remapped to the branch's messages and versions
 // (a version the branch does not hold keeps its old id, so the record stays stale there too), with the facts and threads
-// they or the user set. A record across the split stays behind, and its messages stay raw in the branch until its own
-// summarizing reaches them. null: nothing to carry.
+// as they stood with only those records (engine/memory memoryThrough). A record across the split stays behind, and its
+// messages stay raw in the branch until its own summarizing reaches them. null: nothing to carry.
 function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, versions: ReadonlyMap<string, string>): Memory | null {
   const remap = ({ message, version }: Source): Source => ({ message: messages.get(message)!, version: versions.get(version) ?? version });
-  const records = memory.records.filter(({ sources }) => sources.every(({ message }) => messages.has(message))).map((record) => ({ ...record, sources: record.sources.map(remap) }));
-  const carried = new Set(records.map(({ id }) => id));
-  const state = memory.state.filter(({ record }) => record === null || carried.has(record));
-  const threads = memory.threads.filter(({ opened }) => opened === null || carried.has(opened));
-  return records.length || state.length || threads.length ? { records, state, threads } : null;
+  const kept = memoryThrough(memory, memory.records.filter(({ sources }) => sources.every(({ message }) => messages.has(message))));
+  const records = kept.records.map((record) => ({ ...record, sources: record.sources.map(remap) }));
+  return records.length || kept.state.length || kept.threads.length ? { ...kept, records } : null;
 }
 
 // The entries that fold back to message under the id given: its first version as the message entry, and that
@@ -122,10 +123,11 @@ function copied(id: string, { role, at, versions, selected, after }: Message): {
 // A blank name gives the chat back its first message as its name.
 export const renameChat = (store: ObjectStore, id: string, name: string) => store.update('chat', id, (current) => ({ ...current, title: name.trim() || null }));
 
-// Removes the chat object only. Its entries stay, unreachable, so restoreChat (되돌리기) brings back all of it.
-export const removeChat = (store: ObjectStore, id: string) => store.take('chat', id);
+// The chat stays whole, read as gone (model/library live), until purgeExpired removes it with all it owns; restoreChat
+// (되돌리기) brings it back until then.
+export const removeChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, Date.now());
 
-export const restoreChat = (store: ObjectStore, removed: Stored<'chat'>) => store.restore(removed);
+export const restoreChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, null);
 
 // A chat's own prompt, persona or 작가의 노트; null clears it, and the chat follows the default again.
 function setOwn(store: ObjectStore, chat: string, field: 'prompt' | 'persona' | 'note', value: string | null): Promise<ApiResult<Stored<'chat'>>> {
@@ -193,7 +195,7 @@ export const appendCost = (store: ObjectStore, chat: string, replyId: string, co
 export function editMessage(store: ObjectStore, chat: string, message: Message, text: string, translation: string | null) {
   const current = shown(message);
   const at = Date.now();
-  const kept = translation?.trim() && current.translation && { translation: { text: translation, receipt: current.translation.receipt, at } };
+  const kept = translation?.trim() && current.translation && { translation: { ...current.translation, text: translation, at } };
   return append(store, chat, { type: 'version', message: message.id, replaces: current.id, edit: true, at, text, receipt: current.receipt, seed: current.seed, ...kept });
 }
 

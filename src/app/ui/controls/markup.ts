@@ -18,9 +18,10 @@ export function markup(text: string): Piece[] {
       plain = '';
       pieces.push({ text: piece, line, mark });
     };
+    const ends = closings(whole);
     let at = 0;
     while (at < whole.length) {
-      const end = whole.startsWith('{{', at) ? tagEnd(whole, at) : -1;
+      const end = whole.startsWith('{{', at) ? ends[at + 2]! : -1;
       if (end !== -1) {
         const tag = whole.slice(at, end);
         push(tag, tag === '{{slot}}' ? 'slot' : 'cbs');
@@ -41,18 +42,15 @@ export function markup(text: string): Piece[] {
   return pieces;
 }
 
-function tagEnd(line: string, from: number): number {
-  let depth = 0;
-  let at = from;
-  while (at < line.length) {
-    if (line.startsWith('{{', at)) {
-      depth += 1;
-      at += 2;
-    } else if (line.startsWith('}}', at)) {
-      depth -= 1;
-      at += 2;
-      if (depth === 0) return at;
-    } else at += 1;
+// For each place in the line, where a tag open before it ends when read on from there: just past the `}}` that closes
+// it, the tags opened on the way closed first, or -1 when the line ends first. Filled from the line's end back, each
+// place from the ones after it, so a line of unclosed `{{` costs its length, not its square.
+function closings(line: string): Int32Array {
+  const ends = new Int32Array(line.length + 1).fill(-1);
+  for (let at = line.length - 2; at >= 0; at--) {
+    if (line.startsWith('}}', at)) ends[at] = at + 2;
+    else if (line.startsWith('{{', at)) ends[at] = ends[at + 2] === -1 ? -1 : ends[ends[at + 2]!]!;
+    else ends[at] = ends[at + 1]!;
   }
-  return -1;
+  return ends;
 }

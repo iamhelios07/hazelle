@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
 import type { Card } from '../import/types';
 import { unescapeCbs } from './escape';
-import { evaluate, type CbsContext } from './evaluate';
+import { evaluate, Runaway, type CbsContext } from './evaluate';
 
 const card = (over: Partial<Card> = {}): Card => ({
   name: 'Luna',
@@ -55,6 +55,11 @@ const run = (text: string, over: Partial<CbsContext> = {}) => evaluate(text, con
 const inMessage = { source: { message: 0 } };
 
 describe('evaluate', () => {
+  it('stops an evaluation whose commands keep doubling their text, and gives none of it', () => {
+    expect(() => run('{{description}}', { card: card({ description: '{{description}}{{description}}' }) })).toThrow(Runaway);
+    expect(() => run('{{settempvar::x::abcdefghijklmnop}}' + '{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}'.repeat(22))).toThrow(Runaway);
+  });
+
   it('reads names without case, spaces, _ or -, and splits at a single colon when the first colon is single', () => {
     expect(run('{{Get_Var:mood}} {{ USER }}', { variables: new Map([['mood', 'calm']]) })).toBe('calm jin');
   });
@@ -193,5 +198,12 @@ describe('evaluate', () => {
 
   it('leaves a tag with an argument out of range as written', () => {
     expect(run('{{fixnum::1.5::200}} {{date::YYYY::soon}}')).toBe('{{fixnum::1.5::200}} {{date::YYYY::soon}}');
+  });
+
+  it('leaves a tag as written when its count would size an endless loop or a huge allocation', () => {
+    const huge = '9'.repeat(309);
+    const text = `{{roll::${huge}d6}} {{rollp::10001d6}} {{dice::2d${huge}}} {{cbr::1e9}} {{arrayassert::[]::1e9::x}}`;
+    expect(run(text)).toBe(text);
+    expect(run('{{cbr::2}}{{arrayassert::[]::1::x}}')).toBe('\\n\\n["","x"]');
   });
 });

@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatScope } from '../engine/render';
+import { binned, live } from '../model/library';
 import type { Kind } from '../model/kinds';
+import type { AccountFacts, Standing } from '../runtime/account';
 import { memoryId, type Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
 import type { Remembering } from '../runtime/memory';
@@ -11,13 +13,31 @@ import type { ScriptsState } from '../runtime/scripts';
 import type { ObjectStore } from '../runtime/store';
 import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';
+import { Saves } from './common/saveQueue';
 
-export type Account = { onLock: () => void; onLogout: () => Promise<string | null> };
+// admin: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
+export type Account = { admin: boolean; facts: AccountFacts; onLock: () => void; onLogout: () => Promise<string | null> };
 
-const SessionContext = createContext<{ session: Session; account: Account } | null>(null);
+// How long leaving waits for the saves still on their way. A save in flight and one queued behind it are two round
+// trips, which from Korea can take seconds each; a store write waiting out a dropped connection never ends on its own.
+const LEAVING_WAIT = 10_000;
+
+const SessionContext = createContext<{ session: Session; account: Account; saves: Saves } | null>(null);
 
 export function SessionProvider({ session, account, children }: { session: Session; account: Account; children: ReactNode }) {
-  return <SessionContext value={{ session, account }}>{children}</SessionContext>;
+  // One session's save queues, closed with it: a queue kept past it would write its change into the next account.
+  const saves = useMemo(() => new Saves(window), [session]);
+  useEffect(() => () => saves.close(), [saves]);
+  // Leaving closes the session, which drops what has not been written, so it waits for the saves first.
+  const leaving = useMemo<Account>(
+    () => ({
+      ...account,
+      onLock: () => void saves.settled(LEAVING_WAIT).then(account.onLock),
+      onLogout: () => saves.settled(LEAVING_WAIT).then(account.onLogout),
+    }),
+    [account, saves],
+  );
+  return <SessionContext value={{ session, account: leaving, saves }}>{children}</SessionContext>;
 }
 
 function useOpen() {
@@ -28,8 +48,14 @@ function useOpen() {
 
 export const useSession = (): Session => useOpen().session;
 export const useAccount = (): Account => useOpen().account;
+export const useSaves = (): Saves => useOpen().saves;
 export const useStore = (): ObjectStore => useSession().store;
 export const useFiles = (): Files => useSession().files;
+
+export function useStanding(): Standing {
+  const { facts } = useAccount();
+  return useSyncExternalStore(facts.subscribe, facts.snapshot);
+}
 export const useTalk = (): Talk => useSession().talk;
 export const useTranslator = (): Translator => useSession().translator;
 
@@ -49,7 +75,7 @@ export function useChats() {
 
 export function useChatModel(id: string | null) {
   const { read, store } = useSession();
-  const exists = id !== null && store.get('chat', id) !== null;
+  const exists = id !== null && live(store.get('chat', id)) !== null;
   const [attempt, retry] = useReducer((value: number) => value + 1, 0);
   useEffect(() => {
     if (id === null || !exists) return;
@@ -91,15 +117,27 @@ function useKind<K extends Kind>(kind: K) {
 }
 
 export const useConnections = () => useKind('connection');
-export const usePrompts = () => useKind('prompt');
-export const usePersonas = () => useKind('persona');
-export const useProfiles = () => useKind('profile');
-// The modules there are, by name; a deleted one is not among them (runtime/modules modulesOf). all is the memo's key
-// only: it is a new array exactly when a module changed.
+// Those not in 휴지통. all is the memo's key only: it is a new array exactly when one changed.
+function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {
+  const all = useKind(kind);
+  return useMemo(() => all.filter(live), [all]);
+}
+export const usePrompts = () => useLive('prompt');
+export const usePersonas = () => useLive('persona');
+export const useProfiles = () => useLive('profile');
+// The modules there are, by name; a deleted one is not among them (runtime/modules modulesOf).
 export function useModules() {
   const store = useStore();
   const all = useKind('module');
   return useMemo(() => modulesOf(store), [store, all]);
+}
+// What 휴지통 lists besides the library's characters and chats, most recently deleted first.
+export function useBin() {
+  const modules = useKind('module');
+  const prompts = useKind('prompt');
+  const personas = useKind('persona');
+  const profiles = useKind('profile');
+  return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
 // How many lorebook entries or assets something holds, such as a module. A number, since a fresh array of them would
 // make React re-render forever.
@@ -140,6 +178,13 @@ export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['
 export function useTurn(): Turn | null {
   const talk = useTalk();
   return useSyncExternalStore(talk.subscribe, talk.snapshot);
+}
+
+// The chat whose reply is being written, for what only marks it: the value is the same through every streamed chunk,
+// so nothing that reads it renders again until the turn starts or ends.
+export function useWritingChat(): string | null {
+  const talk = useTalk();
+  return useSyncExternalStore(talk.subscribe, () => talk.snapshot()?.chat ?? null);
 }
 
 export function useTranslating(): Translating {

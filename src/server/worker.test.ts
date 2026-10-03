@@ -18,7 +18,8 @@ describe('accounts', () => {
     const body = signupBody();
     const signup = await post('signup', body);
     expect(signup.status).toBe(201);
-    expect(await signup.json()).toEqual({ accountId: body.accountId, username: 'jin' });
+    const described = { accountId: body.accountId, username: 'jin', admin: false, suspended: false, state: 'active', incarnation: expect.stringMatching(/^[0-9a-f]{32}$/), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 };
+    expect(await signup.json()).toEqual(described);
     const cookie = signup.headers.get('set-cookie')!;
     expect(cookie).toMatch(/^__Host-session=[0-9a-f]{64};/);
     expect(cookie).toContain('HttpOnly');
@@ -27,7 +28,7 @@ describe('accounts', () => {
 
     const session = await get('session', sessionCookie(signup));
     expect(await session.json()).toEqual({
-      session: { accountId: body.accountId, username: 'jin' },
+      session: described,
       vault: { passwordWrap: body.passwordWrap, recoveryWrap: body.recoveryWrap },
     });
 
@@ -35,6 +36,24 @@ describe('accounts', () => {
     const second = await post('signup', signupBody('other'));
     expect(second.status).toBe(403);
     expect(await second.json()).toEqual({ error: 'signup-closed' });
+  });
+
+  it('gives the last place under the cap to one of two signups sent at once, with no vault or session for the other', async () => {
+    const answers = await Promise.all([post('signup', signupBody('one')), post('signup', signupBody('two'))]);
+    expect(answers.map(({ status }) => status).sort()).toEqual([201, 403]);
+    const rows = (table: string) => t.env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n');
+    expect([await rows('accounts'), await rows('vaults'), await rows('sessions')]).toEqual([1, 1, 1]);
+  });
+
+  it('admits accounts up to the cap the operator stored, and tells a taken username from a closed signup', async () => {
+    await t.env.DB.prepare('UPDATE service SET signup_cap = 2').run();
+    await post('signup', signupBody());
+    expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: true });
+    const taken = await post('signup', signupBody());
+    expect(taken.status).toBe(409);
+    expect(await taken.json()).toEqual({ error: 'username-taken' });
+    expect((await post('signup', signupBody('other'))).status).toBe(201);
+    expect(await (await post('signup', signupBody('third'))).json()).toEqual({ error: 'signup-closed' });
   });
 
   it('refuses a username the client did not put in canonical form, and a malformed proof', async () => {
@@ -52,7 +71,7 @@ describe('accounts', () => {
       const login = await post('login', { username: 'jin', method, proof: value });
       expect(login.status).toBe(200);
       expect(await login.json()).toEqual({
-        session: { accountId: body.accountId, username: 'jin' },
+        session: { accountId: body.accountId, username: 'jin', admin: false, suspended: false, state: 'active', incarnation: expect.any(String), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 },
         vault: { passwordWrap: body.passwordWrap, recoveryWrap: body.recoveryWrap },
       });
     }
@@ -82,6 +101,53 @@ describe('accounts', () => {
     expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
   });
 
+  it('deletes an account for its own proof: its rows, sessions, vault and store go', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }], cookie);
+    const incarnation = (await t.env.DB.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!;
+
+    expect((await t.delete('account', { method: 'password', proof: proof('wrong') }, cookie)).status).toBe(401);
+    expect((await get('objects?since=0', cookie)).status).toBe(200);
+
+    const gone = await t.delete('account', { method: 'password', proof: body.passwordProof }, cookie);
+    expect(gone.status).toBe(204);
+    expect(gone.headers.get('set-cookie')).toMatch(/^__Host-session=;.*Max-Age=0/);
+    expect((await post('login', { username: 'jin', method: 'password', proof: body.passwordProof })).status).toBe(401);
+    const rows = (table: string) => t.env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n');
+    expect([await rows('accounts'), await rows('sessions'), await rows('vaults')]).toEqual([0, 0, 0]);
+    expect(t.stores.db(incarnation).tables()).toEqual([]);
+  });
+
+  it('refuses a leaving account every route and its login, and admits its own 탈퇴, which finishes the deletion', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    // A deletion cut off after its intent.
+    await t.env.DB.prepare("UPDATE accounts SET state = 'leaving'").run();
+
+    expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
+    for (const response of [await get('objects?since=0', cookie), await get('vault', cookie), await t.batch([], cookie)]) {
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ error: 'no-session' });
+    }
+    const login = await post('login', { username: 'jin', method: 'password', proof: body.passwordProof });
+    expect(login.status).toBe(403);
+    expect(await login.json()).toEqual({ error: 'account-leaving' });
+
+    expect((await t.delete('account', { method: 'password', proof: body.passwordProof }, cookie)).status).toBe(204);
+    expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM accounts').first('n')).toBe(0);
+  });
+
+  it('refuses 탈퇴 while the operator restores the account', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    await t.lifecycle(body.accountId, "state = 'restoring'");
+    const refused = await t.delete('account', { method: 'password', proof: body.passwordProof }, cookie);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: 'account-busy' });
+    expect(await (await get('session', cookie)).json()).toMatchObject({ session: { state: 'restoring', storage: { bytes: null } } });
+  });
+
   it('ends a session once its expiry passes', async () => {
     const cookie = sessionCookie(await post('signup', signupBody()));
     await t.env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
@@ -101,7 +167,88 @@ describe('provider calls', () => {
   });
 });
 
+describe('a suspended account', () => {
+  it('reads, and is refused every write, upload and provider call', async () => {
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    await t.env.DB.prepare('UPDATE accounts SET suspended_at = 1').run();
+    expect(await (await get('session', cookie)).json()).toMatchObject({ session: { suspended: true } });
+    expect((await get('objects?since=0', cookie)).status).toBe(200);
+
+    const refused = [
+      await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }], cookie),
+      await t.put(`files/${'a'.repeat(64)}`, new Uint8Array([1]), cookie),
+      await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie),
+      await post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null }, cookie),
+    ];
+    for (const response of refused) {
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'suspended' });
+    }
+  });
+});
+
 describe('guards', () => {
+  it('refuses a request that states another account than the one its session names, and writes nothing', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    const timeline = await t.timeline(cookie);
+    const send = (account: string) =>
+      t.raw('objects/batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie, 'x-account': account },
+        body: JSON.stringify({ timeline, writes: [{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }] }),
+      });
+    const other = await send(crypto.randomUUID());
+    expect(other.status).toBe(409);
+    expect(await other.json()).toEqual({ error: 'account-mismatch' });
+    expect(await (await get('objects?since=0', cookie)).json()).toMatchObject({ changes: [] });
+    expect((await send(body.accountId)).status).toBe(200);
+  });
+
+  it('refuses a signed-in request that states no account', async () => {
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    const response = await t.raw('objects?since=0', { headers: { cookie } });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'bad-input' });
+  });
+
+  it('refuses a body over the bound, signed in or not, and takes more only on the routes listed for it', async () => {
+    const response = await post('signup', { ...signupBody(), passwordWrap: 'x'.repeat(100_000) });
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: 'too-large' });
+
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    const large = await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'x'.repeat(200_000), baseRev: null }], cookie);
+    expect(large.status).toBe(200);
+  });
+
+  it('throttles an account that has spent its provider calls, on the relay and on a new stream', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    const call = () => post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie);
+    expect((await call()).status).toBe(200);
+    // The rest of the minute's calls, spent on the local binding itself: 240 requests would take seconds.
+    await Promise.all(Array.from({ length: 239 }, () => t.env.CALLS.limit({ key: body.accountId })));
+    const throttled = await call();
+    expect(throttled.status).toBe(429);
+    expect(throttled.headers.get('x-relay')).toBeNull();
+    expect(await throttled.json()).toEqual({ error: 'too-many-calls' });
+    expect((await post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null }, cookie)).status).toBe(429);
+  });
+
+  it('limits a bot’s own calls per chat, and leaves other chats and the user’s calls alone', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    const chat = crypto.randomUUID();
+    await Promise.all(Array.from({ length: 20 }, () => t.env.BOT_CALLS.limit({ key: `${body.accountId}:${chat}` })));
+    const start = (bot?: string) => post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null, ...(bot && { bot }) }, cookie);
+    const refused = await start(chat);
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: 'too-many-bot-calls' });
+    expect((await start(crypto.randomUUID())).status).toBe(400);
+    expect((await start()).status).toBe(400);
+  });
+
   it('answers the relay without a session with a 401 that carries no x-relay header', async () => {
     const response = await post('relay', { url: 'https://api.example.com/', method: 'GET', headers: {}, body: null });
     expect(response.status).toBe(401);

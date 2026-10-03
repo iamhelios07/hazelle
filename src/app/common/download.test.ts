@@ -12,11 +12,13 @@ it('does not download Blob parts when an export is stopped', async () => {
   const abort = new AbortController();
   const output = await downloadOutput('backup.zip');
   const result = await exportBackup({
+    pin: async () => ({ ok: true, data: { timeline: 't', epoch: 0 } }),
+    list: () => [],
     scan: async (options, visit) => {
       await visit({ id: 'person', kind: 'persona', parent: null, rev: 1 }, options.metadata ? undefined : { name: '달', description: '', picture: null });
       return null;
     },
-  }, { read: vi.fn() }, output, { signal: abort.signal, progress: (done) => { if (done) abort.abort(); } });
+  }, { read: vi.fn(), missing: vi.fn() }, output, { signal: abort.signal, progress: (done) => { if (done) abort.abort(); } });
   expect(result).toEqual({ ok: false, error: 'stopped' });
   expect(click).not.toHaveBeenCalled();
   expect(url).not.toHaveBeenCalled();

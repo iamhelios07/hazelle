@@ -2,6 +2,7 @@ import { providerMessage } from '../connectors/errors';
 import { isRecord } from '../connectors/values';
 import type { HttpRequest } from '../connectors/types';
 import { streamOpener } from '../vault/streams';
+import { fetchApi } from './api';
 
 // Whose refusal it was decides what the user is told: the provider's answer, the relay's
 // own refusal (X-Relay: error), the app's (no X-Relay header, such as an expired session), or no
@@ -21,7 +22,7 @@ const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 
 async function send(request: HttpRequest, signal?: AbortSignal): Promise<Response | RelayFailure> {
   let response: Response;
   try {
-    response = await fetch('/api/relay', {
+    response = await fetchApi('relay', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(request),
@@ -82,28 +83,71 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
 // A generation call through its ReplyStream on the server (tech-spec §6, Detached replies), which goes on when this
 // page stops reading. With a request it starts the call; without one it reads the call already started, from the
 // start. The answer is the provider's as relay gives it. key: the call's private key; public: its public half, to start.
-// took: how long the call ran, as the server measured it, once its end has been read.
-export type StreamCall = { id: string; key: JsonWebKey; public?: string; took?: number };
+// started: told once the server holds the call, before any of it is read. bot: the chat whose bot's script makes the
+// call, which the server limits per chat. took: how long the call ran, as the server measured it, once its end has
+// been read.
+export type StreamCall = { id: string; key: JsonWebKey; public?: string; started?: () => void; bot?: string; took?: number };
 
+// A read ends only at the call's own end: the end the server read, a call the server lost, or one it no longer holds
+// (stream-gone); or once the session is gone (no-session), when no read can reach it. This page's other failures to
+// reach it are tried again until the page stops reading; failing the read on them would save that failure as the
+// call's result and drop a call still running.
 export async function stream(call: StreamCall, request: HttpRequest | null, signal: AbortSignal): Promise<Response | RelayFailure> {
-  let response: Response;
-  try {
-    response = await fetch(
-      `/api/streams/${call.id}`,
-      request ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request }), signal } : { signal },
-    );
-  } catch {
-    return lost(signal);
+  let body: ReadableStream<Uint8Array>;
+  if (request) {
+    let response: Response;
+    try {
+      response = await fetchApi(`streams/${call.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: call.public, request, ...(call.bot && { bot: call.bot }) }), signal });
+    } catch {
+      return lost(signal);
+    }
+    if (response.headers.get('x-stream') !== 'frames' || !response.body) return { kind: 'app', code: await errorCode(response) };
+    // A call stopped as its start was answered gets no marker: whoever stopped it ends it, and a marker landing after
+    // that end would be picked up as a call to save.
+    if (signal.aborted) return lost(signal);
+    call.started?.();
+    body = response.body;
+  } else {
+    let reached: ReadableStream<Uint8Array> | RelayFailure;
+    try {
+      reached = await reach(call.id, 0, 0, signal);
+    } catch {
+      return lost(signal);
+    }
+    if (!(reached instanceof ReadableStream)) return reached;
+    body = reached;
   }
-  if (response.headers.get('x-stream') !== 'frames' || !response.body) return { kind: 'app', code: await errorCode(response) };
-  return answered(await unframe(call, response.body, signal));
+  return answered(await unframe(call, body, signal));
 }
 
 // 멈추기: the call ends and the server keeps what came. A refused stop leaves the call running until it is dropped.
-export const stopStream = (id: string) => void fetch(`/api/streams/${id}/stop`, { method: 'POST', headers: { 'content-type': 'application/json' } }).catch(() => {});
+export const stopStream = (id: string) => void fetchApi(`streams/${id}/stop`, { method: 'POST', headers: { 'content-type': 'application/json' } }).catch(() => {});
 
 // Once the call's result is saved. A refused drop leaves the server's copy until it expires on its own.
-export const dropStream = (id: string) => void fetch(`/api/streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
+export const dropStream = (id: string) => void fetchApi(`streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
+
+// The call's frames from seq from. No connection or a server error are this page's and are tried again, ever more
+// slowly; stream-gone: the server holds no such call; no-session: the session is gone. Throws once signal stops the
+// read.
+async function reach(id: string, from: number, tries: number, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | RelayFailure> {
+  for (; ; tries++) {
+    signal.throwIfAborted();
+    if (tries) await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(wait);
+        signal.removeEventListener('abort', done);
+        resolve();
+      };
+      const wait = setTimeout(done, Math.min(1000 * 2 ** (tries - 1), 30_000));
+      signal.addEventListener('abort', done);
+    });
+    signal.throwIfAborted();
+    const response = await fetchApi(`streams/${id}?from=${from}`, { signal }).catch(() => null);
+    if (response?.headers.get('x-stream') === 'frames' && response.body) return response.body;
+    if (response?.status === 404) return { kind: 'app', code: 'stream-gone' };
+    if (response?.status === 401) return { kind: 'app', code: await errorCode(response) };
+  }
+}
 
 // Frame types and layout as server/stream-box writes them.
 const HEAD = 1;
@@ -145,7 +189,7 @@ async function unframe(call: StreamCall, body: ReadableStream<Uint8Array>, signa
 }
 
 // The frames of a call, hello first. A connection that breaks while the page still wants the call (a phone putting
-// the tab to sleep, a network change) is read again from the frame after the last one, a few times before it fails.
+// the tab to sleep, a network change) is read again from the frame after the last one.
 async function* framesOf(id: string, first: ReadableStream<Uint8Array>, signal: AbortSignal) {
   let body = first;
   let next = 0;
@@ -160,16 +204,13 @@ async function* framesOf(id: string, first: ReadableStream<Uint8Array>, signal: 
       }
       return;
     } catch (error) {
-      if (signal.aborted || tries >= RECONNECTS) throw error;
+      if (signal.aborted) throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** tries));
-    const again = await fetch(`/api/streams/${id}?from=${next}`, { signal }).catch(() => null);
-    if (again?.headers.get('x-stream') === 'frames' && again.body) body = again.body;
-    else if (again) return;
+    const again = await reach(id, next, tries, signal);
+    if (!(again instanceof ReadableStream)) return;
+    body = again;
   }
 }
-
-const RECONNECTS = 3;
 
 // [u32 length][u8 type][u32 seq][body], as server/stream-box writes them.
 async function* split(body: ReadableStream<Uint8Array>) {

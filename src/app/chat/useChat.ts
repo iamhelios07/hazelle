@@ -31,6 +31,7 @@ import { blocked, packsOf, takeTurn, togglesOf, statusBoxes, translateLatest, tr
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
+import { BIN_KEEPS } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -58,7 +59,7 @@ export type ChatActions = OpenChat['actions'];
 // item null is a new chat, saved under chatId with its first message; shelf null is 캐릭터 없이.
 export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null) {
   const session = useSession();
-  const { store, talk, translator } = session;
+  const { store, talk, translator, drafts } = session;
   const turn = useTurn();
   const translating = useTranslating();
   const toast = useToast();
@@ -77,10 +78,16 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // A blank greeting is a choice like the others: picked, the chat starts with no first message (user, 2026-10-02).
   // The chat still opens on the first greeting that says something.
   const greetings = card?.greetings ?? [];
-  const [greeting, setGreeting] = useState(() => Math.max(0, greetings.findIndex((text) => text.trim())));
+  const firstSaid = () => Math.max(0, greetings.findIndex((text) => text.trim()));
+  const [picked, setGreeting] = useState(firstSaid);
+  // The greetings change under an open new chat when its character is edited beside it: a pick whose greeting was
+  // removed goes back to the first.
+  const greeting = picked < greetings.length ? picked : firstSaid();
   // The ids the greetings are saved under, so their random tags roll the same before and after the first send, and the
-  // greeting keeps its place in the story rather than being drawn again.
-  const [openingIds] = useState(() => greetings.map(() => crypto.randomUUID()));
+  // greeting keeps its place in the story rather than being drawn again. A greeting added since gets its own.
+  const [madeIds, setOpeningIds] = useState(() => greetings.map(() => crypto.randomUUID()));
+  const openingIds = madeIds.length < greetings.length ? [...madeIds, ...greetings.slice(madeIds.length).map(() => crypto.randomUUID())] : madeIds;
+  if (openingIds !== madeIds) setOpeningIds(openingIds);
   const translate = translateSwitches(store, chat.character);
   const unstarted: Shown | null = useMemo(() =>
     item === null && card && greetings.some((text) => text.trim())
@@ -175,7 +182,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   function report(failure: TurnFailure | null) {
     if (!failure) return;
     if (blocks(failure)) return setStopped(true);
-    toast.error(describeTurnFailure(failure), failure.kind === 'unsaved' ? { action: { label: '다시 저장', onClick: () => void talk.saveAgain(failure.reply).then(report) } } : undefined);
+    const kept = failure.kind === 'unsaved' ? failure.reply : null;
+    toast.error(describeTurnFailure(failure), kept === null ? undefined : { action: { label: '다시 저장', onClick: () => void talk.saveAgain(kept).then(report) } });
   }
 
   // Back to the foot of the story, which also puts away tools a tap pinned open.
@@ -197,23 +205,30 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
         selected,
         translations: new Map(said.flatMap(({ id, translation }) => (translation ? [[id, translation]] : []))),
       },
-      started: () => navigate({ kind: 'chat', id: chatId }, { replace: true }),
+      started: () => {
+        drafts.move(draft.key, chatId);
+        navigate({ kind: 'chat', id: chatId }, { replace: true });
+      },
     };
   }
 
   async function send() {
-    const text = draft.text.trim();
-    if (!text || busy) return;
+    if (!draft.text.trim() || busy) return;
     await Promise.all(writes.current);
-    if (blocked(session, chat)) return setStopped(true);
+    // A saved chat is asked of the store, as the turn reads it: this render's copy was made before the wait.
+    const now = id === null ? chat : store.get('chat', id)?.value;
+    if (now && blocked(session, now)) return setStopped(true);
+    // Taken only now: the composer stayed open through the wait, so what was typed in it goes with the message, and a
+    // turn that began meanwhile leaves the text where it is.
+    const text = drafts.text(draft.key).trim();
+    if (!text || talk.snapshot()) return;
     setStopped(false);
-    draft.set('');
+    drafts.set(draft.key, '');
     follow();
     const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
-    // An unsaved reply or a kept failure means the user's message was saved. A new chat that was not saved stays on
-    // this screen.
-    if (failure?.kind === 'unstarted') draft.set(text);
-    else if (failure && failure.kind !== 'unsaved' && !failure.kept) draft.putBack(chatId, text);
+    // An unsaved reply or a kept failure means the user's message was saved. Any other failure's text goes back to the
+    // chat's draft, wherever that is by now: a new chat may have been saved before the failure, or not at all.
+    if (failure && failure.kind !== 'unsaved' && !failure.kept) drafts.putBack(store.get('chat', chatId) ? chatId : draft.key, text);
     report(failure);
   }
 
@@ -241,7 +256,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   function ask(target: Target) {
     if (!id || busy) return;
     follow();
-    void takeTurn(session, id, target).then(report);
+    void Promise.all(writes.current).then(() => takeTurn(session, id, target)).then(report);
   }
 
   function select(message: Shown, index: number) {
@@ -285,9 +300,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   async function saveEdit(message: Shown, andReply: boolean) {
     if (!id || !editing) return;
-    const saved = await editMessage(store, id, message, editing.text, editing.translation);
+    const taken = editing;
+    const saved = await editMessage(store, id, message, taken.text, taken.translation);
     if (!saved.ok) return toast.failed(saved);
-    setEditing(null);
+    // Only the edit that was saved closes: one changed since, or another message's opened meanwhile, stays open.
+    setEditing((current) => (current === taken ? null : current));
     if (andReply && last && last.role === 'assistant') ask({ kind: 'regenerate', message: last.id });
   }
 
@@ -317,7 +334,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!removed.ok) return toast.failed(removed);
     const stored = removed.data;
     navigate({ kind: 'shelf', character: stored.value.character });
-    toast.undoable('채팅을 지웠어요', () => void restoreChat(store, stored).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })), item.title);
+    toast.undoable(`‘${item.title}’ 채팅을 지웠어요.`, () => void restoreChat(store, stored.id).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })), BIN_KEEPS);
   }
 
   function copy(text: string) {
@@ -327,7 +344,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     );
   }
 
-  // A send waits for these, so a model, note or toggle changed just before it reaches that turn: the turn reads the
+  // Every turn waits for these, so a model, note or toggle changed just before it reaches that turn: the turn reads the
   // store, which takes a write only once the server has it.
   const writes = useRef(new Set<Promise<unknown>>());
   function track<T>(write: Promise<T>): Promise<T> {

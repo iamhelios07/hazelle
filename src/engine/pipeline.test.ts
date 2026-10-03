@@ -5,7 +5,7 @@ import type { Memory, MemoryRecord } from '../model/memory';
 import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
-import { assemble, unused, type Assembled, type PromptInput, type TooLong } from './pipeline';
+import { assemble, rewritten, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, type ChatRead } from './memory';
 import { renderChat } from './render';
 
@@ -103,11 +103,11 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   ...over,
 });
 
-const assembledOf = (result: Assembled | TooLong) => {
-  if ('kind' in result) throw new Error(`over budget: ${result.tokens} of ${result.budget}`);
+const assembledOf = (result: ReturnType<typeof assemble>) => {
+  if ('kind' in result) throw new Error(result.kind);
   return result;
 };
-const sentOf = (result: Assembled | TooLong) => assembledOf(result).messages;
+const sentOf = (result: ReturnType<typeof assemble>) => assembledOf(result).messages;
 const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: null });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
@@ -218,6 +218,18 @@ describe('assemble', () => {
     expect(lorebook).toEqual([{ role: 'system', content: 'kept' }]);
   });
 
+  it('sends a lorebook entry as the text its cost was counted on, whichever way its random tag rolls', () => {
+    const blocks: Prompt['blocks'] = [{ id: 'lorebook', name: null, kind: 'slot', slot: 'lorebook' }];
+    const entries = [lore('coin', `{{random::short::${'long '.repeat(20)}}}`)];
+    const sizes = new Set<number>();
+    for (let i = 0; i < 20; i++) {
+      const result = assembledOf(assemble({ ...input({ prompt: { ...starter, blocks }, lore: entries }), seed: `reply-${i}` }));
+      expect(result.lore![0]!.fate).toEqual({ kind: 'placed', tokens: result.parts[0]!.tokens });
+      sizes.add(result.parts[0]!.tokens);
+    }
+    expect(sizes.size).toBe(2);
+  });
+
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));
@@ -233,6 +245,12 @@ describe('assemble', () => {
     expect(kept.length).toBeLessThan(messages.length);
     expect(kept).toEqual(whole.filter(inChat).slice(-kept.length));
     expect(assemble({ ...input, budget: 100 })).toMatchObject({ kind: 'too-long', budget: 100 });
+  });
+});
+
+describe('a request whose commands ran away', () => {
+  it('is not built', () => {
+    expect(assemble(input({ card: card({ description: '{{description}}{{description}}' }) }))).toEqual({ kind: 'runaway' });
   });
 });
 
@@ -382,5 +400,26 @@ describe('unused', () => {
       { kind: 'bias', count: 1 },
       { kind: 'utility', count: 1 },
     ]);
+  });
+});
+
+describe('a request a script rewrote', () => {
+  const chat: From = { kind: 'block', name: null, slot: 'chat' };
+  const main: From = { kind: 'block', name: '메인', slot: null };
+  const built: ChatMessage[] = [
+    { role: 'system', content: 'main prompt' },
+    { role: 'user', content: 'first hello' },
+    { role: 'assistant', content: 'first reply' },
+    { role: 'user', content: 'second hello' },
+  ];
+  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, memory: null, dropped: 2 };
+  const note: ChatMessage = { role: 'system', content: 'from the script' };
+  const count = (text: string) => text.length;
+
+  it('keeps the parts of the messages left as built, counts the script’s own, and holds the budget by the oldest chat messages', () => {
+    const edited = [built[0]!, built[1]!, note, built[2]!, built[3]!];
+    expect(rewritten(prompt, edited, count, null)).toEqual({ ...prompt, messages: edited, parts: [prompt.parts[0], prompt.parts[1], { from: { kind: 'script' }, tokens: 15 }, prompt.parts[2], prompt.parts[3]] });
+    expect(rewritten(prompt, edited, count, 50)).toMatchObject({ messages: [built[0], note, built[2], built[3]], dropped: 3 });
+    expect(rewritten(prompt, edited, count, 30)).toEqual({ kind: 'too-long', tokens: 38, budget: 30 });
   });
 });

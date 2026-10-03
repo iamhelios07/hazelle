@@ -27,7 +27,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
   const search = searchTypes(query);
   const shown = search.kind === 'types' ? search.types : search.kind === 'key' ? [search.type] : [];
   const connected = (type: ConnectionType) => connections.filter((entry) => resolveConnection(entry.value)?.type === type).length;
-  const connectKey = (type: ConnectionType, secret: string) => run(() => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }));
+  const connectKey = (type: ConnectionType, secret: string) => run((signal) => connect(session, { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [] }, signal));
 
   return (
     <Screen top={<NavBar title="연결 추가" {...backBar(back)} />}>

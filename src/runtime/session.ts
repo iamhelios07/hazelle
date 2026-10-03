@@ -7,6 +7,7 @@ import { Costs } from './cost';
 import { Credentials } from './credential';
 import { Files } from './files';
 import { deviceCache } from './device-cache';
+import { Drafts } from './drafts';
 import type { DeviceCache } from './object-cache';
 import { Rememberer } from './memory';
 import { addFirstPersona } from './personas';
@@ -15,7 +16,7 @@ import { addDefaults } from './prompts';
 import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
-import { LuaWorker, type Runner } from './lua/client';
+import { LuaStuck, LuaWorker, type Runner } from './lua/client';
 import { ReadModels } from './read-model';
 import { ScriptDisplay } from './script-display';
 import { Scripts } from './scripts';
@@ -32,6 +33,7 @@ export type Session = {
   costs: Costs;
   translator: Translator;
   memory: Rememberer;
+  drafts: Drafts;
   streams: Streams;
   scripts: Scripts;
   credentials: Credentials;
@@ -74,10 +76,12 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const credentials = new Credentials();
   const catalogs = new Catalogs(credentials);
   const costs = new Costs(store);
+  const drafts = new Drafts();
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
   let runner: Promise<Runner> | null = null;
-  const machine = () => (runner ??= lua());
+  // Asked for once the session has closed, it makes none: nothing would be left to end it.
+  const machine = () => (closing.signal.aborted ? Promise.reject<Runner>(new LuaStuck('closed')) : (runner ??= lua()));
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
   const read = new ReadModels(store, display);
   const memory = new Rememberer({ store, read, credentials }, reading);
@@ -128,13 +132,16 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     streams.close();
     talk.close();
     scripts.close();
+    // One still being made is ended as it is made.
+    void runner?.then((made) => made.close());
     translator.close();
     memory.close();
+    drafts.close();
     costs.close();
     catalogs.close();
     credentials.close();
     assets.close();
     store.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, streams, scripts, credentials, catalogs, read, close, startBackground } };
+  return { ok: true, data: { username, store, files, assets, talk, costs, translator, memory, drafts, streams, scripts, credentials, catalogs, read, close, startBackground } };
 }

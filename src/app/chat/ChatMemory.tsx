@@ -6,6 +6,7 @@ import { tokenizer } from '../../runtime/tokenizer';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
+import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
 import { inSettings } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
@@ -54,7 +55,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const view = useView(id, busy, [memory, own, messages, settings, prompts]);
   const [rebuilding, setRebuilding] = useState(false);
   const [resets, setResets] = useState(0);
-  const save = useAutosave<MemorySettings>((patch) => {
+  const save = useAutosave<MemorySettings>(`chat-memory:${id}`, (patch) => {
     const current = store.get('chat', id);
     if (!current) return Promise.resolve({ ok: false, error: 'gone' } as const);
     return setChatMemory(store, id, { ...settingsOf(memorySetup(store, current.value)), ...patch });
@@ -64,7 +65,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   if (opened) return <ChatMemoryRecord chat={id} record={opened} status={view?.records.get(opened.id) ?? null} stale={view?.stale.get(opened.id) ?? null} messages={messages} actions={actions} />;
 
   async function revert() {
-    await save.flush();
+    if (!(await save.flush())) return;
     const done = await setChatMemory(store, id, null);
     if (!done.ok) return toast.failed(done, '되돌리지 못했어요.');
     setResets((count) => count + 1);
@@ -184,12 +185,19 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
 function FactRow({ chat, fact }: { chat: string; fact: Fact }) {
   const store = useStore();
   const toast = useToast();
-  const save = useAutosave<Pick<Fact, 'value'>>((patch) => setFact(store, chat, { ...fact, ...patch, record: null }, fact));
-  const value = save.unsaved.value ?? fact.value;
+  const save = useAutosave<Pick<Fact, 'value'>>(`fact:${chat}:${fact.about}\n${fact.field}`, (patch) => setFact(store, chat, { ...fact, ...patch, record: null }, fact));
+  const [typed, setTyped] = useState<string>();
+  const value = typedText(typed, filled, save.unsaved.value ?? fact.value, String);
   const name = `${fact.about} · ${fact.field}`;
 
+  function type(next: string) {
+    setTyped(next);
+    save.change({ value: next }, next.trim() !== '');
+  }
+
   async function remove() {
-    const removed = await removeFact(store, chat, fact);
+    const removed = await save.remove(() => removeFact(store, chat, fact));
+    if (!removed) return;
     if (!removed.ok) return toast.failed(removed, '지우지 못했어요.');
     toast.undoable(`‘${name}’을(를) 지웠어요`, () => void setFact(store, chat, removed.data, null).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
   }
@@ -198,7 +206,7 @@ function FactRow({ chat, fact }: { chat: string; fact: Fact }) {
     <TextField
       label={name}
       value={value}
-      onChange={(next) => save.change({ value: next }, next.trim() !== '')}
+      onChange={type}
       error={value.trim() ? undefined : '값을 적어 주세요. 필요 없으면 지워 주세요.'}
       action={<IconButton icon={Trash2} label={`${name} 지우기`} size="sm" onClick={() => void remove()} />}
     />
@@ -241,10 +249,13 @@ function NewFact({ chat }: { chat: string }) {
   );
 }
 
-// Open threads in the order they were opened. One added here is kept on the page until its first words are saved.
+// Open threads in the order they were opened. One added here is a draft on the page until its first words are saved,
+// and stops being one then: a saved thread deleted later must not come back as the blank it started from.
 function Threads({ chat, threads }: { chat: string; threads: Thread[] }) {
   const [drafts, setDrafts] = useState<Thread[]>([]);
-  const shown = [...threads, ...drafts.filter((draft) => !threads.some(({ id }) => id === draft.id))];
+  const unsaved = drafts.filter((draft) => !threads.some(({ id }) => id === draft.id));
+  if (unsaved.length !== drafts.length) setDrafts(unsaved);
+  const shown = [...threads, ...unsaved];
   return (
     <Section level={3} title="열린 이야기" note={`${threads.length}개`} hint="약속, 복선, 아직 끝나지 않은 일이에요. 기록이 닫을 때까지 늘 프롬프트에 들어가서, 캐릭터가 먼저 꺼낼 수 있어요.">
       {shown.map((thread, index) => (
@@ -253,7 +264,6 @@ function Threads({ chat, threads }: { chat: string; threads: Thread[] }) {
           chat={chat}
           thread={thread}
           name={`열린 이야기 ${index + 1}`}
-          saved={threads.some(({ id }) => id === thread.id)}
           onDrop={() => setDrafts((current) => current.filter(({ id }) => id !== thread.id))}
         />
       ))}
@@ -267,17 +277,24 @@ function Threads({ chat, threads }: { chat: string; threads: Thread[] }) {
   );
 }
 
-function ThreadRow({ chat, thread, name, saved, onDrop }: { chat: string; thread: Thread; name: string; saved: boolean; onDrop: () => void }) {
+// onDrop: it is a draft no more, deleted before anything of it was saved.
+function ThreadRow({ chat, thread, name, onDrop }: { chat: string; thread: Thread; name: string; onDrop: () => void }) {
   const store = useStore();
   const toast = useToast();
-  const save = useAutosave<Pick<Thread, 'text'>>((patch) => setThread(store, chat, { ...thread, ...patch }));
-  const text = save.unsaved.text ?? thread.text;
+  const save = useAutosave<Pick<Thread, 'text'>>(`thread:${chat}:${thread.id}`, (patch) => setThread(store, chat, { ...thread, ...patch }, true));
+  const [typed, setTyped] = useState<string>();
+  const text = typedText(typed, filled, save.unsaved.text ?? thread.text, String);
+
+  function type(next: string) {
+    setTyped(next);
+    save.change({ text: next }, next.trim() !== '');
+  }
 
   async function remove() {
-    if (!saved) return onDrop();
-    const removed = await removeThread(store, chat, thread.id);
-    if (!removed.ok) return toast.failed(removed, '지우지 못했어요.');
-    toast.undoable('열린 이야기를 지웠어요', () => void setThread(store, chat, removed.data).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
+    const removed = await save.remove(() => removeThread(store, chat, thread.id));
+    if (!removed) return;
+    if (!removed.ok) return removed.error === 'gone' ? onDrop() : toast.failed(removed, '지우지 못했어요.');
+    toast.undoable('열린 이야기를 지웠어요', () => void setThread(store, chat, removed.data, false).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.')));
   }
 
   return (
@@ -285,7 +302,7 @@ function ThreadRow({ chat, thread, name, saved, onDrop }: { chat: string; thread
       label={name}
       lines={2}
       value={text}
-      onChange={(next) => save.change({ text: next }, next.trim() !== '')}
+      onChange={type}
       action={<IconButton icon={Trash2} label={`${name} 지우기`} size="sm" onClick={() => void remove()} />}
     />
   );

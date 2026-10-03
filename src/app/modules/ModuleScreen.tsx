@@ -1,7 +1,7 @@
 import type { Stored } from '../../model/kinds';
 import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { aliased } from '../common/alias';
-import { ALWAYS, moduleName } from '../common/words';
+import { ALWAYS, BIN_KEEPS, moduleName } from '../common/words';
 import { useLibrary, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
@@ -32,11 +32,10 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
     return saved.ok;
   }
 
-  // A deleted module is listed nowhere, so the toast's 되돌리기 is the only way back: its detail must not name a place.
   async function remove() {
     if (!(await mark(Date.now()))) return;
     navigate({ kind: 'modules' });
-    toast.undoable(`‘${moduleName(value.name)}’ 모듈을 지웠어요.`, () => void mark(null), '이 알림이 사라지면 되돌릴 수 없어요.');
+    toast.undoable(`‘${moduleName(value.name)}’ 모듈을 지웠어요.`, () => void mark(null), BIN_KEEPS);
   }
 
   return (

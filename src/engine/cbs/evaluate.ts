@@ -53,18 +53,30 @@ export type CbsContext = {
 const DEPTH = 20;
 const TOO_DEEP = 'ERROR: Call stack limit reached';
 
-// One evaluate call. Temp variables and functions live as long as it.
-type Run = { context: CbsContext; seed: string; temp: Map<string, string>; functions: Map<string, Node[]> };
+// What one evaluation may do: the tags and blocks it evaluates and the text it produces, counted at every level of
+// nesting. A bot's commands that insert or double their own output grow it without end, on the thread that runs them.
+const MOST_TAGS = 200_000;
+const MOST_CHARS = 10_000_000;
+
+// The evaluation went past what it may do and gave no text: not a part of one, which would read as whole.
+export class Runaway extends Error {
+  constructor() {
+    super('CBS made too much text and was stopped');
+  }
+}
+
+// One evaluate call. Temp variables and functions live as long as it, and spent counts against its limits.
+type Run = { context: CbsContext; seed: string; temp: Map<string, string>; functions: Map<string, Node[]>; spent: { tags: number; chars: number } };
 // prefix sets the tags of an inserted text, a call or an #each item apart from those of the text around it,
 // so each rolls its own.
 type Frame = { run: Run; prefix: string; writes: boolean; depth: number; args: string[] | null; slots: Map<string, string> };
 
-// Escaped punctuation stays escaped: the caller runs unescapeCbs once, at the very end.
+// Escaped punctuation stays escaped: the caller runs unescapeCbs once, at the very end. Throws Runaway.
 export function evaluate(text: string, context: CbsContext): string {
   const { source } = context;
   const message = 'message' in source;
   const seed = message ? context.messages[source.message]!.seed : source.seed;
-  const run: Run = { context, seed, temp: new Map(), functions: new Map() };
+  const run: Run = { context, seed, temp: new Map(), functions: new Map(), spent: { tags: 0, chars: 0 } };
   return enter(parse(prestep(text)), { run, prefix: '', writes: message, depth: 0, args: null, slots: new Map() });
 }
 
@@ -82,8 +94,15 @@ function enter(nodes: Node[], frame: Frame): string {
 }
 
 function evaluateNodes(nodes: Node[], frame: Frame): string {
+  const { spent } = frame.run;
   let out = '';
-  for (const node of nodes) out += typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame) : evaluateBlock(node, frame);
+  for (const node of nodes) {
+    const piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame) : evaluateBlock(node, frame);
+    if (typeof node !== 'string') spent.tags++;
+    spent.chars += piece.length;
+    if (spent.tags > MOST_TAGS || spent.chars > MOST_CHARS) throw new Runaway();
+    out += piece;
+  }
   return out;
 }
 
@@ -143,10 +162,21 @@ function env(frame: Frame, place: string): Env {
   };
 }
 
+// The blocks whose body is taken as its source and never evaluated, so a tag written in one is text.
+const RAW = new Map<string, (raw: string, rest: string) => string>([
+  ['escape', (raw, rest) => escapeCbs(rest === '::keep' ? raw : trimBlank(raw), '{}()')],
+  ['pure', (raw) => raw],
+  // Risu backslash-escapes the braces for its markdown; escaped braces survive the later passes and show as braces.
+  ['puredisplay', (raw) => escapeCbs(raw, '{}')],
+]);
+export const isRawBlock = (name: string) => RAW.has(name);
+
 function evaluateBlock(block: Block, frame: Frame): string {
   const head = evaluateNodes(block.head.parts, frame);
   const { name, rest } = blockHead(head)!;
   const unknown = () => asWritten(head) + evaluateNodes(block.body, frame) + asWritten(evaluateNodes(block.close.parts, frame));
+  const raw = RAW.get(name);
+  if (raw) return raw(block.raw, rest);
   switch (name) {
     case 'when':
       return when(block, rest, frame);
@@ -156,13 +186,6 @@ function evaluateBlock(block: Block, frame: Frame): string {
       return truthy(rest.trim()) ? evaluateNodes(block.body, frame) : '';
     case 'each':
       return each(block, rest, frame) ?? unknown();
-    case 'escape':
-      return escapeCbs(rest === '::keep' ? block.raw : trimBlank(block.raw), '{}()');
-    case 'pure':
-      return block.raw;
-    // Risu backslash-escapes the braces for its markdown; escaped braces survive the later passes and show as braces.
-    case 'puredisplay':
-      return escapeCbs(block.raw, '{}');
     case 'code':
       return unbackslash(evaluateNodes(block.body, frame).replace(/[\n\r\t]/g, ''));
     case 'func': {

@@ -2,7 +2,7 @@ import type { ChatMessage } from '../connectors/types';
 import type { Memory, MemoryRecord } from '../model/memory';
 import type { Block, ChatRange, ConversationPrompt, MemoryPrompt, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
-import { evaluate } from './cbs/evaluate';
+import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
 import { activate, merge, type Activation, type Fired, type LoreInput, type Operation } from './lorebook/activate';
@@ -29,12 +29,26 @@ export type PromptInput = {
 // Even the last message alone leaves the prompt over its budget.
 export type TooLong = { kind: 'too-long'; tokens: number; budget: number };
 
+// The CBS of some text the request is built from ran away (cbs/evaluate Runaway), and none of the request is sent.
+export type RanAway = { kind: 'runaway' };
+
+function stoppable<T>(build: () => T): T | RanAway {
+  try {
+    return build();
+  } catch (error) {
+    if (error instanceof Runaway) return { kind: 'runaway' };
+    throw error;
+  }
+}
+
 // Where a sent message came from, for 요청 원문. slot is null for a text block.
 export type From =
   | { kind: 'block'; name: string | null; slot: SlotKind | null }
   | { kind: 'lore'; name: string; slot: 'lorebook' | 'postEverything' }
   | { kind: 'depth'; name: string; depth: number }
-  | { kind: 'continue' };
+  | { kind: 'continue' }
+  // A message a bot's script added or changed after the prompt was assembled (rewritten).
+  | { kind: 'script' };
 
 // parts[i] says where messages[i] came from and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. memory: null while the
@@ -67,9 +81,21 @@ type Laid = {
 function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
   const { card } = scope;
   const context = contexts(scope, 'prompt', language);
-  // An entry costs what its body sends, so its CBS is evaluated before it is counted. The replays below count the
-  // same bodies again.
-  const count = remembered((body) => tokens(evaluate(body, context({ seed }, new Map(variables)))));
+  // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
+  // text, and reads the variables as the chat's messages left them. The text last rendered at a place is kept, so
+  // what is rendered there again is the same text and not a second roll.
+  const held = new Map<string, { text: string; out: string }>();
+  const render = (text: string, place: string) => {
+    const last = held.get(place);
+    if (last?.text === text) return last.out;
+    const out = unescapeCbs(evaluate(text, context({ seed: `${seed}:${place}` }, new Map(variables)))).trim();
+    held.set(place, { text, out });
+    return out;
+  };
+  // An entry costs what its body sends, so it is counted as rendered at its own place, where loreMessage sends it.
+  // One merged into another entry or set inside another text is evaluated there, and its count is of its own body.
+  // The replays below count the same bodies again.
+  const count = (id: string, body: string) => tokens(render(body, id));
   const activation = card || scope.lore.length > 0 ? activate(loreInput(scope, history, afterMatch(scope, count), seed, count)) : null;
   const names = new Map(scope.lore.map(({ id, value }) => [id, value.name]));
 
@@ -108,19 +134,20 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
     depths,
     sides,
     injections,
-    // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
-    // text, and reads the variables as the chat's messages left them.
-    render: (text, place) => unescapeCbs(evaluate(atPositions(text, positions), context({ seed: `${seed}:${place}` }, new Map(variables)))).trim(),
+    render: (text, place) => render(atPositions(text, positions), place),
     named: (id) => names.get(id)!,
   };
 }
 
 // Every lorebook entry a prompt built now would hold, wherever it would sit, as the text and role it is sent with, in
 // the order they were placed: what a bot's loadLoreBooks reads. An entry that renders to nothing is left out.
-export function activeLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
+export const activeLore = (scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] | RanAway =>
+  stoppable(() => placedLore(scope, seed, countTokens));
+
+function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
   const laid = lay(scope, scope.messages, renderChat('prompt', scope).variables, seed, remembered(countTokens), null);
   return (laid.activation?.placed ?? []).flatMap(({ id, body, placement }) => {
-    const text = laid.render(body, `lore:${id}`);
+    const text = laid.render(body, id);
     return text ? [{ role: 'role' in placement ? placement.role : 'system', text }] : [];
   });
 }
@@ -200,9 +227,12 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
 // A conversation prompt's blocks, in order, as the messages sent. Messages left empty are dropped.
 // The messages memory covers leave the chat slots, though their variables are still replayed (renderChat renders them
 // all) and the lorebook still scans them.
-export function assemble({ scope, seed, countTokens, budget, continuing, memory }: PromptInput): Assembled | TooLong {
+export const assemble = (input: PromptInput): Assembled | TooLong | RanAway => stoppable(() => conversation(input));
+
+function conversation({ scope, seed, countTokens, budget, continuing, memory }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const chat = renderChat('prompt', scope);
+  if (chat.stopped) throw chat.stopped;
   const tokens = remembered(countTokens);
   const laid = lay(scope, scope.messages, chat.variables, seed, tokens, null);
   const { activation, named } = laid;
@@ -229,25 +259,53 @@ export function assemble({ scope, seed, countTokens, budget, continuing, memory 
     return template.flatMap((part) => ('range' in part ? range(kept, before, part) : [part]));
   };
   const size = (parts: (Sent | CachePart)[]) => parts.reduce((sum, part) => sum + ('cache' in part ? 0 : tokens(part.message.content)), 0);
-  const assembled = (parts: (Sent | CachePart)[]): Assembled => {
+  const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       memory: recalled && { sent: recalled.sent, covered, missing: slot ? covered - recalled.held : covered, slot },
-      dropped: from,
+      dropped,
     };
   };
 
-  // The budget drops the oldest chat messages first and never the last one; the rest of the template stays whole.
-  // What does not fit even then is not sent.
-  let from = 0;
-  let sent = fill(messages);
-  if (budget === null) return assembled(sent);
-  while (size(sent) > budget && from < messages.length - 1) sent = fill(messages.slice(++from));
-  const used = size(sent);
-  return used > budget ? { kind: 'too-long', tokens: used, budget } : assembled(sent);
+  // The rest of the template stays whole.
+  const dropped = dropOldest(budget, messages.length, (from) => size(fill(messages.slice(from))));
+  return typeof dropped === 'number' ? assembled(fill(messages.slice(dropped)), dropped) : dropped;
+}
+
+// The budget drops the oldest chat messages first and never the last one; what does not fit even then is not sent.
+// size: the request's tokens with the oldest of its count chat messages dropped. Gives how many to drop.
+function dropOldest(budget: number | null, count: number, size: (dropped: number) => number): number | TooLong {
+  if (budget === null) return 0;
+  let dropped = 0;
+  while (size(dropped) > budget && dropped < count - 1) dropped++;
+  const tokens = size(dropped);
+  return tokens > budget ? { kind: 'too-long', tokens, budget } : dropped;
+}
+
+// The request as a bot's script left it (editRequest), with its parts as sent: a message the script left as built
+// keeps its part, any other is the script's and counted here. The budget holds for this request as it does in
+// assemble, over the chat messages left as built.
+export function rewritten(prompt: Assembled, messages: ChatMessage[], countTokens: (text: string) => number, budget: number | null): Assembled | TooLong {
+  let next = 0;
+  const sent = messages.map((message) => {
+    let at = next;
+    while (at < prompt.messages.length && (prompt.messages[at]!.role !== message.role || prompt.messages[at]!.content !== message.content)) at++;
+    if (at === prompt.messages.length) return { message, from: { kind: 'script' } satisfies From, tokens: countTokens(message.content) };
+    next = at + 1;
+    return { message, ...prompt.parts[at]! };
+  });
+  const chat = sent.flatMap(({ from }, at) => (from.kind === 'block' && from.slot === 'chat' ? [at] : []));
+  const total = sent.reduce((sum, { tokens }) => sum + tokens, 0);
+  const before = [0];
+  for (const at of chat) before.push(before.at(-1)! + sent[at]!.tokens);
+  const dropped = dropOldest(budget, chat.length, (from) => total - before[from]!);
+  if (typeof dropped !== 'number') return dropped;
+  const gone = new Set(chat.slice(0, dropped));
+  const kept = sent.filter((_, at) => !gone.has(at));
+  return { ...prompt, messages: kept.map(({ message }) => message), parts: kept.map(({ from, tokens }) => ({ from, tokens })), dropped: prompt.dropped + dropped };
 }
 
 // How much of each message before the source 앞 메시지 holds, from its end.
@@ -272,7 +330,10 @@ export type TranslationInput = {
 // A translation prompt's blocks as the messages sent. source is what goes out to be translated: a message as it is
 // displayed (after its CBS and display scripts), which is what the reader would otherwise read, or the user's input.
 // A translation holds no chat, so entries placed at a depth, or into a text a card replaces, are not sent in it.
-export function assembleTranslation({ scope, take, prompt, translations, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
+export const assembleTranslation = (input: TranslationInput): { source: string; messages: ChatMessage[] } | RanAway => stoppable(() => translation(input));
+
+// A message whose CBS ran away is its source as shown, tags as written, and the display says so.
+function translation({ scope, take, prompt, translations, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
   const { texts, variables } = renderChat('display', scope, take);
   const before = request.kind === 'message' ? request.index : texts.length;
   const source = request.kind === 'message' ? texts[request.index]! : request.text;
@@ -312,8 +373,11 @@ export type MemoryTaskInput = {
 // A memory prompt's blocks as the messages sent, then the app's answer format. span: the span's texts as the prompt
 // renders them, variables replayed, which the answer is validated against and the records' fingerprints are made of.
 // Like a translation, a memory task holds no chat, so entries placed at a depth are not sent in it.
-export function assembleMemory({ scope, prompt, memory, before, budget, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
-  const { texts, variables } = renderChat('prompt', scope);
+export const assembleMemory = (input: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } | RanAway => stoppable(() => memoryTask(input));
+
+function memoryTask({ scope, prompt, memory, before, budget, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
+  const { texts, variables, stopped } = renderChat('prompt', scope);
+  if (stopped) throw stopped;
   const laid = lay(scope, scope.messages.slice(0, to), variables, seed, remembered(countTokens), null);
   const speaker = (role: 'user' | 'assistant') => (role === 'user' ? (scope.persona?.name ?? 'User') : (scope.card?.name ?? 'Assistant'));
   const span = texts.slice(from, to);
@@ -383,8 +447,8 @@ function remembered(measure: (text: string) => number): (text: string) => number
 // A chat with no card scans its modules' lore with every setting at the default.
 const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
-function loreInput(scope: ChatScope, history: HistoryMessage[], afterMatch: string[], seed: string, countTokens: (text: string) => number): LoreInput {
-  return { entries: scope.lore, settings: scope.card?.loreSettings ?? NO_SETTINGS, history, turn: history.length, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, countTokens };
+function loreInput(scope: ChatScope, history: HistoryMessage[], afterMatch: string[], seed: string, cost: LoreInput['cost']): LoreInput {
+  return { entries: scope.lore, settings: scope.card?.loreSettings ?? NO_SETTINGS, history, turn: history.length, greeting: scope.greeting && scope.greeting.index, afterMatch, seed, cost };
 }
 
 const AFTER_MATCH = new Set(['keep_activate_after_match', 'dont_activate_after_match']);
@@ -393,12 +457,12 @@ const declaresAfterMatch = (content: string) =>
 
 // Which after-match entries went into the prompts of the replies before this one. It is not stored: like the
 // variables, it is replayed from the chat, each earlier reply's activation rolled again from its seed.
-function afterMatch(scope: ChatScope, countTokens: (text: string) => number): string[] {
+function afterMatch(scope: ChatScope, cost: LoreInput['cost']): string[] {
   let state: string[] = [];
   if (!scope.lore.some(({ value }) => declaresAfterMatch(value.content))) return state;
   scope.messages.forEach((message, index) => {
     if (message.role === 'user' || (index === 0 && scope.greeting !== null)) return;
-    state = activate(loreInput(scope, scope.messages.slice(0, index), state, message.seed, countTokens)).afterMatch;
+    state = activate(loreInput(scope, scope.messages.slice(0, index), state, message.seed, cost)).afterMatch;
   });
   return state;
 }

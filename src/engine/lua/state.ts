@@ -1,5 +1,5 @@
 import { unescapeCbs } from '../cbs/escape';
-import { evaluate } from '../cbs/evaluate';
+import { evaluate, Runaway } from '../cbs/evaluate';
 import { TOGGLE_GLOBAL } from '../cbs/tags';
 import { contexts, type ChatScope } from '../render';
 
@@ -39,7 +39,8 @@ export type Working = { origin: number | null; role: 'user' | 'char'; data: stri
 
 // One run's view of the chat, which the Lua API and the block effects read and change. quiet: an editDisplay pass,
 // whose writes are dropped and which reaches nothing outside itself. variables is never written: a run's writes stand
-// over it in written, so a display pass over many messages copies nothing.
+// over it in written, so a display pass over many messages copies nothing. ranAway: the last cbs() call ran away; the
+// error Lua raises for it reaches the run as another Error, never the Runaway.
 export type Run = {
   quiet: boolean;
   snapshot: Snapshot;
@@ -51,6 +52,7 @@ export type Run = {
   stop: boolean;
   reload: boolean;
   missing: Set<string>;
+  ranAway: boolean;
 };
 export type Acting = Run & { host: Host };
 
@@ -83,5 +85,11 @@ export function cbs(run: Run, value: string): string {
     context = contexts({ ...run.snapshot.scope, packs: [], toggle: (key) => run.globals.get(`${TOGGLE_GLOBAL}${key}`) ?? null }, 'prompt', null);
     CONTEXTS.set(run.snapshot, context);
   }
-  return unescapeCbs(evaluate(value, context({ seed: crypto.randomUUID() }, new Map([...run.variables, ...run.written]))));
+  run.ranAway = false;
+  try {
+    return unescapeCbs(evaluate(value, context({ seed: crypto.randomUUID() }, new Map([...run.variables, ...run.written]))));
+  } catch (error) {
+    run.ranAway = error instanceof Runaway;
+    throw error;
+  }
 }

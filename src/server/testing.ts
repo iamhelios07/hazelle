@@ -1,43 +1,88 @@
 import { getPlatformProxy } from 'wrangler';
+import { d1Reads } from './account-store';
+import { sha256Hex } from './http';
 import { createRelay, type Upstream } from './relay';
+import { nodeStores } from './store-db-node';
 import { StreamBox, type BoxStorage } from './stream-box';
 import app from './worker';
 
 const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
+// The cutover's destructive migration, which waits outside migrations/ for its step: tests run on the schema it leaves.
+const cutover = import.meta.glob<string>('../../scripts/cutover/*.sql', { query: '?raw', import: 'default', eager: true });
 
-// An in-memory local D1 with every migration applied, and a client that calls the app in-process. upstream answers
-// the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the options each Durable Object
-// was got with.
+// An in-memory local D1 with every migration and the cutover's applied, a local R2, and a client that calls the app
+// in-process. upstream answers the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the
+// options each Durable Object was got with. stores: the accounts' stores in process (store-db-node), whose bookmarks
+// are stamped by clock.
 export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.'))) {
   const proxy = await getPlatformProxy<Env>({ configPath: 'wrangler.test.jsonc', persist: false, remoteBindings: false });
   const placed: unknown[] = [];
-  const env = { ...proxy.env, STREAMS: streamObjects(upstream, placed), RELAY: relayObjects(upstream, placed) };
-  for (const name of Object.keys(migrations).sort()) {
-    const statements = migrations[name]!.split(';').filter((s) => s.trim());
+  const clock = { now: () => Date.now() };
+  const stores = nodeStores(d1Reads(proxy.env.DB), () => clock.now());
+  // ADMIN_ACCOUNT: a test names its operator after signing it up, since nobody signs up as the operator's id.
+  const env = {
+    ...proxy.env,
+    STREAMS: streamObjects(upstream, placed),
+    RELAY: relayObjects(upstream, placed),
+    STORES: stores as unknown as Env['STORES'],
+    ADMIN_ACCOUNT: '' as string,
+  };
+  for (const sql of [...Object.keys(migrations).sort().map((name) => migrations[name]!), ...Object.values(cutover)]) {
+    const statements = sql.split(';').filter((s) => s.trim());
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
   }
 
-  const send = (method: string, path: string, body?: unknown, cookie?: string) =>
-    app.request(
+  // As a page holding the cookie's account sends it: stating that account (server/session). raw states only what it is
+  // given. A Uint8Array body goes as bytes.
+  const holding = async (cookie: string): Promise<Record<string, string>> => {
+    const account = await env.DB.prepare('SELECT account_id FROM sessions WHERE token_hash = ?').bind(await sha256Hex(cookie.split('=')[1]!)).first<string>('account_id');
+    return account ? { cookie, 'x-account': account } : { cookie };
+  };
+  const send = async (method: string, path: string, body?: unknown, cookie?: string) => {
+    const bytes = body instanceof Uint8Array;
+    return app.request(
       `/api/${path}`,
       {
         method,
-        headers: { ...(method === 'GET' ? {} : { 'content-type': 'application/json' }), ...(cookie ? { cookie } : {}) },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: { ...(method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' }), ...(cookie ? await holding(cookie) : {}) },
+        body: body === undefined ? undefined : bytes ? (body as Uint8Array<ArrayBuffer>) : JSON.stringify(body),
       },
       env,
     );
+  };
+  // The account's timeline, as a device that holds nothing learns it.
+  const timeline = async (cookie: string) => ((await (await send('GET', 'objects?since=0', undefined, cookie)).json()) as { timeline: string }).timeline;
 
   return {
     env,
     placed,
+    stores,
+    clock,
     dispose: () => proxy.dispose(),
-    reset: () => env.DB.batch(['objects', 'files', 'vaults', 'sessions', 'accounts'].map((table) => env.DB.prepare(`DELETE FROM ${table}`))),
+    reset: async () => {
+      env.ADMIN_ACCOUNT = '';
+      clock.now = () => Date.now();
+      await env.DB.batch([
+        ...['file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+        env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
+      ]);
+      for (let listed = await env.BLOBS.list(); listed.objects.length; listed = await env.BLOBS.list()) {
+        await env.BLOBS.delete(listed.objects.map(({ key }) => key));
+      }
+    },
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),
     post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),
     put: (path: string, body?: unknown, cookie?: string) => send('PUT', path, body, cookie),
     delete: (path: string, body?: unknown, cookie?: string) => send('DELETE', path, body, cookie),
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env),
+    timeline,
+    // The account's row changed in D1, then its store restarted, as every lifecycle change is made (server/lifecycle).
+    lifecycle: async (accountId: string, set: string) => {
+      const incarnation = await env.DB.prepare(`UPDATE accounts SET ${set} WHERE id = ? RETURNING incarnation`).bind(accountId).first<string>('incarnation');
+      await stores.getByName(incarnation!).restart(incarnation!).catch(() => {});
+    },
+    // A batch on the account's current timeline.
+    batch: async (writes: unknown[], cookie: string) => send('POST', 'objects/batch', { timeline: await timeline(cookie), writes }, cookie),
   };
 }
 
@@ -49,7 +94,7 @@ function streamObjects(upstream: Upstream, placed: unknown[]) {
     return {
       get: async (key) => held.get(key),
       put: async (key, value) => void held.set(key, value),
-      list: async ({ prefix }) => new Map([...held].filter(([key]) => key.startsWith(prefix))),
+      list: async ({ start, end, limit }) => new Map([...held].filter(([key]) => key >= start && key < end).sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, limit)),
       deleteAll: async () => held.clear(),
       setAlarm: async () => {},
     };

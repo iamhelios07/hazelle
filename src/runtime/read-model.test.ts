@@ -37,7 +37,7 @@ async function account() {
         .sort((a, b) => a.rev - b.rev);
       const page = candidates.slice(0, 2).map(({ body, ...row }) => body !== null && (excluded.includes(row.kind) || params.has('metadata')) ? { ...row, omitted: true } : { ...row, body });
       const cursor = page.at(-1)?.rev ?? since;
-      return { ok: true, data: { changes: page, cursor, more: candidates.length > page.length, ...(bootstrap && { until }), limits: { items: 100, bytes: 1_000_000, body: 100_000 } } as T };
+      return { ok: true, data: { timeline: 't', changes: page, cursor, more: candidates.length > page.length, ...(bootstrap && { until }), limits: { items: 100, bytes: 1_000_000, body: 100_000 } } as T };
     }
     const writes = (body as { writes: (Omit<Wire, 'rev'> & { baseRev: number | null })[] }).writes;
     if (writes.some((write) => (changes.get(write.id)?.rev ?? null) !== write.baseRev)) return { ok: false, error: 'conflict' };
@@ -45,7 +45,7 @@ async function account() {
       changes.set(id, { id, kind, parent, body, rev: ++rev });
       return rev;
     });
-    return { ok: true, data: { revs } as T };
+    return { ok: true, data: { revs, timeline: 't' } as T };
   };
   const key = randomBytes(32);
   const open = async () => {
@@ -298,7 +298,7 @@ describe('selective account reads', () => {
     await seed('memory', 'memory', 'a', { records: [], state: [], threads: [] });
     const store = await open();
     const decrypt = vi.spyOn(sealedObjects, 'openObject');
-    const plan = await planRemoval(store, { kind: 'character', id: 'ca' });
+    const plan = await store.pinned((pin) => planRemoval(store, { kind: 'character', id: 'ca' }, pin));
     expect(plan.ok && plan.data.map((round) => round.map(({ id }) => id))).toEqual([['a1', 'a2', 'memory'], ['a'], ['ca']]);
     expect(decrypt).not.toHaveBeenCalled();
     expect(store.scopeState('a')).toBe('unloaded');
@@ -314,9 +314,27 @@ describe('selective account reads', () => {
     if (!removed.ok) throw new Error(removed.error);
     expect(decrypt).not.toHaveBeenCalled();
     expect(store.scopeState('a')).toBe('unloaded');
-    expect((await restoreChat(store, removed.data)).ok).toBe(true);
+    expect((await restoreChat(store, 'a')).ok).toBe(true);
     expect(decrypt).not.toHaveBeenCalled();
     expect(store.scopeState('a')).toBe('unloaded');
+  });
+
+  it('leaves a deleted chat’s call untaken, and takes it once 되돌리기 brings the chat back', async () => {
+    const { seed, open } = await account();
+    await seed('a', 'chat', null, chat);
+    await seed('stream', 'stream', 'a', { key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'reply', for: { kind: 'reply', message: null, replaces: null, continues: null } });
+    const store = await open();
+    await removeChat(store, 'a');
+    const take = vi.fn();
+    const opened = vi.spyOn(store, 'withChat');
+    const streams = new Streams(store, new Set(), take);
+    try {
+      streams.pickUp();
+      expect(opened).not.toHaveBeenCalled();
+      await restoreChat(store, 'a');
+      streams.pickUp();
+      await vi.waitFor(() => expect(take).toHaveBeenCalledOnce());
+    } finally { streams.close(); }
   });
 });
 
@@ -512,6 +530,42 @@ describe('per-chat read models', () => {
     expect(read.chats.snapshot()).toBe(summaries);
     expect(read.library.snapshot()).toBe(library);
     expect(read.chat('a').snapshot()?.messages).toBe(messages);
+    read.close();
+  });
+
+  it('reads a deleted chat as gone from its character, the chat list and its screen, and 되돌리기 brings it back whole', async () => {
+    const { store } = await account();
+    await store.create('character', { card: card('루나'), folder: null, loreFolders: [] }, { id: 'ca' });
+    await store.create('chat', { ...chat, character: 'ca' }, { id: 'a' });
+    await store.create('chat', { ...chat, character: 'ca' }, { id: 'b' });
+    await store.create('entry', message('a first'), { id: 'a1', parent: 'a' });
+    await hold(store, 'a', 'b');
+    const read = new ReadModels(store);
+    const lists = () => [read.chats.snapshot(), read.library.snapshot().characters[0]!.chats].map((list) => list.map(({ id }) => id).toSorted());
+    const texts = () => read.chat('a').snapshot()?.messages.map((message) => chatModel.shown(message).text);
+    expect([lists(), texts()]).toEqual([[['a', 'b'], ['a', 'b']], ['a first']]);
+
+    await removeChat(store, 'a');
+    expect([lists(), read.summary('a').snapshot(), read.chat('a').snapshot()]).toEqual([[['b'], ['b']], null, null]);
+    await restoreChat(store, 'a');
+    expect([lists(), texts(), read.summary('a').snapshot()?.count]).toEqual([[['a', 'b'], ['a', 'b']], ['a first'], 1]);
+    read.close();
+  });
+
+  it('lists in 휴지통 the deleted chats of a character not deleted or of none, never those of a deleted character', async () => {
+    const { store } = await account();
+    await store.create('character', { card: card('루나'), folder: null, loreFolders: [] }, { id: 'ca' });
+    await store.create('character', { card: card('해나'), folder: null, loreFolders: [], deleted: Date.now() }, { id: 'cd' });
+    await store.create('chat', { ...chat, character: 'ca', title: '등대' }, { id: 'a' });
+    await store.create('chat', { ...chat, character: 'cd' }, { id: 'd' });
+    await store.create('chat', chat, { id: 'n' });
+    const read = new ReadModels(store);
+    const binned = () => read.library.snapshot().deletedChats.map(({ id, title }) => [id, title]).toSorted();
+    for (const id of ['a', 'd', 'n']) await removeChat(store, id);
+    expect([binned(), read.chats.snapshot(), read.summary('a').snapshot()]).toEqual([[['a', '등대'], ['n', expect.any(String)]], [], null]);
+
+    await restoreChat(store, 'a');
+    expect([binned(), read.chats.snapshot().map(({ id }) => id)]).toEqual([[['n', expect.any(String)]], ['a']]);
     read.close();
   });
 });

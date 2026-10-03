@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
+import { AdminScreen } from '../admin/AdminScreen';
 import { ChatScreen, type SideAt } from '../chat/ChatScreen';
 import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
@@ -24,7 +25,7 @@ import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
-import { useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
+import { useAccount, useBin, useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
@@ -55,7 +56,9 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const personas = usePersonas();
   const profiles = useProfiles();
   const modules = useModules();
+  const bin = useBin();
   const { pick } = useImport();
+  const { admin } = useAccount();
   const chatModel = useChatModel(route.kind === 'chat' ? route.id : null);
   const wide = useWide();
   const split = useSplit();
@@ -91,12 +94,12 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         if (at.character === null) return <CharacterScreen key="none" shelf={null} back={sideBack(at)} />;
         return withCharacter(at, at.character, (shelf) => <CharacterScreen key={shelf.id} shelf={shelf} back={sideBack(at)} />);
       case 'edit':
-        return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} initial={shelf.character} back={back(at)} />);
+        return withCharacter(at, at.character, (shelf) => <CharacterEditScreen key={shelf.id} id={shelf.id} character={shelf.character} back={back(at)} />);
       case 'new-chat':
         if (at.character === null) return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={null} back={sideBack(at)} side={side} />;
         return withCharacter(at, at.character, (shelf) => <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={sideBack(at)} side={side} />);
       case 'chat': {
-        if (!chatById.has(at.id)) return missing(at, 'chat');
+        if (!chatById.has(at.id)) return missing(at, library.deletedChats.some((chat) => chat.id === at.id) ? 'deleted-chat' : 'chat');
         const item = chatModel.model;
         if (!item || chatModel.state !== 'loaded') return (
           <Screen align="center" top={<NavBar title={chatById.get(at.id)!.title} {...backBar(back(at))} />}>
@@ -106,7 +109,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         );
         const { character } = item.chat;
         const shelf = character === null ? null : characterById.get(character);
-        // Its character is in 지운 캐릭터, or gone for good.
+        // Its character is in 휴지통, or gone for good.
         if (shelf === undefined) return missing(at, 'orphaned-chat');
         return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={sideBack(at)} side={side} />;
       }
@@ -117,7 +120,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
       case 'add-connection':
         return <ConnectionAddScreen back={back(at)} />;
       case 'connect-direct':
-        return <ConnectionDirectScreen address={at.address} back={back(at)} />;
+        return <ConnectionDirectScreen key={at.address} address={at.address} back={back(at)} />;
       case 'connect': {
         const { type } = at;
         if (type.signIn) return <ConnectionSignInScreen key={type.id} type={type} signIn={type.signIn} back={back(at)} />;
@@ -131,25 +134,25 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <PromptsScreen back={sideBack(at)} />;
       case 'prompt': {
         const stored = prompts.find((prompt) => prompt.id === at.id);
-        return stored ? <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} /> : missing(at, 'prompt');
+        return stored ? <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} /> : missing(at, bin.prompts.some(({ id }) => id === at.id) ? 'deleted-prompt' : 'prompt');
       }
       case 'personas':
         return <PersonasScreen back={sideBack(at)} />;
       case 'persona': {
         const stored = personas.find((persona) => persona.id === at.id);
-        return stored ? <PersonaScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'persona');
+        return stored ? <PersonaScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, bin.personas.some(({ id }) => id === at.id) ? 'deleted-persona' : 'persona');
       }
       case 'modules':
         return <ModulesScreen back={sideBack(at)} onImport={pick} />;
       case 'module': {
         const stored = modules.find((module) => module.id === at.id);
-        return stored ? <ModuleScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'module');
+        return stored ? <ModuleScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, bin.modules.some(({ id }) => id === at.id) ? 'deleted-module' : 'module');
       }
       case 'models':
         return <ModelsScreen back={sideBack(at)} />;
       case 'profile': {
         const stored = profiles.find((profile) => profile.id === at.id);
-        return stored ? <ProfileScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'profile');
+        return stored ? <ProfileScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, bin.profiles.some(({ id }) => id === at.id) ? 'deleted-profile' : 'profile');
       }
       case 'model': {
         const connection = connections.find((candidate) => candidate.id === at.connection);
@@ -157,9 +160,12 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return connection && model ? <ModelScreen key={`${connection.id}/${model.id}`} connection={connection} model={model} back={back(at)} /> : missing(at, 'model');
       }
       case 'account':
-        return <AccountScreen back={sideBack(at)} />;
+        return <AccountScreen section={at.section} back={sideBack(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
+      // Its path can be typed by anyone; the server refuses every call but the operator's.
+      case 'admin':
+        return admin ? <AdminScreen back={sideBack(at)} /> : <SettingsList onClose={closeSettings} />;
     }
   }
 

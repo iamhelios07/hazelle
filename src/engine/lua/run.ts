@@ -17,7 +17,10 @@ export type Event =
   | { kind: 'call'; name: string }
   | { kind: 'edit'; stage: EditStage; value: unknown; meta: Record<string, unknown> };
 
-export type ScriptError = { script: string; message: string };
+// runaway: the CBS the script evaluated ran away (cbs/evaluate Runaway), which the app words as its other runaway
+// notices; the message is only what the script itself sees.
+type Failure = { message: string } | { runaway: true };
+export type ScriptError = { script: string } & Failure;
 
 // What a run did, for the caller to save. index is a message's place in the snapshot. value: an edit's result.
 // handled: some script had the function the event calls, or a block trigger answered it. missing: the functions
@@ -37,11 +40,14 @@ export type Outcome = {
 
 // One message's editDisplay pass. variables: the writes since the item before it, over the snapshot's.
 export type DisplayItem = { index: number; text: string; variables: [string, string][] };
-export type Displayed = { texts: string[]; errors: ScriptError[]; missing: string[] };
+// listening: false for a script whose engine holds no editDisplay listener, which has no part in any pass.
+export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[] };
 
 const ENGINES = 8;
 // Passed where Risu passes a run's access key. Bots hand it back as each call's first argument and never read it.
 const KEY = 'lua';
+
+const DEAF = Symbol('no listener');
 
 const UNSUPPORTED = [
   'setChatRole', 'insertChat', 'similarity', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
@@ -52,6 +58,7 @@ const UNSUPPORTED = [
 type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
 
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const failure = (run: Run, error: unknown): Failure => (run.ranAway ? { runaway: true } : { message: describe(error) });
 const roleOf = (value: unknown): Working['role'] => (value === 'user' ? 'user' : 'char');
 const view = ({ role, data, time }: Working) => ({ role, data, time });
 
@@ -79,7 +86,7 @@ export class Lua {
   // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
   // the event is its own.
   async run(owner: string, triggers: Trigger[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
-    const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set() };
+    const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };
     const errors: ScriptError[] = [];
     let value = event.kind === 'edit' ? event.value : undefined;
     let handled = false;
@@ -87,7 +94,7 @@ export class Lua {
       if (script.kind === 'blocks') {
         if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
         handled = true;
-        await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, message: describe(error) }));
+        await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, ...failure(run, error) }));
         continue;
       }
       const engine = await this.engine(owner, 'event', script);
@@ -96,7 +103,8 @@ export class Lua {
         engine.run = run;
         try {
           if (event.kind === 'edit') {
-            const edited: unknown = JSON.parse((await this.call(engine, 'callListenMain', event.stage, KEY, JSON.stringify(value), JSON.stringify(event.meta))) as string);
+            const edited = await this.listeners(engine, event.stage, value, event.meta);
+            if (edited === DEAF) return;
             value = edited ?? value;
             handled = true;
             return;
@@ -107,7 +115,7 @@ export class Lua {
           handled = true;
           if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
         } catch (error) {
-          errors.push({ script: script.name, message: describe(error) });
+          errors.push({ script: script.name, ...failure(run, error) });
         } finally {
           engine.run = null;
         }
@@ -137,35 +145,41 @@ export class Lua {
     const texts = items.map((item) => item.text);
     const globals = new Map(snapshot.globals);
     const messages = working(snapshot);
-    for (const script of scripts) {
+    const listening = scripts.map(() => true);
+    for (const [place, script] of scripts.entries()) {
       const engine = await this.engine(owner, 'display', script);
       await this.exclusive(engine, async () => {
         if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
         const variables = new Map(snapshot.variables);
         for (const [at, item] of items.entries()) {
           for (const [name, value] of item.variables) variables.set(name, value);
-          engine.run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing };
+          const run: Run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
+          engine.run = run;
           try {
-            const edited: unknown = JSON.parse((await this.call(engine, 'callListenMain', 'editDisplay', KEY, JSON.stringify(texts[at]), JSON.stringify({ index: item.index }))) as string);
+            const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
+            if (edited === DEAF) return void (listening[place] = false);
             if (typeof edited === 'string') texts[at] = edited;
           } catch (error) {
-            if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, message: describe(error) });
+            if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, ...failure(run, error) });
           } finally {
             engine.run = null;
           }
         }
       });
     }
-    return { texts, errors, missing: [...missing] };
+    return { texts, listening, errors, missing: [...missing] };
   }
 
-  // Ends the owner's engines, and with them their Lua globals.
-  drop(owner: string) {
-    for (const [key, engine] of this.engines) {
-      if (!key.startsWith(`${owner}\n`)) continue;
-      this.engines.delete(key);
-      void engine.then(({ lua }) => lua.global.close());
-    }
+  // Ends every engine, and with them their Lua globals. A run after it starts its engines anew.
+  close() {
+    for (const engine of this.engines.values()) end(engine);
+    this.engines.clear();
+  }
+
+  // The value after the engine's listeners for the stage, or DEAF when it holds none.
+  private async listeners(engine: Engine, stage: EditStage | 'editDisplay', value: unknown, meta: Record<string, unknown>): Promise<unknown> {
+    const answer = await this.call(engine, 'callListenMain', stage, KEY, JSON.stringify(value), JSON.stringify(meta));
+    return typeof answer === 'string' ? (JSON.parse(answer) as unknown) : DEAF;
   }
 
   private call(engine: Engine, name: string, ...args: unknown[]): Promise<unknown> {
@@ -188,7 +202,7 @@ export class Lua {
       for (const [oldest, old] of this.engines) {
         if (this.engines.size < ENGINES) break;
         this.engines.delete(oldest);
-        void old.then((ended) => ended.queue.then(() => ended.lua.global.close()));
+        end(old);
       }
     }
     this.engines.set(key, engine);
@@ -301,6 +315,9 @@ export class Lua {
     for (const name of UNSUPPORTED) set(name, (run) => void run.missing.add(name));
   }
 }
+
+// Closed once what it is running has ended.
+const end = (engine: Promise<Engine>) => void engine.then(({ lua, queue }) => queue.then(() => lua.global.close()));
 
 function globals(lua: LuaEngine): string[] {
   const names: string[] = [];

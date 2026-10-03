@@ -7,7 +7,7 @@ import type { Upstream } from '../server/relay';
 import { sessionCookie, signupBody, testApp } from '../server/testing';
 import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
-import { api } from './api';
+import { api, holdAccount } from './api';
 import { setDefaultModel } from './assignment';
 import { Files } from './files';
 import { openSession, type Session } from './session';
@@ -112,18 +112,22 @@ export async function answerable(session: Session): Promise<void> {
 export function testServer() {
   let app: App;
   const held: (() => void)[] = [];
+  // A store left open pulls on after its test, through the next test's cookie and into its spies.
+  const stores: ObjectStore[] = [];
   beforeAll(async () => {
     app = await testApp(viaStreams);
   });
   afterAll(() => app.dispose());
   beforeEach(async () => {
     await app.reset();
+    holdAccount(null);
     server = { app, cookie: null };
     relay = null;
     stubFetch();
   });
   afterEach(async () => {
     for (const release of held.splice(0)) release();
+    for (const store of stores.splice(0)) store.close();
     while (answered.size) await Promise.allSettled([...answered]);
     vi.unstubAllGlobals();
   });
@@ -137,12 +141,18 @@ export function testServer() {
         if (failure) throw new Error(failure.error);
       }
     },
+    // The page holds the account it signed up, as AccountFlow does, so every request states it.
     async account() {
       const body = signupBody();
       server!.cookie = sessionCookie(await app.post('signup', body));
       const { accountId } = body;
+      holdAccount(accountId);
       const vaultKey = randomBytes(32);
-      const open = (key: VaultKey = vaultKey) => ObjectStore.open(accountId, key, api);
+      const open = async (key: VaultKey = vaultKey) => {
+        const store = await ObjectStore.open(accountId, key, api);
+        stores.push(store);
+        return store;
+      };
       return { accountId, vaultKey, store: await open(), files: new Files(api), open };
     },
     // The operator deletes the account on the server, which opens signup again (server/accounts): how a user
@@ -161,6 +171,18 @@ export function testServer() {
       } finally {
         opened.data.close();
       }
+    },
+    // The password proof account() signs up with, for what asks for the password again, such as 탈퇴.
+    passwordProof: { method: 'password', proof: signupBody().passwordProof } as const,
+    // The server's clock, which stamps the stores' bookmarks: a restore names a time between two writes. reset() puts it back.
+    at(now: () => number) {
+      app.clock.now = now;
+    },
+    // An account the Worker names as its operator.
+    async operator() {
+      const opened = await harness.account();
+      app.env.ADMIN_ACCOUNT = opened.accountId;
+      return opened;
     },
   };
   return harness;

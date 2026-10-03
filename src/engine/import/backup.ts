@@ -1,6 +1,6 @@
-import { gunzipSync } from 'fflate';
 import { isRecord, list } from '../../connectors/values';
 import { add, convertModule, counted, type Tally } from './convert';
+import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
 import { convertPreset } from './preset';
 import { picture, risuCharacter, type Entry, type Read } from './risu-character';
@@ -89,7 +89,7 @@ const u32 = (bytes: Uint8Array, at: number) => new DataView(bytes.buffer, bytes.
 
 function decode(bytes: Uint8Array): unknown {
   if (DATABASE_HEADER.some((byte, i) => bytes[i] !== byte)) throw new Error('not a Risu database');
-  return readMsgpack(gunzipSync(bytes.subarray(DATABASE_HEADER.length)));
+  return readMsgpack(gunzip(bytes.subarray(DATABASE_HEADER.length)));
 }
 
 async function fromDatabase(db: Json, source: BackupSource, files: Map<string, Span>): Promise<RisuBackup> {

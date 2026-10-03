@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 import type { ChatScope } from '../engine/render';
 import type { Chat } from '../model/chat';
+import { AccountFacts } from '../runtime/account';
 import type { ApiResult, api } from '../runtime/api';
 import { ReadModels, type Opening, type ScreenChat } from '../runtime/read-model';
 import type { Session } from '../runtime/session';
@@ -10,13 +11,15 @@ import { ObjectStore } from '../runtime/store';
 import type { Turn } from '../runtime/talk';
 import * as display from '../runtime/turn';
 import { randomBytes } from '../vault/aead';
-import { SessionProvider, useChatDisplay } from './session';
+import { SessionProvider, useChatDisplay, useWritingChat } from './session';
+
+const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 });
 
 it('C: composer and panel re-renders skip display, while streaming recomputes without replacing unchanged rows', async () => {
   let rev = 0;
   const request: typeof api = async <T,>(method: string): Promise<ApiResult<T>> => ({ ok: true, data: (method === 'GET'
-    ? { changes: [], cursor: 0, more: false, limits: { items: 100, bytes: 1_000_000, body: 100_000 } }
-    : { revs: [++rev] }) as T });
+    ? { timeline: 't', changes: [], cursor: 0, more: false, limits: { items: 100, bytes: 1_000_000, body: 100_000 } }
+    : { revs: [++rev], timeline: 't' }) as T });
   const store = await ObjectStore.open('test', randomBytes(32), request);
   const lease = store.retainChat('chat');
   await lease.ready;
@@ -44,7 +47,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   vi.stubGlobal('window', document.defaultView);
   vi.stubGlobal('document', document);
   const root = createRoot(container);
-  const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
+  const render = (composer: string, panel: boolean) => root.render(<SessionProvider session={session} account={{ admin: false, facts, onLock() {}, onLogout: async () => null }}><Probe composer={composer} panel={panel} /></SessionProvider>);
   const displayed = vi.spyOn(display, 'displayChat');
   try {
     await act(() => render('', false));
@@ -72,6 +75,39 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
     read.close();
     lease.release();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it('useWritingChat renders when a reply starts or ends, and not for its chunks', async () => {
+  let turn: Turn | null = null;
+  const listeners = new Set<() => void>();
+  const say = (next: Turn | null) => act(() => {
+    turn = next;
+    for (const listener of listeners) listener();
+  });
+  const talk = { snapshot: () => turn, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
+  const renders: (string | null)[] = [];
+  function Probe() {
+    renders.push(useWritingChat());
+    return null;
+  }
+  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {}, activeElement: null, defaultView: { HTMLIFrameElement: class {} }, documentElement: { namespaceURI: 'http://www.w3.org/1999/xhtml' } };
+  const container = { nodeType: 1, tagName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: document, addEventListener() {}, removeEventListener() {}, textContent: '' } as unknown as HTMLElement;
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('window', document.defaultView);
+  vi.stubGlobal('document', document);
+  const root = createRoot(container);
+  try {
+    await act(() => root.render(<SessionProvider session={{ talk } as Session} account={{ admin: false, facts, onLock() {}, onLogout: async () => null }}><Probe /></SessionProvider>));
+    const started: Turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
+    await say(started);
+    await say({ ...started, text: 'one' });
+    await say({ ...started, text: 'one two' });
+    await say(null);
+    expect(renders).toEqual([null, 'chat', null]);
+  } finally {
+    await act(() => root.unmount());
     vi.unstubAllGlobals();
   }
 });

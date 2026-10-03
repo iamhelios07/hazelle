@@ -9,10 +9,10 @@ import { noResults } from '../common/search';
 import { ago } from '../common/time';
 import { usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { PAGES } from '../common/words';
+import { PAGES, promptName } from '../common/words';
 import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles } from '../ui';
 import { usePresetImport } from './PresetImport';
-import { EMPTY_USE, promptName, usePromptUse, type PromptUse } from './usePromptUse';
+import { EMPTY_USE, usePromptUse, type PromptUse } from './usePromptUse';
 
 const RECENT = 4;
 const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트' } satisfies Record<PromptSort, string>;

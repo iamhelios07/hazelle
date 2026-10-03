@@ -1,25 +1,26 @@
 import { Copy, Cpu, Ellipsis, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
-import { slotsOf, SLOTS, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
+import { slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { BIN_KEEPS, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import { typing, useShortcut } from '../shortcuts';
-import { useToast } from '../toast';
+import { useOwnUndo, useToast } from '../toast';
 import { Button, Callout, Divider, IconButton, Menu, MenuHeading, MenuItem, NavRow, Outline, Section, Stack, Tag, typeInto, type NavBarProps, type OutlineStop } from '../ui';
 import { BlockPane } from './BlockPane';
 import { blockIcon, blockKind, blockMeta, blockTitle, cacheMarks, hasConditions, isText, MARKS, rangeKey, SLOT, TEXTS } from './blocks';
-import { conditionSnippet, countUses, draftOf, newBlock, withMark, type Draft, type NewBlock, type Snippet } from './edits';
+import { conditionSnippet, countUses, draftOf, newBlock, placedOnce, withMark, type Draft, type NewBlock, type Snippet } from './edits';
 import {
   addBlock,
   addToggle,
+  doing,
   editToggle,
   moveBlock,
   NO_HISTORY,
-  recorded,
   redoing,
   removeBlock,
   removeToggle,
@@ -32,11 +33,12 @@ import {
   setWrapper,
   undoing,
   type Step,
+  type Turned,
 } from './history';
 import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPane';
 import { chatWarning } from './ranges';
 import { TogglePane } from './TogglePane';
-import { EMPTY_USE, promptName, usePromptUse } from './usePromptUse';
+import { EMPTY_USE, usePromptUse } from './usePromptUse';
 
 const MODEL = 'model';
 const TOGGLES = 'toggles';
@@ -58,6 +60,8 @@ const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 �
 type Pane = 'toggles' | null;
 
 const CACHE_WORDS = { set: '여기까지 캐시', auto: '자동 캐시' } as const;
+const UNDO = { did: '되돌렸어요', failed: '되돌리지 못했어요' };
+const REDO = { did: '다시 했어요', failed: '다시 하지 못했어요' };
 
 // side: the outline, beside the open part, in the split layout only. open: the part open, which a frame scrolls back
 // to the top of when it changes.
@@ -88,22 +92,18 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const connections = useConnections();
   const uses = usePromptUse().get(stored.id) ?? EMPTY_USE;
   const split = layout === 'split';
-  const save = useAutosave<PromptPatch>((patch) => editPrompt(store, stored.id, patch));
+  const save = useAutosave<PromptPatch>(`prompt:${stored.id}`, (patch) => editPrompt(store, stored.id, patch));
   const sort = sortOf(stored.value);
   const words = SORT_WORDS[sort];
 
-  const [draft, setDraft] = useState<Draft>(() => draftOf(stored.value));
+  // The stored prompt under what waits to be saved, so another device's edit to a field nothing here changed shows.
+  const draft: Draft = { ...draftOf(stored.value), ...save.unsaved };
+  // The draft with the edits made since this render, for one made right after another.
   const latest = useRef(draft);
-  // Another device's edit comes in while nothing here waits to be saved.
-  useEffect(() => {
-    if (Object.keys(save.unsaved).length) return;
-    latest.current = draftOf(stored.value);
-    setDraft(latest.current);
-  }, [stored]);
+  latest.current = draft;
   const update = (change: (current: Draft) => PromptPatch) => {
     const patch = change(latest.current);
     latest.current = { ...latest.current, ...patch };
-    setDraft(latest.current);
     save.change(patch);
   };
 
@@ -145,40 +145,40 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (pane) onPane(null);
   };
 
-  // Every structural edit is a step on this one stack; a toast's 되돌리기 undoes its own step.
+  // Every structural edit is a step on this one stack; a toast's 되돌리기 undoes its own step, and leaves with the
+  // editor, whose stack it is.
+  const undoable = useOwnUndo();
   const history = useRef(NO_HISTORY);
-  const perform = (step: Step) => {
-    update(step.redo);
-    history.current = recorded(history.current, step);
-    return step;
+  // null: the step was refused, which the toast says, and nothing changed.
+  const turn = (turned: Turned, failed: string): Step | null => {
+    history.current = turned.history;
+    if ('refused' in turned) {
+      toast.error(`${failed}: ${turned.step.label}`, { detail: turned.refused });
+      return null;
+    }
+    update(() => turned.patch);
+    return turned.step;
   };
-  const undo = (step?: Step) => {
-    const undone = undoing(history.current, step);
-    if (!undone) return null;
-    history.current = undone.history;
-    update(undone.step.undo);
-    return undone.step;
+  const perform = (step: Step) => turn(doing(history.current, latest.current, step), '바꾸지 못했어요');
+  const undo = (step: Step) => {
+    const undone = undoing(history.current, latest.current, step);
+    if (undone) turn(undone, UNDO.failed);
   };
-  const redo = () => {
-    const redone = redoing(history.current);
-    if (!redone) return null;
-    history.current = redone.history;
-    update(redone.step.redo);
-    return redone.step;
-  };
-  const report = (step: Step | null, words: string) => {
-    if (!step) return false;
+  const report = (turned: Turned | null, words: typeof UNDO) => {
+    if (!turned) return false;
+    const step = turn(turned, words.failed);
+    if (!step) return;
     if (split && step.block !== null && latest.current.blocks.some((each) => each.id === step.block)) pick(step.block);
-    toast.show(`${words}: ${step.label}`);
+    toast.show(`${words.did}: ${step.label}`);
   };
   // The editor's steps are everything but what is typed in a text field.
-  useShortcut('undo', (event) => (typing(event) ? false : report(undo(), '되돌렸어요')));
-  useShortcut('redo', (event) => (typing(event) ? false : report(redo(), '다시 했어요')));
+  useShortcut('undo', (event) => (typing(event) ? false : report(undoing(history.current, latest.current), UNDO)));
+  useShortcut('redo', (event) => (typing(event) ? false : report(redoing(history.current, latest.current), REDO)));
 
   const change = (next: Block) => update((current) => ({ blocks: current.blocks.map((each) => (each.id === next.id ? next : each)) }));
   const insert = (at: number, kind: NewBlock) => {
     const added = newBlock(kind);
-    perform(addBlock(added, at));
+    if (!perform(addBlock(added, at))) return;
     pick(added.id);
     select.current = added.kind === 'text' ? 'text' : 'name';
   };
@@ -189,8 +189,9 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (!gone) return;
     const next = latest.current.blocks[at + 1] ?? latest.current.blocks[at - 1];
     const step = perform(removeBlock(gone, at));
+    if (!step) return;
     if (open === id) setPicked(next?.id ?? MODEL);
-    toast.undoable(`‘${blockTitle(gone).title}’ 블록을 뺐어요.`, () => undo(step));
+    undoable(`‘${blockTitle(gone).title}’ 블록을 뺐어요.`, () => undo(step));
   };
   const mark = (target: TextBlock, value: TextBlock['mark']) => {
     if (value === target.mark) return;
@@ -200,7 +201,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   };
   const wrap = (target: WrappedSlot, wrapper: string | null) => {
     const step = perform(setWrapper(target, wrapper));
-    if (wrapper === null) toast.undoable('감싸는 글을 뺐어요.', () => undo(step));
+    if (step && wrapper === null) undoable('감싸는 글을 뺐어요.', () => undo(step));
   };
   const typeSnippet = (snippet: (selected: string) => Snippet) => {
     const area = textRef.current!;
@@ -214,11 +215,12 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const gone = latest.current.toggles[at];
     if (!gone) return;
     const step = perform(removeToggle(gone, at));
-    toast.undoable(`‘${gone.label}’ 토글을 지웠어요.`, () => undo(step), '글 속 조건은 그대로예요.');
+    if (!step) return;
+    undoable(`‘${gone.label}’ 토글을 지웠어요.`, () => undo(step), '글 속 조건은 그대로예요.');
   };
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);
-    perform(renameKey(toggle, to));
+    if (!perform(renameKey(toggle, to))) return;
     toast.show('이름을 바꿨어요.', count ? { detail: `글 속 조건 ${count}곳도 함께 바꿨어요.` } : undefined);
   };
   const pickModel = async (role: Role, ref: ModelRef | null) => {
@@ -232,7 +234,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   const isDefault = isDefaultPrompt(settings, stored);
   const copy = async () => {
-    await save.flush();
+    if (!(await save.flush())) return;
     const copied = await copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`);
     if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
     onCopied(copied.data.id);
@@ -243,13 +245,13 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (!saved.ok) toast.failed(saved, '기본으로 정하지 못했어요.');
   };
   const erase = async () => {
-    await save.flush();
-    const removed = await removePrompt(store, stored.id);
+    const removed = await save.remove(() => removePrompt(store, stored.id));
+    if (!removed) return;
     if (!removed.ok) return removed.error === 'default' ? toast.error(words.refused[0], { detail: words.refused[1] }) : toast.failed(removed, '지우지 못했어요.');
     onErased();
     toast.undoable(`‘${promptName(removed.data.value.name)}’을(를) 지웠어요.`, () => {
-      void restorePrompt(store, removed.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
-    });
+      void restorePrompt(store, stored.id).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
+    }, BIN_KEEPS);
   };
 
   const cacheAt = (id: string) => {
@@ -267,7 +269,6 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const words = [`${at + 1}. ${title}`, badge, meta, flagged && '토글 조건 있음', cache && CACHE_WORDS[cache]].filter(Boolean).join(', ');
     return { id: each.id, kind: blockKind(each), icon: blockIcon(each), title, dim, meta, badge, flagged, cache, label: words };
   });
-  const placed = new Set(draft.blocks.flatMap((each) => (each.kind === 'slot' ? [each.slot] : [])));
   const addMenu = (at: number) => (
     <>
       <MenuHeading>직접 쓰는 글</MenuHeading>
@@ -277,9 +278,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       <Divider variant="menu" />
       <MenuHeading>앱이 채우는 자리</MenuHeading>
       {slotsOf(sort).map((slot) => {
-        const taken = !SLOTS[slot].repeats && placed.has(slot);
-        const there = draft.blocks.find((each) => each.kind === 'slot' && each.slot === slot);
-        return taken && there ? (
+        const there = placedOnce(draft.blocks, slot);
+        return there ? (
           <MenuItem key={slot} tone="muted" label={SLOT[slot].name} sub="이미 있어요 · 눌러서 그 자리로" onClick={() => pick(there.id)} />
         ) : (
           <MenuItem key={slot} label={SLOT[slot].name} sub={SLOT[slot].hint} onClick={() => insert(at, { slot })} />

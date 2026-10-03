@@ -26,7 +26,7 @@ describe('planRemoval', () => {
     await chat(null, 1);
 
     const owned = [...store.children('avatar', id), ...store.children('lore', id), ...chats.flatMap((chatId) => [...store.children('entry', chatId), ...store.children('summary', chatId)])].map((object) => object.id);
-    const plan = await planRemoval(store, { kind: 'character', id });
+    const plan = await store.pinned((pin) => planRemoval(store, { kind: 'character', id }, pin));
     const rounds = plan.ok ? plan.data.map((round) => round.map((row) => row.id).toSorted()) : [];
     expect(rounds).toEqual([owned.toSorted(), chats.toSorted(), [id]]);
   });

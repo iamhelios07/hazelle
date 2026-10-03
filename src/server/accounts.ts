@@ -1,10 +1,16 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
-import { fail, ID, readObject, type Account, type AppEnv } from './http';
-import { currentAccount, endSession, setSessionCookie, startSession } from './session';
+import { VISIBLE } from './admin';
+import { FILE_BYTES } from './files';
+import { fail, ID, isAdmin, readObject, refused, type Account, type AppEnv } from './http';
+import { leaveAccount, store } from './lifecycle';
+import { currentAccount, dropSessionCookie, endSession, requireOwnSession, setSessionCookie, startSession } from './session';
 import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
+// Signup is open while there are fewer accounts than the operator's cap.
+const ROOM = '(SELECT COUNT(*) FROM accounts) < (SELECT signup_cap FROM service)';
 
 export const accounts = new Hono<AppEnv>();
 
@@ -17,25 +23,34 @@ accounts.post('/signup', async (c) => {
   const recoveryProof = readProof(body?.recoveryProof);
   const passwordWrap = readWrap(body?.passwordWrap);
   const recoveryWrap = readWrap(body?.recoveryWrap);
-  if (!accountId || typeof body?.username !== 'string' || !passwordProof || !recoveryProof || !passwordWrap || !recoveryWrap) {
+  // The operator is named by an account id, and ids are the client's to make: should that account ever be gone,
+  // nobody may sign up as it.
+  if (!accountId || isAdmin(c, accountId) || typeof body?.username !== 'string' || !passwordProof || !recoveryProof || !passwordWrap || !recoveryWrap) {
     return fail(c, 400, 'bad-input');
   }
   // The password salt comes from the username as the client wrote it, so any other form is refused, not fixed.
   const username = body.username;
   if (!USERNAME.test(username) || username !== username.normalize('NFC').toLowerCase()) return fail(c, 400, 'bad-username');
   const db = c.env.DB;
-  if (!(await signupOpen(db))) return fail(c, 403, 'signup-closed');
 
-  const account = { id: accountId, username };
-  const [session, loginHash, recoveryHash] = await Promise.all([startSession(db, account.id), hashProof(passwordProof), hashProof(recoveryProof)]);
+  const [session, loginHash, recoveryHash] = await Promise.all([startSession(db, accountId, true), hashProof(passwordProof), hashProof(recoveryProof)]);
   const now = Date.now();
-  await db.batch([
-    db.prepare('INSERT INTO accounts (id, username, login_hash, created_at) VALUES (?, ?, ?, ?)').bind(account.id, account.username, loginHash, now),
-    insertVault(db, account.id, { passwordWrap, recoveryWrap, recoveryHash }, now),
+  // The insert itself checks the cap and the username, so two signups at once cannot both take the last place or the
+  // same name: no read outside this batch decides. changes() carries its outcome to the vault and the session.
+  const [created, , , room] = await db.batch<{ incarnation?: string; open?: number }>([
+    db
+      .prepare(
+        `INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) SELECT ?1, ?2, ?3, ?4, lower(hex(randomblob(16))), lower(hex(randomblob(16)))
+         WHERE ${ROOM} AND NOT EXISTS (SELECT 1 FROM accounts WHERE id = ?1 OR username = ?2) RETURNING incarnation`,
+      )
+      .bind(accountId, username, loginHash, now),
+    insertVault(db, accountId, { passwordWrap, recoveryWrap, recoveryHash }, now),
     session.insert,
+    db.prepare(`SELECT ${ROOM} AS open`),
   ]);
+  if (!created!.results.length) return room!.results[0]!.open ? fail(c, 409, 'username-taken') : fail(c, 403, 'signup-closed');
   setSessionCookie(c, session.token);
-  return c.json(describe(account), 201);
+  return c.json(await describe(c, { id: accountId, username, suspended: false, incarnation: created!.results[0]!.incarnation!, state: 'active' }), 201);
 });
 
 // Answers like GET /session, so the client opens the vault without another request.
@@ -47,13 +62,15 @@ accounts.post('/login', async (c) => {
   const db = c.env.DB;
   const account = await findAccount(db, 'username', body.username);
   if (!account) return fail(c, 401, 'wrong-login');
-  const refused = await checkProof(c, account, method, proof);
-  if (refused) return refused;
+  const wrong = await checkProof(c, account, method, proof);
+  if (wrong) return wrong;
+  if (account.state === 'leaving') return fail(c, 403, 'account-leaving');
 
-  const session = await startSession(db, account.id);
-  await db.batch([clearFailures(db, account.id), session.insert]);
-  setSessionCookie(c, session.token);
-  return c.json({ session: describe(account), vault: await readVault(db, account.id) });
+  const started = await startSession(db, account.id);
+  await db.batch([clearFailures(db, account.id), started.insert]);
+  setSessionCookie(c, started.token);
+  const [session, vault] = await Promise.all([describe(c, { ...account, suspended: account.suspended_at !== null }), readVault(db, account.id)]);
+  return c.json({ session, vault });
 });
 
 accounts.post('/logout', async (c) => {
@@ -62,18 +79,56 @@ accounts.post('/logout', async (c) => {
 });
 
 // Everything a page load needs, in one request: from Korea each round trip can take seconds.
+// signupOpen only tells the first screen which form to show. The signup insert decides.
 accounts.get('/session', async (c) => {
   const account = await currentAccount(c);
-  if (!account) return c.json({ session: null, signupOpen: await signupOpen(c.env.DB) });
-  return c.json({ session: describe(account), vault: await readVault(c.env.DB, account.id) });
+  if (!account) return c.json({ session: null, signupOpen: Boolean(await c.env.DB.prepare(`SELECT ${ROOM} AS open`).first('open')) });
+  const [session, vault] = await Promise.all([describe(c, account), readVault(c.env.DB, account.id)]);
+  return c.json({ session, vault });
 });
 
-// The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account.
-function describe(account: Account) {
-  return { accountId: account.id, username: account.username };
-}
+// 탈퇴. The proof is asked again, as for a new password, so a stolen session alone cannot delete the account. An
+// account whose deletion was cut off is still admitted, to finish it. The reports it sent and the operator's log rows
+// about it stay.
+accounts.delete('/account', requireOwnSession, async (c) => {
+  const body = await readObject(c);
+  const method = readMethod(body?.method);
+  const proof = readProof(body?.proof);
+  if (!method || !proof) return fail(c, 400, 'bad-input');
+  const { id, incarnation } = c.get('account');
+  const wrong = await checkProof(c, (await findAccount(c.env.DB, 'id', id))!, method, proof);
+  if (wrong) return wrong;
+  const left = await leaveAccount(c.env, id, incarnation, false);
+  if (left === 'busy') return fail(c, 409, 'account-busy');
+  if (left === 'unavailable') return refused(c, { unavailable: true });
+  dropSessionCookie(c);
+  return c.body(null, 204);
+});
 
-// Signup closes after the first account.
-async function signupOpen(db: D1Database): Promise<boolean> {
-  return (await db.prepare('SELECT 1 FROM accounts LIMIT 1').first()) === null;
+// The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:
+// what the account holds and the caps that apply to it, null for none. bytes: null while the store does not answer,
+// restoring among the reasons. unreadNotices: what the operator sent that the person has not seen (admin.ts).
+async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended' | 'incarnation' | 'state'>) {
+  const { incarnation } = account;
+  const [usage, facts] = await Promise.all([
+    store(c.env, incarnation).usage(incarnation),
+    c.env.DB.prepare(
+      `SELECT ${CAP.bytes} AS bytesCap, ${FILE_BYTES} AS fileBytes, ${CAP.fileBytes} AS fileBytesCap,
+         (SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AND notices.id > accounts.notices_seen) AS unreadNotices
+       FROM accounts WHERE incarnation = ?`,
+    )
+      .bind(incarnation)
+      .first<{ bytesCap: number | null; fileBytes: number; fileBytesCap: number | null; unreadNotices: number }>(),
+  ]);
+  const { unreadNotices, ...storage } = facts!;
+  return {
+    accountId: account.id,
+    username: account.username,
+    admin: isAdmin(c, account.id),
+    suspended: account.suspended,
+    state: account.state,
+    incarnation,
+    storage: { bytes: 'bytes' in usage ? usage.bytes : null, ...storage },
+    unreadNotices,
+  };
 }

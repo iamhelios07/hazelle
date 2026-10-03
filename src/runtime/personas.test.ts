@@ -24,7 +24,8 @@ describe('personas', () => {
     await setChatPersona(store, chat, rin!);
     const removed = await removePersona(store, rin!);
     expect(chatPersona(store, read())).toEqual({ kind: 'missing', own: true });
-    if (removed.ok) await restorePersona(store, removed.data);
+    expect(removed.ok && store.get('persona', rin!)?.value.deleted).toEqual(expect.any(Number));
+    await restorePersona(store, rin!);
     expect(chatPersona(store, read())).toMatchObject({ kind: 'persona', own: true, persona: { id: rin } });
   });
 });

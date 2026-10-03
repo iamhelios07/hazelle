@@ -7,17 +7,29 @@ import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
 import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
-import { inSettings, MODEL_ROLES } from './words';
+import { BIN, inSettings, MODEL_ROLES } from './words';
 
 const MESSAGES: Record<string, string> = {
   'bad-username': '아이디는 2–32자의 글자, 숫자, _ . - 로만 만들 수 있어요.',
-  'signup-closed': '이미 계정이 있어요. 새로고침한 뒤 로그인해 주세요.',
+  'signup-closed': '지금은 자리가 다 차서 계정을 만들 수 없어요. 자리가 늘면 다시 만들 수 있어요.',
+  // Signup's last step, after the recovery key; the name is set on the step before.
+  'username-taken': '이미 있는 아이디예요. 이전으로 돌아가 다른 아이디를 정해 주세요.',
+  'account-mismatch': '다른 탭에서 다른 계정으로 로그인해서 이 탭에서 한 일은 받지 않았어요. 이 탭에서 다시 로그인해 주세요.',
+  suspended: `운영자가 이 계정을 정지해서 저장하거나 모델을 부를 수 없어요. ${inSettings('account')}에서 백업을 받거나 운영자에게 알릴 수 있어요.`,
+  'too-many-calls': '모델을 너무 자주 불렀어요. 잠시 뒤 다시 해 주세요.',
+  'storage-full': `이 계정의 저장 공간이 가득 찼어요. 지운 것을 ${BIN}에서 완전히 지우면 자리가 생겨요.`,
+  'file-blocked': '운영자가 막은 파일이라 올리거나 열 수 없어요. 다른 파일을 써 주세요.',
+  'too-many-reports': '아직 확인하지 않은 알림이 많아서 더 보낼 수 없어요. 운영자가 확인하면 다시 보낼 수 있어요.',
+  'not-admin': '운영자 계정에서만 할 수 있어요.',
   'no-session': '로그인이 풀렸어요. 새로고침한 뒤 다시 로그인해 주세요.',
   conflict: '다른 기기에서 같은 것을 동시에 고치고 있어서 저장하지 못했어요. 다시 해 주세요.',
   unreadable: '금고 열쇠로 열리지 않는 항목이라 고칠 수 없어요.',
   gone: '다른 곳에서 지워진 항목이라 고칠 수 없어요.',
   'too-large': '너무 커서 저장할 수 없어요.',
   offline: '서버에 닿지 못했어요. 연결을 확인해 주세요.',
+  'timeline-changed': '계정을 복원해서 하던 일을 멈췄어요. 다시 해 주세요.',
+  'account-restoring': '계정을 복원하는 중이에요. 잠시 뒤 다시 해 주세요.',
+  'account-busy': '운영자가 이 계정을 복원하는 중이라 지금은 할 수 없어요. 잠시 뒤 다시 해 주세요.',
   'stream-gone': '서버가 이 답을 더 이상 갖고 있지 않아요.',
   'stream-lost': '서버가 답을 받다가 놓쳤어요.',
 };
@@ -130,6 +142,9 @@ export function describeAddFailure(failure: AddFailure): string {
   }
 }
 
+export const RUNAWAY_FIX = '캐릭터, 로어북, 프롬프트, 메시지에서 서로를 끝없이 불러오는 명령어를 고쳐 주세요.';
+const runaway = (before: string) => `명령어가 글을 너무 많이 만들어서 ${before} 멈췄어요. ${RUNAWAY_FIX}`;
+
 export function describeTurnFailure(failure: TurnFailure): string {
   switch (failure.kind) {
     case 'no-model':
@@ -142,6 +157,8 @@ export function describeTurnFailure(failure: TurnFailure): string {
       return failure.own ? '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.' : `기본 페르소나가 지워졌어요. ${inSettings('personas')}에서 다른 페르소나를 기본으로 정해 주세요.`;
     case 'profile-missing':
       return failure.own ? `이 모델이 쓰던 설정이 지워졌어요. ${inSettings('models')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 다른 설정을 기본으로 정해 주세요.`;
+    case 'runaway':
+      return runaway('보내기 전에');
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 보내 주세요.';
     case 'too-long':
@@ -166,6 +183,8 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
   switch (failure.kind) {
     case 'prompt-missing':
       return failure.own ? '고른 번역 프롬프트가 지워졌어요. 채팅의 번역 메뉴에서 다른 프롬프트를 골라 주세요.' : `기본 번역 프롬프트가 없어요. ${inSettings('prompts')}에서 번역 프롬프트 하나를 기본으로 정해 주세요.`;
+    case 'runaway':
+      return runaway('번역하기 전에');
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 번역해 주세요.';
     case 'no-model':
@@ -197,6 +216,8 @@ export function describeMemoryFailure(failure: MemoryFailure): string {
       return `기본 기억 프롬프트가 없어요. ${inSettings('prompts')}에서 기억 프롬프트 하나를 기본으로 정해 주세요.`;
     case 'profile-missing':
       return failure.own ? `기억 모델이 쓰던 설정이 지워졌어요. ${inSettings('models')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 다른 설정을 기본으로 정해 주세요.`;
+    case 'runaway':
+      return runaway('기억을 정리하기 전에');
     case 'tokenizer':
       return '토큰 계산기를 불러오지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
     case 'failed':

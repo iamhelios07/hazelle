@@ -1,8 +1,10 @@
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import { live } from '../model/library';
 import type { Persona } from '../model/persona';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import { markDeleted } from './characters';
 import type { ObjectStore } from './store';
 
 // Fixed, so two devices adding the first persona at once meet in a version conflict instead of making two.
@@ -16,7 +18,7 @@ export type PersonaChoice = { kind: 'persona'; persona: Stored<'persona'>; own: 
 export function chatPersona(store: ObjectStore, chat: Chat): PersonaChoice {
   const own = chat.persona !== undefined;
   const id = chat.persona ?? store.get('settings', SETTINGS_ID)?.value.persona;
-  const persona = id === undefined ? null : store.get('persona', id);
+  const persona = id === undefined ? null : live(store.get('persona', id));
   return persona ? { kind: 'persona', persona, own } : { kind: 'missing', own };
 }
 
@@ -35,12 +37,12 @@ export const addPersona = (store: ObjectStore, persona: Persona) => store.create
 
 export const editPersona = (store: ObjectStore, id: string, patch: Partial<Persona>) => store.update('persona', id, (current) => ({ ...current, ...patch }));
 
-// As with prompts, the default goes only once another persona is the default.
+// To 휴지통 (model/library Mark). As with prompts, the default goes only once another persona is the default.
 export async function removePersona(store: ObjectStore, id: string): Promise<ApiResult<Stored<'persona'>> | { ok: false; error: 'default' }> {
   if (store.get('settings', SETTINGS_ID)?.value.persona === id) return { ok: false, error: 'default' };
-  return store.take('persona', id);
+  return markDeleted(store, 'persona', id, Date.now());
 }
 
-export const restorePersona = (store: ObjectStore, removed: Stored<'persona'>) => store.restore(removed);
+export const restorePersona = (store: ObjectStore, id: string) => markDeleted(store, 'persona', id, null);
 
 export const setDefaultPersona = (store: ObjectStore, id: string) => store.upsert('settings', (current) => ({ models: {}, ...current, persona: id }));

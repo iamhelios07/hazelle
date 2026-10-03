@@ -69,6 +69,39 @@ export function coveredBy(memory: Memory, places: ReadonlyMap<string, number>): 
   return end;
 }
 
+// Memory as it stood with only the records kept, which a branch carries (design §6.2, Branches): their facts and
+// threads and the user's as they stand, and what a record left out changed put back as the kept records had it. A fact
+// it set or removed takes the last kept record's value, and a thread it closed is open again. Only a record's own
+// changes say where in the chat they were made: what the user set, rewrote or deleted is carried as it stands now, so a
+// fact or thread of a kept record that is missing with no left-out record's change to explain it stays out, as the
+// user's deletion.
+export function memoryThrough(memory: Memory, kept: MemoryRecord[]): Memory {
+  const carried = new Set(kept.map(({ id }) => id));
+  const rest = memory.records.filter(({ id }) => !carried.has(id));
+  const key = ({ about, field }: Pick<Fact, 'about' | 'field'>) => JSON.stringify([about, field]);
+  const facts = new Map<string, Fact>();
+  const opened = new Map<string, string>();
+  for (const record of kept) {
+    for (const { about, field, value } of record.state) {
+      if (value === null) facts.delete(key({ about, field }));
+      else facts.set(key({ about, field }), { about, field, value, record: record.id });
+    }
+    for (const text of record.closes) opened.delete(text);
+    for (const text of record.opens) if (!opened.has(text)) opened.set(text, record.id);
+  }
+  const state = memory.state.filter(({ record }) => record === null || carried.has(record));
+  const threads = memory.threads.filter((thread) => thread.opened === null || carried.has(thread.opened));
+  const held = new Set(state.map(key));
+  const open = new Set(threads.map(({ text }) => text));
+  const changed = new Set(rest.flatMap((record) => record.state.map(key)));
+  const closed = new Set(rest.flatMap((record) => record.closes));
+  return {
+    records: kept,
+    state: [...state, ...[...facts].filter(([at]) => changed.has(at) && !held.has(at)).map(([, fact]) => fact)],
+    threads: [...threads, ...[...opened].filter(([text]) => closed.has(text) && !open.has(text)).map(([text, record]) => ({ id: crypto.randomUUID(), text, opened: record }))],
+  };
+}
+
 export function staleness(record: MemoryRecord, chat: ChatRead, places: ReadonlyMap<string, number>): Staleness | null {
   const at = record.sources.map(({ message }) => places.get(message));
   if (at.some((index) => index === undefined)) return 'deleted';

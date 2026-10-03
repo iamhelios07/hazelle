@@ -124,7 +124,7 @@ function memory(): BoxStorage {
   return {
     get: async (key) => held.get(key),
     put: async (key, value) => void held.set(key, value),
-    list: async ({ prefix }) => new Map([...held].filter(([key]) => key.startsWith(prefix))),
+    list: async ({ start, end, limit }) => new Map([...held].filter(([key]) => key >= start && key < end).sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, limit)),
     deleteAll: async () => held.clear(),
     setAlarm: async () => {},
   };

@@ -53,6 +53,13 @@ describe('detection', () => {
     expect(detect('https://my-nas.local/v1')).toMatchObject({ problem: 'local' });
   });
 
+  it('reads a private address only from an address, never from a name that starts like one', () => {
+    expect(detect('https://[fd00::1]/v1')).toMatchObject({ problem: 'local' });
+    expect(detect('https://[::1]:8080/v1')).toMatchObject({ problem: 'local' });
+    expect(detect('https://fd-gateway.example.com/v1')).toMatchObject({ problem: null });
+    expect(detect('https://10.example.com/v1')).toMatchObject({ problem: null });
+  });
+
   it('keeps an unrecognized key to ask for its address, and ignores prose', () => {
     expect(detect('sk-1234')).toEqual({ kind: 'unknown-key', secret: 'sk-1234' });
     expect(detect('이건 키가 아니에요')).toBeNull();

@@ -1,4 +1,5 @@
 import type { Role } from '../../connectors/assignment';
+import { KEEP_DAYS } from '../../model/library';
 
 // The words several screens use for one thing, so it reads the same wherever it appears. Sentences stay in their
 // screen and are built from these; the phrases these replaced are refused by lint (RETIRED_COPY in eslint.config.js).
@@ -17,11 +18,16 @@ export const BOT_MODELS_HELP = '봇의 스크립트가 답장과 별개로 모�
 
 export const SETTINGS = '설정';
 
+// Where what is deleted waits KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
+export const BIN = '휴지통';
+// What the toast of a deletion that goes there adds.
+export const BIN_KEEPS = `${KEEP_DAYS}일 안에는 ‘${BIN}’에서 되살릴 수 있어요.`;
+
 // A {{…}} tag in a prompt or a card's text.
 export const COMMAND = '명령어';
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
-export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', account: '계정' };
+export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', account: '계정', admin: '운영' };
 
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집 (항상 켜짐).
@@ -32,6 +38,10 @@ export const MODULE_VOICE = { name: PAGES.modules, face: null };
 // The layer of the model assignment that 설정's 모델 page holds, under every prompt and chat.
 export const DEFAULT_MODELS = '기본 모델';
 
+// What passes between a person and the operator, always said with its direction. from: what the operator sent, on the
+// person's page. received: what people sent, on the operator's page. send: the operator sending one.
+export const NOTICES = { from: '운영자가 보낸 알림', received: '받은 알림', send: '알림 보내기' };
+
 export const inSettings = (page: keyof typeof PAGES) => `${SETTINGS} › ${PAGES[page]}`;
 
 // An unset choice takes its value from somewhere else, and names it: 기본 모델 따르기, 보조 모델 따르기.
@@ -39,6 +49,7 @@ export const follows = (source: string) => `${source} 따르기`;
 
 // A module Risu kept without a name still needs one to be told apart in a list.
 export const moduleName = (name: string) => name.trim() || '이름 없는 모듈';
+export const promptName = (name: string) => name || '이름 없는 프롬프트';
 
 export const NOT_STARRED = '별표한 모델에 없음';
 

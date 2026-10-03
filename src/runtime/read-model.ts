@@ -2,7 +2,7 @@ import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
 import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
 import type { Kind, Stored, Values } from '../model/kinds';
-import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
+import { live, nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
@@ -25,8 +25,9 @@ class Snapshot<T> {
   }
 }
 
-// The characters, each with its chats, most recent first, and the folders by name.
-export type Library = { characters: CharacterShelf<ChatSummary>[]; none: Shelf<ChatSummary>; deleted: CharacterShelf<ChatSummary>[]; folders: FolderTree[] };
+// The characters, each with its chats, most recent first, and the folders by name. deleted and deletedChats are what
+// 휴지통 shows (shelve).
+export type Library = { characters: CharacterShelf<ChatSummary>[]; none: Shelf<ChatSummary>; deleted: CharacterShelf<ChatSummary>[]; deletedChats: ChatSummary[]; folders: FolderTree[] };
 
 // How an open chat is displayed: with the bot's editDisplay pass (ScriptDisplay), which tells the chat's listeners
 // when more of the pass has landed.
@@ -44,9 +45,19 @@ const NAMED: { [K in Kind]?: (value: Values[K]) => string } = {
 };
 const sameItems = <T>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 const sameSummary = (a: ChatSummary, b: ChatSummary) => a.chat === b.chat && a.count === b.count && a.title === b.title && a.preview === b.preview && a.at === b.at && a.order === b.order;
+// Whether id's summary in map changed. An equal one is kept, so the lists holding it stay the same.
+function place(map: Map<string, ChatSummary>, id: string, next: ChatSummary | null): boolean {
+  if (!next) return map.delete(id);
+  const previous = map.get(id);
+  if (previous && sameSummary(previous, next)) return false;
+  map.set(id, next);
+  return true;
+}
 
 export class ReadModels {
   private readonly summaries = new Map<string, ChatSummary>();
+  // The deleted chats', which no chat list, summary snapshot or chat screen reads.
+  private readonly binned = new Map<string, ChatSummary>();
   private readonly byChat = new Map<string, Snapshot<ChatModel | null>>();
   private readonly bySummary = new Map<string, Snapshot<ChatSummary | null>>();
   private readonly byKind = new Map<Kind, Snapshot<Stored<Kind>[]>>();
@@ -105,7 +116,7 @@ export class ReadModels {
     return snapshot as Snapshot<Stored<K>[]>;
   }
 
-  // The characters not in 지운 캐릭터.
+  // The characters not in 휴지통.
   character(id: string): Snapshot<CharacterShelf<ChatSummary> | null> {
     let snapshot = this.byCharacter.get(id);
     if (!snapshot) {
@@ -158,46 +169,47 @@ export class ReadModels {
     }
   }
 
-  // Every chat, the one written to last first. Renaming a populated chat or changing its model does not move it.
+  // Every live chat, the one written to last first, and apart from them the deleted ones. Renaming a populated chat or
+  // changing its model does not move it.
   private updateLists(changes?: readonly StoreChange[]): boolean {
     const ids = changes
       ? new Set(changes.flatMap((change) => change.kind === 'chat' ? [change.id] : change.kind === 'summary' && change.parent ? [change.parent] : []))
       : new Set(this.store.list('chat').map(({ id }) => id));
     let changed = false;
+    let binChanged = false;
     for (const id of ids) {
       const stored = this.store.get('chat', id);
-      const previous = this.summaries.get(id);
-      if (!stored) {
-        if (this.summaries.delete(id)) changed = true;
-        this.bySummary.get(id)?.set(null);
-        continue;
+      const next = stored && this.summarize(stored);
+      const alive = live(stored) !== null;
+      if (place(this.summaries, id, alive ? next : null)) {
+        this.bySummary.get(id)?.set(this.summaries.get(id) ?? null);
+        changed = true;
       }
-      const { value: chat, rev } = stored;
-      const saved = this.store.get('summary', summaryId(id))?.value;
-      const next: ChatSummary = {
-        id, chat, count: saved?.count ?? null,
-        title: chat.title ?? (chat.origin ? `${chat.origin.name} · 갈래` : saved?.title ?? chatTitle(chat, [], [])),
-        preview: saved?.preview ?? null, at: saved?.at ?? null, order: saved?.order ?? rev,
-      };
-      if (previous && sameSummary(previous, next)) continue;
-      this.summaries.set(id, next);
-      this.bySummary.get(id)?.set(next);
-      changed = true;
+      if (place(this.binned, id, alive ? null : next)) binChanged = true;
     }
     if (changed) this.chats.set([...this.summaries.values()].sort((a, b) => b.order - a.order));
-    return changed;
+    return changed || binChanged;
+  }
+
+  private summarize({ id, value: chat, rev }: Stored<'chat'>): ChatSummary {
+    const saved = this.store.get('summary', summaryId(id))?.value;
+    return {
+      id, chat, count: saved?.count ?? null,
+      title: chat.title ?? (chat.origin ? `${chat.origin.name} · 갈래` : saved?.title ?? chatTitle(chat, [], [])),
+      preview: saved?.preview ?? null, at: saved?.at ?? null, order: saved?.order ?? rev,
+    };
   }
 
   private buildLibrary(): Library {
-    const shelves = shelve(this.store.list('character'), this.store.list('avatar'), this.chats.snapshot());
+    const shelves = shelve(this.store.list('character'), this.store.list('avatar'), this.chats.snapshot(), [...this.binned.values()]);
     const previous = this.library?.snapshot();
     const previousShelves = new Map((previous ? [...previous.characters, ...previous.deleted, previous.none] : []).map((shelf) => [shelf.id, shelf]));
     const reuse = <T extends Shelf<ChatSummary>>(shelf: T): T => {
       const held = previousShelves.get(shelf.id);
       return held && held.character === shelf.character && held.face === shelf.face && held.order === shelf.order && sameItems(held.chats, shelf.chats) ? held as T : shelf;
     };
-    const next = { characters: shelves.characters.map(reuse), deleted: shelves.deleted.map(reuse), none: reuse(shelves.none), folders: this.folders };
-    return previous && sameItems(previous.characters, next.characters) && sameItems(previous.deleted, next.deleted) && previous.none === next.none && previous.folders === next.folders ? previous : next;
+    const next = { characters: shelves.characters.map(reuse), deleted: shelves.deleted.map(reuse), deletedChats: shelves.deletedChats, none: reuse(shelves.none), folders: this.folders };
+    return previous && sameItems(previous.characters, next.characters) && sameItems(previous.deleted, next.deleted) && sameItems(previous.deletedChats, next.deletedChats) && previous.none === next.none && previous.folders === next.folders ? previous : next;
   }
 }
 

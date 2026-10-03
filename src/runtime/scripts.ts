@@ -1,3 +1,4 @@
+import { Runaway } from '../engine/cbs/evaluate';
 import { TOGGLE_GLOBAL } from '../engine/cbs/tags';
 import type { Pack, Trigger } from '../engine/import/types';
 import type { Role } from '../connectors/assignment';
@@ -21,7 +22,7 @@ import { chatPrompt } from './prompts';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
-import { callOf, pageCall } from './streams';
+import { botCall, callOf, endCall } from './streams';
 import { receiptOf } from './talk';
 import { tokenizer } from './tokenizer';
 import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './turn';
@@ -30,8 +31,10 @@ import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './t
 // others are the app's about the bot: a script's error, the functions it called and the block effects it holds that
 // this app does not have, a script that never ended.
 // no-model: the bot called a model of a role the chat has none for. no-character: a module called one in a chat with
-// no character, where there is nobody to allow it for. flood: it called models faster than CALLS_A_MINUTE.
-// unsaved: what a run did to the chat could not be saved.
+// no character, where there is nobody to allow it for. flood: it called models faster than the server lets a chat's bot
+// (server/streams).
+// unsaved: what a run did to the chat could not be saved. runaway: the bot's commands were stopped for making too much
+// text.
 type Note =
   | { kind: 'said'; tone: 'normal' | 'error'; text: string }
   | { kind: 'failed'; message: string }
@@ -40,7 +43,8 @@ type Note =
   | { kind: 'no-model'; role: Role }
   | { kind: 'no-character' }
   | { kind: 'flood' }
-  | { kind: 'unsaved'; failure: ApiFailure };
+  | { kind: 'unsaved'; failure: ApiFailure }
+  | { kind: 'runaway' };
 export type ScriptNote = { id: number; chat: string } & Note;
 // model: the bot's Lua wants to call a model, which the character has not been allowed or refused yet. Its answer
 // 'yes' allows it and 'no' refuses it, both kept on the character; a dismissal leaves it to be asked again.
@@ -66,25 +70,31 @@ function cbsScope({ card, persona, prompt, note, lore, messages, variables, gree
   return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick };
 }
 
-// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
-// variables given.
-export function luaSnapshot(store: ObjectStore, chat: Chat, scope: ChatScope, staged: string[], variables: [string, string][]): Snapshot {
-  const greeting = scope.greeting === null ? 0 : 1;
+// What Lua's own functions read of a chat besides its messages and variables; its CBS and lorebook reads go through
+// the snapshot's scope. An editDisplay pass run on one is not fresh for another (ScriptDisplay).
+export type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
+
+export function luaStanding(store: ObjectStore, chat: Chat, scope: ChatScope): LuaStanding {
   const toggles = togglesOf(store, chat, chatPrompt(store, chat));
   return {
-    messages: scope.messages.slice(greeting).map(({ role, time }, index) => ({ role: role === 'user' ? 'user' : 'char', data: staged[index + greeting]!, time: time ?? 0 })),
-    variables,
     globals: toggles.declared.map(({ key }) => [`${TOGGLE_GLOBAL}${key}`, toggles.value(key) ?? '']),
     character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
     persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
     note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
-    scope: cbsScope(scope),
   };
 }
 
-// A script in a loop must not spend the user's money unseen: past this many model calls in a minute, a chat's bot
-// gets no more until the minute has passed.
-const CALLS_A_MINUTE = 20;
+// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
+// variables given.
+export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: string[], variables: [string, string][]): Snapshot {
+  const greeting = scope.greeting === null ? 0 : 1;
+  return {
+    messages: scope.messages.slice(greeting).map(({ role, time }, index) => ({ role: role === 'user' ? 'user' : 'char', data: staged[index + greeting]!, time: time ?? 0 })),
+    variables,
+    ...standing,
+    scope: cbsScope(scope),
+  };
+}
 
 // The bot's scripts, Lua and block triggers, in the life of a chat (design §6.8): on the way to a reply, when it ends,
 // and on a button. The only place that turns what a run did into entries.
@@ -95,7 +105,6 @@ export class Scripts {
   private readonly queues = new Map<string, Promise<unknown>>();
   // What each chat was already told of its bot's errors, so a script failing on every message says so once.
   private readonly told = new Map<string, Set<string>>();
-  private readonly called = new Map<string, number[]>();
   private readonly closing = new AbortController();
   private ids = 0;
 
@@ -126,7 +135,7 @@ export class Scripts {
   }
 
   // The bot's scripts on the way to a reply: onInput and editInput for a message being sent, which is then saved here so
-  // that what onStart does to the chat lands after it; then onStart, which may end the turn. again gathers the turn
+  // that what onStart does to the chat lands after it; then onStart. Each may end the turn. again gathers the turn
   // anew once the chat has changed under it: answer, once the user's message is saved and no longer sent.
   async starting(
     chat: string,
@@ -151,18 +160,25 @@ export class Scripts {
       };
       const { said } = first;
       if (said) {
-        let history: ChatScope = { ...turn.scope, messages: turn.scope.messages.slice(0, -1) };
-        const input = await this.event(chat, first.chat, scripts, history, { kind: 'input' }, null);
-        if (input.changed) {
-          const failed = regather(false);
-          if (failed) return failed;
-          history = { ...turn.scope, messages: turn.scope.messages.slice(0, -1) };
+        const history = (): ChatScope => ({ ...turn.scope, messages: turn.scope.messages.slice(0, -1) });
+        const input = await this.event(chat, first.chat, scripts, history(), { kind: 'input' }, null);
+        let { stop, writes: before } = input.outcome;
+        let text = said.text;
+        // A stop ends the turn where it is called: what would have run after it does not, and the message is saved
+        // as it stands, with what was written until then.
+        if (!stop) {
+          if (input.changed) {
+            const failed = regather(false);
+            if (failed) return failed;
+          }
+          const edited = await this.event(chat, first.chat, scripts, { ...history(), pending: before }, { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } }, null);
+          before = [...before, ...edited.outcome.writes];
+          if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
+          stop = edited.outcome.stop;
         }
-        const edited = await this.event(chat, first.chat, scripts, { ...history, pending: input.outcome.writes }, { kind: 'edit', stage: 'editInput', value: said.text, meta: { index: -1 } }, null);
-        const before = [...input.outcome.writes, ...edited.outcome.writes];
-        const text = typeof edited.outcome.value === 'string' ? edited.outcome.value : said.text;
         const sent = await appendUserMessage(this.session.store, chat, { ...said, text, ...(before.length > 0 && { before }) });
         if (!sent.ok) return { kind: 'unsent', failure: sent };
+        if (stop) return halted;
         const failed = regather(true);
         if (failed) return failed;
       }
@@ -189,11 +205,11 @@ export class Scripts {
   // The request's messages after the bot's editRequest listeners, with what they wrote. A listener's answer that is
   // no list of messages leaves the request as it was built.
   async requesting(chat: string, turn: TurnContext, messages: ChatMessage[]): Promise<{ messages: ChatMessage[]; writes: Writes }> {
-    // Only a script that names the hook can listen for it.
-    const scripts = scriptsOf(turn.scope.packs).filter(({ code }) => code.includes('editRequest'));
+    const scripts = scriptsOf(turn.scope.packs);
     if (scripts.length === 0) return { messages, writes: [] };
     return this.queued(chat, async () => {
       const { outcome } = await this.event(chat, turn.chat, scripts, turn.scope, { kind: 'edit', stage: 'editRequest', value: messages, meta: {} }, null);
+      if (!outcome.handled) return { messages, writes: outcome.writes };
       const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
         if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
         return [{ role: message.role, content: message.content, ...(message.cache === true && { cache: true }) }];
@@ -270,7 +286,7 @@ export class Scripts {
 
   private reading(chat: Chat, scope: ChatScope): Read {
     const { staged, wrote, variables } = renderChat('prompt', scope);
-    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(this.session.store, chat, scope, staged, [...variables]) };
+    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(scope, luaStanding(this.session.store, chat, scope), staged, [...variables]) };
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.
@@ -289,12 +305,16 @@ export class Scripts {
   }
 
   // What a run or a display pass has to say of the bot's scripts: their errors and the functions this app lacks, or
-  // the error the run itself ended on.
+  // the error the run itself ended on. Or commands that ran away: a display's, or those a script evaluated.
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown) {
     if (result instanceof LuaStuck) return this.note(chat, { kind: 'stuck' });
+    if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' });
     if (result instanceof Error) return this.tell(chat, `failed:${result.message}`, { kind: 'failed', message: result.message });
     const { errors, missing } = result as Pick<Outcome, 'errors' | 'missing'>;
-    for (const { script, message } of errors) this.tell(chat, `failed:${message}`, { kind: 'failed', message: `${script}: ${message}` });
+    for (const error of errors) {
+      if ('runaway' in error) this.tell(chat, 'runaway', { kind: 'runaway' });
+      else this.tell(chat, `failed:${error.message}`, { kind: 'failed', message: `${error.script}: ${error.message}` });
+    }
     if (missing.length > 0) this.tell(chat, `missing:${missing.join()}`, { kind: 'missing', names: missing });
   }
 
@@ -310,7 +330,13 @@ export class Scripts {
         const limit = reserve === null || context === null ? Infinity : context - reserve;
         let total = 0;
         const fitting: Awaited<ReturnType<Host['lore']>> = [];
-        for (const entry of activeLore(scope, crypto.randomUUID(), count)) {
+        const lore = activeLore(scope, crypto.randomUUID(), count);
+        // The script reads none, and the person is told why.
+        if ('kind' in lore) {
+          this.tell(chat, 'runaway', { kind: 'runaway' });
+          return fitting;
+        }
+        for (const entry of lore) {
           total += count(entry.text);
           if (total > limit) break;
           fitting.push(entry);
@@ -353,15 +379,6 @@ export class Scripts {
     }
     if (!allowed) return refused('the user has not allowed this bot to call models');
 
-    const minute = Date.now() - 60_000;
-    const recent = (this.called.get(chat) ?? []).filter((at) => at > minute);
-    this.called.set(chat, recent);
-    if (recent.length >= CALLS_A_MINUTE) {
-      this.tell(chat, 'flood', { kind: 'flood' });
-      return refused('too many model calls in a minute');
-    }
-    recent.push(Date.now());
-
     const route = chatModel(store, stored.value, role);
     const profile = 'kind' in route ? null : modelProfile(store, route.model);
     if ('kind' in route || profile?.kind !== 'profile') {
@@ -369,16 +386,22 @@ export class Scripts {
       return refused('no model is set');
     }
     let text = '';
+    const call = await botCall(chat);
+    // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,
       connection: route.connection.value,
       model: route.model,
       settings: profile.profile.value.settings,
       messages,
-      call: await pageCall(),
+      call,
       signal: this.closing.signal,
       onText: (phase, chunk) => void (phase === 'text' && (text += chunk)),
-    });
+    }).finally(() => endCall(store, call.id));
+    if (answer.error?.kind === 'app' && answer.error.code === 'too-many-bot-calls') {
+      this.tell(chat, 'flood', { kind: 'flood' });
+      return refused('too many model calls in a minute');
+    }
     const receipt = receiptOf(callOf(route), answer);
     const last = this.session.read.chat(chat).snapshot()?.messages.at(-1);
     if (last) {

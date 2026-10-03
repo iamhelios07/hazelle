@@ -6,6 +6,7 @@ let rev = 0;
 const entry = (id: string, value: Entry): Stored<'entry'> => ({ id, kind: 'entry', parent: 'chat', rev: ++rev, value });
 const user = (id: string, text: string) => entry(id, { type: 'message', role: 'user', at: rev, text, receipt: null });
 const receipt = (over: Partial<Receipt> = {}): Receipt => ({
+  id: crypto.randomUUID(),
   connection: 'c1',
   source: 'OpenRouter',
   model: 'm1',
@@ -48,6 +49,14 @@ describe('fold', () => {
     // A select written before the edit, naming the replaced version, still lands on its slot.
     entries.push(entry('s1', { type: 'select', message: 'b1', version: 'v2', at: 0 }), entry('s2', { type: 'select', message: 'b1', version: 'b1', at: 0 }));
     expect(shown(fold(entries)[0]!).text).toBe('하나 고침');
+  });
+
+  it('leads a version replaced more than once to the one standing in its place, for a device that still shows the first', () => {
+    const twice = [user('m1', 'v0'), version('v1', 'm1', 'v1', 'm1'), version('v2', 'm1', 'v2', 'v1'), version('other', 'm1', 'other')];
+    const selected = fold([...twice, entry('s1', { type: 'select', message: 'm1', version: 'm1', at: 0 })])[0]!;
+    expect([selected.versions.map(({ text }) => text), selected.selected]).toEqual([['v2', 'other'], 0]);
+    const edited = fold([...twice, version('v3', 'm1', 'v3', 'm1')])[0]!;
+    expect([edited.versions.map(({ text }) => text), edited.selected]).toEqual([['v3', 'other'], 0]);
   });
 
   it('keeps a text past the scripts staged through its edit, never through a retry or a new version', () => {
@@ -177,6 +186,15 @@ describe('modelUsage', () => {
       costs: [{ unit: 'usd', amount: 0.75, estimated: true }],
       costUnknown: 0,
     });
+  });
+});
+
+describe('modelUsage of a call held twice', () => {
+  it('counts it once though a branch holds it under a later edit and the original has continued it since', () => {
+    const cut = receipt({ state: 'cut', cut: 'length' });
+    const original = fold([bot('b1', '하나 둘', { continues: cut })]);
+    const branch = fold([bot('b9', '하나', cut), entry('e9', { type: 'version', message: 'b9', replaces: 'b9', edit: true, at: 999, text: '하나.', receipt: cut })]);
+    expect(modelUsage([original, branch], { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 2 });
   });
 });
 

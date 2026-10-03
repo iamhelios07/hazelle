@@ -7,54 +7,54 @@ import { packsOf } from '../../runtime/turn';
 import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
 import type { Frame } from '../common/frame';
+import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { ALWAYS, BOT_MODELS, BOT_MODELS_HELP, inSettings, moduleName, PAGES } from '../common/words';
-import { useCharacter, useModules, useSettings, useStore } from '../session';
+import { useModules, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
 
 type Height = 'peek' | 'most';
 const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 적어 주세요.`;
+// undefined: left empty, which is the app's own height. null: not a height.
 const readHeight = (draft: string) => {
+  if (draft.trim() === '') return undefined;
   const value = Number(draft);
   return Number.isInteger(value) && value >= PICTURE_PERCENT.min && value <= PICTURE_PERCENT.max ? value : null;
 };
+const SWITCHES = { decor: setDecor, botModels: setBotModels };
+type Switched = keyof typeof SWITCHES;
 // One status for the editor's two saves: a failure first, then one still saving.
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
   statuses.find((each) => each === 'failed') ?? statuses.find((each) => each === 'saving') ?? statuses.find((each) => each !== null) ?? null;
 
 // 캐릭터 편집: the card's text and the alias, on its own page or beside the chat. Only the fields changed here go to
 // editCharacter. A caller leaves by unmounting it, which saves.
-export function CharacterEditor({ id, initial, frame }: { id: string; initial: Character; frame: Frame }) {
+// character: the stored character as it is now, on every render. The editor shows it, under what waits to be saved.
+export function CharacterEditor({ id, character, frame }: { id: string; character: Character; frame: Frame }) {
   const store = useStore();
-  const [text, setText] = useState<CharacterText>({ ...initial.card, alias: initial.alias ?? '' });
-  const { status, change: queue } = useAutosave<CharacterText>((patch) => editCharacter(store, id, patch));
   const toast = useToast();
-  const [decor, setDecorShown] = useState(initial.decor !== false);
-  const [botModels, setBotModelsShown] = useState(initial.botModels === true);
-  const pictureSave = useAutosave<Pictures>((patch) => setPictures(store, id, patch));
-  const [fold, setFold] = useState(initial.pictures?.fold !== false);
-  const [heights, setHeights] = useState<Record<Height, string>>({ peek: String(initial.pictures?.peek ?? ''), most: String(initial.pictures?.most ?? '') });
-  // Read as they are now, not as they were at open: a module comes, goes and is switched while the editor is open.
+  const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
+  const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
+  const [typedName, setTypedName] = useState<string>();
+  const [typedHeights, setTypedHeights] = useState<Partial<Record<Height, string>>>({});
+  // A switch shows its new value while its save is on its way, and the stored one again if that fails.
+  const [switching, setSwitching] = useState<Partial<Record<Switched, boolean>>>({});
+  const held: CharacterText = { ...character.card, alias: character.alias ?? '', ...unsaved };
+  const text = { ...held, name: typedText(typedName, filled, held.name, String) };
+  const pictures: Pictures = { ...character.pictures, ...pictureSave.unsaved };
+  const fold = pictures.fold !== false;
+  const decor = switching.decor ?? character.decor !== false;
+  const botModels = switching.botModels ?? character.botModels === true;
   const modules = useModules();
   const always = useSettings().modules ?? [];
-  const own = useCharacter(id)?.character.modules ?? [];
+  const own = character.modules ?? [];
 
-  function changeDecor(on: boolean) {
-    setDecorShown(on);
-    void setDecor(store, id, on).then((saved) => {
-      if (saved.ok) return;
-      setDecorShown(!on);
-      toast.failed(saved, '저장하지 못했어요.');
-    });
-  }
-
-  function changeBotModels(on: boolean) {
-    setBotModelsShown(on);
-    void setBotModels(store, id, on).then((saved) => {
-      if (saved.ok) return;
-      setBotModelsShown(!on);
-      toast.failed(saved, '저장하지 못했어요.');
+  function flip(field: Switched, on: boolean) {
+    setSwitching((current) => ({ ...current, [field]: on }));
+    void SWITCHES[field](store, id, on).then((saved) => {
+      setSwitching((current) => ({ ...current, [field]: undefined }));
+      if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
     });
   }
 
@@ -63,33 +63,29 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
     if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
   }
 
-  function changeFold(on: boolean) {
-    setFold(on);
-    pictureSave.change({ fold: on ? undefined : false });
-  }
-
   function changeHeight(field: Height, draft: string) {
-    setHeights((current) => ({ ...current, [field]: draft }));
+    setTypedHeights((current) => ({ ...current, [field]: draft }));
     const value = readHeight(draft);
-    pictureSave.change({ [field]: value ?? undefined }, draft.trim() === '' || value !== null);
+    pictureSave.change({ [field]: value ?? undefined }, value !== null);
   }
 
   function heightRow(field: Height, label: string, help: string, placeholder: string) {
-    const set = heights[field].trim() !== '';
-    const invalid = set && readHeight(heights[field]) === null;
+    const height = typedText(typedHeights[field], readHeight, pictures[field], (value) => String(value ?? ''));
+    const set = height.trim() !== '';
+    const invalid = readHeight(height) === null;
     return (
       <SettingRow
         label={label}
         help={help}
         changed={set}
         error={invalid ? HEIGHT_ERROR : undefined}
-        control={<NumberInput label={label} value={heights[field]} unit="%" placeholder={placeholder} invalid={invalid} onChange={(draft) => changeHeight(field, draft)} />}
+        control={<NumberInput label={label} value={height} unit="%" placeholder={placeholder} invalid={invalid} onChange={(draft) => changeHeight(field, draft)} />}
       />
     );
   }
 
   function change<K extends keyof CharacterText>(field: K, value: CharacterText[K]) {
-    setText((current) => ({ ...current, [field]: value }));
+    if (field === 'name') setTypedName(value as string);
     queue({ [field]: value }, field !== 'name' || !!(value as string).trim());
   }
 
@@ -142,15 +138,15 @@ export function CharacterEditor({ id, initial, frame }: { id: string; initial: C
       </Section>
       <Section title="표시">
         <SettingGroup label="표시">
-          <SettingRow label="봇 꾸밈" help="봇이 만든 상태창, 꾸밈과 버튼을 그려요. 끄면 글만 보여요." control={<Switch label="봇 꾸밈" checked={decor} onChange={changeDecor} />} />
+          <SettingRow label="봇 꾸밈" help="봇이 만든 상태창, 꾸밈과 버튼을 그려요. 끄면 글만 보여요." control={<Switch label="봇 꾸밈" checked={decor} onChange={(on) => flip('decor', on)} />} />
           {decor && (
             <SettingRow
               label="긴 그림 접기"
               help="그림만 있는 줄은 윗부분만 보여요. 마우스를 올려 두거나 누르면 펼쳐져요."
-              control={<Switch label="긴 그림 접기" checked={fold} onChange={changeFold} />}
+              control={<Switch label="긴 그림 접기" checked={fold} onChange={(on) => pictureSave.change({ fold: on ? undefined : false })} />}
             />
           )}
-          {scriptsOf(packsOf(store, { character: id }).map(({ pack }) => pack)).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={changeBotModels} />} />}
+          {scriptsOf(packsOf(store, { character: id }).map(({ pack }) => pack)).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}
         </SettingGroup>
         {decor && (
           <Disclosure label="그림 크기">

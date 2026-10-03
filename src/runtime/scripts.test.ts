@@ -1,18 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { fetchApi } from './api';
 import type { Trigger } from '../engine/import/types';
+import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown } from '../model/chat';
-import { startChat } from './chat-log';
-import type { Session } from './session';
+import { setToggle } from './characters';
+import { appendUserMessage, startChat } from './chat-log';
+import type { Runner } from './lua/client';
+import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
 import { displayChat, takeTurn } from './turn';
 
 const server = testServer();
 
 // A chat with a character whose triggers are these, or the one Lua trigger of this code, opened on its greeting.
-async function chatWith(session: Session, script: string | Trigger[]) {
+async function chatWith(session: Session, script: string | Trigger[], toggles = '') {
   await answerable(session);
   const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', name: 'main', code: script }] : script;
-  const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers };
+  const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers, toggles };
   const character = await session.store.create('character', { card, folder: null, loreFolders: [] });
   if (!character.ok) throw new Error(character.error);
   const chat = crypto.randomUUID();
@@ -36,7 +40,7 @@ describe("a turn with the bot's Lua", () => {
           addChat(id, 'char', 'narration')
         end
         listenEdit('editOutput', function(id, value) return value .. ' (' .. getChatVar(id, 'turn') .. ')' end)
-        listenEdit('editRequest', function(id, value) value[#value + 1] = { role = 'system', content = 'from lua' } return value end)
+        listenEdit('edit' .. 'Request', function(id, value) value[#value + 1] = { role = 'system', content = 'from lua' } return value end)
         function onOutput(id)
           setState(id, 'seen', getChat(id, -1).data)
           setChat(id, -1, getChat(id, -1).data .. '!')
@@ -56,6 +60,9 @@ describe("a turn with the bot's Lua", () => {
       expect(JSON.stringify(log[0]!.sent.body)).toContain('turn 1:안녕 [input]');
       expect(JSON.stringify(log[0]!.sent.body)).toContain('narration');
       expect((JSON.parse(log[0]!.sent.body!) as { messages: unknown[] }).messages.at(-1)).toEqual({ role: 'system', content: 'from lua' });
+      const { prompt } = session.talk.sent(reply!.id)!;
+      expect(prompt.parts).toHaveLength(prompt.messages.length);
+      expect(prompt.parts.at(-1)).toMatchObject({ from: { kind: 'script' } });
     }));
 
   it('ends the turn before any request on stopChat, keeping the message and what was written', () =>
@@ -67,11 +74,33 @@ describe("a turn with the bot's Lua", () => {
       expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', after: [['handled', '/roll']] });
     }));
 
-  it("asks before the bot's first model call, keeps the answer on the character, and counts the call in the chat's usage", () =>
+  it('ends the turn on a stopChat from onInput, running nothing after it and keeping the message with what was written', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(
+        session,
+        `function onInput(id) setChatVar(id, 'seen', '1') stopChat(id) end
+        listenEdit('editInput', function(id, value) return value .. ' edited' end)
+        function onStart(id) setChatVar(id, 'started', '1') end`,
+      );
+      const log = stubRelay(() => saying('never'));
+      expect(await takeTurn(session, chat, { kind: 'send', text: '/roll' })).toBeNull();
+      expect(log).toHaveLength(0);
+      expect(messages()).toHaveLength(2);
+      expect(shown(messages()[1]!)).toMatchObject({ text: '/roll', before: [['seen', '1']] });
+      expect(shown(messages()[1]!).after).toBeUndefined();
+    }));
+
+  it("asks before the bot's first model call, keeps the answer on the character, counts the call in the chat's usage, and ends it on the server", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `onOutput = async(function(id) setChatVar(id, 'made', LLM(id, { { role = 'user', content = 'sum' } }).result) end)`);
       const character = session.store.get('chat', chat)!.value.character!;
       const log = stubRelay(inTurn([saying('reply'), saying('summary')]));
+      const served = globalThis.fetch;
+      const calls: string[] = [];
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/streams/') && init?.method === 'POST') calls.push(url);
+        return served(url, init);
+      });
       expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
       await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ chat, question: { kind: 'model' } }]);
       expect(log).toHaveLength(1);
@@ -81,6 +110,24 @@ describe("a turn with the bot's Lua", () => {
       expect((JSON.parse(log[1]!.sent.body!) as { messages: unknown }).messages).toEqual([{ role: 'user', content: 'sum' }]);
       expect(shown(messages()[2]!).calls).toMatchObject([{ receipt: { state: 'done', model: 'm' } }]);
       expect(modelUsage([messages()], { connection: shown(messages()[2]!).receipt!.connection, model: 'm' }).calls).toBe(2);
+      expect(calls).toHaveLength(2);
+      await vi.waitFor(async () => expect((await fetchApi(calls[1]!.slice('/api/'.length))).status).toBe(404));
+    }));
+
+  it("tells the chat when the server turns its bot's model call away for coming too often", () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `onOutput = async(function(id) setChatVar(id, 'made', LLM(id, { { role = 'user', content = 'sum' } }).result) end)`);
+      stubRelay(inTurn([saying('reply')]));
+      const served = globalThis.fetch;
+      let starts = 0;
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+        url.startsWith('/api/streams/') && init?.method === 'POST' && starts++ ? Promise.resolve(Response.json({ error: 'too-many-bot-calls' }, { status: 429 })) : served(url, init),
+      );
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toBeNull();
+      await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(1);
+      session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      await expect.poll(() => shown(messages()[2]!).after).toEqual([['made', 'Error: too many model calls in a minute']]);
+      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'flood' }]);
     }));
 
   it("answers a button with the script's function and keeps its writes after the last message", () =>
@@ -90,6 +137,14 @@ describe("a turn with the bot's Lua", () => {
       expect(await session.scripts.press(chat, { trigger: 'missing' })).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
+    }));
+
+  it("tells a script's cbs() that ran away as the runaway note, not as its error", () =>
+    server.withSession(async (session) => {
+      const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
+      const { chat } = await chatWith(session, `function grow(id) cbs(${doubling}) end`);
+      expect(await session.scripts.press(chat, { trigger: 'grow' })).toBe(true);
+      expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'runaway' }]);
     }));
 
   it('answers a button with the block trigger of its name, whose texts are CBS over what it wrote', () =>
@@ -106,6 +161,26 @@ describe("a turn with the bot's Lua", () => {
       expect(messages()[1]).toMatchObject({ role: 'assistant' });
       expect(shown(messages()[1]!)).toMatchObject({ text: 'The door is open at -1.', staged: true });
     }));
+});
+
+describe("the bot scripts' machine", () => {
+  it('is ended when its session closes, one still being made then too', async () => {
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    const { accountId, vaultKey } = await server.account();
+    let made!: (runner: Runner) => void;
+    const lua = vi.fn(() => new Promise<Runner>((resolve) => (made = resolve)));
+    const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, lua);
+    if (!opened.ok) throw new Error(opened.error);
+    const { chat } = await chatWith(opened.data, `function open(id) end`);
+    const pressed = opened.data.scripts.press(chat, { trigger: 'open' });
+    await vi.waitFor(() => expect(lua).toHaveBeenCalledOnce());
+    opened.data.close();
+    const close = vi.fn();
+    made({ run: () => Promise.reject(new Error('closed')), display: () => Promise.reject(new Error('closed')), close });
+    await pressed;
+    expect(close).toHaveBeenCalledOnce();
+  });
 });
 
 describe("the display with the bot's Lua", () => {
@@ -127,5 +202,84 @@ describe("the display with the bot's Lua", () => {
       await session.scripts.press(chat, { trigger: 'hit' });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:9>']);
       leave();
+    }));
+
+  it('passes a message again when a toggle its listener reads changes', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value .. ' <' .. getGlobalVar(id, 'toggle_hard') .. '>' end)`, 'hard=어렵게');
+      const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+      const screen = session.read.screen(chat, session.talk, opening);
+      const leave = screen.subscribe(() => {});
+      screen.setInputs(opening, { width: 1200, height: 800 });
+      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <0>']);
+      await setToggle(session.store, opening.chat.character, 'hard', '1');
+      await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <1>']);
+      leave();
+    }));
+
+  it('passes again, after reloadDisplay, the messages of a stretch that was running when it was asked', () =>
+    server.withSession(async (session) => {
+      const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value end)\nfunction again(id) reloadDisplay(id) end`);
+      for (let said = 0; said < 9; said++) await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '안녕' });
+      const run = Lua.prototype.display;
+      const passed: number[][] = [];
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      // The second stretch, of the two oldest messages, is held until reloadDisplay has been asked, and long enough
+      // that the stretch after it is a short one of the newest.
+      const display = vi.spyOn(Lua.prototype, 'display').mockImplementation(async function (this: Lua, owner, scripts, snapshot, items) {
+        const shown = await run.call(this, owner, scripts, snapshot, items);
+        if (passed.push(items.map(({ index }) => index)) === 2) await held;
+        return shown;
+      });
+      const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+      const screen = session.read.screen(chat, session.talk, opening);
+      const leave = screen.subscribe(() => {});
+      screen.setInputs(opening, { width: 1200, height: 800 });
+      await vi.waitFor(() => expect(passed).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [-1, 0]]));
+      await session.scripts.press(chat, { trigger: 'again' });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      release();
+      await vi.waitFor(() => expect(passed.slice(2).flat()).toContain(-1));
+      display.mockRestore();
+      leave();
+    }));
+
+  it('leaves it to the engine whether a script listens: one that only names the hook is passed once, one registered under a computed name is passed', () =>
+    server.withSession(async (session) => {
+      const open = async (script: string | Trigger[]) => {
+        const { chat, messages } = await chatWith(session, script);
+        const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
+        const screen = session.read.screen(chat, session.talk, opening);
+        const leave = screen.subscribe(() => {});
+        screen.setInputs(opening, { width: 1200, height: 800 });
+        return { texts: () => screen.snapshot().display.texts, again: () => screen.setInputs(opening, { width: 800, height: 800 }), leave };
+      };
+      const display = vi.spyOn(Lua.prototype, 'display');
+      const named = await open(`-- editDisplay\nfunction onStart(id) end`);
+      expect(named.texts()).toEqual(['']);
+      await expect.poll(named.texts).toEqual(['어서 와.']);
+      named.again();
+      expect(named.texts()).toEqual(['어서 와.']);
+      expect(display).toHaveBeenCalledOnce();
+      named.leave();
+
+      const computed = await open(`listenEdit('edit' .. 'Display', function(id, value) return value .. '!' end)`);
+      expect(computed.texts()).toEqual(['어서 와.']);
+      await expect.poll(computed.texts).toEqual(['어서 와.!']);
+      computed.leave();
+
+      // The answer of one script's engine leaves the other's results fresh.
+      display.mockClear();
+      const mixed = await open([
+        { kind: 'lua', name: 'named', code: `-- editDisplay\nfunction onInput(id) end` },
+        { kind: 'lua', name: 'listening', code: `listenEdit('editDisplay', function(id, value) return value .. '?' end)` },
+      ]);
+      await expect.poll(mixed.texts).toEqual(['어서 와.?']);
+      mixed.again();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(display).toHaveBeenCalledOnce();
+      mixed.leave();
+      display.mockRestore();
     }));
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Trigger } from '../import/types';
-import { Lua, type Event } from './run';
+import { Lua, type Event, type Script } from './run';
 import type { Host, Snapshot } from './state';
 
 const SNAPSHOT: Snapshot = {
@@ -103,12 +103,18 @@ describe('Lua runs', () => {
     expect((await run(code, { kind: 'call', name: 'nothing' })).handled).toBe(false);
   });
 
+  it('reports CBS its cbs() call ran away with as a runaway, and leaves one the script catches to it', async () => {
+    const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
+    expect((await run(`function onStart(id) cbs(${doubling}) end`, { kind: 'start' })).errors).toEqual([{ script: 'main', runaway: true }]);
+    expect((await run(`function onStart(id) pcall(cbs, ${doubling}) end`, { kind: 'start' })).errors).toEqual([]);
+  });
+
   it('reports an error with its line, a function this app lacks, and a script that never ends', async () => {
     const failed = await run(`function onStart(id)\n  local none = nil\n  return none.field\nend`, { kind: 'start' });
-    expect(failed.errors[0]!.message).toContain('main:3:');
+    expect(failed.errors[0]).toMatchObject({ message: expect.stringContaining('main:3:') });
     expect((await run(`function onStart(id) generateImage(id, 'x') setChatVar(id, 'after', '1') end`, { kind: 'start' }))).toMatchObject({ missing: ['generateImage'], writes: [['after', '1']] });
     expect((await run(`syntax error here`, { kind: 'start' })).errors).toHaveLength(1);
-    expect((await run(`function onStart(id) while true do end end`, { kind: 'start' })).errors[0]!.message).toContain('timeout');
+    expect((await run(`function onStart(id) while true do end end`, { kind: 'start' })).errors[0]).toMatchObject({ message: expect.stringContaining('timeout') });
   });
 
   it('evaluates CBS with the run\'s writes, reads the lorebook by name and as the prompt would hold it, and takes a whole chat', async () => {
@@ -155,7 +161,16 @@ describe('Lua display', () => {
       { index: 0, text: 'a', variables: [] },
       { index: 1, text: 'b', variables: [['hp', '4']] },
     ]);
-    expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], errors: [], missing: [] });
+    expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], listening: [true], errors: [], missing: [] });
+  });
+
+  it('says which scripts listen by what their engines registered, a computed name too, not by their source', async () => {
+    const scripts = [`-- editDisplay editRequest\nfunction onStart(id) end`, `listenEdit('edit' .. 'Display', function(id, value) return value .. '!' end)`].map((code): Script => ({ kind: 'lua', name: 'main', code }));
+    expect(await lua.display('listening', scripts, SNAPSHOT, [{ index: 0, text: 'a', variables: [] }])).toMatchObject({ texts: ['a!'], listening: [false, true] });
+    const request = [{ role: 'user', content: 'a' }];
+    expect(await lua.run('listening', [scripts[0]!], SNAPSHOT, { kind: 'edit', stage: 'editRequest', value: request, meta: {} }, host())).toMatchObject({ value: request, handled: false });
+    const computed = `listenEdit('edit' .. 'Request', function(id, value) value[1].content = 'b' return value end)`;
+    expect(await run(computed, { kind: 'edit', stage: 'editRequest', value: request, meta: {} })).toMatchObject({ value: [{ role: 'user', content: 'b' }], handled: true });
   });
 });
 

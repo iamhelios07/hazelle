@@ -36,9 +36,12 @@ export type Route =
   | { kind: 'profile'; id: string }
   // model: a starred model's id, which may hold any character; the path carries it escaped.
   | { kind: 'model'; connection: string; model: string }
-  | { kind: 'account' }
+  // section opens the page at 운영자가 보낸 알림, which the toast saying they came links to.
+  | { kind: 'account'; section: 'notices' | null }
   // 설정's 채팅 page: what every chat starts with, such as the long-term memory settings.
   | { kind: 'chat-settings' }
+  // 설정's 운영 page, the operator's alone.
+  | { kind: 'admin' }
   // 설정's own list of its pages, which phones open from the library.
   | { kind: 'settings' };
 
@@ -110,9 +113,10 @@ export function parseRoute(at: string): Route {
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
-    if (top === 'account') return { kind: 'account' };
+    if (top === 'account') return { kind: 'account', section: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('section') === 'notices' ? 'notices' : null };
   }
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
+  if (top === 'settings' && id === 'admin' && sub === undefined) return { kind: 'admin' };
   return HOME;
 }
 
@@ -170,9 +174,11 @@ export function href(route: Route): string {
     case 'model':
       return `/models/${route.connection}/${route.model.split('/').map(encodeURIComponent).join('/')}`;
     case 'account':
-      return '/account';
+      return `/account${route.section ? `?section=${route.section}` : ''}`;
     case 'chat-settings':
       return '/settings/chat';
+    case 'admin':
+      return '/settings/admin';
     case 'settings':
       return '/settings';
   }
@@ -206,7 +212,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
   }
 }
 
-export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'account';
+export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'account' | 'admin';
 
 // Which page of 설정 a route is on, 'list' for 설정's own list, or null outside 설정. While it is not null, the
 // settings layer stands in for the library.
@@ -226,6 +232,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'model':
       return 'models';
     case 'account':
+    case 'admin':
       return route.kind;
     case 'chat-settings':
       return 'chat';
@@ -287,6 +294,7 @@ export function up(route: Below, wide: boolean, chats: ChatShelves): Route {
     case 'models':
     case 'account':
     case 'chat-settings':
+    case 'admin':
       return { kind: 'settings' };
     case 'add-connection':
     case 'connection':

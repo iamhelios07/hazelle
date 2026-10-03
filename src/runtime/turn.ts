@@ -3,13 +3,14 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Card, Pack } from '../engine/import/types';
 import { readToggles } from '../engine/import/toggles';
-import { assemble, type Assembled, type PromptInput, type TooLong } from '../engine/pipeline';
+import { assemble, rewritten, type Assembled, type PromptInput, type RanAway, type TooLong } from '../engine/pipeline';
 import { display, type Display } from '../engine/display';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import { shown, type Chat, type Message } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import { live } from '../model/library';
 import type { Toggle } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
@@ -51,6 +52,7 @@ export type TurnFailure = (
   | TalkFailure
   | Blocked
   | TooLong
+  | RanAway
   | { kind: 'tokenizer' }
   | { kind: 'unstarted'; failure: ApiFailure }
   | { kind: 'unpulled'; failure: ApiFailure }
@@ -238,7 +240,7 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
 // null: the chat, or the message the target names, is gone; for a continue, so is the version it names. ids are
 // the ones the turn was shown under, for a new chat shown before it was saved.
 function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() }): TurnContext | Blocked | null {
-  const stored = session.store.get('chat', chat);
+  const stored = live(session.store.get('chat', chat));
   if (!stored) return null;
   const route = chatModel(session.store, stored.value, 'main');
   if ('kind' in route) return route;
@@ -277,22 +279,20 @@ function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, targ
   };
 }
 
-// The request sending text would make, as its cache reads it, for the forecast beside the send button. A message sent
-// translated goes out as its translation, which is not made yet, so it stands in as typed.
-export function nextSend(session: Session, chat: string, text: string, countTokens: (text: string) => number): CacheSend | null {
-  const next = wouldSend(session, chat, { kind: 'send', text }, countTokens);
-  if (!next) return null;
-  const { turn, prompt } = next;
-  const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
-  return view && { connection: turn.route.connection.id, view, parts: prompt.parts };
-}
-
 // The request the chat would send for target now; null while it cannot send, or the prompt is over the model's budget.
-export function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, countTokens: (text: string) => number): { turn: TurnContext; prompt: Assembled } | null {
+export type Sending = { turn: TurnContext; prompt: Assembled };
+
+export function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, countTokens: (text: string) => number): Sending | null {
   const turn = gatherTurn(session, chat, target);
   if (turn === null || 'kind' in turn) return null;
   const prompt = assemble({ scope: turn.scope, seed: turn.reply.id, countTokens, budget: turn.budget, continuing: false, memory: turn.memory });
   return 'kind' in prompt ? null : { turn, prompt };
+}
+
+// A request as its cache reads it, for the forecast beside the send button.
+export function cacheSend({ turn, prompt }: Sending): CacheSend | null {
+  const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
+  return view && { connection: turn.route.connection.id, view, parts: prompt.parts };
 }
 
 // A message whose shown version has a translation, with that translation as its text: a reply's, or what the user
@@ -354,8 +354,10 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const prompt = assemble({ scope, seed: reply.id, countTokens, budget, continuing: reply.continues !== null, memory });
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
+  const sent = requested.messages === prompt.messages ? prompt : rewritten(prompt, requested.messages, countTokens, budget);
+  if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
-  return { route, settings, prompt: { ...prompt, messages: requested.messages }, said, ...(before.length > 0 && { before }) };
+  return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }) };
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or
@@ -371,7 +373,7 @@ export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, st
     const made = await resumeTranslation(session.store, stream, signal, () => {}).finally(() => session.streams.reading.delete(stream.id));
     if (!made.ok && made.failure.kind === 'stopped') return;
     const id = stream.value.result;
-    const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed } } : { id, text: purpose.typed };
+    const said = made.ok ? { id, text: made.translation.text, translation: { ...made.translation, text: purpose.typed, sentIn: purpose.language } } : { id, text: purpose.typed };
     const saved = await appendUserMessage(session.store, stream.parent!, said);
     if (!saved.ok && saved.error === 'stopped') return;
     if (saved.ok || session.store.children('entry', stream.parent!).some((entry) => entry.id === id)) endCall(session.store, stream.id);
@@ -385,7 +387,8 @@ export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, st
 async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
   const typed = turn.said!;
   const messages = session.read.chat(chat).snapshot()!.messages;
-  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text } };
+  const language = translateSwitches(session.store, turn.chat.character).inputLanguage;
+  const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language } };
   session.streams.reading.add(target.id);
   const made = await translate(session, translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text }), target, signal, () => {}).finally(() =>
     session.streams.reading.delete(target.id),
@@ -397,6 +400,6 @@ async function sendTranslated(session: Session, chat: string, turn: TurnContext,
   return {
     ...turn,
     scope: { ...turn.scope, messages: turn.scope.messages.with(-1, { ...last, text: sent }) },
-    said: { id: typed.id, text: sent, translation: { ...made.translation, text: typed.text } },
+    said: { id: typed.id, text: sent, translation: { ...made.translation, text: typed.text, sentIn: language } },
   };
 }

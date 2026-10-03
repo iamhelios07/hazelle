@@ -3,10 +3,12 @@ import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import { live } from '../model/library';
 import { sortOf, type Block, type ConversationPrompt, type Prompt, type PromptOf, type PromptSort, type Toggle } from '../model/prompt';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiFailure, ApiResult } from './api';
+import { markDeleted } from './characters';
 import { without, type ObjectStore } from './store';
 
 // Every write of `prompt` objects and of the default prompts, except a conversation prompt's `models` layer, which
@@ -37,7 +39,7 @@ export type PromptChoice<S extends PromptSort = 'conversation'> = { kind: 'promp
 function choose<S extends PromptSort>(store: ObjectStore, sort: S, chosen: string | undefined): PromptChoice<S> {
   const own = chosen !== undefined;
   const id = chosen ?? store.get('settings', SETTINGS_ID)?.value[DEFAULTS[sort].setting];
-  const prompt = id === undefined ? null : store.get('prompt', id);
+  const prompt = id === undefined ? null : live(store.get('prompt', id));
   return prompt && ofSort(prompt, sort) ? { kind: 'prompt', prompt, own } : { kind: 'missing', own };
 }
 
@@ -129,14 +131,15 @@ export function copyPrompt(store: ObjectStore, id: string, name: string): Promis
   return store.create('prompt', original.task === undefined ? without({ ...original, name, origin }, 'imported') : { ...original, name, origin });
 }
 
-// A sort's default prompt cannot be deleted until another prompt of its sort is made the default.
+// To 휴지통 (model/library Mark). A sort's default prompt cannot be deleted until another prompt of its sort is made the
+// default.
 export async function removePrompt(store: ObjectStore, id: string): Promise<ApiResult<Stored<'prompt'>> | { ok: false; error: 'default' }> {
   const settings = store.get('settings', SETTINGS_ID)?.value;
   if (Object.values(DEFAULTS).some(({ setting }) => settings?.[setting] === id)) return { ok: false, error: 'default' };
-  return store.take('prompt', id);
+  return markDeleted(store, 'prompt', id, Date.now());
 }
 
-export const restorePrompt = (store: ObjectStore, removed: Stored<'prompt'>) => store.restore(removed);
+export const restorePrompt = (store: ObjectStore, id: string) => markDeleted(store, 'prompt', id, null);
 
 export const isDefaultPrompt = (settings: Settings, prompt: Stored<'prompt'>) => settings[DEFAULTS[sortOf(prompt.value)].setting] === prompt.id;
 

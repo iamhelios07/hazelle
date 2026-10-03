@@ -12,13 +12,14 @@ it('reports received objects and pages during opening and aborts the in-flight i
   const waiting = new Promise<void>((resolve) => { started = resolve; });
   const fetch = vi.fn(async (url: string, init: RequestInit) => {
     expect(init.signal).toBe(abandon.signal);
-    url = url.replace(/&account=account&known=\d+$/, '');
+    url = url.replace(/&known=\d+|&timeline=t$/g, '');
     if (url === '/api/objects?since=3&exclude=entry,memory&bootstrap=1') {
       started();
       return new Promise<Response>((_, reject) => init.signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }));
     }
     const revs = url === '/api/objects?since=0&exclude=entry,memory&bootstrap=1' ? [1, 2] : [3];
     return Response.json({
+      timeline: 't',
       changes: revs.map((rev) => ({ id: `gone-${rev}`, kind: 'connection', parent: null, rev, body: null })),
       cursor: revs.at(-1),
       more: true,
@@ -31,5 +32,5 @@ it('reports received objects and pages during opening and aborts the in-flight i
   expect(progress).toEqual([{ objects: 2, pages: 1 }, { objects: 3, pages: 2 }]);
   abandon.abort();
   expect(await opening).toEqual({ ok: false, error: 'stopped' });
-  expect(fetch.mock.calls.map(([url]) => url.replace(/&account=account&known=\d+$/, ''))).toEqual(['/api/objects?since=0&exclude=entry,memory&bootstrap=1', '/api/objects?since=2&exclude=entry,memory&bootstrap=1', '/api/objects?since=3&exclude=entry,memory&bootstrap=1']);
+  expect(fetch.mock.calls.map(([url]) => url.replace(/&known=\d+|&timeline=t$/g, ''))).toEqual(['/api/objects?since=0&exclude=entry,memory&bootstrap=1', '/api/objects?since=2&exclude=entry,memory&bootstrap=1', '/api/objects?since=3&exclude=entry,memory&bootstrap=1']);
 });

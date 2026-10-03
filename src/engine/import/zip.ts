@@ -1,4 +1,4 @@
-import { inflateSync } from 'fflate';
+import { inflate } from './inflate';
 
 const END_OF_DIRECTORY = 0x06054b50;
 const DIRECTORY_ENTRY = 0x02014b50;
@@ -52,7 +52,7 @@ export function openZip(bytes: Uint8Array<ArrayBuffer>): Zip | null {
       if (entry.method === STORED) return data;
       if (entry.method !== DEFLATED) return null;
       try {
-        return inflateSync(data, { out: new Uint8Array(entry.size) }) as Uint8Array<ArrayBuffer>;
+        return inflate(data, entry.size);
       } catch {
         return null;
       }

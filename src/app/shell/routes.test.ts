@@ -45,7 +45,11 @@ const EXAMPLES = {
     { kind: 'model', connection: CHAT, model: 'a b%c@d?e#f' },
     { kind: 'model', connection: CHAT, model: 'a//b/' },
   ],
-  account: [{ kind: 'account' }],
+  account: [
+    { kind: 'account', section: null },
+    { kind: 'account', section: 'notices' },
+  ],
+  admin: [{ kind: 'admin' }],
   'chat-settings': [{ kind: 'chat-settings' }],
   settings: [{ kind: 'settings' }],
 } satisfies { [K in Route['kind']]: Extract<Route, { kind: K }>[] };

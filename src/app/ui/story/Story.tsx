@@ -32,11 +32,12 @@ export const READER_RESIZED = 'readerresized';
 const STYLE_ATTRIBUTE = /(<[a-z][^>]*?\s)style(?=\s*=)/gi;
 const SET_ASIDE = 'data-style';
 // No form: the CSP does not limit where one posts. DOMPurify's own URL rule, with blob: added for the bots' pictures;
-// sanitize then keeps only the app's own sources and web links.
+// sanitize then keeps only the app's own sources and web links. No popover or command: either opens an element in
+// the top layer, which no containment holds, without a script.
 const CONFIG = {
   RETURN_DOM_FRAGMENT: true as const,
   FORBID_TAGS: ['form', 'style'],
-  FORBID_ATTR: ['style'],
+  FORBID_ATTR: ['style', 'popover', 'popovertarget', 'popovertargetaction', 'command', 'commandfor'],
   ADD_ATTR: ['risu-btn', 'risu-trigger', 'risu-mark'],
   ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 };
@@ -46,6 +47,7 @@ const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*\)/gi;
 // data: pictures, and blob: ones, which only the app itself can make: the chat puts its bots' pictures there.
 const OWN_SOURCE = /^(?:data|blob):/;
 const IMPORT = /@import[^;]*;?/gi;
+const XLINK = 'http://www.w3.org/1999/xlink';
 
 // For a stylesheet and a style attribute alike. Risu prefixes every class with x-risu- in the HTML and in the CSS, so
 // a bot may write either, and both lose it. Only the app's own URLs load: the CSP refuses the others anyway, and a
@@ -73,10 +75,16 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
     element.removeAttribute(SET_ASIDE);
   }
   for (const element of fragment.querySelectorAll('[class]')) element.setAttribute('class', element.getAttribute('class')!.replace(/(^|\s)x-risu-/g, '$1'));
-  for (const link of fragment.querySelectorAll('a[href]')) {
-    if (!/^https?:/i.test(link.getAttribute('href')!)) {
+  // Every element that follows a link: HTML's a and area, and SVG's a, whose address may be written as xlink:href.
+  // That one is moved to href, which wins when both are written, so one attribute holds every link.
+  for (const link of fragment.querySelectorAll('a, area')) {
+    const href = link.getAttribute('href') ?? link.getAttributeNS(XLINK, 'href');
+    link.removeAttributeNS(XLINK, 'href');
+    if (href === null) continue;
+    if (!/^https?:/i.test(href)) {
       link.removeAttribute('href');
     } else {
+      link.setAttribute('href', href);
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener noreferrer');
     }

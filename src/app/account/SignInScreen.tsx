@@ -1,19 +1,24 @@
 import { FileText, LogOut } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { LegalNotice } from '../common/LegalNotice';
 import { useAttempt } from '../common/useAttempt';
-import { Brand, Button, Callout, FileButton, IconButton, Intro, Screen, Stack, TextField } from '../ui';
+import { Brand, Button, Callout, FileButton, IconButton, Intro, Screen, Stack, Text, TextField } from '../ui';
 
 type Method = 'password' | 'recovery';
 
 type Props = {
   // The account whose vault is locked on this device, or null when signed out.
   account: string | null;
+  // Why this shows instead of what was open, such as another tab's sign-in.
+  notice?: string | null;
+  // Signed out: the way to make an account, or full while the operator's cap of accounts is reached.
+  signup?: (() => void) | 'full';
   onSubmit: (username: string, method: Method, secret: string) => Promise<string | null>;
   onLogout?: () => void;
 };
 
 // Signing in and unlocking are the same act: the password (or the recovery key) opens the vault.
-export function SignInScreen({ account, onSubmit, onLogout }: Props) {
+export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Props) {
   const [method, setMethod] = useState<Method>('password');
   const [username, setUsername] = useState('');
   const [secret, setSecret] = useState('');
@@ -49,6 +54,11 @@ export function SignInScreen({ account, onSubmit, onLogout }: Props) {
           <Button variant="ghost" onClick={switchMethod}>
             {recovery ? `비밀번호로 ${verb}` : `복구 키로 ${verb}`}
           </Button>
+          {typeof signup === 'function' && (
+            <Button variant="ghost" onClick={signup}>
+              계정 만들기
+            </Button>
+          )}
         </>
       }
     >
@@ -57,6 +67,8 @@ export function SignInScreen({ account, onSubmit, onLogout }: Props) {
           ? '내려받아 둔 복구 키 파일을 고르거나, 키를 직접 넣어 주세요. 열리면 새 비밀번호를 정해요.'
           : account && `${account} 계정이 이 기기에서 잠겨 있어요. 비밀번호를 넣어 주세요.`}
       </Intro>
+      {notice && <Text variant="note">{notice}</Text>}
+      {signup === 'full' && <Text variant="note">지금은 자리가 다 차서 새 계정을 만들 수 없어요. 자리가 늘면 다시 열려요.</Text>}
       <Stack>
         {!account && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         {recovery ? (
@@ -75,6 +87,7 @@ export function SignInScreen({ account, onSubmit, onLogout }: Props) {
           {failure}
         </Callout>
       )}
+      <LegalNotice />
     </Screen>
   );
 }

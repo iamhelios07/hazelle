@@ -35,7 +35,7 @@ describe('forecast', () => {
 
 describe('lastCache', () => {
   const receipt = (over: Partial<Receipt>): Receipt => ({
-    connection: 'c1', source: 'S', model: 'm1', modelName: 'M', state: 'done', cut: null, error: null, finishReason: 'stop', cost: null, replyId: null, firstTextMs: 100,
+    id: 'call', connection: 'c1', source: 'S', model: 'm1', modelName: 'M', state: 'done', cut: null, error: null, finishReason: 'stop', cost: null, replyId: null, firstTextMs: 100,
     usage: { inputTokens: 1000, outputTokens: 10, reasoningTokens: null, cachedInputTokens: 0, cacheWriteInputTokens: 900 }, totalMs: 4000, cache: '5m', ...over,
   });
   const reply = (at: number, value: Receipt): Message => ({ id: `m${at}`, role: 'assistant', at, versions: [{ id: `v${at}`, seed: 's', text: 't', receipt: value, edited: false, at }], selected: 0 });

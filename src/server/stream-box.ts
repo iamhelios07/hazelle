@@ -15,7 +15,8 @@ export type End = Reason & { ms: number };
 export type BoxStorage = {
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
-  list(options: { prefix: string }): Promise<Map<string, unknown>>;
+  // Ascending, from start (inclusive) to end (exclusive), at most limit.
+  list(options: { start: string; end: string; limit: number }): Promise<Map<string, unknown>>;
   deleteAll(): Promise<void>;
   setAlarm(at: number): Promise<void>;
 };
@@ -26,6 +27,11 @@ const GATHER_MS = 50;
 const GATHER_BYTES = 64 * 1024;
 // An outbound call keeps a Durable Object alive for up to 15 minutes from its start (tech-spec §6, Detached replies).
 const LIMIT_MS = 14.5 * 60 * 1000;
+// The provider's body bytes a call keeps; past them it ends as limit, as at its time. A long reply with long reasoning
+// is a few MB of text, and its SSE envelope can take some ten times that.
+const LIMIT_BYTES = 32 * 1024 * 1024;
+// Frames a reader takes from storage at once. A frame holds GATHER_BYTES and at most one upstream chunk more.
+const PAGE = 16;
 // Whatever no device came back for is dropped this long after the call started.
 const KEEP_MS = 24 * 60 * 60 * 1000;
 
@@ -34,6 +40,8 @@ const P256 = { name: 'ECDH', namedCurve: 'P-256' } as const;
 type Key = Awaited<ReturnType<typeof crypto.subtle.importKey>>;
 const encode = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
 const frameKey = (seq: number) => `f:${String(seq).padStart(10, '0')}`;
+// Past every frame key: ';' follows ':'.
+const FRAMES_END = 'f;';
 
 function frame(type: number, seq: number, body: Uint8Array): Uint8Array {
   const out = new Uint8Array(9 + body.byteLength);
@@ -62,11 +70,14 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> | null {
 const json = (status: number, error: string) => Response.json({ error }, { status });
 
 // One generation call, kept apart from the client that asked for it: it reads the upstream answer to the end and
-// seals it into frames that any reader gets from the start, then live.
+// seals it into frames that any reader gets from the start, then live. Storage holds the only copy of the frames, so
+// memory holds what is being sealed and what each reader is sent, however long the answer.
 export class StreamBox {
-  // Every frame since this instance made the call, hello first; empty in an instance rebuilt after it.
-  private frames: Uint8Array[] = [];
-  private readonly readers = new Set<ReadableStreamDefaultController<Uint8Array>>();
+  // The seq of the next frame, and how many are stored: frames are stored in seq order, with no gap.
+  private next = 0;
+  private stored = 0;
+  // Readers waiting for a frame to be stored or the call to end.
+  private waiting = new Set<() => void>();
   private call: AbortController | null = null;
   private running = false;
   private dropped = false;
@@ -116,9 +127,8 @@ export class StreamBox {
     const started = Date.now();
     await this.storage.put('started', started);
     await this.storage.setAlarm(started + KEEP_MS);
-    const hello = frame(HELLO, 0, new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer));
-    this.frames.push(hello);
-    await this.storage.put(frameKey(0), hello);
+    await this.storage.put(frameKey(0), frame(HELLO, 0, new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+    this.next = this.stored = 1;
     this.call = new AbortController();
     this.running = true;
     void this.run(request, sealing, this.call.signal);
@@ -127,10 +137,11 @@ export class StreamBox {
 
   private async run(envelope: unknown, sealing: Key, signal: AbortSignal) {
     let limited = false;
-    const limit = setTimeout(() => {
+    const cut = () => {
       limited = true;
       this.call?.abort();
-    }, LIMIT_MS);
+    };
+    const limit = setTimeout(cut, LIMIT_MS);
     let gathered: Uint8Array[] = [];
     let size = 0;
     let gathering: ReturnType<typeof setTimeout> | null = null;
@@ -149,16 +160,21 @@ export class StreamBox {
       this.append(sealing, DATA, body);
     };
     const began = Date.now();
+    let received = 0;
     let end: Reason = { reason: 'done' };
     try {
       const response = await forward(this.upstream, envelope, signal);
       this.append(sealing, HEAD, encode(JSON.stringify({ status: response.status, statusText: response.statusText, headers: [...response.headers] })));
       const reader = response.body?.getReader();
       while (reader) {
+        // Upstream is read no faster than its frames are stored.
+        await this.writes;
         const { done, value } = await reader.read();
         if (done) break;
         gathered.push(value);
         size += value.byteLength;
+        received += value.byteLength;
+        if (received > LIMIT_BYTES) cut();
         if (size >= GATHER_BYTES) flush();
         else gathering ??= setTimeout(flush, GATHER_MS);
       }
@@ -172,59 +188,60 @@ export class StreamBox {
     await this.writes;
     this.running = false;
     this.call = null;
-    for (const reader of this.readers) reader.close();
-    this.readers.clear();
+    this.wake();
   }
 
   // Sealed in order: each frame waits for the one before it.
   private append(sealing: Key, type: number, body: Uint8Array<ArrayBuffer>) {
-    const seq = this.frames.length;
-    this.frames.push(new Uint8Array());
+    const seq = this.next++;
     this.writes = this.writes.then(async () => {
       const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce(seq), additionalData: new Uint8Array([type]) }, sealing, body));
       if (this.dropped) return;
-      const bytes = frame(type, seq, sealed);
-      this.frames[seq] = bytes;
-      for (const reader of this.readers) reader.enqueue(bytes);
-      await this.storage.put(frameKey(seq), bytes);
+      await this.storage.put(frameKey(seq), frame(type, seq, sealed));
+      this.stored = seq + 1;
+      this.wake();
     });
   }
 
-  // hello first, then every frame from seq on, then the live rest while the call runs.
+  private wake() {
+    const waiting = this.waiting;
+    this.waiting = new Set();
+    for (const resolve of waiting) resolve();
+  }
+
+  // hello first, then every frame from seq on, then the live rest while the call runs. Frames are read from storage a
+  // page at a time, as the reader takes them.
   private async read(from: number): Promise<Response> {
-    let frames = this.frames;
-    if (!frames.length) {
-      const stored = await this.storage.list({ prefix: 'f:' });
-      frames = [...stored.keys()].sort().map((key) => stored.get(key) as Uint8Array);
-    }
-    if (!frames.length) return json(404, 'stream-gone');
-    // A frame still being sealed is sent live when it is.
-    const ready = frames.findIndex((bytes) => !bytes.byteLength);
-    const sent = ready === -1 ? frames : frames.slice(0, ready);
-    let held: ReadableStreamDefaultController<Uint8Array> | null = null;
-    const body = new ReadableStream<Uint8Array>({
-      start: (reader) => {
-        reader.enqueue(sent[0]!);
-        for (const bytes of sent.slice(Math.max(1, from))) reader.enqueue(bytes);
-        if (this.running) {
-          held = reader;
-          this.readers.add(reader);
-        } else reader.close();
+    const hello = (await this.storage.get(frameKey(0))) as Uint8Array | undefined;
+    if (!hello) return json(404, 'stream-gone');
+    let seq = Math.max(1, from);
+    const body = new ReadableStream<Uint8Array>(
+      {
+        start: (reader) => reader.enqueue(hello),
+        pull: async (reader) => {
+          for (;;) {
+            if (this.dropped) return reader.close();
+            const stored = this.stored;
+            const running = this.running;
+            const page = await this.storage.list({ start: frameKey(seq), end: FRAMES_END, limit: PAGE });
+            for (const bytes of page.values()) reader.enqueue(bytes as Uint8Array);
+            seq += page.size;
+            if (page.size) return;
+            // Read before the list: a call that had ended by then had stored every frame.
+            if (!running) return reader.close();
+            if (this.stored === stored && this.running) await new Promise<void>((resolve) => this.waiting.add(resolve));
+          }
+        },
       },
-      cancel: () => {
-        if (held) this.readers.delete(held);
-      },
-    });
+      { highWaterMark: 0 },
+    );
     return new Response(body, { headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store', 'x-stream': 'frames' } });
   }
 
   private async drop() {
     this.dropped = true;
     this.call?.abort();
-    for (const reader of this.readers) reader.close();
-    this.readers.clear();
-    this.frames = [];
+    this.wake();
     await this.storage.deleteAll();
   }
 }
-

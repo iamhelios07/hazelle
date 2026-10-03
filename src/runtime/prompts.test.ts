@@ -2,6 +2,7 @@ import { gunzipSync, gzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { importPreset } from '../engine/import/preset';
 import { unpack } from '../engine/import/risum';
+import { live } from '../model/library';
 import type { Block } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
@@ -77,7 +78,7 @@ describe('addDefaults', () => {
     const other = await open();
     await Promise.all([addDefaults(store), addDefaults(other)]);
     await store.pull();
-    const names = () => store.list('prompt').map((kept) => kept.value.name).sort();
+    const names = () => store.list('prompt').filter(live).map((kept) => kept.value.name).sort();
     expect(names()).toEqual(['기본 기억', '기본 번역', '🏓 핑퐁 간소화']);
     const settings = store.get('settings', SETTINGS_ID)?.value;
     expect([settings?.prompt, settings?.translatePrompt, settings?.memoryPrompt]).toEqual([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID]);
@@ -114,16 +115,16 @@ describe('prompts', () => {
     expect(copied.ok && 'imported' in copied.data.value).toBe(false);
   });
 
-  it('refuses to delete the default prompt, and brings back another deleted one', async () => {
+  it('refuses to delete the default prompt, and brings back another from 휴지통', async () => {
     const { store } = await server.account();
     const [first, second] = await Promise.all([addPrompt(store, '하나', 'conversation'), addPrompt(store, '둘', 'conversation')]);
     const [one, two] = [first, second].map((added) => (added.ok ? added.data.id : ''));
     await setDefaultPrompt(store, one!);
     expect(await removePrompt(store, one!)).toEqual({ ok: false, error: 'default' });
     const removed = await removePrompt(store, two!);
-    expect(store.get('prompt', two!)).toBeNull();
-    if (removed.ok) await restorePrompt(store, removed.data);
-    expect(store.get('prompt', two!)?.value.name).toBe('둘');
+    expect(removed.ok && store.get('prompt', two!)?.value.deleted).toEqual(expect.any(Number));
+    await restorePrompt(store, two!);
+    expect(store.get('prompt', two!)?.value).toEqual({ ...removed.ok && removed.data.value, deleted: undefined });
   });
 
   it('gives a chat its prompt’s model under its own layer, and reads a deleted prompt of its own as missing', async () => {
