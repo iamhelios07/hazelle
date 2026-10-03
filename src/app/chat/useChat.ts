@@ -35,7 +35,7 @@ import { BIN_KEEPS } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { useMenuHandle, useViewport, type BotButton } from '../ui';
+import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { toggleRows } from './toggles';
@@ -57,7 +57,7 @@ export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; 
 export type ChatActions = OpenChat['actions'];
 
 // item null is a new chat, saved under chatId with its first message; shelf null is 캐릭터 없이.
-export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null) {
+export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null, reply: Reading['reply']) {
   const session = useSession();
   const { store, talk, translator, drafts } = session;
   const turn = useTurn();
@@ -118,8 +118,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const streaming = busy && turn.chat === chatId;
   const last = messages.at(-1);
 
+  // A reply starting here while 정보 is open shows its own information.
+  const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
+  // The message a reply answers, the one before it; 이어 쓰기 answers none, since it goes on under text already read.
+  const replyAt = messages.findIndex((message) => message.id === replyTarget);
+  const answered = streaming && replyAt > 0 && !turn.reply.continues ? messages[replyAt - 1]!.id : null;
+
   const draft = useDraft(id, chat.character);
-  const { follow: toBottom, hold: holdScroll, ...scroll } = useFollow(messages.length, streaming);
+  const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, streaming, answered, reply === 'stay');
   const memory = useChatMemory(id);
   const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy);
   const [dialog, setDialog] = useState<'rename' | 'reading' | null>(null);
@@ -131,7 +137,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
   // The messages a memory record was made from, marked in the story: at changes with each look, so the same ones are
   // marked again.
-  const [found, setFound] = useState<{ ids: ReadonlySet<string>; first: string; at: number } | null>(null);
+  const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
   // Where the status window stands: in its latest message, or with 옆에 두기 in the story's margin, while each box
   // fits there (fitting, which the margin reports whether it is shown or not). The key hides it there for now.
   const [fitting, setFitting] = useState<ReadonlyMap<number, boolean>>(() => new Map());
@@ -164,8 +170,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     translateLatest(session, chatId);
   }, [item, turn, translating, translate.replies, greeting]);
 
-  // A reply starting here while 정보 is open shows its own information.
-  const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
   useEffect(() => {
     if (replyTarget) setPanel((current) => (current?.kind === 'info' ? { kind: 'info', id: replyTarget } : current));
   }, [replyTarget]);
@@ -180,6 +184,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // Back to the foot of the story, which also puts away tools a tap pinned open.
   function follow() {
     toBottom();
+    setPinned(null);
+  }
+
+  function asking() {
+    beforeTurn();
     setPinned(null);
   }
 
@@ -207,7 +216,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!text || talk.snapshot()) return;
     setStopped(false);
     drafts.set(draft.key, '');
-    follow();
+    asking();
     const failure = await takeTurn(session, chatId, { kind: 'send', text }, id === null ? starting() : null);
     // An unsaved reply or a kept failure means the user's message was saved. Any other failure's text goes back to the
     // chat's draft, wherever that is by now: a new chat may have been saved before the failure, or not at all.
@@ -238,7 +247,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function ask(target: Target) {
     if (!id || busy) return;
-    follow();
+    asking();
     void Promise.all(writes.current).then(() => takeTurn(session, id, target)).then(report);
   }
 
@@ -479,8 +488,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       // ids in chat order; the view goes to the first.
       find: (ids: string[]) => {
         if (!ids.length) return;
-        holdScroll();
-        setFound({ ids: new Set(ids), first: ids[0]!, at: Date.now() });
+        seekTo(ids[0]!, 'center');
+        setFound({ ids: new Set(ids), at: Date.now() });
       },
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.

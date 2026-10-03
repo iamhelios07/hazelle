@@ -4,6 +4,7 @@ export const SIZE = { min: 14, max: 21 };
 
 export const FONT: Record<Reading['font'], string> = { serif: '명조', sans: '고딕' };
 export const SPACING: Record<Reading['leading'], string> = { narrow: '좁게', normal: '보통', wide: '넓게' };
+export const REPLY: Record<Reading['reply'], string> = { follow: '따라 내려가기', stay: '보낸 자리에 멈추기' };
 
 export const choices = <T extends string>(labels: Record<T, string>) => (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }));
 
@@ -20,5 +21,6 @@ export function parseReading(stored: string, fallback: Reading): Reading {
     size: typeof size === 'number' && Number.isInteger(size) && size >= SIZE.min && size <= SIZE.max ? size : fallback.size,
     leading: known(SPACING, read.leading, fallback.leading),
     width: known(SPACING, read.width, fallback.width),
+    reply: known(REPLY, read.reply, fallback.reply),
   };
 }

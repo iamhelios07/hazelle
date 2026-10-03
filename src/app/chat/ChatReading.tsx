@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { usePersisted } from '../common/usePersisted';
 import { Button, ChoiceGroup, Dialog, IconButton, Menu, readingDefault, Row, SettingRow, Stack, Stepper, type Reading } from '../ui';
-import { choices, FONT, parseReading, SIZE, SPACING } from './reading';
+import { choices, FONT, parseReading, REPLY, SIZE, SPACING } from './reading';
 
 const READING = 'risu-alpha:reading';
 
@@ -54,6 +54,12 @@ function ReadingForm({ reading }: { reading: ReadingControl }) {
         place="panel"
         label="읽기 폭"
         control={<ChoiceGroup layout="segmented" label="읽기 폭" options={choices(SPACING)} value={value.width} onChange={(width) => change({ width })} />}
+      />
+      <SettingRow
+        place="panel"
+        label="답장이 올 때"
+        wide
+        control={<ChoiceGroup layout="segmented" label="답장이 올 때" options={choices(REPLY)} value={value.reply} onChange={(reply) => change({ reply })} />}
       />
       <Row kind="actions">
         <Button variant="ghost" size="sm" onClick={() => set(initial)}>
