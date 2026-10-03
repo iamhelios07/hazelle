@@ -6,11 +6,11 @@ import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
 import { exportBackup, readBackup, restoreBackup } from './backup';
 import type { Files } from './files';
-import { editCharacter, importCharacter } from './characters';
+import { editCharacter, importCharacter, setDeleted } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
-import { addDefaults } from './prompts';
+import { addDefaults, addPrompt, removePrompt } from './prompts';
 import type { ObjectStore } from './store';
 import { testServer } from './testing';
 
@@ -136,6 +136,29 @@ describe('backup', () => {
     expect(await files.read(avatar!.value.file)).toEqual({ ok: true, data: old.image });
     const zipped = unzipSync(new Uint8Array(await made.arrayBuffer()));
     expect(Object.keys(zipped).filter((name) => name.startsWith('files/'))).toHaveLength(2);
+  });
+
+  it('leaves out what is in 휴지통: a deleted character with its chat and picture, and a deleted prompt', async () => {
+    const old = await oldAccount();
+    const added = await importCharacter(old.store, old.files, { card, lore: [], loreFolders: [], assets: [] }, { bytes: old.image, type: 'image/png', thumb: 'data:thumb' }, () => {});
+    const binned = added.ok ? added.data.id : '';
+    const chat = crypto.randomUUID();
+    await server.hold(old.store, chat);
+    await startChat(old.store, chat, { title: null, character: binned, models: {} }, null);
+    await appendUserMessage(old.store, chat, { id: crypto.randomUUID(), text: '같이 가는 채팅' });
+    await setDeleted(old.store, binned, Date.now());
+    const prompt = await addPrompt(old.store, '지운 프롬프트', 'conversation');
+    await removePrompt(old.store, prompt.ok ? prompt.data.id : '');
+    const backup = await read(await exported(old.store, old.files));
+    const expected = await held(old.store);
+    const out = new Set([old.gone, binned, chat, prompt.ok ? prompt.data.id : '']);
+    for (const [id, { parent }] of expected) if (out.has(id) || (parent !== null && out.has(parent))) expected.delete(id);
+    expect(expected.has(old.chat)).toBe(true);
+
+    await server.wipe();
+    const { store, files } = await open('someone');
+    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
+    expect(await held(store)).toEqual(expected);
   });
 
   it('restores the old zipSync format from before 설정 묶음 into an account that opened with one', async () => {
