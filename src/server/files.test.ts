@@ -68,6 +68,37 @@ describe('files', () => {
     expect(new Uint8Array(await (await t.get(`files/${id}`, other.cookie)).arrayBuffer())).toEqual(bytes);
   });
 
+  it('looks up requested file IDs by the account composite key rather than materializing its inventory', async () => {
+    const { cookie } = await signup();
+    const db = t.env.DB;
+    const plans: { detail: string }[] = [];
+    t.env.DB = new Proxy(db, {
+      get: (target, key) => key === 'prepare' ? (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!sql.includes('json_each(?2)')) return statement;
+        return Object.assign(Object.create(statement) as D1PreparedStatement, {
+          bind: (...values: unknown[]) => {
+            const bound = statement.bind(...values);
+            return Object.assign(Object.create(bound) as D1PreparedStatement, {
+              all: async () => {
+                plans.push(...(await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...values).all<{ detail: string }>()).results);
+                return bound.all();
+              },
+            });
+          },
+        });
+      } : (Reflect.get(target, key) as (...args: unknown[]) => unknown).bind(target),
+    });
+    try {
+      const id = '0'.repeat(64);
+      expect(await missing([id], cookie)).toEqual([id]);
+      expect(plans.some(({ detail }) => detail.includes('incarnation=? AND id=?'))).toBe(true);
+      expect(plans.some(({ detail }) => detail.includes('LIST SUBQUERY'))).toBe(false);
+    } finally {
+      t.env.DB = db;
+    }
+  });
+
   it('refuses a body that is not its id, a bad id, an oversized body and a missing session', async () => {
     const { cookie } = await signup();
     const id = await idOf(new Uint8Array([1]));

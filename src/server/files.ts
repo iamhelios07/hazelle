@@ -25,8 +25,8 @@ files.post('/missing', async (c) => {
   const ids = input?.ids;
   if (!Array.isArray(ids) || ids.length > MAX_ASKED || !ids.every((id) => typeof id === 'string' && FILE_ID.test(id))) return fail(c, 400, 'bad-input');
   const { results } = await c.env.DB.prepare(
-    `SELECT value AS id FROM json_each(?2)
-     WHERE value NOT IN (SELECT id FROM account_files WHERE incarnation = ?1 AND stored = 1) OR value IN (SELECT id FROM file_blocks)`,
+    `SELECT asked.value AS id FROM json_each(?2) AS asked
+     WHERE NOT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = asked.value AND stored = 1) OR value IN (SELECT id FROM file_blocks)`,
   )
     .bind(c.get('account').incarnation, JSON.stringify(ids))
     .all<{ id: string }>();
