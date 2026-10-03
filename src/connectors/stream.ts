@@ -1,5 +1,6 @@
 import type { Resolved } from './registry';
 import { SseParser } from './sse';
+import { thoughts } from './thoughts';
 import type { Codec, Cost, Model, Phase, StreamFacts, Terminal, Usage } from './types';
 
 // A cut or failed reply is never shown as a clean success.
@@ -14,13 +15,21 @@ export type Outcome = {
   replyId: string | null;
 };
 
+// What becomes of the thinking blocks an answer writes inside its text (connectors/thoughts). keep: left where they are,
+// for a reply of a character set to 생각을 본문에 둠; a translation always strips them (user ruling, 2026-10-04).
+// takeBack: only a reader that keeps the reasoning acts on it (Talk); translate, memory and scripts keep the text only,
+// and get what is given back as text all the same.
+export type InlineThoughts = { keep?: boolean; takeBack?: (chars: number) => void };
+
 // The reply in the format the provider answered with: an event stream, or one JSON document when it was asked for
 // whole (ModelSettings streaming). Both read into the same facts and end through the same rules.
-export async function decodeStream({ type, codec }: Resolved, model: Model, response: Response, signal: AbortSignal, onText: (phase: Phase, text: string) => void): Promise<Outcome> {
+export async function decodeStream({ type, codec }: Resolved, model: Model, response: Response, signal: AbortSignal, onText: (phase: Phase, text: string) => void, inline: InlineThoughts = {}): Promise<Outcome> {
   const facts: StreamFacts = { rawUsage: {}, finishReason: null, id: null };
-  const append = (phase: Phase, text: string) => text && onText(phase, text);
+  const scanner = inline.keep ? null : thoughts(onText, inline.takeBack ?? (() => {}));
+  const append = (phase: Phase, text: string) => text && (scanner ? scanner.push(phase, text) : onText(phase, text));
 
   const finish = (state: Outcome['state'], cut: Outcome['cut'], error: Outcome['error']): Outcome => {
+    scanner?.end(state === 'done');
     const usage = Object.keys(facts.rawUsage).length ? codec.usage(facts.rawUsage) : null;
     return {
       state,

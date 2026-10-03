@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PICTURE_PERCENT, type Character, type Pictures } from '../../model/library';
-import { editCharacter, setBotModels, setDecor, setPictures, type CharacterText } from '../../runtime/characters';
+import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, type CharacterText } from '../../runtime/characters';
 import { setCharacterModule } from '../../runtime/modules';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/turn';
@@ -22,7 +22,7 @@ const readHeight = (draft: string) => {
   const value = Number(draft);
   return Number.isInteger(value) && value >= PICTURE_PERCENT.min && value <= PICTURE_PERCENT.max ? value : null;
 };
-const SWITCHES = { decor: setDecor, botModels: setBotModels };
+const SWITCHES = { decor: setDecor, botModels: setBotModels, keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
 // One status for the editor's two saves: a failure first, then one still saving.
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
@@ -46,6 +46,7 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
   const fold = pictures.fold !== false;
   const decor = switching.decor ?? character.decor !== false;
   const botModels = switching.botModels ?? character.botModels === true;
+  const keepThoughts = switching.keepThoughts ?? character.keepThoughts === true;
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const own = character.modules ?? [];
@@ -146,6 +147,11 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
               control={<Switch label="긴 그림 접기" checked={fold} onChange={(on) => pictureSave.change({ fold: on ? undefined : false })} />}
             />
           )}
+          <SettingRow
+            label="생각을 본문에 둠"
+            help="일부 봇은 <Thoughts> 같은 생각 글을 직접 꾸며서 보여 줘요. 켜면 떼어 내지 않고 본문에 그대로 둬요."
+            control={<Switch label="생각을 본문에 둠" checked={keepThoughts} onChange={(on) => flip('keepThoughts', on)} />}
+          />
           {scriptsOf(packsOf(store, { character: id }).map(({ pack }) => pack)).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}
         </SettingGroup>
         {decor && (

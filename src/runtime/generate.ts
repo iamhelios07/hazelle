@@ -1,5 +1,5 @@
 import { cacheView, chatRequest, resolveConnection, resolveModel, withCredential, type CacheView, type Resolved } from '../connectors/registry';
-import { decodeStream, type Outcome } from '../connectors/stream';
+import { decodeStream, type InlineThoughts, type Outcome } from '../connectors/stream';
 import type { ModelSettings } from '../connectors/settings';
 import { ConnectorError, type ChatMessage, type Connection, type HttpRequest, type Phase, type Starred } from '../connectors/types';
 import type { Stored } from '../model/kinds';
@@ -36,9 +36,10 @@ export type GenerateInput = {
   call: StreamCall;
   signal: AbortSignal;
   onText: (phase: Phase, text: string) => void;
+  inline?: InlineThoughts;
 };
 
-export async function generate({ credentials, connection, model, settings, messages, call, signal, onText }: GenerateInput): Promise<Reply> {
+export async function generate({ credentials, connection, model, settings, messages, call, signal, onText, inline }: GenerateInput): Promise<Reply> {
   const started = performance.now();
   let firstText: number | null = null;
   // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
@@ -79,7 +80,7 @@ export async function generate({ credentials, connection, model, settings, messa
   const outcome = await decodeStream(route, model, response, signal, (phase, text) => {
     firstText ??= performance.now();
     onText(phase, text);
-  });
+  }, inline);
   return reply(outcome, outcome.error);
 }
 
@@ -97,7 +98,7 @@ export function cacheViewOf(connection: Connection, model: Starred, settings: Mo
 
 // A call already running on the server (its marker), read from its start: what came while no page read it, then the
 // live rest. Its request is gone, its time to first text unknown, and its duration the server's.
-export async function resume(store: ObjectStore, { id, value }: Stored<'stream'>, signal: AbortSignal, onText: GenerateInput['onText']): Promise<Reply> {
+export async function resume(store: ObjectStore, { id, value }: Stored<'stream'>, signal: AbortSignal, onText: GenerateInput['onText'], inline?: InlineThoughts): Promise<Reply> {
   const call: StreamCall = { id, key: value.key };
   const empty = { finishReason: null, usage: null, cost: null, replyId: null };
   const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({ ...outcome, call: id, error, firstTextMs: null, totalMs: call.took ?? 0, request: null, cache: null });
@@ -106,6 +107,6 @@ export async function resume(store: ObjectStore, { id, value }: Stored<'stream'>
   if ('kind' in route || !resolved) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'model-gone' });
   const response = await stream(call, null, signal);
   if (!(response instanceof Response)) return response.kind === 'stopped' ? reply({ state: 'cut', cut: 'stopped', ...empty }, null) : reply({ state: 'failed', cut: null, ...empty }, response);
-  const outcome = await decodeStream(resolveModel(resolved, route.model), route.model, response, signal, onText);
+  const outcome = await decodeStream(resolveModel(resolved, route.model), route.model, response, signal, onText, inline);
   return reply(outcome, outcome.error);
 }

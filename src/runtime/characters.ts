@@ -185,6 +185,10 @@ export function setKeepStatus(store: ObjectStore, id: string, keep: boolean): Pr
   return store.update('character', id, (current) => (keep ? { ...current, keepStatus: true } : without(current, 'keepStatus')));
 }
 
+export function setKeepThoughts(store: ObjectStore, id: string, keep: boolean): Promise<ApiResult<Stored<'character'>>> {
+  return store.update('character', id, (current) => (keep ? { ...current, keepThoughts: true } : without(current, 'keepThoughts')));
+}
+
 // A toggle's value for a character's chats, or with character null for 캐릭터 없이's.
 export function setToggle(store: ObjectStore, character: string | null, key: string, value: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
   if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, toggles: { ...current?.toggles, [key]: value } }));

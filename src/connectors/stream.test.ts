@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import anthropicMessage from './fixtures/anthropic-message.json';
 import chatCompletion from './fixtures/chat-completion.json';
 import { resolveConnection, type Resolved } from './registry';
-import { decodeStream } from './stream';
+import { decodeStream, type InlineThoughts } from './stream';
 import type { Connection, Model, Phase } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Resolved =>
@@ -24,10 +24,10 @@ function body(text: string, cuts = 7): ReadableStream<Uint8Array> {
   });
 }
 
-async function decode(resolved: Resolved, stream: ReadableStream<Uint8Array>, controller = new AbortController(), media = 'text/event-stream') {
+async function decode(resolved: Resolved, stream: ReadableStream<Uint8Array>, controller = new AbortController(), media = 'text/event-stream', inline?: InlineThoughts) {
   const parts: [Phase, string][] = [];
   const response = new Response(stream, { headers: { 'content-type': media } });
-  const outcome = await decodeStream(resolved, model, response, controller.signal, (phase, text) => parts.push([phase, text]));
+  const outcome = await decodeStream(resolved, model, response, controller.signal, (phase, text) => parts.push([phase, text]), inline);
   const joined = (phase: Phase) => parts.filter(([p]) => p === phase).map(([, text]) => text).join('');
   return { outcome, text: joined('text'), reasoning: joined('reasoning') };
 }
@@ -39,6 +39,12 @@ describe('chat completions stream', () => {
   it('reads Copilot’s reasoning_text as reasoning', async () => {
     const stream = sse(chunk({ reasoning_text: '짧게 ' }), chunk({ reasoning_text: '답하자.' }), chunk({ content: '안녕.' }), chunk({}, 'stop'), '[DONE]');
     expect(await decode(openRouter, body(stream))).toMatchObject({ text: '안녕.', reasoning: '짧게 답하자.' });
+  });
+
+  it('moves a thinking block in the text to the reasoning, unless the reply keeps it', async () => {
+    const stream = sse(chunk({ content: '<think>짧게</think>' }), chunk({ content: '\n안녕.' }), chunk({}, 'stop'), '[DONE]');
+    expect(await decode(openRouter, body(stream))).toMatchObject({ text: '안녕.', reasoning: '짧게' });
+    expect(await decode(openRouter, body(stream), undefined, undefined, { keep: true })).toMatchObject({ text: '<think>짧게</think>\n안녕.', reasoning: '' });
   });
 
   it('reads reasoning, text, usage and OpenRouter cost, and skips keep-alive comments', async () => {

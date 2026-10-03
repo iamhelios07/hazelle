@@ -1,4 +1,5 @@
 import type { ModelSettings } from '../connectors/settings';
+import type { InlineThoughts } from '../connectors/stream';
 import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
 import type { Message, Receipt, ReceiptError, Writes } from '../model/chat';
@@ -217,7 +218,7 @@ export class Talk {
     const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, continues: reply.continues, ...(reply.before && { before: reply.before }) } });
     this.reading.add(call.id);
     this.calling = call.id;
-    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write });
+    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write, inline: this.inline(chat) });
     const sent = await sending;
     if (sent && !sent.ok) {
       abort.abort();
@@ -249,7 +250,7 @@ export class Talk {
     try {
       await this.store.pinned(async () => {
         if (await lease.ready) return;
-        const answer = await resume(this.store, stream, abort.signal, this.write);
+        const answer = await resume(this.store, stream, abort.signal, this.write, this.inline(chat));
         if (!this.closed) await this.save(chat, await this.ended(chat, this.written(reply, stream.value.call, answer)), stream.id);
       });
     } finally {
@@ -263,6 +264,13 @@ export class Talk {
   }
 
   private readonly write = (phase: Phase, chunk: string) => this.set({ ...this.turn!, [phase]: this.turn![phase] + chunk });
+
+  // A chat without a character has no 생각을 본문에 둠, and strips.
+  private inline(chat: string): InlineThoughts {
+    const character = this.store.get('chat', chat)?.value.character;
+    const keep = character ? this.store.get('character', character)?.value.keepThoughts === true : false;
+    return { keep, takeBack: (chars) => this.set({ ...this.turn!, reasoning: this.turn!.reasoning.slice(0, this.turn!.reasoning.length - chars) }) };
+  }
 
   private written(reply: Turn['reply'], call: Stream['call'], answer: Reply): Written {
     const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
