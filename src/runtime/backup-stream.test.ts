@@ -28,8 +28,9 @@ function destination() {
 function store(objects: Stored<Kind>[] = []) {
   const held = new Map(objects.map((object) => [object.id, object]));
   const written: string[] = [];
-  const api: Pick<ObjectStore, 'scan' | 'batch' | 'pin' | 'pinned' | 'list'> = {
+  const api: Pick<ObjectStore, 'scan' | 'batch' | 'pin' | 'pinned' | 'list' | 'saveSummaries'> = {
     ...pins,
+    saveSummaries: async () => null,
     scan: async (options, visit) => {
       for (const { value, ...row } of [...held.values()].sort((a, b) => a.rev - b.rev)) await visit(row, options.metadata ? undefined : value);
       return null;

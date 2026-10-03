@@ -113,6 +113,7 @@ class BackupWorker {
         const result = await host.store.batch(writes, () => { count++; }, { signal, unheld });
         return { result, count } satisfies BatchAnswer;
       }
+      if (name === 'saveSummaries') return host.store.saveSummaries(args as string[], signal);
       if (name === 'saveFiles') {
         return host.files.save((args as SaveFilesCall).bytes, { signal });
       }

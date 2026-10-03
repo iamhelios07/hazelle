@@ -12,7 +12,8 @@ import { projectGreetings } from './greetings';
 import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
 import { addDefaults, addPrompt, removePrompt } from './prompts';
-import type { ObjectStore } from './store';
+import type { ObjectStore, Write } from './store';
+import { summaryId, summaryStale } from './summary';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -139,6 +140,53 @@ describe('backup', () => {
     const zipped = unzipSync(new Uint8Array(await made.arrayBuffer()));
     expect(Object.keys(zipped).filter((name) => name.startsWith('files/'))).toHaveLength(2);
   });
+
+  it('restores root pages unheld and resumes a stopped one-chat summary pass without retaining histories', async () => {
+    const old = await open('old');
+    const chats = Array.from({ length: 130 }, () => crypto.randomUUID());
+    const writes = chats.flatMap((id): Write[] => [
+      { type: 'create', id: crypto.randomUUID(), kind: 'entry', parent: id, value: { type: 'message', role: 'user', at: 1, text: id, receipt: null } },
+      { type: 'create', id, kind: 'chat', parent: null, value: { title: null, character: null, models: {} } },
+    ]);
+    expect((await old.store.batch(writes, undefined, { unheld: true })).ok).toBe(true);
+    const backup = await read(await exported(old.store, old.files));
+    await server.wipe();
+    const { store, files } = await open('new');
+    const held = new Map<string, number>();
+    let peak = 0;
+    const retain = store.retainChat.bind(store);
+    vi.spyOn(store, 'retainChat').mockImplementation((id, created) => {
+      const lease = retain(id, created);
+      held.set(id, (held.get(id) ?? 0) + 1);
+      peak = Math.max(peak, held.size);
+      let released = false;
+      return { ready: lease.ready, release: () => {
+        if (released) return;
+        released = true;
+        const count = held.get(id)! - 1;
+        if (count) held.set(id, count); else held.delete(id);
+        lease.release();
+      } };
+    });
+    const stop = new AbortController();
+    const save = store.saveSummary.bind(store);
+    const summary = vi.spyOn(store, 'saveSummary').mockImplementation(async (id) => {
+      const result = await save(id);
+      stop.abort();
+      return result;
+    });
+    expect(await restoreBackup(store, files, backup, { signal: stop.signal })).toEqual({ ok: false, error: 'stopped' });
+    summary.mockRestore();
+    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
+    expect(peak).toBe(1);
+    expect(held.size).toBe(0);
+    for (const id of chats) {
+      expect(store.scopeState(id)).toBe('unloaded');
+      const summary = store.get('summary', summaryId(id))!.value;
+      expect(summary).toMatchObject({ count: 1, preview: id });
+      expect(summaryStale(store, id, summary)).toBe(false);
+    }
+  }, 60_000);
 
   it('leaves out what is in 휴지통: a deleted character with its chat and picture, and a deleted prompt', async () => {
     const old = await oldAccount();

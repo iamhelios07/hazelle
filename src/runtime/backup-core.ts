@@ -11,7 +11,6 @@ import { BACKUP_PAGE_BYTES as PAGE_BYTES, BACKUP_PAGE_ROWS as PAGE_ROWS, BackupS
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
 import { MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
-import { SCOPED } from './object-cache';
 import { ownershipDepth } from './removal';
 import type { ObjectRow, ObjectStore, Pin, Write } from './store';
 
@@ -243,12 +242,12 @@ async function* readObjects(backup: ReadArchive, signal: AbortSignal) {
 // The backup's copies replace what opening added, whatever it holds now, and what it added that the backup lacks
 // goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
 // the operator, or too large), which are left out. What is checked and what is written are of one timeline.
-export function restoreBackup(store: Pick<ObjectStore, 'scan' | 'batch' | 'pinned'>, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
+export function restoreBackup(store: Pick<ObjectStore, 'scan' | 'batch' | 'pinned' | 'saveSummaries'>, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
   return store.pinned((pin) => restoreOn(store, files, backup, options, pin), options.signal);
 }
 
 async function restoreOn(
-  store: Pick<ObjectStore, 'scan' | 'batch'>,
+  store: Pick<ObjectStore, 'scan' | 'batch' | 'saveSummaries'>,
   files: Pick<Files, 'save'>,
   backup: ReadArchive,
   { signal = new AbortController().signal, progress = () => {} }: Options,
@@ -331,7 +330,7 @@ async function restoreOn(
       let writes: Write[] = [];
       let size = 0;
       const flush = async () => {
-        const result = await store.batch(writes, () => progress(++done, total), { unheld: writes.every((write) => write.type !== 'remove' && SCOPED.has(write.kind)), signal });
+        const result = await store.batch(writes, () => progress(++done, total), { unheld: true, signal });
         writes = [];
         size = 0;
         return result;
@@ -356,7 +355,10 @@ async function restoreOn(
       }
     }
     const removed = await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })), undefined, { signal });
-    return removed.ok ? { ok: true, data: { skipped } } : removed;
+    if (!removed.ok) return removed;
+    // Resume includes already-written roots: an interruption may have left their derived summaries unfinished.
+    const summarized = await store.saveSummaries(backup.objects.filter(({ kind }) => kind === 'chat').map(({ id }) => id), signal);
+    return summarized ?? { ok: true, data: { skipped } };
   } catch (error) {
     // A picture entry that does not read refuses the file above; what throws here is the stage, the host or the worker.
     return { ok: false, error: signal.aborted ? 'stopped' : error instanceof BackupStorageError ? 'backup-storage' : 'backup-crashed' };

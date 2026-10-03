@@ -7,7 +7,7 @@ import type { Files } from './files';
 import type { ObjectRow, ObjectStore, Pin, Write } from './store';
 
 export type ExportStore = Pick<ObjectStore, 'scan' | 'pin' | 'list'>;
-export type RestoreStore = Pick<ObjectStore, 'scan' | 'batch' | 'pinned'>;
+export type RestoreStore = Pick<ObjectStore, 'scan' | 'batch' | 'pinned' | 'saveSummaries'>;
 export type ExportFiles = Pick<Files, 'read' | 'missing'>;
 export type RestoreFiles = Pick<Files, 'save'>;
 export type BackupInput =
@@ -99,6 +99,7 @@ export class BackupJobs {
       const store: RestoreStore = {
         scan,
         pinned: (run) => run(task.pin),
+        saveSummaries: (chats) => this.peer.call('saveSummaries', [...chats]),
         batch: async (writes, progress, batchOptions) => {
           const { result, count } = await this.peer.call<BatchAnswer>('batch', { writes, unheld: batchOptions?.unheld } satisfies BatchCall);
           for (let index = 0; index < count; index++) progress?.(writes[index]!);

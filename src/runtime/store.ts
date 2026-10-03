@@ -490,12 +490,14 @@ export class ObjectStore {
     });
   }
 
-  async withChat<T>(chat: string, run: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> {
+  async withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
+    if (signal?.aborted) return { ok: false, error: 'stopped' };
     const lease = this.retainChat(chat);
+    signal?.addEventListener('abort', lease.release, { once: true });
     try {
       const failure = await lease.ready;
-      return failure ?? await run();
-    } finally { lease.release(); }
+      return signal?.aborted ? { ok: false, error: 'stopped' } : failure ?? await run();
+    } finally { signal?.removeEventListener('abort', lease.release); lease.release(); }
   }
 
   refreshChat(chat: string): Promise<ApiFailure | null> {
@@ -555,7 +557,7 @@ export class ObjectStore {
         }
         const write = await this.summaryWrite(chat);
         if (!write) return null;
-        const result = await this.commit([this.step(write)]);
+        const result = await this.commit([this.step(write)], undefined, this.scopes.get(chat)?.abort.signal);
         if (!result.ok) return result;
       }
     };
@@ -563,6 +565,18 @@ export class ObjectStore {
     const saving = save().catch((error: unknown) => this.codecFailure(error, epoch)).finally(() => this.summarizing.delete(chat));
     this.summarizing.set(chat, saving);
     return saving;
+  }
+
+  async saveSummaries(chats: Iterable<string>, signal?: AbortSignal): Promise<ApiFailure | null> {
+    for (const chat of chats) {
+      if (signal?.aborted) return { ok: false, error: 'stopped' };
+      const result = await this.withChat(chat, async () => {
+        if (signal?.aborted) return { ok: false, error: 'stopped' };
+        return await this.saveSummary(chat) ?? { ok: true, data: null };
+      }, signal);
+      if (!result.ok) return result;
+    }
+    return null;
   }
 
   private async summaryWrite(chat: string): Promise<Write | null> {
