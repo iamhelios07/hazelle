@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
-import type { Shelf } from '../../../model/library';
+import type { CharacterShelf, FolderTree, Shelf } from '../../../model/library';
+import { shelfName } from '../../library/shelf';
 import { usePersisted } from '../../common/usePersisted';
 import { useCharacter, useChatSummary, useLibrary, useWritingChat } from '../../session';
 import { useWide } from '../../ui';
@@ -27,7 +28,7 @@ type Props = {
 // Inside a character, the panel is its chats, and "모든 캐릭터" goes back up without leaving the open chat. The search
 // and the open folders outlast a visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
-  const { characters, none } = useLibrary();
+  const { none, folders, byFolder, loose } = useLibrary();
   const writing = useWritingChat();
   const route = useRoute();
   const chat = useChatSummary(route.kind === 'chat' ? route.id : null);
@@ -38,6 +39,20 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const [upAt, setUpAt] = useState<string | null>(null);
   if (upAt !== null && upAt !== at) setUpAt(null);
   const [openFolders, setOpenFolders] = usePersisted(OPEN_FOLDERS, openFolderIds, []);
+
+  // The rail keeps every face in one place: folders as the tree shows them, names in order inside each, loose ones
+  // last. Not recency, which the panel shows (user ruling, 2026-10-04).
+  const railShelves = useMemo(() => {
+    const byName = (shelves: CharacterShelf<ChatSummary>[]) => [...shelves].sort((a, b) => shelfName(a).localeCompare(shelfName(b), 'ko'));
+    const result: Shelf<ChatSummary>[] = [];
+    const visit = (folder: FolderTree) => {
+      folder.children.forEach(visit);
+      result.push(...byName(byFolder.get(folder.id)!.direct));
+    };
+    folders.forEach(visit);
+    result.push(...byName(loose), none);
+    return result;
+  }, [folders, byFolder, loose, none]);
 
   const here = shelfOf(route, chat?.chat.character);
   const character = useCharacter(here ?? null);
@@ -65,7 +80,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   if (page) return panel;
   return (
     <>
-      <SidebarRail shelves={[...characters, none]} current={current} typing={typing} onEnter={enter} open={!collapsed} onToggle={() => onCollapse(!collapsed)} />
+      <SidebarRail shelves={railShelves} current={current} typing={typing} onEnter={enter} open={!collapsed} onToggle={() => onCollapse(!collapsed)} />
       {!collapsed && panel}
     </>
   );
