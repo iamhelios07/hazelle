@@ -43,7 +43,8 @@ export type DisplayItem = { index: number; text: string; variables: [string, str
 // listening: false for a script whose engine holds no editDisplay listener, which has no part in any pass.
 export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[] };
 
-const ENGINES = 8;
+// Only idle worksets count toward this budget. Splitting an active script set loses globals and thrashes every pass.
+const IDLE_ENGINES = 8;
 // Passed where Risu passes a run's access key. Bots hand it back as each call's first argument and never read it.
 const KEY = 'lua';
 
@@ -56,6 +57,8 @@ const UNSUPPORTED = [
 ];
 
 type Engine = { lua: LuaEngine; own: Set<string>; run: Run | null; queue: Promise<unknown>; failed: string | null };
+type Lane = 'event' | 'display';
+type Workset = { engines: Map<string, Promise<Engine>>; codes: Set<string>; held: number; retired: boolean };
 
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const failure = (run: Run, error: unknown): Failure => (run.ranAway ? { runaway: true } : { message: describe(error) });
@@ -68,7 +71,8 @@ const MODEL_ROLES: Record<string, ModelMessage['role']> = { system: 'system', sy
 // never share them; lane keeps the display's engines apart from the events', so a question an event waits on never
 // holds up the display.
 export class Lua {
-  private readonly engines = new Map<string, Promise<Engine>>();
+  private readonly worksets = new Map<string, Workset>();
+  private readonly active = new Map<Lane, Workset>();
 
   private constructor(
     private readonly factory: LuaFactory,
@@ -86,94 +90,108 @@ export class Lua {
   // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
   // the event is its own.
   async run(owner: string, triggers: Trigger[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
-    const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };
-    const errors: ScriptError[] = [];
-    let value = event.kind === 'edit' ? event.value : undefined;
-    let handled = false;
-    for (const script of triggers) {
-      if (script.kind === 'blocks') {
-        if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
-        handled = true;
-        await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, ...failure(run, error) }));
-        continue;
-      }
-      const engine = await this.engine(owner, 'event', script);
-      await this.exclusive(engine, async () => {
-        if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
-        engine.run = run;
-        try {
-          if (event.kind === 'edit') {
-            const edited = await this.listeners(engine, event.stage, value, event.meta);
-            if (edited === DEAF) return;
-            value = edited ?? value;
-            handled = true;
-            return;
-          }
-          const name = event.kind === 'call' ? event.name : event.kind === 'button' ? 'onButtonClick' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`;
-          if (event.kind === 'call' && !engine.own.has(name)) return;
-          if (typeof engine.lua.global.get(name) !== 'function') return;
+    const workset = this.hold(owner, 'event', triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
+    try {
+      const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };
+      const errors: ScriptError[] = [];
+      let value = event.kind === 'edit' ? event.value : undefined;
+      let handled = false;
+      for (const script of triggers) {
+        if (script.kind === 'blocks') {
+          if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
           handled = true;
-          if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
-        } catch (error) {
-          errors.push({ script: script.name, ...failure(run, error) });
-        } finally {
-          engine.run = null;
+          await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, ...failure(run, error) }));
+          continue;
         }
-      });
+        const engine = await this.engine(workset, script);
+        await this.exclusive(engine, async () => {
+          if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
+          engine.run = run;
+          try {
+            if (event.kind === 'edit') {
+              const edited = await this.listeners(engine, event.stage, value, event.meta);
+              if (edited === DEAF) return;
+              value = edited ?? value;
+              handled = true;
+              return;
+            }
+            const name = event.kind === 'call' ? event.name : event.kind === 'button' ? 'onButtonClick' : `on${event.kind[0]!.toUpperCase()}${event.kind.slice(1)}`;
+            if (event.kind === 'call' && !engine.own.has(name)) return;
+            if (typeof engine.lua.global.get(name) !== 'function') return;
+            handled = true;
+            if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
+          } catch (error) {
+            errors.push({ script: script.name, ...failure(run, error) });
+          } finally {
+            engine.run = null;
+          }
+        });
+      }
+      const kept = run.messages.filter((message) => message.origin !== null);
+      const origins = new Set(kept.map((message) => message.origin));
+      return {
+        value,
+        stop: run.stop,
+        handled,
+        writes: [...run.written],
+        edits: kept.filter((message) => message.data !== message.first).map((message) => ({ index: message.origin!, text: message.data })),
+        removed: snapshot.messages.flatMap((_, index) => (origins.has(index) ? [] : [index])),
+        added: run.messages.filter((message) => message.origin === null).map(({ role, data }) => ({ role, text: data })),
+        reload: run.reload,
+        errors,
+        missing: [...run.missing],
+      };
+    } finally {
+      this.release(workset);
     }
-    const kept = run.messages.filter((message) => message.origin !== null);
-    const origins = new Set(kept.map((message) => message.origin));
-    return {
-      value,
-      stop: run.stop,
-      handled,
-      writes: [...run.written],
-      edits: kept.filter((message) => message.data !== message.first).map((message) => ({ index: message.origin!, text: message.data })),
-      removed: snapshot.messages.flatMap((_, index) => (origins.has(index) ? [] : [index])),
-      added: run.messages.filter((message) => message.origin === null).map(({ role, data }) => ({ role, text: data })),
-      reload: run.reload,
-      errors,
-      missing: [...run.missing],
-    };
   }
 
   // Each item's text after every script's editDisplay listeners, in order; an item a script fails on keeps the text
   // it had.
   async display(owner: string, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<Displayed> {
-    const errors: ScriptError[] = [];
-    const missing = new Set<string>();
-    const texts = items.map((item) => item.text);
-    const globals = new Map(snapshot.globals);
-    const messages = working(snapshot);
-    const listening = scripts.map(() => true);
-    for (const [place, script] of scripts.entries()) {
-      const engine = await this.engine(owner, 'display', script);
-      await this.exclusive(engine, async () => {
-        if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
-        const variables = new Map(snapshot.variables);
-        for (const [at, item] of items.entries()) {
-          for (const [name, value] of item.variables) variables.set(name, value);
-          const run: Run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
-          engine.run = run;
-          try {
-            const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
-            if (edited === DEAF) return void (listening[place] = false);
-            if (typeof edited === 'string') texts[at] = edited;
-          } catch (error) {
-            if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, ...failure(run, error) });
-          } finally {
-            engine.run = null;
+    const workset = this.hold(owner, 'display', scripts);
+    try {
+      const errors: ScriptError[] = [];
+      const missing = new Set<string>();
+      const texts = items.map((item) => item.text);
+      const globals = new Map(snapshot.globals);
+      const messages = working(snapshot);
+      const listening = scripts.map(() => true);
+      for (const [place, script] of scripts.entries()) {
+        const engine = await this.engine(workset, script);
+        await this.exclusive(engine, async () => {
+          if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
+          const variables = new Map(snapshot.variables);
+          for (const [at, item] of items.entries()) {
+            for (const [name, value] of item.variables) variables.set(name, value);
+            const run: Run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
+            engine.run = run;
+            try {
+              const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
+              if (edited === DEAF) return void (listening[place] = false);
+              if (typeof edited === 'string') texts[at] = edited;
+            } catch (error) {
+              if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, ...failure(run, error) });
+            } finally {
+              engine.run = null;
+            }
           }
-        }
-      });
+        });
+      }
+      return { texts, listening, errors, missing: [...missing] };
+    } finally {
+      this.release(workset);
     }
-    return { texts, listening, errors, missing: [...missing] };
   }
 
   // Ends every engine, and with them their Lua globals. A run after it starts its engines anew.
   close() {
-    for (const engine of this.engines.values()) end(engine);
-    this.engines.clear();
+    for (const workset of this.worksets.values()) {
+      workset.retired = true;
+      if (!workset.held) this.dispose(workset);
+    }
+    this.worksets.clear();
+    this.active.clear();
   }
 
   // The value after the engine's listeners for the stage, or DEAF when it holds none.
@@ -193,19 +211,63 @@ export class Lua {
     return next;
   }
 
-  private engine(owner: string, lane: 'event' | 'display', script: Script): Promise<Engine> {
-    const key = `${owner}\n${lane}\n${script.code}`;
-    let engine = this.engines.get(key);
-    this.engines.delete(key);
-    if (!engine) {
-      engine = this.start(script);
-      for (const [oldest, old] of this.engines) {
-        if (this.engines.size < ENGINES) break;
-        this.engines.delete(oldest);
-        end(old);
+  private hold(owner: string, lane: Lane, scripts: Script[]): Workset {
+    const key = JSON.stringify([owner, lane]);
+    const workset = this.worksets.get(key) ?? { engines: new Map(), codes: new Set(), held: 0, retired: false };
+    workset.codes = new Set(scripts.map(({ code }) => code));
+    workset.held++;
+    this.worksets.delete(key);
+    this.worksets.set(key, workset);
+    this.active.set(lane, workset);
+    this.trim();
+    return workset;
+  }
+
+  private release(workset: Workset) {
+    workset.held--;
+    // A run awaiting its host at close may still create later scripts' engines. Its retired generation owns those
+    // until the last run ends; a new run after close belongs to a separate workset and must remain alive.
+    if (workset.retired && !workset.held) this.dispose(workset);
+    this.trim();
+  }
+
+  private dispose(workset: Workset) {
+    for (const engine of workset.engines.values()) end(engine);
+    workset.engines.clear();
+  }
+
+  private trim() {
+    const active = new Set(this.active.values());
+    let idle = 0;
+    for (const [key, workset] of this.worksets) {
+      if (workset.held > 0) continue;
+      for (const [code, engine] of workset.engines) {
+        if (workset.codes.has(code)) continue;
+        workset.engines.delete(code);
+        end(engine);
+      }
+      if (!active.has(workset)) {
+        idle += workset.engines.size;
+        if (workset.engines.size === 0) this.worksets.delete(key);
       }
     }
-    this.engines.set(key, engine);
+    // The latest owner of each lane survives between stretches. A host call still awaiting an answer also pins its
+    // whole workset, even if another owner runs meanwhile; no not-yet-visited script may disappear during that run.
+    for (const [key, workset] of this.worksets) {
+      if (idle <= IDLE_ENGINES) break;
+      if (workset.held > 0 || active.has(workset)) continue;
+      this.worksets.delete(key);
+      idle -= workset.engines.size;
+      this.dispose(workset);
+    }
+  }
+
+  private engine(workset: Workset, script: Script): Promise<Engine> {
+    let engine = workset.engines.get(script.code);
+    if (!engine) {
+      engine = this.start(script);
+      workset.engines.set(script.code, engine);
+    }
     return engine;
   }
 

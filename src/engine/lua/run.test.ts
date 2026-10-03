@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { LuaFactory } from 'wasmoon';
 import type { Trigger } from '../import/types';
 import { Lua, type Event, type Script } from './run';
 import type { Host, Snapshot } from './state';
@@ -43,6 +44,59 @@ const run = (code: string, event: Event, over: Partial<Host> = {}, snapshot = SN
 const blocks = (on: string, effects: unknown[], conditions: unknown[] = []): Trigger => ({ kind: 'blocks', name: 'blocks', on, conditions, effects });
 
 describe('Lua runs', () => {
+  it('pins complete nine-script worksets across stretches and lanes, then evicts idle worksets as a whole', async () => {
+    const machine = await Lua.create();
+    const starts = vi.spyOn(LuaFactory.prototype, 'createEngine');
+    const scripts: Script[] = Array.from({ length: 9 }, (_, index) => ({ kind: 'lua', name: String(index), code: `
+      local counter = 0
+      function onStart(id) counter = counter + 1; setChatVar(id, 's${index}', counter) end
+      listenEdit('editDisplay', function(id, value) counter = counter + 1; return value .. ':' .. counter end)
+    ` }));
+    const event = () => machine.run('active', scripts, SNAPSHOT, { kind: 'start' }, host());
+    const display = () => machine.display('active', scripts, SNAPSHOT, [{ index: 0, text: '', variables: [] }]);
+    try {
+      expect((await event()).writes.map(([, value]) => value)).toEqual(Array(9).fill('1'));
+      expect((await display()).texts).toEqual([':1'.repeat(9)]);
+      expect((await event()).writes.map(([, value]) => value)).toEqual(Array(9).fill('2'));
+      expect((await display()).texts).toEqual([':2'.repeat(9)]);
+      expect(starts).toHaveBeenCalledTimes(18);
+      await machine.run('next', scripts, SNAPSHOT, { kind: 'start' }, host());
+      expect((await display()).texts).toEqual([':3'.repeat(9)]);
+      expect((await event()).writes.map(([, value]) => value)).toEqual(Array(9).fill('1'));
+      expect(starts).toHaveBeenCalledTimes(36);
+    } finally {
+      machine.close();
+      starts.mockRestore();
+    }
+  });
+
+  it('closes a retired run’s later engines after a host wait without closing a new run of the same owner', async () => {
+    const machine = await Lua.create();
+    const starts = vi.spyOn(LuaFactory.prototype, 'createEngine');
+    let reached!: () => void;
+    let answer!: (value: string | null) => void;
+    const asked = new Promise<void>((resolve) => { reached = resolve; });
+    const scripts: Script[] = [
+      { kind: 'lua', name: 'wait', code: "onStart = async(function(id) alertInput(id, 'wait'):await() end)" },
+      { kind: 'lua', name: 'later', code: "function onStart(id) setChatVar(id, 'later', 'done') end" },
+    ];
+    try {
+      const old = machine.run('owner', scripts, SNAPSHOT, { kind: 'start' }, host({ ask: () => new Promise((resolve) => { answer = resolve; reached(); }) }));
+      await asked;
+      machine.close();
+      await machine.run('owner', [scripts[1]!], SNAPSHOT, { kind: 'start' }, host());
+      answer(null);
+      expect(await old).toMatchObject({ errors: [], writes: [['later', 'done']] });
+      const engines = await Promise.all(starts.mock.results.map(({ value }) => value));
+      await vi.waitFor(() => expect(engines.map((engine) => engine.global.isClosed())).toEqual([true, false, true]));
+      machine.close();
+      await vi.waitFor(() => expect(engines.every((engine) => engine.global.isClosed())).toBe(true));
+    } finally {
+      machine.close();
+      starts.mockRestore();
+    }
+  });
+
   it('reads and writes variables and state, reporting only what changed', async () => {
     const outcome = await run(
       `function onOutput(id)
