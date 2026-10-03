@@ -19,7 +19,7 @@ import {
 } from './types';
 
 type Json = Record<string, unknown>;
-type Span = { offset: number; length: number };
+type Span = { source: BackupSource; offset: number; length: number };
 type Cold = (key: string) => Promise<unknown>;
 
 // 00 'RISUSAVE' 00 08, then gzip over msgpackr: the one form a backup's database is written in (spec §2).
@@ -36,16 +36,21 @@ const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const record = (value: unknown): Json => (isRecord(value) ? value : {});
 const fail = (kind: BackupFailure['kind'], detail?: string): BackupResult => ({ ok: false, failure: detail ? { kind, detail } : { kind } });
 
-// Only the database and the cold-storage entries are read here; a picture is read when it is asked for.
-export async function readBackup(source: BackupSource): Promise<BackupResult> {
+// Several files are read as one: the database comes from the first whose database is not encrypted, and every entry is
+// looked up in all of them, that one first. So an account's full backup, whose database is locked with Risu's server key
+// but whose pictures are plain, supplies the pictures beside the partial backup that supplies the text. Only the database
+// and the cold-storage entries are read here; a picture is read when it is asked for.
+export async function readBackup(sources: BackupSource[]): Promise<BackupResult> {
   try {
-    const files = await index(readAhead(source));
-    if (files.has('encryption.risudat')) return fail('encrypted');
-    const database = files.get('database.risudat');
-    if (!database) return fail('no-database');
-    const db = decode(await source.read(database.offset, database.length));
+    const indexed = await Promise.all(sources.map((source) => index(readAhead(source), source)));
+    const main = indexed.findIndex((files) => files.has('database.risudat') && !files.has('encryption.risudat'));
+    if (main === -1) return fail(indexed.some((files) => files.has('encryption.risudat')) ? 'encrypted' : 'no-database');
+    const files = new Map(indexed.flatMap((entries, at) => (at === main ? [] : [...entries])));
+    for (const [name, span] of indexed[main]!) files.set(name, span);
+    const database = files.get('database.risudat')!;
+    const db = decode(await database.source.read(database.offset, database.length));
     if (!isRecord(db)) return fail('unreadable', 'not a Risu database');
-    return { ok: true, backup: await fromDatabase(db, source, files) };
+    return { ok: true, backup: await fromDatabase(db, files) };
   } catch (error) {
     return fail('unreadable', error instanceof Error ? error.message : String(error));
   }
@@ -68,7 +73,9 @@ function readAhead(source: BackupSource): BackupSource {
 }
 
 // Records of u32 name length, name, u32 data length, data, little-endian, with nothing around them (spec §1).
-async function index(source: BackupSource): Promise<Map<string, Span>> {
+// A span reads from the file it was indexed in, through raw: the read-ahead window serves one read at a time, and
+// entries are read several at once.
+async function index(source: BackupSource, raw: BackupSource): Promise<Map<string, Span>> {
   const files = new Map<string, Span>();
   const take = (offset: number, length: number) => {
     if (offset + length > source.size) throw new Error('the file ends early');
@@ -78,7 +85,7 @@ async function index(source: BackupSource): Promise<Map<string, Span>> {
     const nameLength = u32(await take(at, 4), 0);
     const head = await take(at + 4, nameLength + 4);
     const length = u32(head, nameLength);
-    files.set(utf8.decode(head.subarray(0, nameLength)), { offset: at + 8 + nameLength, length });
+    files.set(utf8.decode(head.subarray(0, nameLength)), { source: raw, offset: at + 8 + nameLength, length });
     at += 8 + nameLength + length;
     if (at > source.size) throw new Error('the file ends early');
   }
@@ -92,8 +99,10 @@ function decode(bytes: Uint8Array): unknown {
   return readMsgpack(gunzip(bytes.subarray(DATABASE_HEADER.length)));
 }
 
-async function fromDatabase(db: Json, source: BackupSource, files: Map<string, Span>): Promise<RisuBackup> {
-  const reader = (span: Span): Read => () => source.read(span.offset, span.length);
+const isPicture = (name: string) => name !== 'database.risudat' && name !== 'encryption.risudat' && !name.startsWith('coldstorage_');
+
+async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBackup> {
+  const reader = (span: Span): Read => () => span.source.read(span.offset, span.length);
   // An entry is named by the basename of its asset key (spec §7).
   const entry: Entry = (key) => {
     const span = files.get(key.slice(Math.max(key.lastIndexOf('/'), key.lastIndexOf('\\')) + 1));
@@ -168,7 +177,8 @@ async function fromDatabase(db: Json, source: BackupSource, files: Map<string, S
   const modules = list(db.modules).filter(isRecord).map((raw) => risuModule(raw, entry));
   const alwaysModules = list(db.enabledModules).filter((id) => typeof id === 'string');
 
-  return { characters, personas, presets, modules, alwaysModules, unsupported: counted(MOVE_UNSUPPORTED_KINDS, unsupported) };
+  const pictures = [...files.keys()].filter(isPicture).length;
+  return { pictures, characters, personas, presets, modules, alwaysModules, unsupported: counted(MOVE_UNSUPPORTED_KINDS, unsupported) };
 }
 
 // A module's pictures are in the backup's asset storage, each under the key its entry of module.assets holds. One the

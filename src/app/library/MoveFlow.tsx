@@ -14,7 +14,7 @@ import { cardMissed, moduleMissed, moveMissed } from './missed';
 import { hasModule, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
 
 const FAILURE: Record<BackupFailure['kind'], string> = {
-  encrypted: 'Risu 계정의 전체 백업은 Risu 서버의 키로 잠겨 있어 열 수 없어요. Risu에서 ‘부분 로컬 백업 저장’으로 받은 파일을 넣어 주세요.',
+  encrypted: 'Risu 계정의 전체 백업은 글이 Risu 서버의 키로 잠겨 있어요. 그림은 읽을 수 있으니, Risu에서 ‘부분 로컬 백업 저장’으로 받은 파일을 이 파일과 함께 넣어 주세요. 글은 그 파일에서, 그림은 이 파일에서 가져와요.',
   'no-database': 'Risu 백업이 아니거나 깨진 파일이에요.',
   unreadable: 'Risu 백업이 아니거나 깨진 파일이에요.',
 };
@@ -41,16 +41,16 @@ const sourceOf = (file: File): BackupSource => ({
   read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
 });
 
-// A Risu backup dropped or picked: read it, pick what to bring, bring it, and say what came and what did not (design F7).
-// aside: other files dropped with it, which are not imported.
-export function MoveFlow({ file, aside, onClose }: { file: File; aside: number; onClose: () => void }) {
+// Risu backups dropped or picked, read as one: pick what to bring, bring it, and say what came and what did not (design
+// F7). aside: other files dropped with them, which are not imported.
+export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; aside: number; onClose: () => void }) {
   const store = useStore();
   const files = useFiles();
   const [phase, setPhase] = useState<Phase>({ kind: 'reading' });
 
   useEffect(() => {
     let live = true;
-    void readBackup(sourceOf(file)).then((read) => {
+    void readBackup(dropped.map(sourceOf)).then((read) => {
       if (!live) return;
       if (!read.ok) return setPhase({ kind: 'failed', message: FAILURE[read.failure.kind] });
       const have: Have = { characters: broughtFromRisu(store), modules: new Set(modulesFromRisu(store).keys()) };
@@ -62,7 +62,7 @@ export function MoveFlow({ file, aside, onClose }: { file: File; aside: number; 
     return () => {
       live = false;
     };
-  }, [file, store]);
+  }, [dropped, store]);
 
   async function run(backup: RisuBackup, ticks: Ticks) {
     const pick = toPick(backup, ticks);
@@ -71,7 +71,8 @@ export function MoveFlow({ file, aside, onClose }: { file: File; aside: number; 
     setPhase(moved.ok ? { kind: 'done', backup, pick, moved: moved.data } : { kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}` });
   }
 
-  const note = aside > 0 ? `${file.name} · 함께 넣은 파일 ${aside}개는 가져오지 않았어요` : file.name;
+  const names = dropped.map((file) => file.name).join(' + ');
+  const note = aside > 0 ? `${names} · 함께 넣은 파일 ${aside}개는 가져오지 않았어요` : names;
   const close = (
     <Button variant="secondary" size="md" onClick={onClose}>
       닫기
@@ -116,6 +117,7 @@ export function MoveFlow({ file, aside, onClose }: { file: File; aside: number; 
       }
     >
       <Stack gap="section">
+        <Text variant="note">{backup.pictures > 0 ? `그림 ${backup.pictures}개가 들어 있어요.` : '그림이 들어 있지 않아요. 그림을 뺀 백업이면, 그림이 든 전체 백업을 함께 넣어 주세요.'}</Text>
         <Picks
           title="캐릭터"
           rows={backup.characters.map((character) => ({ label: character.card.name, note: have.characters.has(character.id) ? '이미 있음' : `대화 ${character.chats.length}개` }))}

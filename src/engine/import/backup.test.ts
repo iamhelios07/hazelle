@@ -142,7 +142,7 @@ const backupFile = () =>
   ]);
 
 async function read(): Promise<RisuBackup> {
-  const result = await readBackup(backupFile());
+  const result = await readBackup([backupFile()]);
   if (!result.ok) throw new Error(result.failure.kind);
   return result.backup;
 }
@@ -161,10 +161,10 @@ describe('readBackup', () => {
       ['database.risudat', data],
     ]);
     const read = vi.fn(source.read);
-    const result = await readBackup({ size: source.size, read });
-    const reference = await readBackup(bin([
-      ['mira.png', picture], ['map.png', PNG], ['ann.png', PNG], ['database.risudat', data],
-    ]));
+    const result = await readBackup([{ size: source.size, read }]);
+    const reference = await readBackup([bin([
+      ['padding', new Uint8Array(1)], ['mira.png', picture], ['map.png', PNG], ['ann.png', PNG], ['database.risudat', data],
+    ])]);
     expect(JSON.stringify(result)).toBe(JSON.stringify(reference));
     expect(result.ok).toBe(true);
     expect(read.mock.calls).toEqual([
@@ -193,7 +193,7 @@ describe('readBackup', () => {
     const source = bin([['database.risudat', database({ characters })], ...entries]);
     let active = 0;
     let peak = 0;
-    const result = await readBackup({
+    const result = await readBackup([{
       size: source.size,
       async read(offset, length) {
         peak = Math.max(peak, ++active);
@@ -204,7 +204,7 @@ describe('readBackup', () => {
           active--;
         }
       },
-    });
+    }]);
     expect(peak).toBe(8);
     expect(active).toBe(0);
     if (!result.ok) throw new Error(result.failure.kind);
@@ -213,10 +213,22 @@ describe('readBackup', () => {
     );
   });
 
+  it('takes the text from the partial backup and the pictures from the account backup dropped with it', async () => {
+    const result = await readBackup([
+      bin([['encryption.risudat', json({ type: 'account' })], ['mira.png', PNG], ['map.png', PNG], ['database.risudat', strToU8('locked')]]),
+      bin([['database.risudat', database(db)]]),
+    ]);
+    if (!result.ok) throw new Error(result.failure.kind);
+    expect(result.backup.pictures).toBe(2);
+    const card = result.backup.characters[0]!;
+    expect(await card.avatar()).toEqual({ bytes: PNG, type: 'image/png' });
+    expect(card.assets.map(({ name }) => name)).toEqual(['map']);
+  });
+
   it('refuses an encrypted, database-less or undecodable backup', async () => {
-    expect(await readBackup(bin([['encryption.risudat', json({ type: 'account' })], ['database.risudat', database(db)]]))).toEqual({ ok: false, failure: { kind: 'encrypted' } });
-    expect(await readBackup(bin([['mira.png', PNG]]))).toEqual({ ok: false, failure: { kind: 'no-database' } });
-    expect(await readBackup(bin([['database.risudat', PNG]]))).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
+    expect(await readBackup([bin([['encryption.risudat', json({ type: 'account' })], ['database.risudat', database(db)]])])).toEqual({ ok: false, failure: { kind: 'encrypted' } });
+    expect(await readBackup([bin([['mira.png', PNG]])])).toEqual({ ok: false, failure: { kind: 'no-database' } });
+    expect(await readBackup([bin([['database.risudat', PNG]])])).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
   });
 
   it('brings characters out of cold storage, in Risu order, as cards with lazy pictures', async () => {

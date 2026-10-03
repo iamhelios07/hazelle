@@ -159,7 +159,9 @@ export type RisuCharacter = Omit<Imported, 'avatar'> & {
 // alias: Risu's persona note, a line only the user reads to tell personas of one name apart, which is what a 별명 is.
 export type RisuPersona = { id: string | null; name: string; alias: string; description: string; picture: () => Promise<Picture | null> };
 export type RisuPreset = { name: string; result: PresetResult };
+// pictures: the picture entries the files hold, in all; 0 says the account backup was written without its assets.
 export type RisuBackup = {
+  pictures: number;
   characters: RisuCharacter[];
   personas: RisuPersona[];
   presets: RisuPreset[];

@@ -44,14 +44,14 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
 };
 
 // Bot import: pick or drop files anywhere, each is saved as a character or a module, and a summary says what came in, what did
-// not, and what its chats do not use yet. A Risu backup (.bin) goes to MoveFlow instead, and a card named like a
+// not, and what its chats do not use yet. Risu backups (.bin) go to MoveFlow together, and a card named like a
 // character brought from Risu may only fill that character's pictures.
 export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
   const files = useFiles();
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State | null>(null);
-  const [moving, setMoving] = useState<{ file: File; aside: number } | null>(null);
+  const [moving, setMoving] = useState<{ files: File[]; aside: number } | null>(null);
 
   async function save(file: File, progress: (busy: string) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
     const parsed = importCard(file.name, new Uint8Array(await file.arrayBuffer()));
@@ -80,8 +80,8 @@ export function ImportProvider({ children }: { children: ReactNode }) {
 
   async function take(files: File[]) {
     if (files.length === 0 || state?.busy || moving) return;
-    const backup = files.find((file) => file.name.toLowerCase().endsWith('.bin'));
-    if (backup) return setMoving({ file: backup, aside: files.length - 1 });
+    const backups = files.filter((file) => file.name.toLowerCase().endsWith('.bin'));
+    if (backups.length > 0) return setMoving({ files: backups, aside: files.length - backups.length });
     const results: Result[] = [];
     for (const file of files) {
       setState({ busy: file.name, results, ask: null });
@@ -114,7 +114,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         }}
       />
       {dragging && <DropOverlay>여기에 놓으면 봇, 모듈이나 Risu 백업을 가져와요</DropOverlay>}
-      {moving && <MoveFlow file={moving.file} aside={moving.aside} onClose={() => setMoving(null)} />}
+      {moving && <MoveFlow files={moving.files} aside={moving.aside} onClose={() => setMoving(null)} />}
       {state && (
         <Dialog title={title} onClose={() => state.busy || setState(null)}>
           <Stack>
