@@ -68,9 +68,12 @@ export async function leaveAccount(
     const destroyed = await store(env, incarnation).destroy(incarnation);
     if ('unavailable' in destroyed) return 'unavailable';
   }
-  await db.prepare("DELETE FROM accounts WHERE id = ? AND incarnation = ? AND state = 'leaving'").bind(accountId, incarnation).run();
-  // The pictures follow the row: their prefix then names no account, so whatever a cut-off removal or an upload still
-  // in flight leaves is the hourly sweep's (files.ts), and no later run of this has to find it.
+  // The pictures follow the row, whose delete queues their prefix for the hourly sweep (files.ts): whatever a cut-off
+  // removal or an upload still in flight leaves is the sweep's next run, and no later run of this has to find it.
+  await db.batch([
+    db.prepare("DELETE FROM accounts WHERE id = ? AND incarnation = ? AND state = 'leaving'").bind(accountId, incarnation),
+    db.prepare('INSERT INTO file_cleanup (prefix) SELECT ? WHERE changes() = 1 ON CONFLICT DO NOTHING').bind(`files/${incarnation}/`),
+  ]);
   ctx.waitUntil(removeAccountFiles(env, incarnation));
   return 'left';
 }

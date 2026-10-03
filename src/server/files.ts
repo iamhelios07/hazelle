@@ -128,7 +128,8 @@ const CLEANUP_PAGE = 1000;
 const CLEANUP_BUDGET = 20;
 
 // Unbounded, unlike the sweep: 탈퇴 runs it after its answer, once the account's row is gone (lifecycle.ts), so what a
-// cut-off run leaves is a dead prefix sweepDeadPrefixes removes. Safe to run beside the sweep.
+// cut-off run leaves is a dead prefix, queued with the row's delete, that sweepDeadPrefixes removes. Safe to run beside
+// the sweep.
 export async function removeAccountFiles(env: Env, incarnation: string): Promise<void> {
   for (;;) {
     if (await removePrefixPage(env.BLOBS, `files/${incarnation}/`)) return;

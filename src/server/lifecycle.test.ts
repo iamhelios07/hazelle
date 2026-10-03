@@ -384,6 +384,9 @@ describe('a deletion', () => {
     expect((await t.env.BLOBS.list({ prefix: `files/${incarnation}/` })).objects).toEqual([]);
   };
 
+  const queued = ({ incarnation }: { incarnation: string }) =>
+    t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup WHERE prefix = ?').bind(`files/${incarnation}/`).first<number>('n');
+
   it('finishes after a crash at every durable boundary, by running again or by the hourly sweep once the row is gone, and logs the deletion once', async () => {
     const probe = counting();
     const first = await holding();
@@ -394,7 +397,9 @@ describe('a deletion', () => {
       const held = await holding();
       await expect(leave(crashing(n).env, held.id, held.incarnation, true)).rejects.toThrow(Crash);
       expect(await leave(env(), held.id, held.incarnation, true)).toBe('left');
+      expect(await queued(held)).toBe(1);
       await sweepDeadPrefixes(env());
+      expect(await queued(held)).toBe(0);
       await gone(held);
       expect(await t.env.DB.prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'delete-account' AND target = ?").bind(held.id).first('n')).toBe(1);
     }
