@@ -39,7 +39,7 @@
     { "name": "BOT_CALLS", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } }
   ],
   // The operator's account id (src/server/http.ts). Empty names no one.
-  "vars": { "ADMIN_ACCOUNT": "fb7aa518-e824-4784-bf69-a6e868b14cb0" },
+  "vars": { "ADMIN_ACCOUNT": "c7561b28-e433-4adb-bc98-9a90a1f7ddb7" },
   // Hourly: the sweep of pictures whose account is gone, and the delete of reports and log rows past their year
   // (src/server/main.ts).
   "triggers": { "crons": ["17 * * * *"] },
