@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hex } from './http';
-import { forgetOldRecords, readAll } from './admin';
+import { forgetOldRecords, readAll, usageTotals } from './admin';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -47,7 +47,7 @@ describe('the operator', () => {
     expect((await t.post('signup', { ...signupBody('again'), accountId: admin.id })).status).toBe(400);
   });
 
-  it("lists each account with its store's bytes, its pictures and its own caps, and totals what the stores answered", async () => {
+  it("lists each account with its store's bytes, its pictures and its own caps, and separately totals what the stores answered", async () => {
     const admin = await operator();
     const other = await account('other');
     const leaving = await account('leaving');
@@ -57,14 +57,53 @@ describe('the operator', () => {
     await t.batch(writes.map((write) => ({ ...write, id: crypto.randomUUID() })), admin.cookie);
     await t.lifecycle(leaving.id, "state = 'leaving'");
 
-    const answer = (await (await t.get('admin/accounts', admin.cookie)).json()) as { accounts: Record<string, unknown>[]; totals: Record<string, unknown> };
+    const answer = (await (await t.get('admin/accounts', admin.cookie)).json()) as { accounts: Record<string, unknown>[]; next: string | null };
     const row = { createdAt: expect.any(Number), suspended: false, state: 'active', disk: expect.any(Number), bytesCap: 'default', fileBytesCap: 'default' };
     expect(answer.accounts).toEqual([
       { ...row, accountId: admin.id, username: 'operator', bytes: 20, fileBytes: 0 },
       { ...row, accountId: other.id, username: 'other', bytes: 20, fileBytes: 3 },
       { ...row, accountId: leaving.id, username: 'leaving', state: 'leaving', bytes: null, disk: null, fileBytes: 0 },
     ]);
-    expect(answer.totals).toEqual({ bytes: 40, disk: expect.any(Number), unread: 1, readAt: expect.any(Number) });
+    expect(answer.next).toBeNull();
+    expect(await (await t.get('admin/usage', admin.cookie)).json()).toEqual({ accounts: 3, totals: { bytes: 40, disk: expect.any(Number), unread: 1, readAt: expect.any(Number) }, next: null });
+  });
+
+  it('bounds account and usage pages, continues tied timestamps, and refreshes one row without a service fan-out', async () => {
+    const admin = await operator();
+    const ids = Array.from({ length: 101 }, () => crypto.randomUUID());
+    await t.env.DB.prepare(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline)
+      SELECT value, 'member-' || value, login_hash, created_at + 1, lower(hex(randomblob(16))), lower(hex(randomblob(16)))
+      FROM accounts, json_each(?1) WHERE accounts.id = ?2`).bind(JSON.stringify(ids), admin.id).run();
+    const stores = t.env.STORES;
+    let calls = 0;
+    t.env.STORES = { getByName: () => ({ usage: async () => { calls++; return { bytes: 2, disk: 4 }; } }) } as unknown as Env['STORES'];
+    try {
+      type Page = { accounts: { accountId: string }[]; next: string | null };
+      const first = await (await t.get('admin/accounts', admin.cookie)).json() as Page;
+      expect(first.accounts).toHaveLength(100);
+      expect(calls).toBe(100);
+      const second = await (await t.get(`admin/accounts?after=${encodeURIComponent(first.next!)}`, admin.cookie)).json() as Page;
+      expect(second.accounts).toHaveLength(2);
+      expect(second.next).toBeNull();
+      expect(new Set([...first.accounts, ...second.accounts].map(({ accountId }) => accountId)).size).toBe(102);
+      expect(calls).toBe(102);
+
+      const row = await (await t.get(`admin/accounts/${ids[0]!}`, admin.cookie)).json();
+      expect(row).toMatchObject({ account: { accountId: ids[0], bytes: 2 } });
+      expect(calls).toBe(103);
+      await t.post('admin/notices', { to: ids[0], text: '알림' }, admin.cookie);
+      await t.get('admin/log', admin.cookie);
+      expect(calls).toBe(103);
+      expect(await (await t.get('admin/usage', admin.cookie)).json()).toMatchObject({ accounts: 100, totals: { bytes: 200, disk: 400, unread: 0 }, next: first.next });
+      expect(calls).toBe(203);
+      expect((await t.get('admin/accounts?after=invalid', admin.cookie)).status).toBe(400);
+    } finally {
+      t.env.STORES = stores;
+    }
+  });
+
+  it('totals one bounded usage page while counting every unread store once', () => {
+    expect(usageTotals([{ bytes: 3, disk: 7 }, null, { bytes: 5, disk: 11 }], 123)).toEqual({ bytes: 8, disk: 18, unread: 1, readAt: 123 });
   });
 
   it('keeps at most fifty store reads in flight and answers the ones unsettled at the deadline as unread', async () => {

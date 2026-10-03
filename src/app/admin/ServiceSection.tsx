@@ -11,7 +11,7 @@ import { CAP_ERROR, capText, typedCap, typedCount } from './bytes';
 import { NoticeDialog } from './NoticeDialog';
 
 // The operator raises the cap in steps, so each cap sits with the count it bounds.
-export function ServiceSection({ service, onSaved }: { service: Service; onSaved: () => void }) {
+export function ServiceSection({ service, onSaved, onNoticed }: { service: Service; onSaved: () => void; onNoticed: () => void }) {
   // null: not typed in, so the field shows the server's value.
   const [seats, setSeats] = useState<string | null>(null);
   const [cap, setCap] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
           onSent={() => {
             setWriting(false);
             toast.show('모두에게 보냈어요.');
-            onSaved();
+            onNoticed();
           }}
           onClose={() => setWriting(false)}
         />

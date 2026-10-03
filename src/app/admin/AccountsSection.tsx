@@ -1,17 +1,17 @@
 import { Ban, HardDrive, History, MoreHorizontal, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ApiResult } from '../../runtime/api';
-import { liftSuspension, removeAccount, sendNotice, suspend, type AccountState, type AdminAccount, type OwnCap, type Totals } from '../../runtime/admin';
+import { liftSuspension, removeAccount, sendNotice, suspend, type AccountState, type AdminAccount, type OwnCap } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
 import { NOTICES } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
-import { Callout, ConfirmDialog, IconButton, List, ListItem, Menu, MenuItem, Section, Text } from '../ui';
+import { Button, Callout, ConfirmDialog, IconButton, List, ListItem, Menu, MenuItem, Section } from '../ui';
 import { CapsDialog } from './CapsDialog';
 import { NoticeDialog } from './NoticeDialog';
-import { moment } from './time';
+import type { useAccounts } from './useAccounts';
 
 const UNKNOWN = '알 수 없음';
 const STATES: Record<AccountState, string | null> = { active: null, restoring: '복원 중', leaving: '탈퇴 중' };
@@ -20,13 +20,9 @@ const size = (bytes: number | null) => (bytes === null ? UNKNOWN : sizeText(byte
 // What it holds, and its own cap when it has one.
 const held = (name: string, bytes: number | null, cap: OwnCap) => `${name} ${size(bytes)}${cap === 'default' ? '' : ` / ${cap === null ? '한도 없음' : sizeText(cap)}`}`;
 
-const reading = ({ bytes, disk, unread, readAt }: Totals) =>
-  `합계 글 ${sizeText(bytes)} · 디스크 ${sizeText(disk)} · ${moment(readAt)}에 읽음${unread > 0 ? ` · ${unread.toLocaleString('ko-KR')}명은 읽지 못해 합계에서 빠짐` : ''}`;
-
-type Loaded = { data: { accounts: AdminAccount[]; totals: Totals } | null; failure: string | null; reload: () => void };
 type Named = Pick<AdminAccount, 'accountId' | 'username'>;
 
-export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loaded; onActed: () => void; onRestores: (account: Named) => void }) {
+export function AccountsSection({ loaded, onActed, onRestores }: { loaded: ReturnType<typeof useAccounts>; onActed: (id?: string) => void; onRestores: (account: Named) => void }) {
   const { username: own } = useSession();
   const toast = useToast();
   const { data, failure, reload } = loaded;
@@ -35,15 +31,15 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
   const [writing, setWriting] = useState<{ account: AdminAccount; suspend: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function act(done: Promise<ApiResult<undefined>>, failed: string) {
+  async function act(id: string, done: Promise<ApiResult<undefined>>, failed: string) {
     const answer = await done;
     if (!answer.ok) return toast.error(failed, { detail: describeFailure(answer) });
-    onActed();
+    onActed(id);
   }
 
   async function remove(account: AdminAccount) {
     setBusy(true);
-    await act(removeAccount(account.accountId), account.state === 'leaving' ? `${account.username} 계정의 탈퇴를 마무리하지 못했어요.` : `${account.username} 계정을 지우지 못했어요.`);
+    await act(account.accountId, removeAccount(account.accountId), account.state === 'leaving' ? `${account.username} 계정의 탈퇴를 마무리하지 못했어요.` : `${account.username} 계정을 지우지 못했어요.`);
     setBusy(false);
     setRemoving(null);
   }
@@ -51,11 +47,15 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
   return (
     <Section
       title="계정"
-      note={data ? `${data.accounts.length.toLocaleString('ko-KR')}명` : undefined}
+      note={`${loaded.page}쪽${data ? ` · ${data.accounts.length.toLocaleString('ko-KR')}명` : ''}`}
+      action={<>
+        <Button variant="ghost" size="sm" busy={loaded.busy} onClick={reload}>새로고침</Button>
+        <Button variant="ghost" size="sm" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>
+        <Button variant="ghost" size="sm" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
+      </>}
       hint="글은 계정이 저장한 내용의 크기, 디스크는 그 내용이 서버에서 차지해 요금이 매겨지는 크기예요. 제때 답하지 않았거나 복원 중, 탈퇴 중인 계정은 알 수 없음으로 보여요."
     >
       {failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: reload }}>{failure}</Callout>}
-      {data && <Text variant="note">{reading(data.totals)}</Text>}
       {data && (
         <List label="계정">
           {data.accounts.map((account) => {
@@ -78,7 +78,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
                         {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
                         {others &&
                           (account.suspended ? (
-                            <MenuItem icon={RotateCcw} label="정지 풀기" onClick={() => void act(liftSuspension(account.accountId), `${account.username} 계정의 정지를 풀지 못했어요.`)} />
+                            <MenuItem icon={RotateCcw} label="정지 풀기" onClick={() => void act(account.accountId, liftSuspension(account.accountId), `${account.username} 계정의 정지를 풀지 못했어요.`)} />
                           ) : (
                             <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알리기, 탈퇴만 돼요" onClick={() => setWriting({ account, suspend: true })} />
                           ))}
@@ -98,7 +98,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
           onClose={() => setCapping(null)}
           onSaved={() => {
             setCapping(null);
-            onActed();
+            onActed(capping.accountId);
           }}
         />
       )}
@@ -112,7 +112,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Loade
             send={(reason) => suspend(writing.account.accountId, reason)}
             onSent={() => {
               setWriting(null);
-              onActed();
+              onActed(writing.account.accountId);
             }}
             onClose={() => setWriting(null)}
           />

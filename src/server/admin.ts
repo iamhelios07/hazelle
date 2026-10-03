@@ -113,59 +113,104 @@ function noticed(db: D1Database, text: string, to: Target | null, report: number
 const USAGE_SLOTS = 50;
 const USAGE_DEADLINE_MS = 10_000;
 
+type AccountRow = {
+  accountId: string;
+  username: string;
+  createdAt: number;
+  suspended: number;
+  state: State;
+  incarnation: string;
+  fileBytes: number;
+  own_bytes_cap: number;
+  bytes_cap: number | null;
+  own_file_bytes_cap: number;
+  file_bytes_cap: number | null;
+};
+const ACCOUNT_COLUMNS = `id AS accountId, username, created_at AS createdAt, suspended_at IS NOT NULL AS suspended,
+  state, incarnation, file_bytes AS fileBytes, own_bytes_cap, bytes_cap, own_file_bytes_cap, file_bytes_cap`;
+type Usage = { bytes: number; disk: number } | null;
+
+// Keyset pages stay bounded after deletions and do not scan an ever-growing OFFSET. The (created_at, id) index owns
+// this order; the cursor includes both because accounts can share their creation millisecond.
+function accountPage(c: Context<AppEnv>, columns: string) {
+  const after = c.req.query('after');
+  if (after === undefined) return c.env.DB.prepare(`SELECT ${columns} FROM accounts ORDER BY created_at, id LIMIT ?`).bind(PAGE_ROWS);
+  const split = after.indexOf(':');
+  const at = Number(after.slice(0, split));
+  const id = after.slice(split + 1);
+  if (split < 1 || !count(at) || !ID.test(id)) return null;
+  return c.env.DB.prepare(`SELECT ${columns} FROM accounts WHERE (created_at, id) > (?, ?) ORDER BY created_at, id LIMIT ?`).bind(at, id, PAGE_ROWS);
+}
+
+const afterAccounts = (rows: Pick<AccountRow, 'accountId' | 'createdAt'>[]) =>
+  rows.length === PAGE_ROWS ? `${rows.at(-1)!.createdAt}:${rows.at(-1)!.accountId}` : null;
+
 // bytes, disk: what the account's store answered, null for an account not read by the deadline, failing, or not
 // active (restoring and leaving accounts are not called). fileBytes: the sum of its pictures. bytesCap, fileBytesCap:
-// its own caps, 'default' while the service's apply. totals: a reading of the accounts that answered, at readAt.
+// its own caps, 'default' while the service's apply. Whole-service totals are read separately through /usage.
 admin.get('/accounts', async (c) => {
-  const { results } = await c.env.DB.prepare(
-    `SELECT id AS accountId, username, created_at AS createdAt, suspended_at IS NOT NULL AS suspended, state, incarnation, file_bytes AS fileBytes,
-       own_bytes_cap, bytes_cap, own_file_bytes_cap, file_bytes_cap
-     FROM accounts ORDER BY created_at, id`,
-  ).all<{
-    accountId: string;
-    username: string;
-    createdAt: number;
-    suspended: number;
-    state: State;
-    incarnation: string;
-    fileBytes: number;
-    own_bytes_cap: number;
-    bytes_cap: number | null;
-    own_file_bytes_cap: number;
-    file_bytes_cap: number | null;
-  }>();
-  const usages = await readAll(
-    results.map(({ state, incarnation }) => (state === 'active' ? () => store(c.env, incarnation).usage(incarnation) : null)),
+  const page = accountPage(c, ACCOUNT_COLUMNS);
+  if (!page) return fail(c, 400, 'bad-input');
+  const { results } = await page.all<AccountRow>();
+  const usages = await accountUsage(c.env, results);
+  return c.json({ accounts: results.map((row, index) => shownAccount(row, usages[index]!)), next: afterAccounts(results) });
+});
+
+// Whole-service usage is an explicit, separately refreshed traversal. Each request calls only this page's stores,
+// and returns sums rather than retaining/transporting every account row. Ordinary actions never start this scan.
+admin.get('/usage', async (c) => {
+  const page = accountPage(c, 'id AS accountId, created_at AS createdAt, state, incarnation');
+  if (!page) return fail(c, 400, 'bad-input');
+  const { results } = await page.all<Pick<AccountRow, 'accountId' | 'createdAt' | 'state' | 'incarnation'>>();
+  return c.json({ totals: usageTotals(await accountUsage(c.env, results), Date.now()), accounts: results.length, next: afterAccounts(results) });
+});
+
+// A change refreshes only its row. A deleted account is absent rather than a reason to reload the service.
+admin.get('/accounts/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!ID.test(id)) return fail(c, 400, 'bad-input');
+  const row = await c.env.DB.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ?`).bind(id).first<AccountRow>();
+  const usage = row ? (await accountUsage(c.env, [row]))[0]! : null;
+  return c.json({ account: row ? shownAccount(row, usage) : null });
+});
+
+async function accountUsage(env: Env, rows: Pick<AccountRow, 'state' | 'incarnation'>[]): Promise<Usage[]> {
+  const answers = await readAll(
+    rows.map(({ state, incarnation }) => (state === 'active' ? () => store(env, incarnation).usage(incarnation) : null)),
     USAGE_SLOTS,
     USAGE_DEADLINE_MS,
   );
-  const accounts = results.map((row, index) => {
-    const usage = usages[index];
-    const read = usage && 'bytes' in usage ? usage : null;
-    return {
-      accountId: row.accountId,
-      username: row.username,
-      createdAt: row.createdAt,
-      suspended: Boolean(row.suspended),
-      state: row.state,
-      bytes: read?.bytes ?? null,
-      disk: read?.disk ?? null,
-      fileBytes: row.fileBytes,
-      bytesCap: row.own_bytes_cap ? row.bytes_cap : 'default',
-      fileBytesCap: row.own_file_bytes_cap ? row.file_bytes_cap : 'default',
-    };
-  });
-  const answered = accounts.filter(({ bytes }) => bytes !== null);
-  return c.json({
-    accounts,
-    totals: {
-      bytes: answered.reduce((sum, { bytes }) => sum + bytes!, 0),
-      disk: answered.reduce((sum, { disk }) => sum + disk!, 0),
-      unread: accounts.length - answered.length,
-      readAt: Date.now(),
-    },
-  });
-});
+  return answers.map((usage) => usage && 'bytes' in usage ? usage : null);
+}
+
+function shownAccount(row: AccountRow, usage: Usage) {
+  return {
+    accountId: row.accountId,
+    username: row.username,
+    createdAt: row.createdAt,
+    suspended: Boolean(row.suspended),
+    state: row.state,
+    bytes: usage?.bytes ?? null,
+    disk: usage?.disk ?? null,
+    fileBytes: row.fileBytes,
+    bytesCap: row.own_bytes_cap ? row.bytes_cap : 'default',
+    fileBytesCap: row.own_file_bytes_cap ? row.file_bytes_cap : 'default',
+  };
+}
+
+export function usageTotals(usages: readonly Usage[], readAt: number) {
+  let bytes = 0;
+  let disk = 0;
+  let unread = 0;
+  for (const usage of usages) {
+    if (usage === null) unread++;
+    else {
+      bytes += usage.bytes;
+      disk += usage.disk;
+    }
+  }
+  return { bytes, disk, unread, readAt };
+}
 
 // Runs each call that is not null with at most slots of them in flight, a slot held until its call settles, since a
 // call cannot be aborted. At the deadline no call starts any more, and what has not settled is answered as undefined:

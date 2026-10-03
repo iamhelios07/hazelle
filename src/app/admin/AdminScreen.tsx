@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { readAccounts, readService, type Report } from '../../runtime/admin';
+import { readService, type Report } from '../../runtime/admin';
 import { PAGES } from '../common/words';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -11,31 +11,31 @@ import { ReportsSection } from './ReportsSection';
 import { RestoresDialog, type Restoring } from './RestoresDialog';
 import { ServiceSection } from './ServiceSection';
 import { useLoaded } from '../common/useLoaded';
+import { useAccounts } from './useAccounts';
+import { UsageSection } from './UsageSection';
 
-// 운영: the operator's tools. Every act lands in the log, which is asked again after one. The accounts are asked again
-// only after an act on an account: reading them calls every account's store.
+// 운영: the operator's tools. Every act lands in the log, which is asked again after one. Only the changed account's
+// row is asked again; whole-service usage is refreshed separately by the operator.
 export function AdminScreen({ back }: { back: Back | null }) {
   const service = useLoaded(readService);
-  const accounts = useLoaded(readAccounts);
+  const accounts = useAccounts();
   const [acts, setActs] = useState(0);
   const [restoring, setRestoring] = useState<Restoring | null>(null);
-  const acted = () => {
-    service.reload();
-    setActs((count) => count + 1);
-  };
-  const actedOnAccount = () => {
-    accounts.reload();
+  const acted = () => setActs((count) => count + 1);
+  const actedOnAccount = (id?: string) => {
+    if (id) void accounts.refresh(id).then((removed) => { if (removed) service.reload(); });
     acted();
   };
   return (
     <Screen width="form" top={<NavBar title={PAGES.admin} {...backBar(back)} />}>
       {service.failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: service.reload }}>{service.failure}</Callout>}
-      {service.data && <ServiceSection service={service.data} onSaved={acted} />}
+      {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} onNoticed={acted} />}
+      <UsageSection />
       <AccountsSection loaded={accounts} onActed={actedOnAccount} onRestores={(account) => setRestoring({ ...account, report: null })} />
       <ReportsSection onActed={acted} onRestore={(report: Report) => setRestoring({ accountId: report.accountId, username: report.username, report })} />
       <FileSection onActed={acted} />
       <LogSection key={acts} />
-      {restoring && <RestoresDialog key={restoring.accountId} restoring={restoring} onClose={() => setRestoring(null)} onActed={actedOnAccount} />}
+      {restoring && <RestoresDialog key={restoring.accountId} restoring={restoring} onClose={() => setRestoring(null)} onActed={() => actedOnAccount(restoring.accountId)} />}
     </Screen>
   );
 }

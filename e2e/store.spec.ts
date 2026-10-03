@@ -24,8 +24,9 @@ type Inspection = {
 };
 type Listing = {
   accounts: { accountId: string; state: string; bytes: number | null; disk: number | null; fileBytes: number }[];
-  totals: { bytes: number; disk: number; unread: number; readAt: number };
+  next: string | null;
 };
+type UsagePage = { accounts: number; totals: { bytes: number; disk: number; unread: number; readAt: number }; next: string | null };
 
 const PROOF = Buffer.alloc(32, 7).toString('base64');
 const headers = (actor: Actor) => ({ cookie: actor.cookie, 'x-account': actor.accountId });
@@ -120,7 +121,7 @@ test.beforeAll(async ({ request }) => {
   operator = await json<Actor>(await request.post('/__store-spec/operator', { data: {} }));
   expect(operator.accountId).toBe(STORE_ADMIN);
   expect((await request.put('/api/admin/service', {
-    headers: headers(operator), data: { signupCap: 96, accountBytesCap: 300_000_000, accountFileBytesCap: null },
+    headers: headers(operator), data: { signupCap: 192, accountBytesCap: 300_000_000, accountFileBytesCap: null },
   })).status()).toBe(204);
 });
 
@@ -366,11 +367,36 @@ test('an acknowledged batch is still readable after a real abort and restart', a
   expect(after.head).toEqual(before.head);
 });
 
-test('the operator fan-out reads more than fifty real stores and totals their usage', async ({ request }) => {
-  const listing = async () => json<Listing>(await request.get('/api/admin/accounts', { headers: headers(operator) }));
+test('the operator reads bounded account pages and separately refreshes usage totals', async ({ request }) => {
+  const listing = async () => {
+    let next: string | null = null;
+    const accounts: Listing['accounts'] = [];
+    do {
+      const page: Listing = await json<Listing>(await request.get(`/api/admin/accounts${next === null ? '' : `?after=${encodeURIComponent(next)}`}`, { headers: headers(operator) }));
+      expect(page.accounts.length).toBeLessThanOrEqual(100);
+      accounts.push(...page.accounts);
+      next = page.next;
+    } while (next !== null);
+    return accounts;
+  };
+  const usage = async () => {
+    let next: string | null = null;
+    const sum = { bytes: 0, disk: 0, unread: 0, readAt: 0 };
+    do {
+      const page: UsagePage = await json<UsagePage>(await request.get(`/api/admin/usage${next === null ? '' : `?after=${encodeURIComponent(next)}`}`, { headers: headers(operator) }));
+      expect(page.accounts).toBeLessThanOrEqual(100);
+      sum.bytes += page.totals.bytes;
+      sum.disk += page.totals.disk;
+      sum.unread += page.totals.unread;
+      sum.readAt = page.totals.readAt;
+      next = page.next;
+    } while (next !== null);
+    return sum;
+  };
   const before = await listing();
+  const beforeUsage = await usage();
   const added: { account: Ready; bytes: number }[] = [];
-  for (let group = 0; group < 13; group++) {
+  for (let group = 0; group < 26; group++) {
     const accounts = await Promise.all(Array.from({ length: 4 }, () => ready(request)));
     for (const account of accounts) {
       const body = `fan-out-${added.length}-한`;
@@ -380,15 +406,16 @@ test('the operator fan-out reads more than fifty real stores and totals their us
   }
   const started = Date.now();
   const after = await listing();
-  expect(after.accounts).toHaveLength(before.accounts.length + 52);
-  expect(after.totals.unread).toBe(0);
-  expect(after.totals.readAt).toBeGreaterThanOrEqual(started);
-  expect(after.totals.readAt).toBeLessThanOrEqual(Date.now());
+  const afterUsage = await usage();
+  expect(after).toHaveLength(before.length + 104);
+  expect(afterUsage.unread).toBe(0);
+  expect(afterUsage.readAt).toBeGreaterThanOrEqual(started);
+  expect(afterUsage.readAt).toBeLessThanOrEqual(Date.now());
   for (const { account, bytes } of added) {
-    const row = after.accounts.find(row => row.accountId === account.accountId);
+    const row = after.find(row => row.accountId === account.accountId);
     expect(row).toMatchObject({ state: 'active', bytes, fileBytes: 0 });
     expect(row!.disk).toBeGreaterThan(0);
   }
-  expect(after.totals.bytes).toBe(before.totals.bytes + added.reduce((sum, row) => sum + row.bytes, 0));
-  expect(after.totals.disk).toBe(after.accounts.reduce((sum, row) => sum + row.disk!, 0));
+  expect(afterUsage.bytes).toBe(beforeUsage.bytes + added.reduce((sum, row) => sum + row.bytes, 0));
+  expect(afterUsage.disk).toBe(after.reduce((sum, row) => sum + row.disk!, 0));
 });

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { loadSession, markNoticesSeen, readNotices, sendReport } from './account';
-import { beginRestore, continueRestore, readAccounts, readLog, readReports, readRestores, readService, removeAccount, resolveReport, sendNotice, setService, suspend, type Restore } from './admin';
+import { beginRestore, continueRestore, readAccounts, readAdminAccount, readServiceUsage, readLog, readReports, readRestores, readService, removeAccount, resolveReport, sendNotice, setService, suspend, type Restore } from './admin';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -66,7 +66,7 @@ it('restores an account to a time on its report: its open device drops to the ob
     id: run.ok && run.data.id, reportId: report, at, undoes: null, phase: 'done', verified: true, error: null,
     createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [],
   }] });
-  expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, state: 'active', bytes: expect.any(Number) }], totals: { unread: 0 } } });
+  expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, state: 'active', bytes: expect.any(Number) }], next: null } });
   const log = await readLog(null);
   expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['restore-done', 'restore-begun']);
 });
@@ -81,11 +81,31 @@ function answering(...answers: Response[]) {
   return sent;
 }
 
-it('reads accounts whose usage is unknown or that are held, with totals dated and the unread counted', async () => {
+it('reads a bounded account page whose usage can be unknown or held', async () => {
   const unread = { accountId: 'b', username: 'bee', createdAt: 1, suspended: false, state: 'restoring', bytes: null, disk: null, fileBytes: 30, bytesCap: 'default', fileBytesCap: null };
-  const totals = { bytes: 120, disk: 4096, unread: 1, readAt: 1_700_000_000_000 };
-  answering(Response.json({ accounts: [unread], totals }));
-  expect(await readAccounts()).toEqual({ ok: true, data: { accounts: [unread], totals } });
+  answering(Response.json({ accounts: [unread], next: null }));
+  expect(await readAccounts()).toEqual({ ok: true, data: { accounts: [unread], next: null } });
+});
+
+it('refreshes a single account and explicitly sums usage pages without retaining account rows', async () => {
+  const totals = { bytes: 2, disk: 4, unread: 0, readAt: 10 };
+  const sent = answering(
+    Response.json({ account: null }),
+    Response.json({ accounts: 100, totals, next: '10:account' }),
+    Response.json({ accounts: 1, totals: { bytes: 0, disk: 0, unread: 1, readAt: 11 }, next: null }),
+  );
+  expect(await readAdminAccount('gone')).toEqual({ ok: true, data: { account: null } });
+  const progress = vi.fn();
+  expect(await readServiceUsage(progress, new AbortController().signal)).toEqual({ ok: true, data: { accounts: 101, bytes: 2, disk: 4, unread: 1, readAt: 11 } });
+  expect(progress).toHaveBeenCalledTimes(2);
+  expect(sent.map(({ url }) => url)).toEqual(['/api/admin/accounts/gone', '/api/admin/usage', '/api/admin/usage?after=10%3Aaccount']);
+});
+
+it('stops an explicit usage traversal before requesting its next page', async () => {
+  const stop = new AbortController();
+  const sent = answering(Response.json({ accounts: 100, totals: { bytes: 1, disk: 2, unread: 0, readAt: 3 }, next: '3:account' }));
+  expect(await readServiceUsage(() => stop.abort(), stop.signal)).toEqual({ ok: false, error: 'stopped' });
+  expect(sent).toHaveLength(1);
 });
 
 it('finishes a leaving account by removing it again', async () => {
