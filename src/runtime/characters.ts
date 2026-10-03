@@ -20,8 +20,8 @@ const FILE_WINDOW = 32;
 
 // The character goes last with what it owns (store.batch), a move's chat roots right before it, so a failure midway
 // never leaves a character missing some of its own, which a move relies on to skip a character already brought. Only a
-// batch longer than one request (limits.items), cut between requests, leaves pieces without their character, chat roots
-// among them. brought: a move's character id, which its staged entries name, and its chat roots. unheld: those chats
+// batch sent as several requests (over the server's item or byte limit), cut between them, leaves pieces without their
+// character, chat roots among them. brought: a move's character id, which its staged entries name, and its chat roots. unheld: those chats
 // are new, so no tab holds them; their summaries follow publication (runtime/move).
 export async function addCharacter(store: ObjectStore, character: Character, { avatar, assets, lore }: Owned, progress: Progress, { id = crypto.randomUUID(), chats = [] }: { id?: string; chats?: Write[] } = {}): Promise<ApiResult<string>> {
   const owned = <K extends 'avatar' | 'asset' | 'lore'>(kind: K, value: Values[K]): Write => ({ type: 'create', kind, id: crypto.randomUUID(), parent: id, value });

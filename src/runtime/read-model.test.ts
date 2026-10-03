@@ -271,25 +271,21 @@ describe('selective account reads', () => {
     store.close();
   });
 
-  it('stops a summary pass whose write lands as it is cancelled, holding the chat until the write ends', async () => {
+  it.each([false, true])('stops a summary pass at once, its write waiting on the connection, and lets the chat go without throwing (write lands on abort: %s)', async (lands) => {
     const { request, key, seed } = await account();
     await seed('a', 'chat', null, chat);
     await seed('a1', 'entry', 'a', message('one'));
-    let land: (() => void) | null = null;
+    let waiting = false;
     const store = await ObjectStore.open('account', key, async (method, path, body, signal) => {
       if (method !== 'POST') return request(method, path, body, signal);
-      return new Promise((resolve) => {
-        land = () => resolve(request(method, path, body, signal));
-        signal!.addEventListener('abort', land, { once: true });
-      });
+      waiting = true;
+      return new Promise((resolve) => signal!.addEventListener('abort', () => resolve(lands ? request(method, path, body) : { ok: false, error: 'stopped' }), { once: true }));
     });
     await store.pull();
     const stop = new AbortController();
     const saving = saveSummaries(store, ['a'], stop.signal);
-    await vi.waitFor(() => expect(land).not.toBeNull());
+    await vi.waitFor(() => expect(waiting).toBe(true));
     stop.abort();
-    expect(store.scopeState('a')).toBe('loaded');
-    land!();
     expect(await saving).toEqual({ ok: false, error: 'stopped' });
     expect(store.scopeState('a')).toBe('unloaded');
     store.close();

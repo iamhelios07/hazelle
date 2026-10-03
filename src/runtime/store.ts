@@ -500,15 +500,16 @@ export class ObjectStore {
     });
   }
 
-  // signal: the caller's stop, seen once the chat is ready; the lease is held until run ends, so run never finds its
-  // chat let go under it.
+  // signal: the caller's stop, which lets the chat go at once, ending its opening and a summary write waiting on the
+  // connection; what run does with the chat after that ends as stopped (saveSummary).
   async withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
     if (signal?.aborted) return { ok: false, error: 'stopped' };
     const lease = this.retainChat(chat);
+    signal?.addEventListener('abort', lease.release, { once: true });
     try {
       const failure = await lease.ready;
       return signal?.aborted ? { ok: false, error: 'stopped' } : failure ?? await run();
-    } finally { lease.release(); }
+    } finally { signal?.removeEventListener('abort', lease.release); lease.release(); }
   }
 
   refreshChat(chat: string): Promise<ApiFailure | null> {
