@@ -74,8 +74,8 @@ export function effortLevels(values: unknown): { levels: string[]; none: boolean
 // but not described stays unknown: a protocol field is no promise that a model takes it (Anthropic's
 // models from 4.7 on refuse temperature, which the Messages format carries).
 export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
-  const listed = model.takes?.settings ?? null;
-  const facts = model.takes?.reasoning ?? null;
+  const listed = model.takes.settings;
+  const facts = model.takes.reasoning;
   const takes = (setting: Setting): Accepts => (listed === null ? null : listed.includes(setting));
   const numbers = Object.fromEntries(
     NUMBERS.map((name): [NumberSetting, Rule] => {

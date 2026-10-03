@@ -101,7 +101,7 @@ export const saying = (text: string) =>
 
 // An OpenRouter connection whose one starred model is 기본값's 대화 모델, so chats can be answered.
 export async function answerable(session: Session): Promise<void> {
-  const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
+  const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
   const connection = await session.store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [model] });
   if (!connection.ok) throw new Error(connection.error);
   await setDefaultModel(session.store, 'main', { connection: connection.data.id, model: model.id });

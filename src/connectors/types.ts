@@ -42,9 +42,8 @@ export type Model = {
   // (Copilot). null means the connection's own. 'unsupported' means only formats this app does not
   // speak yet, so a request is refused before sending.
   protocol: Protocol | 'unsupported' | null;
-  // Absent where the catalog says nothing about request settings (the generic list), and from a
-  // snapshot starred before catalogs were read for them.
-  takes?: Takes;
+  // Catalogs that say nothing about request settings keep the Takes fields null.
+  takes: Takes;
 };
 
 // profile: the 설정 묶음 it uses; without one, the default 묶음.

@@ -35,6 +35,7 @@ const model = (extra: Partial<Model> = {}): Model => ({
   reasoning: null,
   tools: null,
   protocol: null,
+  takes: { settings: null, reasoning: null },
   ...extra,
 });
 
@@ -182,6 +183,13 @@ describe('catalogs', () => {
     expect(withCredential(generic, catalogRequest(generic), 'k')).toEqual({ url: 'https://api.example.com/v1/models', method: 'GET', headers: { authorization: 'Bearer k' }, body: null });
     expect(parseCatalog(generic, { data: [{ id: 'deepseek-chat' }, { id: '' }, 'junk'] })).toEqual([model({ id: 'deepseek-chat', name: 'deepseek-chat' })]);
     expect(parseCatalog(generic, { models: [] })).toBeNull();
+  });
+
+  it('normalizes unknown request capabilities once for both protocol catalogs', () => {
+    const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
+    const payload = { data: [{ id: 'm' }] };
+    expect(parseCatalog(generic, payload)![0]!.takes).toEqual({ settings: null, reasoning: null });
+    expect(parseCatalog(connection('anthropic'), payload)![0]!.takes).toEqual({ settings: null, reasoning: null });
   });
 
   it('knows nothing of a type from a newer version, or a generic connection without its address', () => {

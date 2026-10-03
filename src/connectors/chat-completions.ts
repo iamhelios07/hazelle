@@ -52,6 +52,7 @@ export const chatCompletions: Codec = {
       reasoning: null,
       tools: null,
       protocol: null,
+      takes: { settings: null, reasoning: null },
     })) ?? null,
 
   // top_k, min_p and repetition_penalty are not OpenAI's, but vLLM and OpenRouter take them.

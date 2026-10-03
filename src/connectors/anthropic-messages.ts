@@ -80,17 +80,15 @@ export const anthropicMessages: Codec = {
           reasoning: supported(thinking),
           tools: null,
           protocol: null,
-          ...(capabilities && {
-            takes: {
-              settings: null,
-              reasoning: {
-                off: null,
-                levels: effort && (effort.supported === false ? [] : LEVELS.filter((level) => supported(effort[level]))),
-                budget: budget === null ? null : budget && { min: null, max: null },
-                adaptive: supported(types.adaptive),
-              },
-            },
-          }),
+          takes: {
+            settings: null,
+            reasoning: capabilities ? {
+              off: null,
+              levels: effort && (effort.supported === false ? [] : LEVELS.filter((level) => supported(effort[level]))),
+              budget: budget === null ? null : budget && { min: null, max: null },
+              adaptive: supported(types.adaptive),
+            } : null,
+          },
         };
       }) ?? null
     );

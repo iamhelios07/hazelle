@@ -8,7 +8,7 @@ import type { ChatMessage, Connection, Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Connection => ({ type, label: type, baseUrl: null, protocol: null, secret: 'key', starred: [], ...extra });
 const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
-const bare: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
+const bare: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
 
 function listed(type: string, payload: unknown, id: string): Model {
   return parseCatalog(resolveConnection(connection(type))!, payload)!.find((model) => model.id === id)!;

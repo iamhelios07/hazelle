@@ -8,7 +8,7 @@ const connection = (type: string, extra: Partial<Connection> = {}): Resolved =>
 
 const openRouter = connection('openrouter');
 const anthropic = connection('anthropic');
-const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
+const model: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
 
 // Chunks are cut at awkward places on purpose: inside a line and inside a multi-byte character.
 function body(text: string, cuts = 7): ReadableStream<Uint8Array> {

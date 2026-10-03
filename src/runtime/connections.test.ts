@@ -42,7 +42,7 @@ describe('setStarred', () => {
     server.withSession(async ({ store }) => {
       const saved = await store.create('connection', openRouter);
       const id = saved.ok ? saved.data.id : '';
-      const model = (name: string, output: string[] | null = null) => ({ id: name, name, input: null, output, contextLength: null, maxOutput: null }) as never;
+      const model = (name: string, output: string[] | null = null) => ({ id: name, name, input: null, output, contextLength: null, maxOutput: null, takes: { settings: null, reasoning: null } }) as never;
       await setStarred(store, id, model('painter', ['image']), true);
       await setStarred(store, id, model('first'), true);
       await setStarred(store, id, model('second'), true);

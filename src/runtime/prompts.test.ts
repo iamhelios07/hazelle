@@ -129,7 +129,7 @@ describe('prompts', () => {
 
   it('gives a chat its prompt’s model under its own layer, and reads a deleted prompt of its own as missing', async () => {
     const { store } = await server.account();
-    const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null };
+    const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
     const connection = await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [model] });
     const [byDefault, own] = await Promise.all([addPrompt(store, '기본', 'conversation'), addPrompt(store, '따로', 'conversation')]);
     const [defaultId, ownId] = [byDefault, own].map((added) => (added.ok ? added.data.id : ''));
