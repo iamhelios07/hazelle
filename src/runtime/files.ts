@@ -21,8 +21,12 @@ export class Files {
 
   // Each file's reference, in order; null for one the server refuses: too large, blocked (taken down by the operator),
   // or past the account's picture cap, which the caller leaves out and counts as it does a picture it cannot read.
-  async save(files: Uint8Array<ArrayBuffer>[]): Promise<ApiResult<(FileRef | null)[]>> {
+  async save(files: Uint8Array<ArrayBuffer>[], { expected, signal }: { expected?: FileRef[]; signal?: AbortSignal } = {}): Promise<ApiResult<(FileRef | null)[]>> {
+    if (signal?.aborted) return { ok: false, error: 'stopped' };
     const sealed = await Promise.all(files.map(sealFile));
+    // Restore validates even refused/already-stored pictures, before writing any referencing objects.
+    if (expected && (expected.length !== sealed.length || sealed.some(({ ref }, i) => ref.id !== expected[i]!.id || ref.key !== expected[i]!.key))) return { ok: false, error: 'not-backup' };
+    if (signal?.aborted) return { ok: false, error: 'stopped' };
     const bodies = new Map(sealed.map(({ ref, body }) => [ref.id, body]));
     const asked = await this.missing([...bodies.keys()]);
     if (!asked.ok) return asked;
@@ -33,6 +37,7 @@ export class Files {
       else missing.push(id);
     }
     for (let start = 0; start < missing.length; start += UPLOADS) {
+      if (signal?.aborted) return { ok: false, error: 'stopped' };
       const puts = await Promise.all(
         missing.slice(start, start + UPLOADS).map(async (id) => {
           const put = await this.store.reaching(() => this.request('PUT', `files/${id}`, bodies.get(id)!));

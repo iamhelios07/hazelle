@@ -23,6 +23,7 @@ const FILES = 'files/';
 const PAGE_BYTES = 1024 * 1024;
 const PAGE_ROWS = 128;
 const HELD_BYTES = 8 * 1024 * 1024;
+const PICTURE_ROWS = 12;
 
 // What opening an account adds by itself.
 const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
@@ -268,16 +269,38 @@ async function restoreOn(
     // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
     // would restore a picture that never opens. All files are checked before the first object write.
     const refused = new Set<string>();
+    let pictures: { ref: FileRef; bytes: Uint8Array<ArrayBuffer> }[] = [];
+    let pictureBytes = 0;
+    const savePictures = async () => {
+      signal.throwIfAborted();
+      const saved = await files.save(pictures.map(({ bytes }) => bytes), { expected: pictures.map(({ ref }) => ref), signal });
+      if (!saved.ok) return saved;
+      for (let i = 0; i < pictures.length; i++) {
+        const ref = pictures[i]!.ref;
+        const sealed = saved.data[i];
+        if (!sealed) refused.add(ref.id);
+        else if (sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false as const, error: 'not-backup' };
+        progress(++done, total);
+      }
+      pictures = [];
+      pictureBytes = 0;
+      return saved;
+    };
     for (const ref of backup.files.values()) {
       signal.throwIfAborted();
-      const bytes = await readEntry(backup.file, backup.entries.get(FILES + ref.id)!, signal);
-      signal.throwIfAborted();
-      const saved = await files.save([bytes]);
+      const entry = backup.entries.get(FILES + ref.id)!;
+      // One picture may exceed the window; never hold another picture beside that indivisible file.
+      if (pictures.length && (pictures.length === PICTURE_ROWS || pictureBytes + entry.size > HELD_BYTES)) {
+        const saved = await savePictures();
+        if (!saved.ok) return saved;
+      }
+      const bytes = await readEntry(backup.file, entry, signal);
+      pictures.push({ ref, bytes });
+      pictureBytes += bytes.length;
+    }
+    if (pictures.length) {
+      const saved = await savePictures();
       if (!saved.ok) return saved;
-      const sealed = saved.data[0];
-      if (!sealed) refused.add(ref.id);
-      else if (sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false, error: 'not-backup' };
-      progress(++done, total);
     }
     let skipped = 0;
     // In their old rev order, so each chat's entries fold as they did; owners follow every owned page.

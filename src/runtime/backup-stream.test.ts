@@ -88,7 +88,7 @@ it('round-trips streamed objects and files and filters unreachable objects from 
   const next = store();
   const save = vi.fn(async (bytes: Uint8Array<ArrayBuffer>[]) => ({ ok: true as const, data: await Promise.all(bytes.map(async (bytes) => (await sealFile(bytes)).ref)) }));
   expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: { skipped: 0 } });
-  expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes]);
+  expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes], { expected: [source.ref], signal: expect.any(AbortSignal) });
   for (const object of source.objects) expect(next.held.get(object.id)).toMatchObject({ ...object, rev: expect.any(Number) });
   expect(next.held.size).toBe(source.objects.length);
   expect(read).toHaveBeenCalledTimes(1);
@@ -209,4 +209,26 @@ it('refuses a file with a body its kind cannot hold', async () => {
 it('distinguishes another backup version from a damaged file', async () => {
   const file = new Blob([zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })) })]);
   expect(await readBackup(file)).toEqual({ ok: false, error: 'other-version' });
+});
+
+it('restores pictures in bounded uploader windows before writing objects', async () => {
+  const pictures = await Promise.all(Array.from({ length: 25 }, async (_, i) => {
+    const bytes = new Uint8Array([i]);
+    return { bytes, ref: (await sealFile(bytes)).ref };
+  }));
+  const objects = pictures.map(({ ref }, i): Stored<'asset'> => ({ id: `asset-${i}`, kind: 'asset', parent: 'character', rev: i, value: { file: ref, name: String(i), type: 'image/png', size: 1 } }));
+  const file = new Blob([zipSync({
+    'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 2 })),
+    'objects.jsonl': strToU8(objects.map((object) => JSON.stringify(object)).join('\n')),
+    ...Object.fromEntries(pictures.map(({ bytes, ref }) => [`files/${ref.id}`, bytes])),
+  })]);
+  const next = store();
+  const windows: number[] = [];
+  const save = async (bytes: Uint8Array<ArrayBuffer>[]) => {
+    expect(next.written).toEqual([]);
+    windows.push(bytes.length);
+    return { ok: true as const, data: await Promise.all(bytes.map(async (item) => (await sealFile(item)).ref)) };
+  };
+  expect(await restoreBackup(next.api, { save }, await backup(file))).toEqual({ ok: true, data: { skipped: 0 } });
+  expect(windows).toEqual([12, 12, 1]);
 });

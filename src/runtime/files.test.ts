@@ -54,3 +54,13 @@ describe('files on a bad link', () => {
     expect(puts).toEqual([`files/${(await sealFile(small)).ref.id}`]);
   });
 });
+
+it('validates restored references before missing checks or refused uploads', async () => {
+  const { store } = await server.account();
+  let requests = 0;
+  const files = new Files(async () => { requests++; return { ok: false, error: 'file-blocked' }; }, store);
+  const bytes = randomBytes(16);
+  const ref = (await sealFile(bytes)).ref;
+  expect(await files.save([bytes], { expected: [{ ...ref, key: 'wrong' }] })).toEqual({ ok: false, error: 'not-backup' });
+  expect(requests).toBe(0);
+});
