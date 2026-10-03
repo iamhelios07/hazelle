@@ -36,6 +36,11 @@ const sse = (...events: unknown[]) => events.map((event) => `data: ${typeof even
 const chunk = (delta: Record<string, unknown>, finish: string | null = null) => ({ choices: [{ index: 0, delta, finish_reason: finish }] });
 
 describe('chat completions stream', () => {
+  it('reads Copilot’s reasoning_text as reasoning', async () => {
+    const stream = sse(chunk({ reasoning_text: '짧게 ' }), chunk({ reasoning_text: '답하자.' }), chunk({ content: '안녕.' }), chunk({}, 'stop'), '[DONE]');
+    expect(await decode(openRouter, body(stream))).toMatchObject({ text: '안녕.', reasoning: '짧게 답하자.' });
+  });
+
   it('reads reasoning, text, usage and OpenRouter cost, and skips keep-alive comments', async () => {
     const stream =
       ': OPENROUTER PROCESSING\n\n' +

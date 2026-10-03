@@ -33,10 +33,10 @@ function effort(reasoning: Reasoning | undefined) {
   return {};
 }
 
-// reasoning_content (DeepSeek and others) and reasoning (OpenRouter) are the two spellings of reasoning text in
-// compatible replies, streamed in a delta or whole in a message. A server that sends neither is unaffected.
+// reasoning_content (DeepSeek and others), reasoning (OpenRouter) and reasoning_text (Copilot's Claude and Gemini)
+// are the spellings of reasoning text in a delta or a message; a provider sends one of them.
 function reasoningOf(part: Record<string, unknown>) {
-  const reasoning = typeof part.reasoning_content === 'string' && part.reasoning_content ? part.reasoning_content : part.reasoning;
+  const reasoning = [part.reasoning_content, part.reasoning, part.reasoning_text].find((value) => typeof value === 'string' && value);
   return typeof reasoning === 'string' ? reasoning : null;
 }
 
