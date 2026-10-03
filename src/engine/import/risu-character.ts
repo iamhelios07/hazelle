@@ -25,7 +25,7 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
   const missed: Tally<MoveUnsupportedKind> = new Map();
   const tally: Tally = new Map();
   // cardJson always builds a v3 card with data, which convert never refuses.
-  const converted = convert(cardJson(char), null, tally)!;
+  const converted = convert(cardJson(char), null, tally, list(char.globalLore))!;
   // Any uri other than a Risu asset key points outside the backup.
   const resolve: Resolve = (uri) => {
     const read = uri.startsWith('assets/') ? entry(uri) : null;
@@ -129,7 +129,6 @@ function cardJson(char: Json): Json {
         token_budget: settings.tokenBudget,
         recursive_scanning: settings.recursiveScanning,
         extensions: { ...record(char.loreExt), risu_fullWordMatching: settings.fullWordMatching ?? false },
-        entries: list(char.globalLore).filter(isRecord).map(bookEntry),
       },
       tags: char.tags,
       creator: extras.creator,
@@ -174,28 +173,5 @@ function cardJson(char: Json): Json {
           .map(([name, uri]) => ({ type: 'emotion', uri, name, ext: 'png' })),
       ],
     },
-  };
-}
-
-// The lore's activationPercent rides in risu_activationPercent, which the converter turns into @@probability with
-// the rest of Risu's bookVersion 1 migration.
-function bookEntry(lore: Json): Json {
-  const extensions = record(lore.extentions);
-  const split = (value: unknown) => text(value).split(',').map((key) => key.trim());
-  return {
-    keys: split(lore.key),
-    secondary_keys: lore.selective === true ? split(lore.secondkey) : undefined,
-    content: lore.content,
-    extensions: { ...extensions, risu_activationPercent: lore.activationPercent, risu_loreCache: lore.loreCache },
-    enabled: true,
-    insertion_order: lore.insertorder,
-    constant: lore.alwaysActive,
-    selective: lore.selective,
-    name: lore.comment,
-    comment: lore.comment,
-    case_sensitive: extensions.risu_case_sensitive === true,
-    use_regex: lore.useRegex === true,
-    mode: lore.mode,
-    folder: lore.folder,
   };
 }

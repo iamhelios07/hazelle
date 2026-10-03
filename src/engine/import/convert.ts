@@ -62,7 +62,8 @@ const order = (value: unknown) => (typeof value === 'number' && Number.isFinite(
 
 // module: a charx's module.risum. Its regex and triggers replace the card's, and its lorebook, when it has one,
 // replaces the character_book entries; lore settings stay the card's (characterCards.ts:148-158 at ca1345fc).
-export function convert(raw: unknown, module: Json | null, tally: Tally): Converted | null {
+// nativeLore: a backup's globalLore, kept apart from CCv3 because bookVersion controls Risu's open-time migration.
+export function convert(raw: unknown, module: Json | null, tally: Tally, nativeLore: unknown[] | null = null): Converted | null {
   if (!isRecord(raw)) return null;
   const spec = SPECS.get(raw.spec) ?? 'v1';
   const data = spec === 'v1' ? tavern(raw) : isRecord(raw.data) ? raw.data : null;
@@ -116,7 +117,8 @@ export function convert(raw: unknown, module: Json | null, tally: Tally): Conver
     },
   };
   const { lore, loreFolders } =
-    module && Array.isArray(module.lorebook) ? lorebook(module.lorebook, RISU_LORE) : lorebook(list(book.entries), BOOK_LORE);
+    nativeLore !== null ? nativeLorebook(nativeLore)
+      : module && Array.isArray(module.lorebook) ? nativeLorebook(module.lorebook) : lorebook(list(book.entries), BOOK_LORE);
   countInText(card, lore, tally);
   return { card, lore, loreFolders, spec, icon: icon && text(icon.uri), assets };
 }
@@ -142,7 +144,7 @@ function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; to
 // kept: what its scripts may do is the user's answer, as for a card (design §6.8).
 export function convertModule(raw: Json, tally: Tally): Omit<ImportedModule, 'assets' | 'unsupported'> & { assets: string[] } {
   const pack = packOf({ regex: raw.regex, trigger: raw.trigger, background: raw.backgroundEmbedding, toggles: raw.customModuleToggle }, tally);
-  const { lore, loreFolders } = lorebook(list(raw.lorebook), RISU_LORE);
+  const { lore, loreFolders } = nativeLorebook(list(raw.lorebook));
   countTags([...pack.regex.flatMap((script) => [script.find, script.replace]), pack.background ?? '', ...lore.map((entry) => entry.content)], tally);
   return {
     name: text(raw.name),
@@ -221,7 +223,9 @@ function lorebook(raws: unknown[], source: LoreSource): { lore: LoreEntry[]; lor
   return { lore, loreFolders };
 }
 
-// Risu's own lore, from module.risum.
+const nativeLorebook = (entries: unknown[]) => lorebook(entries, RISU_LORE);
+
+// Native module and backup lore share bookVersion: only version 1's activationPercent and old tag syntax migrate.
 const RISU_LORE: LoreSource = {
   folderId: (raw) => text(raw.key),
   name: (raw) => text(raw.comment),

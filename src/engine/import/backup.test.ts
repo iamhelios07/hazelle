@@ -279,6 +279,29 @@ describe('readBackup', () => {
     );
   });
 
+  it('converts native character and module lore once according to bookVersion without replacing the character scripts', async () => {
+    const lore = [
+      { key: 'folder', comment: 'Places', mode: 'folder' },
+      { key: 'castle', secondkey: 'queen', comment: 'Current', folder: 'folder', bookVersion: 2, activationPercent: 40, content: '@@probability 40\n<char> <user>\n@@end' },
+      { key: 'garden', comment: 'Old', bookVersion: 1, activationPercent: 40, content: '<char> <user>\n@@end' },
+    ];
+    const result = await readBackup([bin([['database.risudat', database({
+      characters: [{ ...mira, chats: [], globalLore: lore }],
+      modules: [{ name: 'Lore', lorebook: lore }],
+    })]])]);
+    if (!result.ok) throw new Error(result.failure.kind);
+    const character = result.backup.characters[0]!;
+    const module = result.backup.modules[0]!;
+    expect(character.lore).toEqual(module.lore);
+    expect(character.loreFolders).toEqual(['Places']);
+    expect(character.lore.map(({ content }) => content)).toEqual([
+      '@@probability 40\n<char> <user>\n@@end',
+      '@@probability 40\n{{char}} {{user}}\n@@depth 0',
+    ]);
+    expect(character.card.regex[0]!.name).toBe('r');
+    expect(character.card.triggers).toEqual([{ kind: 'lua', name: 'lua', code: 'print(1)' }]);
+  });
+
   it('reads a module with its pictures from the asset storage, and where Risu had it on as Risu ids', async () => {
     const { modules, alwaysModules, characters } = await read();
     expect(modules).toMatchObject([
