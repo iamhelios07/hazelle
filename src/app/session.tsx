@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatScope } from '../engine/render';
 import { binned, live } from '../model/library';
-import type { Kind } from '../model/kinds';
+import type { Kind, Stored } from '../model/kinds';
 import type { AccountFacts, Standing } from '../runtime/account';
 import { memoryId, type Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
@@ -165,6 +165,12 @@ const snapshotNull = () => null;
 export function useCharacter(id: string | null) {
   const { read } = useSession();
   const model = id === null ? null : read.character(id);
+  return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
+}
+
+export function useStored<K extends Kind>(kind: K, id: string | null): Stored<K> | null {
+  const { read } = useSession();
+  const model = id === null ? null : read.object(kind, id);
   return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNull);
 }
 

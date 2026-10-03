@@ -61,17 +61,25 @@ const DAY = 24 * 60 * 60 * 1000;
 
 // What goes to 휴지통 when deleted: it waits KEEP_DELETED, then goes for good with everything it owns (runtime/characters
 // purgeExpired). deleted is when it went there; purging: that removal has begun, so it can no longer be brought back.
-// A character's chats go with it; a deleted chat stays whole for undo until that purge. A deleted module is off
+// A character's chats go with it; a deleted chat stays whole for 되돌리기 until that purge. A deleted module is off
 // everywhere and absent from live lists. The next purge finishes a removal interrupted after purging was marked.
 export const REMOVABLE = ['character', 'module', 'chat', 'prompt', 'persona', 'profile'] as const;
 export type Removable = (typeof REMOVABLE)[number];
 export type Mark = { deleted?: number; purging?: true };
 
+// Whether it is out of 휴지통, and whether 휴지통 shows it: one being removed for good (purging) is neither.
+export const isLive = ({ deleted }: Mark) => deleted === undefined;
+export const isBinned = ({ deleted, purging }: Mark) => deleted !== undefined && !purging;
+
 // A stored object as every reader but its removal and its undo sees it: null while it is in 휴지통.
-export const live = <T extends { value: Mark }>(stored: T | null): T | null => (stored && stored.value.deleted === undefined ? stored : null);
+export const live = <T extends { value: Mark }>(stored: T | null): T | null => (stored && isLive(stored.value) ? stored : null);
 
 // Those in 휴지통, most recently deleted first.
-export const binned = <T extends { value: Mark }>(items: T[]): T[] => items.filter(({ value }) => value.deleted !== undefined && !value.purging).sort((a, b) => b.value.deleted! - a.value.deleted!);
+export const binned = <T extends { value: Mark }>(items: T[]): T[] => items.filter(({ value }) => isBinned(value)).sort((a, b) => b.value.deleted! - a.value.deleted!);
+
+// Whether 휴지통 lists a chat. One of a deleted character is not listed: it goes or comes back with its character.
+export const binsChat = (chat: { character: string | null } & Mark, characterLive: (id: string) => boolean) =>
+  isBinned(chat) && (chat.character === null || characterLive(chat.character));
 
 // How long what is in 휴지통 waits before it is removed for good.
 export const KEEP_DELETED = 7 * DAY;
@@ -112,9 +120,8 @@ type ChatLike = { chat: { character: string | null } & Mark; order: number };
 
 // chats come newest first. A character is as recent as its latest chat, or, with none yet, as its own
 // last change. Deleted characters and their chats are kept apart, most recently deleted first. binned are the deleted
-// chats: deletedChats lists those of a character not deleted, or of none, most recently deleted first. A deleted chat
-// of a deleted character is not listed: it goes or comes back with its character. One being removed for good
-// (purging) is listed nowhere: it can no longer be brought back.
+// chats: deletedChats lists those binsChat lists, most recently deleted first. One being removed for good (purging) is
+// listed nowhere: it can no longer be brought back.
 export function shelve<C extends ChatLike>(
   characters: Stored<'character'>[],
   avatars: Stored<'avatar'>[],
@@ -133,14 +140,14 @@ export function shelve<C extends ChatLike>(
     return { id, character: value, face: faces.get(id) ?? null, chats: own, order: own[0]?.order ?? rev };
   });
   const loose = grouped.get(null) ?? [];
-  const live = shelves.filter((shelf) => shelf.character.deleted === undefined);
+  const live = shelves.filter((shelf) => isLive(shelf.character));
   const liveIds = new Set(live.map((shelf) => shelf.id));
   return {
     characters: live.sort((a, b) => b.order - a.order),
     none: { id: null, character: null, face: null, chats: loose, order: loose[0]?.order ?? 0 },
-    deleted: shelves.filter((shelf) => shelf.character.deleted !== undefined && !shelf.character.purging).sort((a, b) => b.character.deleted! - a.character.deleted!),
+    deleted: shelves.filter((shelf) => isBinned(shelf.character)).sort((a, b) => b.character.deleted! - a.character.deleted!),
     deletedChats: binned
-      .filter(({ chat }) => !chat.purging && (chat.character === null || liveIds.has(chat.character)))
+      .filter(({ chat }) => binsChat(chat, (id) => liveIds.has(id)))
       .sort((a, b) => b.chat.deleted! - a.chat.deleted!),
   };
 }
@@ -163,5 +170,41 @@ export function nest(folders: Stored<'folder'>[]): FolderTree[] {
     .map((top) => ({ ...top, children: (children.get(top.id) ?? []).map((child) => ({ ...child, children: [] })) }));
 }
 
-// A folder holds the characters in it and in its subfolders.
-export const holds = (folder: FolderTree, character: Character) => character.folder === folder.id || folder.children.some((child) => child.id === character.folder);
+// A folder holds the characters in it and in its subfolders: those whose folder is one of these.
+const heldFolders = (folder: FolderTree) => [folder.id, ...folder.children.map((child) => child.id)];
+export const holds = (folder: FolderTree, character: Character) => character.folder !== null && heldFolders(folder).includes(character.folder);
+
+// What a folder holds (holds): direct are the characters in the folder itself, characters those in its subfolders too.
+export type FolderContents<C> = { folder: FolderTree; top: FolderTree; direct: CharacterShelf<C>[]; characters: CharacterShelf<C>[] };
+
+// Each folder of the tree with what it holds, and loose: the characters in none. A character whose folder the tree does
+// not show (removed on another device meanwhile) sits in no folder.
+export function indexFolders<C>(characters: CharacterShelf<C>[], folders: FolderTree[]): { byFolder: Map<string, FolderContents<C>>; loose: CharacterShelf<C>[] } {
+  const byFolder = new Map<string, FolderContents<C>>();
+  const holders = new Map<string, FolderContents<C>[]>();
+  const file = (folder: FolderTree, top: FolderTree) => {
+    const contents: FolderContents<C> = { folder, top, direct: [], characters: [] };
+    byFolder.set(folder.id, contents);
+    for (const id of heldFolders(folder)) {
+      const group = holders.get(id);
+      if (group) group.push(contents);
+      else holders.set(id, [contents]);
+    }
+  };
+  for (const top of folders) {
+    file(top, top);
+    for (const child of top.children) file(child, top);
+  }
+  const loose: CharacterShelf<C>[] = [];
+  // Walk the library order once so a top folder's direct and nested characters stay interleaved by recency.
+  for (const shelf of characters) {
+    const own = shelf.character.folder === null ? undefined : byFolder.get(shelf.character.folder);
+    if (!own) {
+      loose.push(shelf);
+      continue;
+    }
+    own.direct.push(shelf);
+    for (const holder of holders.get(own.folder.id)!) holder.characters.push(shelf);
+  }
+  return { byFolder, loose };
+}

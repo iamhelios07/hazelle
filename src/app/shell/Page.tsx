@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
+import { binsChat, isBinned, live } from '../../model/library';
 import { AdminScreen } from '../admin/AdminScreen';
 import { ChatScreen, type SideAt } from '../chat/ChatScreen';
 import { describeFailure } from '../common/failure';
@@ -24,7 +25,7 @@ import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
-import { useAccount, useCharacter, useChatModel, useChatSummary, useSession } from '../session';
+import { useAccount, useCharacter, useChatModel, useChatSummary, useSession, useStored } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
@@ -32,14 +33,13 @@ import { ChatSide } from './ChatSide';
 import { backBar } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
-import { useStored } from './useStored';
 
 const side = (at: SideAt) => <ChatSide {...at} />;
 type At<K extends Route['kind']> = Extract<Route, { kind: K }>;
 const missing = (at: Route, what: Absent, wide: boolean) => <Missing what={what} back={backTo(upFromMissing(at), wide)} />;
 type ItemKind = 'character' | 'prompt' | 'persona' | 'module' | 'profile';
 const absentItem = <K extends ItemKind>(kind: K, stored: Stored<K> | null): K | `deleted-${K}` =>
-  stored?.value.deleted !== undefined && !stored.value.purging ? `deleted-${kind}` : kind;
+  stored && isBinned(stored.value) ? `deleted-${kind}` : kind;
 
 // What the item's side of a list says before anything is picked from it.
 const EMPTY = {
@@ -163,8 +163,7 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
     return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={wide ? null : back} side={side} />;
   }
   if (!summary) {
-    const deleted = stored?.value.deleted !== undefined && !stored.value.purging && (character === null || shelf !== null);
-    return missing(at, deleted ? 'deleted-chat' : 'chat', wide);
+    return missing(at, stored && binsChat(stored.value, () => shelf !== null) ? 'deleted-chat' : 'chat', wide);
   }
   const item = chatModel.model;
   if (!item || chatModel.state !== 'loaded') return (
@@ -180,8 +179,9 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
 
 function ItemPage<K extends 'prompt' | 'persona' | 'module' | 'profile'>({ at, back, children }: { at: { kind: K; id: string }; back: Back; children: (stored: Stored<K>) => ReactNode }) {
   const stored = useStored(at.kind, at.id);
-  if (!stored || stored.value.deleted !== undefined) return <Missing what={absentItem(at.kind, stored)} back={back} />;
-  return children(stored);
+  const shown = live(stored);
+  if (!shown) return <Missing what={absentItem(at.kind, stored)} back={back} />;
+  return children(shown);
 }
 
 function ConnectionPage({ at, back }: { at: At<'connection'>; back: Back }) {

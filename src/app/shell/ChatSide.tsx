@@ -6,9 +6,8 @@ import { PersonaEditor } from '../personas/PersonaEditor';
 import { PersonaList } from '../personas/PersonaList';
 import { PromptEditor } from '../prompts/PromptEditor';
 import { PromptList } from '../prompts/PromptList';
-import { useCharacter } from '../session';
+import { useCharacter, useStored } from '../session';
 import { NavBar, SidePanel, type NavBarProps } from '../ui';
-import { useStored } from './useStored';
 
 type Props<K extends SideAt['open']['kind']> = Omit<SideAt, 'open'> & { open: Extract<SideAt['open'], { kind: K }> };
 const panel =

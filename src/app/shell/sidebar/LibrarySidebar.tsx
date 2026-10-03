@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { usePersisted } from '../../common/usePersisted';
-import { useChatSummary, useLibrary, useWritingChat } from '../../session';
+import { useCharacter, useChatSummary, useLibrary, useWritingChat } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { enterShelf, HOME, href, shelfOf } from '../routes';
@@ -26,7 +26,7 @@ type Props = {
 // Inside a character, the list is its chats, and "모든 캐릭터" goes back up without leaving the open chat. The search
 // and the open folders outlast a visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
-  const { characters, none, byCharacter } = useLibrary();
+  const { characters, none } = useLibrary();
   const writing = useWritingChat();
   const route = useRoute();
   const chat = useChatSummary(route.kind === 'chat' ? route.id : null);
@@ -39,8 +39,8 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const [openFolders, setOpenFolders] = usePersisted(OPEN_FOLDERS, openFolderIds, []);
 
   const here = shelfOf(route, chat?.chat.character);
-  const shelf = here === undefined ? undefined : here === null ? none : byCharacter.get(here);
-  const current = shelf?.character?.deleted === undefined ? shelf : undefined;
+  const character = useCharacter(here ?? null);
+  const current = here === null ? none : (character ?? undefined);
   const typing = (shelf: Shelf<ChatSummary>) => shelf.chats.some((item) => item.id === writing);
 
   // Picking a character goes inside it, even when its latest chat is the page already open.

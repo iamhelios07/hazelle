@@ -17,9 +17,11 @@ export const FIRST_PROFILE_ID = '00000000-0000-4000-8000-000000000003';
 // missing and never as another 묶음; a turn stops on it, as it does on a missing prompt.
 export type ProfileChoice = { kind: 'profile'; profile: Stored<'profile'>; own: boolean } | { kind: 'missing'; own: boolean };
 
+const profileId = (model: Starred, defaultProfile: string | undefined) => model.profile ?? defaultProfile;
+
 export function modelProfile(store: ObjectStore, model: Starred): ProfileChoice {
   const own = model.profile !== undefined;
-  const id = model.profile ?? store.get('settings', SETTINGS_ID)?.value.profile;
+  const id = profileId(model, store.get('settings', SETTINGS_ID)?.value.profile);
   const profile = id === undefined ? null : live(store.get('profile', id));
   return profile ? { kind: 'profile', profile, own } : { kind: 'missing', own };
 }
@@ -27,7 +29,7 @@ export function modelProfile(store: ObjectStore, model: Starred): ProfileChoice 
 // The starred models that use a 묶음, its own or as the default, in connection order.
 export type ProfileUser = { connection: Stored<'connection'>; model: Starred };
 export function profileUsers(connections: readonly Stored<'connection'>[], defaultProfile: string | undefined, id: string): ProfileUser[] {
-  return connections.flatMap((connection) => connection.value.starred.filter((model) => (model.profile ?? defaultProfile) === id).map((model) => ({ connection, model })));
+  return connections.flatMap((connection) => connection.value.starred.filter((model) => profileId(model, defaultProfile) === id).map((model) => ({ connection, model })));
 }
 
 // An account that has never had a default 묶음 gets an empty one, once. The session awaits it when it opens;

@@ -2,7 +2,7 @@ import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
 import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
 import type { Kind, Stored, Values } from '../model/kinds';
-import { live, nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
+import { indexFolders, isLive, live, nest, shelve, type CharacterShelf, type FolderContents, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
@@ -25,8 +25,6 @@ class Snapshot<T> {
   }
 }
 
-type FolderContents = { folder: FolderTree; top: FolderTree; direct: CharacterShelf<ChatSummary>[]; characters: CharacterShelf<ChatSummary>[] };
-
 // The characters, each with its chats, most recent first, and the folders by name. deleted and deletedChats are what
 // 휴지통 shows (shelve). byCharacter includes deleted characters, but none being purged.
 export type Library = {
@@ -36,33 +34,11 @@ export type Library = {
   deletedChats: ChatSummary[];
   folders: FolderTree[];
   byCharacter: ReadonlyMap<string, CharacterShelf<ChatSummary>>;
-  byFolder: ReadonlyMap<string, FolderContents>;
+  byFolder: ReadonlyMap<string, FolderContents<ChatSummary>>;
   loose: CharacterShelf<ChatSummary>[];
 };
 
-function indexFolders(characters: CharacterShelf<ChatSummary>[], folders: FolderTree[]): Pick<Library, 'byFolder' | 'loose'> {
-  const byFolder = new Map<string, FolderContents>();
-  for (const top of folders) {
-    byFolder.set(top.id, { folder: top, top, direct: [], characters: [] });
-    for (const child of top.children) byFolder.set(child.id, { folder: child, top, direct: [], characters: [] });
-  }
-  const loose: CharacterShelf<ChatSummary>[] = [];
-  // Every folder id the tree shows. A character whose folder is not among them sits in no folder.
-  // Walk the library order once so a top folder's direct and nested characters stay interleaved by recency.
-  for (const shelf of characters) {
-    const own = shelf.character.folder === null ? undefined : byFolder.get(shelf.character.folder);
-    if (!own) {
-      loose.push(shelf);
-      continue;
-    }
-    own.direct.push(shelf);
-    own.characters.push(shelf);
-    if (own.folder !== own.top) byFolder.get(own.top.id)!.characters.push(shelf);
-  }
-  return { byFolder, loose };
-}
-
-const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => shelf && shelf.character.deleted === undefined ? shelf : null;
+const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => (shelf && isLive(shelf.character) ? shelf : null);
 
 // How an open chat is displayed: with the bot's editDisplay pass (ScriptDisplay), which tells the chat's listeners
 // when more of the pass has landed.
