@@ -5,8 +5,7 @@ import type { SaveStatus, Write } from './saveQueue';
 
 export const SAVE_STATUS: Record<SaveStatus, string> = { saving: '저장 중', saved: '저장됨', failed: '저장 못 함' };
 
-// One thing's fields, saved together after a pause in typing, and at once when the screen is left. key names the
-// thing among the session's saves (common/saveQueue Saves), the same on every screen that edits it.
+// key names the thing among the session's saves (common/saveQueue Saves), the same on every screen that edits it.
 // unsaved: what was changed that the store does not hold yet, by this screen or one before it.
 export function useAutosave<T extends object>(key: string, write: Write<T>) {
   const toast = useToast();

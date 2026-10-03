@@ -5,14 +5,11 @@ import { Icon } from '../foundation/Icon';
 import { keepOnScreen, useLayer } from './layers';
 import styles from './Menu.module.css';
 
-// What a menu hands a button that opens it, spread onto an IconButton, Button, ChipButton, ToolButton or FaceCard.
 export type MenuOpener = { ref: RefObject<HTMLButtonElement | null>; popup: 'menu' | 'dialog'; expanded: boolean; onClick: () => void };
 
 type State = { open: boolean; from: HTMLElement | null };
 const CLOSED: State = { open: false, from: null };
 
-// A menu's open state and the button that opened it, kept apart from the menu so buttons elsewhere open it and show
-// whether it is open too, such as a card in 휴지통 or a failed reply's 다른 모델로.
 export type MenuHandle = { read: () => State; subscribe: (listener: () => void) => () => void; set: (state: State) => void };
 
 function menuHandle(): MenuHandle {
@@ -44,13 +41,10 @@ export function useMenuOpener(handle: MenuHandle): MenuOpener {
 type Props = {
   label: string;
   trigger: (opener: MenuOpener) => ReactNode;
-  // Which corner of the trigger it opens from, and which way.
   place?: 'below-start' | 'below-end' | 'above-start' | 'above-end';
-  // form: a dialog's width, for kind dialog.
   size?: 'md' | 'lg' | 'form';
   // dialog: a small form opened and closed like a menu, such as the chat's 작가의 노트; useMenuClose closes it.
   kind?: 'menu' | 'dialog';
-  // For a menu that other buttons open too; without one it keeps its own.
   handle?: MenuHandle;
   children: ReactNode;
 };
@@ -63,8 +57,6 @@ const CloseMenu = createContext(() => {});
 let shown: (() => void)[] = [];
 const Holders = createContext<readonly (() => void)[]>([]);
 
-// Every menu opened from a button. An item closes it. Esc and an item give the focus back to the button that opened
-// it, or to the menu's own button when that one has gone.
 export function Menu({ label, trigger, place = 'below-start', size = 'md', kind = 'menu', handle, children }: Props) {
   const own = useMenuHandle();
   const menu = handle ?? own;
@@ -122,11 +114,8 @@ type ItemProps = {
   label: string;
   sub?: string;
   icon?: LucideIcon;
-  // A face in the icon's place, such as a persona's.
   avatar?: ReactNode;
-  // Beside the label, such as 기본 on the default.
   tag?: ReactNode;
-  // Makes the item one of a set of choices, checked when it is the current one.
   checked?: boolean;
   tone?: 'default' | 'muted' | 'warn';
   onClick: () => void;

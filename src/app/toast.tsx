@@ -7,30 +7,26 @@ import { Toast, ToastStack, type ToastAction } from './ui';
 type Action = { label: string; onClick: () => void };
 type Extra = { detail?: string; action?: Action };
 type From = { name: string; face: string | null };
-// said: whose words the message is, and what its Toast does once they are opened.
 type Notice = { key: number; message: string; detail?: string; tone: 'plain' | 'error'; action?: ToastAction; said?: { from: From; keep: () => void; close: () => void }; undo: boolean; life: number; ends: number };
 
 export type Toasts = {
-  // detail: what it was done to, under the message.
   show: (message: string, extra?: Extra) => void;
-  // Something did not happen: message says what, detail why, action where to fix it.
   error: (message: string, extra?: Extra) => void;
-  // Why a write failed, in failure.ts's words, led by prefix when it names what did not happen. A full account is
+  // A full account is
   // left to its standing notice (shell/Workspace), which says it once, and a write a restore dropped to the toast that
   // counts them (shell/Workspace); a prefixed failure, a whole task such as a backup, is still said.
   failed: (failure: ApiFailure, prefix?: string) => void;
   // Deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog; Ctrl+Z does it too.
   // Answers what takes the toast away.
   undoable: (message: string, undo: () => void, detail?: string) => () => void;
-  // Someone else's words, such as a bot's, under their face and name. Long ones are cut until pressed, and once
+  // Long ones are cut until pressed, and once
   // opened stay until closed.
   said: (from: From, text: string, tone: Notice['tone']) => void;
 };
 
-// Three at most: more would only stack edges nobody reads.
+// More would only stack edges nobody reads.
 const KEPT = 3;
 
-// Long enough to read: a longer text stays longer, an action or an error longer still.
 function lifeOf(tone: Notice['tone'], text: string, action: boolean): number {
   const base = tone === 'error' ? 7000 : action ? 6000 : 4000;
   return Math.min(base + text.length * 40, tone === 'error' ? 14000 : 10000);
@@ -40,7 +36,7 @@ const ToastContext = createContext<Toasts | null>(null);
 
 export type Standing = { message: string; detail: string };
 
-// Newest in front. Pointing at the stack opens it and stops every notice's time, which runs on from where it stopped.
+// Pointing at the stack opens it and stops every notice's time, which runs on from where it stopped.
 // standing: a notice in front of them for as long as the caller passes it, with no time of its own.
 export function ToastProvider({ standing, children }: { standing: Standing | null; children: ReactNode }) {
   const [notices, setNotices] = useState<Notice[]>([]);

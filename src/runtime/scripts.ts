@@ -26,9 +26,7 @@ import { botCall, callOf, endCall } from './streams';
 import { receiptOf } from './talk';
 import { packsOf, scopeOf, type Blocked, type TurnContext } from './turn';
 
-// What the bot's scripts have for the chat screen. said: the bot's own words (alertNormal, alertError, showAlert). The
-// others are the app's about the bot: a script's error, the functions it called and the block effects it holds that
-// this app does not have, a script that never ended.
+// said: the bot's own words (alertNormal, alertError, showAlert). The others are the app's about the bot.
 // no-model: the bot called a model of a role the chat has none for. no-character: a module called one in a chat with
 // no character, where there is nobody to allow it for. flood: it called models faster than the server lets a chat's bot
 // (server/streams).
@@ -58,7 +56,6 @@ export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone
 // The triggers of a chat's packs, in the packs' order (design §6.5), which is the order a run walks them in. A block
 // trigger keeps its name as written, since a press finds it by that.
 export const triggersOf = (packs: readonly Pack[]): Trigger[] => packs.flatMap(({ triggers }) => triggers).map((trigger) => (trigger.kind === 'lua' ? { ...trigger, name: trigger.name || 'Lua' } : trigger));
-// The Lua among them, which alone listen for edits and call models.
 export const scriptsOf = (packs: readonly Pack[]): Script[] => triggersOf(packs).filter((trigger) => trigger.kind === 'lua');
 
 type Read = { snapshot: Snapshot; wrote: Writes[]; greeting: number };
@@ -73,8 +70,7 @@ export function luaStanding(scope: ChatScope): LuaStanding {
   };
 }
 
-// The bot's scripts, Lua and block triggers, in the life of a chat (design §6.8): on the way to a reply, when it ends,
-// and on a button. The only place that turns what a run did into entries.
+// The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
   private state: ScriptsState = { notes: [], questions: [] };
   private readonly listeners = new Set<() => void>();
@@ -179,8 +175,7 @@ export class Scripts {
     return Promise.race([started, stopped]);
   }
 
-  // The request's messages after the bot's editRequest listeners, with what they wrote. A listener's answer that is
-  // no list of messages leaves the request as it was built.
+  // A listener's answer that is no list of messages leaves the request as it was built.
   async requesting(chat: string, turn: TurnContext, messages: ChatMessage[]): Promise<{ messages: ChatMessage[]; writes: Writes }> {
     const scripts = scriptsOf(turn.scope.packs);
     if (scripts.length === 0) return { messages, writes: [] };
@@ -195,7 +190,6 @@ export class Scripts {
     });
   }
 
-  // A reply as its stream ended, after the bot's editOutput listeners, with what they wrote.
   async ending(chat: string, reply: Written): Promise<Written> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? scriptsOf(this.packs(stored.value)) : [];
@@ -222,7 +216,6 @@ export class Scripts {
     return (await this.now(chat, event, (last) => (last === null ? null : { version: last, stays: true }))) ?? false;
   }
 
-  // An event over the chat as it stands. anchor: where its writes stand, given the last version shown.
   // null: the chat has no triggers.
   private now(chat: string, event: Event, anchor: (last: string | null) => Anchor | null): Promise<boolean | null> {
     const stored = this.session.store.get('chat', chat);
@@ -239,8 +232,7 @@ export class Scripts {
     return packsOf(this.session.store, chat).map(({ pack }) => pack);
   }
 
-  // One run over scope, and what it did to the chat saved. anchor: where its writes stand; null leaves them to the
-  // caller. changed: it wrote to the chat's messages.
+  // anchor: where its writes stand; null leaves them to the caller.
   private async event(chat: string, scripts: Trigger[], scope: ChatScope, event: Event, anchor: Anchor | null): Promise<{ outcome: Outcome; changed: boolean }> {
     const read = this.reading(scope);
     const outcome = await this.run(chat, scripts, scope, read.snapshot, event);
@@ -281,8 +273,6 @@ export class Scripts {
     }
   }
 
-  // What a run or a display pass has to say of the bot's scripts: their errors and the functions this app lacks, or
-  // the error the run itself ended on. Or commands that ran away: a display's, or those a script evaluated.
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown) {
     if (result instanceof LuaStuck) return this.note(chat, { kind: 'stuck' });
     if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' });

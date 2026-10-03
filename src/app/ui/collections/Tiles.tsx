@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Tag } from '../foundation/Tag';
 import styles from './Tiles.module.css';
 
-// A few items to pick again, two to a row where there is room, such as the prompts used last.
 export function Tiles({ label, children }: { label: string; children: ReactNode }) {
   return (
     <ul className={styles.tiles} aria-label={label}>

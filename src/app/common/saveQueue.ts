@@ -1,6 +1,5 @@
 import type { ApiFailure } from '../../runtime/api';
 
-// How long typing pauses before a change is saved.
 const PAUSE = 600;
 
 export type SaveStatus = 'saving' | 'saved' | 'failed';
@@ -8,8 +7,8 @@ export type Write<T> = (patch: Partial<T>) => Promise<{ ok: true } | ApiFailure>
 
 const empty = (patch: object) => Object.keys(patch).length === 0;
 
-// One thing's changes, merged per field and written one save at a time: a store write retried on a conflict reapplies
-// its patch, so two in flight could land out of order and an older value win.
+// Written one save at a time: a store write retried on a conflict reapplies its patch, so two in flight could land out
+// of order and an older value win.
 export class SaveQueue<T extends object> {
   private pending: Partial<T> = {};
   private writing: Partial<T> | null = null;
@@ -192,7 +191,6 @@ export class Saves {
     if (this.queues.size === 0) this.page.removeEventListener('beforeunload', this.unload);
   }
 
-  // Closing or reloading the tab gives a save no time to finish, so the browser asks first.
   private readonly unload = (event: BeforeUnloadEvent) => {
     const busy = [...this.queues.values()].filter(({ queue }) => queue.busy);
     if (busy.length === 0) return;

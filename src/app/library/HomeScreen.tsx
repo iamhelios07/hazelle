@@ -4,7 +4,6 @@ import { navigate } from '../shell/router';
 import { ActionCard, Intro, Screen, Stack } from '../ui';
 import { useImport } from './ImportFlow';
 
-// The landing until there is a character to show instead. 새 채팅 appears once there is a connection to talk through.
 export function Welcome() {
   const connections = useConnections();
   const chats = useChats();

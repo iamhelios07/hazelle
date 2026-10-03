@@ -29,10 +29,8 @@ export type { RecordStatus } from '../engine/memory';
 // budget, window and batch count tokens (model/memory MemorySettings).
 export const MEMORY_DEFAULTS: MemorySettings = { on: true, budget: 25_000, window: 24_000, batch: 12_000 };
 
-// own: the chat's 이 채팅만 따로, in place of the account's.
 export type MemorySetup = MemorySettings & { own: boolean };
 
-// The account's default, its absent fields filled from MEMORY_DEFAULTS.
 export const defaultMemory = (store: ObjectStore): MemorySettings => ({ ...MEMORY_DEFAULTS, ...store.get('settings', SETTINGS_ID)?.value.memory });
 
 export const memorySetup = (store: ObjectStore, chat: Chat): MemorySetup => (chat.memory ? { ...chat.memory, own: true } : { ...defaultMemory(store), own: false });
@@ -48,7 +46,7 @@ export const chatMemory = (store: ObjectStore, chat: string): Memory => store.ch
 
 const sourcesOf = (messages: Message[]): Source[] => messages.map((message) => ({ message: message.id, version: shown(message).id }));
 
-// What a turn's 장기 기억 slot is made from: messages are the turn's, as its scope holds them. null while memory is off.
+// null while memory is off.
 export function memoryInput(store: ObjectStore, id: string, chat: Chat, messages: Message[]): MemoryInput | null {
   const setup = memorySetup(store, chat);
   return setup.on ? { memory: chatMemory(store, id), budget: setup.budget, shown: sourcesOf(messages) } : null;
@@ -56,8 +54,8 @@ export function memoryInput(store: ObjectStore, id: string, chat: Chat, messages
 
 type Write<T = Stored<'memory'>> = Promise<ApiResult<T>>;
 
-// One update of the chat's memory, creating it the first time. change answers null when what it changes is not there,
-// and nothing is written ('gone'). A create that meets another device's goes on as an update of that one.
+// change answers null when what it changes is not there, and nothing is written ('gone'). A create that meets
+// another device's goes on as an update of that one.
 async function changeMemory(store: ObjectStore, chat: string, change: (memory: Memory) => Memory | null): Write {
   return store.withChat(chat, async () => {
     const id = memoryId(chat);
@@ -77,7 +75,6 @@ const withRecord = (store: ObjectStore, chat: string, id: string, change: (recor
     return at === -1 ? null : { ...memory, records: memory.records.with(at, change(memory.records[at]!)) };
   });
 
-// The fields of a record the user can rewrite; an edit marks it edited.
 export type RecordPatch = Partial<Pick<MemoryRecord, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome'>>;
 
 // at moves too, so a summary of the record started before the edit is refused.
@@ -88,9 +85,9 @@ export const editRecord = (store: ObjectStore, chat: string, record: string, pat
 export const pinRecord = (store: ObjectStore, chat: string, record: string, pinned: boolean): Write =>
   withRecord(store, chat, record, (current) => (pinned ? { ...current, pinned: true } : without(current, 'pinned')));
 
-// A deletion that answers what it deleted, for its 되돌리기. The store applies a change again when a try's answer was
-// lost after it landed (ObjectStore reaching), and that copy no longer holds the thing: the snapshot stays the last
-// copy's that held it, and the deletion already made, by that try or by another device, is this one done.
+// The store applies a change again when a try's answer was lost after it landed (ObjectStore reaching), and that
+// copy no longer holds the thing: the snapshot stays the last copy's that held it, and the deletion already made, by
+// that try or by another device, is this one done.
 async function taking<T>(store: ObjectStore, chat: string, find: (memory: Memory) => T | undefined, remove: (memory: Memory, found: T) => Memory): Write<T> {
   let was: T | undefined;
   const saved = await changeMemory(store, chat, (memory) => {
@@ -102,7 +99,6 @@ async function taking<T>(store: ObjectStore, chat: string, find: (memory: Memory
   return saved.ok ? { ok: true, data: was! } : saved;
 }
 
-// Answers the record as it was, which restoreRecord (되돌리기) writes back.
 export const forgetRecord = (store: ObjectStore, chat: string, record: string): Write<MemoryRecord> =>
   taking(
     store,
@@ -152,8 +148,6 @@ export const removeThread = (store: ObjectStore, chat: string, thread: string): 
     (memory, found) => ({ ...memory, threads: memory.threads.filter((each) => each !== found) }),
   );
 
-// A saved chat as memory reads it, once what was last written to it is evaluated: its messages as a request sends
-// them, their texts as the prompt renders them with their tokens, and given memory, what of it a request sends.
 // asker: background memory's lane or the memory panel's (turn wouldSend).
 type ChatSent = { chat: Chat; scope: ChatScope; read: ChatRead; tokens: number[]; standing: Standing | null };
 
@@ -171,10 +165,10 @@ async function chatSent(session: Pick<Session, 'store' | 'read'>, id: string, as
   return { chat: stored.value, scope, read: { shown, roles: messages.map(({ role }) => role), texts: texts.texts }, tokens: texts.tokens, standing: texts.standing };
 }
 
-// What the memory panel shows of one chat. slot: whether the chat's prompt holds 장기 기억 where a request reaches it,
-// false while the chat cannot send. stale: why each stale record is, a record the user edited or pinned included, which
-// stays sent. covered: the leading messages memory covers. waiting: messages past the window not summarized yet. tokens:
-// what the slot sends against its budget (shrunk to what the model can take), and the state's share against its limit.
+// slot: whether the chat's prompt holds 장기 기억 where a request reaches it, false while the chat cannot send. stale: why
+// each stale record is, a record the user edited or pinned included, which stays sent. waiting: messages past the window
+// not summarized yet. tokens: what the slot sends against its budget (shrunk to what the model can take), and the
+// state's share against its limit.
 export type MemoryView = {
   memory: Memory;
   setup: MemorySetup;
@@ -204,8 +198,6 @@ export async function memoryView(session: Pick<Session, 'store' | 'read'>, chat:
   };
 }
 
-// The messages a request leaves out with no memory standing for them: covered by memory that is not sent, or cut by
-// the model's budget.
 export const leaving = (prompt: Assembled): number => (prompt.memory?.missing ?? 0) + prompt.dropped;
 
 // One summary: the message versions it reads, in chat order, and the record it summarizes again as it was when the job
@@ -213,8 +205,6 @@ export const leaving = (prompt: Assembled): number => (prompt.memory?.missing ??
 // pinned, or forgot, summarized again.
 type Job = { sources: Source[]; redo: { record: string; at: number; user: boolean } | null };
 
-// Whether a job's result may enter memory now: the versions it read are still the ones shown, and memory still ends
-// where the job started, or the record it summarizes again is as it was. messages: the chat's, as they fold now.
 function applies(memory: Memory, messages: Message[], { sources, redo }: Job): boolean {
   const places = placesOf(sourcesOf(messages));
   const showing = sources.every(({ message, version }) => {
@@ -227,10 +217,8 @@ function applies(memory: Memory, messages: Message[], { sources, redo }: Job): b
   return record !== undefined && record.at === redo.at && (redo.user || (!record.edited && !record.pinned && !record.forgotten));
 }
 
-// The job's records in place of the one it summarized again, or after memory's end, with the state they change (a null
-// value removes the fact) and the threads they open and close, each kept on the record that made it. A fact a later
-// record or the user set stays as it is. span: the messages read, as the prompt rendered them; first: the id of the first
-// record, which tells a call already saved (Streams).
+// A fact a later record or the user set stays as it is. first: the id of the first record, which tells a call already
+// saved (Streams).
 function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], span: { role: string; text: string }[], receipt: Receipt, first: string): Memory {
   const at = Date.now();
   let from = 0;
@@ -256,7 +244,6 @@ function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], sp
       else state = at === -1 ? [...state, { about, field, value, record }] : state.with(at, { about, field, value, record });
     }
     const kept = threads.filter((thread) => !draft.closes.includes(threadLabel(thread)));
-    // A thread already open, said again, stays one thread.
     const known = new Set(kept.map(({ text }) => sameText(text)));
     threads = [...kept, ...draft.opens.filter((text) => !known.has(sameText(text))).map((text) => ({ id: crypto.randomUUID(), text, opened: record }))];
   });
@@ -274,11 +261,9 @@ export type MemoryFailure =
   | { kind: 'unsaved'; failure: ApiFailure }
   | RanAway;
 
-// running: the chats whose memory is being written, with the model writing it and the calls left. failed: why a
-// chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
+// failed: why a chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
 export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure> };
 
-// A job ready to call: what it reads, through which prompt and model, and the calls likely left after it.
 type Planned = { job: Job; sent: ChatSent; from: number; to: number; memory: Memory; before: MemoryRecord | null; prompt: MemoryPrompt; route: Route; settings: ModelSettings; left: number };
 
 // done: committed. moved: memory or the messages changed while the call ran, so its result was dropped and the next job
@@ -295,7 +280,6 @@ export class Rememberer {
   // The chats with a job running, and of those the ones that may summarize new messages too, not only stale records.
   private readonly working = new Set<string>();
   private readonly full = new Set<string>();
-  // The record the user asked to summarize again, by chat.
   private readonly asked = new Map<string, string>();
   // The message versions a stale record was summarized again from this session. One that renders differently each
   // time it is read ({{time}}, or CBS reading later messages) stays stale, and is not summarized again from the same
@@ -326,12 +310,10 @@ export class Rememberer {
 
   readonly snapshot = () => this.state;
 
-  // After a reply is saved, and when a chat opens.
   check(chat: string) {
     this.start(chat, true);
   }
 
-  // 다시 시도 after a failure.
   retry(chat: string) {
     this.change(chat, { failed: null });
     this.start(chat, true);
@@ -459,8 +441,7 @@ export class Rememberer {
     return { job, sent, from, to, memory, before, prompt: prompt.prompt.value, route, settings: profile.profile.value.settings, left: Math.max(stale.length + waiting, 1) };
   }
 
-  // New messages to summarize, by their tokens as the prompt renders them; earlier than batch when the next request
-  // drops messages for want of room.
+  // Earlier than batch when the next request drops messages for want of room.
   private async span(chat: string, tokens: number[], covered: number, setup: MemorySettings) {
     const end = windowStart(tokens, setup.window);
     if (end <= covered) return null;
@@ -550,7 +531,6 @@ const sameText = (text: string) => text.replace(/\s+/g, ' ').trim();
 
 const readKey = (sources: Source[]) => sources.map(({ message, version }) => `${message}/${version}`).join(' ');
 
-// The versions shown now of a record's messages that are still in the chat.
 const shownFor = (record: MemoryRecord, read: ChatRead, places: ReadonlyMap<string, number>) => record.sources.flatMap(({ message }) => {
   const at = places.get(message);
   return at === undefined ? [] : [read.shown[at]!];

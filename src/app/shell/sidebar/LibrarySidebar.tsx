@@ -24,9 +24,8 @@ type Props = {
   onCollapse: (collapsed: boolean) => void;
 };
 
-// Wide screens: the rail of every character, and beside it the panel unless folded. Phones: the panel alone, as a page.
-// Inside a character, the panel is its chats, and "모든 캐릭터" goes back up without leaving the open chat. The search
-// and the open folders outlast a visit inside one.
+// Inside a character, "모든 캐릭터" goes back up without leaving the open chat. The search and the open folders outlast a
+// visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { none, folders, byFolder, loose } = useLibrary();
   const writing = useWritingChat();

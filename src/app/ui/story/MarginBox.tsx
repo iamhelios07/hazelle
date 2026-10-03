@@ -7,16 +7,13 @@ type Props = {
   css: string;
   buttons: 'live' | 'inert';
   onPress: (button: BotButton | null) => void;
-  // Whether it fits the margin at no less than LEAST of its size.
   onFit: (fits: boolean) => void;
 };
 
-// The smallest a box is drawn at in the margin; smaller, it is not drawn there at all.
 const LEAST = 0.5;
 const PICTURE = new Set(['IMG', 'SVG', 'CANVAS', 'VIDEO', 'HR']);
 
-// What a box draws, from the left and top of its element: its text, pictures, and elements that paint a background,
-// a border or a shadow. The wrappers bots centre a narrow card in are as wide as the story but draw nothing.
+// The wrappers bots centre a narrow card in are as wide as the story but draw nothing.
 function drawn(element: HTMLElement): { left: number; right: number; bottom: number } | null {
   const root = element.firstElementChild?.firstElementChild?.shadowRoot;
   if (!root) return null;
@@ -50,8 +47,6 @@ function drawn(element: HTMLElement): { left: number; right: number; bottom: num
   return right > left ? { left, right, bottom } : null;
 }
 
-// A bot's box in the story's margin (상태창, 옆에 두기): laid out as wide as the story's text, as in its message, and
-// drawn smaller to fit the margin. Pointed at, it grows to its size over the story, and the margin keeps its place.
 export function MarginBox({ html, css, buttons, onPress, onFit }: Props) {
   const room = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);

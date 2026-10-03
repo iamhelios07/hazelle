@@ -1,14 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { READER_RESIZED, ROWS_RESIZED, type Seek } from '../ui';
 
-// Whether the view is at the story's end, given how far above it the view is and whether it was there: it stays
+// It stays
 // there until it is well above, and comes back only at the very end, so scrolling into the band does not snap it down.
 export const atEnd = (distance: number, was: boolean) => distance < (was ? 48 : 1);
 
-// The view starts at the bottom and follows the story while it is there; scrolled up, it stays, and a new message
-// lights the 새 답장 pill instead. count and streaming are the story's; its scroller takes scrollRef.
-// stay (보낸 자리에 멈추기): a reply starting here puts answered, the message it answers, at the top, and from then on
-// nothing the story gains moves the view, not even at its end, until the pill takes it down (follow).
+// stay (보낸 자리에 멈추기): a reply starting here puts answered, the message it answers, at the top, and from then on nothing
+// the story gains moves the view, not even at its end, until the pill takes it down (follow).
 export function useFollow(count: number, streaming: boolean, answered: string | null, stay: boolean) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -97,7 +95,7 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
     setSeek({ key, revision: Date.now(), align });
   }
 
-  // What the pill over the composer says, or null while the view is at the bottom.
+  // null while the view is at the bottom.
   const pill = !away ? null : streaming ? '답장 쓰는 중' : unread ? '새 답장' : '맨 아래로';
 
   return { scrollRef, onScroll, follow, beforeTurn, seekTo, seek, pill, away };

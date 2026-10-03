@@ -71,7 +71,6 @@ it('restores an account to a time on its report: its open device drops to the ob
   expect(log.ok && log.data.rows.map((row) => row.action)).toEqual(['restore-done', 'restore-begun']);
 });
 
-// The server's answers in turn, and what each request sent.
 function answering(...answers: Response[]) {
   const sent: { url: string; method: string; body: unknown }[] = [];
   vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {

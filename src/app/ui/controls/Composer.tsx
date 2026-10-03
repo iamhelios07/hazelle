@@ -10,11 +10,9 @@ type Props = {
   onBlur: () => void;
   placeholder: string;
   hint: string;
-  // Before the hint, such as the persona and 노트 of the chat.
   tools?: ReactNode;
   actions: ReactNode;
   inputRef: RefObject<HTMLTextAreaElement | null>;
-  // One line while nothing in it has focus; pressing it brings it back whole.
   compact: boolean;
 };
 

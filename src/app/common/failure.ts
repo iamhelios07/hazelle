@@ -40,8 +40,7 @@ const SERVER_TROUBLE = '서버에 문제가 생겼어요. 잠시 뒤 다시 해 
 
 const SECRET = { password: '비밀번호가', recovery: '복구 키가' } as const;
 
-// A refused password or recovery key, named the way the user chose to sign in. Signed out, the
-// username may be the wrong part.
+// Signed out, the username may be the wrong part.
 export function wrongSecret(method: keyof typeof SECRET, withUsername: boolean): string {
   return `${withUsername ? '아이디나 ' : ''}${SECRET[method]} 맞지 않아요.`;
 }

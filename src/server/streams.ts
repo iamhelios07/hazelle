@@ -5,7 +5,6 @@ import { EXIT } from './relay';
 import { StreamBox } from './stream-box';
 import { canCall, requireSession } from './session';
 
-// The Durable Object around StreamBox, one per account and call id.
 export class ReplyStream {
   private readonly box: StreamBox;
 

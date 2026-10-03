@@ -64,7 +64,6 @@ function described(restore: Restore): string {
 
 type Asking = { kind: 'restore'; at: number } | { kind: 'undo'; restore: Restore } | { kind: 'resume'; restore: Restore };
 
-// An account's restores, newest first, with what the server allows on each; from a report, also a new restore and an undo.
 export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Restoring; onClose: () => void; onActed: () => void }) {
   const { accountId, username, report } = restoring;
   const toast = useToast();

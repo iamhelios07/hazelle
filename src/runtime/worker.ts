@@ -25,7 +25,6 @@ export class Heartbeat {
 
   constructor(private readonly limit: number, private readonly ping: () => void, private readonly stuck: () => void) {}
 
-  // While a job is out.
   start() {
     this.beat ??= setInterval(() => this.check(), BEAT_MS);
   }

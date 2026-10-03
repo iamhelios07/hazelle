@@ -27,8 +27,6 @@ export const pressed = (event: Press, chords: readonly Chord[]) => pressedKey(ev
 
 const NAMES: Record<string, string> = { Escape: 'Esc', ArrowUp: '↑', ArrowLeft: '←', ArrowRight: '→' };
 
-// The caps a chord is pressed with, each one Kbd: Ctrl+Enter is ['Ctrl', 'Enter'].
 export const keyCaps = ({ key, shift, mod }: Chord) => [...(mod ? ['Ctrl'] : []), ...(shift ? ['Shift'] : []), NAMES[key] ?? (LETTER.test(key) ? key.toUpperCase() : key)];
 
-// Chords in a line of text, such as a hint or a button's title: 'Ctrl+Enter', '← →'.
 export const formatKeys = (chords: readonly Chord[]) => chords.map((chord) => keyCaps(chord).join('+')).join(' ');

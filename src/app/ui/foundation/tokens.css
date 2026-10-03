@@ -75,7 +75,6 @@
   --color-item-hover: var(--color-surface-hover);
   --color-item-current: var(--color-surface-raised);
 
-  /* Story text: narration, "dialogue" and *actions* read in three tones. */
   --color-prose-narration: var(--palette-sand-200);
   --color-prose-dialogue: var(--palette-sand-50);
   --color-prose-action: var(--palette-lilac-350);
@@ -107,7 +106,6 @@
   --shadow-popover: 0 12px 32px var(--palette-shadow);
   --shadow-toast: 0 22px 44px -14px var(--palette-shadow-deep), 0 4px 12px var(--palette-shadow);
 
-  /* Tints derive from the tone colors, so changing a tone recolors its backgrounds and borders too. */
   --color-accent-bg: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
   --color-accent-border: color-mix(in srgb, var(--color-accent) 40%, var(--color-bg));
   --color-warn-bg: color-mix(in srgb, var(--color-warn) 10%, var(--color-bg));
@@ -189,10 +187,8 @@
   --bar-height: 4px;
   --screen-narrow: 440px;
   --toast-width: 380px;
-  /* How far each notice behind the front one shows, and how much smaller it is. */
   --toast-peek: var(--space-8);
   --toast-shrink: 0.05;
-  /* The most a notice's long words take once opened; past it they scroll. */
   --toast-words-most: 50vh;
   --screen-offset-top: 10vh;
   --sidebar-width: 272px;

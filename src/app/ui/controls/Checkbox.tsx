@@ -2,7 +2,6 @@ import styles from './Checkbox.module.css';
 
 type Props = {
   label: string;
-  // A few words after the label, such as a count or why it cannot be ticked.
   note?: string;
   checked: boolean;
   disabled?: boolean;

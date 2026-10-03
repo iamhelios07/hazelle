@@ -10,8 +10,6 @@ function cbsScope({ card, persona, prompt, note, lore, messages, variables, gree
   return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick };
 }
 
-// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
-// variables given.
 export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: string[], variables: [string, string][]): Snapshot {
   const greeting = scope.greeting === null ? 0 : 1;
   return {

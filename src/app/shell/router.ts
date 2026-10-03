@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { href, parseRoute, type Back, type Route } from './routes';
 
-// Paths in the address bar, so the browser's back button and a reload keep the place. A router
+// A router
 // library would add nothing for a handful of fixed paths.
 const NAVIGATED = 'risu-alpha:navigate';
 

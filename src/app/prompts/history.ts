@@ -3,16 +3,14 @@ import type { PromptPatch } from '../../runtime/prompts';
 import { blockTitle, MARKS, SLOT } from './blocks';
 import { keyInUse, moved, placedOnce, rekey, withMark, type Draft } from './edits';
 
-// Why a step cannot apply to the draft as it is now, in words. A toast's 되돌리기 undoes a step out of turn, so what
-// a step puts back may no longer fit: the slot it held is taken, or its key is another toggle's.
+// A toast's 되돌리기 undoes a step out of turn, so what a step puts back may no longer fit: the slot it held is taken, or
+// its key is another toggle's.
 export type Refused = { refused: string };
 
-// One structural edit and its inverse. Both apply to the draft as it is then and change only what the edit changed,
-// so text typed in between survives either way. Typing is not a step: a text field keeps the browser's own undo.
+// Both apply to the draft as it is then and change only what the edit changed, so text typed in between survives either
+// way. Typing is not a step: a text field keeps the browser's own undo.
 export type Step = {
-  // What it did, as a toast names it.
   label: string;
-  // The block to show once it is undone or redone.
   block: string | null;
   undo: (draft: Draft) => PromptPatch | Refused;
   redo: (draft: Draft) => PromptPatch | Refused;
@@ -21,14 +19,12 @@ export type Step = {
 export type History = { done: readonly Step[]; undone: readonly Step[] };
 export const NO_HISTORY: History = { done: [], undone: [] };
 
-// A step applied to a draft: the history after it, and the patch it makes. A step refused changes nothing and leaves
-// the history for good, so the steps under it can still be reached.
+// A step refused changes nothing and leaves the history for good, so the steps under it can still be reached.
 export type Turned = { step: Step; history: History } & ({ patch: PromptPatch } | Refused);
 
 const turned = (step: Step, change: PromptPatch | Refused, applied: History, refused: History): Turned =>
   'refused' in change ? { step, history: refused, ...change } : { step, history: applied, patch: change };
 
-// A new edit: its redo applied, and the step recorded over whatever was undone.
 export const doing = (history: History, draft: Draft, step: Step): Turned => turned(step, step.redo(draft), { done: [...history.done, step], undone: [] }, history);
 
 // The last step done, or the one a toast's 되돌리기 names; null when it is not there to undo.
@@ -45,7 +41,7 @@ export function redoing(history: History, draft: Draft): Turned | null {
   return turned(step, step.redo(draft), { done: [...history.done, step], undone }, { done: history.done, undone });
 }
 
-// Puts an item back where it stood, or takes it out, keeping it as it was when taken, typing included. Adding is put
+// Adding is put
 // then take to undo, removing the other way round. joining: the item as it may stand among the others now, under
 // the rules adding one keeps, or why it may not.
 function presence<T extends object>(item: T, at: number, same: (a: T, b: T) => boolean, joining: (items: readonly T[], item: T) => T | Refused) {

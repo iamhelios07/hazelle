@@ -5,7 +5,6 @@ import { inTurn, stubRelay, upstream } from './testing';
 
 const connection: Connection = { type: 'vercel', label: 'Vercel', baseUrl: null, protocol: null, secret: 'vck_x', starred: [] };
 
-// Vercel through the relay: each lookup gets the next status and body.
 const vercel = (answers: [number, unknown][]) => stubRelay(inTurn(answers.map(([status, body]) => upstream(status, body))));
 
 async function settle() {

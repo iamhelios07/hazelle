@@ -9,7 +9,6 @@ import { Brand, Button, Callout, FileButton, IconButton, Intro, Screen, Stack, T
 type Props = {
   // The account whose vault is locked on this device, or null when signed out.
   account: string | null;
-  // Why this shows instead of what was open, such as another tab's sign-in.
   notice?: string | null;
   // Signed out: the way to make an account, or full while the operator's cap of accounts is reached.
   signup?: (() => void) | 'full';

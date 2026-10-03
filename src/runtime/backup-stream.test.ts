@@ -9,10 +9,8 @@ import * as zip from './backup-zip';
 
 const persona = (id: string, rev: number): Stored<'persona'> => ({ id, rev, kind: 'persona', parent: null, value: { name: id, description: '이야기 '.repeat(100), picture: null } });
 
-// The server holds every file asked about.
 const missing = async () => ({ ok: true as const, data: { missing: new Set<string>(), maxBytes: 0 } });
 
-// A store whose timeline never changes.
 const PIN = { timeline: 't', epoch: 0 };
 const pins: Pick<ObjectStore, 'pin' | 'pinned' | 'list'> = { pin: async () => ({ ok: true, data: PIN }), pinned: (run) => run(PIN), list: () => [] };
 

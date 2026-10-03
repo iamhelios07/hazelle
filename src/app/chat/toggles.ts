@@ -5,8 +5,7 @@ import type { ChatToggleSet } from '../../runtime/turn';
 export type ToggleRow = { toggle: Toggle; value: string; changed: boolean };
 export type ToggleRows = { prompt: ToggleRow[]; card: ToggleRow[]; changed: number };
 
-// The chat's toggles as the panel lists them: the first fromPrompt are the prompt's (runtime/turn togglesOf puts
-// them first), each with its value and whether that differs from its default.
+// The first fromPrompt are the prompt's (runtime/turn togglesOf puts them first).
 export function toggleRows({ declared, value }: ChatToggleSet, fromPrompt: number): ToggleRows {
   const rows = declared.map((toggle) => {
     const current = value(toggle.key)!;
@@ -15,8 +14,7 @@ export function toggleRows({ declared, value }: ChatToggleSet, fromPrompt: numbe
   return { prompt: rows.slice(0, fromPrompt), card: rows.slice(fromPrompt), changed: rows.filter((row) => row.changed).length };
 }
 
-// The rows after the prompt's, apart by who declares them: the card (its toggle text), or a module on in the chat. A
-// key both declare is the card's, whose pack comes first (runtime/turn packsOf).
+// A key both declare is the card's, whose pack comes first (runtime/turn packsOf).
 export function splitByCard(rows: readonly ToggleRow[], card: string): { card: ToggleRow[]; modules: ToggleRow[] } {
   const own = new Set(readToggles(card).toggles.map(({ key }) => key));
   return { card: rows.filter(({ toggle }) => own.has(toggle.key)), modules: rows.filter(({ toggle }) => !own.has(toggle.key)) };

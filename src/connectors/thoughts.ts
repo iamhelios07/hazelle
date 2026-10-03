@@ -24,7 +24,6 @@ const named = (open: string) => (open.endsWith('>') ? open.slice(0, -1) : null);
 const OPENER = new RegExp(BLOCKS.map(({ open }) => `(${named(open) === null ? escape(open) : `${escape(named(open)!)}(?:\\s[^<>]{0,${ATTRIBUTES}})?>`})`).join('|'), 'i');
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
-// Whether the text, which ends the chunks so far, may still grow into an opener.
 function opening(tail: string) {
   return BLOCKS.some(({ open }) => {
     const name = named(open);
@@ -137,7 +136,6 @@ export function thoughts(onText: (phase: Phase, text: string) => void, takeBack:
   };
 }
 
-// A whole text's blocks taken out, as a finished answer's are.
 export function splitThoughts(text: string): { text: string; reasoning: string } {
   const parts = { text: '', reasoning: '' };
   const scanner = thoughts(

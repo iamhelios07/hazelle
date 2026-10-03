@@ -22,7 +22,6 @@ export const MEMORY_PROMPT_ID = '00000000-0000-4000-8000-000000000005';
 // Each task's built-in prompt, which a new prompt of its sort starts from while the account's default is gone.
 const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
 
-// Each sort's default prompt: the settings field naming it, and the prompt an account gets once, at a fixed id.
 const DEFAULTS = {
   conversation: { setting: 'prompt', id: STARTER_ID, make: starter },
   translate: { setting: 'translatePrompt', id: TRANSLATOR_ID, make: () => Promise.resolve(BUILT_IN.translate()) },
@@ -32,8 +31,8 @@ const DEFAULTS = {
 export type StoredPrompt<S extends PromptSort> = Stored<'prompt'> & { value: PromptOf<S> };
 export const ofSort = <S extends PromptSort>(prompt: Stored<'prompt'>, sort: S): prompt is StoredPrompt<S> => sortOf(prompt.value) === sort;
 
-// A sort's prompt in use: the one chosen, else the default. A deleted one, one of another sort, or a default not
-// added yet reads as missing and never as another prompt; a turn stops on it ("기본 프롬프트가 없어요").
+// A deleted one, one of another sort, or a default not added yet reads as missing and never as another prompt; a turn
+// stops on it ("기본 프롬프트가 없어요").
 export type PromptChoice<S extends PromptSort = 'conversation'> = { kind: 'prompt'; prompt: StoredPrompt<S>; own: boolean } | { kind: 'missing'; own: boolean };
 
 function choose<S extends PromptSort>(store: ObjectStore, sort: S, chosen: string | undefined): PromptChoice<S> {
@@ -45,7 +44,6 @@ function choose<S extends PromptSort>(store: ObjectStore, sort: S, chosen: strin
 
 export const chatPrompt = (store: ObjectStore, chat: Chat) => choose(store, 'conversation', chat.prompt);
 
-// chosen: the translation prompt a character's 번역 names.
 export const translationPrompt = (store: ObjectStore, chosen: string | undefined) => choose(store, 'translate', chosen);
 
 export const memoryPrompt = (store: ObjectStore) => choose(store, 'memory', undefined);
@@ -77,8 +75,6 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): P
 
 export type ImportPromptResult = { ok: true; id: string; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure | { kind: 'save'; failure: ApiFailure } };
 
-// A Risu preset, dropped or brought in a backup, becomes a new conversation prompt; unsupported is what the summary
-// counts.
 export async function savePreset(store: ObjectStore, read: PresetResult): Promise<ImportPromptResult> {
   if (!read.ok) return read;
   const saved = await store.create('prompt', read.prompt);
@@ -143,7 +139,6 @@ export const restorePrompt = (store: ObjectStore, id: string) => markDeleted(sto
 
 export const isDefaultPrompt = (settings: Settings, prompt: Stored<'prompt'>) => settings[DEFAULTS[sortOf(prompt.value)].setting] === prompt.id;
 
-// The default of the prompt's own sort.
 export function setDefaultPrompt(store: ObjectStore, id: string): Promise<ApiResult<Stored<'settings'>>> {
   const prompt = store.get('prompt', id);
   if (!prompt) return Promise.resolve({ ok: false, error: 'gone' });

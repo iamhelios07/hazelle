@@ -22,7 +22,6 @@ import { PurgeDialog } from './PurgeDialog';
 
 const MODEL_SETTINGS = '모델 설정';
 
-// 캐릭터 둘러보기: every character as a face, filtered by folder, and where folders are made, renamed, emptied and filled.
 export function GalleryScreen({ back }: { back: Back | null }) {
   const { characters, none, deleted, deletedChats, byCharacter, byFolder, loose } = useLibrary();
   const bin = useBin();
@@ -34,7 +33,6 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   // The characters picked to move, or null while not picking.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
-  // What 지금 지우기 asks about before it goes for good.
   const [purging, setPurging] = useState<Binned | null>(null);
 
   const contents = byFolder.get(filter);
@@ -57,7 +55,6 @@ export function GalleryScreen({ back }: { back: Back | null }) {
       })
     : [];
   const busy = (id: string) => (characterActions.busy?.id === id ? characterActions.busy.label : null);
-  // The rest of 휴지통, by section: each is listed by its toasts' name.
   const rows = <K extends 'module' | 'prompt' | 'persona' | 'profile'>(items: Stored<K>[], to: (stored: Stored<K>) => Binned, describe: (stored: Stored<K>) => string | undefined, face?: (stored: Stored<K>) => ReactNode) =>
     items.flatMap((stored) => {
       const item = to(stored);

@@ -41,8 +41,8 @@
   padding: var(--space-16) var(--space-16);
 }
 
-/* A menu opened inside another, such as a choice in a small form: the outer one stops clipping while it is open, and
-   the inner one stays short enough to fit beside it. */
+/* A menu opened inside another: the outer one stops clipping while it is open, and the inner one stays short enough
+   to fit beside it. */
 .menu:has(.menu) {
   overflow-y: visible;
 }
@@ -71,7 +71,6 @@
   right: 0;
 }
 
-/* A menu never runs off a phone screen. */
 @media (max-width: 959px) {
   .md,
   .lg {

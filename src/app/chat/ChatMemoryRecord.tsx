@@ -15,13 +15,12 @@ type Props = {
   record: MemoryRecord;
   // null while the panel's view is being worked out.
   status: RecordStatus | null;
-  // Why its messages read differently now; a record the user edited or pinned is still sent while stale.
+  // A record the user edited or pinned is still sent while stale.
   stale: Staleness | null;
   positions: ReadonlyMap<string, number>;
   actions: ChatActions;
 };
 
-// Its fields save as they are typed.
 export function ChatMemoryRecord({ chat, record, status, stale, positions, actions }: Props) {
   const session = useSession();
   const { store } = session;

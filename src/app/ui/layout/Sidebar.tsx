@@ -7,14 +7,12 @@ import { useLayer } from '../overlays/layers';
 import styles from './Sidebar.module.css';
 
 type Props = {
-  // On phones the chat list is the home screen and fills it.
   page?: boolean;
   actions: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 };
 
-// Beside the rail on wide screens, which holds the toggle that folds it.
 export function Sidebar({ page = false, actions, children, footer }: Props) {
   return (
     <aside className={page ? `${styles.sidebar} ${styles.page}` : styles.sidebar} aria-label="캐릭터 목록">
@@ -28,8 +26,7 @@ export function Sidebar({ page = false, actions, children, footer }: Props) {
   );
 }
 
-// A layer's own sidebar in the library's place, such as 설정's. × and Esc close it; Esc joins the layer
-// stack, so a menu open over the page closes first.
+// Esc joins the layer stack, so a menu open over the page closes first.
 export function LayerSidebar({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useLayer(true, { outside: () => false, close: onClose });
   return (
@@ -45,7 +42,6 @@ export function LayerSidebar({ title, onClose, children }: { title: string; onCl
   );
 }
 
-// A face per character and an icon per place, left of the sidebar or alone while it is folded.
 export function Rail({ open, onToggle, actions, children, footer }: { open: boolean; onToggle: () => void; actions: ReactNode; children: ReactNode; footer: ReactNode }) {
   return (
     <aside className={styles.rail} aria-label="캐릭터 바로가기">

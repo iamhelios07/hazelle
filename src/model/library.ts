@@ -4,9 +4,8 @@ import type { Translation, TranslateSwitches } from './chat';
 import type { Stored } from './kinds';
 import type { ToggleValues } from './prompt';
 
-// folder is the library folder it sits in; loreFolders only group its lorebook on screen.
+// loreFolders only group its lorebook on screen.
 // origin is the character it was copied from, named as it was then, so a gone origin can still be named.
-// toggles holds the values set for it, over the declared defaults; translate, its chats' 번역.
 // alias: 별명, the user's own note to tell apart characters (or personas) of one name. It is never sent, unlike the
 // card's nickname (부르는 이름), which CCv3 puts in {{char}}'s place.
 export type Character = Mark & {
@@ -21,7 +20,7 @@ export type Character = Mark & {
   decor?: boolean;
   // Whether the bot's Lua may call models, which costs the user. Absent: not asked yet, and the first call asks.
   botModels?: boolean;
-  // How its chats draw a line that is only a picture. Absent fields are the defaults.
+  // Absent fields are the defaults.
   pictures?: Pictures;
   // 상태창 지정: the display scripts, by place in card.regex, whose boxes are the character's status window, shown once
   // for the latest message instead of in every one. Only an import writes card.regex; an editor that reorders it must
@@ -33,8 +32,8 @@ export type Character = Mark & {
   // 생각을 본문에 둠: its replies keep the thinking blocks they write inside the text (connectors/thoughts) where they
   // are, for a bot that draws them itself. Absent: they move to the reply's reasoning.
   keepThoughts?: true;
-  // A greeting's translation, made before any chat of it was saved, which every new chat opens with. Keyed by the
-  // greeting as the card holds it and the language, so an edited greeting or a changed language translates anew.
+  // Keyed by the greeting as the card holds it and the language, so an edited greeting or a changed language
+  // translates anew.
   greetingTranslations?: GreetingTranslation[];
   // The Risu chaId of a character brought from Risu: a move skips it, and 그림 채우기 finds it.
   risu?: string;
@@ -42,8 +41,7 @@ export type Character = Mark & {
   modules?: string[];
 };
 
-// Kind `module`: a pack with a name, on in every chat (settings.modules, 항상) or in a character's
-// (character.modules). Its lorebook and assets are its children, as a character's are.
+// Its lorebook and assets are its children, as a character's are.
 // namespace: Risu's, which {{moduleenabled::…}} asks by. loreFolders only group its lorebook on screen.
 // risu: the Risu id of one brought from a Risu backup, which a move skips.
 export type Module = Pack & Mark & {
@@ -77,29 +75,24 @@ export const isBinned = ({ deleted, purging }: Mark) => deleted !== undefined &&
 // A stored object as every reader but its removal and its undo sees it: null while it is in 휴지통.
 export const live = <T extends { value: Mark }>(stored: T | null): T | null => (stored && isLive(stored.value) ? stored : null);
 
-// Those in 휴지통, most recently deleted first.
 export const binned = <T extends { value: Mark }>(items: T[]): T[] => items.filter(({ value }) => isBinned(value)).sort((a, b) => b.value.deleted! - a.value.deleted!);
 
-// Whether 휴지통 lists a chat. One of a deleted character is not listed: it goes or comes back with its character.
+// One of a deleted character is not listed: it goes or comes back with its character.
 export const binsChat = (chat: { character: string | null } & Mark, characterLive: (id: string) => boolean) =>
   isBinned(chat) && (chat.character === null || characterLive(chat.character));
 
-// How long what is in 휴지통 waits before it is removed for good.
 export const KEEP_DELETED = 7 * DAY;
-// KEEP_DELETED as the copy names it (7일).
 export const KEEP_DAYS = KEEP_DELETED / DAY;
 
 export const greetingTranslation = ({ greetingTranslations }: Character, greeting: string, language: string) =>
   greetingTranslations?.find((each) => each.greeting === greeting && each.language === language)?.translation;
 
-// Whole days something in 휴지통 has left. At 0 or less it is due, and purgeExpired removes it.
+// At 0 or less it is due, and purgeExpired removes it.
 export const daysLeft = ({ deleted }: Mark, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);
 
-// The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name, nickname or alias.
 export const matches = ({ card, alias }: Character, query: string) =>
   `${card.name} ${card.nickname ?? ''} ${alias ?? ''}`.toLowerCase().includes(query.trim().toLowerCase());
 
-// Kind `lore`, whose parent is the character or module it belongs to. folder is the id of one of its loreFolders.
 export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 
 // Two levels deep: a subfolder's parent is the top folder it sits in, and top folders have
@@ -107,12 +100,10 @@ export type Lore = Omit<LoreEntry, 'folder'> & { folder: string | null };
 export type Folder = { name: string; parent?: string };
 export type FolderTree = Stored<'folder'> & { children: FolderTree[] };
 
-// Kind `avatar`, whose parent is the character: file is the original picture, and thumb a small copy that syncs with
-// the objects, so lists need no file fetch.
+// thumb: a small copy that syncs with the objects, so lists need no file fetch.
 export type Avatar = { type: string; size: number; thumb: string; file: FileRef };
 
-// Kind `asset`, whose parent is the character or module: a picture of the bot's own, which its text reaches by name
-// ({{raw::name}}, design §6.4). type is what the bytes are, read from them.
+// Kind `asset`, whose parent is the character or module (design §6.4). type is what the bytes are, read from them.
 export type Asset = { name: string; type: string; size: number; file: FileRef };
 
 // A character with its chats, or (id null) the chats that have no character: 캐릭터 없이.
@@ -155,8 +146,7 @@ export function shelve<C extends ChatLike>(
   };
 }
 
-// Top folders with their subfolders, both by name. A subfolder whose top folder is gone (removed on
-// another device meanwhile) stands at the top instead of vanishing.
+// A subfolder whose top folder is gone (removed on another device meanwhile) stands at the top instead of vanishing.
 export function nest(folders: Stored<'folder'>[]): FolderTree[] {
   const sorted = [...folders].sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
   const ids = new Set(sorted.map((folder) => folder.id));
@@ -173,15 +163,13 @@ export function nest(folders: Stored<'folder'>[]): FolderTree[] {
     .map((top) => ({ ...top, children: (children.get(top.id) ?? []).map((child) => ({ ...child, children: [] })) }));
 }
 
-// A folder holds the characters in it and in its subfolders: those whose folder is one of these.
 const heldFolders = (folder: FolderTree) => [folder.id, ...folder.children.map((child) => child.id)];
 export const holds = (folder: FolderTree, character: Character) => character.folder !== null && heldFolders(folder).includes(character.folder);
 
 // What a folder holds (holds): direct are the characters in the folder itself, characters those in its subfolders too.
 export type FolderContents<C> = { folder: FolderTree; top: FolderTree; direct: CharacterShelf<C>[]; characters: CharacterShelf<C>[] };
 
-// Each folder of the tree with what it holds, and loose: the characters in none. A character whose folder the tree does
-// not show (removed on another device meanwhile) sits in no folder.
+// A character whose folder the tree does not show (removed on another device meanwhile) sits in no folder.
 export function indexFolders<C>(characters: CharacterShelf<C>[], folders: FolderTree[]): { byFolder: Map<string, FolderContents<C>>; loose: CharacterShelf<C>[] } {
   const byFolder = new Map<string, FolderContents<C>>();
   const holders = new Map<string, FolderContents<C>[]>();

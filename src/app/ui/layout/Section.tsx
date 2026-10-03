@@ -4,15 +4,10 @@ import styles from './Section.module.css';
 
 type Props = {
   title: string;
-  // 2 on a screen, under its h1; 3 in a side panel, under the panel's title, where it reads smaller.
   level?: 2 | 3;
-  // A short figure beside the title, such as a cache hit rate.
   note?: string;
-  // What the reader who does not know it needs, behind an ⓘ after the title.
   hint?: string;
-  // A small button at the end of the title's line, such as 순서 바꾸기.
   action?: ReactNode;
-  // The view goes to it when it mounts with seek, or when seek turns on.
   seek?: boolean;
   children: ReactNode;
 };

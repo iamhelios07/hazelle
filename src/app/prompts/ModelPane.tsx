@@ -12,7 +12,6 @@ type Task = Exclude<PromptSort, 'conversation'>;
 
 const nameOf = (ref: ModelRef, connections: readonly Stored<'connection'>[]) => findStarred(ref, connections)?.name ?? NOT_STARRED;
 
-// What the 모델 row says: a conversation prompt's 대화 모델 and whether it sets its own 보조 모델.
 export function modelWords(models: Assignment, connections: readonly Stored<'connection'>[]): string {
   const main = models.main ? nameOf(models.main, connections) : DEFAULTS;
   return models.aux ? `${main} · ${MODEL_ROLES.aux} 따로` : main;
@@ -22,7 +21,6 @@ export const taskModelWords = (own: ModelRef | undefined, connections: readonly 
 
 type Props = { models: Assignment; defaults: Assignment; connections: readonly Stored<'connection'>[]; onPick: (role: Role, ref: ModelRef | null) => void };
 
-// A conversation prompt's layer of the model assignment.
 export function ModelPane({ models, defaults, connections, onPick }: Props) {
   // Unset here, 보조 모델 takes 기본 모델's own 보조 모델 first, and only then 대화 모델.
   const follow = (role: Role) => (role === 'main' || defaults.aux ? DEFAULTS : follows(MODEL_ROLES.main));

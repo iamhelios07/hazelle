@@ -6,13 +6,10 @@ export const MEDIA = {
   // Room for the sidebar beside the page. narrow is its complement: change the two together.
   wide: '(min-width: 960px)',
   narrow: '(max-width: 959px)',
-  // Room, beside the sidebar, for a list and the item picked from it.
   split: '(min-width: 1200px)',
-  // Too narrow for the story and a side panel side by side, so the panel covers the page.
   panelCovers: '(max-width: 1279px)',
-  // Wider than a phone: a screen's column sits lower on the page instead of filling it.
   roomy: '(min-width: 600px)',
-  // A pointer that hovers. A touch screen keeps :hover on whatever was tapped last.
+  // A touch screen keeps :hover on whatever was tapped last.
   hover: '(hover: hover)',
   reducedMotion: '(prefers-reduced-motion: reduce)',
 } as const;
@@ -46,20 +43,15 @@ function watch(query: string) {
   return () => useSyncExternalStore(subscribe, read);
 }
 
-// Which layout the app shell takes: the sidebar beside the page, or one screen at a time (phones).
 export const useWide = watch(MEDIA.wide);
 
-// Whether list screens show the picked item beside the list (ListDetail).
 export const useSplit = watch(MEDIA.split);
 
-// Whether a side panel lies over the page instead of beside it.
 export const usePanelCovers = watch(MEDIA.panelCovers);
 
-// Whether things show on hover; without it they show on a tap.
 export const useHover = watch(MEDIA.hover);
 
-// The window's size as `width x height`, for bots that lay out by it ({{screen_width}}). A string, so an unchanged size
-// is the same snapshot.
+// A string, so an unchanged size is the same snapshot.
 const subscribeResize = (listener: () => void) => {
   window.addEventListener('resize', listener);
   return () => window.removeEventListener('resize', listener);

@@ -46,7 +46,6 @@ describe('fold', () => {
     const [message] = fold(entries);
     expect(message!.versions.map((v) => v.text)).toEqual(['하나 고침', '둘']);
     expect(message!.selected).toBe(0);
-    // A select written before the edit, naming the replaced version, still lands on its slot.
     entries.push(entry('s1', { type: 'select', message: 'b1', version: 'v2', at: 0 }), entry('s2', { type: 'select', message: 'b1', version: 'b1', at: 0 }));
     expect(shown(fold(entries)[0]!).text).toBe('하나 고침');
   });

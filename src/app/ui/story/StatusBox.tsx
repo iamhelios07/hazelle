@@ -3,7 +3,6 @@ import { Story, type BotButton } from './Story';
 import styles from './StatusBox.module.css';
 
 type Props = {
-  // The script that draws it, as the bot named it; shown with actions, which a box among several has of its own.
   name: string;
   actions?: ReactNode;
   // null: the box was never drawn yet in this chat.
@@ -13,7 +12,6 @@ type Props = {
   onPress: (button: BotButton | null) => void;
 };
 
-// A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text as it is there.
 export function StatusBox({ name, actions, html, css, buttons, onPress }: Props) {
   return (
     <section className={styles.box} aria-label={name}>

@@ -29,7 +29,6 @@ const operator = new Hono<AppEnv>().route('/', fileBlocks);
 const block = (id: string, blocked: boolean) =>
   operator.request(`/files/${id}/blocked`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ blocked }) }, t.env);
 
-// Replaces one method of a binding for the length of a test step, as a crash at that point would.
 async function withBlobsPut(put: (key: string, value: Parameters<R2Bucket['put']>[1]) => Promise<unknown>, step: () => Promise<void>) {
   const blobs = t.env.BLOBS;
   t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, { put });

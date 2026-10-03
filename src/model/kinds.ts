@@ -8,7 +8,6 @@ import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
 import type { Stream } from './stream';
 
-// Every kind of stored object, with the value its sealed body holds.
 export type Values = {
   character: Character;
   module: Module;
@@ -37,7 +36,6 @@ export type Kind = keyof Values;
 // parent cannot carry it: it is bound into each object's sealing (vault/objects) and sent in the clear.
 export type Rule = { parent: Kind | readonly Kind[] | null; id?: string; appendOnly?: true; file?: true; owner?: { field: string; kind: Kind } };
 
-// The body fields of a kind that can hold another object's id.
 type Link<K extends Kind> = { [F in keyof Values[K]]-?: Values[K][F] extends string | null ? F : never }[keyof Values[K]];
 
 // The rules runtime/store checks before a write leaves the browser, and the links runtime/removal follows.
@@ -60,7 +58,6 @@ export const KINDS = {
   profile: { parent: null },
 } as const satisfies Record<Kind, Rule> & { [K in Kind]: { owner?: { field: Link<K> } } };
 
-// The kinds an object of this kind may sit under; none for a top-level kind.
 export function parentKinds(kind: Kind): readonly Kind[] {
   const { parent }: Rule = KINDS[kind];
   return parent === null ? [] : typeof parent === 'string' ? [parent] : parent;
@@ -97,7 +94,6 @@ const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })),
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
 const task = shape({ task: (value) => value === 'translate' || value === 'memory', model: (value) => value === undefined || isRecord(value) });
 
-// Each kind's required fields, and one level into what screens index.
 const SHAPES = {
   character: shape({
     card: shape({

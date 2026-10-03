@@ -1,8 +1,7 @@
 import { readToggles } from '../../engine/import/toggles';
 import type { Pack } from '../../engine/import/types';
 
-// What a pack holds, in one line, as the import summary and 설정's 모듈 say it. Its lorebook and assets are stored
-// apart from it, so their counts are given.
+// A pack's lorebook and assets are stored apart from it, so their counts are given.
 export function packHolds(pack: Pack, lore: number, assets: number): string {
   const counted: [string, number][] = [
     ['로어북', lore],

@@ -35,11 +35,8 @@ export function Layout() {
     </>
   );
 
-  // 설정 stands in for the library while it is open.
   if (settings !== null) return wide ? <Shell side={<SettingsSidebar current={settings} onClose={closeSettings} />}>{page}</Shell> : page;
   const sidebar = (asPage: boolean) => <LibrarySidebar page={asPage} collapsed={collapsed} onCollapse={setCollapsed} />;
-  // On phones the character list is the home screen, a character's chats are its page, and every
-  // other page takes the whole screen.
   if (!wide) return sidebarPage(route) ? sidebar(true) : page;
   return <Shell side={sidebar(false)}>{page}</Shell>;
 }

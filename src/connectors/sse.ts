@@ -1,6 +1,5 @@
-// Splits a text stream into server-sent events and returns each event's data. Comment lines and other
-// fields are dropped: providers send keep-alive comments such as ": OPENROUTER PROCESSING", and every
-// codec reads its event type from the JSON data, not from the event field.
+// Comment lines and other fields are dropped: providers send keep-alive comments such as ": OPENROUTER PROCESSING",
+// and every codec reads its event type from the JSON data, not from the event field.
 export class SseParser {
   private buffer = '';
 

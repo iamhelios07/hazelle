@@ -1,4 +1,3 @@
-/* On the composer's own surface, so above it the two read as one dock. */
 .card {
   composes: riseIn from '../foundation/motion.module.css';
   display: flex;
@@ -34,7 +33,6 @@
   line-height: var(--leading-relaxed);
 }
 
-/* A long question scrolls inside the card, which never grows over the story it is asked about. */
 .text {
   min-width: 0;
   max-height: var(--composer-max-height);
@@ -49,8 +47,7 @@
   padding-right: var(--space-8);
 }
 
-/* Many choices scroll inside the card, as a long question does, so its × stays on screen however many a bot offers.
-   The room around them is the focus ring's, which a box that scrolls would cut. */
+/* The room around them is the focus ring's, which a box that scrolls would cut. */
 .choices {
   max-height: var(--composer-max-height);
   margin: calc(-1 * (var(--focus-ring-width) + var(--focus-ring-offset)));

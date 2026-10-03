@@ -8,7 +8,6 @@ import { currentAccount, dropSessionCookie, endSession, requireOwnSession, setSe
 import { insertVault, readVault, readWrap } from './vaults';
 
 const USERNAME = /^[\p{L}\p{N}_.-]{2,32}$/u;
-// Signup is open while there are fewer accounts than the operator's cap.
 const ROOM = '(SELECT COUNT(*) FROM accounts) < (SELECT signup_cap FROM service)';
 
 export const accounts = new Hono<AppEnv>();
@@ -106,7 +105,7 @@ accounts.delete('/account', requireOwnSession, async (c) => {
 
 // The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:
 // what the account holds and the caps that apply to it, null for none. bytes: null while the store does not answer,
-// restoring among the reasons. unreadNotices: what the operator sent that the person has not seen (admin.ts).
+// restoring among the reasons.
 async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended' | 'incarnation' | 'state'>) {
   const { incarnation } = account;
   const [usage, facts] = await Promise.all([

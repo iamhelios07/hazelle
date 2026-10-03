@@ -67,7 +67,6 @@
   }
 }
 
-/* On a phone the chip leaves room for the title beside it. */
 @media (max-width: 959px) {
   .chip {
     max-width: var(--chip-max-width-narrow);

@@ -14,7 +14,6 @@ export function add<K>(tally: Tally<K>, kind: K, amount = 1) {
   tally.set(kind, (tally.get(kind) ?? 0) + amount);
 }
 
-// The kinds counted at least once, in the order kinds lists them.
 export function counted<K>(kinds: readonly K[], tally: Tally<K>): { kind: K; count: number }[] {
   return kinds.flatMap((kind) => {
     const count = tally.get(kind) ?? 0;
@@ -27,9 +26,7 @@ export type Converted = {
   lore: LoreEntry[];
   loreFolders: string[];
   spec: ImportReport['spec'];
-  // The uri of the card's icon asset, when it names one.
   icon: string | null;
-  // The bot's own pictures, each by the name its text reaches it by and the uri that holds it.
   assets: { name: string; uri: string }[];
 };
 
@@ -124,7 +121,6 @@ export function convert(raw: unknown, module: Json | null, tally: Tally, nativeL
   return { card, lore, loreFolders, spec, icon: icon && text(icon.uri), assets };
 }
 
-// A pack from Risu's own fields, a card's or a module's: its scripts, triggers, backgroundHTML and toggle text.
 function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; toggles: unknown }, tally: Tally): Pack {
   const triggers: Trigger[] = [];
   for (const trigger of list(raw.trigger).map(record)) {

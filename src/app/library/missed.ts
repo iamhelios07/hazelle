@@ -28,7 +28,6 @@ const MOVE_UNSUPPORTED: Record<MoveUnsupportedKind, (count: number) => string> =
 
 type Unsupported = ImportReport['unsupported'];
 
-// Assets a card or module names but lacks and those it holds that could not be kept (skipped), as one count.
 function assets(unsupported: Unsupported, skipped: number): string[] {
   const count = (unsupported.find((item) => item.kind === 'asset')?.count ?? 0) + skipped;
   return count ? [UNSUPPORTED.asset(count)] : [];

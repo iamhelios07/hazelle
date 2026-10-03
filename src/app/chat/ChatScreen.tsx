@@ -16,7 +16,6 @@ import { ChatToggles } from './ChatToggles';
 import { useChat, type Side } from './useChat';
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
-// inUse is the one this chat uses, marked in the list.
 export type SideAt = { open: Side; inUse: string | null; onOpen: (open: Side) => void; onClose: () => void };
 
 type Props = {

@@ -4,7 +4,6 @@ import styles from './Outcome.module.css';
 
 type Item = { tone: 'done' | 'missed'; title: string; note?: string };
 
-// What an import did and did not bring, one line each, with why under a line that needs it.
 export function Outcome({ label, items }: { label: string; items: Item[] }) {
   return (
     <ul className={styles.outcome} aria-label={label}>

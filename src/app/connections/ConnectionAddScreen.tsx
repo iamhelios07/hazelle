@@ -16,8 +16,6 @@ const GROUPS: Record<ConnectionType['group'], string> = {
   subscription: '구독 계정으로',
 };
 
-// Pick a provider from the list, or paste its key or address into the one field on top. What the list does not hold
-// goes through 직접 연결.
 export function ConnectionAddScreen({ back }: { back: Back }) {
   const session = useSession();
   const connections = useConnections();

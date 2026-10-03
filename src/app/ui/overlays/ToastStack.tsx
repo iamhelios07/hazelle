@@ -4,11 +4,9 @@ import styles from './ToastStack.module.css';
 type Props = {
   // Newest first: the first is in front, and the others wait behind it until the stack is pointed at.
   items: { key: Key; toast: ReactNode }[];
-  // Pointed at or focused: the stack opens and the notices stay.
   onHold: (held: boolean) => void;
 };
 
-// Floats in the bottom right corner, or under the header on a phone, where the composer takes the bottom.
 export function ToastStack({ items, onHold }: Props) {
   const [open, setOpen] = useState(false);
   const [heights, setHeights] = useState<ReadonlyMap<Key, number>>(() => new Map());

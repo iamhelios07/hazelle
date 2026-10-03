@@ -6,8 +6,6 @@ import { Icon } from './Icon';
 type Story = { label: string; icon?: LucideIcon; action?: { label: string; onClick: () => void } };
 type Props = Story | { variant: 'menu' | 'tools' | 'rail' };
 
-// A line between groups, drawn to suit where it sits. With a label it runs across the story, such as a day, or with
-// an icon and an action, where a branch split from its chat.
 export function Divider(props: Props) {
   if ('label' in props) {
     const { label, icon, action } = props;

@@ -11,9 +11,8 @@ import type { ObjectStore } from './store';
 import { pinned, scopeOf } from './turn';
 
 type Pass = { revision: number; generation: number; scripts: Script[]; snapshot: Snapshot; items: Missed[]; remaining: number; installed: boolean; view: Display; signal?: AbortSignal };
-// What a chat's passes are run with besides each message's text and state: its scripts and what Lua reads of the
-// chat's standing. generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks,
-// and never used twice, so a stretch begun under an older one lands as a last result and never as a fresh one.
+// generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks, and never used
+// twice, so a stretch begun under an older one lands as a last result and never as a fresh one.
 type Basis = { parts: string[]; generation: number };
 // How long one stretch of a pass may hold the worker, which the chat's other Lua (a send, a button) waits behind. A
 // script that reads the whole chat for every message takes a third of a second each on a long chat (measured
@@ -40,11 +39,9 @@ export class ScriptDisplay {
   constructor(
     private readonly store: ObjectStore,
     private readonly open: () => Promise<Runner>,
-    // A pass's errors and the functions it called that this app lacks, or the error it ended on.
     private readonly report: (chat: string, result: Displayed | unknown) => void,
   ) {}
 
-  // What the chat's passes gave is kept while someone listens, and dropped with the last listener.
   subscribe(chat: string, listener: (display?: Display) => void | Promise<void>) {
     const listeners = this.listeners.get(chat) ?? new Set();
     this.listeners.set(chat, listeners.add(listener));
@@ -77,7 +74,6 @@ export class ScriptDisplay {
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
     const all = scriptsOf(scope.packs);
-    // A bot whose engines all said no is shown with no pass and no Lua worker.
     const scripts = all.filter(({ code }) => this.listens.get(code) !== false);
     if (!scripts.length) {
       const previous = this.passes.get(id);

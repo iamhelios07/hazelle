@@ -61,7 +61,6 @@
   --gap: var(--outline-gap-kind);
 }
 
-/* Room for the cache line under the stop above. */
 .cutAbove {
   --gap: var(--outline-gap-cut);
 }
@@ -70,7 +69,6 @@
   opacity: 0.4;
 }
 
-/* From the stop above's node (or the start cap) down to this one's, in the stop above's color. */
 .segment {
   position: absolute;
   z-index: var(--layer-raised);
@@ -85,7 +83,6 @@
   height: calc(var(--outline-cap-row) / 2 + var(--gap) + var(--outline-row) / 2);
 }
 
-/* From the last node down to the end cap. */
 .segment.last {
   top: calc(var(--gap) + var(--outline-row) / 2);
   height: calc(var(--outline-row) / 2 + var(--tail) + var(--outline-cap-row) / 2);
@@ -129,7 +126,6 @@
   height: var(--tail);
 }
 
-/* A cache point: a dashed line from the rail across, halfway down the gap under the stop it follows. */
 .cut {
   position: absolute;
   top: 50%;
@@ -177,7 +173,7 @@
   background: var(--color-accent);
 }
 
-/* A zero-size point on the rail, halfway down the gap: the menu's anchor sits here. */
+/* The menu's anchor sits here. */
 .plusAt {
   position: absolute;
   z-index: var(--layer-menu);

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-// A submit that is busy until it settles, then shows why it failed beside the form. The task answers
-// with the failure in words, or null when it went through. Its signal stops once the screen is left, and what a task
-// answers after that is not shown.
+// The task answers with the failure in words, or null when it went through. Its signal stops once the screen is left,
+// and what a task answers after that is not shown.
 export function useAttempt() {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);

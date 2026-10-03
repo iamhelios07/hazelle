@@ -1,5 +1,5 @@
-// A text read as CBS: literal text, tags and blocks. The whole tree is read before anything is evaluated,
-// so a #when evaluates only the branch it takes and a pure block still has its source.
+// The whole tree is read before anything is evaluated, so a #when evaluates only the branch it takes and a pure
+// block still has its source.
 export type Node = string | Tag | Block;
 // at: where the tag's `{{` stands in the text it was read from; it places the tag's random rolls.
 export type Tag = { kind: 'tag'; at: number; parts: Node[] };
@@ -14,7 +14,6 @@ export function parse(text: string): Node[] {
   const stack: Frame[] = [root];
   const top = () => stack.at(-1)!;
   let at = 0;
-  // Where the literal text not yet added to the tree starts.
   let from = 0;
 
   for (;;) {

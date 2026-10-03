@@ -93,7 +93,6 @@ describe('Translator', () => {
       const version = crypto.randomUUID();
       const messages: Message[] = [{ id: version, role: 'assistant', at: 0, selected: 0, versions: [{ id: version, seed: version, text: 'Hello', receipt: null, edited: false, at: 0 }] }];
       const log = stubRelay(() => saying('안녕'));
-      // The chat screen shows it, as it does before the first send.
       const read = session.read.screen(chat, session.talk, { chat: opened, messages });
       const leave = read.subscribe(() => {});
       await vi.waitFor(() => expect(read.snapshot().display.texts).toEqual(['Hello']));

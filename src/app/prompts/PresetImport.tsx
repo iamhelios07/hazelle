@@ -15,7 +15,6 @@ const FAILURE: Record<PresetFailure['kind'], string> = {
   'no-template': '프롬프트 템플릿을 쓰지 않는 옛 프리셋이라 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
 };
 
-// What a preset held that the prompt did not take.
 const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: string; note?: string }> = {
   jailbreak: (count) => ({ title: `탈옥 블록 ${count}개` }),
   cot: (count) => ({ title: `생각 유도(CoT) 블록 ${count}개` }),
@@ -46,8 +45,7 @@ export async function readPreset(store: ObjectStore, file: File): Promise<Result
   return prompt && ofSort(prompt, 'conversation') ? { file: file.name, id: imported.id, prompt: prompt.value, unsupported: imported.unsupported } : { file: file.name, failure: '다른 곳에서 지워졌어요.' };
 }
 
-// A Risu preset picked or dropped on the prompt list becomes a new prompt. While the list is open, its drop takes files
-// from the app's character import.
+// While the list is open, its drop takes files from the app's character import.
 export function usePresetImport(onOpen: (id: string) => void): { take: (files: File[]) => void; view: ReactNode } {
   const store = useStore();
   const [busy, setBusy] = useState<string | null>(null);

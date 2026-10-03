@@ -17,7 +17,6 @@ const deferred = <T,>() => {
 };
 const key = () => objectKey(randomBytes(32));
 const item = { id: 'one', kind: 'connection', parent: null };
-// The codec worker answers each job with run's results, or crashes when run throws.
 function scripted(run: (job: CodecJob) => Promise<CodecResult[]>) {
   const made: CodecWorker[] = [];
   vi.stubGlobal('Worker', class extends CodecWorker {

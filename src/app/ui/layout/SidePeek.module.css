@@ -1,9 +1,8 @@
 /* Between the header and the composer, over the story and left of its scrollbar; only the tabs and a shown drawer
-   take the pointer. The tabs stack at the middle of its right side, and every drawer slides over the same place. */
+   take the pointer. */
 .peeks {
   position: absolute;
   inset: var(--header-height) var(--story-scrollbar) var(--footer-space) 0;
-  /* The panel variant stands over the header and the composer, as a SidePanel does. */
   z-index: var(--layer-panel);
   display: flex;
   flex-direction: column;

@@ -18,8 +18,8 @@ const readCount = (draft: string) => {
   return draft.trim() !== '' && Number.isSafeInteger(value) && value >= 1 ? value : null;
 };
 
-// The memory settings, the account's default or a chat's own. A number is passed on only once it is valid. A caller
-// that resets the values from outside remounts this, so a number typed and not valid does not stand over the reset.
+// A number is passed on only once it is valid. A caller that resets the values from outside remounts this, so a number
+// typed and not valid does not stand over the reset.
 export function MemoryFields({ value, onChange }: { value: MemorySettings; onChange: (change: Partial<MemorySettings>) => void }) {
   const [drafts, setDrafts] = useState<Partial<Record<Count, string>>>({});
   const row = (field: Count) => {

@@ -121,7 +121,6 @@ async function leave(on: Env, id: string, incarnation: string, operator: boolean
   return left;
 }
 
-// Counts the boundaries of a run, crashes after the nth, or pauses after the nth until released.
 const counting = () => {
   let count = 0;
   return { ...watched(() => void count++), count: () => count };
@@ -169,13 +168,11 @@ const reported = async (accountId: string) =>
 
 const account = (id: string) => t.env.DB.prepare('SELECT incarnation, state, timeline, operation FROM accounts WHERE id = ?').bind(id).first<{ incarnation: string; state: string; timeline: string; operation: number | null }>();
 const operation = (id: number) => t.env.DB.prepare('SELECT phase, verified, target, error FROM restores WHERE id = ?').bind(id).first<{ phase: Phase; verified: number; target: string | null; error: string | null }>();
-// Log rows of an action, about one operation when it is named.
 const logged = async (action: string, operation?: number) =>
   (await t.env.DB.prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = ?1 AND (?2 IS NULL OR json_extract(detail, '$.operation') = ?2)")
     .bind(action, operation ?? null)
     .first<number>('n'))!;
 
-// What a device that holds nothing reads from the account.
 async function contents(cookie: string) {
   const { changes } = (await (await t.get('objects?since=0', cookie)).json()) as { changes: { id: string; body: string | null }[] };
   return Object.fromEntries(changes.filter(({ body }) => body !== null).map(({ id, body }) => [id, body]));
@@ -187,9 +184,8 @@ async function begin(seed: Awaited<ReturnType<typeof seeded>>, from: { at: numbe
   return begun.begun;
 }
 
-// A finished restore: done and verified, the account active on the restore's timeline with the target's objects, one
-// done row, and every arm naming the one target. Its checkpoint, the undo, holds the state the restore replaced: read
-// straight from the store's bookmarks, which ends the store's use in the test.
+// Its checkpoint, the undo, holds the state the restore replaced: read straight from the store's bookmarks, which ends
+// the store's use in the test.
 async function expectRestored(seed: Awaited<ReturnType<typeof seeded>>, id: number, arms: string[]) {
   const ended = (await operation(id))!;
   expect(ended).toMatchObject({ phase: 'done', verified: 1, error: null });
@@ -535,7 +531,6 @@ describe('an account id used again', () => {
   });
 });
 
-// Runs until the operation's phase is the one named, then crashes: the phase is read after every boundary.
 function pausedAt(phase: Phase) {
   return watched(async (what) => {
     const reached = await t.env.DB.prepare('SELECT 1 FROM restores WHERE phase = ? AND verified = 0').bind(phase).first();

@@ -11,7 +11,6 @@ export type Env = {
   // Whether setvar, addvar and setdefaultvar write: only in a chat message's own text.
   writes: boolean;
   temp: Map<string, string>;
-  // The tag's own rolls, placed by where it stands.
   random: () => number;
   // Card, persona and prompt texts go out through this, never as they are: they hold CBS of their own, and
   // write no variables.
@@ -171,7 +170,6 @@ define('source', 1, ([name], { context: { stage, faces } }) => {
   const face = name!.toLowerCase();
   return (face === 'char' ? faces.char : face === 'user' ? faces.user : null) ?? '';
 });
-// The names a bot's prompt lists, so the model can pick pictures by name.
 define('assetlist', 0, (_, { context: { card, assets } }) => (card ? serialize(assets.filter((asset) => asset.module === undefined).map(({ name }) => name)) : ''));
 define('moduleenabled', 1, ([namespace], { context }) => (context.modules.includes(namespace!) ? '1' : '0'));
 define('moduleassetlist', 1, ([namespace], { context: { modules, assets } }) => (modules.includes(namespace!) ? serialize(assets.filter((asset) => asset.module === namespace).map(({ name }) => name)) : ''));
@@ -334,7 +332,6 @@ define('isfirstmsg', 0, (_, { context }) => bool(context.greeting !== null && me
 define('replace', 3, ([text, find, replacement]) => text!.replaceAll(find!, replacement!));
 define('split', 2, ([text, separator]) => serialize(text!.split(separator!)));
 define('join', 2, ([array, separator]) => items(array!).join(separator));
-// Its items become the arguments of the tag around it.
 define('spread', 1, ([array]) => items(array!).join('::'));
 define('trim', 1, ([text]) => text!.trim());
 define('length', 1, ([text]) => String([...text!].length));

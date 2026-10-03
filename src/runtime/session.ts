@@ -41,8 +41,7 @@ export type Session = {
   credentials: Credentials;
   catalogs: Catalogs;
   read: ReadModels;
-  // Stops sync, the reply and the background work, and drops the tokens and model lists. Every way out
-  // of an open vault (잠그기, 로그아웃) unmounts app/shell/Workspace, which calls it.
+  // Every way out of an open vault (잠그기, 로그아웃) unmounts app/shell/Workspace, which calls it.
   close: () => void;
   startBackground: () => void;
 };
@@ -51,7 +50,6 @@ export type Session = {
 const luaWorker = (): Promise<Runner> => Promise.resolve(new LuaWorker());
 
 // An open given up while it loads (signal) starts nothing. A cached opening never waits for the network.
-// lua: where the bot scripts run.
 export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), lua: () => Promise<Runner> = luaWorker): Promise<ApiResult<Session>> {
   const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
   if (signal.aborted) {

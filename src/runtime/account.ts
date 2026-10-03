@@ -2,12 +2,9 @@ import { passwordCredential, recoveryCredential, type Credential, type Method, t
 import { api, type Heard } from './api';
 import { page } from './pages';
 
-// What the account holds and the caps that apply to it, null for none. bytes is null while the account is restored or
-// its store does not answer. fileBytes: the pictures stored for it, which deleting them in the app does not lower
-// (server/files).
+// Caps are null for none. bytes is null while the account is restored or its store does not answer. fileBytes: the
+// pictures stored for it, which deleting them in the app does not lower (server/files).
 export type Storage = { bytes: number | null; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
-// What the server says about the signed-in account, on GET /session, signup and login alike. state: restoring while the
-// operator restores it, at the account's own request. unreadNotices: what the operator sent that the person has not seen.
 export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: 'active' | 'restoring'; storage: Storage; unreadNotices: number };
 export type SignedIn = { session: SessionFacts; vault: VaultRecord };
 export type Boot = { session: null; signupOpen: boolean } | SignedIn;
@@ -25,7 +22,6 @@ const proven = ({ method, proof }: Proof) => ({ method, proof });
 // restoring: the server refused this account's objects while the operator restores it, and no store has answered since.
 export type Standing = { suspended: boolean; full: boolean; restoring: boolean; storage: Storage };
 
-// The open account as the server last described it: the session answer, then whatever later answers say (runtime/api).
 // A cap the operator changes is learned on the next page load.
 export class AccountFacts {
   private now: Standing;
@@ -72,14 +68,12 @@ export const logOut = () => api<undefined>('POST', 'logout');
 export const changePassword = (current: Proof, next: { passwordProof: string; passwordWrap: string }) =>
   api<undefined>('PUT', 'vault/password', { ...proven(current), ...next });
 
-// 탈퇴: asks the password or the recovery key again, as login does.
 export const deleteAccount = (credential: Proof) => api<undefined>('DELETE', 'account', proven(credential));
 
-// Plaintext to the operator, which a suspended account may send too. The server's MAX_REPORT_LENGTH (server/admin).
+// The server's MAX_REPORT_LENGTH (server/admin).
 export const REPORT_LENGTH = 4000;
 export const sendReport = (text: string) => api<undefined>('POST', 'reports', { text });
 
-// What the operator sent this account, or every account there when it was sent. reportId: the report it answers.
 export type Notice = { id: number; reportId: number | null; text: string; createdAt: number };
 export const readNotices = (before: number | null) => page<'notices', Notice>('notices', 'notices', before);
 // newest: the newest notice shown, so one sent since stays unread.

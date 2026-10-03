@@ -46,13 +46,11 @@ import { useSeen } from './useSeen';
 type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
 
-// The failures a chip fixes, shown by the composer for as long as they hold rather than as a toast.
 const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'prompt-missing', 'persona-missing', 'profile-missing']);
 const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failure.kind);
 
 export type OpenChat = ReturnType<typeof useChat>;
 
-// A persona or prompt list beside the chat, or one of them open from it, or the chat's character in 캐릭터 편집.
 export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; id: string | null; pane: 'toggles' | null } | { kind: 'character'; id: string };
 // Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
 export type ChatActions = OpenChat['actions'];
@@ -65,7 +63,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const translating = useTranslating();
   const toast = useToast();
   const id = item ? chatId : null;
-  // A new chat's own model, prompt, persona and note, saved with it on the first send.
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
   const chat: Chat = useMemo(() => item ? item.chat : { title: null, character: shelf?.id ?? null, ...unsaved }, [item?.chat, shelf?.id, unsaved]);
   const route = chatModel(store, chat, 'main');
@@ -91,7 +88,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     const preview = greetingPreview(choices, openedAt);
     return preview && { ...preview, live: null };
   }, [choices, openedAt]);
-  // A new chat shows its turn while it is saved, under the id it is saved as.
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
   const { messages, display: view, pending: displayPending, error: displayError, retry: retryDisplay } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
@@ -102,9 +98,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toast.error('채팅 표시를 계산하지 못했어요.', { detail: displayError instanceof Error ? displayError.message : undefined, action: { label: '다시 시도', onClick: retryDisplay } });
   }, [displayError]);
   const { texts, css } = view;
-  // 봇 꾸밈, on unless the character turned it off; a chat without a character has nothing to turn off.
   const bot = shelf?.character.decor !== false;
-  // 상태창 지정 (design §6.4): the status window's boxes, and each message's boxes, which its tools offer to make one.
+  // 상태창 지정 (design §6.4).
   const statusScripts = bot ? (shelf?.character.statusScripts ?? []) : [];
   const scriptName = (script: number) => card?.regex[script]?.name.trim() || `표시 스크립트 ${script + 1}`;
   const status = statusBoxes(view, messages, statusScripts).map((box) => ({ ...box, name: scriptName(box.script) }));
@@ -118,9 +113,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const streaming = busy && turn.chat === chatId;
   const last = messages.at(-1);
 
-  // A reply starting here while 정보 is held shows its own information.
   const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
-  // The message a reply answers, the one before it; 이어 쓰기 answers none, since it goes on under text already read.
+  // 이어 쓰기 answers none, since it goes on under text already read.
   const replyAt = messages.findIndex((message) => message.id === replyTarget);
   const answered = streaming && replyAt > 0 && !turn.reply.continues ? messages[replyAt - 1]!.id : null;
 
@@ -133,10 +127,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
   // 토글, 장기 기억 and the persona and prompt lists take the same place beside the story, so one closes another.
-  // record: the memory record open in the panel, in place of the whole memory.
   const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
-  // The messages a memory record was made from, marked in the story: at changes with each look, so the same ones are
-  // marked again.
   const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
   // Where the status window stands: in its latest message, or with 옆에 두기 in the story's margin, while each box
   // fits there (fitting, which the margin reports whether it is shown or not). The key hides it there for now.
@@ -150,13 +141,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // over the same place, so holding one lets go of the other.
   const [held, setHeld] = useState<'status' | 'info' | null>(null);
   const hold = (which: 'status' | 'info', open: boolean) => setHeld((current) => (open ? which : current === which ? null : current));
-  // 상태's tab is there while a box is off screen, or never drawn in a message.
   const peeking = status.length > 0 && !(beside && !hidden) && (held === 'status' || status.some(({ script }) => !seen.has(script)));
-  // The reply a message's ⓘ or 정보's stepper picked, kept while the chat is open; null follows the latest.
+  // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
   const infoDrawer = useId();
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
-  // The versions shown the other way round from their default, the original in place of the translation.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
@@ -183,7 +172,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toast.error(describeTurnFailure(failure), kept === null ? undefined : { action: { label: '다시 저장', onClick: () => void talk.saveAgain(kept).then(report) } });
   }
 
-  // Back to the foot of the story, which also puts away tools a tap pinned open.
   function follow() {
     toBottom();
     setPinned(null);
@@ -194,7 +182,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setPinned(null);
   }
 
-  // The new chat as it is saved: by its first send, or by a press on a button of its greeting.
   function starting() {
     return {
       chat,
@@ -258,7 +245,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void selectVersion(store, id, message.id, message.versions[index]!.id).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  // On the greeting of a chat not started yet, a step picks which greeting it opens on.
   function swipe(message: Shown, step: -1 | 1) {
     if (busy) return;
     const next = message.selected + step;
@@ -309,7 +295,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toast.undoable('메시지를 지웠어요', () => void restoreMessage(store, id, message.id));
   }
 
-  // A long chat is saved in several requests, so the copy takes a moment.
   async function branch(message: Shown) {
     if (!item || branching) return;
     setBranching(true);

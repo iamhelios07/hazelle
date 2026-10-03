@@ -3,7 +3,6 @@ import styles from './Avatar.module.css';
 import { Icon } from './Icon';
 
 type Props = {
-  // The first letter of a name, or an icon for something with no picture and no name of its own.
   face: string | LucideIcon;
   // A character's picture. face stands in while there is none.
   image?: string | null;

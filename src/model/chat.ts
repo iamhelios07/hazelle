@@ -5,32 +5,27 @@ import type { Kind, Stored } from './kinds';
 import type { Mark } from './library';
 import type { MemorySettings } from './memory';
 
-// Its messages are `entry` objects whose parent is the chat.
 export type Chat = Mark & {
   // null until the user names the chat; until then it is called by its first message, or a branch after its
   // origin (chatTitle).
   title: string | null;
   // A chat with no character talks to the model as it is.
   character: string | null;
-  // The 채팅 layer of the model assignment.
   models: Assignment;
-  // The chat's own prompt, persona and 작가의 노트; each absent follows the default.
+  // Each absent follows the default.
   prompt?: string;
   persona?: string;
   note?: string;
-  // A branch's original chat, named as it was then so a renamed or deleted one still reads; after is the message
-  // of this chat that the split comes after, where its divider stands.
+  // Named as it was then so a renamed or deleted one still reads.
   origin?: { id: string; name: string; after: string };
-  // The id pick and rollp roll from in place of this chat's own: a branch keeps its original's, so the history
-  // it copied reads the same.
+  // A branch keeps its original's, so the history it copied reads the same.
   seed?: string;
-  // 이 채팅만 따로: the chat's own memory settings in place of the account's.
   memory?: MemorySettings;
   // The variables it starts from, over the card's defaults: a chat brought from Risu keeps Risu's.
   variables?: [string, string][];
 };
 
-// What a reply's generation left behind. The raw request is never stored.
+// The raw request is never stored.
 export type Receipt = {
   // The call's own id (runtime/streams newCall, pageCall), the same in every copy of the receipt: an edit, a branch's
   // copy and a continued reply keep the receipt whole, so usage counts the call once wherever it is held.
@@ -78,10 +73,9 @@ export type ReceiptError =
 // language a message sent translated went out in, as the English name its prompt read; a reply's translation has none.
 export type Translation = { text: string; receipt: Receipt | null; at: number; sentIn?: string };
 
-// Per character, or for every 캐릭터 없이 chat: replies translates each chat's latest reply, input
-// sends the user's messages translated, reverse (반전 모드) sends the model each version's translation in place of
-// its text. replyLanguage and inputLanguage are what replies and the user's messages are translated
-// into, each as the English name the prompt reads. prompt is the translation prompt. Absent fields are read through
+// Per character, or for every 캐릭터 없이 chat: replies translates each chat's latest reply, reverse (반전 모드) sends the
+// model each version's translation in place of its text. replyLanguage and inputLanguage are what replies and the
+// user's messages are translated into, each as the English name the prompt reads. Absent fields are read through
 // runtime/characters translateSwitches, the one place that knows their defaults.
 export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: boolean; replyLanguage?: string; inputLanguage?: string; prompt?: string };
 
@@ -89,7 +83,6 @@ export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: bo
 // entry. at is the writer's clock, for showing times only; order is the server's rev.
 // seed: the id a version's random tags roll from in place of its own. A branch's copy keeps its original's, and
 // an edit or a continued cut keeps the seed of the version it replaces, so text already shown never rolls again.
-// translation: the version's own from the start, for a message sent translated, an edit and a branch's copy.
 // staged: text already past the bot's input or output scripts (a message brought from Risu, one the bot's Lua
 // wrote), which never run on it again; an edit of it is the same.
 // before: the variables the bot's Lua wrote on the way to this version (when the message was sent, before its reply
@@ -151,10 +144,9 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
   const deleted = new Set<string>();
   // By a version's own id only: a translation of a replaced version is not its replacement's.
   const own = new Map<string, Version>();
-  // A version's place among its message's versions, by its id. A place never moves, so a replaced version's id keeps
-  // leading to whichever version stands there now, however many times it was replaced since.
+  // A place never moves, so a replaced version's id keeps leading to whichever version stands there now, however many
+  // times it was replaced since.
   const places = new Map<string, number>();
-  // By a version's own id and those of the versions it is an edit of, and those ids by the version.
   const edits = new Map<string, Version>();
   const ids = new Map<Version, string[]>();
   const home = new Map<Version, Message>();
@@ -254,10 +246,8 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
 
 export const shown = (message: Message): Version => message.versions[message.selected]!;
 
-// The calls a reply took, the first one first: one, or more when it was continued (이어 쓰기).
 export const calls = (receipt: Receipt): Receipt[] => [...(receipt.continues ? calls(receipt.continues) : []), receipt];
 
-// A bot's HTML shows as the words in it.
 const lines = (text: string) =>
   text
     .replace(/<[^>]*>/g, ' ')
@@ -267,11 +257,9 @@ const lines = (text: string) =>
 
 export const firstLine = (text: string) => lines(text)[0] ?? '';
 
-// Words outside brackets, and no heading: a status line such as `⏱️[2025-03-15 (토) 오후 05:36]` or `# Response` has none.
 const prose = (line: string) => !line.startsWith('#') && /\p{L}{2}/u.test(line.replace(/\[[^\]]*\]|\([^)]*\)|【[^】]*】/g, ''));
 
-// A chat list's line for a message: its first line of prose. Many bots open every reply with the same status line,
-// which tells one chat from the next no better than a blank. A message that is all status keeps its first line.
+// Many bots open every reply with the same status line, which tells one chat from the next no better than a blank.
 export function previewLine(text: string): string {
   const all = lines(text);
   return all.find(prose) ?? all[0] ?? '';
@@ -305,7 +293,7 @@ export type Summary = {
 };
 export type RecentModel = { at: number; ref: ModelRef };
 
-// One shelf's chats with each branch right under the chat it came from, in the order given at each level.
+// Each branch right under the chat it came from, in the order given at each level.
 // A branch whose origin is not among them stands at the top level.
 export function branchTree(items: ChatSummary[]): { item: ChatSummary; nested: boolean }[] {
   const ids = new Set(items.map((item) => item.id));
@@ -317,7 +305,7 @@ export function branchTree(items: ChatSummary[]): { item: ChatSummary; nested: b
 
 type Tally = { total: number; unknown: number };
 // A count sums the calls that reported it, and unknown counts those that did not, so a gap never shrinks the total.
-// costs: one per unit, never summed together; estimated once any part came from a price list. last: the newest reply's time.
+// costs: one per unit, never summed together; estimated once any part came from a price list.
 export type ModelUsage = { calls: number; last: number | null; input: Tally; output: Tally; costs: { unit: Cost['unit']; amount: number; estimated: boolean }[]; costUnknown: number };
 
 export type UsageCall = { at: number; call: Pick<Receipt, 'id' | 'connection' | 'model' | 'usage' | 'cost'> };
@@ -395,7 +383,6 @@ export function recentIn(messages: Message[]): RecentModel[] {
   return latest;
 }
 
-// Models used lately across all chats, newest first, for the model picker's 최근.
 export function recentModels(chats: RecentModel[][], limit: number): ModelRef[] {
   const used = chats.flat().sort((a, b) => b.at - a.at);
   const seen = new Set<string>();

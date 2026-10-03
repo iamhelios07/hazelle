@@ -9,11 +9,9 @@ type Props = {
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   hint: string;
   actions: ReactNode;
-  // A second text of the same message, such as its translation, edited under the first; both then show their labels.
   second?: Field & { firstLabel: string };
 };
 
-// A message being edited in place, in the story's own type. It takes the focus when it opens.
 export function EditBox({ value, onChange, onKeyDown, hint, actions, second }: Props) {
   return (
     <div className={styles.box}>

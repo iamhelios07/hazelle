@@ -21,7 +21,7 @@ export function cardNote(shelf: CharacterShelf<ChatSummary>): string {
   return latest?.at ? `${ago(latest.at)} · 채팅 ${shelf.chats.length}개` : NO_CHATS;
 }
 
-// How long a character or chat in 휴지통 has left. Past its time it goes when the app next opens.
+// Past its time it goes when the app next opens.
 export function timeLeft(deleted: { deleted?: number }): string {
   const days = daysLeft(deleted, Date.now());
   return days > 0 ? `${days}일 남음` : '곧 지워져요';

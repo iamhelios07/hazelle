@@ -10,9 +10,9 @@ const UPLOADS = 12;
 const ASKED = 1000;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
-// The stored files (server/files). A file is sealed by its content, so one the server already holds, from this
-// account or any other, is never sent again; an import cut short and tried again sends only what did not arrive.
-// Asking and uploading wait out a dropped connection the way the store's writes do (store.reaching).
+// A file is sealed by its content, so one the server already holds, from this account or any other, is never sent
+// again; an import cut short and tried again sends only what did not arrive. Asking and uploading wait out a dropped
+// connection the way the store's writes do (store.reaching).
 export class Files {
   constructor(
     private readonly request: Api,

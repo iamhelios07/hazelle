@@ -1,5 +1,4 @@
-/* A light card on the dark app, so it is seen at a glance. The kit's colors are turned for this surface here, so the
-   button and key caps inside keep their own styles. */
+/* The kit's colors are turned for this surface here, so the button and key caps inside keep their own styles. */
 .toast {
   --color-text: var(--palette-ink-800);
   --color-text-muted: var(--palette-lilac-600);
@@ -43,7 +42,6 @@
   font-size: var(--text-sm);
 }
 
-/* Whose words the notice is: a face and a name over them, and the × of one that stays. */
 .from {
   display: flex;
   align-items: center;
@@ -97,7 +95,6 @@
   font-weight: var(--weight-semibold);
 }
 
-/* A touch screen has no keys to press. */
 .action kbd {
   display: none;
 }
@@ -141,7 +138,6 @@
   font-size: var(--text-md);
 }
 
-/* The time left: it runs down with the notice's life and stops with it. */
 .time {
   composes: runDown from '../foundation/motion.module.css';
   position: absolute;

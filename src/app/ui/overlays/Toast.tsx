@@ -11,13 +11,10 @@ export type ToastAction = { label: string; onClick: () => void; keys?: readonly 
 
 type Props = {
   message: string;
-  // What it was done to, or for an error why.
   detail?: string;
   tone: 'plain' | 'error';
   action?: ToastAction;
-  // Whose words the message is, such as a bot's: the face and name lead it, on the band of an error. The words keep
-  // their line breaks, and long ones show four lines until pressed. Open, the notice has a × (onClose), and onKeep
-  // tells that its time must not take it away.
+  // Open, the notice has a × (onClose), and onKeep tells that its time must not take it away.
   from?: { name: string; face: string | null };
   onKeep?: () => void;
   onClose?: () => void;

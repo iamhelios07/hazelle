@@ -2,8 +2,7 @@ import styles from './Breakdown.module.css';
 
 type Part = { label: string; value: string; mark: 'accent' | 'plain' | 'outline' };
 
-// A total split into parts: a legend with every part's value and, when every share is known, a bar
-// with each part's fraction of it, in the parts' order.
+// When every share is known, a bar with each part's fraction of it, in the parts' order.
 export function Breakdown({ parts, shares }: { parts: Part[]; shares: number[] | null }) {
   return (
     <div className={styles.breakdown}>

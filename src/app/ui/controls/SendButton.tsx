@@ -4,7 +4,6 @@ import styles from './SendButton.module.css';
 
 type Props = { streaming: boolean; disabled: boolean; title: string; onClick: () => void };
 
-// Send, or 멈추기 while this chat's reply is being written.
 export function SendButton({ streaming, disabled, title, onClick }: Props) {
   return (
     <button

@@ -6,7 +6,6 @@ import styles from './SidePeek.module.css';
 
 type Props = {
   label: string;
-  // The tab's word, when shorter than label, such as 정보 for 답장 정보.
   tab?: string;
   // The drawer's id, which buttons elsewhere that hold it open name (IconButton's controls): a press on them is not
   // outside, so the one that holds it lets go of it again, and another keeps it held.
@@ -14,22 +13,18 @@ type Props = {
   // Held open by a key or a tap; pointing at the tab shows it only while the pointer stays.
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  // panel: the story's full height at its edge, as a SidePanel beside the story, such as 답장 정보; card (the default):
-  // a box the size of its content at the story's middle, such as 상태.
   variant?: 'card' | 'panel';
   subtitle?: string;
   actions: ReactNode;
   children: ReactNode;
 };
 
-// The story's right edge, between the header and the composer, where SidePeeks stack their tabs. ChatFrame places it.
 export function SidePeeks({ children }: { children: ReactNode }) {
   return <div className={styles.peeks}>{children}</div>;
 }
 
-// A tab at the story's right edge whose drawer slides over the story while the tab or the drawer is pointed at,
-// such as 상태. Held open, it has its own close: on a phone the drawer covers nearly all the story, and what is left
-// outside it is the composer, whose press raises the keyboard.
+// Held open, it has its own close: on a phone the drawer covers nearly all the story, and what is left outside it
+// is the composer, whose press raises the keyboard.
 export function SidePeek({ label, tab = label, id, open, onOpenChange, variant = 'card', subtitle, actions, children }: Props) {
   const root = useRef<HTMLDivElement>(null);
 

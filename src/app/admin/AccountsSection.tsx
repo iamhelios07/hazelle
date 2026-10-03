@@ -17,7 +17,6 @@ const UNKNOWN = '알 수 없음';
 const STATES: Record<AccountState, string | null> = { active: null, restoring: '복원 중', leaving: '탈퇴 중' };
 
 const size = (bytes: number | null) => (bytes === null ? UNKNOWN : sizeText(bytes));
-// What it holds, and its own cap when it has one.
 const held = (name: string, bytes: number | null, cap: OwnCap) => `${name} ${size(bytes)}${cap === 'default' ? '' : ` / ${cap === null ? '한도 없음' : sizeText(cap)}`}`;
 
 type Named = Pick<AdminAccount, 'accountId' | 'username'>;

@@ -20,7 +20,6 @@ type State =
   | { kind: 'unreachable'; message: string }
   | { kind: 'signup'; step: 'password'; draft: Draft | null }
   | { kind: 'signup'; step: 'recovery'; draft: Draft }
-  // notice: why this shows instead of what was open.
   | { kind: 'login'; signupOpen: boolean; notice: string | null }
   | { kind: 'locked'; signedIn: SignedIn; notice: string | null }
   | { kind: 'recovered'; session: SessionFacts; vaultKey: VaultKey; current: Credential }
@@ -44,7 +43,7 @@ async function loadState(notice: string | null = null, prefer: 'signup' | 'login
   return { kind: 'locked', signedIn: boot, notice };
 }
 
-// Up to an open vault: loading → signed out → vault setup → locked → unlocked. children renders what is
+// children renders what is
 // behind it, so account/ never imports the shell.
 export function AccountFlow({ children }: { children: (unlocked: Unlocked) => ReactNode }) {
   const [state, setState] = useState<State>({ kind: 'loading' });

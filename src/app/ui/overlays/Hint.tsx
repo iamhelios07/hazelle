@@ -8,8 +8,6 @@ import styles from './Hint.module.css';
 // Long enough that a pointer passing over a column of ⓘ opens none of them.
 const PEEK_DELAY = 300;
 
-// An explanation behind an ⓘ beside a label. Where there is hover, resting on it shows it until the pointer
-// leaves; a click or tap pins it until Esc, a press outside or another click.
 export function Hint({ label, children }: { label: string; children: string }) {
   const hover = useHover();
   const [state, setState] = useState<'closed' | 'peek' | 'pinned'>('closed');
@@ -27,7 +25,6 @@ export function Hint({ label, children }: { label: string; children: string }) {
   });
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  // Below its ⓘ, or above where the screen ends first, as for one beside the send button.
   useLayoutEffect(() => {
     const element = bubble.current;
     if (!element) return;

@@ -2,27 +2,22 @@ import { isRecord } from '../connectors/values';
 import type { Change, Fact, Line, Memory, MemoryRecord, Source, Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 
-// What the 장기 기억 slot did for one request. sent: the records it sent. covered: the leading messages memory covers,
-// which the chat slots leave out. missing: how many of those went with no memory standing for them (stale, over the
-// budget, forgotten, or the slot did not reach the request). slot: whether the prompt holds 장기 기억 where it reaches the
-// request, whatever memory holds.
+// covered: the leading messages memory covers, which the chat slots leave out. missing: how many of those went with no
+// memory standing for them (stale, over the budget, forgotten, or the slot did not reach the request). slot: whether
+// the prompt holds 장기 기억 where it reaches the request, whatever memory holds.
 export type MemorySent = { sent: string[]; covered: number; missing: number; slot: boolean };
 
-// sent: in the next request. stale: its messages render differently now, so it waits (design §6.2, When the source
-// changes). over: past the budget. forgotten: the user deleted it.
+// stale: its messages render differently now, so it waits (design §6.2, When the source changes).
 export type RecordStatus = 'sent' | 'stale' | 'over' | 'forgotten';
 
-// Why a record is stale. deleted: one of its messages is gone, and the record waits for the user, since 되돌리기 may bring
-// the message back. changed: its messages render differently now, after an edit, a version switch or a variable an
-// earlier message sets.
+// deleted: one of its messages is gone, and the record waits for the user, since 되돌리기 may bring the message back.
+// changed: its messages render differently now, after an edit, a version switch or a variable an earlier message sets.
 export type Staleness = 'deleted' | 'changed';
 
 // The chat's messages as one request reads them, oldest first: each one's id and shown version, and its role and text as
 // the prompt renders it.
 export type ChatRead = { shown: Source[]; roles: ('user' | 'assistant')[]; texts: string[] };
 
-// The 장기 기억 slot of a conversation request: the chat's memory, its budget in tokens, and each of the scope's messages'
-// id and shown version, in the scope's order.
 export type MemoryInput = { memory: Memory; budget: number; shown: Source[] };
 
 // Memory takes at most this share of what the model can take, so a budget set for a larger model shrinks for this
@@ -115,10 +110,9 @@ export type Standing = {
   covered: number;
   status: Map<string, RecordStatus>;
   stale: Map<string, Staleness>;
-  // The slot's content; empty when nothing is recorded or nothing can be sent.
+  // Empty when nothing is recorded or nothing can be sent.
   text: string;
   sent: string[];
-  // The covered messages a sent record stands for.
   held: number;
   tokens: { used: number; budget: number; state: number; stateLimit: number };
 };
@@ -211,8 +205,6 @@ export function nextSpan(tokens: number[], covered: number, { window, batch }: {
 // A thread as a job names it: its id's first group, which stays the same whichever device reads the answer.
 export const threadLabel = (thread: Thread) => `T-${thread.id.slice(0, 8)}`;
 
-// The 장기 기억 slot of a memory task: what the new records follow, with the state's size against its limit, so the
-// summarizer keeps it tight.
 export function memoryBefore(memory: Memory, before: MemoryRecord | null, limit: number, countTokens: (text: string) => number): string {
   const size = countTokens(memoryText(memory.state, [], []));
   return memoryText(

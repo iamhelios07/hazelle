@@ -1,6 +1,5 @@
 import type { Model } from './types';
 
-// A 설정 묶음's settings in this app's own names; each codec puts them into its wire format.
 export const NUMBERS = ['maxOutput', 'temperature', 'topP', 'topK', 'frequencyPenalty', 'presencePenalty', 'repetitionPenalty', 'minP', 'seed'] as const;
 export type NumberSetting = (typeof NUMBERS)[number];
 export type Setting = NumberSetting | 'stop' | 'reasoning';
@@ -20,24 +19,21 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   stop?: string[];
   reasoning?: Reasoning;
   systemAsUser?: true;
-  // Off asks for the whole reply in one response. Every model takes it, so fit() never leaves it out.
+  // Every model takes it, so fit() never leaves it out.
   streaming?: false;
-  // How long a cache point's cache lives: 5 minutes, or an hour at a dearer write.
   cache?: Cache;
 };
 export type Cache = '5m' | '1h';
 
 export type Bounds = { min: number | null; max: number | null };
 
-// What a catalog says a model takes. settings lists the request settings it takes, so one left out is
-// not taken; null means the catalog keeps no such list. reasoning is null when the catalog does not
-// describe the model's reasoning controls, and each control is null where it is silent; budget holds
-// the bounds the catalog names.
+// settings lists the request settings it takes, so one left out is not taken; null means the catalog keeps no such
+// list. reasoning is null when the catalog does not describe the model's reasoning controls, and each control is null
+// where it is silent; budget holds the bounds the catalog names.
 export type Takes = { settings: Setting[] | null; reasoning: ReasoningTakes | null };
 export type ReasoningTakes = { off: boolean | null; levels: string[] | null; budget: Bounds | false | null; adaptive: boolean | null };
 
-// What a wire format can put in a request, with the bounds it allows. No model on it takes a setting
-// it cannot carry. always: the format sends that setting on every request.
+// No model on it takes a setting it cannot carry. always: the format sends that setting on every request.
 export type Carries = {
   numbers: { [S in NumberSetting]?: Bounds & { always?: true } };
   reasoning: { off: boolean; levels: string[]; budget: Bounds | null; adaptive: boolean };
@@ -122,8 +118,7 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
 
 const within = (value: number, rule: Bounds) => Math.min(Math.max(value, rule.min ?? value), rule.max ?? value);
 
-// A value the model is known not to take is left out, and a number past its bounds is brought within them; unknown is
-// sent as it is. changes names each, for the screens to say.
+// Unknown is sent as it is.
 export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   const sent: ModelSettings = { ...settings };
   const changes: Change[] = [];

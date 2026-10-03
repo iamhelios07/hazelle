@@ -5,7 +5,6 @@ export const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stal
 
 export const recordTitle = (record: MemoryRecord) => record.what.trim() || '내용 없는 기록';
 
-// When and where, as the story says them.
 export const recordScene = (record: MemoryRecord) => [record.when, record.where].filter(Boolean).join(' · ');
 
 export class MessagePositions {
@@ -42,7 +41,6 @@ export function spanOf(sources: readonly Source[], positions: ReadonlyMap<string
   return { words: gone ? `${span} · 지운 메시지 ${gone}개` : span, there };
 }
 
-// The state's facts by whom or what they concern, in the order each first appears.
 export function factGroups(state: readonly Fact[]): { about: string; facts: Fact[] }[] {
   const groups = new Map<string, Fact[]>();
   for (const fact of state) groups.set(fact.about, [...(groups.get(fact.about) ?? []), fact]);

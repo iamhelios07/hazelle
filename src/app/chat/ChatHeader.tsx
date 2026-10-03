@@ -25,7 +25,6 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
 // A character can hold hundreds of chats, so the menu lists only the latest; the rest are on the character's chat list.
 const RECENT = 8;
 
-// Mounted only while the menu is open.
 function ChatChoices({ chat }: { chat: OpenChat }) {
   const { id, shelf, actions } = chat;
   const { none } = useLibrary();

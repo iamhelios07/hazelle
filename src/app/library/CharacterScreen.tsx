@@ -11,7 +11,7 @@ import { characterPage, HOME, type Back } from '../shell/routes';
 import { Button, Callout, Intro, NavBar, Portrait, Row, Screen, Section, Story, Tag, Text, useWide } from '../ui';
 import { useCharacterActions } from './useCharacterActions';
 
-// A character's own page beside its chats, or with shelf null, 캐릭터 없이.
+// shelf null is 캐릭터 없이.
 export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatSummary> | null; back: Back | null }) {
   const id = shelf?.id ?? null;
   const original = useCharacter(shelf?.character.origin?.id ?? null);

@@ -4,7 +4,6 @@ import { BIN } from './words';
 import type { Back } from '../shell/routes';
 import { Empty, NavBar, Screen } from '../ui';
 
-// What is in 휴지통, and a chat whose character is there, says how to get it back.
 const RESTORE = `캐릭터 둘러보기의 ‘${BIN}’에서 되살릴 수 있어요.`;
 const COPY = {
   chat: { title: '채팅', message: '이 채팅이 없어요. 지워졌거나 주소가 잘못됐어요.' },
@@ -26,7 +25,6 @@ const COPY = {
 
 export type Absent = keyof typeof COPY;
 
-// What the address names is not there.
 export function Missing({ what, back }: { what: Absent; back: Back }) {
   const { title, message } = COPY[what];
   return (

@@ -8,7 +8,7 @@ import { RECENT_MAX, type Snippet } from './edits';
 
 type Props = {
   block: Block;
-  // Which sort of prompt the block is in: a card replaces only a conversation prompt's texts.
+  // A card replaces only a conversation prompt's texts.
   sort: PromptSort;
   index: number;
   count: number;

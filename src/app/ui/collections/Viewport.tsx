@@ -7,10 +7,8 @@ type Props = {
   keys: readonly string[];
   children: (index: number) => ReactNode;
   variant?: 'story' | 'list' | 'items' | 'rail' | 'grid';
-  // The list's name: the root is a ul and every row an li.
   list?: string;
-  // What names the current row, such as the open chat's id. When it changes, a current row out of the list's view is
-  // brought into it: a chat opened from a menu or a link may sit hundreds of rows down.
+  // When it changes, a current row out of the list's view is brought into it.
   current?: string;
   keep?: readonly string[];
   seek?: Seek | null;
@@ -30,7 +28,6 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
   const stable = useRef(given);
   if (given !== stable.current && (given.length !== stable.current.length || given.some((key, index) => key !== stable.current[index]))) stable.current = given;
   const keys = stable.current;
-  // Rows rise in while the view opens; once the reader or a seek has moved it, only rows of keys added since do.
   const [initial] = useState(() => new Set(keys));
   const opened = useRef(false);
   const reveal = useMemo<Seek | null>(() => current ? { key: current, revision: 0, align: 'center' } : null, [current]);
@@ -288,7 +285,6 @@ function across(root: HTMLElement, frame: HTMLElement): Reading | null {
   return { row, element, inside: inside({ row, element }) };
 }
 
-// What the reader moves the view with: a wheel, a touch, the scrollbar or a key.
 const MOVES = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
 const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]';
 function frameHeight(frame: HTMLElement) { return frame === document.scrollingElement ? window.innerHeight : frame.clientHeight; }

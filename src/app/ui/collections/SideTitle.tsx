@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
 import styles from './SideTitle.module.css';
 
-// The character whose chats the list shows. With onOpen, its face and name open the character's own
-// page; on phones the list is that page.
 export function SideTitle({ avatar, name, onOpen }: { avatar: ReactNode; name: string; onOpen?: () => void }) {
   const title = (
     <>

@@ -8,11 +8,9 @@ export type CatalogResult = { ok: true; models: Model[] } | { ok: false; failure
 
 export const catalogKey = (connection: Connection): string => JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
 
-// A model list stays in memory for five minutes per connection and key, so moving between screens
-// does not ask the provider again. A new key is a new entry.
 const TTL_MS = 5 * 60 * 1000;
 
-// The model lists of one open vault. Cache keys hold API keys, so close() drops them.
+// Cache keys hold API keys, so close() drops them.
 export class Catalogs {
   private readonly cache = new Map<string, { at: number; result: Promise<CatalogResult> }>();
 

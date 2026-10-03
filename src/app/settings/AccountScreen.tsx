@@ -11,7 +11,7 @@ import { LeaveSection } from './LeaveSection';
 import { NoticesSection } from './NoticesSection';
 import { ReportSection } from './ReportSection';
 
-// Used, and the cap when there is one. bytes is null while the server could not read it.
+// bytes is null while the server could not read it.
 const used = (name: string, bytes: number | null, cap: number | null) => `${name} ${bytes === null ? '알 수 없음' : sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
 
 // section: the one the page was opened at (shell/routes).

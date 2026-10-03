@@ -4,9 +4,9 @@ import { wireMessage } from './anthropic-messages';
 import type { Codec } from './types';
 import { count, isRecord, list, modelEntries } from './values';
 
-// This format's field for each setting it carries. OpenRouter's and Vercel's catalogs name the same
-// fields in supported_parameters. max_tokens rather than max_completion_tokens: OpenAI's reasoning
-// models refuse the first in favor of the second, which many compatible servers do not know.
+// OpenRouter's and Vercel's catalogs name the same fields in supported_parameters. max_tokens rather than
+// max_completion_tokens: OpenAI's reasoning models refuse the first in favor of the second, which many compatible
+// servers do not know.
 const FIELDS: Record<NumberSetting | 'stop', string> = {
   maxOutput: 'max_tokens',
   temperature: 'temperature',
@@ -40,7 +40,6 @@ function reasoningOf(part: Record<string, unknown>) {
   return typeof reasoning === 'string' ? reasoning : null;
 }
 
-// The OpenAI-compatible wire format, the generic base every connection type builds on.
 export const chatCompletions: Codec = {
   authHeaders: (secret): Record<string, string> => (secret ? { authorization: `Bearer ${secret}` } : {}),
 
@@ -116,7 +115,6 @@ export const chatCompletions: Codec = {
     return null;
   },
 
-  // A chat.completion object: the first choice's whole message, with the usage a stream sends last.
   whole(payload, facts, append) {
     const failed = chatCompletions.terminal(payload);
     if (failed) return failed;

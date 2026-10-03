@@ -47,7 +47,6 @@ export type ChatScope = {
 export const authorNote = (note: string | null, prompt: ConversationPrompt) => note ?? prompt.authorNote;
 const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prompt.blocks.find((block): block is TextBlock => block.kind === 'text' && block.mark === mark)?.text ?? '';
 
-// One chat's CBS contexts for a stage, by the text's source and the variables it reads. language: a translation's.
 // toggles: the bot's Lua reads them from its globals as they stand mid-run.
 export function contexts(scope: Omit<ChatScope, 'toggles'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
   const { card, persona, prompt, note, messages, greeting, toggles, model, clock, assets, modules, faces, screen, pick } = scope;

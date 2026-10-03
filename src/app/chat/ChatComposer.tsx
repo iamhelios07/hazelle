@@ -14,7 +14,6 @@ import type { OpenChat } from './useChat';
 const LEAVING = '가장 오래된 메시지가 이번 요청에서 빠지는데, 장기 기억이 아직 정리하지 못했거나 보내지 않는 부분이라 모델이 그 내용을 몰라요. 장기 기억 패널에서 무엇이 빠지는지 볼 수 있어요.';
 
 type Chip = 'model' | 'prompt' | 'persona';
-// The chip whose menu fixes each failure that stops a chat before sending.
 const FIX = {
   'no-model': { label: '모델 고르기', chip: 'model' },
   'model-gone': { label: '모델 고르기', chip: 'model' },
@@ -55,7 +54,6 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
     }
   }
 
-  // Key hints only where there is a keyboard to press them.
   const hint = !focused || !wide ? '' : streaming ? hints(SHORTCUTS.stop) : draft.text ? hints(SHORTCUTS.send, SHORTCUTS.newline) : hints(SHORTCUTS.send, SHORTCUTS.editLast, SHORTCUTS.swipe);
 
   return (

@@ -15,8 +15,6 @@ export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: 
 // A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
 const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 
-// What the bot's Lua editDisplay pass has yet to run, with what its run reads: each message past its input or output
-// stage, and the variables the chat starts from.
 export type DisplayWork = { items: Missed[]; staged: string[]; start: [string, string][] };
 export type DisplayPatch = { rows: { index: number; text: string; drawn: number[]; boxes: Box[] }[]; css: string; pass: boolean; stopped: Runaway | null };
 
@@ -109,11 +107,10 @@ function parser(html: boolean) {
 const BOT = parser(true);
 const PLAIN = parser(false);
 
-// A message's shown text as the story's HTML. bot: the bot's HTML is kept, for the sanitizer to take what it
-// allows; without it, tags show as text.
+// bot: the bot's HTML is kept, for the sanitizer to take what it allows; without it, tags show as text.
 export const storyHtml = (text: string, bot: boolean) => (bot ? BOT : PLAIN).render(text);
 
-// A paragraph of several lines becomes one paragraph per line. A tight list's hidden paragraphs keep their breaks.
+// A tight list's hidden paragraphs keep their breaks.
 function lines(state: StateCore) {
   const out: Token[] = [];
   state.tokens.forEach((token, index) => {

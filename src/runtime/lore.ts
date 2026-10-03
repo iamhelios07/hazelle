@@ -4,10 +4,8 @@ import type { Lore, LoreFolder } from '../model/library';
 import type { ApiResult } from './api';
 import type { ObjectStore } from './store';
 
-// The character or module a lorebook belongs to: its entries are its `lore` children, its folders its loreFolders.
 export type LoreOwner = { kind: 'character' | 'module'; id: string };
 
-// 새 항목: on, found by its keys, placed in the lorebook's slot, after every entry the owner already has.
 export const newLore = (siblings: Lore[], folder: string | null): Lore => ({
   name: '',
   keys: [],
@@ -47,10 +45,8 @@ export const addLoreFolder = (store: ObjectStore, owner: LoreOwner, name: string
 export const renameLoreFolder = (store: ObjectStore, owner: LoreOwner, folder: string, name: string) =>
   setFolders(store, owner, (folders) => folders.map((each) => (each.id === folder ? { ...each, name } : each)));
 
-// What restoreLoreFolder needs to undo removeLoreFolder: the folder, its place among the owner's, and its entries.
 export type RemovedLoreFolder = { folder: LoreFolder; at: number; entries: string[] };
 
-// One at a time; the first failure stops the rest.
 async function place(store: ObjectStore, entries: string[], folder: string | null): Promise<ApiResult<null>> {
   for (const id of entries) {
     const saved = await store.update('lore', id, (current) => ({ ...current, folder }));
@@ -72,7 +68,6 @@ export async function removeLoreFolder(store: ObjectStore, owner: LoreOwner, id:
   return removed.ok ? { ok: true, data: { folder, at, entries } } : removed;
 }
 
-// 되돌리기: the folder back at its place, then its entries back in it.
 export async function restoreLoreFolder(store: ObjectStore, owner: LoreOwner, { folder, at, entries }: RemovedLoreFolder): Promise<ApiResult<null>> {
   const restored = await setFolders(store, owner, (folders) => folders.toSpliced(at, 0, folder));
   return restored.ok ? place(store, entries, folder.id) : restored;

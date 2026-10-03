@@ -116,7 +116,6 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
   }
 }
 
-// What the reply was sent of the chat's memory, so a fact it forgot reads as missing from memory or sent and not used.
 // The records are named as they are now; one deleted since reads as gone.
 export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memory: Memory | null; onRecord: (record: string) => void }) {
   if (!sent) return <Empty variant="section">이 답장의 기억 기록이 이 페이지에 없어요. 기억 기록도 요청 원문처럼 이 채팅을 벗어나면 사라져요.</Empty>;

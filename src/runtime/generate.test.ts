@@ -77,7 +77,6 @@ describe('a connection that trades its key for a token', () => {
   const EXCHANGE = 'https://api.github.com/copilot_internal/v2/token';
   const CHAT = 'https://api.githubcopilot.com/chat/completions';
 
-  // Answers the exchange with a token that lasts the given seconds, and a chat with a one-word reply.
   function copilotApi(lasts: number) {
     const log = stubRelay(({ url }) =>
       url === EXCHANGE

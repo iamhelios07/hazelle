@@ -329,9 +329,7 @@ function risum(module: unknown, assets: Uint8Array[]): Uint8Array<ArrayBuffer> {
 }
 
 // A module.risum laid out as Risu's exportModuleLegacy writes it and encoded with the encode half of the real
-// rpack_map.bin (RisuAI ca1345fc), so it checks the ported decode table against Risu's own bytes. It holds a Lua
-// and a plain trigger, an editdisplay and an edittrans script, and a lore folder with a bookVersion 1 entry
-// (activationPercent 40) and a bookVersion 2 entry.
+// rpack_map.bin (RisuAI ca1345fc), so it checks the ported decode table against Risu's own bytes.
 const RISU_MODULE = [
   'bwDfBwAA5m5hYSAtQOKyTAUgl2HmbmFhYWEg8tMtBSCXYSChNUqhRmdh20DiskwFIABuYWFhYSDiBUg8eQ4sDw5A8iCXYSDbQOKy',
   'TAVhjkB5YaE1SqFGZyAAbmFhYWEgDuIgl2Eg0h2RPFaO0gUMkdNkggwWPGRkDHSOFhYMVuLSPBaOgo7B08HSIABuYWFhYSAPeQ4q',

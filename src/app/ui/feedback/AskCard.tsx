@@ -10,19 +10,15 @@ import styles from './AskCard.module.css';
 export type AskAnswer = { kind: 'line' } | { kind: 'choices'; choices: { label: string; value: string | null; primary?: boolean }[] };
 
 type Props = {
-  // Who asks.
   from: { name: string; face: string | null };
-  // What is asked, its line breaks kept, and behind an ⓘ what a reader who does not know it needs.
   text?: string;
   help?: string;
-  // A line typed, or one of a few choices. A choice's value is what picking it answers.
   answer: AskAnswer;
   // null: put away unanswered, which the × does.
   onAnswer: (value: string | null) => void;
 };
 
-// A question beside what the user is doing, such as a bot's by the composer: it waits there and takes no focus, but
-// for the line it asks to be typed.
+// It waits there and takes no focus, but for the line it asks to be typed.
 export function AskCard({ from, text, help, answer, onAnswer }: Props) {
   return (
     <section className={styles.card} aria-label={`${from.name}의 질문`}>

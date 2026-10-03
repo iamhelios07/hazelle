@@ -11,7 +11,6 @@ export function ChatAsk({ chat, onTyped }: { chat: OpenChat; onTyped: () => void
   const { scripts } = useSession();
   const asked = useScripts().questions.find((question) => question.chat === chat.id);
   if (!asked) return null;
-  // A chat with no character has only its modules' scripts to ask.
   const from = chat.shelf ? { name: aliased(chat.shelf.character.card.name, chat.shelf.character.alias), face: chat.shelf.face } : MODULE_VOICE;
   return (
     <AskCard

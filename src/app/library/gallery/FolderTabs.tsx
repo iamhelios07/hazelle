@@ -13,7 +13,6 @@ export type Naming = { id: string | null; name: string; parent?: FolderTree };
 type Props = {
   filter: Filter;
   onFilter: (filter: Filter) => void;
-  // The folder the filter picks, if it picks one.
   folder: FolderTree | null;
   onName: (naming: Naming) => void;
 };
@@ -22,7 +21,6 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
   const { characters, folders, deleted, deletedChats, byFolder } = useLibrary();
   const bin = useBin();
   const { remove } = useFolderActions();
-  // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
   const top = folder && byFolder.get(folder.id)!.top;
   const binned = filter === 'deleted';
   const inBin = deleted.length + deletedChats.length + bin.modules.length + bin.prompts.length + bin.personas.length + bin.profiles.length;

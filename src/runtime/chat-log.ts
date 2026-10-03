@@ -36,7 +36,7 @@ export function chatWrites(id: string, chat: Chat, greetings: Greetings | null, 
   return { entries, root: { type: 'create', kind: 'chat', id, parent: null, value: chat } };
 }
 
-// A character's chat opens on its greeting, and the other greetings are versions of it. They are saved as the card wrote them; engine/render fills them each time they are shown or sent.
+// Greetings are saved as the card wrote them; engine/render fills them each time they are shown or sent.
 function greetingWrites(chat: string, { choices, selected }: Greetings, at: number): Write[] {
   const first = choices[0]!.id;
   const entries: [string, Entry][] = choices.map(({ id, index: greeting, text, translation }, index) => {
@@ -48,9 +48,8 @@ function greetingWrites(chat: string, { choices, selected }: Greetings, at: numb
   return entries.map(([id, value]) => ({ type: 'create', kind: 'entry', id, parent: chat, value }));
 }
 
-// 갈라지기: a new chat holding item's messages up to and including message, as they fold, and the memory of them. The
-// spread takes the original's own choices; nothing links the two chats but origin, so deleting either leaves the other
-// whole.
+// The spread takes the original's own choices; nothing links the two chats but origin, so deleting either leaves the
+// other whole.
 export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<string>> {
   return store.withChat(item.id, async () => {
     const current = store.projection(item.id)?.model;
@@ -129,7 +128,7 @@ export const removeChat = (store: ObjectStore, id: string) => markDeleted(store,
 
 export const restoreChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, null);
 
-// A chat's own prompt, persona or 작가의 노트; null clears it, and the chat follows the default again.
+// null clears it, and the chat follows the default again.
 function setOwn(store: ObjectStore, chat: string, field: 'prompt' | 'persona' | 'note', value: string | null): Promise<ApiResult<Stored<'chat'>>> {
   return store.update('chat', chat, (current) => (value === null ? without(current, field) : { ...current, [field]: value }));
 }
@@ -149,9 +148,8 @@ export type Said = { id: string; text: string; translation?: Translation; before
 export const appendUserMessage = (store: ObjectStore, chat: string, { id, text, translation, before }: Said) =>
   append(store, chat, { type: 'message', role: 'user', at: Date.now(), text, receipt: null, ...(translation && { translation }), ...(before && { before }) }, id);
 
-// A reply as its stream ended: a new message, or a new version of `message`, in place of `replaces` on
-// 다시 시도. at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain)
-// sends the same entry, and a first try that landed unanswered is found as it is.
+// at is the reply's own, never the time of the save, so saving it again (Talk.saveAgain) sends the same entry, and a
+// first try that landed unanswered is found as it is.
 export type Written = { id: string; message: string | null; replaces: string | null; at: number; text: string; receipt: Receipt; seed?: string; before?: Writes; reasoning?: string };
 
 export function appendReply(store: ObjectStore, chat: string, { id, message, replaces, at, text, receipt, seed, before, reasoning }: Written) {
@@ -159,9 +157,9 @@ export function appendReply(store: ObjectStore, chat: string, { id, message, rep
   return append(store, chat, message === null ? { type: 'message', role: 'assistant', ...held } : { type: 'version', message, replaces, edit: false, ...held, ...(seed && { seed }) }, id);
 }
 
-// What a run of the bot's Lua did to a chat (engine/lua Outcome), by the messages it read. edits: a message's new
-// text in place of its shown version, with the variables that version's own text wrote, which the new text no
-// longer does. vars: the variables written, standing after a version, or with stays after its message (Entry vars).
+// edits: a message's new text in place of its shown version, with the variables that version's own text wrote, which
+// the new text no longer does. vars: the variables written, standing after a version, or with stays after its message
+// (Entry vars).
 export type Scripted = {
   edits: { message: Message; text: string; wrote: Writes }[];
   removed: string[];

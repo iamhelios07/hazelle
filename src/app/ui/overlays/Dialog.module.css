@@ -24,7 +24,6 @@
   box-shadow: var(--shadow-popover);
 }
 
-/* A body taller than the screen, such as 단축키, scrolls under the title. */
 .body {
   min-height: 0;
   overflow-y: auto;

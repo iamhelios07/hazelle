@@ -14,8 +14,8 @@ import { useLoaded } from '../common/useLoaded';
 import { useAccounts } from './useAccounts';
 import { UsageSection } from './UsageSection';
 
-// 운영: the operator's tools. Every act lands in the log, which is asked again after one. Only the changed account's
-// row is asked again; whole-service usage is refreshed separately by the operator.
+// Every act lands in the log, which is asked again after one. Only the changed account's row is asked again;
+// whole-service usage is refreshed separately by the operator.
 export function AdminScreen({ back }: { back: Back | null }) {
   const service = useLoaded(readService);
   const accounts = useAccounts();

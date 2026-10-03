@@ -30,7 +30,7 @@ export const CACHE: Record<Cache, string> = { '5m': '5분', '1h': '1시간' };
 
 export const settingLabel = (setting: Change['setting']) => (setting === 'stop' ? '멈춤 문구' : setting === 'reasoning' ? '생각' : setting === 'cache' ? '캐시' : NUMBER[setting].label);
 
-// The values set, in short words, in the order the editor shows them; empty when none is.
+// In the order the editor shows them; empty when none is.
 export function valueWords(settings: ModelSettings): string[] {
   const { reasoning, stop, systemAsUser, streaming, cache } = settings;
   const number = (field: Field) => {
@@ -46,7 +46,7 @@ export function valueWords(settings: ModelSettings): string[] {
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').
 export const NOT_CALLABLE = '이 버전은 이 모델을 부를 수 없어요';
 
-// What a model is sent other than the values, in short words; undefined when it is sent them as they are.
+// undefined when it is sent the values as they are.
 export function changeWords(changes: Change[]): string | undefined {
   const left = changes.filter((change) => change.change === 'left-out').map((change) => settingLabel(change.setting));
   const capped = changes.flatMap((change) => (change.change === 'capped' ? [`${settingLabel(change.setting)} ${count(change.to)}`] : []));
@@ -54,6 +54,5 @@ export function changeWords(changes: Change[]): string | undefined {
   return parts.length ? parts.join(' · ') : undefined;
 }
 
-// The default 설정 first, then by name.
 export const defaultFirst = (profiles: readonly Stored<'profile'>[], defaultId: string | undefined) =>
   [...profiles].sort((a, b) => Number(b.id === defaultId) - Number(a.id === defaultId) || a.value.name.localeCompare(b.value.name, 'ko'));

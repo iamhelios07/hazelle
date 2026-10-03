@@ -1,6 +1,5 @@
 import type { Shown } from '../../runtime/talk';
 
-// The reply 답장 정보 shows: the one picked by a message's ⓘ or the stepper while the chat is open, else the latest.
 export const infoReply = (replies: Shown[], picked: string | null) => replies.find((message) => message.id === picked) ?? replies.at(-1);
 
 // What a reply starting while 답장 정보 is held leaves picked: nothing when it is the latest message, so 정보 goes on

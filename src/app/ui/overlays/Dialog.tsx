@@ -12,16 +12,12 @@ type Props = {
   title: string;
   note?: string;
   onClose: () => void;
-  // Makes the body and its actions a form, so Enter in a field presses the submit button among the actions.
   onSubmit?: () => void;
   actions?: ReactNode;
-  // full: each action stretched across the dialog, such as a form's 저장. row: side by side, such as a confirm's
-  // 취소 and its action.
   actionsLayout?: 'full' | 'row';
   children: ReactNode;
 };
 
-// A small window over the page. Esc or a press on the page around it closes it.
 export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout = 'row', children }: Props) {
   const scrim = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -63,7 +59,6 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
   );
 }
 
-// Keyboard shortcuts, each with its keys drawn as key caps.
 export function Shortcuts({ items }: { items: readonly { label: string; keys: readonly Chord[] }[] }) {
   return (
     <dl className={styles.shortcuts}>

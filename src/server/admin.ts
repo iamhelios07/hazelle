@@ -287,8 +287,7 @@ admin.delete('/accounts/:id', async (c) => {
   return c.body(null, 204);
 });
 
-// A restore of the account's store, on a report it sent: { report, at } for its state at a time, or { report, undoes }
-// to undo its latest finished restore. The operation runs in this request (lifecycle.ts).
+// The operation runs in this request (lifecycle.ts).
 admin.post('/accounts/:id/restores', async (c) => {
   const id = c.req.param('id');
   const body = await readObject(c);
@@ -304,8 +303,7 @@ admin.post('/accounts/:id/restores', async (c) => {
 
 const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 400, 'bad-time': 400, 'cannot-undo': 400 } as const;
 
-// Newest first. canUndo, undoExpiresAt: whether and until when an undo of this restore can begin. actions: what its
-// phase allows.
+// Newest first.
 admin.get('/accounts/:id/restores', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
@@ -341,7 +339,6 @@ admin.post('/restores/:id/cancel', async (c) => {
   return ran ? c.json(ran) : fail(c, 404, 'not-found');
 });
 
-// fileBytes: the pictures every account holds.
 admin.get('/service', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,

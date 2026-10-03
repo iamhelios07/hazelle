@@ -18,13 +18,11 @@ import { describeStep } from './saving';
 
 const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin';
 
-// A card whose name matches a character brought from Risu, put into that character's bot pictures.
 type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed: string[] };
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
 type Ask = { name: string; answer: (fill: boolean) => void };
 type State = { busy: string | null; results: Result[]; ask: Ask | null };
 
-// pick opens the file picker of 봇 가져오기; move opens Risu에서 이사.
 const ImportContext = createContext<{ pick: () => void; move: () => void } | null>(null);
 
 export function useImport() {
@@ -39,9 +37,8 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요. 깨졌거나 캐릭터 카드나 모듈이 아니에요.',
 };
 
-// Bot import: pick or drop files anywhere, each is saved as a character or a module, and a summary says what came in, what did
-// not, and what its chats do not use yet. Risu backups (.bin) go to MoveFlow together, and a card named like a
-// character brought from Risu may only fill that character's pictures.
+// Risu backups (.bin) go to MoveFlow together, and a card named like a character brought from Risu may only fill that
+// character's pictures.
 export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
   const files = useFiles();

@@ -34,7 +34,6 @@
   border-radius: var(--radius-md);
 }
 
-/* Only a list's rows fade their fill in. */
 .tall {
   gap: var(--space-8);
   min-height: var(--row-min-height);
@@ -117,7 +116,6 @@
   font-size: var(--text-xs);
 }
 
-/* A list row stays a row: a long description, such as a persona's whole text, shows its first two lines. */
 .tall .preview {
   display: -webkit-box;
   overflow: hidden;
@@ -129,8 +127,7 @@
   composes: ellipsis from '../foundation/a11y.module.css';
 }
 
-/* The fills read the two tokens; the sidebar and the tabs set them to their own below. Hover comes first so the current
-   fill stays under the pointer. */
+/* Hover comes first so the current fill stays under the pointer. */
 .pressable:hover {
   background: var(--color-item-hover);
 }

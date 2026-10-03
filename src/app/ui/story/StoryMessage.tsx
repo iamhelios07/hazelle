@@ -13,15 +13,10 @@ type Props = {
   avatar: ReactNode;
   name: string;
   time: string;
-  // The user's own words sit in a box; replies run as the story.
   mine: boolean;
-  // A quiet tag beside the name, always shown, such as 번역 on a reply shown as its translation; action is what a tap
-  // on it does.
   mark?: { label: string; action: string; onClick: () => void };
   children: ReactNode;
-  // Under the body: a cut marker, the version switcher.
   after?: ReactNode;
-  // Shown on hover, or on phones after a tap on the message (pinned).
   tools?: ReactNode;
   pinned: boolean;
   onTap: () => void;
@@ -67,7 +62,6 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
   );
 }
 
-// The reply is on its way and no text has come yet.
 export function Waiting() {
   return (
     <span className={styles.waiting} aria-label="답장을 기다리는 중">
@@ -84,19 +78,15 @@ type SwitcherProps = {
   onNext: () => void;
   prevDisabled: boolean;
   nextDisabled: boolean;
-  // On the last version, → asks for a new one.
   nextLabel: string;
-  // With the keys that press them.
   prevTitle: string;
   nextTitle: string;
-  // Each version in a line, which the count's menu lists so any of them is one press away.
   versions: string[];
   selected: number;
   pickDisabled: boolean;
   onPick: (index: number) => void;
 };
 
-// ← n / m → between a message's versions.
 export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, nextLabel, prevTitle, nextTitle, versions, selected, pickDisabled, onPick }: SwitcherProps) {
   return (
     <div className={styles.switcher}>
@@ -119,11 +109,9 @@ export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, ne
   );
 }
 
-// translation: the state of a message's translation, such as one being made or one that failed.
 type MarkerProps = { reason: 'length' | 'stopped' | 'translation'; label: string; action?: { label: string; disabled: boolean; onClick: () => void } };
 const MARKS = { length: Scissors, stopped: Square, translation: Languages };
 
-// A reply that did not end cleanly says so, quietly, under its text.
 export function Marker({ reason, label, action }: MarkerProps) {
   return (
     <div className={reason === 'stopped' ? `${styles.marker} ${styles.stopped}` : styles.marker}>
@@ -138,7 +126,6 @@ export function Marker({ reason, label, action }: MarkerProps) {
   );
 }
 
-// A reply that failed, in place of its text.
 export function Failure({ title, children, actions }: { title: string; children: ReactNode; actions: ReactNode }) {
   return (
     <div className={styles.failure} role="alert">

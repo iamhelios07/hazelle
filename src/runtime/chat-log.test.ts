@@ -73,7 +73,6 @@ describe('branchChat', () => {
     await startChat(store, source, chat, projectGreetings(['하나', '둘 {{random::빨강::파랑::노랑::초록}} {{pick::봄::여름::가을::겨울}}', '셋'], [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], 1));
     await appendUserMessage(store, source, { id: said, text: '안녕' });
     await editMessage(store, source, folded().find((message) => message.id === said)!, '안녕하세요', null);
-    // A reply cut at its limit, then continued (이어 쓰기), whose cut call's cost is booked later.
     const reply = crypto.randomUUID();
     const cut: Receipt = { ...pending, state: 'cut', cut: 'length' };
     await appendReply(store, source, { id: reply, message: null, replaces: null, at: 1, text: '답', receipt: cut });
@@ -134,7 +133,6 @@ describe('branchChat', () => {
     await store.create(
       'memory',
       {
-        // The later record moved Luna and closed the vow; the coat is a fact the user deleted.
         records: [
           record('before', sourcesOf(0, 2), { state: [{ about: 'Luna', field: 'mood', value: 'calm' }, { about: 'Luna', field: 'place', value: 'home' }, { about: 'jin', field: 'coat', value: 'red' }], opens: ['A vow'], closes: [] }),
           record('across', sourcesOf(2, 4), { state: [{ about: 'Luna', field: 'place', value: 'pier' }], opens: ['A promise'], closes: ['A vow'] }),

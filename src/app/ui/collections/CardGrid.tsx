@@ -4,7 +4,6 @@ import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
 import styles from './CardGrid.module.css';
 
-// Characters as large faces, since they are found by face more than by name.
 export function CardGrid({ label, keys, children }: { label: string; keys: readonly string[]; children: (index: number) => ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(1);
@@ -33,11 +32,9 @@ type CardProps = {
   // null while the grid is not picking characters.
   selected: boolean | null;
   onClick: () => void;
-  // A card that opens a menu takes these from Menu.
   popup?: 'menu' | 'dialog';
   expanded?: boolean;
   ref?: Ref<HTMLButtonElement>;
-  // A menu button over the picture's corner, beside the card rather than inside its button.
   menu?: ReactNode;
 };
 
@@ -65,7 +62,6 @@ export function FaceCard({ image, name, note, selected, onClick, popup, expanded
   );
 }
 
-// A character's own page: its face, large.
 export function Portrait({ image, name }: { image: string | null; name: string }) {
   return (
     <span className={styles.portrait}>
@@ -78,7 +74,6 @@ function Face({ image, name }: { image: string | null; name: string }) {
   return image ? <img className={styles.image} src={image} alt="" /> : <span className={styles.letter}>{name.slice(0, 1)}</span>;
 }
 
-// What to do with the picked characters, kept at the bottom of the screen while picking.
 export function SelectionBar({ children }: { children: ReactNode }) {
   return <div className={styles.bar}>{children}</div>;
 }

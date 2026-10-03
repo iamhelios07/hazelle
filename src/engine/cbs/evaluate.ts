@@ -8,11 +8,10 @@ import type { PreviousMessages } from './history';
 import { parse, type Block, type Node, type Tag } from './parse';
 import { bool, handlerFor, items, normalize, readToggle, readVar, Return, truthy, type Env } from './tags';
 
-// A caller closes over one to hand the regex stage `(text) => evaluate(text, context)`.
 export type CbsContext = {
   stage: Stage;
   card: Card | null;
-  // The chat's persona; with none, the account's username and no description.
+  // With none, the account's username and no description.
   persona: { name: string; description: string } | null;
   // The prompt's own main text and global note, not a card's replacements, and the author's note in effect.
   // persona and prompt are null when the chat's is gone, which only the display renders through.
@@ -67,7 +66,7 @@ export class Runaway extends Error {
   }
 }
 
-// One evaluate call. Temp variables and functions live as long as it, and spent counts against its limits.
+// Temp variables and functions live as long as it, and spent counts against its limits.
 type Run = { context: CbsContext; seed: string; temp: Map<string, string>; functions: Map<string, Node[]>; spent: { tags: number; chars: number } };
 // prefix sets the tags of an inserted text, a call or an #each item apart from those of the text around it,
 // so each rolls its own.
@@ -111,7 +110,6 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
 const asWritten = (content: string) => `{{${content}}}`;
 
 // At `::`, or at `:` when the first colon is single, so {{getvar:x}} works.
-// `::` when the first colon is doubled, else `:`.
 export function separatorOf(content: string): string | null {
   const colon = content.indexOf(':');
   return colon === -1 ? null : content[colon + 1] === ':' ? '::' : ':';

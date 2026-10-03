@@ -13,7 +13,6 @@ export type ReplyError =
   | CredentialFailure
   | NonNullable<Outcome['error']>;
 
-// The facts a receipt keeps: the outcome, and times measured from the moment of sending.
 // A stop is a cut, never an error. request is the address and body the request was built with, for 요청 원문, and
 // cache what its cache read and wrote; both null when it was refused before it could be built, or picked up after a reload.
 // call: the call's id, which its receipt keeps (model/chat Receipt id); a call picked up after a reload has the same.
@@ -32,7 +31,6 @@ export type GenerateInput = {
   model: Starred;
   settings: ModelSettings;
   messages: ChatMessage[];
-  // The call's id and keys (runtime/streams newCall).
   call: StreamCall;
   signal: AbortSignal;
   onText: (phase: Phase, text: string) => void;

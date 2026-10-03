@@ -38,7 +38,7 @@ const BUDGET_START = 8000;
 type Choice = 'unset' | 'off' | 'adaptive' | 'budget' | `level:${string}`;
 const choiceOf = (reasoning: Reasoning | undefined): Choice => (!reasoning ? 'unset' : reasoning.kind === 'level' ? `level:${reasoning.level}` : reasoning.kind);
 
-// A model that uses the 묶음, with what it is sent of it. schema null: this version cannot call it.
+// schema null: this version cannot call it.
 type User = ProfileUser & { schema: SettingsSchema | null; changes: Change[] };
 
 // The name rides in the settings' patch, so one queue orders both writes.
@@ -64,12 +64,10 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     }
     return Object.keys(values).length ? setProfileSettings(store, id, values) : { ok: true };
   });
-  // What waits to be saved shows at once, over the stored copy.
   const shown = withSettings(stored.value.settings, split(unsaved).settings);
   const name = typedText(drafts.name, (typed) => typed.trim() || null, unsaved.name ?? stored.value.name, String);
   const set = (values: ModelSettings) => void save(values);
 
-  // An invalid draft shows its error and is never saved, and takes back a valid one still waiting; an empty one unsets.
   function type(field: Field | 'budget', draft: string, value: (number: number) => ModelSettings) {
     setDrafts((current) => ({ ...current, [field]: draft }));
     const key = field === 'budget' ? 'reasoning' : field;
@@ -80,7 +78,6 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
   function rename(next: string) {
     setDrafts((current) => ({ ...current, name: next }));
-    // A blank name is never saved; the field shows its placeholder until one is typed.
     change({ name: next.trim() }, !!next.trim());
   }
 
@@ -90,7 +87,6 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   });
   const callable = users.filter((user): user is User & { schema: SettingsSchema } => user.schema !== null);
 
-  // What some models are sent of a setting instead of the value, or nothing when all take it as it is.
   function noteFor(setting: Change['setting']): string | undefined {
     const left = users.filter((user) => user.changes.some((change) => change.setting === setting && change.change === 'left-out')).map((user) => user.model.name);
     const capped = users.flatMap((user) => user.changes.flatMap((change) => (change.setting === setting && change.change === 'capped' ? [`${user.model.name}에는 ${count(change.to)}`] : [])));
@@ -119,7 +115,6 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   function reasoningRow(): ReactNode {
     const reasoning = shown.reasoning;
     const current = choiceOf(reasoning);
-    // With no model to ask, every choice is offered; otherwise those some model here takes, and the one set.
     const offers = (takes: (rules: SettingsSchema['reasoning']) => boolean) => callable.length === 0 || callable.some((user) => takes(user.schema.reasoning));
     const named = callable.length === 0 ? Object.keys(LEVELS) : [...new Set(callable.flatMap((user) => (user.schema.reasoning.level === false ? [] : user.schema.reasoning.levels)))];
     const known = Object.keys(LEVELS);

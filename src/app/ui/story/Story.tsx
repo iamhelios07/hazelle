@@ -8,15 +8,10 @@ import shadowCss from './Story.shadow.css?inline';
 export type BotButton = { trigger: string } | { data: string };
 
 type Props = {
-  // The engine's HTML for the text: markdown's, with a bot's own HTML where it was kept.
   html: string;
-  // The bot's CSS for the chat.
   css?: string;
-  // cursor marks a reply still streaming. faded: text that another will take the place of, such as a reply's
-  // original while its translation is awaited.
   cursor?: boolean;
   tone?: 'plain' | 'faded';
-  // inert: nothing answers the bot's buttons, so they are dimmed. live: they keep the bot's own look.
   buttons?: 'live' | 'inert';
   // A press on one of the bot's buttons; null for a plain button, which names nothing to run.
   onPress?: (button: BotButton | null) => void;
@@ -59,7 +54,6 @@ const cleanCss = (css: string) => css.replaceAll('.x-risu-', '.').replace(IMPORT
 
 let base: CSSStyleSheet | null = null;
 const sheets = new Map<string, CSSStyleSheet>();
-// One sheet per CSS, shared by every message that shows it; the latest few are kept.
 function sheetFor(css: string): CSSStyleSheet {
   let sheet = sheets.get(css);
   if (!sheet) {
@@ -103,7 +97,6 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
     if (only && block.matches('p, .risu-inlay-image')) block.setAttribute(PICTURE, String(index));
   }
   if (cursor) {
-    // At the end of the last text, inside whatever holds it.
     const last = (node: ParentNode) => {
       let child = node.lastChild;
       while (child instanceof Text && !child.data.trim()) child = child.previousSibling;

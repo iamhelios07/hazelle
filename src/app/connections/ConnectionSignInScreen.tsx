@@ -14,8 +14,6 @@ import { connect } from './connect';
 
 type Stage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
 
-// Signing in with a device code: the provider's site takes the code, and this screen waits for the approval, then
-// checks the model list and saves the connection, as a pasted key does.
 export function ConnectionSignInScreen({ type, signIn, back }: { type: ConnectionType; signIn: SignIn; back: Back }) {
   const session = useSession();
   const toast = useToast();

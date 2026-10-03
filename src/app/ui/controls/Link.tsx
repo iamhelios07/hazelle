@@ -5,7 +5,6 @@ import styles from './Link.module.css';
 
 type Props = {
   href: string;
-  // A file to save under this name, instead of a page to open.
   download?: string;
   children: ReactNode;
 };

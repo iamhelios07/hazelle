@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 // How many screens that take dropped files of their own are mounted; while one is, the app-wide drop stands aside.
 let screens = 0;
 
-// Files dragged anywhere over the window: true while they are over it, and onDrop takes them when they are
-// dropped. dragenter and dragleave fire for every element crossed, so it counts them instead of trusting either one.
+// dragenter and dragleave fire for every element crossed, so it counts them instead of trusting either one.
 // scope 'screen': a screen's own drop, such as 프롬프트 taking a .risup, which the app's character import would refuse.
 export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'screen' = 'app'): boolean {
   const [dragging, setDragging] = useState(false);

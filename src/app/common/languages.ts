@@ -1,5 +1,4 @@
-// The languages a reply or the user's message is translated into. name is what is stored and what the translation prompt's
-// {{language}} receives; label is how the app shows it.
+// name is what is stored and what the translation prompt's {{language}} receives; label is how the app shows it.
 export const LANGUAGES = [
   { name: 'Korean', label: '한국어' },
   { name: 'English', label: '영어' },
@@ -17,7 +16,6 @@ export const LANGUAGES = [
   { name: 'Indonesian', label: '인도네시아어' },
 ] as const;
 
-// A typed language shows as typed.
 export function languageLabel(name: string): string {
   return LANGUAGES.find((language) => language.name === name)?.label ?? name;
 }

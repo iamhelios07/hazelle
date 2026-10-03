@@ -3,9 +3,7 @@ import { isRecord } from '../connectors/values';
 export type ApiFailure = { ok: false; error: string; retryAfter?: number };
 export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
 
-// What an answer says of the account the page holds rather than of the request: that the cookie has come to name
-// another account (elsewhere, told once), that the operator suspended it, that a write was refused for room, or the
-// account's counts after a write or a sync, or that the operator is restoring it. The header names are the server's
+// What an answer says of the account the page holds rather than of the request. The header names are the server's
 // USE_HEADERS (server/caps).
 export type Heard = { kind: 'elsewhere' } | { kind: 'suspended' } | { kind: 'storage-full' } | { kind: 'restoring' } | { kind: 'bytes'; bytes: number } | { kind: 'file-bytes'; fileBytes: number };
 
@@ -17,8 +15,7 @@ const REFUSALS: Record<string, 'elsewhere' | 'suspended' | 'storage-full' | 'res
   'account-restoring': 'restoring',
 };
 
-// The account this page is open as. Every request states it, and the server refuses one whose cookie has come to name
-// another account, as it does once another tab signs in as someone else (server/session).
+// Every request states it, and the server refuses one whose cookie has come to name another account (server/session).
 let held: string | null = null;
 let hear: ((heard: Heard) => void) | null = null;
 
@@ -27,8 +24,7 @@ export function holdAccount(account: string | null, onHeard: ((heard: Heard) => 
   hear = onHeard;
 }
 
-// Every request to this app's server leaves through here (api, and runtime/relay's raw ones), so each states the
-// account and the page hears what every answer says of it.
+// Every request to this app's server leaves through here (api, and runtime/relay's raw ones).
 export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {}): Promise<Response> {
   const response = await fetch(`/api/${path}`, { ...init, headers: { ...(held === null ? {} : { 'x-account': held }), ...init.headers } });
   const tell = hear;
@@ -47,10 +43,8 @@ export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> 
   return response;
 }
 
-// A Uint8Array body goes out as bytes, and a byte answer comes back as a Uint8Array; everything else
-// is JSON. 'offline' means no whole answer came: the request never reached the server, or the connection
-// dropped while its answer was being read. 'server-error' means it answered without the JSON error shape
-// every API route uses.
+// 'offline' means no whole answer came: the request never reached the server, or the connection dropped while its
+// answer was being read. 'server-error' means it answered without the JSON error shape every API route uses.
 export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal): Promise<ApiResult<T>> {
   const bytes = body instanceof Uint8Array ? (body as Uint8Array<ArrayBuffer>) : null;
   let response: Response;

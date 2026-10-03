@@ -16,7 +16,6 @@ const server = testServer();
 
 const bytes = fromBase64(starter.slice(starter.indexOf(',') + 1));
 
-// A block as the prompt editor lists it: its kind, name, role and mark, or its wrapper's first line, or its range.
 function outline(block: Block) {
   if (block.kind === 'text') return ['text', block.name, block.role, block.mark];
   if (block.slot === 'chat') return [block.slot, block.name, block.range];

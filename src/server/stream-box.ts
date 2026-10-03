@@ -11,7 +11,6 @@ const END = 3;
 type Reason = { reason: 'done' | 'stopped' | 'limit' } | { reason: 'network'; detail: string };
 export type End = Reason & { ms: number };
 
-// DurableObjectStorage, or the harness's map.
 export type BoxStorage = {
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
@@ -69,14 +68,12 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> | null {
 
 const json = (status: number, error: string) => Response.json({ error }, { status });
 
-// One generation call, kept apart from the client that asked for it: it reads the upstream answer to the end and
-// seals it into frames that any reader gets from the start, then live. Storage holds the only copy of the frames, so
-// memory holds what is being sealed and what each reader is sent, however long the answer.
+// Storage holds the only copy of the frames, so memory holds what is being sealed and what each reader is sent,
+// however long the answer.
 export class StreamBox {
   // The seq of the next frame, and how many are stored: frames are stored in seq order, with no gap.
   private next = 0;
   private stored = 0;
-  // Readers waiting for a frame to be stored or the call to end.
   private waiting = new Set<() => void>();
   private call: AbortController | null = null;
   private running = false;

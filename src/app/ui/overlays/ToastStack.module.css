@@ -20,7 +20,6 @@
   right: 0;
   bottom: 0;
   transform: translateY(calc(var(--toward) * var(--index) * var(--toast-peek))) scale(calc(1 - var(--index) * var(--toast-shrink)));
-  /* The front one paints over those behind it, which come after it. */
   z-index: calc(var(--count) - var(--index));
   transform-origin: bottom center;
   transition:
@@ -32,7 +31,6 @@
   transform: translateY(calc(var(--toward) * (var(--lift) + var(--index) * var(--space-8))));
 }
 
-/* Behind the front one, a notice shows as a card's edge: the front one's height, its words hidden. */
 .behind {
   height: var(--front);
   overflow: hidden;

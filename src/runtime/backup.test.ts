@@ -69,7 +69,6 @@ const lore: Lore = {
   folder: null,
 };
 
-// What opening an account adds (runtime/session).
 async function open(username: string, { profile = true } = {}) {
   const account = await server.account();
   await addDefaults(account.store);

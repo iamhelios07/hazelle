@@ -61,7 +61,6 @@ const viaStreams: Upstream = async (url, { method, headers, body, signal }) => {
   return abortable(answer, signal);
 };
 
-// An abort errors a response's body, as it does a real fetch's.
 function abortable(response: Response, signal: AbortSignal | null | undefined): Response {
   if (!response.body || !signal) return response;
   const reader = response.body.getReader();
@@ -77,8 +76,7 @@ function abortable(response: Response, signal: AbortSignal | null | undefined): 
   return new Response(read, { status: response.status, statusText: response.statusText, headers: response.headers });
 }
 
-// Every relay call gets answer's reply. The log holds what each call sent upstream, and when, in
-// seconds after the stub was set.
+// The log holds what each call sent upstream, and when, in seconds after the stub was set.
 export function stubRelay(answer: Relay): { at: number; sent: HttpRequest }[] {
   const log: { at: number; sent: HttpRequest }[] = [];
   const start = Date.now();
@@ -90,16 +88,13 @@ export function stubRelay(answer: Relay): { at: number; sent: HttpRequest }[] {
   return log;
 }
 
-// A provider's answer as the relay passes it on.
 export const upstream = (status: number, body: unknown) => Response.json(body, { status, headers: { 'x-relay': 'upstream' } });
 
 export const inTurn = (answers: (Response | null)[]): Relay => () => answers.shift() ?? null;
 
-// A chat-completions stream that says text and ends.
 export const saying = (text: string) =>
   new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { headers: { 'x-relay': 'upstream' } });
 
-// An OpenRouter connection whose one starred model is 기본값's 대화 모델, so chats can be answered.
 export async function answerable(session: Session): Promise<void> {
   const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
   const connection = await session.store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [model] });
@@ -173,13 +168,11 @@ export function testServer() {
         opened.data.close();
       }
     },
-    // The password proof account() signs up with, for what asks for the password again, such as 탈퇴.
     passwordProof: { method: 'password', proof: signupBody().passwordProof } as const,
     // The server's clock, which stamps the stores' bookmarks: a restore names a time between two writes. reset() puts it back.
     at(now: () => number) {
       app.clock.now = now;
     },
-    // An account the Worker names as its operator.
     async operator() {
       const opened = await harness.account();
       app.env.ADMIN_ACCOUNT = opened.accountId;

@@ -15,10 +15,9 @@ export type Outcome = {
   replyId: string | null;
 };
 
-// What becomes of the thinking blocks an answer writes inside its text (connectors/thoughts). keep: left where they are,
-// for a reply of a character set to 생각을 본문에 둠; a translation always strips them (user ruling, 2026-10-04).
-// takeBack: only a reader that keeps the reasoning acts on it (Talk); translate, memory and scripts keep the text only,
-// and get what is given back as text all the same.
+// keep: left where they are, for a reply of a character set to 생각을 본문에 둠; a translation always strips them (user
+// ruling, 2026-10-04). takeBack: only a reader that keeps the reasoning acts on it (Talk); translate, memory and
+// scripts keep the text only, and get what is given back as text all the same.
 export type InlineThoughts = { keep?: boolean; takeBack?: (chars: number) => void };
 
 // The reply in the format the provider answered with: an event stream, or one JSON document when it was asked for

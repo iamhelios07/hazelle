@@ -1,6 +1,5 @@
 import { stripComments } from '../cbs/parse';
 
-// What a key is searched in: a chat message, or the body of an entry that fired in an earlier pass.
 export type Source = { kind: 'message' | 'entry'; id: string };
 
 // A scanned text, with CBS comments removed and prepared once for each way a key compares.

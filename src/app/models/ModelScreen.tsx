@@ -34,7 +34,6 @@ function spent({ costs, costUnknown }: ModelUsage): string {
   return costUnknown ? `${sums} · ${costUnknown}번은 알 수 없음` : sums;
 }
 
-// One starred model: the settings it uses, which it picks here, what it is, and what it has cost.
 export function ModelScreen({ connection, model, back }: { connection: Stored<'connection'>; model: Starred; back: Back }) {
   const { store, usage: usageIndex } = useSession();
   const toast = useToast();
@@ -66,7 +65,6 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
     if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
   }
 
-  // A copy of what the model uses now, so only the values changed afterwards differ.
   async function own() {
     const made = await addProfile(store, { name: `${model.name}용`, settings: current?.value.settings ?? {} });
     if (!made.ok) return toast.failed(made, '설정을 만들지 못했어요.');

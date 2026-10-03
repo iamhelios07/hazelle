@@ -3,14 +3,10 @@ import styles from './ChoiceGroup.module.css';
 
 type Props<T extends string> = {
   label: string;
-  // Shows the label before the options instead of only telling screen readers.
   showLabel?: boolean;
   options: { value: T; label: string; sub?: string }[];
   value: T | null;
   onChange: (value: T) => void;
-  // chips: a row of small filters. buttons: equal-width buttons for a choice the form needs. segmented: one
-  // bordered strip of short choices for a setting, such as a reasoning level or a block's role. list: a column of
-  // options with a line under each, such as a model.
   layout?: 'chips' | 'buttons' | 'segmented' | 'list';
 };
 

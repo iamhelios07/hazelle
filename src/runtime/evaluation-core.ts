@@ -6,12 +6,9 @@ import type { Memory, Source } from '../model/memory';
 import { applyTail, type Tail } from './history-delta';
 import { tokenizer } from './tokenizer';
 
-// What a version's text became in the bot's editDisplay pass, with the text and state it was run on.
 export type LuaText = { text: string; stamp: string; shown: string };
 const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
 export type ScopeData = Omit<ChatScope, 'lua' | 'messages'>;
-// read: the chat's texts as the prompt renders them, with their tokens; with memory, what of it a request sends.
-// lore: the lorebook entries a prompt built now would hold, as many as fit within limit tokens.
 export type EvaluationJob =
   | { kind: 'display'; take: ReadonlySet<number>; lua?: { generation: number; revision: number; waits: boolean } }
   | { kind: 'prompt'; input: Omit<PromptInput, 'scope' | 'countTokens'> }

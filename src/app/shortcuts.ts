@@ -3,8 +3,7 @@ import { formatKeys, pressed, type Chord } from './ui';
 
 type Shortcut = { label: string; hint: string; keys: readonly Chord[] };
 
-// label names the shortcut in 단축키; hint is the shorter word of the hint lines and button titles. A modifier a
-// chord leaves out is not checked, so Ctrl+Enter still sends and Ctrl+Shift+Enter still saves an edit.
+// A modifier a chord leaves out is not checked, so Ctrl+Enter still sends and Ctrl+Shift+Enter still saves an edit.
 export const SHORTCUTS = {
   // Its handler must never pass Ctrl+S on, or the browser's save-page dialog opens.
   settings: { label: '설정 열기 · 닫기', hint: '설정', keys: [{ key: ',', mod: true }, { key: 's', mod: true }] },
@@ -17,7 +16,6 @@ export const SHORTCUTS = {
   newline: { label: '줄바꿈', hint: '줄바꿈', keys: [{ key: 'Enter', shift: true }] },
   stop: { label: '답장 멈추기', hint: '멈추기', keys: [{ key: 'Escape' }] },
   editLast: { label: '내 마지막 메시지 수정', hint: '내 메시지 수정', keys: [{ key: 'ArrowUp' }] },
-  // The first key steps back, the second forward, and from the last version asks for a new one.
   swipe: { label: '답장 넘기기 · 끝에서 새 답장 받기', hint: '답장 넘기기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
   saveEdit: { label: '수정 저장', hint: '저장', keys: [{ key: 'Enter', mod: true }] },
   cancelEdit: { label: '수정 취소', hint: '취소', keys: [{ key: 'Escape' }] },
@@ -78,7 +76,6 @@ export function useShortcut(name: Name, handler: Handler, { fallback = false } =
   }, [name, fallback]);
 }
 
-// What the shortcut's keys would do, for a button or menu item that does the same.
 export function runShortcut(name: Name) {
   for (const entry of inTurn()) if (entry.name === name && entry.run() !== false) return;
 }

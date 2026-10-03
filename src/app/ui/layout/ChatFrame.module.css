@@ -50,7 +50,6 @@
   --read-width: var(--read-wide);
 }
 
-/* The strip at the page's top that brings the hidden header back when pointed at; the header hangs from it. */
 .top {
   position: absolute;
   top: 0;
@@ -148,7 +147,6 @@
   transition: background-color var(--duration-slow) var(--ease-enter);
 }
 
-/* Folded, the story shows around the composer. */
 .compact:not(:focus-within) {
   background-color: transparent;
 }

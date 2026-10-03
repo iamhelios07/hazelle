@@ -76,7 +76,6 @@
   }
 }
 
-/* Inside a ListDetail pane: from the top, and no wider than a form reads well. */
 .screen.pane {
   min-height: 100%;
   max-width: var(--pane-max-width);

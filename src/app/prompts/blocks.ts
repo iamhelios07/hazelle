@@ -72,7 +72,6 @@ export function describeRange(range: ChatRange): { label: string; meta: string }
 
 export const firstLine = (text: string) => text.trim().split('\n')[0]!.trim();
 
-// A block's title: its name, else a slot's kind or a text's first line, which reads dimmed.
 export function blockTitle(block: Block): { title: string; dim: boolean } {
   if (block.name) return { title: block.name, dim: false };
   if (block.kind === 'slot') return { title: SLOT[block.slot].name, dim: false };
@@ -89,7 +88,6 @@ export function blockMeta(block: Block): string {
   return 'role' in block ? MESSAGE_ROLES[block.role] : '';
 }
 
-// The CBS a block sends: a text's own, or a wrapped slot's 감싸는 글.
 export const blockSource = (block: Block): string => (block.kind === 'text' ? block.text : 'wrapper' in block ? (block.wrapper ?? '') : '');
 
 export const hasConditions = (block: Block) => toggleUses(blockSource(block)).length > 0;

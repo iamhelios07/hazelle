@@ -2,8 +2,8 @@ import type { ScriptQuestion } from '../../runtime/scripts';
 import { BOT_MODELS_HELP } from '../common/words';
 import type { AskAnswer } from '../ui';
 
-// A bot's question as the card by the composer asks it. Each value is what Scripts.answer takes for that kind
-// (runtime/scripts): the line typed, 'yes' or a dismissal, an option's index, and for a model call 'yes' or 'no'.
+// Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
+// option's index, and for a model call 'yes' or 'no'.
 export function asking(question: ScriptQuestion['question']): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {
     case 'input':

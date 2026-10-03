@@ -26,8 +26,7 @@ class Snapshot<T> {
   }
 }
 
-// The characters, each with its chats, most recent first, and the folders by name. deleted and deletedChats are what
-// 휴지통 shows (shelve). byCharacter includes deleted characters, but none being purged.
+// byCharacter includes deleted characters, but none being purged.
 export type Library = {
   characters: CharacterShelf<ChatSummary>[];
   none: Shelf<ChatSummary>;
@@ -41,8 +40,6 @@ export type Library = {
 
 const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => (shelf && isLive(shelf.character) ? shelf : null);
 
-// How an open chat is displayed: with the bot's editDisplay pass (ScriptDisplay), which tells the chat's listeners
-// when more of the pass has landed.
 export type OpenDisplay = Pick<ScriptDisplay, 'display' | 'subscribe'>;
 
 const EMPTY_SETTINGS: Settings = { models: {} };
@@ -57,7 +54,7 @@ const NAMED: { [K in Kind]?: (value: Values[K]) => string } = {
 };
 const sameItems = <T>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 const sameSummary = (a: ChatSummary, b: ChatSummary) => a.chat === b.chat && a.count === b.count && a.title === b.title && a.preview === b.preview && a.at === b.at && a.order === b.order;
-// Whether id's summary in map changed. An equal one is kept, so the lists holding it stay the same.
+// An equal one is kept, so the lists holding it stay the same.
 function place(map: Map<string, ChatSummary>, id: string, next: ChatSummary | null): boolean {
   if (!next) return map.delete(id);
   const previous = map.get(id);
@@ -68,7 +65,6 @@ function place(map: Map<string, ChatSummary>, id: string, next: ChatSummary | nu
 
 export class ReadModels {
   private readonly summaries = new Map<string, ChatSummary>();
-  // The deleted chats', which no chat list, summary snapshot or chat screen reads.
   private readonly binned = new Map<string, ChatSummary>();
   private readonly byChat = new Map<string, Snapshot<ChatModel | null>>();
   private readonly bySummary = new Map<string, Snapshot<ChatSummary | null>>();
@@ -138,7 +134,6 @@ export class ReadModels {
     return object.state as Snapshot<Stored<K> | null>;
   }
 
-  // The characters not in 휴지통.
   character(id: string): Snapshot<CharacterShelf<ChatSummary> | null> {
     let snapshot = this.byCharacter.get(id);
     if (!snapshot) {
@@ -187,8 +182,7 @@ export class ReadModels {
     }
   }
 
-  // Every live chat, the one written to last first, and apart from them the deleted ones. Renaming a populated chat or
-  // changing its model does not move it.
+  // Renaming a populated chat or changing its model does not move it.
   private updateLists(changes?: readonly StoreChange[]): boolean {
     const ids = changes
       ? new Set(changes.flatMap((change) => change.kind === 'chat' ? [change.id] : change.kind === 'summary' && change.parent ? [change.parent] : []))

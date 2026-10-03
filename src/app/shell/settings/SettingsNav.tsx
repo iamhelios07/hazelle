@@ -7,7 +7,7 @@ import type { Route, SettingsPage } from '../routes';
 
 type Place = { page: SettingsPage; label: string; icon: LucideIcon; route: Route };
 
-// 설정's pages, in sets spaced apart. Only built pages are listed.
+// Only built pages are listed.
 const GROUPS: Place[][] = [
   [
     { page: 'models', label: PAGES.models, icon: Layers, route: { kind: 'models' } },
@@ -23,7 +23,6 @@ const GROUPS: Place[][] = [
 ];
 const ADMIN: Place[] = [{ page: 'admin', label: PAGES.admin, icon: ShieldCheck, route: { kind: 'admin' } }];
 
-// 운영 is listed to the operator alone.
 function useGroups(): Place[][] {
   const { admin } = useAccount();
   return admin ? [...GROUPS, ADMIN] : GROUPS;
@@ -47,7 +46,6 @@ export function SettingsSidebar({ current, onClose }: { current: SettingsPage | 
   );
 }
 
-// 설정 on phones: its pages as a list, each with what it holds.
 export function SettingsList({ onClose }: { onClose: () => void }) {
   const prompts = usePrompts();
   const personas = usePersonas();

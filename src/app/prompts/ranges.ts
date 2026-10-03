@@ -31,7 +31,6 @@ export function chatWarning(blocks: readonly Block[]): string | null {
   return missed.length ? `${missed.join(', ')}이(가) 어느 ‘채팅’ 자리에도 들어가지 않아요.` : null;
 }
 
-// A run of messages no slot sends, named from the end of the chat when the ranges place it there.
 function describeRun(first: number, last: number, length: number, reach: number): string {
   if (first === 0) return '앞부분';
   const fromEnd = (index: number) => length - index;

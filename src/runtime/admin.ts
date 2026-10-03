@@ -1,7 +1,7 @@
 import { api, type ApiResult } from './api';
 import { page } from './pages';
 
-// The operator's calls (server/admin). Only the account the Worker names passes; any other is answered not-admin.
+// Only the account the Worker names passes; any other is answered not-admin.
 
 // The caps every account has unless given its own; null is no cap. fileBytes: every account's pictures together.
 export type Service = { signupCap: number; accountBytesCap: number | null; accountFileBytesCap: number | null; accounts: number; fileBytes: number };
@@ -10,7 +10,7 @@ export type OwnCap = number | null | 'default';
 // restoring: held by a restore until it ends. leaving: its deletion stopped before the end; removing it again finishes it.
 export type AccountState = 'active' | 'restoring' | 'leaving';
 // bytes and disk (what the account's store takes on the server) are null when its store was not read: it did not answer in
-// time, or the account is not active. fileBytes: its pictures.
+// time, or the account is not active.
 export type AdminAccount = {
   accountId: string;
   username: string;
@@ -26,7 +26,6 @@ export type AdminAccount = {
 // The accounts read at readAt; the sums leave out the unread ones.
 export type Totals = { bytes: number; disk: number; unread: number; readAt: number };
 export type Report = { id: number; accountId: string; username: string; text: string; createdAt: number; resolvedAt: number | null };
-// detail: what the server logged with it, such as the account's username or the service values set.
 export type LogRow = { id: number; at: number; action: string; target: string; detail: unknown };
 export const readService = () => api<Service>('GET', 'admin/service');
 export const setService = (values: Pick<Service, 'signupCap' | 'accountBytesCap' | 'accountFileBytesCap'>) => api<undefined>('PUT', 'admin/service', values);
@@ -76,8 +75,8 @@ export const removeAccount = (account: string) => api<undefined>('DELETE', `admi
 // on a report that account sent. The phases run in order; from armed on, a restore can only go forward.
 export type RestorePhase = 'begun' | 'fenced' | 'checkpointed' | 'targeted' | 'armed' | 'rewound' | 'done' | 'failed' | 'cancelled';
 export type RestoreAction = 'resume' | 'cancel' | 'finalize';
-// at: the time asked for, null for an undo. undoes: the restore an undo rewinds. verified: the account was seen open again
-// after done. actions: what the server allows in this phase.
+// at: the time asked for, null for an undo. verified: the account was seen open again after done. actions: what the
+// server allows in this phase.
 export type Restore = {
   id: number;
   reportId: number;
@@ -92,7 +91,6 @@ export type Restore = {
   undoExpiresAt: number | null;
   actions: RestoreAction[];
 };
-// Where a run stopped: done, or a phase that waits for the operator.
 export type RestoreRun = Pick<Restore, 'id' | 'phase' | 'verified' | 'error'>;
 export type RestoreAsk = { report: number; at: number } | { report: number; undoes: number };
 

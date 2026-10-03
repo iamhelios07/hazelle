@@ -8,18 +8,13 @@ import type { Binned, CharacterActions } from '../useCharacterActions';
 type Props = {
   item: Binned;
   face?: ReactNode;
-  // Whose, or what sort, where the section's title does not say: a chat's character, a task prompt's task, a module's
-  // description.
   description?: string;
   mark: Mark;
-  // The step it is at while it is being removed for good.
   busy: string | null;
   actions: CharacterActions;
-  // 지금 지우기 asks first.
   onPurge: () => void;
 };
 
-// A row of 휴지통: anything in it but a character, which shows as a card.
 export function BinnedRow({ item, face, description, mark, busy, actions, onPurge }: Props) {
   return (
     <ListItem

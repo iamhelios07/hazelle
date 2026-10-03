@@ -22,7 +22,6 @@ export const readsChanged = (reads: StoreRead[], changes: readonly StoreChange[]
 
 type Limits = { items: number; bytes: number; body: number };
 type Page = { timeline: string; until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits };
-// What a workflow runs on from its start to its end: the server's timeline and this store's epoch (pinned).
 export type Pin = { timeline: string; epoch: number };
 const changed = (): ApiFailure => ({ ok: false, error: 'timeline-changed' });
 type ObjectValue = Omit<Stored<Kind>, 'rev'>;
@@ -50,8 +49,7 @@ export class ScopeUnavailable extends Error {
   constructor(readonly chat: string | null) { super(`Chat scope is not loaded: ${chat ?? 'unknown'}`); }
 }
 
-// The browser's copy of the account's objects, decrypted in memory. The server stays the only source
-// of truth: writes go to it first, and a version conflict is resolved by pulling the
+// The server stays the only source of truth: writes go to it first, and a version conflict is resolved by pulling the
 // newer copy and applying the change again on top of it.
 export class ObjectStore {
   private readonly closing = new AbortController();
@@ -86,11 +84,9 @@ export class ObjectStore {
   // The local generation, not the server's timeline: every reset ends one, and work begun in it is cancelled.
   private epoch = 0;
   private ended = new AbortController();
-  // The cache generation this tab holds (object-cache).
   private generation: Generation | null = null;
   // A reload from the cache after another tab moved its generation, which a pull waits for before its next request.
   private opening: Promise<void> | null = null;
-  // Per commit under way, how many of the person's writes in it the server has not taken.
   private readonly unsent = new Set<() => number>();
   private readonly workflows = new Set<Pin>();
   private readonly rewoundListeners = new Set<(dropped: number) => void>();
@@ -112,7 +108,6 @@ export class ObjectStore {
     return store;
   }
 
-  // What a page load does: take the stored cache generation, and its rows when it has a timeline.
   private async load(epoch: number, signal?: AbortSignal) {
     if (!this.cache || this.cacheFailed) return;
     const stop = AbortSignal.any([this.closing.signal, this.ended.signal, ...(signal ? [signal] : [])]);
@@ -208,8 +203,7 @@ export class ObjectStore {
     });
   }
 
-  // Another tab moved the cache to a generation of its own: this one drops what it holds, loads that generation and
-  // catches up from it.
+  // Another tab moved the cache to a generation of its own.
   private reopen() {
     this.reset(true);
     const epoch = this.epoch;
@@ -270,7 +264,6 @@ export class ObjectStore {
     return () => this.listeners.delete(listener);
   };
 
-  // True while a write waits for the server to be reachable again.
   readonly waiting = () => this.waitingWrites > 0;
 
   readonly subscribeWaiting = (listener: () => void) => {
@@ -641,7 +634,7 @@ export class ObjectStore {
     return this.unreadableCount;
   }
 
-  // The timeline and epoch held now. A store holding no timeline pulls one first, as one about to write does.
+  // A store holding no timeline pulls one first, as one about to write does.
   async pin(signal?: AbortSignal): Promise<ApiResult<Pin>> {
     const epoch = this.epoch;
     if (!this.limits || this.timeline === null) {
@@ -754,7 +747,6 @@ export class ObjectStore {
     return this.batch([{ type: 'remove', id }]);
   }
 
-  // Answers the removed object, which restore (되돌리기) writes back.
   async take<K extends Kind>(kind: K, id: string): Promise<ApiResult<Stored<K>>> {
     const object = this.get(kind, id);
     if (!object) return { ok: false, error: 'gone' };
@@ -1198,7 +1190,6 @@ export class ObjectStore {
   }
 }
 
-// A copy without key, for an update that clears an optional field.
 export function without<T extends object>(from: T, key: keyof T): T {
   const rest = { ...from };
   delete rest[key];

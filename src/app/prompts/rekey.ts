@@ -2,7 +2,6 @@ import { blockHead, conditionSteps, isRawBlock, separatorOf, whenArgs } from '..
 import { parse, type Node, type Tag } from '../../engine/cbs/parse';
 import { normalize, TOGGLE_GLOBAL } from '../../engine/cbs/tags';
 
-// A toggle key written in the text, and where it stands.
 export type ToggleUse = { key: string; at: number };
 
 // Every place CBS reads a toggle by a written key, found the way the evaluator reads them: the literal `toggle` applies
@@ -49,7 +48,6 @@ const sourceLength = (node: Node): number =>
       ? '{{}}'.length + node.parts.reduce((sum: number, part) => sum + sourceLength(part), 0)
       : sourceLength(node.head) + node.raw.length + sourceLength(node.close);
 
-// A tag's written source, and where that source starts.
 function source(tag: Tag): Written {
   return { content: tag.parts.map((part) => (typeof part === 'string' ? part : NESTED.repeat(sourceLength(part)))).join(''), start: tag.at + 2 };
 }

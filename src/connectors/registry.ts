@@ -11,7 +11,6 @@ import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Co
 // Adding a provider means adding its connection type here. Nothing else names one.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, ollama, anthropic, copilot];
 
-// The type of a connection the user described by address and protocol.
 export const GENERIC = 'generic';
 
 // Keyed by any string: a stored connection or model snapshot may name a protocol that only a newer
@@ -33,8 +32,6 @@ export function resolveConnection(connection: Connection): Resolved | null {
 
 const typeForHost = (hostname: string) => CONNECTION_TYPES.find((type) => type.detect?.host === hostname);
 
-// The address and codec one model is called through: the connection's own, or the route its type
-// gives for the protocol the model names.
 export function resolveModel(resolved: Resolved, model: Model): Resolved {
   const protocol = model.protocol ?? resolved.endpoint.protocol;
   if (protocol === resolved.endpoint.protocol) return resolved;
@@ -48,7 +45,6 @@ export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
 
-// What one model's requests can carry: its codec's, and a reasoning budget and cache points its connection type adds.
 function carries({ type, codec }: Resolved): Carries {
   const { reasoning, cache } = codec.carries;
   return {
@@ -71,8 +67,7 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
 }
 
 // settings is the 묶음's as stored; the 모델 설정 screen names each change with the same fit().
-// What a request sends before its codec writes it: the settings its model takes, and the messages with the roles and
-// cache points they go out with. chatRequest writes it and cacheView reads it, so a forecast compares what is sent.
+// chatRequest writes it and cacheView reads it, so a forecast compares what is sent.
 function sending(route: Resolved, { model, messages, settings: stored }: ChatRequest): ChatRequest {
   const { settings } = fit(settingsSchema(carries(route), model), stored);
   const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
@@ -86,9 +81,8 @@ export function chatRequest(route: Resolved, request: ChatRequest): HttpRequest 
   return route.codec.chat(route.endpoint, sent, fields);
 }
 
-// A request as a provider's cache reads it: its messages in the order the wire sends them, each with its place in the
-// prompt (index) and whether a cache point ends there. cache is how long the points keep it, null when none is sent.
-// Reasoning is there because changing it drops the cached messages.
+// cache is how long the points keep it, null when none is sent. Reasoning is there because changing it drops the cached
+// messages.
 export type CacheView = { model: string; reasoning: ModelSettings['reasoning']; cache: Cache | null; messages: (ChatMessage & { index: number })[] };
 
 export function cacheView(route: Resolved, request: ChatRequest): CacheView {
@@ -107,7 +101,6 @@ function cachePoints(messages: ChatMessage[], caching: boolean): ChatMessage[] {
   return messages.map((message, index) => (!message.cache || kept.has(index) ? message : { role: message.role, content: message.content }));
 }
 
-// The credential is the stored key, or the token a connection type traded it for.
 export function withCredential({ type, codec }: Resolved, request: HttpRequest, credential: string): HttpRequest {
   return { ...request, headers: { ...request.headers, ...(type?.headers ?? codec.authHeaders)(credential) } };
 }
@@ -118,7 +111,6 @@ export type Detection =
   | { kind: 'generic-url'; baseUrl: string; problem: 'not-https' | 'local' | null }
   | { kind: 'unknown-key'; secret: string };
 
-// One pasted value, recognized by key shape or host.
 export function detect(input: string): Detection | null {
   const text = input.trim();
   if (!text) return null;
@@ -140,9 +132,8 @@ export type Search =
   | { kind: 'address'; baseUrl: string }
   | { kind: 'none' };
 
-// The 연결 추가 list's one field: a pasted key or address is recognized first, because detect reads
-// any single word as a key; only then is the text a name to look for. A key never shapes the result
-// beyond its type, so it is not echoed back.
+// A pasted key or address is recognized first, because detect reads any single word as a key; only then is the text a
+// name to look for. A key never shapes the result beyond its type, so it is not echoed back.
 export function searchTypes(input: string): Search {
   const text = input.trim();
   if (!text) return { kind: 'types', types: CONNECTION_TYPES };
@@ -155,7 +146,6 @@ export function searchTypes(input: string): Search {
   return types.length ? { kind: 'types', types } : { kind: 'none' };
 }
 
-// Accepts an address copied from a provider's docs, with or without an endpoint path on the end.
 export function normalizeBaseUrl(text: string): string | null {
   if (!/^https?:\/\//i.test(text)) return null;
   let url: URL;

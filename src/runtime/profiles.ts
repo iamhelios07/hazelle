@@ -13,8 +13,8 @@ import { without, type ObjectStore } from './store';
 // Fixed, so two devices adding the first 묶음 at once meet in a version conflict instead of making two.
 export const FIRST_PROFILE_ID = '00000000-0000-4000-8000-000000000003';
 
-// The 묶음 a starred model uses: its own, else the default. A deleted one, or a default not added yet, reads as
-// missing and never as another 묶음; a turn stops on it, as it does on a missing prompt.
+// A deleted one, or a default not added yet, reads as missing and never as another 묶음; a turn stops on it, as it
+// does on a missing prompt.
 export type ProfileChoice = { kind: 'profile'; profile: Stored<'profile'>; own: boolean } | { kind: 'missing'; own: boolean };
 
 const profileId = (model: Starred, defaultProfile: string | undefined) => model.profile ?? defaultProfile;
@@ -26,7 +26,6 @@ export function modelProfile(store: ObjectStore, model: Starred): ProfileChoice 
   return profile ? { kind: 'profile', profile, own } : { kind: 'missing', own };
 }
 
-// The starred models that use a 묶음, its own or as the default, in connection order.
 export type ProfileUser = { connection: Stored<'connection'>; model: Starred };
 export function profileUsers(connections: readonly Stored<'connection'>[], defaultProfile: string | undefined, id: string): ProfileUser[] {
   return connections.flatMap((connection) => connection.value.starred.filter((model) => profileId(model, defaultProfile) === id).map((model) => ({ connection, model })));

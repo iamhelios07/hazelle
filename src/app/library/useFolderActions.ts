@@ -3,7 +3,6 @@ import type { FolderTree } from '../../model/library';
 import { useLibrary, useStore } from '../session';
 import { useToast } from '../toast';
 
-// Making, renaming, removing and filling folders. Each says in a toast how it went, and a removal offers 되돌리기.
 export function useFolderActions() {
   const store = useStore();
   const toast = useToast();

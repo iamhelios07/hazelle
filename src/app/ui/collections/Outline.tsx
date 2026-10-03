@@ -22,42 +22,31 @@ export type OutlineStop = {
   flagged?: boolean;
   // A cache point after the stop, drawn as a dashed line under it: one set on it, or one the app sets itself.
   cache?: 'set' | 'auto';
-  // What a screen reader reads for the row.
   label: string;
 };
 
 type Props = {
   label: string;
-  // How the keys work, read with every row.
   help: string;
   start: string;
   end: string;
   stops: OutlineStop[];
   current: string | null;
   onPick: (id: string) => void;
-  // Enter: into the block's own page or text.
   onOpen: (id: string) => void;
   onRemove: (id: string) => void;
   // to is the index the stop ends at.
   onMove: (from: number, to: number) => void;
-  // The menu behind each "+", for a new stop at that index; the last one is 맨 끝에 추가.
   insert: (index: number) => ReactNode;
-  // Sets or takes off the cache point after a stop, from a toggle beside 빼기. A point the app sets has none.
   onCache: (id: string) => void;
-  // drag: drag and Alt+↑/↓. buttons: ↑/↓ on each row instead, where there is no drag (the phone's 순서 바꾸기).
   reorder?: 'drag' | 'buttons';
-  // A chevron on each row: it opens a page of its own (phone).
   drill?: boolean;
 };
 
-// A subway map of what is sent, top to bottom. The line between two stops takes the
-// upper stop's color, so it changes color at the stop where the section changes, and a section change leaves a wider
-// gap. Stops are one grid: number, node, title, meta.
 export function Outline({ label, help, start, end, stops, current, onPick, onOpen, onRemove, onMove, insert, onCache, reorder = 'drag', drill = false }: Props) {
   const list = useRef<HTMLDivElement>(null);
   const helpId = useId();
   const [drag, setDrag] = useState<{ from: number; at: number } | null>(null);
-  // The row to focus once the stops have changed under it: moved, or next after a removal.
   const refocus = useRef<string | null>(null);
 
   const focusStop = (id: string) => list.current?.querySelector<HTMLElement>(`[data-stop="${CSS.escape(id)}"]`)?.focus();

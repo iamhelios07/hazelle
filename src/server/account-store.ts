@@ -1,6 +1,4 @@
-// One account's objects and the counters that change with them, as rules over StoreDb. The Durable Object
-// (account-object.ts) runs them over workerd's storage, the tests over store-db-node.ts. Nothing here may import
-// cloudflare:workers: vitest loads this file in plain Node.
+// Nothing here may import cloudflare:workers: vitest loads this file in plain Node.
 
 export type Life = { state: 'active' | 'restoring' | 'leaving' | 'gone'; timeline: string | null; operation: number | null };
 export type Unavailable = { unavailable: true };
@@ -15,9 +13,8 @@ type WrongPhase = { wrongPhase: true };
 
 export type SqlValue = string | number | null;
 
-// What the rules need of a SQLite-backed Durable Object's storage. workerd refuses BEGIN, SAVEPOINT and PRAGMA in
-// exec; a transaction is only transaction(fn), which rolls back when fn throws. wipe() drops every table and every
-// kv key, as deleteAll() does; the bookmarks outlive it.
+// workerd refuses BEGIN, SAVEPOINT and PRAGMA in exec; a transaction is only transaction(fn), which rolls back when fn
+// throws. wipe() drops every table and every kv key, as deleteAll() does; the bookmarks outlive it.
 export type StoreDb = {
   exec<T>(sql: string, ...binds: SqlValue[]): T[];
   transaction<T>(fn: () => T): T;

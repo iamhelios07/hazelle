@@ -16,11 +16,9 @@ import { saveSummaries } from './summary';
 import type { ObjectStore, Write } from './store';
 
 export type MovePick = Pick<BackupCatalog, 'characters' | 'personas' | 'presets' | 'modules'>;
-// pictures counts every picture the pick holds, across its modules and characters, as they go up.
 export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules' | 'pictures'; done: number; total: number };
 // risu: its Risu chaId. skipped as in runtime/characters ImportedCharacter; faceless also when the picture did not read.
 export type MovedCharacter = { id: string; risu: string; name: string; chats: number; skipped: number; faceless: boolean; report: ImportReport; missed: MoveUnsupported[]; unused: Unused[] };
-// skipped: its pictures that were not kept.
 export type MovedModule = { name: string; unsupported: ImportReport['unsupported']; skipped: number };
 export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[] };
 
@@ -68,7 +66,6 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => a.lastTalk - b.lastTalk);
   const pictureTotal = [...dueModules, ...due].reduce((sum, { assetCount }) => sum + assetCount, 0);
   let picturesDone = 0;
-  // Uploading pictures is the long part of a move, so each window of them is reported over the whole pick.
   const uploading: Progress = (step) => {
     if (step.kind === 'assets') progress({ kind: 'pictures', done: picturesDone + step.done, total: pictureTotal });
   };

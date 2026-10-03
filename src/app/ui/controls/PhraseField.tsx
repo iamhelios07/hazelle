@@ -6,8 +6,7 @@ import styles from './PhraseField.module.css';
 
 type Props = { label: string; phrases: string[]; onChange: (phrases: string[]) => void };
 
-// Phrases as removable chips, and a field that adds the one typed on Enter. A phrase is kept exactly as
-// typed: a stop phrase's spaces are part of it.
+// A phrase is kept exactly as typed: a stop phrase's spaces are part of it.
 export function PhraseField({ label, phrases, onChange }: Props) {
   const [draft, setDraft] = useState('');
   return (

@@ -5,7 +5,7 @@ import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
 import { add, cbs, read, text, UNSET, working, write, type Acting, type Host, type ModelMessage, type Run, type Snapshot, type Working } from './state';
 
-// One Lua trigger of a pack. name is for error messages only.
+// name is for error messages only.
 export type Script = Extract<Trigger, { kind: 'lua' }>;
 
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
@@ -22,9 +22,8 @@ export type Event =
 type Failure = { message: string } | { runaway: true };
 export type ScriptError = { script: string } & Failure;
 
-// What a run did, for the caller to save. index is a message's place in the snapshot. value: an edit's result.
-// handled: some script had the function the event calls, or a block trigger answered it. missing: the functions
-// called and the block effects met that this app does not have.
+// index is a message's place in the snapshot. handled: some script had the function the event calls, or a block
+// trigger answered it. missing: the functions called and the block effects met that this app does not have.
 export type Outcome = {
   value: unknown;
   stop: boolean;
@@ -38,7 +37,7 @@ export type Outcome = {
   missing: string[];
 };
 
-// One message's editDisplay pass. variables: the writes since the item before it, over the snapshot's.
+// variables: the writes since the item before it, over the snapshot's.
 export type DisplayItem = { index: number; text: string; variables: [string, string][] };
 // listening: false for a script whose engine holds no editDisplay listener, which has no part in any pass.
 export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[] };
@@ -69,9 +68,8 @@ const view = ({ role, data, time }: Working) => ({ role, data, time });
 
 const MODEL_ROLES: Record<string, ModelMessage['role']> = { system: 'system', sys: 'system', user: 'user', assistant: 'assistant', bot: 'assistant', char: 'assistant' };
 
-// The bot scripts' virtual machines. owner names whose Lua globals an engine holds (a chat), so two chats of one bot
-// never share them; lane keeps the display's engines apart from the events', so a question an event waits on never
-// holds up the display.
+// owner names whose Lua globals an engine holds (a chat), so two chats of one bot never share them; lane keeps the
+// display's engines apart from the events', so a question an event waits on never holds up the display.
 export class Lua {
   private readonly worksets = new Map<string, Workset>();
   private readonly displays = new Map<string, DisplaySession>();

@@ -4,10 +4,8 @@ import { Icon } from '../foundation/Icon';
 import styles from './IconButton.module.css';
 
 type Props = {
-  // A letter in the serif face in place of an icon, such as 읽기 설정's 가.
   icon: LucideIcon | string;
   label: string;
-  // The tooltip, when it says more than the label, such as the keys that press it.
   title?: string;
   onClick: () => void;
   pressed?: boolean;
@@ -18,13 +16,11 @@ type Props = {
   // The id of what it holds open elsewhere, such as a SidePeek's drawer.
   controls?: string;
   ref?: Ref<HTMLButtonElement>;
-  // xs: a message's tools and version switcher.
   size?: 'xs' | 'sm' | 'md';
   disabled?: boolean;
 };
 
-// label is required: an icon-only button has no other accessible name. pressed makes it a toggle,
-// such as a star, drawn filled in the accent color while on.
+// label is required: an icon-only button has no other accessible name.
 export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, controls, ref, size = 'md', disabled = false }: Props) {
   return (
     <button

@@ -12,13 +12,12 @@ import type { ObjectStore } from './store';
 
 export const callOf = (route: Route): Stream['call'] => ({ connection: route.connection.id, source: route.connection.value.label, model: route.model.id, modelName: route.model.name });
 
-// What a new call is for: its id, the saved chat that keeps its marker (null for a chat not saved yet, whose call a
-// reload does not pick up), the id its result is saved under, and what that result is.
+// chat: null for a chat not saved yet, whose call a reload does not pick up.
 export type CallTarget = { id: string; chat: string | null; result: string; for: Stream['for'] };
 
-// A new call's keys. Its marker is written once the server holds the call, never before: a pick-up that found the
-// marker of a call not started yet would read no call and save that as its result. A marker that fails to save only
-// leaves the call to this page; one that lands after its result was saved is removed by the next pick-up.
+// Its marker is written once the server holds the call, never before: a pick-up that found the marker of a call not
+// started yet would read no call and save that as its result. A marker that fails to save only leaves the call to this
+// page; one that lands after its result was saved is removed by the next pick-up.
 export async function newCall(store: ObjectStore, route: Route, { id, chat, result, for: purpose }: CallTarget): Promise<StreamCall> {
   const key = await streamKey();
   const at = Date.now();
@@ -33,7 +32,6 @@ export async function botCall(chat: string): Promise<StreamCall> {
   return { id: crypto.randomUUID(), key: key.private, public: key.public, bot: chat };
 }
 
-// Once the call's result is saved, here or by another device.
 export function endCall(store: ObjectStore, id: string) {
   dropStream(id);
   if (store.get('stream', id)) void store.remove(id);

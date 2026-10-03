@@ -5,7 +5,6 @@ import { SaveQueue, Saves } from './saveQueue';
 type Note = { title: string; body: string };
 type Answer = { ok: true } | ApiFailure;
 
-// Each write waits until the test answers it.
 function queue() {
   const writes: { patch: Partial<Note>; answer: (answer: Answer) => void }[] = [];
   const saves = new SaveQueue<Note>(
@@ -114,7 +113,6 @@ describe('SaveQueue', () => {
   });
 });
 
-// The page's beforeunload listeners, which stand for the browser asking before the tab goes.
 function page() {
   const asking = new Set<unknown>();
   const target = { addEventListener: (_: string, listener: unknown) => void asking.add(listener), removeEventListener: (_: string, listener: unknown) => void asking.delete(listener) };

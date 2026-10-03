@@ -5,7 +5,6 @@ import { useAutosave } from '../common/useAutosave';
 import { useSettings, useStore } from '../session';
 import { Section } from '../ui';
 
-// The account's memory settings, which every chat without its own follows.
 export function MemoryDefaults() {
   const store = useStore();
   // Subscribed for its changes: defaultMemory reads the settings from the store.

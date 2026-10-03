@@ -19,8 +19,8 @@ const ARM_TRIES = 3;
 // Steps one run takes before it stops: every phase once, the re-arms, and the compare-and-sets a parallel run won.
 const MAX_STEPS = 24;
 
-// The account's store, typed as the rules it runs: its answers are plain values, so RPC's wrapping of them changes
-// nothing a caller reads. A fresh stub per call: a stub got before a restart fails every later call.
+// Its answers are plain values, so RPC's wrapping of them changes nothing a caller reads. A fresh stub per call: a stub
+// got before a restart fails every later call.
 export const store = (env: Env, incarnation: string) =>
   env.STORES.getByName(incarnation) as unknown as { [M in keyof StoreRules]: StoreRules[M] } & { restart(incarnation: string): Promise<never> };
 
@@ -32,8 +32,6 @@ async function reload(env: Env, incarnation: string): Promise<Life | Unavailable
     .catch(() => {});
   return store(env, incarnation).status(incarnation);
 }
-
-// --- Deletion
 
 // left: the account's row is deleted, by this run or an earlier one. Its pictures are removed after the answer.
 export async function leaveAccount(
@@ -78,8 +76,6 @@ export async function leaveAccount(
   return 'left';
 }
 
-// --- Restore
-
 export type Run = { id: number; phase: Phase; verified: boolean; error: string | null };
 
 type Operation = {
@@ -92,9 +88,7 @@ type Operation = {
   phase: Phase;
   verified: number;
   error: string | null;
-  // The undone operation's checkpoint, which an undo rewinds to.
   undone: string | null;
-  // The time the target bookmark stands for, which expires with the bookmarks.
   target_at: number;
 };
 
@@ -153,7 +147,7 @@ export async function beginRestore(env: Env, accountId: string, report: number, 
   return { refused: at === null ? 'cannot-undo' : 'bad-time' };
 }
 
-// Runs the operation from its phase until it is finished and verified or a step must stop. null: no such operation.
+// null: no such operation.
 // Every step re-reads the operation, so a run that lost a compare-and-set to a parallel run follows where it went.
 export async function runRestore(env: Env, id: number): Promise<Run | null> {
   let arms = 0;
@@ -269,7 +263,6 @@ async function step(env: Env, operation: Operation, armedTooOften: () => boolean
   }
 }
 
-// One compare-and-set on the operation's phase. set: more columns to write with it, valued by binds.
 function advance(db: D1Database, id: number, from: Phase, to: Phase, set?: string, ...binds: (string | number)[]) {
   return db
     .prepare(`UPDATE restores SET phase = ?, error = NULL, updated_at = ?${set ? `, ${set}` : ''} WHERE id = ? AND phase = ?`)
@@ -277,7 +270,7 @@ function advance(db: D1Database, id: number, from: Phase, to: Phase, set?: strin
     .run();
 }
 
-// Ends an operation that never armed: the account goes back to active with the timeline it had. true: this run ended it.
+// true: this run ended it.
 async function release(env: Env, operation: Operation, to: 'cancelled' | 'failed', from: Phase[], error: string | null) {
   const db = env.DB;
   const [ended] = await db.batch([

@@ -61,7 +61,6 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
   );
 }
 
-// The language a switch translates into, inside its sentence: 답장을 [한국어]로 번역해서 보기.
 function Into({ before, after, label, value, onPick }: { before: string; after: string; label: string; value: string; onPick: (name: string) => void }) {
   const word = languageLabel(value);
   return (

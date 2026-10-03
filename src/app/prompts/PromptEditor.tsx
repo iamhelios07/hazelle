@@ -69,7 +69,7 @@ type Parts = { head: NavBarProps; body: ReactNode; side?: ReactNode; open: strin
 
 type Props = {
   stored: Stored<'prompt'>;
-  // split: the outline beside the open part. drill: the outline alone, and a part opens in its place. The caller
+  // The caller
   // decides, since a side panel is narrow on any screen.
   layout: 'split' | 'drill';
   // The 토글 pane is open: a page keeps it in its address, a panel in its own state.
@@ -77,10 +77,9 @@ type Props = {
   onPane: (pane: Pane) => void;
   backLabel: string;
   onBack: () => void;
-  // The copy just made, to open in this one's place.
   onCopied: (id: string) => void;
   onErased: () => void;
-  // A page or a side panel: the editor says what its head holds, the caller how it looks.
+  // The editor says what its head holds, the caller how it looks.
   frame: (parts: Parts) => ReactNode;
 };
 

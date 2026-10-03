@@ -12,7 +12,6 @@ import { without, type ObjectStore, type Write } from './store';
 
 export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 
-// What a character owns, its files stored already.
 type Owned = { avatar: Avatar | null; assets: Asset[]; lore: Lore[] };
 
 // Files are read and sent this many at a time, so a bot of thousands never holds them all at once.
@@ -67,8 +66,6 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
 // A moved character's id is already named by its staged entries; chats: their roots (runtime/chat-log chatWrites).
 export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; chats: Write[] };
 
-// A card as the importer read it, in no library folder unless brought. Its picture and assets are stored first; its
-// lorebook folders get ids, and each entry names its folder by that id instead of the importer's index.
 export async function importCharacter(
   store: ObjectStore,
   files: Files,
@@ -98,9 +95,8 @@ export async function importCharacter(
   return added.ok ? { ok: true, data: { id: added.data, skipped, faceless: picture !== null && avatar === null } } : added;
 }
 
-// A copy that goes its own way (사본 만들기): the card under a new name, the lorebook, the picture and the assets, in
-// the original's folder. Chats stay with the original, and so does the alias, which tells the two apart. The copy
-// names the same stored files.
+// 사본 만들기: chats stay with the original, and so does the alias, which tells the two apart. The copy names the same
+// stored files.
 export async function copyCharacter(store: ObjectStore, id: string, name: string, progress: Progress): Promise<ApiResult<string>> {
   const failed = await store.pull();
   if (failed) return failed;
@@ -119,7 +115,6 @@ export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id
   return store.update(kind, id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }) as Values[K] | null);
 }
 
-// at is when it went to 휴지통, where it and its chats wait KEEP_DELETED before going for good.
 export const setDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'character', id, at);
 
 // Removal for good is decided once, by the purging claim, at the rev the claim is written on (store.update): a restore
@@ -131,13 +126,11 @@ async function purge(store: ObjectStore, kind: Removable, id: string, due: (valu
   return removeOwned(store, { kind, id }, progress);
 }
 
-// 지금 지우기: only one still in 휴지통.
 export const purgeNow = (store: ObjectStore, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
   purge(store, kind, id, (value) => value.deleted !== undefined, progress);
 
-// Removes for good what has been in 휴지통 past its time. The session runs it when it opens, on
-// whichever device opens first. One that fails is tried again next time. A stop (the vault closing) lets the one
-// under way finish and leaves the rest for next time.
+// The session runs it when it opens, on whichever device opens first. One that fails is tried again next time. A stop
+// (the vault closing) lets the one under way finish and leaves the rest for next time.
 export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
   const due = (value: Mark) => value.deleted !== undefined && daysLeft(value, now) <= 0;
   for (const kind of REMOVABLE) {
@@ -148,7 +141,6 @@ export async function purgeExpired(store: ObjectStore, now: number, signal: Abor
   }
 }
 
-// What 캐릭터 편집 changes: the card's text and the alias beside it.
 export type CharacterText = Card & { alias: string };
 
 // Only the fields given, the card's merged into the current card, so an edit to another field on another device
@@ -173,7 +165,6 @@ export function setBotModels(store: ObjectStore, id: string, botModels: boolean)
   return store.update('character', id, (current) => ({ ...current, botModels }));
 }
 
-// 상태창으로 지정 for one display script of the character's card, or on false its 지정 풀기.
 export function setStatusScript(store: ObjectStore, id: string, script: number, on: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => {
     const rest = (current.statusScripts ?? []).filter((place) => place !== script);
@@ -203,7 +194,6 @@ const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, reply
 // prompt absent follows the account's default translation prompt.
 export type TranslateSetup = typeof TRANSLATE_DEFAULTS & Pick<TranslateSwitches, 'prompt'>;
 
-// A character's 번역, in every chat of it, or that of every 캐릭터 없이 chat, as toggle values are.
 export function translateSwitches(store: ObjectStore, character: string | null): TranslateSetup {
   const saved = character === null ? store.get('settings', SETTINGS_ID)?.value.translate : store.get('character', character)?.value.translate;
   const switches = { ...TRANSLATE_DEFAULTS, ...saved };
@@ -217,7 +207,6 @@ export function setTranslate(store: ObjectStore, character: string | null, chang
   return store.update('character', character, (current) => ({ ...current, translate: merged(current.translate) }));
 }
 
-// Translations of greetings the card no longer holds go with the write.
 export function setGreetingTranslation(store: ObjectStore, character: string, greeting: string, language: string, translation: Translation) {
   return store.update('character', character, (current) => ({
     ...current,
@@ -228,7 +217,6 @@ export function setGreetingTranslation(store: ObjectStore, character: string, gr
   }));
 }
 
-// 기본값으로 되돌리기: the chats go back to the toggles' declared defaults.
 export function resetToggles(store: ObjectStore, character: string | null): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
   if (character === null) return store.upsert('settings', (current) => without({ models: {}, ...current }, 'toggles'));
   return store.update('character', character, (current) => without(current, 'toggles'));
@@ -236,7 +224,6 @@ export function resetToggles(store: ObjectStore, character: string | null): Prom
 
 type Placement = { id: string; folder: string | null };
 
-// One at a time; the first failure stops the rest.
 async function place(store: ObjectStore, placements: Placement[]): Promise<ApiResult<null>> {
   for (const { id, folder } of placements) {
     const saved = await store.update('character', id, (current) => ({ ...current, folder }));
@@ -273,7 +260,6 @@ export async function removeFolder(store: ObjectStore, id: string): Promise<ApiR
   return { ok: true, data: { folders, placements, up } };
 }
 
-// 되돌리기: the folders back under their ids, then every character back where it was.
 export async function restoreFolder(store: ObjectStore, { folders, placements }: RemovedFolder): Promise<ApiResult<null>> {
   for (const folder of folders) {
     const saved = await store.restore(folder);

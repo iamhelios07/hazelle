@@ -38,7 +38,7 @@ export function findAccount(db: D1Database, column: 'id' | 'username', value: st
     .first<StoredAccount>();
 }
 
-// The failed-login lock covers both methods and the password change. Returns the refusal, or null.
+// The failed-login lock covers both methods and the password change.
 export async function checkProof(c: Context<AppEnv>, account: StoredAccount, method: Method, proof: string): Promise<Response | null> {
   const db = c.env.DB;
   const now = Date.now();

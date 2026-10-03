@@ -21,7 +21,6 @@ const POSITIONS: { value: NonNullable<Position> | 'lorebook'; label: string }[] 
 ];
 const NUMBER_ERROR = '숫자를 적어 주세요.';
 const NO_FOLDER = '폴더 없음';
-// How many keys the folded line names.
 const KEYS_SHOWN = 3;
 
 // undefined: left empty. null: not a number.
@@ -31,7 +30,6 @@ const readNumber = (draft: string) => {
   return Number.isFinite(value) ? value : null;
 };
 
-// The folded line: the name, then what makes it go in.
 function summary({ name, enabled, constant, keys }: Lore) {
   const named = keys.filter((key) => key.trim());
   const more = named.length > KEYS_SHOWN ? ` 외 ${named.length - KEYS_SHOWN}개` : '';
@@ -41,14 +39,12 @@ function summary({ name, enabled, constant, keys }: Lore) {
 
 type Naming = { folder: LoreFolder | null; name: string };
 
-// 로어북 of a character or a module: its entries grouped by its folders, each opening to its fields, which save as they
-// are typed. folders: the owner's loreFolders as stored now.
+// folders: the owner's loreFolders as stored now.
 export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: LoreFolder[] }) {
   const store = useStore();
   const toast = useToast();
   const entries = useChildren('lore', owner.id);
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
-  // The entry just added, which opens at once.
   const [added, setAdded] = useState<string | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
 
@@ -116,7 +112,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
 
 type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; startOpen: boolean };
 
-// One entry, folded to its line; its edits wait in its own save queue, so the line shows them before they are stored.
+// Its edits wait in its own save queue, so the line shows them before they are stored.
 function EntryRow({ stored, folders, startOpen }: RowProps) {
   const store = useStore();
   const toast = useToast();

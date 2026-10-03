@@ -3,7 +3,7 @@ import type { ApiResult } from '../../runtime/api';
 import type { Page } from '../../runtime/pages';
 import { describeFailure } from './failure';
 
-// What a section shows from the server, asked when it mounts and again on reload. A failed reload keeps what was shown.
+// A failed reload keeps what was shown.
 export function useLoaded<T>(load: () => Promise<ApiResult<T>>) {
   const [data, setData] = useState<T | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -22,7 +22,6 @@ export function useLoaded<T>(load: () => Promise<ApiResult<T>>) {
   return { data, failure, reload: () => setAttempt((count) => count + 1) };
 }
 
-// Rows newest first, a page at a time: more asks for the page older than the last row shown.
 export function usePages<T extends { id: number }>(load: (before: number | null) => Promise<ApiResult<Page<T>>>) {
   const [rows, setRows] = useState<T[] | null>(null);
   const [more, setMore] = useState(false);
@@ -54,7 +53,6 @@ export function usePages<T extends { id: number }>(load: (before: number | null)
     busy,
     failure,
     older: () => void fetch(rows!.at(-1)!.id),
-    // A row changed by an act on this page, such as a report resolved.
     patch: (id: number, change: Partial<T>) => setRows((shown) => shown && shown.map((row) => (row.id === id ? { ...row, ...change } : row))),
   };
 }

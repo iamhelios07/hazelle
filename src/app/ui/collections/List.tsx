@@ -7,7 +7,6 @@ import styles from './List.module.css';
 // In the windowed form the Viewport's rows are the li, so an item renders none of its own.
 const Windowed = createContext(false);
 
-// With keys, only the rows near the view are made, each by children(index).
 export function List(props: { label: string; children: ReactNode } | { label: string; keys: readonly string[]; children: (index: number) => ReactNode }) {
   if ('keys' in props) {
     return (
@@ -26,24 +25,17 @@ export function List(props: { label: string; children: ReactNode } | { label: st
 }
 
 type ItemProps = {
-  // Before the title, such as a face.
   leading?: ReactNode;
   title: string;
-  // A gold mark beside the title, such as 기본.
   badge?: string;
-  // A machine name under the title, such as a model id, set in the mono face.
   code?: string;
   description?: string;
   tags?: string[];
-  // A short figure at the end of the row, before trailing, such as a count.
   aside?: string;
-  // Something at the end of the row: an icon, a badge, or a control of its own.
   trailing?: ReactNode;
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
-  // A control beside the row's button, such as 사본 2 that opens the rows under it.
   control?: ReactNode;
-  // Rows under this one, set in from it, such as a prompt's copies.
   children?: ReactNode;
   // pressed: one of a set of choices. current: the item open beside the list (ListDetail).
   selected?: boolean;

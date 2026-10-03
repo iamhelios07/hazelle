@@ -25,12 +25,10 @@ const readHeight = (draft: string) => {
 };
 const SWITCHES = { decor: setDecor, botModels: setBotModels, keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
-// One status for the editor's two saves: a failure first, then one still saving.
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
   statuses.find((each) => each === 'failed') ?? statuses.find((each) => each === 'saving') ?? statuses.find((each) => each !== null) ?? null;
 
-// 캐릭터 편집: the card's text and the alias, on its own page or beside the chat. Only the fields changed here go to
-// editCharacter. A caller leaves by unmounting it, which saves.
+// Only the fields changed here go to editCharacter. A caller leaves by unmounting it, which saves.
 // character: the stored character as it is now, on every render. The editor shows it, under what waits to be saved.
 export function CharacterEditor({ id, character, frame }: { id: string; character: Character; frame: Frame }) {
   const store = useStore();
@@ -39,7 +37,6 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const [typedName, setTypedName] = useState<string>();
   const [typedHeights, setTypedHeights] = useState<Partial<Record<Height, string>>>({});
-  // A switch shows its new value while its save is on its way, and the stored one again if that fails.
   const [switching, setSwitching] = useState<Partial<Record<Switched, boolean>>>({});
   const held: CharacterText = { ...character.card, alias: character.alias ?? '', ...unsaved };
   const text = { ...held, name: typedText(typedName, filled, held.name, String) };

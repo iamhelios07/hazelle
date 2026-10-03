@@ -8,11 +8,8 @@ import { PAGES } from '../common/words';
 import { Avatar, Button, List, ListItem } from '../ui';
 
 type Props = {
-  // A new persona is picked as soon as it is made.
   onPick: (id: string) => void;
-  // Open beside the list.
   current?: string;
-  // The one a chat uses, marked 사용 중.
   inUse?: string;
   frame: Frame;
 };

@@ -1,7 +1,5 @@
 import type { TranslatePrompt } from '../model/prompt';
 
-// A chat message as the chat shows it, into the reader's language; or the user's new message, after the chat's
-// messages, into the language the model is sent.
 export type TranslationRequest = { kind: 'message'; index: number } | { kind: 'input'; text: string };
 
 // The prompt was measured in the user's own translator (provider-hub src/translate/prompt.js): an edit must keep what

@@ -9,7 +9,6 @@ export const draftOf = (prompt: Prompt): Draft => ({ name: prompt.name, blocks: 
 
 export type NewBlock = { text: Role } | { slot: SlotKind };
 
-// How many messages a new 앞 메시지 holds, and at most.
 const RECENT_COUNT = 4;
 export const RECENT_MAX = 20;
 
@@ -35,7 +34,6 @@ export function newBlock(kind: NewBlock): Block {
   }
 }
 
-// The block standing in a slot that is placed once, which no second one joins.
 export const placedOnce = (blocks: readonly Block[], slot: SlotKind): Block | undefined =>
   SLOTS[slot].repeats ? undefined : blocks.find((each) => each.kind === 'slot' && each.slot === slot);
 
@@ -61,7 +59,6 @@ export function withMark(blocks: readonly Block[], id: string, mark: TextBlock['
   return { blocks: next, taken };
 }
 
-// Every text a condition can stand in: text blocks, 감싸는 글 and the default 작가의 노트.
 function rewrite(draft: Draft, change: (text: string) => string): PromptPatch {
   const blocks = draft.blocks.map((block) => {
     if (block.kind === 'text') return { ...block, text: change(block.text) };
@@ -81,7 +78,7 @@ export function rekey(draft: Draft, from: string, to: string): PromptPatch {
 
 export const keyInUse = (toggles: readonly Toggle[], key: string) => toggles.some((toggle) => toggle.key === key);
 
-// Why a key cannot be used, or null. A key stands inside {{#when::toggle::KEY}}, so it holds none of CBS's own marks.
+// A key stands inside {{#when::toggle::KEY}}, so it holds none of CBS's own marks.
 export function keyProblem(key: string, toggles: readonly Toggle[], own: string | null): string | null {
   if (!key) return '조건에서 부르는 이름을 적어 주세요.';
   if (/[\s:{}]/.test(key)) return '빈칸과 :, {, }는 쓸 수 없어요.';
@@ -89,9 +86,8 @@ export function keyProblem(key: string, toggles: readonly Toggle[], own: string 
   return null;
 }
 
-// What 조건 넣기 puts in place of the selection: selected text becomes the first branch, not replaced by it.
+// Selected text becomes the first branch, not replaced by it.
 // select: the placeholder to type over next, the first branch's or, after a selection, the second's.
-// What an insert types over the selection, and the selection it leaves.
 export type Snippet = { text: string; select: [number, number] };
 
 export function conditionSnippet(toggle: Toggle, selected: string): Snippet {

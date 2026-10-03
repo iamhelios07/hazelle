@@ -10,8 +10,7 @@ import type { ObjectStore } from './store';
 // Fixed, so two devices adding the first persona at once meet in a version conflict instead of making two.
 export const FIRST_ID = '00000000-0000-4000-8000-000000000002';
 
-// Who the user plays in a chat: its own persona, else the default. There is no chat without a persona; a
-// deleted one, or a default not added yet, reads as missing and never as
+// There is no chat without a persona; a deleted one, or a default not added yet, reads as missing and never as
 // another persona, and a turn stops on it.
 export type PersonaChoice = { kind: 'persona'; persona: Stored<'persona'>; own: boolean } | { kind: 'missing'; own: boolean };
 

@@ -2,7 +2,6 @@ import type { BackupCatalog } from '../../engine/import/types';
 import type { MovePick } from '../../runtime/move';
 
 export type Ticks = { characters: boolean[]; personas: boolean[]; presets: boolean[]; modules: boolean[] };
-// The Risu ids of what was already brought from Risu.
 export type Have = { characters: ReadonlySet<string>; modules: ReadonlySet<string> };
 
 export const hasModule = (have: Have, risu: string | null): boolean => risu !== null && have.modules.has(risu);

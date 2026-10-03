@@ -16,44 +16,32 @@ import { useReveal } from './useReveal';
 
 type Props = {
   message: Shown;
-  // The shown version's text as it is displayed. Editing starts from the stored text.
+  // Editing starts from the stored text.
   text: string;
-  // 봇 꾸밈: whether the bot's HTML is drawn, its CSS for the chat, its pictures' URLs, and whether its buttons run.
   decor: { bot: boolean; css: string; url: (id: string) => string | undefined; buttons: 'live' | 'inert' };
-  // The status window's boxes this message draws, being the latest to draw them, at the end each stood at.
   hosted: Box[];
-  // The boxes the bot drew in this message, by the script that draws each, and whether it is the status window's.
   offered: { script: number; name: string; marked: boolean }[];
-  // The chat's translations being made or failed, and whether this version shows the other way round from its default.
   translating: Translating;
-  // 답장 번역 will translate this version, being written or just written.
   awaited: boolean;
   flipped: boolean;
   isLast: boolean;
-  // The user's message right before the last reply, which 저장하고 새 답장 받기 answers again.
   beforeLastReply: boolean;
   // Who replies: the chat's character, or with none, the model named on each reply.
   character: { name: string; image: string | null } | null;
   // Who the user plays: the chat's persona, which {{user}} names in the prompt, so the row shows the same name the
   // model reads; null for a deleted persona, shown as missing rather than as the account.
   me: { name: string; image: string | null } | null;
-  // The chat's model, naming a reply still being written.
   modelName: string | null;
   // The greeting of a chat not started yet: its versions are the other greetings, and it has nothing
   // to regenerate, edit or delete.
   opening: boolean;
-  // A reply is being written somewhere, so no other can start.
   busy: boolean;
-  // What the edit box holds, while this message is being edited: its text, and its translation when it has one.
   editing: { text: string; translation: string | null } | null;
   pinned: boolean;
   // One of the messages a memory record was made from, marked as StoryMessage's found; the collection seeks the first.
   found: number;
-  // A branch of this chat is being saved; one at a time.
   branching: boolean;
-  // The header's model menu, which a failed reply's 다른 모델로 opens.
   modelMenu: MenuHandle;
-  // The 답장 정보 drawer's id, which ⓘ holds open.
   infoDrawer: string;
   actions: ChatActions;
 };
@@ -72,12 +60,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const receipt = version.receipt;
   const mine = message.role === 'user';
   const live = message.live === version.id;
-  // A version with a translation shows it, and a translation being made shows as it comes.
   const translation = version.translation ?? null;
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
   const text = flipped ? original : translatingText || (translation?.text ?? original);
-  // What shows until a translation's first text comes stays faded, and the translation then streams in its place.
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live && !message.whole);
   const html = useMemo(() => shownHtml(reveal.text, decor), [reveal.text, decor.bot, decor.url]);
@@ -299,5 +285,4 @@ function sameRow(previous: Props, next: Props): boolean {
   return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
 }
 
-// A shown text as the story draws it, in a message or in 상태.
 export const shownHtml = (text: string, { bot, url }: Props['decor']) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));

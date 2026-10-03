@@ -41,7 +41,6 @@ type ItemKind = 'character' | 'prompt' | 'persona' | 'module' | 'profile';
 const absentItem = <K extends ItemKind>(kind: K, stored: Stored<K> | null): K | `deleted-${K}` =>
   stored && isBinned(stored.value) ? `deleted-${kind}` : kind;
 
-// What the item's side of a list says before anything is picked from it.
 const EMPTY = {
   connections: '연결을 고르면 모델 목록과 사용량이 여기에 보여요.',
   'add-connection': '왼쪽에서 연결할 곳을 고르면 여기서 이어서 연결해요.',
@@ -61,7 +60,6 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
 
   function screen(at: Route): ReactNode {
     switch (at.kind) {
-      // The desktop home: every character, or before there is one, the first steps.
       case 'home':
         return <HomePage />;
       case 'gallery':
@@ -116,7 +114,6 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
     }
   }
 
-  // The connection, persona, module and 모델 screens: their list and the item picked from it, side by side when there is room.
   const list = listOf(route);
   if (!list) return screen(route);
   const detail = route.kind === list.kind ? null : screen(route);
@@ -172,7 +169,6 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
       {chatModel.state === 'failed' && <Button onClick={chatModel.retry}>다시 시도</Button>}
     </Screen>
   );
-  // Its character is in 휴지통, or gone for good.
   if (character !== null && !shelf) return missing(at, 'orphaned-chat', wide);
   return <ChatScreen key={item.id} id={item.id} item={item} shelf={shelf} back={wide ? null : back} side={side} />;
 }

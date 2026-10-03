@@ -22,7 +22,6 @@ const picture = () => ({ bytes: randomBytes(64), type: 'image/png' });
 const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: testCard(name), folder: null, loreFolders: [], ...over });
 const none = { avatar: null, assets: [], lore: [] };
 
-// A saved chat with a message, held, so its entries can be read.
 async function savedChat(store: ObjectStore, character: string | null = null) {
   const id = crypto.randomUUID();
   await server.hold(store, id);

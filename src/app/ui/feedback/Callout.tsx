@@ -8,9 +8,7 @@ const ICONS = { warn: TriangleAlert, success: CircleCheck };
 
 type Props = {
   tone: keyof typeof ICONS;
-  // The callout reports the outcome of something the user just did, so screen readers announce it.
   alert?: boolean;
-  // Under the note, such as 다시 불러오기 after a list failed to load.
   action?: { label: string; onClick: () => void };
   children: ReactNode;
 };

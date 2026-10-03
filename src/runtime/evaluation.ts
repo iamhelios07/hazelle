@@ -11,7 +11,6 @@ import workerUrl from './evaluation-worker?worker&url';
 export class EvaluationStopped extends Error {}
 export class EvaluationFailed extends Error {}
 
-// What an evaluation that did not finish tells its caller: it was stopped with that caller, or the worker failed.
 export function evaluationFailure(error: unknown): ApiFailure {
   if (error instanceof EvaluationStopped) return { ok: false, error: 'stopped' };
   if (error instanceof EvaluationFailed) return { ok: false, error: 'evaluation-unavailable' };
@@ -77,7 +76,6 @@ export class Evaluation {
     return this.run(`count:${++this.ids}`, null, { kind: 'count', texts }) as Promise<Counted<number[]>>;
   }
 
-  // The tokenizer is loaded ahead of the first job that counts.
   warm() {
     if (!this.closed) this.open().postMessage({ warm: true } satisfies EvaluationDown);
   }

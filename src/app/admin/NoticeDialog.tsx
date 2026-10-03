@@ -14,9 +14,7 @@ type Props = {
   optional?: boolean;
   placeholder?: string;
   confirm: { label: string; icon: LucideIcon };
-  // What the notice is about, above the field, such as the report it answers.
   about?: ReactNode;
-  // Another action beside confirm, such as 이 알림으로 복원.
   also?: ReactNode;
   send: (text: string) => Promise<ApiResult<undefined>>;
   onSent: () => void;

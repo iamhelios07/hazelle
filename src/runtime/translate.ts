@@ -20,14 +20,10 @@ import type { ObjectStore } from './store';
 import { receiptOf } from './talk';
 import { evaluationFailure } from './evaluation';
 
-// What one translation is made from: the chat, whose character's 번역 picks the prompt and the language and whose
-// layers the 보조 모델 a prompt without a model takes, its scope with each message's translation text or null, and what to translate.
 // take: the display scripts that draw the status window (상태창 지정), whose boxes the source leaves out.
 export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest };
 
-// prompt-missing: the translation prompt chosen (own) or the default is gone. failed: the call's receipt says why, and
-// a cut one that wrote nothing is failed too. unsaved: what failure says stopped it, the chat's evaluation before a
-// call or the translation's save after one.
+// failed: the call's receipt says why, and a cut one that wrote nothing is failed too.
 export type TranslateFailure =
   | RouteFailure
   | { kind: 'prompt-missing'; own: boolean }
@@ -40,9 +36,8 @@ export type TranslateFailure =
 
 type Deps = { store: ObjectStore; credentials: Credentials };
 
-// One call to the chat's 번역 model, with that model's 설정 묶음, through the character's translation prompt. A reply
-// goes into its replyLanguage and the user's message into its inputLanguage. A translation cut at its length keeps what it
-// wrote, and its receipt says it was cut.
+// A reply goes into its replyLanguage and the user's message into its inputLanguage. A translation cut at its length
+// keeps what it wrote, and its receipt says it was cut.
 export async function translate(
   { store, credentials }: Deps,
   { chat, scope, take, translations, request }: TranslateInput,
@@ -105,7 +100,6 @@ function translated(call: Stream['call'], answer: Reply, text: string, language:
   return { ok: true, translation: { text: text.trim(), receipt, at: Date.now() }, language };
 }
 
-// The prompt a chat's translations go through and the model that makes them.
 export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt: TranslatePrompt; route: Route } | { ok: false; failure: RouteFailure | { kind: 'prompt-missing'; own: boolean } } {
   const prompt = translationPrompt(store, translateSwitches(store, chat.character).prompt);
   if (prompt.kind === 'missing') return { ok: false, failure: { kind: 'prompt-missing', own: prompt.own } };
@@ -115,12 +109,10 @@ export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt
 
 export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }>;
 
-// live: the text so far of each translation being made, by the version's id. failed: why the last try at a version
-// did not translate it, kept for the session.
+// failed: why the last try at a version did not translate it, kept for the session.
 export type Translating = { live: ReadonlyMap<string, string>; failed: ReadonlyMap<string, TranslatorFailure> };
 
-// The translations of the chats' messages. Unlike replies, several run at once, one per version, and each goes
-// on when its chat is left.
+// Unlike replies, several run at once, one per version, and each goes on when its chat is left.
 export class Translator {
   private closed = false;
   private state: Translating = { live: new Map(), failed: new Map() };
@@ -165,7 +157,6 @@ export class Translator {
     );
   }
 
-  // A translation the server was making when this page came, which Streams hands over.
   resume(stream: Stored<'stream'>, version: string) {
     const chat = stream.parent!;
     if (this.closed || this.aborts.has(version)) return;

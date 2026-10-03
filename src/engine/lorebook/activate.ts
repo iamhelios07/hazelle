@@ -13,9 +13,7 @@ export type Placement =
   | { kind: 'description'; side: 'before' | 'after' }
   // Counted from the end of the chat: 0 is after the last message.
   | { kind: 'depth'; depth: number; role: Role }
-  // Where the template's text holds {{position::name}}.
   | { kind: 'position'; name: string }
-  // The template location @@inject_at names, as written.
   | { kind: 'inject'; target: string; operation: Operation };
 
 export type KeyMatch = { query: 'primary' | 'secondary' | 'additional'; key: string; source: Source };

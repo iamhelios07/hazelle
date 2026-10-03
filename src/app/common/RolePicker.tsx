@@ -21,7 +21,7 @@ function modelName(ref: ModelRef, connections: readonly Stored<'connection'>[]):
   return choice ? `${choice.name} · ${choice.source}` : NOT_STARRED;
 }
 
-// role: the models it offers. label: a task's own model is picked from 보조 모델's models under the task's name.
+// label: a task's own model is picked from 보조 모델's models under the task's name.
 type Props = {
   role: Role;
   label?: string;
@@ -34,7 +34,6 @@ type Props = {
   onPick: (ref: ModelRef | null) => void;
 };
 
-// One role of one layer of the model assignment, or a task prompt's own model.
 export function RolePicker({ role, label = MODEL_ROLES[role], help, own, follow, connections, onPick }: Props) {
   const starred = starredModels(connections, role);
   const current = own ? modelName(own, connections) : (follow ?? '정하지 않음');

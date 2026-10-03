@@ -8,7 +8,6 @@
   background: var(--color-sidebar);
 }
 
-/* Too narrow for the story and the panel side by side: the panel covers the page. */
 @media (max-width: 1279px) {
   .panel {
     position: fixed;
@@ -38,7 +37,6 @@
   border-bottom: var(--border-thin) solid var(--color-divider);
 }
 
-/* A screen's own top row can be taller than a title, with its subtitle under the name. */
 .screen {
   height: auto;
   min-height: var(--header-height);

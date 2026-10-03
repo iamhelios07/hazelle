@@ -2,7 +2,6 @@ import styles from './Facts.module.css';
 
 type Item = { label: string; value: string; tone?: 'muted' | 'warn' };
 
-// Label and value pairs, such as a reply's receipt. tiles sets each pair in a box, two to a row.
 export function Facts({ items, variant = 'plain' }: { items: Item[]; variant?: 'plain' | 'tiles' }) {
   return (
     <dl className={variant === 'tiles' ? `${styles.facts} ${styles.tiles}` : styles.facts}>

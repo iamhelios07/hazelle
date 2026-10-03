@@ -3,14 +3,12 @@ import styles from './EditorFrame.module.css';
 
 type Props = {
   top: ReactNode;
-  // An outline of what is edited, beside the part of it that is open.
   side: ReactNode;
   // The page scrolls back to its top when this changes, such as when another part is opened.
   page: string;
   children: ReactNode;
 };
 
-// A long thing edited one part at a time, such as a prompt on wide screens. Each column scrolls on its own.
 export function EditorFrame({ top, side, page, children }: Props) {
   const main = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {

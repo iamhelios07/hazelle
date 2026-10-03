@@ -18,9 +18,8 @@ const panel =
     </SidePanel>
   );
 
-// Ctrl+E and Ctrl+P beside the chat: the list first, and the one picked opens in its place. 캐릭터 편집 opens the
-// chat's character alone. Each editor is keyed by its id and saves as it unmounts, so going back to the list or
-// closing the panel saves what was typed.
+// Each editor is keyed by its id and saves as it unmounts, so going back to the list or closing the panel saves what
+// was typed.
 export function ChatSide(props: SideAt) {
   const { open } = props;
   if (open.kind === 'character') return <CharacterSide {...props} open={open} />;

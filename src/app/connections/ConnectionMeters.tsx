@@ -13,16 +13,13 @@ const figure = (unit: MeterUnit, value: number) => (unit === 'requests' ? `${num
 
 const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${monthDay(resets.at)} 초기화`);
 
-// Out of a cap, what is left reads as "남음"; a balance with no cap needs no such word.
 function fact(meter: Meter) {
   if (meter.kind === 'spent' || meter.limit === null) return { label: meter.label, value: figure(meter.unit, meter.amount) };
   const label = meter.resets ? `${meter.label} · ${reset(meter.resets)}` : meter.label;
-  // A unit written after the number is said once, after the cap: "38 남음 / 50회".
   const amount = meter.unit === 'usd' ? usd(meter.amount) : number(meter.unit, meter.amount);
   return { label, value: `${amount} 남음 / ${figure(meter.unit, meter.limit)}` };
 }
 
-// For a connection whose type reports meters.
 export function ConnectionMeters({ connection }: { connection: Connection }) {
   const [result, setResult] = useState<MetersResult | null>(null);
   const [attempt, setAttempt] = useState(0);

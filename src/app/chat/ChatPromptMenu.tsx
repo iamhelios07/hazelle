@@ -30,7 +30,7 @@ export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
   );
 }
 
-// Mounted only while the menu is open, so each opening starts with an empty search. The conversation prompts go by their latest use in any chat, then by name.
+// Mounted only while the menu is open, so each opening starts with an empty search.
 function PromptChoices({ chat }: { chat: OpenChat }) {
   const { prompt, actions } = chat;
   const { store } = useSession();

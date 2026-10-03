@@ -54,7 +54,6 @@ export function ReportsSection({ onActed, onRestore }: { onActed: () => void; on
   );
 }
 
-// An open report is resolved with an optional reply, which goes to its sender as a notice.
 function ReportDialog({ report, onClose, onRestore, onResolved }: { report: Report; onClose: () => void; onRestore: () => void; onResolved: (at: number) => void }) {
   const title = `${report.username}의 알림`;
   const text = <Text variant="prose">{report.text}</Text>;

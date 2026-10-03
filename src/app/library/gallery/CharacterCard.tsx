@@ -10,15 +10,12 @@ import { binnedCharacter, type CharacterActions } from '../useCharacterActions';
 
 type Props = {
   shelf: CharacterShelf<ChatSummary>;
-  // In 휴지통: it can be brought back or removed for good, and a press opens its menu.
   binned: boolean;
-  // The step it is at while it is being copied or removed for good.
   busy: string | null;
-  // Whether it is picked to move, or null while not picking.
+  // null while not picking.
   picked: boolean | null;
   onPick: () => void;
   actions: CharacterActions;
-  // 지금 지우기 asks first.
   onPurge: () => void;
 };
 
@@ -43,7 +40,6 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
       )}
     </Menu>
   );
-  // A binned card being removed for good has no menu to open.
   const press = picked !== null ? { onClick: onPick } : binned ? (shows ? card : { onClick: () => {} }) : { onClick: () => navigate(enterShelf(shelf, wide)) };
   return (
     <FaceCard

@@ -2,7 +2,6 @@ import { useId, type ChangeEvent, type ReactNode } from 'react';
 import { Hint } from '../overlays/Hint';
 import styles from './TextField.module.css';
 
-// Each kind carries the input attributes that belong together, so screens cannot mix them up.
 const KINDS = {
   text: { type: 'text' },
   username: { type: 'text', autoComplete: 'username', autoCapitalize: 'none', spellCheck: false },
@@ -19,14 +18,10 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  // Shown under the field, for what the person typing needs now, such as what a rename changes.
   hint?: string;
-  // What the reader who does not know it needs, behind an ⓘ beside the label.
   help?: string;
   error?: string;
-  // Makes the field a text area of this many lines.
   lines?: number;
-  // A small button on the label's line, such as 지우기 for one of several fields.
   action?: ReactNode;
 };
 

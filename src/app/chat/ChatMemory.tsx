@@ -17,8 +17,7 @@ import type { OpenChat } from './useChat';
 
 const NO_MEMORY = emptyMemory();
 
-// What memoryView says of the chat, worked out again when anything it reads may have changed; while a reply streams
-// the last answer stands, since every chunk changes the messages.
+// While a reply streams the last answer stands, since every chunk changes the messages.
 function useView(id: string, busy: boolean, inputs: unknown[]): MemoryView | null {
   const session = useSession();
   const [view, setView] = useState<MemoryView | null>(null);
@@ -36,9 +35,8 @@ function useView(id: string, busy: boolean, inputs: unknown[]): MemoryView | nul
   return view;
 }
 
-// 장기 기억 beside the chat (design §6.2): whether it is being written, the state, the open threads and the records in
-// chat order, each opening in the list's place, and the chat's memory settings. Without memoryView's answer nothing is
-// said about what is sent: no status, no tokens, no missing slot.
+// 장기 기억 (design §6.2). Without memoryView's answer nothing is said about what is sent: no status, no tokens, no missing
+// slot.
 export function ChatMemory({ id, record, chat }: { id: string; record: string | null; chat: OpenChat }) {
   const session = useSession();
   const { store } = session;
@@ -182,7 +180,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   );
 }
 
-// One fact, its value edited in place; whom it concerns and which field stay, so a rename is a delete and an add.
+// Whom a fact concerns and which field stay, so a rename is a delete and an add.
 function FactRow({ chat, fact }: { chat: string; fact: Fact }) {
   const store = useStore();
   const toast = useToast();
@@ -250,8 +248,8 @@ function NewFact({ chat }: { chat: string }) {
   );
 }
 
-// Open threads in the order they were opened. One added here is a draft on the page until its first words are saved,
-// and stops being one then: a saved thread deleted later must not come back as the blank it started from.
+// One added here is a draft on the page until its first words are saved, and stops being one then: a saved thread
+// deleted later must not come back as the blank it started from.
 function Threads({ chat, threads }: { chat: string; threads: Thread[] }) {
   const [drafts, setDrafts] = useState<Thread[]>([]);
   const unsaved = drafts.filter((draft) => !threads.some(({ id }) => id === draft.id));

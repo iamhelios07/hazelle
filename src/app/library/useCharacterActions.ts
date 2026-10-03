@@ -12,7 +12,7 @@ import { withChats } from './shelf';
 
 type Shelf = CharacterShelf<ChatSummary>;
 export type CharacterActions = ReturnType<typeof useCharacterActions>;
-// Something in 휴지통, named as its toasts name it. what is all that 지금 지우기 takes, as the object of 지워요.
+// what is all that 지금 지우기 takes, as the object of 지워요.
 export type Binned = { kind: Removable; id: string; name: string; what: string };
 const OBJECT: Record<Removable, string> = { character: '캐릭터를', chat: '채팅을', module: '모듈을', prompt: '프롬프트를', persona: '페르소나를', profile: '모델 설정을' };
 const one = (kind: Exclude<Removable, 'character' | 'chat'>, id: string, name: string): Binned => ({ kind, id, name, what: `‘${name}’ ${OBJECT[kind]}` });
@@ -28,8 +28,6 @@ export const binnedPrompt = ({ id, value }: Stored<'prompt'>): Binned => one('pr
 export const binnedPersona = ({ id, value }: Stored<'persona'>): Binned => one('persona', id, value.name);
 export const binnedProfile = ({ id, value }: Stored<'profile'>): Binned => one('profile', id, value.name);
 
-// A character's 사본 만들기 and 지우기, from the character page and from 캐릭터 둘러보기, and 되살리기 and 지금 지우기
-// of anything in 휴지통. busy is the character being copied, or what is being removed for good, and the step it is at.
 export function useCharacterActions() {
   const store = useStore();
   const toast = useToast();
@@ -50,7 +48,6 @@ export function useCharacterActions() {
     navigate({ kind: 'edit', character: copied.data });
   }
 
-  // Whether it went to 휴지통.
   async function remove(shelf: Shelf): Promise<boolean> {
     const { id, character } = shelf;
     if (!(await mark(id, Date.now()))) return false;

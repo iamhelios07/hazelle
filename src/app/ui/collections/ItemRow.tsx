@@ -3,10 +3,8 @@ import { Item } from './Item';
 import styles from './ItemRow.module.css';
 
 type Props = {
-  // A character's face. A chat inside a character has none.
   avatar?: ReactNode;
   title: string;
-  // Replaced by 쓰는 중 while a reply is being written.
   time: string;
   typing: boolean;
   preview: string;
@@ -14,7 +12,6 @@ type Props = {
   onClick: () => void;
 };
 
-// One character, or one of a character's chats, in the sidebar list.
 export function ItemRow({ avatar, title, time, typing, preview, current, onClick }: Props) {
   return (
     <Item

@@ -7,12 +7,8 @@ import type { Shown } from '../../runtime/talk';
 import { cacheSend, wouldSend } from '../../runtime/turn';
 import { useSession } from '../session';
 
-// Typing waits this long before the next send's prompt is built again.
 const SETTLE_MS = 400;
 
-// What sending the draft now would do, beside the send button: until when the chat's last call keeps the prompt cache
-// and what the draft would read of it, and how many messages would leave the prompt with no memory standing for them,
-// both read from one request built for the draft.
 // The forecast needs the last call's request, which only the page that sent it holds (Talk.sent).
 export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean) {
   const session = useSession();

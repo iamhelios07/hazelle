@@ -20,7 +20,6 @@
   animation: runDown var(--duration-instant) linear forwards;
 }
 
-/* Held a while, then gone: a mark on what was just looked for. */
 .fadeAway {
   animation: fadeAway var(--duration-found) var(--ease-enter) forwards;
 }

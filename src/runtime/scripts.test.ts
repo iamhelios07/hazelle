@@ -14,7 +14,6 @@ import { evaluateChat, takeTurn } from './turn';
 
 const server = testServer();
 
-// A chat with a character whose triggers are these, or the one Lua trigger of this code, opened on its greeting.
 async function chatWith(session: Session, script: string | Trigger[], toggles = '') {
   await answerable(session);
   const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', name: 'main', code: script }] : script;
@@ -307,7 +306,6 @@ describe("the display with the bot's Lua", () => {
       await expect.poll(computed.texts).toEqual(['어서 와.!']);
       computed.leave();
 
-      // The answer of one script's engine leaves the other's results fresh.
       display.mockClear();
       const mixed = await open([
         { kind: 'lua', name: 'named', code: `-- editDisplay\nfunction onInput(id) end` },

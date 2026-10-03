@@ -28,26 +28,19 @@ type Props = {
   title: ReactNode;
   actions: ReactNode;
   children: ReactNode;
-  // Floats above the composer: the 새 답장 pill.
   above: ReactNode;
   footer: ReactNode;
   panel?: ReactNode;
-  // Over the story at its right edge: SidePeeks, such as 상태 and 답장 정보.
   peek?: ReactNode;
-  // In the story's right margin: a StoryAside, such as 상태 kept there.
   aside?: ReactNode;
   reading: Reading;
   // A character's own look for the lines that are only a picture, over the defaults in tokens.css.
   pictures?: { fold?: false; peek?: number; most?: number };
-  // The story is read above its end: the composer folds to one line (Composer's compact).
   compact: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   onScroll: () => void;
 };
 
-// The chat page: a header, the story column that scrolls, the composer, and a panel beside it. The header and
-// the composer float over the story: the header hides while the story is read down, and comes back when it is scrolled
-// up, reached at its top or pointed at the page's top edge.
 export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, pictures, compact, scrollRef, onScroll }: Props) {
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
@@ -56,7 +49,6 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   // move the story's end, and the view with it. Only a transition is skipped, so a spinner in the composer does not
   // stop the measuring.
   const [space, setSpace] = useState(0);
-  // The story's scrollbar, which the peek and the aside keep clear of.
   const [scrollbar, setScrollbar] = useState(0);
   // A message's tools take a gutter (StoryMessage's .rail) beside the text column only while the room right of it also
   // holds a peek tab, which paints over whatever shares the story's edge; else they lie over the message's corner.
@@ -151,14 +143,12 @@ type TitleProps = {
   avatar: ReactNode;
   title: string;
   typing: boolean;
-  // The name opens the menu of the chats it sits among, and takes these from Menu.
   popup: 'menu' | 'dialog';
   expanded: boolean;
   ref: Ref<HTMLButtonElement>;
   onClick: () => void;
 };
 
-// The chat's name in its header, with 쓰는 중 while a reply is being written.
 export function ChatTitle({ avatar, title, typing, popup, expanded, ref, onClick }: TitleProps) {
   return (
     <span className={styles.chatTitle}>

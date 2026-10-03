@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
-// Which of the status window's boxes drawn in the messages are on screen, by script, so the tab at the story's edge
-// shows only while one is not. watch gives one ref per script that lasts, so a render does not watch again.
+// watch gives one ref per script that lasts, so a render does not watch again.
 export function useSeen() {
   const [seen, setSeen] = useState<ReadonlySet<number>>(() => new Set());
   const [{ watch }] = useState(() => {

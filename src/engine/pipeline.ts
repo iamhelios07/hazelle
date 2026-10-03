@@ -16,8 +16,7 @@ export type PromptInput = {
   // probabilities, as each earlier reply's id rolled its own.
   seed: string;
   countTokens: (text: string) => number;
-  // The tokens the prompt may take: the model's context less its reply length. null when the context is unknown,
-  // and then nothing is dropped.
+  // null when the context is unknown, and then nothing is dropped.
   budget: number | null;
   // 이어 쓰기: the chat's messages end with the cut reply, and the continue instruction goes last.
   continuing: boolean;
@@ -40,13 +39,12 @@ function stoppable<T>(build: () => T): T | RanAway {
   }
 }
 
-// Where a sent message came from, for 요청 원문. slot is null for a text block.
+// slot is null for a text block.
 export type From =
   | { kind: 'block'; name: string | null; slot: SlotKind | null }
   | { kind: 'lore'; name: string; slot: 'lorebook' | 'postEverything' }
   | { kind: 'depth'; name: string; depth: number }
   | { kind: 'continue' }
-  // A message a bot's script added or changed after the prompt was assembled (rewritten).
   | { kind: 'script' };
 
 // parts[i] says where messages[i] came from and what it counts in o200k_base, an estimate for any other
@@ -62,8 +60,6 @@ type Lore = { id: string; role: Role; body: string };
 type Sent = { message: ChatMessage; from: From };
 type Part = Sent | ChatPart | CachePart;
 
-// What the lorebook placed for one request, and how a text outside the chat's messages is rendered: what both sorts of
-// prompt are laid out with.
 type Laid = {
   card: Card | null;
   activation: Activation | null;
@@ -76,7 +72,6 @@ type Laid = {
   named: (id: string) => string;
 };
 
-// history: the messages the lorebook scans. variables: as the chat's messages left them.
 function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
   const { card } = scope;
   const context = contexts(scope, 'prompt', language);
@@ -139,8 +134,7 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
   };
 }
 
-// Every lorebook entry a prompt built now would hold, wherever it would sit, as the text and role it is sent with, in
-// the order they were placed: what a bot's loadLoreBooks reads. An entry that renders to nothing is left out.
+// In the order they were placed: what a bot's loadLoreBooks reads. An entry that renders to nothing is left out.
 export const activeLore = (scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] | RanAway =>
   stoppable(() => placedLore(scope, seed, countTokens));
 
@@ -152,8 +146,6 @@ function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) 
   });
 }
 
-// What only one sort of prompt fills: a conversation its 작가의 노트, a translation 앞 메시지 (by how many messages it
-// holds) and 원문, a memory task 정리할 메시지; 장기 기억 is a conversation's memory as sent, or what a memory task follows.
 type Filling =
   | { sort: 'conversation'; note: string; memory: string }
   | { sort: 'translate'; recent: (count: number) => string; source: string }
@@ -224,7 +216,7 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
   return { parts, memory };
 }
 
-// A conversation prompt's blocks, in order, as the messages sent. Messages left empty are dropped.
+// Messages left empty are dropped.
 // The messages memory covers leave the chat slots, though their variables are still replayed (renderChat renders them
 // all) and the lorebook still scans them.
 export const assemble = (input: PromptInput): Assembled | TooLong | RanAway => stoppable(() => conversation(input));
@@ -286,9 +278,8 @@ function dropOldest(budget: number | null, count: number, size: (dropped: number
   return tokens > budget ? { kind: 'too-long', tokens, budget } : dropped;
 }
 
-// The request as a bot's script left it (editRequest), with its parts as sent: a message the script left as built
-// keeps its part, any other is the script's and counted here. The budget holds for this request as it does in
-// assemble, over the chat messages left as built.
+// A message the script left as built keeps its part, any other is the script's and counted here. The budget holds
+// for this request as it does in assemble, over the chat messages left as built.
 export function rewritten(prompt: Assembled, messages: ChatMessage[], countTokens: (text: string) => number, budget: number | null): Assembled | TooLong {
   let next = 0;
   const sent = messages.map((message) => {
@@ -318,19 +309,17 @@ export type TranslationInput = {
   // The display scripts that draw the status window (상태창 지정), whose boxes a message's source leaves out.
   take: ReadonlySet<number>;
   prompt: TranslatePrompt;
-  // Each of scope.messages' translation text, or null.
   translations: (string | null)[];
   request: TranslationRequest;
   // What {{language}} reads: the language translated into.
   language: string;
-  // Rolls the request's random tags and its lorebook probabilities.
   seed: string;
   countTokens: (text: string) => number;
 };
 
-// A translation prompt's blocks as the messages sent. source is what goes out to be translated: a message as it is
-// displayed (after its CBS and display scripts), which is what the reader would otherwise read, or the user's input.
-// A translation holds no chat, so entries placed at a depth, or into a text a card replaces, are not sent in it.
+// source is what goes out to be translated: a message as it is displayed (after its CBS and display scripts), which
+// is what the reader would otherwise read, or the user's input. A translation holds no chat, so entries placed at a
+// depth, or into a text a card replaces, are not sent in it.
 export const assembleTranslation = (input: TranslationInput): { source: string; messages: ChatMessage[] } | RanAway => stoppable(() => translation(input));
 
 // A message whose CBS ran away is its source as shown, tags as written, and the display says so.
@@ -360,8 +349,7 @@ export type MemoryTaskInput = {
   // The chat's, its messages as a request sends them.
   scope: ChatScope;
   prompt: MemoryPrompt;
-  // What the new records follow: the state and open threads, and the record before the span. budget: the 장기 기억 slot's
-  // in the chat's requests, whose share the state may take.
+  // budget: the 장기 기억 slot's in the chat's requests, whose share the state may take.
   memory: Memory;
   before: MemoryRecord | null;
   budget: number;
@@ -371,9 +359,9 @@ export type MemoryTaskInput = {
   countTokens: (text: string) => number;
 };
 
-// A memory prompt's blocks as the messages sent, then the app's answer format. span: the span's texts as the prompt
-// renders them, variables replayed, which the answer is validated against and the records' fingerprints are made of.
-// Like a translation, a memory task holds no chat, so entries placed at a depth are not sent in it.
+// span: the span's texts as the prompt renders them, variables replayed, which the answer is validated against and
+// the records' fingerprints are made of. Like a translation, a memory task holds no chat, so entries placed at a
+// depth are not sent in it.
 export const assembleMemory = (input: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } | RanAway => stoppable(() => memoryTask(input));
 
 function memoryTask({ scope, prompt, memory, before, budget, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
@@ -402,7 +390,6 @@ export function autoCachePoints(roles: readonly ('chat' | 'depth' | 'memory' | n
   return [...new Set([...anchor, ...(first > 0 ? [first - 1] : []), ...(last === -1 ? [] : [last])])];
 }
 
-// The cache points: the last message sent up to each block marked 여기까지 캐시, and the app's own.
 function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
   const sent: Sent[] = [];
   const point = (index: number) => {
@@ -532,7 +519,7 @@ function atPositions(text: string, positions: Map<string, string[]>): string {
   return out;
 }
 
-// The character's definitions for the 캐릭터 설명 slot. Example dialogue has no slot of its own, so it goes here.
+// Example dialogue has no slot of its own, so it goes here.
 function describe(card: Card | null): string[] {
   if (!card) return [];
   return [
@@ -545,8 +532,6 @@ function describe(card: Card | null): string[] {
 
 export type Unused = { kind: 'bias' | 'utility'; count: number };
 
-// What the character brought that its chats do not use yet, so they can say so instead of quietly behaving unlike
-// the bot.
 export function unused(card: Card): Unused[] {
   const found: Unused[] = [
     { kind: 'bias', count: card.bias.length },

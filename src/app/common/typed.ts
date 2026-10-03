@@ -7,5 +7,4 @@ export function typedText<V>(typed: string | undefined, read: (typed: string) =>
   return meant === null || meant === value ? typed : text(value);
 }
 
-// A text that must not be blank.
 export const filled = (typed: string) => (typed.trim() ? typed : null);

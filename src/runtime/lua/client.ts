@@ -5,7 +5,6 @@ import { changedTail, sameHistory, type Tail } from '../history-delta';
 import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
-// What the runtime asks of the bot scripts' machines: the engine itself in tests, a worker in the browser.
 export type Runner = Pick<Lua, 'run' | 'installDisplay' | 'display' | 'forgetDisplay' | 'close'>;
 
 export type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
@@ -35,7 +34,6 @@ export class LuaStuck extends Error {}
 
 type Pending = { resolve: (result: Outcome | DisplayBatch | null) => void; reject: (error: Error) => void; host: Host | null };
 
-// The bot scripts run in a worker, which is ended and started again when a script holds it without answering.
 export class LuaWorker implements Runner {
   private worker: Worker | null = null;
   private readonly pending = new Map<number, Pending>();

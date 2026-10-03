@@ -8,17 +8,16 @@ type Entry<T> = { value: T; name: string; set: (value: T) => void; remove: React
 type Props<T> = {
   entries: T[];
   onChange: (entries: T[]) => void;
-  // One entry's name by its place, such as 첫인사 2. Its delete button is named after it.
   name: (index: number) => string;
   blank: T;
   addLabel: string;
-  // The toast after a delete. The caller words it, so the particle after the noun is right.
+  // The caller words it, so the particle after the noun is right.
   removed: (index: number) => string;
   children: (entry: Entry<T>) => ReactNode;
 };
 
-// Entries edited in place, in order, such as a card's greetings. A delete takes effect at once and the toast offers
-// 되돌리기, which puts the entry back into the list as it is then, at its old place or last when the list is shorter.
+// A delete takes effect at once and the toast offers 되돌리기, which puts the entry back into the list as it is then, at
+// its old place or last when the list is shorter.
 export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed, children }: Props<T>) {
   const undoable = useOwnUndo();
   const latest = useRef({ entries, onChange });

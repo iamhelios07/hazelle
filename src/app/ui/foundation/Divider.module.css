@@ -23,7 +23,6 @@
   background: var(--color-border);
 }
 
-/* A message's tools run as a row or, beside the story's column, as a column: the line stretches across either. */
 .tools {
   flex: none;
   align-self: stretch;

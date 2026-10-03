@@ -15,9 +15,7 @@ import { stopStream } from './relay';
 import type { ChatLease, ObjectStore } from './store';
 import { callOf, endCall, newCall } from './streams';
 
-// The reply being written. said is the user's message sent with it, shown until the store has it; reply
-// says where the answer goes: a new message, or a new version of one (in place of a failed one on 다시 시도, or
-// of the cut one it continues on 이어 쓰기). A continuation's text and reasoning start as those it continues. before:
+// A continuation's text and reasoning start as those it continues. before:
 // what the bot's Lua wrote before the reply was made (model/chat Entry).
 export type Turn = {
   chat: string;
@@ -29,19 +27,16 @@ export type Turn = {
   whole?: true;
 };
 
-// A message on screen: live marks the version being written, whole that it comes in one piece (Turn). unstored: the
-// user's message shown before the store has it. Nothing may be saved against it yet: fold skips, for good, an entry
-// that names a message saved after it.
+// unstored: the user's message shown before the store has it. Nothing may be saved against it yet: fold skips, for
+// good, an entry that names a message saved after it.
 export type Shown = Message & { live: string | null; whole?: true; unstored?: true };
 
-// What one reply is sent with, ready once its prompt is built: the model and the prompt, which the reply's id
-// seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model. said: the user's message
-// as it is saved, which a message sent translated saves translated; null when prepare saved it itself. before: the
-// reply's (Turn).
+// The prompt, which the reply's id seeds. settings: the model's 설정 묶음 as stored, which the request fits to the model.
+// said: the user's message as it is saved, which a message sent translated saves translated; null when prepare saved it
+// itself.
 export type Ask = { route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes };
 
-// What one reply sent, for 정보's 요청 원문 and lorebook part. It lives in page memory only, until the session
-// closes: the raw request is never stored.
+// It lives in page memory only, until the session closes: the raw request is never stored.
 export type Sent = Pick<Reply, 'request' | 'cache'> & { prompt: Assembled };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
@@ -57,7 +52,6 @@ const resting = (message: Message): Shown => {
   return held;
 };
 
-// The chat's messages with the turn laid over them, until its entries are saved.
 export function withTurn(messages: Message[], turn: Turn | null, chat: string): Shown[] {
   const out = messages.map((message) => resting(message));
   if (turn?.chat !== chat) return out;
@@ -278,7 +272,6 @@ export class Talk {
   }
 }
 
-// What a call leaves in a saved chat: a reply's receipt, or a translation's.
 export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
   return {
     id: answer.call,

@@ -22,7 +22,6 @@ const FILES = 'files/';
 const HELD_BYTES = 8 * 1024 * 1024;
 const PICTURE_ROWS = 12;
 
-// What opening an account adds by itself.
 const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, FIRST_PROFILE_ID, SETTINGS_ID]);
 
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
@@ -33,11 +32,11 @@ export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' |
 export type BackupPin = { pin: Pin; excluded: Set<string> };
 export type { BackupOutput } from './backup-zip';
 
-// Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. What is
-// in 휴지통 reaches nothing: it is left out with all it owns, a character's chats included, as are the pieces nothing
-// reaches: the lore and pictures of an import cut short. left counts the objects that did not open, which no backup can hold. skipped counts the objects
-// naming a picture the operator blocked, which are left out as restore leaves out what the server refuses. Both scans
-// are of one timeline: an account restored between them fails the export, and no archive is written.
+// Connection keys are kept. What is in 휴지통 reaches nothing: it is left out with all it owns, a character's chats
+// included, as are the pieces nothing reaches: the lore and pictures of an import cut short. left counts the objects that
+// did not open. skipped counts the objects naming a picture the operator blocked, which are left out as restore leaves out
+// what the server refuses. Both scans are of one timeline: an account restored between them fails the export, and no
+// archive is written.
 export async function exportBackup(
   store: Pick<ObjectStore, 'scan' | 'pin'>,
   files: Pick<Files, 'read' | 'missing'>,
@@ -242,7 +241,7 @@ async function* readObjects(backup: ReadArchive, signal: AbortSignal) {
 // The backup's copies replace what opening added, whatever it holds now, and what it added that the backup lacks
 // goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
 // the operator, or too large), which are left out. What is checked and what is written are of one timeline.
-// The store as a restore in the backup worker sees it. saveSummaries: runtime/summary's, run by the host on its store.
+// saveSummaries: runtime/summary's, run by the host on its store.
 export type RestoreStore = Pick<ObjectStore, 'scan' | 'batch' | 'pinned'> & { saveSummaries: (chats: string[], signal: AbortSignal) => Promise<ApiFailure | null> };
 
 export function restoreBackup(store: RestoreStore, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {

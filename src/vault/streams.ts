@@ -10,8 +10,7 @@ export async function streamKey(): Promise<{ public: string; private: JsonWebKey
   return { public: toBase64(new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))), private: await crypto.subtle.exportKey('jwk', pair.privateKey) };
 }
 
-// Opens the frames of call id, given the server's hello. null: a frame that does not open, which nothing but a
-// broken or foreign stream gives.
+// null: a frame that does not open, which nothing but a broken or foreign stream gives.
 export async function streamOpener(id: string, key: JsonWebKey, hello: Uint8Array<ArrayBuffer>) {
   const mine = await crypto.subtle.importKey('jwk', key, P256, false, ['deriveBits']);
   const theirs = await crypto.subtle.importKey('raw', hello, P256, false, []);

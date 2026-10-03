@@ -2,53 +2,44 @@ import { CONNECTION_TYPES } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import type { Shelf } from '../../model/library';
 
-// Every place in the app, as the address bar names it. These paths are what a reload, a bookmark and
+// These paths are what a reload, a bookmark and
 // the browser's back button land on, so an existing one never changes.
 export type Route =
   | { kind: 'home' }
-  // 캐릭터 둘러보기 on its own path, which phones open from the character list.
   | { kind: 'gallery' }
-  // A character's chats, and on wide screens its own page beside them. character null is 캐릭터 없이.
+  // character null is 캐릭터 없이.
   | { kind: 'shelf'; character: string | null }
-  // A character's own page on phones, where its shelf is the list of its chats.
   | { kind: 'about'; character: string }
   | { kind: 'edit'; character: string }
-  // A chat not saved yet, which is saved with its first message.
   | { kind: 'new-chat'; character: string | null }
   | { kind: 'chat'; id: string }
   | { kind: 'connections' }
   | { kind: 'add-connection' }
   | { kind: 'connect'; type: ConnectionType }
-  // 직접 연결, with the address pasted into 연결 추가's search; '' when there was none.
+  // '' when there was none.
   | { kind: 'connect-direct'; address: string }
   | { kind: 'connection'; id: string }
-  // 설정's 프롬프트: the list, and one prompt's editor. pane opens the editor on its 토글 pane, which the
+  // pane opens the editor on its 토글 pane, which the
   // chat's toggle panel links to.
   | { kind: 'prompts' }
   | { kind: 'prompt'; id: string; pane: 'toggles' | null }
   | { kind: 'personas' }
   | { kind: 'persona'; id: string }
-  // 설정's 모듈: the list, and one module's page.
   | { kind: 'modules' }
   | { kind: 'module'; id: string }
-  // 설정's 모델: the default models, the starred models and the 설정 묶음 list; one 묶음's editor.
   | { kind: 'models' }
   | { kind: 'profile'; id: string }
   // model: a starred model's id, which may hold any character; the path carries it escaped.
   | { kind: 'model'; connection: string; model: string }
   // section opens the page at 운영자가 보낸 알림, which the toast saying they came links to.
   | { kind: 'account'; section: 'notices' | null }
-  // 설정's 채팅 page: what every chat starts with, such as the long-term memory settings.
   | { kind: 'chat-settings' }
-  // 설정's 운영 page, the operator's alone.
   | { kind: 'admin' }
-  // 설정's own list of its pages, which phones open from the library.
   | { kind: 'settings' };
 
 export const HOME: Route = { kind: 'home' };
 
 type Kind<K extends Route['kind']> = Extract<Route, { kind: K }>;
-// Every route but home has somewhere to go back up to.
 export type Below = Exclude<Route, Kind<'home'>>;
 
 const ID = /^[0-9a-f-]{36}$/;
@@ -184,8 +175,7 @@ export function href(route: Route): string {
 
 export const sidebarPage = (route: Route) => route.kind === 'home' || route.kind === 'shelf';
 
-// The list a route sits in: its screen is the list itself, or the item beside it where there is room. null outside
-// the connection, persona, module and 모델 screens.
+// null outside the connection, persona, module and 모델 screens.
 export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'personas' | 'modules' | 'models'> | null {
   switch (route.kind) {
     case 'connections':
@@ -212,7 +202,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
 
 export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'account' | 'admin';
 
-// Which page of 설정 a route is on, 'list' for 설정's own list, or null outside 설정. While it is not null, the
+// 'list' for 설정's own list, or null outside 설정. While it is not null, the
 // settings layer stands in for the library.
 export function settingsPage(route: Route): SettingsPage | 'list' | null {
   switch (route.kind) {
@@ -257,17 +247,14 @@ export function shelfOf(route: Route, chatShelf?: string | null): string | null 
   }
 }
 
-// A character's own page: beside its chats where the sidebar shows them, on its own path on phones.
 export const characterPage = (character: string, wide: boolean): Route => (wide ? { kind: 'shelf', character } : { kind: 'about', character });
 
-// Picking a character opens its latest chat where the sidebar lists its chats beside it. On phones,
-// and for a character with no chat yet, it opens the character's shelf.
 export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
   const latest = shelf.chats[0];
   return wide && latest ? { kind: 'chat', id: latest.id } : { kind: 'shelf', character: shelf.id };
 }
 
-// Where 뒤로 goes. On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is
+// On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is
 // the way back), so only phones use their answer.
 export function up(route: Below, wide: boolean, chatShelf?: string | null): Route {
   switch (route.kind) {
@@ -312,8 +299,6 @@ export function up(route: Below, wide: boolean, chatShelf?: string | null): Rout
   }
 }
 
-// Where 뒤로 goes from a route whose chat, character or connection is not there: the list it would be
-// in, past every route that names it.
 export const upFromMissing = (route: Route): Route => (route.kind === 'prompt' ? { kind: 'prompts' } : (listOf(route) ?? HOME));
 
 export type Back = { to: Route; label: string };

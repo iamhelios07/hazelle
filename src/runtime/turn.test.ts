@@ -12,14 +12,12 @@ import { statusBoxes, takeTurn, wouldSend } from './turn';
 
 const server = testServer();
 
-// A chat-completions stream that stops at its token limit after text, with what OpenRouter says it cost.
 const cutAt = (text: string, cost: number) =>
   new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'length' }], usage: { prompt_tokens: 10, completion_tokens: 5, cost } })}\n\ndata: [DONE]\n\n`, {
     headers: { 'x-relay': 'upstream' },
   });
 const lastTwo = (body: string | null) => (JSON.parse(body!) as { messages: { role: string; content: string }[] }).messages.slice(-2);
 
-// A chat whose reply was cut at its token limit.
 async function cutReply(session: Session, answers: (Response | null)[]) {
   await answerable(session);
   const chat = crypto.randomUUID();

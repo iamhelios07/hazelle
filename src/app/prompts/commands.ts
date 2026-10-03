@@ -253,7 +253,6 @@ export const COMMANDS: readonly CommandGroup[] = [
   },
 ];
 
-// The command as typed, and the selection after it: its first placeholder, else the caret after it.
 export function commandSnippet({ form }: Command): Snippet {
   const placeholder = /[가-힣]+(?: [가-힣]+)*/.exec(form);
   return { text: form, select: placeholder ? [placeholder.index, placeholder.index + placeholder[0].length] : [form.length, form.length] };

@@ -22,9 +22,7 @@ const useWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '�
 const used = (use: PromptUse) => (use.at === null ? useWords(use) : `${useWords(use)} · ${ago(use.at)} 씀`);
 
 type Props = {
-  // A prompt made or imported here is picked as soon as it is saved.
   onPick: (id: string) => void;
-  // The one a chat uses, marked 사용 중.
   inUse?: string;
   frame: Frame;
 };

@@ -84,7 +84,6 @@
   white-space: nowrap;
 }
 
-/* At a control's size (되돌리기) a link fills on hover; inside a line of text (xs, 다시 받기) it never fills. */
 .link:not(.xs):hover:not(:disabled) {
   background: var(--color-surface-hover);
 }

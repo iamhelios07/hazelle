@@ -18,7 +18,7 @@ import { Saves } from './common/saveQueue';
 // admin: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
 export type Account = { admin: boolean; facts: AccountFacts; onLock: () => void; onLogout: () => Promise<string | null> };
 
-// How long leaving waits for the saves still on their way. A save in flight and one queued behind it are two round
+// A save in flight and one queued behind it are two round
 // trips, which from Korea can take seconds each; a store write waiting out a dropped connection never ends on its own.
 const LEAVING_WAIT = 10_000;
 
@@ -59,7 +59,7 @@ export function useStanding(): Standing {
 export const useTalk = (): Talk => useSession().talk;
 export const useTranslator = (): Translator => useSession().translator;
 
-// A bot asset's picture URL as the session has it (runtime/assets). The function is a new one when a picture has
+// The function is a new one when a picture has
 // loaded, so what shows pictures renders again.
 export function useAssetUrl(): (id: string) => string | undefined {
   const { assets } = useSession();
@@ -121,7 +121,7 @@ function useKind<K extends Kind>(kind: K) {
 }
 
 export const useConnections = () => useKind('connection');
-// Those not in 휴지통. all is the memo's key only: it is a new array exactly when one changed.
+// all is the memo's key only: it is a new array exactly when one changed.
 function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {
   const all = useKind(kind);
   return useMemo(() => all.filter(live), [all]);
@@ -129,13 +129,12 @@ function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {
 export const usePrompts = () => useLive('prompt');
 export const usePersonas = () => useLive('persona');
 export const useProfiles = () => useLive('profile');
-// The modules there are, by name; a deleted one is not among them (runtime/modules modulesOf).
+// A deleted one is not among them (runtime/modules modulesOf).
 export function useModules() {
   const store = useStore();
   const all = useKind('module');
   return useMemo(() => modulesOf(store), [store, all]);
 }
-// What 휴지통 lists besides the library's characters and chats, most recently deleted first.
 export function useBin() {
   const modules = useKind('module');
   const prompts = useKind('prompt');
@@ -143,7 +142,7 @@ export function useBin() {
   const profiles = useKind('profile');
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
-// The lorebook entries or assets something holds, such as a character or a module. The array is held until one of
+// The array is held until one of
 // them changes, since a fresh array on every read would make React re-render forever. Subscribing reads it anew, so
 // a change between the render and the subscription is not missed.
 export function useChildren<K extends 'lore' | 'asset'>(kind: K, parent: string): Stored<K>[] {
@@ -204,8 +203,8 @@ export function useTurn(): Turn | null {
   return useSyncExternalStore(talk.subscribe, talk.snapshot);
 }
 
-// The chat whose reply is being written, for what only marks it: the value is the same through every streamed chunk,
-// so nothing that reads it renders again until the turn starts or ends.
+// The value is the same through every streamed chunk, so nothing that reads it renders again until the turn starts or
+// ends.
 export function useWritingChat(): string | null {
   const talk = useTalk();
   return useSyncExternalStore(talk.subscribe, () => talk.snapshot()?.chat ?? null);
@@ -216,7 +215,7 @@ export function useTranslating(): Translating {
   return useSyncExternalStore(translator.subscribe, translator.snapshot);
 }
 
-// The chat's stored memory, null while it has none.
+// null while it has none.
 export function useChatMemory(chat: string | null): Memory | null {
   const { store } = useSession();
   const id = chat;
@@ -227,7 +226,6 @@ export function useChatMemory(chat: string | null): Memory | null {
   return useSyncExternalStore(subscribe, () => (id === null ? null : store.children('memory', id).find((memory) => memory.id === memoryId(id)) ?? null))?.value ?? null;
 }
 
-// What the bots' scripts have said and not yet shown, and what they are asking.
 export function useScripts(): ScriptsState {
   const { scripts } = useSession();
   return useSyncExternalStore(scripts.subscribe, scripts.snapshot);

@@ -24,9 +24,8 @@ export type Card = {
   loreSettings: { scanDepth: number | null; tokenBudget: number | null; recursive: boolean | null; fullWordMatching: boolean | null };
 } & Pack;
 
-// What works on a chat's text without being the character: a character's card holds one as its own, and a module is
-// one with a name (design §6.5). Its lorebook and assets are stored objects of their own, under whichever holds it.
-// A chat reads its packs as one list (runtime/turn packsOf), never a card's or a module's apart.
+// Its lorebook and assets are stored objects of their own, under whichever holds it. A chat reads its packs as one list
+// (runtime/turn packsOf), never a card's or a module's apart.
 export type Pack = {
   regex: RegexScript[];
   // The triggers that do something, in Risu's order, which is the order a run walks them in (runtime/scripts).
@@ -93,7 +92,6 @@ export type ImportReport = {
 
 export type ImportFailure = { kind: 'unknown-format' | 'encrypted' | 'unreadable'; detail?: string };
 
-// A Risu module, read (design §6.5): its pack, with its lorebook and pictures beside it as a card's are.
 export type ImportedModule = {
   name: string;
   description: string;
@@ -107,7 +105,6 @@ export type ImportedModule = {
   unsupported: ImportReport['unsupported'];
 };
 
-// A file holds a character or a module.
 export type ImportResult = { ok: true; card: Imported } | { ok: true; module: ImportedModule } | { ok: false; failure: ImportFailure };
 
 // A Risu local backup, read (design F7; research/risu-backup-spec.md). Pictures stay in the file until a character,
@@ -122,7 +119,6 @@ export type RisuChat = {
   title: string;
   // 작가의 노트; null when Risu's is empty.
   note: string | null;
-  // The Risu persona id the chat is bound to.
   persona: string | null;
   // Index into the card's greetings.
   greeting: number;
@@ -144,7 +140,6 @@ export const MOVE_UNSUPPORTED_KINDS = [
 export type MoveUnsupportedKind = (typeof MOVE_UNSUPPORTED_KINDS)[number];
 export type MoveUnsupported = { kind: MoveUnsupportedKind; count: number };
 
-// The card as the card importer reads it, with its pictures read from the backup when it is brought.
 export type RisuCharacter = Omit<Imported, 'avatar'> & {
   // Risu's chaId.
   id: string;
@@ -154,7 +149,6 @@ export type RisuCharacter = Omit<Imported, 'avatar'> & {
   chats: RisuChat[];
   // The Risu ids of the modules on for it, whether or not the backup holds them.
   modules: string[];
-  // What its chats held that does not come.
   missed: MoveUnsupported[];
 };
 // alias: Risu's persona note, a line only the user reads to tell personas of one name apart, which is what a 별명 is.
@@ -169,7 +163,6 @@ export type BackupCatalog = {
   modules: { key: number; name: string; risu: string | null; assetCount: number }[];
   // The Risu ids of the modules on in every chat, whether or not the backup holds them.
   alwaysModules: string[];
-  // What the backup held outside its characters that does not come (group chats).
   unsupported: MoveUnsupported[];
 };
 // Catalog rows carry no history or asset readers. Keys identify source positions even when Risu ids repeat.

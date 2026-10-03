@@ -62,7 +62,6 @@ function room(element: HTMLElement) {
   return { left, right };
 }
 
-// Shifts a popover sideways, through --nudge, back inside its room's sides less the --menu-edge gutter.
 export function keepOnScreen(element: HTMLElement) {
   // Measured unshifted: --nudge inherits, so a popover inside another would otherwise start from the outer one's shift.
   element.style.setProperty('--nudge', '0px');
@@ -75,8 +74,6 @@ export function keepOnScreen(element: HTMLElement) {
 
 const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
-// The focus moves into box when it opens and back to what had it when it closes; Tab and Shift+Tab go round
-// inside it. Returns box's keydown handler.
 export function useFocusTrap(box: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;

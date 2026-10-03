@@ -55,7 +55,6 @@ export async function relay(request: HttpRequest, signal?: AbortSignal): Promise
   return answered(await send(request, signal));
 }
 
-// For requests whose whole answer is one JSON document, such as a model list.
 export async function relayJson(request: HttpRequest, signal?: AbortSignal): Promise<JsonAnswer> {
   return readJson(await relay(request, signal), signal);
 }
@@ -82,7 +81,7 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
 
 // A generation call through its ReplyStream on the server (tech-spec §6, Detached replies), which goes on when this
 // page stops reading. With a request it starts the call; without one it reads the call already started, from the
-// start. The answer is the provider's as relay gives it. key: the call's private key; public: its public half, to start.
+// start. key: the call's private key; public: its public half, to start.
 // started: told once the server holds the call, before any of it is read. bot: the chat whose bot's script makes the
 // call, which the server limits per chat. took: how long the call ran, as the server measured it, once its end has
 // been read.
@@ -126,9 +125,8 @@ export const stopStream = (id: string) => void fetchApi(`streams/${id}/stop`, { 
 // Once the call's result is saved. A refused drop leaves the server's copy until it expires on its own.
 export const dropStream = (id: string) => void fetchApi(`streams/${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
 
-// The call's frames from seq from. No connection or a server error are this page's and are tried again, ever more
-// slowly; stream-gone: the server holds no such call; no-session: the session is gone. Throws once signal stops the
-// read.
+// No connection or a server error are this page's and are tried again, ever more slowly; stream-gone: the server
+// holds no such call; no-session: the session is gone. Throws once signal stops the read.
 async function reach(id: string, from: number, tries: number, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | RelayFailure> {
   for (; ; tries++) {
     signal.throwIfAborted();
@@ -188,8 +186,8 @@ async function unframe(call: StreamCall, body: ReadableStream<Uint8Array>, signa
   return sourced(new Response(NO_BODY.has(head.status) ? null : data, { status: head.status, statusText: head.statusText, headers: head.headers }));
 }
 
-// The frames of a call, hello first. A connection that breaks while the page still wants the call (a phone putting
-// the tab to sleep, a network change) is read again from the frame after the last one.
+// A connection that breaks while the page still wants the call (a phone putting the tab to sleep, a network change)
+// is read again from the frame after the last one.
 async function* framesOf(id: string, first: ReadableStream<Uint8Array>, signal: AbortSignal) {
   let body = first;
   let next = 0;

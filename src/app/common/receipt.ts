@@ -15,8 +15,7 @@ export function cost(value: Cost | 'pending' | null): string {
   return value.source === 'price-list' ? `약 ${amount}` : amount;
 }
 
-// Output tokens per second from the first text to the end. A reply that came in one piece, as from a
-// provider that does not stream, has no speed to measure.
+// A reply that came in one piece, as from a provider that does not stream, has no speed to measure.
 const MEASURABLE_MS = 250;
 
 export function speed(outputTokens: number | null, firstTextMs: number | null, totalMs: number): string {

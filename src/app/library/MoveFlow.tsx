@@ -36,8 +36,8 @@ type Phase =
   | { kind: 'running'; step: MoveStep | null }
   | { kind: 'done'; backup: BackupCatalog; moved: Moved };
 
-// Risu backups dropped or picked, read as one: pick what to bring, bring it, and say what came and what did not (design
-// F7). aside: other files dropped with them, which are not imported.
+// Risu backups dropped or picked, read as one (design F7). aside: other files dropped with them, which are not
+// imported.
 export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; aside: number; onClose: () => void }) {
   const store = useStore();
   const files = useFiles();

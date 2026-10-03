@@ -5,7 +5,6 @@ import { count, isRecord, modelEntries, nameOf } from './values';
 
 const VERSION = { 'anthropic-version': '2023-06-01' };
 
-// output_config.effort's levels, which the Models API reports one by one.
 const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 const supported = (entry: unknown) => (isRecord(entry) && typeof entry.supported === 'boolean' ? entry.supported : null);
@@ -155,7 +154,6 @@ export const anthropicMessages: Codec = {
     return null;
   },
 
-  // The message object a stream's events build up: its content blocks, stop_reason and usage at once.
   whole(payload, facts, append) {
     const failed = anthropicMessages.terminal(payload);
     if (failed) return failed;

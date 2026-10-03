@@ -55,7 +55,6 @@ function fromCharx(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   return converted ? done('charx', converted, avatar(converted.icon, zip.prefix, zip, tally), { zip }, tally) : fail('unreadable', 'not a character card');
 }
 
-// A module file. Its pictures are the blocks after its main one, each for the entry of module.assets at its place.
 function fromRisum(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const read = readRisum(bytes);
   if (!read) return fail('unreadable', 'not a module');
@@ -79,7 +78,6 @@ function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   return converted ? done('json', converted, avatar(converted.icon, null, null, tally), {}, tally) : fail('unreadable', 'not a character card');
 }
 
-// Where a file's assets can be: a charx's zip, or a PNG's asset chunks.
 type Holders = { zip?: Zip; chunks?: Map<string, string> };
 
 function done(format: ImportReport['format'], converted: Converted, avatar: Imported['avatar'], holders: Holders, tally: Tally): ImportResult {
@@ -152,7 +150,6 @@ function image(bytes: Uint8Array<ArrayBuffer>, tally: Tally): Imported['avatar']
   return { bytes, type };
 }
 
-// What picture the bytes are, read from them; null for anything else.
 export function imageType(bytes: Uint8Array): string | null {
   const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
   if (ascii(0, 8) === '\x89PNG\r\n\x1a\n') return 'image/png';

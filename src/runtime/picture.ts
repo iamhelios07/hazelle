@@ -1,8 +1,6 @@
-// The longest side of the thumbnail that lists and 캐릭터 둘러보기 show; the original stays in its blob.
 const THUMB = 400;
 
-// A small copy of the picture for lists. Safari cannot write WebP and hands back PNG, which is far
-// larger, so it gets JPEG instead.
+// Safari cannot write WebP and hands back PNG, which is far larger, so it gets JPEG instead.
 export async function thumbnail({ bytes, type }: { bytes: Uint8Array<ArrayBuffer>; type: string }): Promise<string> {
   const bitmap = await createImageBitmap(new Blob([bytes], { type }));
   const scale = Math.min(1, THUMB / Math.max(bitmap.width, bitmap.height));

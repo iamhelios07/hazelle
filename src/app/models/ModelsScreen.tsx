@@ -11,9 +11,7 @@ import { useToast } from '../toast';
 import { Callout, Empty, List, ListItem, NavBar, Screen, Section, SettingGroup } from '../ui';
 import { defaultFirst, valueWords } from './settingWords';
 
-// The 기본 모델 layer of the model assignment, the one place it is chosen, and the task prompts that pass 보조 모델 by
-// with their own model, which are only shown here and changed in the prompt; then the starred models, each opening its
-// own page where it picks its settings, and the settings made so far. The screens never say 묶음.
+// The screens never say 묶음.
 export function ModelsScreen({ back }: { back: Back | null }) {
   const store = useStore();
   const toast = useToast();

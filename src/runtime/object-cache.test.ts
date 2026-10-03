@@ -380,7 +380,6 @@ it('answers timeline-changed to a chat opening a reset cut short, and opens the 
   await vi.waitFor(() => expect(f.fetch.mock.lastCall?.[0]).toContain('bootstrap=1'));
   resume();
   expect(await cut.ready).toEqual({ ok: false, error: 'timeline-changed' });
-  // Retained while the bootstrap is under way, the chat waits for it and loads, the pull not waiting for the chat.
   const again = store.retainChat('chat');
   boot();
   expect(await pulled).toBeNull();

@@ -7,7 +7,6 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  // page: the text is the page, as a text block's is. field: a boxed field, such as a 감싸는 글.
   variant?: 'page' | 'field';
   ref?: Ref<HTMLTextAreaElement>;
 };
@@ -24,10 +23,9 @@ export function typeInto(area: HTMLTextAreaElement, [start, end]: [number, numbe
   document.execCommand('insertText', false, text);
 }
 
-// Prompt text with its CBS tags, <tags>, headings and rules colored. The colors are drawn on a layer behind a
-// transparent textarea, so the layer must set the text exactly as the textarea does: it never changes weight, size,
-// spacing or font (a heading is brighter, not bolder), or the caret drifts from the letters. The layer is in the flow
-// and the textarea covers it, so the box grows with the text.
+// The colors are drawn on a layer behind a transparent textarea, so the layer must set the text exactly as the
+// textarea does: it never changes weight, size, spacing or font (a heading is brighter, not bolder), or the caret
+// drifts from the letters. The layer is in the flow and the textarea covers it, so the box grows with the text.
 export function MarkupArea({ label, value, onChange, placeholder, variant = 'page', ref }: Props) {
   const id = useId();
   // A last empty line has no height in the layer until something is on it.

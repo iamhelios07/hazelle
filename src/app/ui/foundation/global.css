@@ -42,7 +42,6 @@ select {
   color: inherit;
 }
 
-/* Every button starts bare; its component adds the border, fill and padding it has. */
 button {
   border: 0;
   background: transparent;

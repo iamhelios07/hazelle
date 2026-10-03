@@ -8,9 +8,9 @@ const TTL: Record<Cache, number> = { '5m': 5 * 60_000, '1h': 60 * 60_000 };
 
 export type LastCache = { version: string; connection: string; until: number };
 
-// What the chat's latest call that reported its counts cached, and until when: a provider keeps it for the call's
-// TTL from the call's start, and a read renews it as a write does. null when that call sent no cache point, or
-// reported reading and writing none (a prompt shorter than the model caches, or a provider that ignores points).
+// A provider keeps a cache for the call's TTL from the call's start, and a read renews it as a write does. null when the
+// chat's latest call that reported its counts sent no cache point, or reported reading and writing none (a prompt
+// shorter than the model caches, or a provider that ignores points).
 export function lastCache(messages: Message[]): LastCache | null {
   let latest: { id: string; at: number; receipt: NonNullable<Message['versions'][number]['receipt']> } | null = null;
   for (const message of messages) {
@@ -22,12 +22,10 @@ export function lastCache(messages: Message[]): LastCache | null {
   return { version: latest.id, connection, until: latest.at - totalMs + TTL[cache] };
 }
 
-// One request as its cache reads it, and where each message in its prompt came from.
 export type CacheSend = { connection: string; view: CacheView; parts: Assembled['parts'] };
 
-// Why the next send would not read all the last call cached, at the first message where the two differ. differs: the
-// last call's message is not sent as it was (an edit, a change, or a message the budget or a delete dropped); added: a
-// message the last call did not send comes before it.
+// differs: the last call's message is not sent as it was (an edit, a change, or a message the budget or a delete
+// dropped); added: a message the last call did not send comes before it.
 export type Break = { kind: 'model' | 'reasoning' | 'off' } | { kind: 'differs' | 'added'; from: From; role: Role };
 
 // read: the tokens the next send would read from the cache, of all the last call cached up to its last point.

@@ -1,13 +1,10 @@
-// A piece of prompt text as the highlight layer draws it (MarkupArea). line: how its whole line reads, a `#`
-// heading, a `---` rule or body text. mark: a CBS tag, the wrapper's {{slot}}, or an <angle> tag inside it.
 export type Piece = { text: string; line: 'body' | 'heading' | 'rule'; mark: 'cbs' | 'slot' | 'angle' | null };
 
 const HEADING = /^#{1,6}\s/;
 const RULE = /^\s*-{3,}\s*$/;
 const ANGLE = /^<\/?[A-Za-z][^<>\n]{0,60}>/;
 
-// The pieces joined give back the text exactly, so the layer and the textarea above it wrap alike. A tag is read
-// within its line, `{{` and `}}` nesting; one left open is plain text.
+// The pieces joined give back the text exactly, so the layer and the textarea above it wrap alike.
 export function markup(text: string): Piece[] {
   const pieces: Piece[] = [];
   for (const whole of text.split(/(?<=\n)/)) {

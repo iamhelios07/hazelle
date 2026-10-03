@@ -12,7 +12,6 @@ const encode = (text: string) => new TextEncoder().encode(text);
 const delta = (text: string) => encode(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
 const ending = encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
 
-// Two page loads of one account: a reload, or another device.
 async function pages() {
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('document', { visibilityState: 'hidden' });
@@ -26,7 +25,6 @@ async function pages() {
   return open;
 }
 
-// A chat whose reply streams from a provider the test writes to.
 async function streaming(session: Session) {
   await answerable(session);
   const chat = crypto.randomUUID();

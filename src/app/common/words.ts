@@ -1,7 +1,7 @@
 import type { Role } from '../../connectors/assignment';
 import { KEEP_DAYS } from '../../model/library';
 
-// The words several screens use for one thing, so it reads the same wherever it appears. Sentences stay in their
+// Sentences stay in their
 // screen and are built from these; the phrases these replaced are refused by lint (RETIRED_COPY in eslint.config.js).
 // Kept apart on purpose, not variants of one word: 빼기 takes out of a list, 지우기 deletes. 편집 opens an item's
 // editor, 수정 changes a message in place. 새 답장 받기 asks for another reply, 다시 시도 repeats a failed or stopped
@@ -23,7 +23,6 @@ export const BIN = '휴지통';
 // What the toast of a deletion that goes there adds.
 export const BIN_KEEPS = `${KEEP_DAYS}일 안에는 ‘${BIN}’에서 되살릴 수 있어요.`;
 
-// A {{…}} tag in a prompt or a card's text.
 export const COMMAND = '명령어';
 
 // 설정's pages, which SettingsNav lists and a sentence points to.

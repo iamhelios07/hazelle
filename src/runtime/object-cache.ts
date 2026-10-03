@@ -14,7 +14,6 @@ export type CacheWrite = { changes: SealedChange[]; feed: CacheState; scopes?: {
 // token, set once by adopt, and every row of a generation is of its timeline.
 export type Generation = { id: string; timeline: string | null };
 
-// A cache operation stated a generation that is no longer the stored one: another tab cleared or adopted it.
 export class GenerationChanged extends Error {
   constructor() { super('The cache generation changed'); }
 }
@@ -23,9 +22,8 @@ export class GenerationChanged extends Error {
 // Every operation but open and forget states the generation the tab holds and compares it inside its own
 // transaction, so a delayed clear or bootstrap from a stale tab changes nothing.
 export interface DeviceCache {
-  // The stored generation, with the feed's rows when it has a timeline. One without a timeline is a clear whose
-  // bootstrap has not answered yet, which a tab joins; none at all is a cache from before generations, whose rows go
-  // as a new generation is made, in the same transaction.
+  // One without a timeline is a clear whose bootstrap has not answered yet, which a tab joins; none at all is a cache
+  // from before generations, whose rows go as a new generation is made, in the same transaction.
   open(): Promise<{ generation: Generation; saved: CachedScope | null }>;
   read(generation: Generation, chat: string): Promise<CachedScope | null>;
   write(generation: Generation, write: CacheWrite): Promise<void>;

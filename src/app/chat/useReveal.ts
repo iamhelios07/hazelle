@@ -12,7 +12,7 @@ export function revealStep(shown: number, total: number, ms: number): number {
   return Math.min(total, shown + Math.max((FLOOR * ms) / 1000, (backlog * ms) / DRAIN_MS));
 }
 
-// The part of a version's text shown while it is written, and whether some of it is still to come. Revealing
+// Revealing
 // starts from the text the version had when it went live, so 이어 쓰기 does not type out the text it continues,
 // and goes on after the reply ends until all of it is shown, so the last burst does not jump in.
 export function useReveal(version: string, text: string, live: boolean): { text: string; revealing: boolean } {

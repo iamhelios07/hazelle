@@ -16,7 +16,6 @@ export class NodeStoreDb implements StoreDb {
   private pending: Snapshot | null = null;
   private open = false;
 
-  // now: the clock the log is stamped with, so a test can ask for a bookmark at a time it chose.
   constructor(private readonly now: () => number) {
     this.record();
   }

@@ -1,6 +1,6 @@
 import { encodeText, fromBase64, toBase64 } from './aead';
 
-// A stored file: id names the sealed body on the server, key opens it. The key lives only in sealed object bodies.
+// The key lives only in sealed object bodies.
 export type FileRef = { id: string; key: string };
 
 // Every file is sealed by its own content (design §3, convergent): the key comes from the bytes, so the same file

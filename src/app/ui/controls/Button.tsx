@@ -4,9 +4,7 @@ import { Icon } from '../foundation/Icon';
 import styles from './Button.module.css';
 
 type Props = {
-  // danger: a way to delete what the page shows, such as 이 페르소나 지우기.
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'link' | 'danger';
-  // xs: a link inside a line of small text.
   size?: 'xs' | 'sm' | 'md' | 'lg';
   type?: 'button' | 'submit';
   icon?: LucideIcon;
@@ -14,7 +12,6 @@ type Props = {
   label?: string;
   busy?: boolean;
   disabled?: boolean;
-  // A button that opens a menu takes these from Menu.
   popup?: 'menu' | 'dialog';
   expanded?: boolean;
   ref?: Ref<HTMLButtonElement>;

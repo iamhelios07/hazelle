@@ -19,8 +19,8 @@ export function formatRecoveryKey(bytes: Uint8Array): string {
   return chars.match(/.{1,4}/g)!.join('-');
 }
 
-// Accepts the key as typed or pasted, or the whole downloaded file. In a file, the key is the line
-// that reads as a whole key; a pattern search could borrow letters from the username line above it.
+// In a file, the key is the line that reads as a whole key; a pattern search could borrow letters from the
+// username line above it.
 export function parseRecoveryKey(input: string): Uint8Array<ArrayBuffer> | null {
   const isKey = (chars: string) => chars.length === KEY_CHARS && [...chars].every((c) => ALPHABET.includes(c));
   const chars = input.split(/\r?\n/).map(normalize).find(isKey) ?? normalize(input);

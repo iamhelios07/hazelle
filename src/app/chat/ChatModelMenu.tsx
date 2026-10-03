@@ -10,11 +10,10 @@ import { navigate } from '../shell/router';
 import { ChipButton, Divider, Empty, Menu, MenuHeading, MenuItem, SearchField, type MenuHandle } from '../ui';
 
 type Props = {
-  // The model now in use, and its name for the button; null when no layer names one.
+  // null when no layer names one.
   current: ModelRef | null;
   label: string;
   onPick: (ref: ModelRef) => void;
-  // A failed reply's 다른 모델로 opens it too.
   handle: MenuHandle;
 };
 
@@ -32,7 +31,6 @@ export function ChatModelMenu({ current, label, onPick, handle }: Props) {
   );
 }
 
-// The settings the current model uses, opening its page; nothing while current names a model no longer starred.
 function ProfileItem({ current }: { current: ModelRef }) {
   const store = useStore();
   const connections = useConnections();
