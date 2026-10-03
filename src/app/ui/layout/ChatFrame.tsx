@@ -50,26 +50,30 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
   const footerRef = useRef<HTMLDivElement>(null);
-  const folded = useRef(compact);
-  // The story ends above the composer as it is whole, folded or not: space that shrank with the fold would move the
-  // story's end, which would unfold it again at once.
+  // The story ends above the composer as it is whole, never folded or midway: space that moved with the fold would
+  // move the story's end, and the view with it. Only a transition is skipped, so a spinner in the composer does not
+  // stop the measuring.
   const [space, setSpace] = useState(0);
   // The story's scrollbar, which the peek and the aside keep clear of.
   const [scrollbar, setScrollbar] = useState(0);
 
   useLayoutEffect(() => {
-    folded.current = compact;
-  });
-
-  useLayoutEffect(() => {
     const element = footerRef.current!;
     const measure = () => {
-      if (!folded.current || element.matches(':focus-within')) setSpace(element.offsetHeight);
+      if (element.matches(`.${styles.compact}:not(:focus-within)`)) return;
+      if (element.getAnimations({ subtree: true }).some((animation) => animation instanceof CSSTransition)) return;
+      setSpace(element.offsetHeight);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    return () => observer.disconnect();
+    element.addEventListener('transitionend', measure);
+    element.addEventListener('transitioncancel', measure);
+    return () => {
+      observer.disconnect();
+      element.removeEventListener('transitionend', measure);
+      element.removeEventListener('transitioncancel', measure);
+    };
   }, []);
 
   useLayoutEffect(() => {
