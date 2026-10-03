@@ -7,10 +7,8 @@ import { StreamBox, type BoxStorage } from './stream-box';
 import app from './worker';
 
 const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
-// The cutover's destructive migration, which waits outside migrations/ for its step: tests run on the schema it leaves.
-const cutover = import.meta.glob<string>('../../scripts/cutover/*.sql', { query: '?raw', import: 'default', eager: true });
 
-// An in-memory local D1 with every migration and the cutover's applied, a local R2, and a client that calls the app
+// An in-memory local D1 with every migration applied, a local R2, and a client that calls the app
 // in-process. upstream answers the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the
 // options each Durable Object was got with. stores: the accounts' stores in process (store-db-node), whose bookmarks
 // are stamped by clock.
@@ -27,7 +25,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     STORES: stores as unknown as Env['STORES'],
     ADMIN_ACCOUNT: '' as string,
   };
-  for (const sql of [...Object.keys(migrations).sort().map((name) => migrations[name]!), ...Object.values(cutover)]) {
+  for (const sql of Object.keys(migrations).sort().map((name) => migrations[name]!)) {
     const statements = sql.split(';').filter((s) => s.trim());
     await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
   }
