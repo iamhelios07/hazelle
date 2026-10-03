@@ -230,6 +230,35 @@ describe('assemble', () => {
     expect(sizes.size).toBe(2);
   });
 
+  it('chooses the first fitting cut when overlapping signed ranges and depth entries make costs nonmonotone', () => {
+    const messages = [5, 50, 1, 40, 2].map((length, index) => message(`m${index}`, 'user', String(index).repeat(length)));
+    const blocks: Prompt['blocks'] = [
+      { id: 'first', name: null, kind: 'slot', slot: 'chat', range: { from: 0, to: 1 } },
+      { id: 'tail', name: null, kind: 'slot', slot: 'chat', range: { from: -2, to: null } },
+    ];
+    const result = assembledOf(assemble({ ...input({ messages, greeting: null, prompt: { ...starter, blocks }, lore: [lore('depth', '@@depth 2\nabc')] }), budget: 47, countTokens: (text) => text.length }));
+    expect(result.dropped).toBe(2);
+    expect(result.messages.map(({ content }) => content)).toEqual(['2', 'abc', '3'.repeat(40), '44']);
+    expect(result.parts.reduce((sum, { tokens }) => sum + tokens, 0)).toBe(46);
+    expect(result.messages.at(-1)!.cache).toBe(true);
+  });
+
+  it('counts only texts demanded by the slots, with no budget, a fitting first cut, or a short moving range', () => {
+    const messages = [message('long', 'user', 'long unused tail'), message('short', 'user', 'x'), message('tail', 'user', 'tail')];
+    const counted = (from: number, to: number | null, budget: number | null) => {
+      const texts: string[] = [];
+      const blocks: Prompt['blocks'] = [{ id: 'chat', name: null, kind: 'slot', slot: 'chat', range: { from, to } }];
+      const result = assembledOf(assemble({ ...input({ card: null, lore: [], messages, greeting: null, prompt: { ...starter, blocks } }), budget, countTokens: (text) => { texts.push(text); return text.length; } }));
+      return { result, texts };
+    };
+    expect(counted(-1, null, null).texts).toEqual(['tail']);
+    expect(counted(-1, null, 4).texts).toEqual(['tail']);
+    const moved = counted(0, 1, 1);
+    expect(moved.texts).toEqual(['long unused tail', 'x']);
+    expect(moved.result.dropped).toBe(1);
+    expect(moved.result.messages.map(({ content }) => content)).toEqual(['x']);
+  });
+
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));

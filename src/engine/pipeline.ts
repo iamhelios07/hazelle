@@ -258,7 +258,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory }: 
     }
     return template.flatMap((part) => ('range' in part ? range(kept, before, part) : [part]));
   };
-  const size = (parts: (Sent | CachePart)[]) => parts.reduce((sum, part) => sum + ('cache' in part ? 0 : tokens(part.message.content)), 0);
+  const size = budgetSize(template, messages, atDepth, tokens);
   const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
@@ -271,7 +271,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory }: 
   };
 
   // The rest of the template stays whole.
-  const dropped = dropOldest(budget, messages.length, (from) => size(fill(messages.slice(from))));
+  const dropped = dropOldest(budget, messages.length, size);
   return typeof dropped === 'number' ? assembled(fill(messages.slice(dropped)), dropped) : dropped;
 }
 
@@ -426,10 +426,54 @@ function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
 const blockFrom = (block: Block): From => ({ kind: 'block', name: block.name, slot: block.kind === 'slot' ? block.slot : null });
 
 function range(kept: ChatMessage[], before: Map<number, Sent[]>, { range: { from, to }, from: slot }: ChatPart): Sent[] {
-  const at = (n: number) => (n < 0 ? Math.max(kept.length + n, 0) : Math.min(n, kept.length));
+  const [start, end] = rangeBounds(kept.length, { from, to });
   const out: Sent[] = [];
-  for (let index = at(from); index < (to === null ? kept.length : at(to)); index++) out.push(...(before.get(index) ?? []), { message: kept[index]!, from: slot });
+  for (let index = start; index < end; index++) out.push(...(before.get(index) ?? []), { message: kept[index]!, from: slot });
   return out;
+}
+
+function rangeBounds(length: number, { from, to }: ChatRange): [number, number] {
+  const at = (n: number) => (n < 0 ? Math.max(length + n, 0) : Math.min(n, length));
+  return [at(from), to === null ? length : at(to)];
+}
+
+function budgetSize(template: Part[], messages: ChatMessage[], depths: { depth: number; sent: Sent }[], tokens: (text: string) => number): (dropped: number) => number {
+  const ranges = template.filter((part): part is ChatPart => 'range' in part).map(({ range }) => ({ range, start: 0, end: 0, tokens: 0 }));
+  const fixed = template.reduce((sum, part) => sum + ('message' in part ? tokens(part.message.content) : 0), 0);
+  const ordered = [...depths].sort((a, b) => a.depth - b.depth);
+  const depthPrefix = [0];
+  for (const { sent } of ordered) depthPrefix.push(depthPrefix.at(-1)! + tokens(sent.message.content));
+  const throughDepth = (depth: number) => {
+    let low = 0;
+    let high = ordered.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (ordered[middle]!.depth <= depth) low = middle + 1;
+      else high = middle;
+    }
+    return depthPrefix[low]!;
+  };
+  return (dropped) => {
+    const length = messages.length - dropped;
+    let size = fixed;
+    for (const held of ranges) {
+      const [start, end] = rangeBounds(length, held.range);
+      const absoluteStart = dropped + start;
+      const absoluteEnd = dropped + Math.max(start, end);
+      // dropOldest advances cuts in order: both absolute bounds only advance. Each text enters/leaves a slot
+      // at most once; nothing outside the tried ranges is tokenized, including when no trimming is needed.
+      // Costs themselves need not be monotone: overlapping signed ranges can gain messages as cuts advance.
+      for (let at = held.start; at < Math.min(absoluteStart, held.end); at++) held.tokens -= tokens(messages[at]!.content);
+      for (let at = Math.max(held.end, absoluteStart); at < absoluteEnd; at++) held.tokens += tokens(messages[at]!.content);
+      held.start = absoluteStart;
+      held.end = absoluteEnd;
+      if (end <= start) continue;
+      size += held.tokens;
+      // Depths beyond the remaining history clamp to its first message, not outside the slot.
+      size += (start === 0 ? depthPrefix.at(-1)! : throughDepth(length - start)) - throughDepth(length - end);
+    }
+    return size;
+  };
 }
 
 function remembered(measure: (text: string) => number): (text: string) => number {
