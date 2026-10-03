@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
-import type { CatalogResult } from '../../runtime/catalog';
+import { catalogKey, type CatalogResult } from '../../runtime/catalog';
 import { removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { reportsMeters } from '../../runtime/meters';
 import { modelProfile } from '../../runtime/profiles';
@@ -43,7 +43,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [pendingStars, setPendingStars] = useState<Model[] | null>(null);
   const saving = useRef({ queue: Promise.resolve(), count: 0 });
 
-  const catalogKey = JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
+  const key = catalogKey(connection);
   useEffect(() => {
     let current = true;
     setCatalog(null);
@@ -52,7 +52,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       current = false;
     };
     // The stored object is replaced on every sync; only a change to its endpoint or key means a new list.
-  }, [catalogKey, attempt]);
+  }, [key, attempt]);
 
   const starred = pendingStars ?? connection.starred;
   const starredIds = useMemo(() => new Set(starred.map((model) => model.id)), [starred]);

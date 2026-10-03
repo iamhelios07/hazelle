@@ -6,6 +6,8 @@ import { relayJson } from './relay';
 export type CatalogFailure = CredentialFailure | { kind: 'refused'; code: string } | { kind: 'not-a-catalog' };
 export type CatalogResult = { ok: true; models: Model[] } | { ok: false; failure: CatalogFailure };
 
+export const catalogKey = (connection: Connection): string => JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
+
 // A model list stays in memory for five minutes per connection and key, so moving between screens
 // does not ask the provider again. A new key is a new entry.
 const TTL_MS = 5 * 60 * 1000;
@@ -17,7 +19,7 @@ export class Catalogs {
   constructor(private readonly credentials: Credentials) {}
 
   load(connection: Connection, { fresh = false } = {}): Promise<CatalogResult> {
-    const key = JSON.stringify([connection.type, connection.baseUrl, connection.protocol, connection.secret]);
+    const key = catalogKey(connection);
     const hit = this.cache.get(key);
     if (hit && !fresh && performance.now() - hit.at < TTL_MS) return hit.result;
     const result = this.fetch(connection);
