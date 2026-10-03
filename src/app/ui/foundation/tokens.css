@@ -248,6 +248,8 @@
   --read-normal: 800px;
   --read-wide: 960px;
   --read-gutter: 40px;
+  /* SidePeek's tab at the story's edge: 2 × --space-4, an xs line and a thin border. ChatFrame reads it. */
+  --peek-tab-width: 27px;
 
   /* The gap a menu keeps from the screen's sides, the phone gutter. layers.ts reads it too. */
   --menu-edge: var(--space-16);

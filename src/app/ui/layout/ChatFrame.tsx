@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, 
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import styles from './ChatFrame.module.css';
+import { StoryGutterContext } from './story-gutter';
 
 type Spacing = 'narrow' | 'normal' | 'wide';
 
@@ -56,6 +57,10 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   const [space, setSpace] = useState(0);
   // The story's scrollbar, which the peek and the aside keep clear of.
   const [scrollbar, setScrollbar] = useState(0);
+  // A message's tools take a gutter (StoryMessage's .rail) beside the text column only while the room right of it also
+  // holds a peek tab, which paints over whatever shares the story's edge; else they lie over the message's corner.
+  const [gutter, setGutter] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const element = footerRef.current!;
@@ -78,10 +83,17 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
 
   useLayoutEffect(() => {
     const element = scrollRef.current!;
-    const measure = () => setScrollbar(element.offsetWidth - element.clientWidth);
+    const content = contentRef.current!;
+    const tokens = getComputedStyle(element);
+    const room = parseFloat(tokens.getPropertyValue('--read-gutter')) + parseFloat(tokens.getPropertyValue('--peek-tab-width'));
+    const measure = () => {
+      setScrollbar(element.offsetWidth - element.clientWidth);
+      setGutter((element.clientWidth - content.offsetWidth) / 2 + parseFloat(getComputedStyle(content).paddingRight) >= room);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+    observer.observe(content);
     return () => observer.disconnect();
   }, [scrollRef]);
 
@@ -118,7 +130,9 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
           </header>
         </div>
         <div className={styles.scroll} ref={scrollRef} onScroll={scrolled}>
-          <div className={styles.content}>{children}</div>
+          <div className={styles.content} ref={contentRef}>
+            <StoryGutterContext value={gutter}>{children}</StoryGutterContext>
+          </div>
         </div>
         {aside}
         {peek}
