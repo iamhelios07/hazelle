@@ -6,12 +6,12 @@ import type { OpenChat } from './useChat';
 // 상태: the bot's status window (상태창 지정), each box from the latest message that drew it. Away from that message it
 // peeks over the story from a tab at its edge, or with 옆에 두기 stands in the story's margin, where it fits.
 export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
-  const { status, peek, canKeep, decor, actions } = chat;
+  const { status, held, canKeep, decor, actions } = chat;
   return (
     <SidePeek
       label="상태"
-      open={peek}
-      onOpenChange={actions.setPeek}
+      open={held === 'status'}
+      onOpenChange={(open) => actions.hold('status', open)}
       actions={
         <>
           {unmarkOnly(chat)}

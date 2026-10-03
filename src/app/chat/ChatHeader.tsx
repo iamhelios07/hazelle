@@ -56,7 +56,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
 }
 
 export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
-  const { id, item, route, toggles, panel, modelMenu, actions } = chat;
+  const { id, item, route, toggles, panel, held, infoDrawer, modelMenu, actions } = chat;
   const remembering = useRemembering();
   const failed = id !== null && remembering.failed.has(id);
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
@@ -88,16 +88,8 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
         />
       )}
       {wide && <ReadingMenu reading={reading} />}
-      {/* A phone opens 정보 from a tapped message's tools. */}
-      {wide && (
-        <IconButton
-          icon={PanelRight}
-          label="답장 정보"
-          size="sm"
-          expanded={panel?.kind === 'info'}
-          onClick={() => (panel?.kind === 'info' ? actions.closePanel() : actions.info(null))}
-        />
-      )}
+      {/* A phone's header has no room for it: there 정보 opens from its tab and a tapped message's tools. */}
+      {wide && <IconButton icon={PanelRight} label="답장 정보" size="sm" expanded={held === 'info'} controls={infoDrawer} onClick={actions.toggleInfo} />}
       <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
         {!wide && item && <MenuItem label="장기 기억" sub={failed ? '마지막 정리가 실패했어요' : undefined} onClick={toggleMemory} />}
