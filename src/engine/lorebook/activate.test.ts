@@ -122,6 +122,23 @@ describe('activate', () => {
     expect(ids(run(entries, chat('to the castle'), { settings: { ...NULLS, recursive: false } }))).toEqual(['castle', 'flat']);
   });
 
+  it('retains earlier key and exclusion evidence while consuming only new recursive bodies', () => {
+    const entries = [
+      lore('first', { constant: true, content: 'rain key-two red' }),
+      lore('second', { keys: ['key-two'], content: 'preferred blue go' }),
+      lore('target', { keys: ['preferred', 'fallback'], selective: true, secondaryKeys: ['blue'], content: '@@additional_keys red\n@@additional_keys go\ntarget' }),
+      lore('excluded', { keys: ['preferred', 'fallback'], selective: true, secondaryKeys: ['blue'], content: '@@exclude_keys_all night,rain\nexcluded' }),
+    ];
+    const result = run(entries, chat('fallback red night'));
+    expect(ids(result)).toEqual(['first', 'second', 'target']);
+    expect(why(result, 'target')).toEqual({ kind: 'keys', matched: [
+      { query: 'primary', key: 'preferred', source: { kind: 'entry', id: 'second' } },
+      { query: 'secondary', key: 'blue', source: { kind: 'entry', id: 'second' } },
+      { query: 'additional', key: 'red', source: { kind: 'message', id: 'm0' } },
+      { query: 'additional', key: 'go', source: { kind: 'entry', id: 'second' } },
+    ] });
+  });
+
   it('rolls @@probability once per entry per send, so a later pass does not roll again (row 9)', () => {
     const entries = [lore('maybe', { keys: ['omen'], content: '@@probability 50\nmaybe' }), lore('echo', { keys: ['omen'], content: 'another omen' })];
     const lost = run(entries, chat('an omen'), { seed: 'send-2' });

@@ -94,12 +94,14 @@ type Rules = {
 };
 
 type Query = { key: string; match: Matcher }[];
+type Evidence = Map<Matcher, Source>;
 
 type Book = {
   id: string;
   value: Omit<LoreEntry, 'folder'>;
   body: string;
   scanned: Scanned;
+  matchers: Matcher[];
   rules: Rules;
   queries: { primary: Query; secondary: Query; additional: Query[]; exclude: Query[]; excludeAll: Query[] };
 };
@@ -154,20 +156,24 @@ function activate(books: Book[], settings: LoreInput['settings'], invalidKeys: A
   const matched: { book: Book; why: Why }[] = [];
   const active: Book[] = [];
   const fates = new Map<string, Fate>();
-  let waiting = books.filter(open);
-  let recursion: Scanned[] = [];
+  let waiting = books.filter(open).map((book) => ({ book, evidence: new Map<Matcher, Source>() }));
+  let frontier: Scanned[] = [];
+  let first = true;
   // Each pass scans what the passes before it activated; an entry fires once, and its roll is its own for the
   // whole send, whichever pass reaches it.
   for (;;) {
     const waited = waiting;
     const now: Book[] = [];
     waiting = [];
-    for (const book of waited) {
-      const depth = book.rules.scanDepth ?? scanDepth;
-      const sources = () => [...window(history, end, depth), ...(book.rules.searchRecursion ? recursion : [])];
-      const why = triggered(book, afterMatch, sources);
+    for (const pending of waited) {
+      const { book, evidence } = pending;
+      const why = triggered(book, afterMatch, () => {
+        if (first) consume(book.matchers, evidence, window(history, end, book.rules.scanDepth ?? scanDepth));
+        if (book.rules.searchRecursion) consume(book.matchers, evidence, frontier);
+        return evidence;
+      });
       if (!why) {
-        waiting.push(book);
+        waiting.push(pending);
         continue;
       }
       matched.push({ book, why });
@@ -177,7 +183,8 @@ function activate(books: Book[], settings: LoreInput['settings'], invalidKeys: A
     active.push(...now);
     const bodies = now.filter(({ rules }) => rules.recursive ?? recursive).map(({ scanned }) => scanned);
     if (bodies.length === 0) break;
-    recursion = [...recursion, ...bodies];
+    frontier = bodies;
+    first = false;
   }
 
   // Risu's budget and order (risu-compat-spec §b Budget, ordering, output), step by step: the stable sorts and
@@ -259,19 +266,21 @@ function prepare({ id, value }: LoreInput['entries'][number], fullWordMatching: 
         // A key that does not compile never matches, so it cannot complete an @@exclude_keys_all either.
         return { key, match: match ?? NEVER };
       });
+  const queries = {
+    primary: query(value.keys),
+    secondary: value.selective ? query(value.secondaryKeys) : [],
+    additional: rules.additional.map(query),
+    exclude: rules.exclude.map(query),
+    excludeAll: rules.excludeAll.map(query),
+  };
   return {
     id,
     value,
     body,
     scanned: scan({ kind: 'entry', id }, body),
     rules,
-    queries: {
-      primary: query(value.keys),
-      secondary: value.selective ? query(value.secondaryKeys) : [],
-      additional: rules.additional.map(query),
-      exclude: rules.exclude.map(query),
-      excludeAll: rules.excludeAll.map(query),
-    },
+    queries,
+    matchers: [queries.primary, queries.secondary, ...queries.additional, ...queries.exclude, ...queries.excludeAll].flat().map(({ match }) => match),
   };
 }
 
@@ -384,30 +393,39 @@ function apply(rules: Rules, { name, value }: DecoratorLine): boolean {
   }
 }
 
-function triggered({ id, value, rules, queries }: Book, afterMatch: ReadonlySet<string>, readSources: () => Scanned[]): Why | null {
+function triggered({ id, value, rules, queries }: Book, afterMatch: ReadonlySet<string>, readEvidence: () => Evidence): Why | null {
   if (value.constant) return { kind: 'constant' };
   if (rules.trigger === 'activate') return { kind: 'decorator', name: 'activate' };
   if (rules.afterMatch === 'keep' && afterMatch.has(id)) return { kind: 'decorator', name: 'keep_activate_after_match' };
-  const sources = readSources();
+  const evidence = readEvidence();
   const matched: KeyMatch[] = [];
   const needs = (query: Query, name: KeyMatch['query']) => {
-    const hit = find(query, sources);
+    const hit = find(query, evidence);
     if (hit) matched.push({ query: name, ...hit });
     return hit !== null;
   };
   if (!needs(queries.primary, 'primary')) return null;
   if (queries.secondary.length > 0 && !needs(queries.secondary, 'secondary')) return null;
   if (!queries.additional.every((query) => needs(query, 'additional'))) return null;
-  if (queries.exclude.some((query) => find(query, sources))) return null;
+  if (queries.exclude.some((query) => find(query, evidence))) return null;
   // Every key somewhere in the scanned text, not every key in every message.
-  if (queries.excludeAll.some((query) => query.every(({ match }) => sources.some(match)))) return null;
+  if (queries.excludeAll.some((query) => query.every(({ match }) => evidence.has(match)))) return null;
   return { kind: 'keys', matched };
 }
 
-function find(query: Query, sources: Scanned[]): { key: string; source: Source } | null {
-  for (const { key, match } of query) {
+function consume(matchers: Matcher[], evidence: Evidence, sources: Scanned[]) {
+  for (const match of matchers) {
+    if (evidence.has(match)) continue;
     const scanned = sources.find(match);
-    if (scanned) return { key, source: scanned.source };
+    if (scanned) evidence.set(match, scanned.source);
+  }
+}
+
+function find(query: Query, evidence: Evidence): { key: string; source: Source } | null {
+  // Key order outranks source age: a higher-priority key can first match in a later frontier.
+  for (const { key, match } of query) {
+    const source = evidence.get(match);
+    if (source) return { key, source };
   }
   return null;
 }
