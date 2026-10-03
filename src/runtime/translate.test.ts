@@ -2,73 +2,86 @@ import { describe, expect, it, vi } from 'vitest';
 import { fold, shown, type Message } from '../model/chat';
 import { greetingTranslation } from '../model/library';
 import { appendUserMessage, startChat } from './chat-log';
-import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
+import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { setTranslate } from './characters';
 import { SETTINGS_ID } from '../model/settings';
 import { setDefaultModel, setTaskModel } from './assignment';
 import { translate, translatorOf } from './translate';
-import { takeTurn, translateLatest, translationInput } from './turn';
+import { takeTurn, translationInput } from './turn';
 
 const server = testServer();
 
 describe('Translator', () => {
-  it('translates a reply after its screen leaves while it is streaming', () =>
+  it('translates a reply received here, though its chat was left before the bot’s onOutput ended', () =>
     server.withSession(async (session) => {
       await answerable(session);
       await setTranslate(session.store, null, { replies: true });
       const chat = crypto.randomUUID();
-      await server.hold(session.store, chat);
+      const lease = session.store.retainChat(chat);
+      await lease.ready;
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Hi' });
       const stream = new TransformStream<Uint8Array, Uint8Array>();
       const writer = stream.writable.getWriter();
       const log = stubRelay(inTurn([new Response(stream.readable, { headers: { 'x-relay': 'upstream' } }), saying('안녕, 여행자.')]));
+      // The bot's onOutput runs past the moment the reply lets its chat go.
+      vi.spyOn(session.scripts, 'ended').mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 50)));
       const screen = vi.fn();
       const leave = session.talk.subscribe(screen);
       const turn = takeTurn(session, chat, { kind: 'answer' });
       await writer.write(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hello, traveler."}}]}\n\n'));
       await vi.waitFor(() => expect(session.talk.snapshot()?.text).toBe('Hello, traveler.'));
-      translateLatest(session, chat);
       expect(log).toHaveLength(1);
       expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
       leave();
+      lease.release();
       screen.mockClear();
       await writer.write(new TextEncoder().encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));
       expect(await turn).toBeNull();
 
-      const reply = () => shown(fold(session.store.children('entry', chat))[1]!);
-      await vi.waitFor(() => expect(reply().translation?.text).toBe('안녕, 여행자.'));
+      await vi.waitFor(() => expect(log).toHaveLength(2));
       await vi.waitFor(() => expect(session.translator.snapshot().live.size).toBe(0));
       expect(screen).not.toHaveBeenCalled();
-      translateLatest(session, chat);
-      expect(log).toHaveLength(2);
+      await server.hold(session.store, chat);
+      expect(shown(fold(session.store.children('entry', chat))[1]!).translation?.text).toBe('안녕, 여행자.');
     }));
 
-  it('checks the switch on reopening and leaves a failed translation for an explicit retry', () =>
+  it('leaves a reply received before the switch went on to 번역', () =>
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
       await server.hold(session.store, chat);
       const opened = { title: null, character: null, models: {} };
       await startChat(session.store, chat, opened, null);
-      const log = stubRelay(inTurn([saying('Hello'), upstream(500, { error: { message: 'overloaded' } }), saying('안녕')]));
+      const log = stubRelay(inTurn([saying('Hello'), saying('안녕')]));
       await takeTurn(session, chat, { kind: 'answer' });
-      translateLatest(session, chat);
-      expect(log).toHaveLength(1);
       await setTranslate(session.store, null, { replies: true });
-      translateLatest(session, chat);
-      translateLatest(session, chat);
+      expect(session.translator.snapshot().live.size).toBe(0);
+      expect(log).toHaveLength(1);
       const messages = () => fold(session.store.children('entry', chat));
-      const reply = shown(messages()[0]!);
-      await vi.waitFor(() => expect(session.translator.snapshot().failed.has(reply.id)).toBe(true));
-      translateLatest(session, chat);
-      expect(log).toHaveLength(2);
-      session.translator.translate(chat, reply, translationInput(session, chat, opened, messages(), { kind: 'message', index: 0 }));
+      session.translator.translate(chat, shown(messages()[0]!), translationInput(session, chat, opened, messages(), { kind: 'message', index: 0 }));
       await vi.waitFor(() => expect(shown(messages()[0]!).translation?.text).toBe('안녕'));
-      expect(log).toHaveLength(3);
     }));
 
-  it('keeps an unsaved greeting’s automatic translation on its character, which a new chat opens with', () =>
+  it('does not translate the latest reply of a chat it opens', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      const opened = { title: null, character: null, models: {} };
+      await startChat(session.store, chat, opened, null);
+      const log = stubRelay(inTurn([saying('Hello')]));
+      await takeTurn(session, chat, { kind: 'answer' });
+      await setTranslate(session.store, null, { replies: true });
+      const read = session.read.screen(chat, session.talk, { chat: opened, messages: [] });
+      const leave = read.subscribe(() => {});
+      await vi.waitFor(() => expect(read.snapshot().display.texts).toEqual(['Hello']));
+      expect(session.translator.snapshot().live.size).toBe(0);
+      expect(log).toHaveLength(1);
+      leave();
+    }));
+
+  it('leaves a new chat’s greeting to 번역', () =>
     server.withSession(async (session) => {
       await answerable(session);
       const card = { name: 'Luna', nickname: null, description: '', personality: '', scenario: '', greetings: ['Hello'], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [], loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } };
@@ -76,19 +89,18 @@ describe('Translator', () => {
       const character = created.ok ? created.data.id : '';
       await setTranslate(session.store, character, { replies: true });
       const chat = crypto.randomUUID();
-      await server.hold(session.store, chat);
       const opened = { title: null, character, models: {} };
       const version = crypto.randomUUID();
       const messages: Message[] = [{ id: version, role: 'assistant', at: 0, selected: 0, versions: [{ id: version, seed: version, text: 'Hello', receipt: null, edited: false, at: 0 }] }];
       const log = stubRelay(() => saying('안녕'));
       // The chat screen shows it, as it does before the first send.
-      const leave = session.read.screen(chat, session.talk, { chat: opened, messages }).subscribe(() => {});
-      translateLatest(session, chat);
-      const kept = () => greetingTranslation(session.store.get('character', character)!.value, 'Hello', 'Korean');
-      await vi.waitFor(() => expect(kept()?.text).toBe('안녕'));
-      expect(session.store.get('chat', chat)).toBeNull();
+      const read = session.read.screen(chat, session.talk, { chat: opened, messages });
+      const leave = read.subscribe(() => {});
+      await vi.waitFor(() => expect(read.snapshot().display.texts).toEqual(['Hello']));
+      expect(session.translator.snapshot().live.size).toBe(0);
+      expect(greetingTranslation(session.store.get('character', character)!.value, 'Hello', 'Korean')).toBeUndefined();
+      expect(log).toHaveLength(0);
       leave();
-      expect(log).toHaveLength(1);
     }));
 
   it('shows a reply’s translation as it comes, then saves it with the call’s receipt', () =>

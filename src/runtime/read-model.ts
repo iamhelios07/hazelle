@@ -76,7 +76,6 @@ export class ReadModels {
   private readonly byObject = new Map<string, { kind: Kind; state: Snapshot<Stored<Kind> | null> }>();
   private readonly byCharacter = new Map<string, Snapshot<CharacterShelf<ChatSummary> | null>>();
   private folders: FolderTree[];
-  private readonly screens = new Map<string, ChatScreenRead>();
   readonly chats = new Snapshot<ChatSummary[]>([]);
   readonly library: Snapshot<Library>;
   // Until something is saved, nothing is assigned: an empty layer, not a guessed default.
@@ -153,23 +152,14 @@ export class ReadModels {
     return new ChatScreenRead(this, talk, id, opening);
   }
 
-  attach(screen: ChatScreenRead) {
-    this.screens.set(screen.id, screen);
-    return () => {
-      if (this.screens.get(screen.id) === screen) this.screens.delete(screen.id);
-    };
-  }
-
   async displayed(id: string): Promise<ScreenChat | null> {
     await this.store.evaluated(id);
     const model = this.chat(id).snapshot();
-    if (model) return { chat: model.chat, messages: withTurn(model.messages, null, id), display: model.display };
-    return this.screens.get(id)?.forTranslation() ?? null;
+    return model && { chat: model.chat, messages: withTurn(model.messages, null, id), display: model.display };
   }
 
   close() {
     this.leave();
-    this.screens.clear();
     for (const snapshot of this.byChat.values()) snapshot.set(null);
     this.byChat.clear();
   }
@@ -251,7 +241,6 @@ export type ScreenChat = { chat: Chat; messages: Shown[]; display: Display; pend
 export class ChatScreenRead {
   private readonly state: Snapshot<ScreenChat>;
   private reads: StoreRead[] = [];
-  private translationDisplay: Promise<Display> | null = null;
   private evaluation: AbortController | null = null;
   private revision = 0;
   private screen: ChatScope['screen'] = null;
@@ -273,7 +262,6 @@ export class ChatScreenRead {
       // first send never waits for it.
       this.models.store.evaluation.warm();
       const lease = this.models.store.retainChat(this.id);
-      const detach = this.models.attach(this);
       const store = this.models.store.subscribe((changes) => {
         const model = this.models.chat(this.id).snapshot();
         if (model === this.model && !readsChanged(this.reads, changes)) return;
@@ -290,7 +278,7 @@ export class ChatScreenRead {
         if (!display) return this.refresh();
         this.state.set({ ...this.state.snapshot(), display });
       });
-      this.leave = () => { this.revision++; this.evaluation?.abort(); detach(); store(); talk(); passed(); lease.release(); };
+      this.leave = () => { this.revision++; this.evaluation?.abort(); store(); talk(); passed(); lease.release(); };
       const model = this.models.chat(this.id).snapshot();
       const turn = this.currentTurn();
       // A pass the display was missing while nobody listened was not run: it is asked for again now.
@@ -316,20 +304,12 @@ export class ChatScreenRead {
     if (changed) this.refresh();
   }
 
-  // Translation has always read without a viewport; an open screen must not change which replies qualify.
-  async forTranslation(): Promise<ScreenChat> {
-    const view = this.snapshot();
-    this.translationDisplay ??= evaluateChat({ store: this.models.store }, this.id, view.chat, view.messages);
-    return { ...view, display: await this.translationDisplay };
-  }
-
   private currentTurn() {
     const turn = this.talk.snapshot();
     return turn?.chat === this.id ? turn : null;
   }
 
   refresh() {
-    this.translationDisplay = null;
     this.evaluation?.abort();
     const evaluation = new AbortController();
     this.evaluation = evaluation;

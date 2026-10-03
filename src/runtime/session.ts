@@ -23,7 +23,7 @@ import { ScriptDisplay } from './script-display';
 import { Scripts } from './scripts';
 import { Streams } from './streams';
 import { backfillSummaries } from './summary';
-import { resumeSend, translateLatest } from './turn';
+import { resumeSend, translateReceived } from './turn';
 
 export type Session = {
   username: string;
@@ -94,12 +94,15 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     credentials,
     costs,
     (chat, reply) => scripts.ending(chat, reply),
-    // The bot's onOutput may rewrite the reply, so what reads the reply waits for it.
-    (chat, reply) =>
+    // The bot's onOutput may rewrite the reply, so what reads the reply waits for it. The lease, taken while Talk still
+    // holds the chat, keeps it loaded for the translation however soon the chat is left.
+    (chat, reply) => {
+      const lease = store.retainChat(chat);
       void scripts.ended(chat, reply).finally(() => {
-        translateLatest({ store, read, talk, translator }, chat);
+        void translateReceived({ store, read, translator }, chat, reply).finally(lease.release);
         memory.check(chat);
-      }),
+      });
+    },
     reading,
   );
   const closing = new AbortController();

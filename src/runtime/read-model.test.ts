@@ -606,10 +606,7 @@ describe('per-chat read models', () => {
     await hold(store, screen.id);
     screen.setInputs(opening, { width: 800, height: 600 });
     await vi.waitFor(() => expect(screen.snapshot().display.texts).toEqual(['800']));
-    expect((await read.displayed('new'))?.display.texts).toEqual(['{{screenwidth}}']);
-    const displayed = vi.spyOn(store.evaluation, 'display');
-    await read.displayed('new');
-    expect(displayed).not.toHaveBeenCalled();
+    expect(await read.displayed('new')).toBeNull();
     talk.set({ chat: 'new', said: { id: 'said', text: 'hi' }, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: 'hello', reasoning: '' });
     await vi.waitFor(() => expect(screen.snapshot().messages.map((message) => message.id)).toEqual(['opening', 'said', 'reply']));
     await store.batch([

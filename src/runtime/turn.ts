@@ -24,10 +24,10 @@ import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { CacheSend } from './cache';
 import type { Halted } from './scripts';
-import { appendUserMessage, startChat, type Said } from './chat-log';
+import { appendUserMessage, startChat, type Said, type Written } from './chat-log';
 import { greetingOf, type Greetings } from './greetings';
 import { cacheViewOf } from './generate';
-import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
+import { type Ask, type Shown, type TalkFailure, type Turn } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
 import { endCall, type CallTarget } from './streams';
 import { resumeTranslation, translate, type TranslateFailure, type TranslateInput } from './translate';
@@ -196,23 +196,23 @@ export function translationInput(reader: Reader, id: string, chat: Chat, message
   return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
 }
 
-// An unsaved chat is read from its open screen, the only place it exists.
-export async function translateLatest(session: Pick<Session, 'store' | 'read' | 'talk' | 'translator'>, id: string) {
-  const view = await session.read.displayed(id).catch((error: unknown) => {
+// Automatic 답장 번역 is for replies received here, never for what a chat already holds: opening a chat, a greeting, a
+// version switched to and the switch turned on leave it to 번역 (user ruling, 2026-10-04). The reply is as saved; the
+// bot's onOutput may have edited or removed its message since, so the message is read again. Its chat must stay
+// loaded until this returns (session).
+export async function translateReceived(session: Pick<Session, 'store' | 'read' | 'translator'>, chat: string, reply: Written) {
+  if (reply.receipt.state === 'failed') return;
+  const view = await session.read.displayed(chat).catch((error: unknown) => {
     if (error instanceof EvaluationStopped || error instanceof EvaluationFailed) return null;
     throw error;
   });
-  if (!view) return;
-  const { chat } = view;
-  if ( !translateSwitches(session.store, chat.character).replies) return;
-  const messages = withTurn(view.messages, session.talk.snapshot(), id);
-  const last = messages.at(-1);
-  if (!last || last.role !== 'assistant' || last.live !== null) return;
-  const version = shown(last);
-  const { live, failed } = session.translator.snapshot();
-  if (version.receipt?.state === 'failed' || version.translation || live.has(version.id) || failed.has(version.id)) return;
-  if (!view.display.texts.at(-1)!.trim()) return;
-  session.translator.translate(id, version, translationInput(session, id, chat, messages, { kind: 'message', index: messages.length - 1 }));
+  if (!view || !translateSwitches(session.store, view.chat.character).replies) return;
+  const index = view.messages.findIndex((message) => message.id === (reply.message ?? reply.id));
+  if (index === -1) return;
+  const version = shown(view.messages[index]!);
+  // Another version, already translated, may have been switched to while onOutput ran.
+  if (version.translation || !view.display.texts[index]!.trim()) return;
+  session.translator.translate(chat, version, translationInput(session, chat, view.chat, view.messages, { kind: 'message', index }));
 }
 
 // A scope a turn can send from, or why not.
