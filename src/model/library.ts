@@ -67,7 +67,19 @@ export type LoreFolder = { id: string; name: string };
 
 const DAY = 24 * 60 * 60 * 1000;
 
-// How long a deleted character, module or chat waits before it is removed for good.
+// What goes to 휴지통 when deleted: it waits KEEP_DELETED, then goes for good with everything it owns (runtime/characters
+// purgeExpired). deleted is when it went there; purging: that removal has begun, so it can no longer be brought back.
+export const REMOVABLE = ['character', 'module', 'chat', 'prompt', 'persona', 'profile'] as const;
+export type Removable = (typeof REMOVABLE)[number];
+export type Mark = { deleted?: number; purging?: true };
+
+// A stored object as every reader but its removal and its undo sees it: null while it is in 휴지통.
+export const live = <T extends { value: Mark }>(stored: T | null): T | null => (stored && stored.value.deleted === undefined ? stored : null);
+
+// Those in 휴지통, most recently deleted first.
+export const binned = <T extends { value: Mark }>(items: T[]): T[] => items.filter(({ value }) => value.deleted !== undefined && !value.purging).sort((a, b) => b.value.deleted! - a.value.deleted!);
+
+// How long what is in 휴지통 waits before it is removed for good.
 export const KEEP_DELETED = 7 * DAY;
 // KEEP_DELETED as the copy names it (7일).
 export const KEEP_DAYS = KEEP_DELETED / DAY;
@@ -75,8 +87,8 @@ export const KEEP_DAYS = KEEP_DELETED / DAY;
 export const greetingTranslation = ({ greetingTranslations }: Character, greeting: string, language: string) =>
   greetingTranslations?.find((each) => each.greeting === greeting && each.language === language)?.translation;
 
-// Whole days a deleted character, module or chat has left. At 0 or less it is due, and purgeExpired removes it.
-export const daysLeft = ({ deleted }: { deleted?: number }, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);
+// Whole days something in 휴지통 has left. At 0 or less it is due, and purgeExpired removes it.
+export const daysLeft = ({ deleted }: Mark, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);
 
 // The name search of the gallery and the sidebar: the query, trimmed and in any case, within the name, nickname or alias.
 export const matches = ({ card, alias }: Character, query: string) =>
@@ -102,7 +114,7 @@ export type Asset = { name: string; type: string; size: number; file: FileRef };
 export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; chats: C[]; order: number };
 export type CharacterShelf<C> = Shelf<C> & { id: string; character: Character };
 
-type ChatLike = { chat: { character: string | null; deleted?: number; purging?: true }; order: number };
+type ChatLike = { chat: { character: string | null } & Mark; order: number };
 
 // chats come newest first. A character is as recent as its latest chat, or, with none yet, as its own
 // last change. Deleted characters and their chats are kept apart, most recently deleted first. binned are the deleted

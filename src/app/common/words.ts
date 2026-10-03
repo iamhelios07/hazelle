@@ -18,7 +18,7 @@ export const BOT_MODELS_HELP = '봇의 스크립트가 답장과 별개로 모�
 
 export const SETTINGS = '설정';
 
-// Where deleted characters and chats wait KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
+// Where what is deleted waits KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
 export const BIN = '휴지통';
 // What the toast of a deletion that goes there adds.
 export const BIN_KEEPS = `${KEEP_DAYS}일 안에는 ‘${BIN}’에서 되살릴 수 있어요.`;
@@ -49,6 +49,7 @@ export const follows = (source: string) => `${source} 따르기`;
 
 // A module Risu kept without a name still needs one to be told apart in a list.
 export const moduleName = (name: string) => name.trim() || '이름 없는 모듈';
+export const promptName = (name: string) => name || '이름 없는 프롬프트';
 
 export const NOT_STARRED = '별표한 모델에 없음';
 

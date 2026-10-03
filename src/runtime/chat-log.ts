@@ -123,7 +123,7 @@ function copied(id: string, { role, at, versions, selected, after }: Message): {
 // A blank name gives the chat back its first message as its name.
 export const renameChat = (store: ObjectStore, id: string, name: string) => store.update('chat', id, (current) => ({ ...current, title: name.trim() || null }));
 
-// The chat stays whole, read as gone (liveChat), until purgeExpired removes it with all it owns; restoreChat
+// The chat stays whole, read as gone (model/library live), until purgeExpired removes it with all it owns; restoreChat
 // (되돌리기) brings it back until then.
 export const removeChat = (store: ObjectStore, id: string) => markDeleted(store, 'chat', id, Date.now());
 

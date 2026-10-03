@@ -1,9 +1,11 @@
 import type { ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Stored } from '../model/kinds';
+import { live } from '../model/library';
 import type { Profile } from '../model/profile';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import { markDeleted } from './characters';
 import { without, type ObjectStore } from './store';
 
 // Every write of `profile` objects, of the default 묶음, and of the 묶음 a starred model uses.
@@ -18,7 +20,7 @@ export type ProfileChoice = { kind: 'profile'; profile: Stored<'profile'>; own: 
 export function modelProfile(store: ObjectStore, model: Starred): ProfileChoice {
   const own = model.profile !== undefined;
   const id = model.profile ?? store.get('settings', SETTINGS_ID)?.value.profile;
-  const profile = id === undefined ? null : store.get('profile', id);
+  const profile = id === undefined ? null : live(store.get('profile', id));
   return profile ? { kind: 'profile', profile, own } : { kind: 'missing', own };
 }
 
@@ -56,14 +58,14 @@ export function withSettings(settings: ModelSettings, values: ModelSettings): Mo
 
 export const setProfileSettings = (store: ObjectStore, id: string, values: ModelSettings) => updateSettings(store, id, (settings) => withSettings(settings, values));
 
-// As with prompts, the default goes only once another 묶음 is the default. A model that used a deleted 묶음 reads
-// as missing until it is given another, or the 묶음 comes back with 되돌리기.
+// To 휴지통 (model/library Mark). As with prompts, the default goes only once another 묶음 is the default. A model that
+// used a deleted 묶음 reads as missing until it is given another, or the 묶음 comes back.
 export async function removeProfile(store: ObjectStore, id: string): Promise<ApiResult<Stored<'profile'>> | { ok: false; error: 'default' }> {
   if (store.get('settings', SETTINGS_ID)?.value.profile === id) return { ok: false, error: 'default' };
-  return store.take('profile', id);
+  return markDeleted(store, 'profile', id, Date.now());
 }
 
-export const restoreProfile = (store: ObjectStore, removed: Stored<'profile'>) => store.restore(removed);
+export const restoreProfile = (store: ObjectStore, id: string) => markDeleted(store, 'profile', id, null);
 
 export const setDefaultProfile = (store: ObjectStore, id: string) => store.upsert('settings', (current) => ({ models: {}, ...current, profile: id }));
 

@@ -1,7 +1,7 @@
 import { FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { holds, type FolderTree } from '../../../model/library';
 import { BIN } from '../../common/words';
-import { useLibrary } from '../../session';
+import { useBin, useLibrary } from '../../session';
 import { IconButton, Menu, MenuItem, Row, Stack, Tab, Tabs } from '../../ui';
 import { useFolderActions } from '../useFolderActions';
 
@@ -20,11 +20,12 @@ type Props = {
 
 export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
   const { characters, folders, deleted, deletedChats } = useLibrary();
+  const bin = useBin();
   const { remove } = useFolderActions();
   // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
   const top = folder && (folders.find((candidate) => candidate === folder || candidate.children.includes(folder)) ?? null);
   const binned = filter === 'deleted';
-  const inBin = deleted.length + deletedChats.length;
+  const inBin = deleted.length + deletedChats.length + bin.modules.length + bin.prompts.length + bin.personas.length + bin.profiles.length;
   const count = (candidate: FolderTree) => characters.filter(({ character }) => holds(candidate, character)).length;
 
   async function drop(target: FolderTree) {

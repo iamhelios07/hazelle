@@ -4,10 +4,9 @@ import type { ConversationPrompt } from '../../model/prompt';
 import { importPrompt, ofSort } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import { describeFailure } from '../common/failure';
-import { inSettings } from '../common/words';
+import { inSettings, promptName } from '../common/words';
 import { useStore } from '../session';
 import { Button, Callout, Dialog, DropOverlay, Outcome, Section, Stack, Text, useFileDrop } from '../ui';
-import { promptName } from './usePromptUse';
 
 const FAILURE: Record<PresetFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요. 깨졌거나 Risu 프리셋(.risup, .risupreset)이 아니에요.',

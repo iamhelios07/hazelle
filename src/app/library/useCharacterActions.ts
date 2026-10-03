@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import type { ChatSummary } from '../../model/chat';
-import type { CharacterShelf } from '../../model/library';
+import type { Stored } from '../../model/kinds';
+import type { CharacterShelf, Removable } from '../../model/library';
 import { copyCharacter, markDeleted, purgeNow, setDeleted } from '../../runtime/characters';
-import { BIN_KEEPS } from '../common/words';
+import { BIN_KEEPS, moduleName, promptName } from '../common/words';
 import { useStore } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
@@ -11,10 +12,10 @@ import { withChats } from './shelf';
 
 type Shelf = CharacterShelf<ChatSummary>;
 export type CharacterActions = ReturnType<typeof useCharacterActions>;
-// A character or a chat in 휴지통, named as its toasts name it. what is all that 지금 지우기 takes, as the object of
-// 지워요.
-export type Binned = { kind: 'character' | 'chat'; id: string; name: string; what: string };
-const OBJECT = { character: '캐릭터를', chat: '채팅을' };
+// Something in 휴지통, named as its toasts name it. what is all that 지금 지우기 takes, as the object of 지워요.
+export type Binned = { kind: Removable; id: string; name: string; what: string };
+const OBJECT: Record<Removable, string> = { character: '캐릭터를', chat: '채팅을', module: '모듈을', prompt: '프롬프트를', persona: '페르소나를', profile: '모델 설정을' };
+const one = (kind: Exclude<Removable, 'character' | 'chat'>, id: string, name: string): Binned => ({ kind, id, name, what: `‘${name}’ ${OBJECT[kind]}` });
 
 export const binnedCharacter = (shelf: Shelf): Binned => {
   const name = shelf.character.card.name;
@@ -22,9 +23,13 @@ export const binnedCharacter = (shelf: Shelf): Binned => {
 };
 
 export const binnedChat = ({ id, title }: ChatSummary): Binned => ({ kind: 'chat', id, name: title, what: `‘${title}’ ${OBJECT.chat}` });
+export const binnedModule = ({ id, value }: Stored<'module'>): Binned => one('module', id, moduleName(value.name));
+export const binnedPrompt = ({ id, value }: Stored<'prompt'>): Binned => one('prompt', id, promptName(value.name));
+export const binnedPersona = ({ id, value }: Stored<'persona'>): Binned => one('persona', id, value.name);
+export const binnedProfile = ({ id, value }: Stored<'profile'>): Binned => one('profile', id, value.name);
 
 // A character's 사본 만들기 and 지우기, from the character page and from 캐릭터 둘러보기, and 되살리기 and 지금 지우기
-// of what is in 휴지통. busy is the character being copied, or what is being removed for good, and the step it is at.
+// of anything in 휴지통. busy is the character being copied, or what is being removed for good, and the step it is at.
 export function useCharacterActions() {
   const store = useStore();
   const toast = useToast();

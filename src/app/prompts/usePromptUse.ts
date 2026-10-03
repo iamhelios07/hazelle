@@ -26,4 +26,3 @@ export function usePromptUse(): ReadonlyMap<string, PromptUse> {
 
 export const EMPTY_USE: PromptUse = { chats: 0, at: null };
 
-export const promptName = (name: string) => name || '이름 없는 프롬프트';

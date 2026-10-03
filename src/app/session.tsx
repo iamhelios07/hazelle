@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { ChatScope } from '../engine/render';
-import { liveChat } from '../model/chat';
+import { binned, live } from '../model/library';
 import type { Kind } from '../model/kinds';
 import type { AccountFacts, Standing } from '../runtime/account';
 import { memoryId, type Memory } from '../model/memory';
@@ -75,7 +75,7 @@ export function useChats() {
 
 export function useChatModel(id: string | null) {
   const { read, store } = useSession();
-  const exists = id !== null && liveChat(store.get('chat', id)) !== null;
+  const exists = id !== null && live(store.get('chat', id)) !== null;
   const [attempt, retry] = useReducer((value: number) => value + 1, 0);
   useEffect(() => {
     if (id === null || !exists) return;
@@ -117,15 +117,27 @@ function useKind<K extends Kind>(kind: K) {
 }
 
 export const useConnections = () => useKind('connection');
-export const usePrompts = () => useKind('prompt');
-export const usePersonas = () => useKind('persona');
-export const useProfiles = () => useKind('profile');
-// The modules there are, by name; a deleted one is not among them (runtime/modules modulesOf). all is the memo's key
-// only: it is a new array exactly when a module changed.
+// Those not in 휴지통. all is the memo's key only: it is a new array exactly when one changed.
+function useLive<K extends 'prompt' | 'persona' | 'profile'>(kind: K) {
+  const all = useKind(kind);
+  return useMemo(() => all.filter(live), [all]);
+}
+export const usePrompts = () => useLive('prompt');
+export const usePersonas = () => useLive('persona');
+export const useProfiles = () => useLive('profile');
+// The modules there are, by name; a deleted one is not among them (runtime/modules modulesOf).
 export function useModules() {
   const store = useStore();
   const all = useKind('module');
   return useMemo(() => modulesOf(store), [store, all]);
+}
+// What 휴지통 lists besides the library's characters and chats, most recently deleted first.
+export function useBin() {
+  const modules = useKind('module');
+  const prompts = useKind('prompt');
+  const personas = useKind('persona');
+  const profiles = useKind('profile');
+  return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
 // How many lorebook entries or assets something holds, such as a module. A number, since a fresh array of them would
 // make React re-render forever.

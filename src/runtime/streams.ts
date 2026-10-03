@@ -1,4 +1,4 @@
-import { liveChat } from '../model/chat';
+import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
 import { memoryId } from '../model/memory';
 import type { Stream } from '../model/stream';
@@ -60,7 +60,7 @@ export class Streams {
     if (this.closed) return;
     for (const stream of this.store.list('stream')) {
       // A deleted chat's calls stay untaken: they go with its purge, or after its 되돌리기 the next pick-up takes them.
-      if (this.reading.has(stream.id) || this.checking.has(stream.id) || !liveChat(this.store.get('chat', stream.parent!))) continue;
+      if (this.reading.has(stream.id) || this.checking.has(stream.id) || !live(this.store.get('chat', stream.parent!))) continue;
       this.checking.add(stream.id);
       void this.store.withChat(stream.parent!, async () => {
         if (!this.closed && !this.reading.has(stream.id)) {

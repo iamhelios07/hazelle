@@ -1,5 +1,6 @@
 import type { Display } from '../engine/display';
-import { chatTitle, fold, liveChat, previewLine, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
+import { chatTitle, fold, previewLine, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
+import { live } from '../model/library';
 import type { ObjectStore } from './store';
 import { displayChat } from './turn';
 import { pause } from './pause';
@@ -17,7 +18,7 @@ export function summaryStale(store: ObjectStore, id: string, summary: Summary, h
 }
 
 export function projectChat(store: ObjectStore, id: string, previous?: Projection): Projection | null {
-  const stored = liveChat(store.get('chat', id));
+  const stored = live(store.get('chat', id));
   if (!stored) return null;
   const entries = store.children('entry', id);
   const head = store.loadedHead(id);
@@ -42,7 +43,7 @@ export function projectChat(store: ObjectStore, id: string, previous?: Projectio
 // A chat lacks its summary when the write that follows its messages failed (ObjectStore.writeOne). Opening it writes one
 // too, so this catches the chats nobody opens.
 export async function backfillSummaries(store: ObjectStore, signal: AbortSignal): Promise<void> {
-  for (const { id } of store.list('chat').filter(liveChat)) {
+  for (const { id } of store.list('chat').filter(live)) {
     if (signal.aborted) return;
     if (store.get('summary', summaryId(id))) continue;
     const result = await store.withChat(id, async () => await store.saveSummary(id) ?? { ok: true, data: null });

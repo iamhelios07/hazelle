@@ -16,6 +16,7 @@ import {
 } from '../../runtime/profiles';
 import { typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { BIN_KEEPS } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -246,8 +247,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       return toast.failed(removed, '지우지 못했어요.');
     }
     navigate({ kind: 'models' });
-    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 골라야 보낼 수 있어요.` : undefined;
-    toast.undoable(`${removed.data.value.name} 설정을 지웠어요.`, () => void restoreProfile(store, removed.data), note);
+    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 골라야 보낼 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
+    toast.undoable(`${removed.data.value.name} 설정을 지웠어요.`, () => void restoreProfile(store, id), note);
   }
 
   const detailSet = DETAIL.filter((field) => shown[field] !== undefined).length + (shown.stop ? 1 : 0) + (shown.systemAsUser ? 1 : 0);

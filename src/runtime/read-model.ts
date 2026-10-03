@@ -1,8 +1,8 @@
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
-import { chatTitle, liveChat, type Chat, type ChatSummary, type Message } from '../model/chat';
+import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
 import type { Kind, Stored, Values } from '../model/kinds';
-import { nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
+import { live, nest, shelve, type CharacterShelf, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
@@ -180,12 +180,12 @@ export class ReadModels {
     for (const id of ids) {
       const stored = this.store.get('chat', id);
       const next = stored && this.summarize(stored);
-      const live = liveChat(stored) !== null;
-      if (place(this.summaries, id, live ? next : null)) {
+      const alive = live(stored) !== null;
+      if (place(this.summaries, id, alive ? next : null)) {
         this.bySummary.get(id)?.set(this.summaries.get(id) ?? null);
         changed = true;
       }
-      if (place(this.binned, id, live ? null : next)) binChanged = true;
+      if (place(this.binned, id, alive ? null : next)) binChanged = true;
     }
     if (changed) this.chats.set([...this.summaries.values()].sort((a, b) => b.order - a.order));
     return changed || binChanged;

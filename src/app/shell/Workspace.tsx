@@ -19,7 +19,7 @@ const SUSPENDED: Standing = {
   detail: `읽기는 그대로 되지만 저장과 모델 부르기는 막혀 있어요. ${inSettings('account')}에서 ${NOTICES.from}을 보거나 백업을 받거나 운영자에게 알리거나 탈퇴할 수 있어요.`,
 };
 // Said once, and standing until the account shrinks: each refused write saying it again would be a stream of toasts.
-const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: `새로 만든 것은 저장되지 않아요. 캐릭터나 채팅을 지운 뒤 ${BIN}에서 완전히 지우면 자리가 생겨요.` };
+const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: `새로 만든 것은 저장되지 않아요. 지운 것을 ${BIN}에서 완전히 지우면 자리가 생겨요.` };
 // Ahead of 연결이 불안정해요: writes wait out a restore as they wait out a dropped connection.
 const RESTORING: Standing = { message: '계정을 복원하는 중이에요', detail: '' };
 const subscribeNothing = () => () => {};

@@ -4,11 +4,15 @@ import { BIN } from './words';
 import type { Back } from '../shell/routes';
 import { Empty, NavBar, Screen } from '../ui';
 
-// What is in 휴지통, and a chat whose character is there, say how to get them back.
+// What is in 휴지통, and a chat whose character is there, says how to get it back.
 const RESTORE = `캐릭터 둘러보기의 ‘${BIN}’에서 되살릴 수 있어요.`;
 const COPY = {
   chat: { title: '채팅', message: '이 채팅이 없어요. 지워졌거나 주소가 잘못됐어요.' },
   'deleted-chat': { title: '채팅', message: `지운 채팅이에요. ${RESTORE}` },
+  'deleted-prompt': { title: '프롬프트', message: `지운 프롬프트예요. ${RESTORE}` },
+  'deleted-persona': { title: '페르소나', message: `지운 페르소나예요. ${RESTORE}` },
+  'deleted-module': { title: '모듈', message: `지운 모듈이에요. ${RESTORE}` },
+  'deleted-profile': { title: '모델 설정', message: `지운 모델 설정이에요. ${RESTORE}` },
   'orphaned-chat': { title: '채팅', message: `지운 캐릭터의 채팅이에요. ${KEEP_DAYS}일 안에는 ${RESTORE}` },
   character: { title: '캐릭터', message: '이 캐릭터가 없어요. 지워졌거나 주소가 잘못됐어요.' },
   'deleted-character': { title: '캐릭터', message: `지운 캐릭터예요. ${RESTORE}` },

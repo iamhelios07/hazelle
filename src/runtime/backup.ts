@@ -1,7 +1,7 @@
 import { strFromU8, strToU8 } from 'fflate';
 import { isRecord } from '../connectors/values';
 import { KINDS, isValue, parentKinds, type Kind, type Stored } from '../model/kinds';
-import { liveChat } from '../model/chat';
+import { REMOVABLE } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import { toBase64 } from '../vault/aead';
@@ -34,9 +34,9 @@ export type Backup = { file: Blob; entries: Map<string, ZipEntry>; objects: Obje
 export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' };
 export type { BackupOutput } from './backup-zip';
 
-// Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. A deleted
-// chat reaches nothing, and is left out with all it owns, as are the pieces nothing reaches: the lore and pictures of an
-// import cut short. left counts the objects that did not open, which no backup can hold. skipped counts the objects
+// Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. What is
+// in 휴지통 reaches nothing: it is left out with all it owns, a character's chats included, as are the pieces nothing
+// reaches: the lore and pictures of an import cut short. left counts the objects that did not open, which no backup can hold. skipped counts the objects
 // naming a picture the operator blocked, which are left out as restore leaves out what the server refuses. Both scans
 // are of one timeline: an account restored between them fails the export, and no archive is written.
 export async function exportBackup(
@@ -51,8 +51,9 @@ export async function exportBackup(
     const pinned = await store.pin(signal);
     if (!pinned.ok) return pinned;
     const pin = pinned.data;
-    // The metadata walk cannot see the mark, which is sealed in the chat's body.
-    const deleted = new Set(store.list('chat').filter((chat) => !liveChat(chat)).map(({ id }) => id));
+    // The metadata walk cannot see the mark, nor a chat's character: both are sealed in the body.
+    const deleted = new Set(REMOVABLE.flatMap((kind) => store.list(kind).filter(({ value }) => value.deleted !== undefined).map(({ id }) => id)));
+    for (const { id, value } of store.list('chat')) if (value.character !== null && deleted.has(value.character)) deleted.add(id);
     const metadata = new Map<string, ObjectRow>();
     const scanned = await store.scan({ metadata: true }, (row) => {
       signal.throwIfAborted();

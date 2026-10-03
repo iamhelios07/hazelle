@@ -9,6 +9,7 @@ import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { BIN_KEEPS } from '../common/words';
 import { useToast } from '../toast';
 import { Avatar, Button, Checkbox, FaceRow, FileButton, Row, TextField } from '../ui';
 
@@ -55,7 +56,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       return toast.failed(removed, '지우지 못했어요.');
     }
     onRemoved();
-    toast.undoable(`${removed.data.value.name} 페르소나를 지웠어요.`, () => void restorePersona(store, removed.data));
+    toast.undoable(`${removed.data.value.name} 페르소나를 지웠어요.`, () => void restorePersona(store, id), BIN_KEEPS);
   }
 
   const isDefault = settings.persona === id;

@@ -1,4 +1,5 @@
 import type { Assignment, ModelRef } from '../connectors/assignment';
+import type { Mark } from './library';
 
 export type Role = 'system' | 'user' | 'assistant';
 
@@ -88,7 +89,8 @@ export type MemoryPrompt = {
   origin?: { id: string; name: string };
 };
 
-export type Prompt = ConversationPrompt | TranslatePrompt | MemoryPrompt;
+// deleted and purging: model/library Mark.
+export type Prompt = (ConversationPrompt | TranslatePrompt | MemoryPrompt) & Mark;
 export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt }[S];
 
 export const sortOf = (prompt: Prompt): PromptSort => prompt.task ?? 'conversation';

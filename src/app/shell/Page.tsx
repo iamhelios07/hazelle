@@ -25,7 +25,7 @@ import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
-import { useAccount, useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
+import { useAccount, useBin, useChatModel, useChats, useConnections, useLibrary, useModules, usePersonas, useProfiles, usePrompts } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
@@ -56,6 +56,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const personas = usePersonas();
   const profiles = useProfiles();
   const modules = useModules();
+  const bin = useBin();
   const { pick } = useImport();
   const { admin } = useAccount();
   const chatModel = useChatModel(route.kind === 'chat' ? route.id : null);
@@ -133,25 +134,25 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <PromptsScreen back={sideBack(at)} />;
       case 'prompt': {
         const stored = prompts.find((prompt) => prompt.id === at.id);
-        return stored ? <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} /> : missing(at, 'prompt');
+        return stored ? <PromptScreen key={stored.id} stored={stored} pane={at.pane} back={back(at)} /> : missing(at, bin.prompts.some(({ id }) => id === at.id) ? 'deleted-prompt' : 'prompt');
       }
       case 'personas':
         return <PersonasScreen back={sideBack(at)} />;
       case 'persona': {
         const stored = personas.find((persona) => persona.id === at.id);
-        return stored ? <PersonaScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'persona');
+        return stored ? <PersonaScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, bin.personas.some(({ id }) => id === at.id) ? 'deleted-persona' : 'persona');
       }
       case 'modules':
         return <ModulesScreen back={sideBack(at)} onImport={pick} />;
       case 'module': {
         const stored = modules.find((module) => module.id === at.id);
-        return stored ? <ModuleScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'module');
+        return stored ? <ModuleScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, bin.modules.some(({ id }) => id === at.id) ? 'deleted-module' : 'module');
       }
       case 'models':
         return <ModelsScreen back={sideBack(at)} />;
       case 'profile': {
         const stored = profiles.find((profile) => profile.id === at.id);
-        return stored ? <ProfileScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, 'profile');
+        return stored ? <ProfileScreen key={stored.id} stored={stored} back={back(at)} /> : missing(at, bin.profiles.some(({ id }) => id === at.id) ? 'deleted-profile' : 'profile');
       }
       case 'model': {
         const connection = connections.find((candidate) => candidate.id === at.connection);

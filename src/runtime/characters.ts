@@ -2,7 +2,7 @@ import { imageType } from '../engine/import/card';
 import type { Card, Imported } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { Stored, Values } from '../model/kinds';
-import { daysLeft, holds, nest, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
+import { daysLeft, holds, nest, REMOVABLE, type Asset, type Avatar, type Character, type Lore, type Mark, type Pictures, type Removable } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
@@ -111,9 +111,6 @@ export async function copyCharacter(store: ObjectStore, id: string, name: string
   return addCharacter(store, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, owned, progress);
 }
 
-// What waits KEEP_DELETED once deleted, and then goes for good with everything it owns (purgeExpired).
-type Removable = 'character' | 'module' | 'chat';
-
 // at is when it was deleted; null brings it back, unless its removal has begun ('gone').
 export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id: string, at: number | null): Promise<ApiResult<Stored<K>>> {
   return store.update(kind, id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }) as Values[K] | null);
@@ -121,8 +118,6 @@ export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id
 
 // at is when it went to 휴지통, where it and its chats wait KEEP_DELETED before going for good.
 export const setDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'character', id, at);
-
-type Mark = Pick<Character, 'deleted' | 'purging'>;
 
 // Removal for good is decided once, by the purging claim, at the rev the claim is written on (store.update): a restore
 // landing first leaves the root not due ('gone'), and one after it is refused (markDeleted). Nothing
@@ -137,12 +132,12 @@ async function purge(store: ObjectStore, kind: Removable, id: string, due: (valu
 export const purgeNow = (store: ObjectStore, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
   purge(store, kind, id, (value) => value.deleted !== undefined, progress);
 
-// Removes for good the deleted characters, modules and chats whose time is up. The session runs it when it opens, on
+// Removes for good what has been in 휴지통 past its time. The session runs it when it opens, on
 // whichever device opens first. One that fails is tried again next time. A stop (the vault closing) lets the one
 // under way finish and leaves the rest for next time.
 export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
   const due = (value: Mark) => value.deleted !== undefined && daysLeft(value, now) <= 0;
-  for (const kind of ['character', 'module', 'chat'] as const) {
+  for (const kind of REMOVABLE) {
     for (const { id, value } of store.list(kind)) {
       if (signal.aborted) return;
       if (value.purging || due(value)) await purge(store, kind, id, due, () => {});

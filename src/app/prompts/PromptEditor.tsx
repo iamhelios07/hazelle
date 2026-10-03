@@ -6,6 +6,7 @@ import { slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Togg
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { BIN_KEEPS, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
 import { typing, useShortcut } from '../shortcuts';
 import { useOwnUndo, useToast } from '../toast';
@@ -37,7 +38,7 @@ import {
 import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPane';
 import { chatWarning } from './ranges';
 import { TogglePane } from './TogglePane';
-import { EMPTY_USE, promptName, usePromptUse } from './usePromptUse';
+import { EMPTY_USE, usePromptUse } from './usePromptUse';
 
 const MODEL = 'model';
 const TOGGLES = 'toggles';
@@ -249,8 +250,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (!removed.ok) return removed.error === 'default' ? toast.error(words.refused[0], { detail: words.refused[1] }) : toast.failed(removed, '지우지 못했어요.');
     onErased();
     toast.undoable(`‘${promptName(removed.data.value.name)}’을(를) 지웠어요.`, () => {
-      void restorePrompt(store, removed.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
-    });
+      void restorePrompt(store, stored.id).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
+    }, BIN_KEEPS);
   };
 
   const cacheAt = (id: string) => {

@@ -138,6 +138,16 @@ describe('purgeExpired', () => {
     expect([store.get('character', id)?.value.deleted, store.get('chat', chat.ok ? chat.data.id : '')?.id]).toEqual([undefined, chat.ok ? chat.data.id : '']);
   });
 
+  it('removes a prompt deleted a week ago and keeps a persona deleted since', async () => {
+    const { store } = await server.account();
+    const now = Date.now();
+    const prompt = await store.create('prompt', { name: '옛', blocks: [], toggles: [], authorNote: '', models: {}, deleted: now - KEEP_DELETED });
+    await store.create('persona', { name: '린', description: '', picture: null, deleted: now - 1000 });
+
+    await purgeExpired(store, now, new AbortController().signal);
+    expect([store.get('prompt', prompt.ok ? prompt.data.id : ''), store.list('persona').map(({ value }) => value.name)]).toEqual([null, ['린']]);
+  });
+
   it('finishes a removal begun before, however long the character has left', async () => {
     const { store } = await server.account();
     const now = Date.now();

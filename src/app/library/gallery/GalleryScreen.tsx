@@ -1,25 +1,31 @@
 import { FolderInput } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../../model/chat';
+import type { Stored } from '../../../model/kinds';
 import { holds, KEEP_DAYS, matches, shownFolders, type Shelf } from '../../../model/library';
 import { NameDialog } from '../../common/NameDialog';
 import { noResults } from '../../common/search';
-import { BIN } from '../../common/words';
-import { useLibrary } from '../../session';
+import { TASK_NAMES } from '../../common/prompt-words';
+import { BIN, PAGES } from '../../common/words';
+import { useBin, useLibrary } from '../../session';
 import { backBar } from '../../shell/router';
 import type { Back } from '../../shell/routes';
-import { Button, CardGrid, Empty, List, NavBar, Row, Screen, SearchField, Section, Text } from '../../ui';
-import { binnedCharacter, binnedChat, useCharacterActions, type Binned } from '../useCharacterActions';
+import { Avatar, Button, CardGrid, Empty, List, NavBar, Row, Screen, SearchField, Section, Text } from '../../ui';
+import { ShelfFace, shelfName } from '../shelf';
+import { binnedCharacter, binnedChat, binnedModule, binnedPersona, binnedProfile, binnedPrompt, useCharacterActions, type Binned } from '../useCharacterActions';
 import { findFolder, useFolderActions } from '../useFolderActions';
-import { BinnedChat } from './BinnedChat';
+import { BinnedRow } from './BinnedRow';
 import { CharacterCard } from './CharacterCard';
 import { FolderTabs, type Filter, type Naming } from './FolderTabs';
 import { MoveBar } from './MoveBar';
 import { PurgeDialog } from './PurgeDialog';
 
+const MODEL_SETTINGS = '모델 설정';
+
 // 캐릭터 둘러보기: every character as a face, filtered by folder, and where folders are made, renamed, emptied and filled.
 export function GalleryScreen({ back }: { back: Back | null }) {
   const { characters, none, folders, deleted, deletedChats } = useLibrary();
+  const bin = useBin();
   const characterActions = useCharacterActions();
   const { create, rename, move } = useFolderActions();
   const [filter, setFilter] = useState<Filter>('all');
@@ -41,13 +47,29 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   if (byName) shown.sort((a, b) => a.character.card.name.localeCompare(b.character.card.name, 'ko'));
   // shelve lists only the deleted chats of a character not deleted, or of none.
   const shelfOf = ({ chat }: ChatSummary): Shelf<ChatSummary> => (chat.character === null ? none : characters.find((shelf) => shelf.id === chat.character)!);
+  const named = (name: string) => name.toLowerCase().includes(words.toLowerCase());
   const shownChats = binned
     ? deletedChats.filter((item) => {
         const { character } = shelfOf(item);
-        return item.title.toLowerCase().includes(words.toLowerCase()) || (character !== null && matches(character, query));
+        return named(item.title) || (character !== null && matches(character, query));
       })
     : [];
   const busy = (id: string) => (characterActions.busy?.id === id ? characterActions.busy.label : null);
+  // The rest of 휴지통, by section: each is listed by its toasts' name.
+  const rows = <K extends 'module' | 'prompt' | 'persona' | 'profile'>(items: Stored<K>[], to: (stored: Stored<K>) => Binned, describe: (stored: Stored<K>) => string | undefined, face?: (stored: Stored<K>) => ReactNode) =>
+    items.flatMap((stored) => {
+      const item = to(stored);
+      if (!binned || !named(item.name)) return [];
+      return [<BinnedRow key={item.id} item={item} face={face?.(stored)} description={describe(stored)} mark={stored.value} busy={busy(item.id)} actions={characterActions} onPurge={() => setPurging(item)} />];
+    });
+  const sections: [string, ReactNode[]][] = [
+    [PAGES.chat, shownChats.map((item) => <BinnedRow key={item.id} item={binnedChat(item)} face={<ShelfFace shelf={shelfOf(item)} />} description={shelfName(shelfOf(item))} mark={item.chat} busy={busy(item.id)} actions={characterActions} onPurge={() => setPurging(binnedChat(item))} />)],
+    [PAGES.modules, rows(bin.modules, binnedModule, ({ value }) => value.description.trim() || undefined)],
+    [PAGES.prompts, rows(bin.prompts, binnedPrompt, ({ value }) => value.task && `${TASK_NAMES[value.task]} ${PAGES.prompts}`)],
+    [PAGES.personas, rows(bin.personas, binnedPersona, () => undefined, ({ value }) => <Avatar face={value.name} image={value.picture} tone="you" />)],
+    [MODEL_SETTINGS, rows(bin.profiles, binnedProfile, () => undefined)],
+  ];
+  const listed = sections.filter(([, items]) => items.length > 0);
 
   // 휴지통 cannot be moved, so going there stops picking.
   const choose = (next: Filter) => {
@@ -89,7 +111,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
         )}
       </Row>
       <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />
-      {binned && <Text variant="note">{`${BIN}의 캐릭터와 채팅은 ${KEEP_DAYS}일이 지나면 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
+      {binned && <Text variant="note">{`${BIN}에 든 것은 ${KEEP_DAYS}일이 지나면 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
       {shown.length > 0 && (
         <CardGrid label="캐릭터">
           {shown.map((shelf) => (
@@ -106,23 +128,12 @@ export function GalleryScreen({ back }: { back: Back | null }) {
           ))}
         </CardGrid>
       )}
-      {shownChats.length > 0 && (
-        <Section title="채팅">
-          <List label={`${BIN}의 채팅`}>
-            {shownChats.map((item) => (
-              <BinnedChat
-                key={item.id}
-                item={item}
-                shelf={shelfOf(item)}
-                busy={busy(item.id)}
-                actions={characterActions}
-                onPurge={() => setPurging(binnedChat(item))}
-              />
-            ))}
-          </List>
+      {listed.map(([title, items]) => (
+        <Section key={title} title={title}>
+          <List label={`${BIN}의 ${title}`}>{items}</List>
         </Section>
-      )}
-      {shown.length === 0 && shownChats.length === 0 && (
+      ))}
+      {shown.length === 0 && listed.length === 0 && (
         <Empty>{words ? noResults(words) : binned ? `${BIN}이 비어 있어요.` : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Empty>
       )}
       {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={(to) => void movePicked(to)} />}
