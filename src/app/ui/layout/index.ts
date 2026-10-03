@@ -10,6 +10,6 @@ export { Section } from './Section';
 export { Shell } from './Shell';
 export { FaceButton, LayerSidebar, Rail, Sidebar } from './Sidebar';
 export { SidePanel } from './SidePanel';
-export { SidePeek } from './SidePeek';
+export { SidePeek, SidePeeks } from './SidePeek';
 export { Stack } from './Stack';
 export { StoryAside } from './StoryAside';

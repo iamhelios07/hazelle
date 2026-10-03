@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
@@ -38,6 +38,7 @@ import { useToast } from '../toast';
 import { useMenuHandle, useViewport, type BotButton } from '../ui';
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
+import { pickStarted } from './infoReply';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
 import { useSeen } from './useSeen';
@@ -125,9 +126,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
-  // 정보, 토글, 장기 기억 and the persona and prompt lists take the same place beside the story, so one closes another.
+  // 토글, 장기 기억 and the persona and prompt lists take the same place beside the story, so one closes another.
   // record: the memory record open in the panel, in place of the whole memory.
-  const [panel, setPanel] = useState<{ kind: 'info'; id: string | null } | { kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
+  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
   // The messages a memory record was made from, marked in the story: at changes with each look, so the same ones are
   // marked again.
   const [found, setFound] = useState<{ ids: ReadonlySet<string>; first: string; at: number } | null>(null);
@@ -139,10 +140,15 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [hidden, setHidden] = useState(false);
   const hosted = (index: number) => beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []));
   const { seen, watch } = useSeen();
-  // 상태 shown over the story by its key or a tap, rather than by pointing at its tab. The tab is there while a box
-  // is off screen, or never drawn in a message.
-  const [peek, setPeek] = useState(false);
-  const peeking = status.length > 0 && !(beside && !hidden) && (peek || status.some(({ script }) => !seen.has(script)));
+  // 상태 or 답장 정보 shown over the story by a key or a tap, rather than by pointing at its tab. Their drawers slide
+  // over the same place, so holding one lets go of the other.
+  const [held, setHeld] = useState<'status' | 'info' | null>(null);
+  const hold = (which: 'status' | 'info', open: boolean) => setHeld((current) => (open ? which : current === which ? null : current));
+  // 상태's tab is there while a box is off screen, or never drawn in a message.
+  const peeking = status.length > 0 && !(beside && !hidden) && (held === 'status' || status.some(({ script }) => !seen.has(script)));
+  // The reply a message's ⓘ or 정보's stepper picked, kept while the chat is open; null follows the latest.
+  const [infoPick, setInfoPick] = useState<string | null>(null);
+  const infoDrawer = useId();
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
   // The versions shown the other way round from their default, the original in place of the translation.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -160,10 +166,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
 
-  // A reply starting here while 정보 is open shows its own information.
+  // A reply starting here while 정보 is held shows its own information.
   const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
   useEffect(() => {
-    if (replyTarget) setPanel((current) => (current?.kind === 'info' ? { kind: 'info', id: replyTarget } : current));
+    if (replyTarget && held === 'info') setInfoPick(pickStarted(messages, replyTarget));
   }, [replyTarget]);
 
   function report(failure: TurnFailure | null) {
@@ -372,14 +378,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!character) return;
     const saved = await track(setStatusScript(store, character, script, on));
     if (!saved.ok) return toast.failed(saved);
-    if (!on && statusScripts.length === 1) setPeek(false);
+    if (!on && statusScripts.length === 1) hold('status', false);
     toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, script, !on), [scriptName(script), card?.name].filter(Boolean).join(' · '));
   }
 
   // 옆에 두기, or on false 탭으로 접기, for every chat of the character.
   function keepStatus(keep: boolean) {
     if (!chat.character) return;
-    setPeek(false);
+    hold('status', false);
     setHidden(false);
     void track(setKeepStatus(store, chat.character, keep)).then((saved) => saved.ok || toast.failed(saved));
   }
@@ -387,7 +393,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // The key shows or hides 상태 for now, storing nothing: in the margin while it stands there, or else the drawer
   // over the story.
   function toggleStatus() {
-    setPeek(beside ? false : !peek);
+    hold('status', !beside && held !== 'status');
     if (beside) setHidden(!hidden);
   }
 
@@ -416,8 +422,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     status,
     hosted,
     offered,
-    peek,
+    held,
     peeking,
+    infoPick,
+    infoDrawer,
     aside: beside && !hidden,
     canKeep: fits,
     translate,
@@ -469,7 +477,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       branch,
       pin: (message: Shown) => setPinned(pinned === message.id ? null : message.id),
       follow,
-      info: (reply: string | null) => setPanel({ kind: 'info', id: reply }),
+      info: (reply: string) => {
+        setInfoPick(reply);
+        setHeld('info');
+      },
+      pickInfo: setInfoPick,
+      toggleInfo: () => hold('info', held !== 'info'),
       showToggles: () => setPanel({ kind: 'toggles' }),
       memory: (record: string | null) => setPanel({ kind: 'memory', record }),
       // ids in chat order; the view goes to the first.
@@ -482,7 +495,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       // The keys open the list, and close it again while that list or one of its items is open.
       toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
       closePanel: () => setPanel(null),
-      setPeek,
+      hold,
       keepStatus: () => keepStatus(true),
       foldStatus: () => keepStatus(false),
       toggleStatus,

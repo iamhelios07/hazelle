@@ -1,19 +1,26 @@
-/* Between the header and the composer, over the story and left of its scrollbar; only the tab and a shown drawer
-   take the pointer. */
-.peek {
+/* Between the header and the composer, over the story and left of its scrollbar; only the tabs and a shown drawer
+   take the pointer. The tabs stack at the middle of its right side, and every drawer slides over the same place. */
+.peeks {
   position: absolute;
   inset: var(--header-height) var(--story-scrollbar) var(--footer-space) 0;
   z-index: var(--layer-menu);
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-4);
   pointer-events: none;
 }
 
+/* Its tab is one of the stack's, and its drawer stands in the whole stack's place. */
+.peek {
+  display: contents;
+}
+
+/* Over every drawer, its own included, so a pointer resting on it can still press it. */
 .tab {
-  position: absolute;
-  top: 50%;
-  right: 0;
+  position: relative;
+  z-index: var(--layer-raised);
   padding: var(--space-12) var(--space-4);
   border: var(--border-thin) solid var(--color-border);
   border-right: 0;
@@ -23,7 +30,6 @@
   font-size: var(--text-xs);
   writing-mode: vertical-rl;
   pointer-events: auto;
-  transform: translateY(-50%);
 }
 
 .tab:hover,
@@ -35,13 +41,14 @@
    the tab, so a pointer crossing the edge does not bring it, and leaves a moment after the pointer does, so a pointer
    passing from the tab to it does not close it. */
 .drawer {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  right: var(--space-12);
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
   width: min(calc(var(--read-width) - 2 * var(--read-gutter) + 2 * var(--space-24)), calc(100% - 2 * var(--space-12)));
   max-height: 100%;
-  margin-right: var(--space-12);
   padding: var(--space-16) var(--space-24) var(--space-24);
   overflow-y: auto;
   border: var(--border-thin) solid var(--color-border);
@@ -49,7 +56,7 @@
   background: var(--color-bg);
   box-shadow: var(--shadow-popover);
   visibility: hidden;
-  transform: translateX(calc(100% + var(--space-12)));
+  transform: translate(calc(100% + var(--space-12)), -50%);
   transition:
     transform var(--duration-slow) var(--ease-enter) var(--duration-fast),
     visibility var(--duration-instant) linear calc(var(--duration-slow) + var(--duration-fast));
@@ -58,7 +65,7 @@
 .tab:hover + .drawer {
   visibility: visible;
   pointer-events: auto;
-  transform: none;
+  transform: translateY(-50%);
   transition:
     transform var(--duration-slow) var(--ease-enter) var(--duration-intent),
     visibility var(--duration-instant) linear var(--duration-intent);
@@ -69,10 +76,15 @@
 .open .drawer {
   visibility: visible;
   pointer-events: auto;
-  transform: none;
+  transform: translateY(-50%);
   transition:
     transform var(--duration-slow) var(--ease-enter),
     visibility var(--duration-instant);
+}
+
+/* Another drawer pointed at takes the place of the one held open, which comes back when the pointer leaves. */
+.peeks:has(.peek:not(.open) > .tab:hover, .peek:not(.open) > .drawer:hover) .open .drawer {
+  visibility: hidden;
 }
 
 .head {
