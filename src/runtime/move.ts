@@ -2,7 +2,7 @@ import type { Card, Imported, ImportedModule, RisuCharacter, RisuChat, RisuPerso
 import type { Chat } from '../model/chat';
 import type { MemorySettings } from '../model/memory';
 import type { ApiResult } from './api';
-import { createFolder, importCharacter, saveAssets } from './characters';
+import { createFolder, importCharacter, saveAssets, type Progress } from './characters';
 import { chatWrites } from './chat-log';
 import type { Files } from './files';
 import { defaultMemory } from './memory';
@@ -14,7 +14,8 @@ import type { ObjectStore, Write } from './store';
 
 // alwaysModules: the Risu ids of the modules Risu had on in every chat.
 export type MovePick = { characters: RisuCharacter[]; personas: RisuPersona[]; presets: RisuPreset[]; modules: ImportedModule[]; alwaysModules: string[] };
-export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules'; done: number; total: number };
+// pictures counts every picture the pick holds, across its modules and characters, as they go up.
+export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules' | 'pictures'; done: number; total: number };
 // risu: its Risu chaId. skipped as in runtime/characters ImportedCharacter; faceless also when the picture did not read.
 export type MovedCharacter = { id: string; risu: string; name: string; chats: number; skipped: number; faceless: boolean };
 // skipped: its pictures that were not kept.
@@ -58,6 +59,14 @@ async function move(store: ObjectStore, files: Files, { characters, personas, pr
 
   const moduleIds = modulesFromRisu(store);
   const dueModules = modules.filter(({ risu }) => risu === null || !moduleIds.has(risu));
+  const brought = broughtFromRisu(store);
+  const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => Math.max(0, ...a.chats.map(lastTalk)) - Math.max(0, ...b.chats.map(lastTalk)));
+  const pictureTotal = [...dueModules, ...due].reduce((sum, { assets }) => sum + assets.length, 0);
+  let picturesDone = 0;
+  // Uploading pictures is the long part of a move, so each window of them is reported over the whole pick.
+  const uploading: Progress = (step) => {
+    if (step.kind === 'assets') progress({ kind: 'pictures', done: picturesDone + step.done, total: pictureTotal });
+  };
   const movedModules: MovedModule[] = [];
   for (const [done, module] of dueModules.entries()) {
     progress({ kind: 'modules', done, total: dueModules.length });
@@ -67,16 +76,15 @@ async function move(store: ObjectStore, files: Files, { characters, personas, pr
       const always = await setModuleAlways(store, id, true);
       if (!always.ok) return always;
     }
-    const saved = await importModule(store, files, module, () => {}, module.risu === null ? undefined : { id, risu: module.risu });
+    const saved = await importModule(store, files, module, uploading, module.risu === null ? undefined : { id, risu: module.risu });
     if (!saved.ok) return saved;
+    picturesDone += module.assets.length;
     movedModules.push({ module, skipped: saved.data.skipped });
     if (module.risu !== null) moduleIds.set(module.risu, saved.data.id);
   }
 
-  const brought = broughtFromRisu(store);
   // Chats and characters are listed by the server's rev, the latest first, and a batch takes its revs in the order
-  // written. So what was talked in last is written last, whatever order Risu kept it in.
-  const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => Math.max(0, ...a.chats.map(lastTalk)) - Math.max(0, ...b.chats.map(lastTalk)));
+  // written. So what was talked in last is written last, whatever order Risu kept it in (due).
   const chatTotal = due.reduce((sum, { chats }) => sum + chats.length, 0);
   let chatsDone = 0;
   const moved: MovedCharacter[] = [];
@@ -91,8 +99,9 @@ async function move(store: ObjectStore, files: Files, { characters, personas, pr
     // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
     const memory = { ...defaultMemory(store), on: false };
     const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).flatMap((chat) => chatOf(id, character.card, chat, personaIds, memory));
-    const saved = await importCharacter(store, files, character, avatar && thumb ? { ...avatar, thumb } : null, () => {}, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats });
+    const saved = await importCharacter(store, files, character, avatar && thumb ? { ...avatar, thumb } : null, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats });
     if (!saved.ok) return saved;
+    picturesDone += character.assets.length;
     chatsDone += character.chats.length;
     progress({ kind: 'chats', done: chatsDone, total: chatTotal });
     const { skipped, faceless } = saved.data;

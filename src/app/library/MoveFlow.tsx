@@ -26,7 +26,7 @@ const PRESET_FAILURE: Record<PresetFailure['kind'], string> = {
   'not-preset': '프리셋 아님',
 };
 
-const STEP: Record<MoveStep['kind'], string> = { characters: '캐릭터', chats: '대화', personas: '페르소나', prompts: '프롬프트', modules: '모듈' };
+const STEP: Record<MoveStep['kind'], string> = { characters: '캐릭터 저장 중', chats: '대화 저장 중', personas: '페르소나 저장 중', prompts: '프롬프트 저장 중', modules: '모듈 저장 중', pictures: '그림 올리는 중' };
 
 type Phase =
   | { kind: 'reading' }
@@ -83,7 +83,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
     const { step } = phase.kind === 'running' ? phase : { step: null };
     return (
       <Dialog title={phase.kind === 'reading' ? '백업 읽는 중' : '가져오는 중'} note={note} onClose={() => {}}>
-        <Text variant="note">{step ? `${STEP[step.kind]} 저장 중 · ${step.done} / ${step.total}` : '잠시만요'}</Text>
+        <Text variant="note">{step ? `${STEP[step.kind]} · ${step.done} / ${step.total}` : '잠시만요'}</Text>
       </Dialog>
     );
   }

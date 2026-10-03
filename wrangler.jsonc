@@ -43,6 +43,8 @@
   // Hourly: the sweep of pictures whose account is gone, and the delete of reports and log rows past their year
   // (src/server/main.ts).
   "triggers": { "crons": ["17 * * * *"] },
+  // Workers Logs: invocations, exceptions and console lines kept in the dashboard, so a failure can be read after it.
+  "observability": { "enabled": true },
   "r2_buckets": [
     {
       "binding": "BLOBS",

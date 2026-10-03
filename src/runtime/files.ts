@@ -3,7 +3,8 @@ import type { ApiResult, api as realApi } from './api';
 
 type Api = typeof realApi;
 
-const UPLOADS = 4;
+// A PUT is three or four D1 round trips, so a window this wide keeps a move at a few pictures a second on a far link.
+const UPLOADS = 12;
 const ASKED = 1000;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
