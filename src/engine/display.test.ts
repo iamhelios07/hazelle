@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveAssets } from './assets';
 import { evaluate } from './cbs/evaluate';
-import { display, storyHtml } from './display';
+import { display, DisplayPass, storyHtml } from './display';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
 import { contexts, type ChatScope } from './render';
@@ -80,6 +80,30 @@ describe('the editDisplay pass', () => {
     expect(stamps([['mood', 'calm']])).toEqual(stamps([['mood', 'calm']]));
     expect(stamps([['mood', 'calm']])).not.toEqual(stamps([['mood', 'angry']]));
   });
+});
+
+it('finishes newest-first Lua patches like a full display, including variable history, boxes and CSS order', () => {
+  const changed: ChatScope = { ...scope, messages: [
+    { ...message('a', 'assistant', '{{setvar::hp::7}}BOX'), after: [['hp', '8']] },
+    message('b', 'assistant', '{{setvar::hp::9}}BOX'),
+  ] };
+  const runaway = '{{settempvar::x::ab}}' + '{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}'.repeat(24);
+  const values = new Map<string, string>([['b', runaway]]);
+  const complete = new Set<string>();
+  const lua: NonNullable<ChatScope['lua']> = (id) => values.has(id) ? { text: values.get(id)!, fresh: complete.has(id) } : null;
+  const take = new Set([1]);
+  const pass = new DisplayPass({ ...changed, lua }, take);
+  expect(pass.value.stopped).not.toBeNull();
+  for (const [version, text] of [['b', '<style>.last { color: blue }</style>BOX {{getvar::hp}}'], ['a', '<style>.first { color: red }</style>BOX {{getvar::hp}}']]) {
+    values.set(version!, text!);
+    complete.add(version!);
+    pass.patch([{ version: version!, text: text! }]);
+    expect(pass.value).toEqual(display({ ...changed, lua }, take));
+  }
+  expect(pass.value.texts[0]).toContain('8');
+  expect(pass.value.texts[1]).toContain('9');
+  expect(pass.value.pass).toBe(false);
+  expect(pass.value.stopped).toBeNull();
 });
 
 describe('asset tags', () => {

@@ -1,37 +1,37 @@
 import type { Display } from '../engine/display';
-import type { Displayed, Script } from '../engine/lua/run';
+import type { DisplayBatch, Displayed, Script } from '../engine/lua/run';
 import type { Snapshot } from '../engine/lua/state';
 import type { ChatScope, Missed } from '../engine/render';
 import type { Chat, Message } from '../model/chat';
-import type { LuaText } from './evaluation-core';
+import { EvaluationStopped } from './evaluation';
 import type { Runner } from './lua/client';
-import { luaSnapshot, luaStanding, scriptsOf } from './scripts';
+import { luaSnapshot } from './lua/snapshot';
+import { luaStanding, scriptsOf } from './scripts';
 import type { ObjectStore } from './store';
 import { pinned, scopeOf } from './turn';
 
-type Pass = { scripts: Script[]; snapshot: Snapshot; items: Missed[]; generation: number };
+type Pass = { revision: number; generation: number; scripts: Script[]; snapshot: Snapshot; items: Missed[]; remaining: number; installed: boolean; view: Display; signal?: AbortSignal };
 // What a chat's passes are run with besides each message's text and state: its scripts and what Lua reads of the
 // chat's standing. generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks,
 // and never used twice, so a stretch begun under an older one lands as a last result and never as a fresh one.
 type Basis = { parts: string[]; generation: number };
-const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
-
 // How long one stretch of a pass may hold the worker, which the chat's other Lua (a send, a button) waits behind. A
 // script that reads the whole chat for every message takes a third of a second each on a long chat (measured
 // 2026-10-02), so a pass is cut into stretches of about this long, sized by how the last one went.
 const STRETCH_MS = 200;
 const STRETCH_MOST = 512;
 
-// The open chats' displays with the bot's Lua editDisplay pass laid over them (design §6.8). The display is made at
-// once from what the pass has given so far; what it has not is run in the background, and the chat's listeners are
-// told when it lands, to display again.
+// The open chats' displays with the bot's Lua editDisplay pass laid over them (design §6.8). Pending rows keep their
+// last result until a new pass lands; rows with no result wait empty when the bot listens. Completion patches only
+// the display stage on that same semantic input revision, never its input/output/CBS history.
 export class ScriptDisplay {
-  // What a version's text became in the bot's editDisplay pass, with the text and state it was run on.
-  private readonly held = new Map<string, Map<string, LuaText>>();
-  private readonly listeners = new Map<string, Set<() => void | Promise<void>>>();
-  private readonly waiting = new Map<string, Pass>();
+  private readonly listeners = new Map<string, Set<(display?: Display) => void | Promise<void>>>();
+  private readonly passes = new Map<string, Pass>();
+  private readonly wanted = new Map<string, number>();
   private readonly running = new Set<string>();
   private readonly bases = new Map<string, Basis>();
+  private runner: Promise<Runner> | null = null;
+  private revisions = 0;
   private generations = 0;
   // Whether each script, by its code, holds an editDisplay listener, as its engine said when a pass asked. Only the
   // engine decides who takes part: a listener may be registered under a computed name, which the source does not show.
@@ -45,28 +45,46 @@ export class ScriptDisplay {
   ) {}
 
   // What the chat's passes gave is kept while someone listens, and dropped with the last listener.
-  subscribe(chat: string, listener: () => void | Promise<void>) {
+  subscribe(chat: string, listener: (display?: Display) => void | Promise<void>) {
     const listeners = this.listeners.get(chat) ?? new Set();
     this.listeners.set(chat, listeners.add(listener));
     return () => {
       listeners.delete(listener);
-      if (listeners.size > 0) return;
+      if (listeners.size) return;
       this.listeners.delete(chat);
-      this.held.delete(chat);
-      this.waiting.delete(chat);
-      this.bases.delete(chat);
-      this.store.evaluation.forget(`screen:${chat}`);
+      this.release(chat);
     };
   }
 
+  close() {
+    for (const chat of this.listeners.keys()) this.release(chat);
+    this.listeners.clear();
+  }
+
+  private release(chat: string) {
+    const pass = this.passes.get(chat);
+    if (pass) void this.runner?.then((runner) => runner.forgetDisplay(chat, pass.revision));
+    this.passes.delete(chat);
+    this.wanted.delete(chat);
+    this.bases.delete(chat);
+    this.store.evaluation.forget(`screen:${chat}`);
+  }
+
   async display(id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'], signal?: AbortSignal): Promise<Display> {
+    const revision = ++this.revisions;
+    this.wanted.set(id, revision);
     const reader = { store: this.store };
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
     const all = scriptsOf(scope.packs);
-    // A bot whose engines all said no is shown with no pass and no worker.
+    // A bot whose engines all said no is shown with no pass and no Lua worker.
     const scripts = all.filter(({ code }) => this.listens.get(code) !== false);
-    if (scripts.length === 0) return this.told(id, await this.store.evaluation.display(`screen:${id}`, scope, take, signal));
+    if (!scripts.length) {
+      const previous = this.passes.get(id);
+      if (previous) void this.runner?.then((runner) => runner.forgetDisplay(id, previous.revision));
+      this.passes.delete(id);
+      return this.told(id, (await this.store.evaluation.display(`screen:${id}`, scope, take, signal)).display);
+    }
     // Until an engine has answered, its script is passed all the same, and the source is only a guess at what to show
     // meanwhile: one that names the hook waits empty as a listening one does, any other shows its text as it is.
     const waits = scripts.some(({ code }) => this.listens.get(code) ?? code.includes('editDisplay'));
@@ -75,10 +93,12 @@ export class ScriptDisplay {
     // Of all the bot's scripts, not only those passed: an engine's answer takes its script out of the passes and must
     // not make the others' results stale.
     const generation = this.generation(id, [String(all.length), ...all.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
-    const held = this.held.get(id);
-    const shown = await this.store.evaluation.display(`screen:${id}`, scope, take, signal, { held: held ?? new Map(), waits, generation });
-    if (shown.pass && this.listeners.has(id)) this.pass(id, { scripts, snapshot: luaSnapshot(scope, standing, shown.pass.staged, shown.pass.start), items: shown.pass.items, generation });
-    return this.told(id, shown);
+    const { display, work } = await this.store.evaluation.display(`screen:${id}`, scope, take, signal, { waits, generation, revision });
+    if (work && this.listeners.has(id) && this.wanted.get(id) === revision && !signal?.aborted) {
+      this.passes.set(id, { revision, generation, scripts, snapshot: luaSnapshot(scope, standing, work.staged, work.start), items: work.items, remaining: work.items.length, installed: false, view: display, signal });
+      this.drain(id);
+    }
+    return this.told(id, display);
   }
 
   private told(chat: string, shown: Display): Display {
@@ -90,7 +110,7 @@ export class ScriptDisplay {
   stale(chat: string) {
     const basis = this.bases.get(chat);
     if (basis) basis.generation = ++this.generations;
-    this.tell(chat);
+    void this.tell(chat);
   }
 
   private generation(chat: string, parts: string[]): number {
@@ -102,45 +122,60 @@ export class ScriptDisplay {
   }
 
   // One stretch at a time per chat, of the latest pass asked for: its newest messages, which are the ones on screen.
-  // Telling the listeners displays the chat again, which asks for what is still missing, and so the next stretch; a
-  // reply being written asks at every chunk.
-  private pass(chat: string, pass: Pass) {
-    this.waiting.set(chat, pass);
+  // The installed queue owns remaining work; a completion never redisplays the history to rediscover it.
+  private drain(chat: string) {
     if (this.running.has(chat)) return;
     this.running.add(chat);
     void (async () => {
       let size = 8;
-      for (let next = this.waiting.get(chat); next; next = this.waiting.get(chat)) {
-        this.waiting.delete(chat);
-        const { scripts, snapshot } = next;
-        const from = Math.max(0, next.items.length - size);
-        const items = next.items.slice(from);
-        const variables = new Map(snapshot.variables);
-        for (const item of next.items.slice(0, from)) for (const [name, value] of item.variables) variables.set(name, value);
+      for (;;) {
+        const pass = this.passes.get(chat);
+        if (!pass || !pass.remaining || pass.signal?.aborted || this.wanted.get(chat) !== pass.revision || !this.listeners.has(chat)) break;
+        const from = Math.max(0, pass.remaining - size);
+        const items = pass.items.slice(from, pass.remaining);
         const began = performance.now();
-        // A pass that cannot be made shows the texts as they were, rather than nothing.
-        const texts = await this.open()
-          .then((runner) => runner.display(chat, scripts, { ...snapshot, variables: [...variables] }, items))
-          .then(
-            (shown) => {
-              this.report(chat, shown);
-              shown.listening.forEach((listening, at) => this.listens.set(scripts[at]!.code, listening));
-              return shown.texts;
-            },
-            (error: unknown) => (this.report(chat, error), items.map((item) => item.text)),
-          );
+        let batch: DisplayBatch;
+        try {
+          const runner = await (this.runner ??= this.open());
+          if (!pass.installed) {
+            await runner.installDisplay(chat, pass.revision, pass.scripts, pass.snapshot, pass.items.slice(0, pass.remaining));
+            pass.installed = true;
+          }
+          batch = pass.scripts.every(({ code }) => this.listens.get(code) === false)
+            ? { texts: items.map((item) => item.text), listening: pass.scripts.map(() => false), errors: [], missing: [], from, remaining: from }
+            : await runner.display(chat, pass.revision, size);
+          this.report(chat, batch);
+          batch.listening.forEach((listening, at) => this.listens.set(pass.scripts[at]!.code, listening));
+        } catch (error) {
+          // A pass that cannot be made shows the texts as they were, rather than nothing.
+          this.report(chat, error);
+          pass.installed = false;
+          batch = { texts: items.map((item) => item.text), listening: [], errors: [], missing: [], from, remaining: from };
+        }
         size = Math.min(STRETCH_MOST, Math.max(1, Math.round((STRETCH_MS * items.length) / Math.max(1, performance.now() - began))));
-        if (!this.listeners.has(chat)) break;
-        const held = this.held.get(chat) ?? new Map<string, LuaText>();
-        this.held.set(chat, held);
-        items.forEach((item, at) => held.set(item.version, { text: item.text, stamp: stamped(next.generation, item.stamp), shown: texts[at]! }));
-        await this.tell(chat);
+        pass.remaining = batch.remaining;
+        const rows = pass.items.slice(batch.from, batch.from + batch.texts.length).map((item, at) => ({ version: item.version, text: item.text, stamp: item.stamp, shown: batch.texts[at]! }));
+        try {
+          const patch = await this.store.evaluation.patch(`screen:${chat}`, pass.revision, pass.generation, rows);
+          if (!patch || pass.signal?.aborted || this.wanted.get(chat) !== pass.revision || !this.listeners.has(chat)) continue;
+          const texts = pass.view.texts.slice();
+          const drawn = pass.view.drawn.slice();
+          const boxes = pass.view.boxes.slice();
+          for (const row of patch.rows) { texts[row.index] = row.text; drawn[row.index] = row.drawn; boxes[row.index] = row.boxes; }
+          pass.view = { texts, drawn, boxes, css: patch.css, pass: patch.pass, stopped: patch.stopped };
+          await this.tell(chat, this.told(chat, pass.view));
+        } catch (error) {
+          if (!(error instanceof EvaluationStopped)) { this.report(chat, error); break; }
+        }
+        if (!pass.remaining) {
+          pass.items = [];
+          if (pass.scripts.every(({ code }) => this.listens.get(code) === false)) void this.runner?.then((runner) => runner.forgetDisplay(chat, pass.revision));
+        }
       }
-      this.running.delete(chat);
-    })();
+    })().finally(() => this.running.delete(chat));
   }
 
-  private async tell(chat: string) {
-    await Promise.all([...this.listeners.get(chat) ?? []].map((listener) => listener()));
+  private async tell(chat: string, display?: Display) {
+    await Promise.all([...this.listeners.get(chat) ?? []].map((listener) => listener(display)));
   }
 }

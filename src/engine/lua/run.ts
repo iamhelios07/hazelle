@@ -42,6 +42,8 @@ export type Outcome = {
 export type DisplayItem = { index: number; text: string; variables: [string, string][] };
 // listening: false for a script whose engine holds no editDisplay listener, which has no part in any pass.
 export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[] };
+export type DisplayBatch = Displayed & { from: number; remaining: number };
+type DisplaySession = { generation: number; scripts: Script[]; snapshot: Snapshot; items: DisplayItem[]; variables: Map<string, string>; undo: [string, string | undefined][][]; remaining: number; messages: Working[]; globals: Map<string, string> };
 
 // Only idle worksets count toward this budget. Splitting an active script set loses globals and thrashes every pass.
 const IDLE_ENGINES = 8;
@@ -72,6 +74,7 @@ const MODEL_ROLES: Record<string, ModelMessage['role']> = { system: 'system', sy
 // holds up the display.
 export class Lua {
   private readonly worksets = new Map<string, Workset>();
+  private readonly displays = new Map<string, DisplaySession>();
   private readonly active = new Map<Lane, Workset>();
 
   private constructor(
@@ -146,22 +149,47 @@ export class Lua {
     }
   }
 
+  async installDisplay(owner: string, generation: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {
+    const variables = new Map(snapshot.variables);
+    const undo = items.map((item) => item.variables.map(([name, value]): [string, string | undefined] => {
+      const previous = variables.get(name);
+      variables.set(name, value);
+      return [name, previous];
+    }));
+    this.displays.set(owner, { generation, scripts, snapshot, items, variables, undo, remaining: items.length, messages: working(snapshot), globals: new Map(snapshot.globals) });
+  }
+
+  forgetDisplay(owner: string, generation: number) {
+    if (this.displays.get(owner)?.generation === generation) this.displays.delete(owner);
+  }
+
   // Each item's text after every script's editDisplay listeners, in order; an item a script fails on keeps the text
-  // it had.
-  async display(owner: string, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<Displayed> {
+  // it had. Stretches start newest-first, but each stretch threads its input variable deltas oldest-first.
+  async display(owner: string, generation: number, size: number): Promise<DisplayBatch> {
+    const session = this.displays.get(owner);
+    if (!session || session.generation !== generation) throw new Error('Display session expired');
+    const { scripts, snapshot, messages, globals } = session;
+    const from = Math.max(0, session.remaining - size);
+    const items = session.items.slice(from, session.remaining);
+    while (session.remaining > from) {
+      const changes = session.undo[--session.remaining]!;
+      for (let at = changes.length - 1; at >= 0; at--) {
+        const [name, previous] = changes[at]!;
+        if (previous === undefined) session.variables.delete(name);
+        else session.variables.set(name, previous);
+      }
+    }
     const workset = this.hold(owner, 'display', scripts);
     try {
       const errors: ScriptError[] = [];
       const missing = new Set<string>();
       const texts = items.map((item) => item.text);
-      const globals = new Map(snapshot.globals);
-      const messages = working(snapshot);
       const listening = scripts.map(() => true);
       for (const [place, script] of scripts.entries()) {
         const engine = await this.engine(workset, script);
         await this.exclusive(engine, async () => {
           if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
-          const variables = new Map(snapshot.variables);
+          const variables = new Map(session.variables);
           for (const [at, item] of items.entries()) {
             for (const [name, value] of item.variables) variables.set(name, value);
             const run: Run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
@@ -178,7 +206,8 @@ export class Lua {
           }
         });
       }
-      return { texts, listening, errors, missing: [...missing] };
+      if (from === 0 && this.displays.get(owner) === session) this.displays.delete(owner);
+      return { texts, listening, errors, missing: [...missing], from, remaining: from };
     } finally {
       this.release(workset);
     }
@@ -186,6 +215,7 @@ export class Lua {
 
   // Ends every engine, and with them their Lua globals. A run after it starts its engines anew.
   close() {
+    this.displays.clear();
     for (const workset of this.worksets.values()) {
       workset.retired = true;
       if (!workset.held) this.dispose(workset);

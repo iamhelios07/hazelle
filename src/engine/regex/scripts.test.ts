@@ -38,6 +38,17 @@ describe('Scripts', () => {
     expect(apply([script('{{user}}', 'X', { flags: '<cbs>' })], '{{user}}').text).toBe('X');
   });
 
+  it('keeps raw same-role repeat matches before the row during backwards display patches', () => {
+    const history = ['A1', 'none', 'A3', 'none', 'none'].map((text, index) => message('assistant', text, index));
+    const scripts = new Scripts([script('A\\d', '@@repeat_back end')], history);
+    const read = (index: number) => scripts.apply('display', 'none', { index, cbs: (text) => text }).text;
+    expect(read(4)).toBe('noneA3');
+    expect(read(2)).toBe('noneA1');
+    expect(read(0)).toBe('none');
+    expect(read(3)).toBe('noneA3');
+    expect(read(1)).toBe('noneA1');
+  });
+
   it('skips a script whose pattern is empty, also after CBS', () => {
     const blank = (text: string) => text.replaceAll('{{unset}}', '');
     expect(apply([script('', 'X'), script('{{unset}}', 'X', { flags: '<cbs>' })], 'ab', { cbs: blank })).toMatchObject({ text: 'ab' });

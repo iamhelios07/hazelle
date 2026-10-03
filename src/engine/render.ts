@@ -81,7 +81,7 @@ export function renderChat(
   stage: Stage,
   scope: ChatScope,
   take: ReadonlySet<number> = new Set(),
-): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; stopped: Runaway | null } {
+): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; stopped: Runaway | null; finish: ((index: number, text: string) => ReturnType<typeof renderStage>) | null; failures: { input: Map<number, Runaway>; display: Map<number, Runaway> } } {
   const context = contexts(scope, stage, null);
   const scripts = new Scripts(scope.packs.flatMap(({ regex }) => regex), scope.messages);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
@@ -91,6 +91,9 @@ export function renderChat(
   // Through set, so the stamp tells one start from another; then cleared, since a pass begins from start.
   for (const [name, value] of start) variables.set(name, value);
   variables.changed?.clear();
+  const states = lua ? new VariableTimeline(start) : null;
+  variables.record = states;
+  const failures = { input: new Map<number, Runaway>(), display: new Map<number, Runaway>() };
   const first = scope.greeting === null ? 0 : 1;
   const missed: Missed[] = [];
   const wrote: [string, string][][] = [];
@@ -99,23 +102,25 @@ export function renderChat(
   const past: string[] = [];
   let stopped: Runaway | null = null;
   // What the stage's CBS wrote before the stop stays written.
-  const guarded = <T>(run: () => T, unrun: T): T => {
+  const guarded = <T>(index: number, run: () => T, unrun: T): T => {
     try {
       return run();
     } catch (error) {
       if (!(error instanceof Runaway)) throw error;
       stopped ??= error;
+      failures.input.set(index, error);
       return unrun;
     }
   };
   const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
+    states?.begin();
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
     // CBS still writes.
     const written = !((index === 0 && scope.greeting !== null) || staged);
     for (const [name, value] of before) variables.set(name, value);
     variables.log = [];
-    const replayed = guarded(() => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { index, cbs: cbs(variables) }).text : cbs(variables)(text), text);
+    const replayed = guarded(index, () => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { index, cbs: cbs(variables) }).text : cbs(variables)(text), text);
     wrote.push(variables.log);
     variables.log = null;
     for (const [name, value] of after) variables.set(name, value);
@@ -135,13 +140,54 @@ export function renderChat(
       }
       edited = held?.text ?? '';
     }
-    const shown = guarded(() => scripts.apply(stage === 'prompt' ? 'process' : 'display', edited, { index, take, cbs: cbs(new Map(variables)) }), { text: edited, drawn: [], boxes: [] });
+    const shown = renderStage(stage, scripts, context, index, edited, variables, take);
+    if (shown.stopped) { stopped ??= shown.stopped; failures.display.set(index, shown.stopped); }
     drawn.push(shown.drawn);
-    boxes.push(shown.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })));
-    return unescapeCbs(shown.text);
+    boxes.push(shown.boxes);
+    return shown.text;
   });
+  variables.record = null;
   for (const [name, value] of scope.pending ?? []) variables.set(name, value);
-  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, stopped };
+  return { texts, staged: past, wrote, start, variables, drawn, boxes, missed, stopped, finish: states ? (index, text) => renderStage(stage, scripts, context, index, text, states.at(index), take) : null, failures };
+}
+
+function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof contexts>, index: number, text: string, variables: ReadonlyMap<string, string>, take: ReadonlySet<number>) {
+  const read = new Map(variables);
+  let stopped: Runaway | null = null;
+  let result: { text: string; drawn: number[]; boxes: Box[] };
+  try {
+    result = scripts.apply(stage === 'prompt' ? 'process' : 'display', text, { index, take, cbs: (part) => evaluate(part, context({ message: index }, read)) });
+  } catch (error) {
+    if (!(error instanceof Runaway)) throw error;
+    stopped = error;
+    result = { text, drawn: [], boxes: [] };
+  }
+  return { text: unescapeCbs(result.text), drawn: result.drawn, boxes: result.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })), stopped };
+}
+
+// Recorded by the canonical input/output pass, including before/after writes. A Lua result changes only a row's
+// display stage; seeking these deltas preserves its original state without one full variable map per message.
+class VariableTimeline {
+  private readonly frames: [string, string, string | undefined][][] = [];
+  private readonly values: Map<string, string>;
+  private cursor = 0;
+  constructor(start: [string, string][]) { this.values = new Map(start); }
+  begin() { this.frames.push([]); }
+  write(name: string, value: string, previous: string | undefined) { if (value !== previous) this.frames.at(-1)!.push([name, value, previous]); }
+  at(index: number): ReadonlyMap<string, string> {
+    while (this.cursor <= index) {
+      for (const [name, value] of this.frames[this.cursor++]!) this.values.set(name, value);
+    }
+    while (this.cursor > index + 1) {
+      const frame = this.frames[--this.cursor]!;
+      for (let at = frame.length - 1; at >= 0; at--) {
+        const [name, , previous] = frame[at]!;
+        if (previous === undefined) this.values.delete(name);
+        else this.values.set(name, previous);
+      }
+    }
+    return this.values;
+  }
 }
 
 const LATEST = 5;
@@ -154,10 +200,12 @@ export type Missed = { index: number; version: string; text: string; stamp: stri
 // log: the writes of one stage, while it is set. changed and stamp follow every write that changes a value, for the
 // editDisplay pass: the names since they were last taken, and a number that differs when the state does.
 class Logged extends Map<string, string> {
+  record: VariableTimeline | null = null;
   log: [string, string][] | null = null;
   changed: Set<string> | null = null;
   stamp = 0;
   override set(name: string, value: string) {
+    this.record?.write(name, value, this.get(name));
     this.log?.push([name, value]);
     if (this.changed && this.get(name) !== value) {
       this.changed.add(name);

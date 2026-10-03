@@ -113,10 +113,12 @@ export class Scripts {
 // Risu copied from the previous same-role message only, and carried a match forward because the output stage
 // rewrote that message in storage. Stored text stays as written, so the copy comes from the latest earlier same-role
 // message that has a match, read raw.
-// Calls come in message order within the one pass that owns the Scripts, so each key holds only its latest match.
+// Each key holds only its latest match before through. Display patches come in descending disjoint stretches,
+// each internally forward; a backwards seek scans only when that match lies beyond the requested message.
+type MatchCursor = { through: number; last: { index: number; text: string } | null };
 function latestMatches(messages: readonly HistoryMessage[]): (pattern: RegExp, index: number, dynamic: boolean) => string | null {
-  const fixed = new Map<string, { through: number; last: string | null }>();
-  const dynamic = new Map<string, { through: number; last: string | null }>();
+  const fixed = new Map<string, MatchCursor>();
+  const dynamic = new Map<string, MatchCursor>();
   return (pattern, index, expanded) => {
     const role = messages[index]!.role;
     const key = JSON.stringify([pattern.source, pattern.flags, role]);
@@ -126,13 +128,25 @@ function latestMatches(messages: readonly HistoryMessage[]): (pattern: RegExp, i
     cache.set(key, state);
     // CBS may produce a different pattern for every message. Its cache must not retain a history per expansion.
     if (expanded && cache.size > 16) cache.delete(cache.keys().next().value!);
+    if (index < state.through) {
+      state.through = index;
+      if (state.last && state.last.index >= index) {
+        state.last = null;
+        for (let at = index - 1; at >= 0; at--) {
+          const message = messages[at]!;
+          if (message.role !== role) continue;
+          const match = reset(pattern).exec(message.text);
+          if (match) { state.last = { index: at, text: match[0] }; break; }
+        }
+      }
+    }
     for (; state.through < index; state.through++) {
       const message = messages[state.through]!;
       if (message.role !== role) continue;
       const match = reset(pattern).exec(message.text);
-      if (match) state.last = match[0];
+      if (match) state.last = { index: state.through, text: match[0] };
     }
-    return state.last;
+    return state.last?.text ?? null;
   };
 }
 

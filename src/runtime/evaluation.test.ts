@@ -12,11 +12,11 @@ afterEach(() => vi.unstubAllGlobals());
 it('replays old tail reads and forward variables after a history delta, and matches the engine', async () => {
   const evaluation = new Evaluation();
   const first = { ...scope, messages: [message('old', '{{setvar::hp::7}}tail={{lastmessage}}'), message('tail', '{{getvar::hp}} old')] };
-  expect(await evaluation.display('screen', first, new Set())).toEqual(display(first));
+  expect((await evaluation.display('screen', first, new Set())).display).toEqual(display(first));
   const next = { ...first, messages: [first.messages[0]!, message('tail', '{{getvar::hp}} new')] };
   const result = await evaluation.display('screen', next, new Set());
-  expect(result).toEqual(display(next));
-  expect(result.texts).toEqual(['tail=7 new', '7 new']);
+  expect(result.display).toEqual(display(next));
+  expect(result.display.texts).toEqual(['tail=7 new', '7 new']);
   evaluation.close();
 });
 
@@ -44,9 +44,21 @@ it('coalesces queued revisions, settles cancellations and retains the active slo
   receive({ id: requests[0]!.id, result: await engine.run(requests[0]!.input) });
   expect(requests).toHaveLength(2);
   receive({ id: requests[1]!.id, result: await engine.run(requests[1]!.input) });
-  expect((await latest).texts).toEqual(['latest']);
+  expect((await latest).display.texts).toEqual(['latest']);
   const closing = evaluation.display('screen', scope, new Set());
   const closed = expect(closing).rejects.toBeInstanceOf(EvaluationStopped);
   evaluation.close();
   await closed;
+});
+
+
+it('does not let an older Lua patch cancel a newer whole-input revision', async () => {
+  const evaluation = new Evaluation();
+  const first = await evaluation.display('screen', { ...scope, messages: [message('a', 'one')] }, new Set(), undefined, { revision: 1, generation: 1, waits: true });
+  const item = first.work!.items[0]!;
+  const next = evaluation.display('screen', { ...scope, messages: [message('a', 'two')] }, new Set(), undefined, { revision: 2, generation: 2, waits: true });
+  const old = evaluation.patch('screen', 1, 1, [{ version: 'a', text: item.text, stamp: item.stamp, shown: 'obsolete' }]);
+  expect((await next).display.texts).toEqual(['']);
+  expect(await old).toBeNull();
+  evaluation.close();
 });

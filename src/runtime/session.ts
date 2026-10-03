@@ -129,6 +129,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     closing.abort();
     stopSync();
     read.close();
+    display.close();
     streams.close();
     talk.close();
     scripts.close();

@@ -1,10 +1,12 @@
 import wasm from 'wasmoon/dist/glue.wasm?url';
-import { Lua, type Displayed, type Outcome } from '../../engine/lua/run';
-import type { Host } from '../../engine/lua/state';
+import { Lua, type DisplayBatch, type Outcome } from '../../engine/lua/run';
+import type { Host, Snapshot } from '../../engine/lua/state';
+import { applyTail } from '../history-delta';
 import type { Down, Up } from './client';
 
 const scope = self as unknown as { postMessage(message: Up): void };
 let lua: Promise<Lua> | null = null;
+const displays = new Map<string, { generation: number; snapshot: Snapshot }>();
 let calls = 0;
 const waiting = new Map<number, (value: never) => void>();
 
@@ -31,10 +33,24 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
     waiting.delete(data.call);
     return;
   }
+  if (data.kind === 'forget-display') {
+    if (displays.get(data.owner)?.generation === data.generation) displays.delete(data.owner);
+    void lua?.then((machine) => machine.forgetDisplay(data.owner, data.generation));
+    return;
+  }
   lua ??= Lua.create({ wasm });
   const { id } = data;
   lua
-    .then<Outcome | Displayed>((machine) => (data.kind === 'run' ? machine.run(data.owner, data.triggers, data.snapshot, data.event, host(id)) : machine.display(data.owner, data.scripts, data.snapshot, data.items)))
+    .then<Outcome | DisplayBatch | null>(async (machine) => {
+      if (data.kind === 'run') return machine.run(data.owner, data.triggers, data.snapshot, data.event, host(id));
+      if (data.kind === 'display') return machine.display(data.owner, data.generation, data.size);
+      const previous = displays.get(data.owner)?.snapshot;
+      const { install } = data;
+      const snapshot: Snapshot = { ...install.snapshot, messages: applyTail(previous?.messages ?? [], install.messages), scope: { ...install.snapshot.scope, messages: applyTail(previous?.scope.messages ?? [], install.history) } };
+      displays.set(data.owner, { generation: install.generation, snapshot });
+      await machine.installDisplay(data.owner, install.generation, install.scripts, snapshot, install.items);
+      return null;
+    })
     .then(
       (result) => scope.postMessage({ kind: 'done', id, result }),
       (error: unknown) => scope.postMessage({ kind: 'failed', id, message: String(error) }),

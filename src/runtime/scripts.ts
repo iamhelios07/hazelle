@@ -16,6 +16,7 @@ import { appendCall, appendScripted, appendUserMessage, type Written } from './c
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate } from './generate';
+import { luaSnapshot, type LuaStanding } from './lua/snapshot';
 import { LuaStuck, type Runner } from './lua/client';
 import { modelProfile } from './profiles';
 import { chatPrompt } from './prompts';
@@ -65,15 +66,6 @@ export const scriptsOf = (packs: readonly Pack[]): Script[] => triggersOf(packs)
 type Read = { snapshot: Snapshot; wrote: Writes[]; greeting: number };
 type Anchor = { version: string; stays?: true };
 
-// The card without its scripts and triggers, which no tag reads and a run is handed apart.
-function cbsScope({ card, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick }: ChatScope): Snapshot['scope'] {
-  return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, clock, assets, modules, faces, screen, pick };
-}
-
-// What Lua's own functions read of a chat besides its messages and variables; its CBS and lorebook reads go through
-// the snapshot's scope. An editDisplay pass run on one is not fresh for another (ScriptDisplay).
-export type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
-
 export function luaStanding(store: ObjectStore, chat: Chat, scope: ChatScope): LuaStanding {
   const toggles = togglesOf(store, chat, chatPrompt(store, chat));
   return {
@@ -81,18 +73,6 @@ export function luaStanding(store: ObjectStore, chat: Chat, scope: ChatScope): L
     character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
     persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
     note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
-  };
-}
-
-// The chat as Lua reads it: without its greeting, each message past its input or output stage (staged), with the
-// variables given.
-export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: string[], variables: [string, string][]): Snapshot {
-  const greeting = scope.greeting === null ? 0 : 1;
-  return {
-    messages: scope.messages.slice(greeting).map(({ role, time }, index) => ({ role: role === 'user' ? 'user' : 'char', data: staged[index + greeting]!, time: time ?? 0 })),
-    variables,
-    ...standing,
-    scope: cbsScope(scope),
   };
 }
 

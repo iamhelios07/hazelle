@@ -263,7 +263,7 @@ export class ChatScreenRead {
   constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, readonly id: string, private opening: Opening) {
     this.model = models.chat(id).snapshot();
     this.turn = this.currentTurn();
-    this.state = new Snapshot<ScreenChat>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: null, stopped: null }, pending: true });
+    this.state = new Snapshot<ScreenChat>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: false, stopped: null }, pending: true });
   }
 
   readonly snapshot = () => this.state.snapshot();
@@ -283,7 +283,10 @@ export class ChatScreenRead {
         this.turn = turn;
         this.refresh();
       });
-      const passed = this.models.open.subscribe(this.id, () => this.refresh());
+      const passed = this.models.open.subscribe(this.id, (display) => {
+        if (!display) return this.refresh();
+        this.state.set({ ...this.state.snapshot(), display });
+      });
       this.leave = () => { this.revision++; this.evaluation?.abort(); detach(); store(); talk(); passed(); lease.release(); };
       const model = this.models.chat(this.id).snapshot();
       const turn = this.currentTurn();

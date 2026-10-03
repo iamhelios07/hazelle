@@ -14,7 +14,7 @@ export class CodecWorker {
   postMessage(message: CodecDown | EvaluationDown) {
     if ('forget' in message) return this.evaluator.forget(message.forget);
     if ('input' in message) {
-      void this.evaluator.run(structuredClone(message.input)).then((result) => this.onmessage?.({ data: { id: message.id, result } }), (error: unknown) => this.onmessage?.({ data: { id: message.id, error: String(error) } }));
+      void this.evaluator.run(structuredClone(message.input)).then((result) => this.onmessage?.({ data: { id: message.id, result: structuredClone(result) } }), (error: unknown) => this.onmessage?.({ data: { id: message.id, error: String(error) } }));
       return;
     }
     if (message.kind === 'init') {

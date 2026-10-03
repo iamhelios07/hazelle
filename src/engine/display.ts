@@ -7,37 +7,92 @@ import { contexts, renderChat, type ChatScope, type Missed } from './render';
 // texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the packs'
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
 // drawn: the display scripts, by place among the packs' regex, that drew a box in each message; boxes: each message's
-// boxes taken out of it (상태창 지정), their <style> blocks in css too. pass: what the bot's Lua editDisplay pass has
-// yet to run (scope.lua), with what its run reads: each message past its input or output stage, and the variables
-// the chat starts from. stopped: the bot's commands in a message or a backgroundHTML that ran away (renderChat); a
+// boxes taken out of it (상태창 지정), their <style> blocks in css too. pass: whether the bot's Lua editDisplay pass
+// still has pending messages (scope.lua). stopped: the bot's commands in a message or a backgroundHTML that ran away (renderChat); a
 // backgroundHTML that did is left out.
-export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: { items: Missed[]; staged: string[]; start: [string, string][] } | null; stopped: Runaway | null };
+export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: boolean; stopped: Runaway | null };
 
 // A <style> left open runs to the end of its text, as a browser reads it; bots' backgroundHTML often ends that way.
 const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 
-export function display(scope: ChatScope, take: ReadonlySet<number> = new Set()): Display {
-  const { texts, variables, drawn, boxes, missed, staged, start, stopped: inMessages } = renderChat('display', scope, take);
-  let stopped = inMessages;
-  const blocks: string[] = [];
-  const strip = (text: string) =>
-    text.replace(STYLE, (_, css: string) => {
-      blocks.push(css);
-      return '';
-    });
-  // Read with the variables as the last message left them, as Risu reads it with the chat's current ones.
-  for (const { background } of scope.packs) {
-    if (!background) continue;
-    try {
-      strip(unescapeCbs(evaluate(background, contexts(scope, 'display', null)({ seed: 'background' }, variables))));
-    } catch (error) {
-      if (!(error instanceof Runaway)) throw error;
-      stopped ??= error;
+// What the bot's Lua editDisplay pass has yet to run, with what its run reads: each message past its input or output
+// stage, and the variables the chat starts from.
+export type DisplayWork = { items: Missed[]; staged: string[]; start: [string, string][] };
+export type DisplayPatch = { rows: { index: number; text: string; drawn: number[]; boxes: Box[] }[]; css: string; pass: boolean; stopped: Runaway | null };
+
+export const display = (scope: ChatScope, take: ReadonlySet<number> = new Set()): Display => new DisplayPass(scope, take).value;
+
+export class DisplayPass {
+  readonly value: Display;
+  readonly work: DisplayWork | null;
+  private readonly rendered: ReturnType<typeof renderChat>;
+  private readonly byVersion: Map<string, number>;
+  private readonly missing: Set<string>;
+  private readonly background: string[] = [];
+  private readonly textStyles: string[][];
+  private readonly boxStyles: string[][];
+  private backgroundStop: Runaway | null = null;
+
+  constructor(scope: ChatScope, take: ReadonlySet<number>) {
+    const rendered = renderChat('display', scope, take);
+    this.rendered = rendered;
+    this.byVersion = new Map(scope.messages.map(({ id }, index) => [id, index]));
+    this.missing = new Set(rendered.missed.map(({ version }) => version));
+    this.work = rendered.missed.length ? { items: rendered.missed, staged: rendered.staged, start: rendered.start } : null;
+    // Read with the variables as the last message left them, as Risu reads it with the chat's current ones.
+    for (const { background } of scope.packs) {
+      if (!background) continue;
+      try {
+        stripStyles(unescapeCbs(evaluate(background, contexts(scope, 'display', null)({ seed: 'background' }, rendered.variables))), this.background);
+      } catch (error) {
+        if (!(error instanceof Runaway)) throw error;
+        this.backgroundStop ??= error;
+      }
     }
+    this.textStyles = rendered.texts.map(() => []);
+    this.boxStyles = rendered.boxes.map(() => []);
+    const texts = rendered.texts.map((text, index) => stripStyles(text, this.textStyles[index]!));
+    const boxes = rendered.boxes.map((rows, index) => rows.map((box) => ({ ...box, html: stripStyles(box.html, this.boxStyles[index]!) })));
+    this.value = { texts, boxes, drawn: rendered.drawn, css: this.css(), pass: this.missing.size > 0, stopped: rendered.stopped ?? this.backgroundStop };
   }
-  const shown = texts.map(strip);
-  const taken = boxes.map((list) => list.map((box) => ({ ...box, html: strip(box.html) })));
-  return { texts: shown, css: [...new Set(blocks.map((block) => block.trim()))].join('\n'), drawn, boxes: taken, pass: missed.length > 0 ? { items: missed, staged, start } : null, stopped };
+
+  patch(items: { version: string; text: string }[]): DisplayPatch {
+    const rows: DisplayPatch['rows'] = [];
+    for (const { version, text } of items) {
+      const index = this.byVersion.get(version);
+      if (index === undefined) continue;
+      const next = this.rendered.finish!(index, text);
+      if (next.stopped) this.rendered.failures.display.set(index, next.stopped);
+      else this.rendered.failures.display.delete(index);
+      this.textStyles[index] = [];
+      this.boxStyles[index] = [];
+      const row = { index, text: stripStyles(next.text, this.textStyles[index]!), drawn: next.drawn, boxes: next.boxes.map((box) => ({ ...box, html: stripStyles(box.html, this.boxStyles[index]!) })) };
+      rows.push(row);
+      this.value.texts[index] = row.text;
+      this.value.drawn[index] = row.drawn;
+      this.value.boxes[index] = row.boxes;
+      this.missing.delete(version);
+    }
+    let first = Infinity;
+    let stopped: Runaway | null = null;
+    for (const errors of [this.rendered.failures.input, this.rendered.failures.display]) for (const [index, error] of errors) {
+      if (index < first) { first = index; stopped = error; }
+    }
+    const patch = { rows, css: this.css(), pass: this.missing.size > 0, stopped: stopped ?? this.backgroundStop };
+    this.value.css = patch.css;
+    this.value.pass = patch.pass;
+    this.value.stopped = patch.stopped;
+    return patch;
+  }
+
+  private css(): string {
+    // Styles cascade in the original order: backgrounds, every text, then every taken box, not text/box pairs.
+    return [...new Set([...this.background, ...this.textStyles.flat(), ...this.boxStyles.flat()].map((block) => block.trim()))].join('\n');
+  }
+}
+
+function stripStyles(text: string, blocks: string[]) {
+  return text.replace(STYLE, (_, css: string) => { blocks.push(css); return ''; });
 }
 
 // Markdown as Risu parses it (markdown-it, soft breaks kept, no indented code), so a bot's HTML blocks and the prose

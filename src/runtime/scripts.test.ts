@@ -178,7 +178,7 @@ describe("the bot scripts' machine", () => {
     await vi.waitFor(() => expect(lua).toHaveBeenCalledOnce());
     opened.data.close();
     const close = vi.fn();
-    made({ run: () => Promise.reject(new Error('closed')), display: () => Promise.reject(new Error('closed')), close });
+    made({ run: () => Promise.reject(new Error('closed')), installDisplay: () => Promise.reject(new Error('closed')), forgetDisplay() {}, display: () => Promise.reject(new Error('closed')), close });
     await pressed;
     expect(close).toHaveBeenCalledOnce();
   });
@@ -229,9 +229,9 @@ describe("the display with the bot's Lua", () => {
       const held = new Promise<void>((resolve) => (release = resolve));
       // The second stretch, of the two oldest messages, is held until reloadDisplay has been asked, and long enough
       // that the stretch after it is a short one of the newest.
-      const display = vi.spyOn(Lua.prototype, 'display').mockImplementation(async function (this: Lua, owner, scripts, snapshot, items) {
-        const shown = await run.call(this, owner, scripts, snapshot, items);
-        if (passed.push(items.map(({ index }) => index)) === 2) await held;
+      const display = vi.spyOn(Lua.prototype, 'display').mockImplementation(async function (this: Lua, owner, generation, size) {
+        const shown = await run.call(this, owner, generation, size);
+        if (passed.push(Array.from({ length: shown.texts.length }, (_, at) => shown.from + at - 1)) === 2) await held;
         return shown;
       });
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };

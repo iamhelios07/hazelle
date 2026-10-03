@@ -1,19 +1,24 @@
 import type { Trigger } from '../../engine/import/types';
-import type { DisplayItem, Displayed, Event, Lua, Outcome, Script } from '../../engine/lua/run';
-import type { Host, Snapshot } from '../../engine/lua/state';
+import type { DisplayBatch, DisplayItem, Event, Lua, Outcome, Script } from '../../engine/lua/run';
+import type { Host, LuaMessage, Snapshot } from '../../engine/lua/state';
+import { changedTail, sameHistory, type Tail } from '../history-delta';
 import { moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
 // What the runtime asks of the bot scripts' machines: the engine itself in tests, a worker in the browser.
-export type Runner = Pick<Lua, 'run' | 'display' | 'close'>;
+export type Runner = Pick<Lua, 'run' | 'installDisplay' | 'display' | 'forgetDisplay' | 'close'>;
+
+export type DisplayInstall = { generation: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
 
 export type Down =
   | { kind: 'run'; id: number; owner: string; triggers: Trigger[]; snapshot: Snapshot; event: Event }
-  | { kind: 'display'; id: number; owner: string; scripts: Script[]; snapshot: Snapshot; items: DisplayItem[] }
+  | { kind: 'install-display'; id: number; owner: string; install: DisplayInstall }
+  | { kind: 'display'; id: number; owner: string; generation: number; size: number }
+  | { kind: 'forget-display'; owner: string; generation: number }
   | { kind: 'answer'; call: number; value: unknown }
   | { kind: 'ping' };
 export type Up =
-  | { kind: 'done'; id: number; result: Outcome | Displayed }
+  | { kind: 'done'; id: number; result: Outcome | DisplayBatch | null }
   | { kind: 'failed'; id: number; message: string }
   | { kind: 'say'; id: number; args: Parameters<Host['say']> }
   | { kind: 'ask'; id: number; call: number; args: Parameters<Host['ask']> }
@@ -29,12 +34,13 @@ const STUCK_MS = 8000;
 
 export class LuaStuck extends Error {}
 
-type Pending = { resolve: (result: Outcome | Displayed) => void; reject: (error: Error) => void; host: Host | null };
+type Pending = { resolve: (result: Outcome | DisplayBatch | null) => void; reject: (error: Error) => void; host: Host | null };
 
 // The bot scripts run in a worker, which is ended and started again when a script holds it without answering.
 export class LuaWorker implements Runner {
   private worker: Worker | null = null;
   private readonly pending = new Map<number, Pending>();
+  private readonly displays = new Map<string, { generation: number; snapshot: Snapshot }>();
   private ids = 0;
   private beat: ReturnType<typeof setInterval> | null = null;
   private pinged: number | null = null;
@@ -43,15 +49,33 @@ export class LuaWorker implements Runner {
     return this.send((id) => ({ kind: 'run', id, owner, triggers, snapshot, event }), host) as Promise<Outcome>;
   }
 
-  display(owner: string, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<Displayed> {
-    return this.send((id) => ({ kind: 'display', id, owner, scripts, snapshot, items }), null) as Promise<Displayed>;
+  installDisplay(owner: string, generation: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {
+    const previous = this.displays.get(owner)?.snapshot;
+    const { messages, scope, ...rest } = snapshot;
+    const { messages: history, ...fixed } = scope;
+    const install: DisplayInstall = {
+      generation, scripts, items, snapshot: { ...rest, scope: fixed },
+      messages: changedTail(previous?.messages ?? [], messages, (a, b) => a.role === b.role && a.data === b.data && a.time === b.time),
+      history: changedTail(previous?.scope.messages ?? [], history, sameHistory),
+    };
+    this.displays.set(owner, { generation, snapshot });
+    return this.send((id) => ({ kind: 'install-display', id, owner, install }), null).then(() => {});
+  }
+
+  display(owner: string, generation: number, size: number): Promise<DisplayBatch> {
+    return this.send((id) => ({ kind: 'display', id, owner, generation, size }), null) as Promise<DisplayBatch>;
+  }
+
+  forgetDisplay(owner: string, generation: number) {
+    if (this.displays.get(owner)?.generation === generation) this.displays.delete(owner);
+    this.worker?.postMessage({ kind: 'forget-display', owner, generation } satisfies Down);
   }
 
   close() {
     this.end(new LuaStuck('closed'));
   }
 
-  private send(message: (id: number) => Down, host: Host | null): Promise<Outcome | Displayed> {
+  private send(message: (id: number) => Down, host: Host | null): Promise<Outcome | DisplayBatch | null> {
     const id = ++this.ids;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject, host });
@@ -109,6 +133,7 @@ export class LuaWorker implements Runner {
   private end(error: Error) {
     this.worker?.terminate();
     this.worker = null;
+    this.displays.clear();
     this.rest();
     const pending = [...this.pending.values()];
     this.pending.clear();

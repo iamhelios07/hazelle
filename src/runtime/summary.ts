@@ -26,7 +26,7 @@ export async function projectChat(store: ObjectStore, id: string, previous?: Pro
   const rendered = { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
   const { value: input, reads } = store.capture(() => ({ scope: { ...scopeOf({ store }, id, stored.value, messages), clock: rendered }, take: pinned({ store }, stored.value) }));
   const dependencies = [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()];
-  const display = await store.evaluation.display(`projection:${id}`, input.scope, input.take, signal);
+  const { display } = await store.evaluation.display(`projection:${id}`, input.scope, input.take, signal);
   const latest = entries.reduce<(typeof entries)[number] | null>((last, entry) => last && last.rev > entry.rev ? last : entry, null);
   // A message is named as the reader reads it: its translation when it has one.
   const texts = display.texts.map((text, index) => shown(messages[index]!).translation?.text ?? text);

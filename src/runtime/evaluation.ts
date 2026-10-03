@@ -1,16 +1,17 @@
 import { Runaway } from '../engine/cbs/evaluate';
-import type { Display } from '../engine/display';
+import type { DisplayPatch } from '../engine/display';
 import { readToggles } from '../engine/import/toggles';
 import type { PromptInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import { chatToggles } from '../model/toggles';
-import type { EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp } from './evaluation-core';
+import type { DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult } from './evaluation-core';
+import { changedTail, sameHistory } from './history-delta';
 import { moduleWorker } from './worker';
 import workerUrl from './evaluation-worker?worker&url';
 
 export class EvaluationStopped extends Error {}
 export class EvaluationFailed extends Error {}
-type Work = { lane: string; scope: ChatScope; job: EvaluationJob; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
+type Work = { lane: string; scope: ChatScope | null; job: EvaluationJob | { kind: 'patch'; owner: string; revision: number; generation: number; items: LuaResult[] }; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
 
 export class Evaluation {
   private worker: Worker | null = null;
@@ -20,8 +21,12 @@ export class Evaluation {
   private ids = 0;
   private closed = false;
 
-  display(lane: string, scope: ChatScope, take: ReadonlySet<number>, signal?: AbortSignal, lua?: Extract<EvaluationJob, { kind: 'display' }>['lua']): Promise<Display> {
-    return this.run(lane, scope, { kind: 'display', take, ...(lua && { lua }) }, signal) as Promise<Display>;
+  display(lane: string, scope: ChatScope, take: ReadonlySet<number>, signal?: AbortSignal, lua?: Extract<EvaluationJob, { kind: 'display' }>['lua']): Promise<DisplayEvaluation> {
+    return this.run(lane, scope, { kind: 'display', take, ...(lua && { lua }) }, signal) as Promise<DisplayEvaluation>;
+  }
+
+  patch(lane: string, revision: number, generation: number, items: LuaResult[], signal?: AbortSignal): Promise<DisplayPatch | null> {
+    return this.run(`patch:${lane}`, null, { kind: 'patch', owner: lane, revision, generation, items }, signal) as Promise<DisplayPatch | null>;
   }
 
   prompt(lane: string, input: Omit<PromptInput, 'countTokens'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {
@@ -34,10 +39,12 @@ export class Evaluation {
   }
 
   forget(lane: string) {
-    const waiting = this.waiting.get(lane);
-    if (waiting) { this.waiting.delete(lane); waiting.stop(); waiting.reject(new EvaluationStopped()); }
-    if (this.active?.work.lane === lane) this.active.work.reject(new EvaluationStopped());
-    this.histories.delete(lane);
+    for (const key of [lane, `patch:${lane}`]) {
+      const waiting = this.waiting.get(key);
+      if (waiting) { this.waiting.delete(key); waiting.stop(); waiting.reject(new EvaluationStopped()); }
+      if (this.active?.work.lane === key) this.active.work.reject(new EvaluationStopped());
+      this.histories.delete(key);
+    }
     this.worker?.postMessage({ forget: lane } satisfies EvaluationDown);
   }
 
@@ -46,7 +53,7 @@ export class Evaluation {
     this.end(new EvaluationStopped());
   }
 
-  private run(lane: string, scope: ChatScope, job: EvaluationJob, signal?: AbortSignal): Promise<EvaluationResult> {
+  private run(lane: string, scope: ChatScope | null, job: Work['job'], signal?: AbortSignal): Promise<EvaluationResult> {
     return new Promise((resolve, reject) => {
       if (this.closed || signal?.aborted) return reject(new EvaluationStopped());
       if (this.active?.work.lane === lane) this.active.work.reject(new EvaluationStopped());
@@ -78,15 +85,17 @@ export class Evaluation {
         worker.onerror = worker.onmessageerror = () => this.end(new EvaluationFailed('Evaluation worker failed'));
         this.worker = worker;
       }
-      const { toggle, messages, ...scope } = work.scope;
-      delete scope.lua;
-      const keys = chatToggles(scope.prompt?.toggles ?? [], scope.packs.flatMap((pack) => readToggles(pack.toggles).toggles));
-      const previous = this.histories.get(work.lane) ?? [];
-      let from = 0;
-      while (from < previous.length && from < messages.length && sameMessage(previous[from]!, messages[from]!)) from++;
-      const input: EvaluationInput = { lane: work.lane, scope: { ...scope, toggle: keys.map(({ key }) => [key, toggle(key)]) }, history: { from, messages: messages.slice(from), length: messages.length }, job: work.job };
+      let input: EvaluationInput;
+      if (work.job.kind === 'patch') input = { lane: work.job.owner, patch: { revision: work.job.revision, generation: work.job.generation, items: work.job.items } };
+      else {
+        const { toggle, messages, ...scope } = work.scope!;
+        delete scope.lua;
+        const keys = chatToggles(scope.prompt?.toggles ?? [], scope.packs.flatMap((pack) => readToggles(pack.toggles).toggles));
+        const previous = this.histories.get(work.lane) ?? [];
+        input = { lane: work.lane, scope: { ...scope, toggle: keys.map(({ key }) => [key, toggle(key)]) }, history: changedTail(previous, messages, sameHistory), job: work.job };
+        this.histories.set(work.lane, messages);
+      }
       this.worker.postMessage({ id, input } satisfies EvaluationDown);
-      this.histories.set(work.lane, messages);
     } catch (error) { this.end(new EvaluationFailed(String(error))); }
   }
 
@@ -98,7 +107,8 @@ export class Evaluation {
     if ('error' in data) active.work.reject(new EvaluationFailed(data.error));
     else {
       // Structured cloning preserves Error but not a custom prototype; callers classify the engine's Runaway.
-      if ('stopped' in data.result && data.result.stopped) data.result.stopped = new Runaway();
+      if (data.result && 'stopped' in data.result && data.result.stopped) data.result.stopped = new Runaway();
+      if (data.result && 'display' in data.result && data.result.display.stopped) data.result.display.stopped = new Runaway();
       active.work.resolve(data.result);
     }
     this.dispatch();
@@ -114,6 +124,3 @@ export class Evaluation {
     for (const each of work) { each.stop(); each.reject(error); }
   }
 }
-
-const sameWrites = (a: [string, string][] | undefined, b: [string, string][] | undefined) => a === b || ((a?.length ?? 0) === (b?.length ?? 0) && (a ?? []).every(([key, value], at) => b![at]![0] === key && b![at]![1] === value));
-const sameMessage = (a: ChatScope['messages'][number], b: ChatScope['messages'][number]) => a === b || (a.id === b.id && a.seed === b.seed && a.role === b.role && a.text === b.text && a.time === b.time && a.staged === b.staged && sameWrites(a.before, b.before) && sameWrites(a.after, b.after));

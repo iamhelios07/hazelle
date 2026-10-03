@@ -54,7 +54,11 @@ describe('Lua runs', () => {
       listenEdit('editDisplay', function(id, value) counter = counter + 1; return value .. ':' .. counter end)
     ` }));
     const event = () => machine.run('active', scripts, SNAPSHOT, { kind: 'start' }, host());
-    const display = () => machine.display('active', scripts, SNAPSHOT, [{ index: 0, text: '', variables: [] }]);
+    let generation = 0;
+    const display = async () => {
+      await machine.installDisplay('active', ++generation, scripts, SNAPSHOT, [{ index: 0, text: '', variables: [] }]);
+      return machine.display('active', generation, 1);
+    };
     try {
       expect((await event()).writes.map(([, value]) => value)).toEqual(Array(9).fill('1'));
       expect((await display()).texts).toEqual([':1'.repeat(9)]);
@@ -212,16 +216,36 @@ describe('Lua display', () => {
         setChatVar(id, 'hp', 'changed')
         return value .. ':' .. meta.index .. ':' .. hp .. ':' .. getChat(id, 0).data
       end)`;
-    const shown = await lua.display('display', [{ kind: 'lua', name: 'main', code }], SNAPSHOT, [
+    await lua.installDisplay('display', 1, [{ kind: 'lua', name: 'main', code }], SNAPSHOT, [
       { index: 0, text: 'a', variables: [] },
       { index: 1, text: 'b', variables: [['hp', '4']] },
     ]);
-    expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], listening: [true], errors: [], missing: [] });
+    const shown = await lua.display('display', 1, 2);
+    expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], listening: [true], errors: [], missing: [], from: 0, remaining: 0 });
+  });
+
+  it('retains full-chat reads while walking newest-first variable deltas and replacing a generation', async () => {
+    const scripts: Script[] = [{ kind: 'lua', name: 'state', code: "listenEdit('editDisplay', function(id, value) return value .. ':' .. getChatVar(id, 'hp') .. ':' .. getChatVar(id, 'x') .. ':' .. getChatLength(id) end)" }];
+    const items = [
+      { index: 0, text: 'a', variables: [['hp', '1']] as [string, string][] },
+      { index: 1, text: 'b', variables: [['x', 'a']] as [string, string][] },
+      { index: 2, text: 'c', variables: [['hp', '7']] as [string, string][] },
+      { index: 3, text: 'd', variables: [['x', 'b']] as [string, string][] },
+    ];
+    await lua.installDisplay('retained', 1, scripts, SNAPSHOT, items);
+    expect(await lua.display('retained', 1, 2)).toMatchObject({ texts: ['c:7:a:2', 'd:7:b:2'], from: 2, remaining: 2 });
+    expect(await lua.display('retained', 1, 2)).toMatchObject({ texts: ['a:1:null:2', 'b:1:a:2'], from: 0, remaining: 0 });
+    await lua.installDisplay('retained', 2, scripts, { ...SNAPSHOT, messages: [] }, items);
+    await expect(lua.display('retained', 1, 2)).rejects.toThrow('expired');
+    expect((await lua.display('retained', 2, 1)).texts).toEqual(['d:7:b:0']);
+    lua.forgetDisplay('retained', 2);
+    await expect(lua.display('retained', 2, 1)).rejects.toThrow('expired');
   });
 
   it('says which scripts listen by what their engines registered, a computed name too, not by their source', async () => {
     const scripts = [`-- editDisplay editRequest\nfunction onStart(id) end`, `listenEdit('edit' .. 'Display', function(id, value) return value .. '!' end)`].map((code): Script => ({ kind: 'lua', name: 'main', code }));
-    expect(await lua.display('listening', scripts, SNAPSHOT, [{ index: 0, text: 'a', variables: [] }])).toMatchObject({ texts: ['a!'], listening: [false, true] });
+    await lua.installDisplay('listening', 1, scripts, SNAPSHOT, [{ index: 0, text: 'a', variables: [] }]);
+    expect(await lua.display('listening', 1, 1)).toMatchObject({ texts: ['a!'], listening: [false, true] });
     const request = [{ role: 'user', content: 'a' }];
     expect(await lua.run('listening', [scripts[0]!], SNAPSHOT, { kind: 'edit', stage: 'editRequest', value: request, meta: {} }, host())).toMatchObject({ value: request, handled: false });
     const computed = `listenEdit('edit' .. 'Request', function(id, value) value[1].content = 'b' return value end)`;
