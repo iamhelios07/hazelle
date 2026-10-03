@@ -3,9 +3,10 @@ import { useId, useState, type ReactNode } from 'react';
 import { Icon } from '../foundation/Icon';
 import styles from './Disclosure.module.css';
 
-// A line that opens what is folded under it, such as the settings a model does not take.
-export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+// A line that opens what is folded under it, such as the settings a model does not take. What is folded is made only
+// while open, so a long list of them stays light. startOpen: open when it first shows, such as an entry just added.
+export function Disclosure({ label, startOpen = false, children }: { label: string; startOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(startOpen);
   const id = useId();
   return (
     <div className={styles.disclosure}>
@@ -16,7 +17,7 @@ export function Disclosure({ label, children }: { label: string; children: React
         {label}
       </button>
       <div id={id} className={styles.body} hidden={!open}>
-        {children}
+        {open && children}
       </div>
     </div>
   );

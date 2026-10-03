@@ -6,6 +6,7 @@ import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/turn';
 import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
+import { LoreEditor } from '../common/LoreEditor';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
@@ -92,7 +93,7 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
 
   const body = (
     <>
-      <Text variant="note">로어북과 정규식은 아직 여기서 고칠 수 없어요.</Text>
+      <Text variant="note">정규식은 아직 여기서 고칠 수 없어요.</Text>
       <Section title="기본 정보">
         <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 적어 주세요.'} />
         <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 보는 이름이에요. 모델에게는 보내지 않아요." />
@@ -137,6 +138,7 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
           help="대화 기록 바로 뒤에 붙어요."
         />
       </Section>
+      <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />
       <Section title="표시">
         <SettingGroup label="표시">
           <SettingRow label="봇 꾸밈" help="봇이 만든 상태창, 꾸밈과 버튼을 그려요. 끄면 글만 보여요." control={<Switch label="봇 꾸밈" checked={decor} onChange={(on) => flip('decor', on)} />} />
