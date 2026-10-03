@@ -1,3 +1,4 @@
+import { streamError } from './errors';
 import type { NumberSetting, Reasoning, Setting } from './settings';
 import { wireMessage } from './anthropic-messages';
 import type { Codec } from './types';
@@ -106,7 +107,7 @@ export const chatCompletions: Codec = {
 
   terminal(event) {
     if (event === '[DONE]') return { state: 'completed' };
-    if (isRecord(event) && event.error !== undefined && event.error !== null) return { state: 'failed', error: errorText(event.error) };
+    if (isRecord(event) && event.error !== undefined && event.error !== null) return { state: 'failed', error: streamError(event.error) };
     return null;
   },
 
@@ -124,9 +125,3 @@ export const chatCompletions: Codec = {
     };
   },
 };
-
-function errorText(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (isRecord(error) && typeof error.message === 'string') return error.message;
-  return JSON.stringify(error);
-}

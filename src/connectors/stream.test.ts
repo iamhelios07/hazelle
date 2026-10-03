@@ -142,3 +142,10 @@ describe('anthropic messages stream', () => {
     expect((await decode(anthropic, body(failed))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Overloaded' } });
   });
 });
+
+it('uses unquoted string errors in both streams without changing their terminal rules', async () => {
+  expect((await decode(openRouter, body(sse({ error: 'Overloaded' })))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Overloaded' } });
+  expect((await decode(anthropic, body(sse({ type: 'error', error: 'Overloaded' })))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Overloaded' } });
+  expect(anthropic.codec.terminal({ error: 'Not an Anthropic terminal' })).toBeNull();
+  expect(openRouter.codec.terminal({ error: null })).toBeNull();
+});
