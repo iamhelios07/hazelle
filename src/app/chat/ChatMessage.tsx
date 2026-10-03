@@ -9,7 +9,6 @@ import type { Translating } from '../../runtime/translate';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
-import { useSession } from '../session';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
@@ -35,6 +34,9 @@ type Props = {
   beforeLastReply: boolean;
   // Who replies: the chat's character, or with none, the model named on each reply.
   character: { name: string; image: string | null } | null;
+  // Who the user plays: the chat's persona, which {{user}} names in the prompt, so the row shows the same name the
+  // model reads; null for a deleted persona, shown as missing rather than as the account.
+  me: { name: string; image: string | null } | null;
   // The chat's model, naming a reply still being written.
   modelName: string | null;
   // The greeting of a chat not started yet: its versions are the other greetings, and it has nothing
@@ -57,11 +59,12 @@ type Props = {
 // A card's blank greeting, which starts the chat with no first message.
 const NO_GREETING = '첫 메시지 없이';
 
+const NO_PERSONA = '페르소나 없음';
+
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, modelName, opening, busy, editing, pinned, found, branching, modelMenu, actions } = props;
-  const { username } = useSession();
+  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -265,8 +268,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
 
   return (
     <StoryMessage
-      avatar={mine ? <Avatar face={username} tone="you" /> : character ? <Avatar face={character.name} image={character.image} /> : <Avatar face={Bot} />}
-      name={mine ? username : (character?.name ?? receipt?.modelName ?? modelName ?? '모델')}
+      avatar={mine ? <Avatar face={me?.name ?? '?'} image={me?.image} tone="you" /> : character ? <Avatar face={character.name} image={character.image} /> : <Avatar face={Bot} />}
+      name={mine ? (me?.name ?? NO_PERSONA) : (character?.name ?? receipt?.modelName ?? modelName ?? '모델')}
       time={timeOfDay(version.at)}
       mine={mine && editing === null}
       mark={mark}
@@ -282,11 +285,12 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
 }, sameRow);
 
 function sameRow(previous: Props, next: Props): boolean {
-  const { decor: aDecor, hosted: aHosted, offered: aOffered, character: aCharacter, translating: aTranslating, ...a } = previous;
-  const { decor: bDecor, hosted: bHosted, offered: bOffered, character: bCharacter, translating: bTranslating, ...b } = next;
+  const { decor: aDecor, hosted: aHosted, offered: aOffered, character: aCharacter, me: aMe, translating: aTranslating, ...a } = previous;
+  const { decor: bDecor, hosted: bHosted, offered: bOffered, character: bCharacter, me: bMe, translating: bTranslating, ...b } = next;
   if ((Object.keys(a) as (keyof typeof a)[]).some((key) => a[key] !== b[key])) return false;
   if (aDecor.bot !== bDecor.bot || aDecor.css !== bDecor.css || aDecor.url !== bDecor.url || aDecor.buttons !== bDecor.buttons) return false;
   if (aCharacter?.name !== bCharacter?.name || aCharacter?.image !== bCharacter?.image) return false;
+  if (aMe?.name !== bMe?.name || aMe?.image !== bMe?.image) return false;
   if (aHosted.length !== bHosted.length || aHosted.some((box, index) => box.script !== bHosted[index]!.script || box.html !== bHosted[index]!.html || box.at !== bHosted[index]!.at)) return false;
   if (aOffered.length !== bOffered.length || aOffered.some((box, index) => box.script !== bOffered[index]!.script || box.name !== bOffered[index]!.name || box.marked !== bOffered[index]!.marked)) return false;
   const id = shown(next.message).id;

@@ -19,6 +19,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const originModel = useChatSummary(item?.chat.origin?.id ?? null);
   const origin = item?.chat.origin;
   const character = card && { name: card.nickname || card.name, image: shelf!.face };
+  const me = chat.persona.kind === 'persona' ? { name: chat.persona.persona.value.name, image: chat.persona.persona.value.picture } : null;
   const modelName = 'kind' in route ? null : route.model.name;
   const seek = useMemo(() => found && { key: found.first, revision: found.at }, [found]);
   if (chat.displayPending) return chat.displayError === undefined ? <Text>채팅을 불러오는 중</Text> : <>
@@ -50,6 +51,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           isLast={index === messages.length - 1}
           beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
           character={character}
+          me={me}
           modelName={modelName}
           opening={message === opening}
           busy={busy}
