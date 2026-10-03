@@ -1,8 +1,8 @@
 import { UserX } from 'lucide-react';
 import { useState } from 'react';
 import { credentialFor, deleteAccount } from '../../runtime/account';
-import type { Method } from '../../vault/keys';
 import { describeFailure, wrongSecret } from '../common/failure';
+import { useCredential } from '../common/useCredential';
 import { useAttempt } from '../common/useAttempt';
 import { useAccount, useSession } from '../session';
 import { Button, ConfirmDialog, Section, SettingGroup, SettingRow, Stack, TextField } from '../ui';
@@ -31,10 +31,9 @@ export function LeaveSection() {
 function LeaveDialog({ onClose }: { onClose: () => void }) {
   const { username } = useSession();
   const { onLogout } = useAccount();
-  const [method, setMethod] = useState<Method>('password');
-  const [secret, setSecret] = useState('');
   const { busy, failure, run, setFailure } = useAttempt();
-  const recovery = method === 'recovery';
+  const credential = useCredential(setFailure);
+  const { method, secret } = credential;
 
   const leave = () =>
     run(async () => {
@@ -55,24 +54,9 @@ function LeaveDialog({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       field={
         <Stack gap="related">
-          <TextField
-            label={recovery ? '복구 키' : '비밀번호'}
-            kind={recovery ? 'code' : 'current-password'}
-            value={secret}
-            onChange={setSecret}
-            placeholder={recovery ? 'XXXX-XXXX-XXXX-…' : undefined}
-            error={failure ?? undefined}
-          />
-          <Button
-            variant="link"
-            size="xs"
-            onClick={() => {
-              setMethod(recovery ? 'password' : 'recovery');
-              setSecret('');
-              setFailure(null);
-            }}
-          >
-            {recovery ? '비밀번호로 확인' : '복구 키로 확인'}
+          <TextField {...credential.field} error={failure ?? undefined} />
+          <Button variant="link" size="xs" onClick={credential.switchMethod}>
+            {`${credential.alternate}로 확인`}
           </Button>
         </Stack>
       }
