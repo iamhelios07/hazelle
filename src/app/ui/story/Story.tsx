@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify';
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useRowState } from '../collections/row-memory';
 import styles from './Story.module.css';
 import shadowCss from './Story.shadow.css?inline';
 
@@ -25,6 +26,8 @@ const NAMED = '[risu-trigger], [risu-btn]';
 // Named in Story.shadow.css.
 const PICTURE = 'data-picture';
 const OPEN = 'data-open';
+const PICTURES = Symbol('pictures');
+const pictureKey = (picture: Element) => `${picture.getAttribute(PICTURE)}:${picture.querySelector('img')!.getAttribute('src')}`;
 // Sent from a message when the reader opens or closes one of its pictures, so the chat keeps its view where it is.
 export const READER_RESIZED = 'readerresized';
 // The CSP refuses a style attribute, even in the document the sanitizer parses into, so each is renamed before the
@@ -95,9 +98,9 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
     else if (!own) element.removeAttribute('src');
     element.removeAttribute('srcset');
   }
-  for (const block of fragment.children) {
+  for (const [index, block] of [...fragment.children].entries()) {
     const only = block.childElementCount === 1 && block.firstElementChild!.tagName === 'IMG' && !block.textContent!.trim();
-    if (only && block.matches('p, .risu-inlay-image')) block.setAttribute(PICTURE, '');
+    if (only && block.matches('p, .risu-inlay-image')) block.setAttribute(PICTURE, String(index));
   }
   if (cursor) {
     // At the end of the last text, inside whatever holds it.
@@ -118,12 +121,17 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
 export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress }: Props) {
+  const pictures = useRowState(PICTURES, () => new Set<string>());
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
 
   useLayoutEffect(() => {
-    root().replaceChildren(sanitize(html, cursor));
-  }, [html, cursor]);
+    const fragment = sanitize(html, cursor);
+    for (const picture of fragment.querySelectorAll(`[${PICTURE}]`)) {
+      if (pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
+    }
+    root().replaceChildren(fragment);
+  }, [html, cursor, pictures]);
 
   useLayoutEffect(() => {
     if (!base) (base = new CSSStyleSheet()).replaceSync(shadowCss);
@@ -136,7 +144,10 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
       const picture = (event.target as Element).closest(`[${PICTURE}]`);
       // A short picture, or one its character shows whole, has nothing to open, and a tap on it is the message's.
       if (picture && (picture.hasAttribute(OPEN) || picture.scrollHeight > picture.clientHeight)) {
-        picture.toggleAttribute(OPEN);
+        const opened = picture.toggleAttribute(OPEN);
+        const source = pictureKey(picture);
+        if (opened) pictures?.add(source);
+        else pictures?.delete(source);
         event.preventDefault();
         return;
       }
@@ -159,7 +170,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
       shadow.removeEventListener('click', press);
       shadow.removeEventListener('transitionend', resized);
     };
-  }, [onPress]);
+  }, [onPress, pictures]);
 
   return (
     <div className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>

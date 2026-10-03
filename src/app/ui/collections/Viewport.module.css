@@ -1,0 +1,31 @@
+.viewport {
+  position: relative;
+  flex-shrink: 0;
+  overflow-anchor: none;
+}
+
+.story {
+  --viewport-estimate: var(--viewport-story-estimate);
+  --viewport-gap: var(--space-24);
+}
+
+.list {
+  --viewport-estimate: var(--row-min-height);
+  --viewport-gap: 0;
+}
+
+/* No transform: row menus position against the viewport, not a transformed containing block. */
+.row {
+  position: absolute;
+  top: var(--viewport-offset);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--viewport-gap);
+  padding-bottom: var(--viewport-gap);
+}
+
+.last {
+  padding-bottom: 0;
+}

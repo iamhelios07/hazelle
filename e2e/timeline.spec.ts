@@ -235,7 +235,7 @@ test('two tabs across a restore and its undo end on the undo’s timeline with i
   await test.step('the first tab’s delayed bootstrap of the restore changes nothing, and the tab reloads the undo from the cache', async () => {
     server.release(first);
     await expect(mira(first)).toBeVisible();
-    await expect(second.getByText('계정을 복원해서 다시 불러왔어요')).toBeVisible();
+    await expect(second.getByText('계정을 복원해서 다시 불러왔어요').first()).toBeVisible();
     await expect(first.getByText('계정을 복원해서 다시 불러왔어요').first()).toBeVisible();
   });
 

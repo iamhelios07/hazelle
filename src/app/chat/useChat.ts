@@ -105,7 +105,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const status = statusBoxes(view, messages, statusScripts).map((box) => ({ ...box, name: scriptName(box.script) }));
   // Only the card's own scripts, which come first among the packs': a module's place moves as modules go on and off.
   const own = card?.regex.length ?? 0;
-  const offered = view.drawn.map((scripts) => (bot ? scripts.filter((script) => script < own).map((script) => ({ script, name: scriptName(script), marked: statusScripts.includes(script) })) : []));
+  const offered = (index: number) => bot ? view.drawn[index]!.filter((script) => script < own).map((script) => ({ script, name: scriptName(script), marked: statusScripts.includes(script) })) : [];
   const url = useAssetUrl();
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);
@@ -133,7 +133,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const fits = status.length > 0 && status.every(({ script, drawn }) => drawn === null || fitting.get(script) === true);
   const beside = bot && shelf?.character.keepStatus === true && fits;
   const [hidden, setHidden] = useState(false);
-  const hosted = messages.map((_, index) => (beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []))));
+  const hosted = (index: number) => beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []));
   const { seen, watch } = useSeen();
   // 상태 shown over the story by its key or a tap, rather than by pointing at its tab. The tab is there while a box
   // is off screen, or never drawn in a message.

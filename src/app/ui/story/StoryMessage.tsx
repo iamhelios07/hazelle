@@ -1,10 +1,11 @@
 import { ChevronLeft, ChevronRight, Languages, Scissors, Square, TriangleAlert } from 'lucide-react';
-import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react';
+import { useContext, useMemo, useRef, type MouseEvent, type ReactNode } from 'react';
 import { Button } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
 import { Icon } from '../foundation/Icon';
 import { useHover } from '../foundation/media';
 import { Menu, MenuItem } from '../overlays/Menu';
+import { RowMemoryContext } from '../collections/row-memory';
 import styles from './StoryMessage.module.css';
 
 type Props = {
@@ -23,26 +24,24 @@ type Props = {
   tools?: ReactNode;
   pinned: boolean;
   onTap: () => void;
-  // Marked for a moment as what was looked for, again each time the number changes; 0 for none. seek: the view
-  // goes to it.
+  // Marked for a moment from this timestamp, again with each look; 0 for none. The collection
+  // brings the first marked row into view, even when it has not been mounted.
   found?: number;
-  seek?: boolean;
 };
 
-export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap, found = 0, seek = false }: Props) {
+export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap, found = 0 }: Props) {
   const hover = useHover();
-  const self = useRef<HTMLElement>(null);
-  useLayoutEffect(() => {
-    if (found && seek) self.current?.scrollIntoView({ block: 'center' });
-  }, [found]);
+  const foundDelay = useMemo(() => `-${Math.max(0, Date.now() - found)}ms`, [found]);
+  const memory = useContext(RowMemoryContext);
+  const revisited = useRef(memory?.visited ?? false);
   // Phones have no hover, so a tap on the message itself shows its tools; not one the story took, such as on a picture.
   const tap = (event: MouseEvent) => {
     if (hover || event.defaultPrevented || (event.target as HTMLElement).closest('button, a, textarea')) return;
     onTap();
   };
   return (
-    <article ref={self} className={pinned ? `${styles.message} ${styles.pinned}` : styles.message} onClick={tap}>
-      {found !== 0 && <span key={found} className={styles.found} aria-hidden />}
+    <article className={`${styles.message} ${pinned ? styles.pinned : ''} ${revisited.current ? styles.revisited : ''}`} onClick={tap}>
+      {found !== 0 && <span key={found} className={styles.found} style={{ animationDelay: foundDelay }} aria-hidden />}
       {avatar}
       <div className={styles.main}>
         <div className={styles.head}>

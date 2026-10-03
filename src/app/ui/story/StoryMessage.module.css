@@ -212,3 +212,7 @@
   flex-wrap: wrap;
   gap: var(--space-8);
 }
+
+.revisited {
+  animation: none;
+}

@@ -79,6 +79,7 @@ and only this folder styles elements.**
 | controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
+| collections | `Viewport` | `Viewport.module.css` | A keyed, measured window within its existing scroll parent; keeps focused rows, reading choices and source jumps across remounts |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
