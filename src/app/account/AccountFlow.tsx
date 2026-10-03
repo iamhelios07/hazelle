@@ -18,7 +18,8 @@ type Draft = { session: { accountId: string; username: string } } & Awaited<Retu
 type State =
   | { kind: 'loading' }
   | { kind: 'unreachable'; message: string }
-  | { kind: 'signup'; step: 'password' | 'recovery'; draft: Draft | null }
+  | { kind: 'signup'; step: 'password'; draft: Draft | null }
+  | { kind: 'signup'; step: 'recovery'; draft: Draft }
   // notice: why this shows instead of what was open.
   | { kind: 'login'; signupOpen: boolean; notice: string | null }
   | { kind: 'locked'; signedIn: SignedIn; notice: string | null }
@@ -98,8 +99,8 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
     case 'unreachable':
       return <UnreachableScreen message={state.message} onRetry={reload} />;
     case 'signup': {
-      const { draft } = state;
-      if (state.step === 'recovery' && draft) {
+      const { draft, step } = state;
+      if (step === 'recovery') {
         return (
           <RecoveryKeyScreen
             username={draft.session.username}
