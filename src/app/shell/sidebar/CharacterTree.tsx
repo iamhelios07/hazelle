@@ -1,7 +1,7 @@
 import { Import, LayoutGrid, PackageOpen } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { ChatSummary } from '../../../model/chat';
-import { holds, matches, shownFolders, type FolderTree, type Shelf } from '../../../model/library';
+import { matches, type FolderTree, type Shelf } from '../../../model/library';
 import { noResults } from '../../common/search';
 import { ago } from '../../common/time';
 import { Welcome } from '../../library/HomeScreen';
@@ -26,12 +26,12 @@ type Props = {
 };
 
 export function CharacterTree({ page, onCollapse, current, typing, onEnter, query, onQuery, openFolders, onToggleFolder }: Props) {
-  const { characters, none, folders } = useLibrary();
+  const { characters, none, folders, byFolder, loose } = useLibrary();
   const wide = useWide();
   const { pick, move } = useImport();
   const empty = characters.length === 0 && none.chats.length === 0;
   const words = query.trim();
-  const filed = shownFolders(folders);
+  const opened = useMemo(() => new Set(openFolders), [openFolders]);
 
   const row = (shelf: Shelf<ChatSummary>) => {
     const latest = shelf.chats[0];
@@ -48,19 +48,16 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
       />
     );
   };
-  const folderRow = (folder: FolderTree): ReactNode => (
-    <FolderRow
-      key={folder.id}
-      name={folder.value.name}
-      count={characters.filter(({ character }) => holds(folder, character)).length}
-      open={openFolders.includes(folder.id)}
-      onToggle={() => onToggleFolder(folder.id)}
-    >
-      {folder.children.map(folderRow)}
-      {characters.filter(({ character }) => character.folder === folder.id).map(row)}
-    </FolderRow>
-  );
-  const found = characters.filter(({ character }) => matches(character, query));
+  const folderRow = (folder: FolderTree): ReactNode => {
+    const open = opened.has(folder.id);
+    const contents = byFolder.get(folder.id)!;
+    return (
+      <FolderRow key={folder.id} name={folder.value.name} count={contents.characters.length} open={open} onToggle={() => onToggleFolder(folder.id)}>
+        {open && <>{folder.children.map(folderRow)}{contents.direct.map(row)}</>}
+      </FolderRow>
+    );
+  };
+  const found = words ? characters.filter(({ character }) => matches(character, query)) : [];
 
   return (
     <Sidebar
@@ -86,7 +83,7 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
       {!empty && !words && (
         <>
           {folders.map(folderRow)}
-          {characters.filter(({ character }) => !character.folder || !filed.has(character.folder)).map(row)}
+          {loose.map(row)}
           {row(none)}
         </>
       )}

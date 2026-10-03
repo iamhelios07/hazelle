@@ -150,13 +150,18 @@ export function shelve<C extends ChatLike>(
 export function nest(folders: Stored<'folder'>[]): FolderTree[] {
   const sorted = [...folders].sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
   const ids = new Set(sorted.map((folder) => folder.id));
+  const children = new Map<string, Stored<'folder'>[]>();
+  for (const folder of sorted) {
+    const parent = folder.value.parent;
+    if (parent === undefined) continue;
+    const group = children.get(parent);
+    if (group) group.push(folder);
+    else children.set(parent, [folder]);
+  }
   return sorted
     .filter(({ value }) => value.parent === undefined || !ids.has(value.parent))
-    .map((top) => ({ ...top, children: sorted.filter(({ value }) => value.parent === top.id).map((child) => ({ ...child, children: [] })) }));
+    .map((top) => ({ ...top, children: (children.get(top.id) ?? []).map((child) => ({ ...child, children: [] })) }));
 }
-
-// Every folder id the tree shows. A character whose folder is not among them sits in no folder.
-export const shownFolders = (tree: FolderTree[]) => new Set(tree.flatMap((top) => [top.id, ...top.children.map((child) => child.id)]));
 
 // A folder holds the characters in it and in its subfolders.
 export const holds = (folder: FolderTree, character: Character) => character.folder === folder.id || folder.children.some((child) => child.id === character.folder);

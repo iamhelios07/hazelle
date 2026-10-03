@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../engine/import/types';
 import type { Stored } from './kinds';
-import { daysLeft, holds, KEEP_DELETED, matches, nest, shelve, shownFolders } from './library';
+import { daysLeft, holds, KEEP_DELETED, matches, nest, shelve } from './library';
 
 const character = (id: string, rev: number): Stored<'character'> => ({ id, kind: 'character', parent: null, rev, value: { card: { name: id } as Card, folder: null, loreFolders: [] } });
 const chat = (id: string, character: string | null, order: number) => ({ id, chat: { character }, order });
@@ -47,7 +47,6 @@ describe('nest', () => {
       ['d', []],
       ['f', ['k', 'm']],
     ]);
-    expect([...shownFolders(tree)].sort()).toEqual(['d', 'f', 'k', 'm', 'o']);
     const inKnights = character('a', 1).value;
     inKnights.folder = 'k';
     expect(holds(tree[2]!, inKnights)).toBe(true);

@@ -25,9 +25,44 @@ class Snapshot<T> {
   }
 }
 
+type FolderContents = { folder: FolderTree; top: FolderTree; direct: CharacterShelf<ChatSummary>[]; characters: CharacterShelf<ChatSummary>[] };
+
 // The characters, each with its chats, most recent first, and the folders by name. deleted and deletedChats are what
-// 휴지통 shows (shelve).
-export type Library = { characters: CharacterShelf<ChatSummary>[]; none: Shelf<ChatSummary>; deleted: CharacterShelf<ChatSummary>[]; deletedChats: ChatSummary[]; folders: FolderTree[] };
+// 휴지통 shows (shelve). byCharacter includes deleted characters, but none being purged.
+export type Library = {
+  characters: CharacterShelf<ChatSummary>[];
+  none: Shelf<ChatSummary>;
+  deleted: CharacterShelf<ChatSummary>[];
+  deletedChats: ChatSummary[];
+  folders: FolderTree[];
+  byCharacter: ReadonlyMap<string, CharacterShelf<ChatSummary>>;
+  byFolder: ReadonlyMap<string, FolderContents>;
+  loose: CharacterShelf<ChatSummary>[];
+};
+
+function indexFolders(characters: CharacterShelf<ChatSummary>[], folders: FolderTree[]): Pick<Library, 'byFolder' | 'loose'> {
+  const byFolder = new Map<string, FolderContents>();
+  for (const top of folders) {
+    byFolder.set(top.id, { folder: top, top, direct: [], characters: [] });
+    for (const child of top.children) byFolder.set(child.id, { folder: child, top, direct: [], characters: [] });
+  }
+  const loose: CharacterShelf<ChatSummary>[] = [];
+  // Every folder id the tree shows. A character whose folder is not among them sits in no folder.
+  // Walk the library order once so a top folder's direct and nested characters stay interleaved by recency.
+  for (const shelf of characters) {
+    const own = shelf.character.folder === null ? undefined : byFolder.get(shelf.character.folder);
+    if (!own) {
+      loose.push(shelf);
+      continue;
+    }
+    own.direct.push(shelf);
+    own.characters.push(shelf);
+    if (own.folder !== own.top) byFolder.get(own.top.id)!.characters.push(shelf);
+  }
+  return { byFolder, loose };
+}
+
+const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => shelf && shelf.character.deleted === undefined ? shelf : null;
 
 // How an open chat is displayed: with the bot's editDisplay pass (ScriptDisplay), which tells the chat's listeners
 // when more of the pass has landed.
@@ -120,7 +155,7 @@ export class ReadModels {
   character(id: string): Snapshot<CharacterShelf<ChatSummary> | null> {
     let snapshot = this.byCharacter.get(id);
     if (!snapshot) {
-      snapshot = new Snapshot(this.library.snapshot().characters.find((shelf) => shelf.id === id) ?? null);
+      snapshot = new Snapshot(liveShelf(this.library.snapshot().byCharacter.get(id)));
       this.byCharacter.set(id, snapshot);
     }
     return snapshot;
@@ -165,7 +200,7 @@ export class ReadModels {
     if (listsChanged || ['character', 'avatar', 'folder'].some((kind) => kinds.has(kind))) {
       const library = this.buildLibrary();
       this.library.set(library);
-      for (const [id, snapshot] of this.byCharacter) snapshot.set(library.characters.find((shelf) => shelf.id === id) ?? null);
+      for (const [id, snapshot] of this.byCharacter) snapshot.set(liveShelf(library.byCharacter.get(id)));
     }
   }
 
@@ -203,13 +238,17 @@ export class ReadModels {
   private buildLibrary(): Library {
     const shelves = shelve(this.store.list('character'), this.store.list('avatar'), this.chats.snapshot(), [...this.binned.values()]);
     const previous = this.library?.snapshot();
-    const previousShelves = new Map((previous ? [...previous.characters, ...previous.deleted, previous.none] : []).map((shelf) => [shelf.id, shelf]));
     const reuse = <T extends Shelf<ChatSummary>>(shelf: T): T => {
-      const held = previousShelves.get(shelf.id);
+      const held = shelf.id === null ? previous?.none : previous?.byCharacter.get(shelf.id);
       return held && held.character === shelf.character && held.face === shelf.face && held.order === shelf.order && sameItems(held.chats, shelf.chats) ? held as T : shelf;
     };
     const next = { characters: shelves.characters.map(reuse), deleted: shelves.deleted.map(reuse), deletedChats: shelves.deletedChats, none: reuse(shelves.none), folders: this.folders };
-    return previous && sameItems(previous.characters, next.characters) && sameItems(previous.deleted, next.deleted) && sameItems(previous.deletedChats, next.deletedChats) && previous.none === next.none && previous.folders === next.folders ? previous : next;
+    const sameCharacters = previous !== undefined && sameItems(previous.characters, next.characters);
+    const sameDeleted = previous !== undefined && sameItems(previous.deleted, next.deleted);
+    if (previous && sameCharacters && sameDeleted && sameItems(previous.deletedChats, next.deletedChats) && previous.none === next.none && previous.folders === next.folders) return previous;
+    const byCharacter = previous && sameCharacters && sameDeleted ? previous.byCharacter : new Map([...next.characters, ...next.deleted].map((shelf) => [shelf.id, shelf]));
+    const filed = previous && sameCharacters && previous.folders === next.folders ? { byFolder: previous.byFolder, loose: previous.loose } : indexFolders(next.characters, next.folders);
+    return { ...next, byCharacter, ...filed };
   }
 }
 

@@ -2,7 +2,7 @@ import { FolderInput } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Stored } from '../../../model/kinds';
-import { holds, KEEP_DAYS, matches, shownFolders, type Shelf } from '../../../model/library';
+import { KEEP_DAYS, matches, type Shelf } from '../../../model/library';
 import { NameDialog } from '../../common/NameDialog';
 import { noResults } from '../../common/search';
 import { TASK_NAMES } from '../../common/prompt-words';
@@ -13,7 +13,7 @@ import type { Back } from '../../shell/routes';
 import { Avatar, Button, CardGrid, Empty, List, NavBar, Row, Screen, SearchField, Section, Text } from '../../ui';
 import { ShelfFace, shelfName } from '../shelf';
 import { binnedCharacter, binnedChat, binnedModule, binnedPersona, binnedProfile, binnedPrompt, useCharacterActions, type Binned } from '../useCharacterActions';
-import { findFolder, useFolderActions } from '../useFolderActions';
+import { useFolderActions } from '../useFolderActions';
 import { BinnedRow } from './BinnedRow';
 import { CharacterCard } from './CharacterCard';
 import { FolderTabs, type Filter, type Naming } from './FolderTabs';
@@ -24,7 +24,7 @@ const MODEL_SETTINGS = '모델 설정';
 
 // 캐릭터 둘러보기: every character as a face, filtered by folder, and where folders are made, renamed, emptied and filled.
 export function GalleryScreen({ back }: { back: Back | null }) {
-  const { characters, none, folders, deleted, deletedChats } = useLibrary();
+  const { characters, none, deleted, deletedChats, byCharacter, byFolder, loose } = useLibrary();
   const bin = useBin();
   const characterActions = useCharacterActions();
   const { create, rename, move } = useFolderActions();
@@ -37,16 +37,15 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   // What 지금 지우기 asks about before it goes for good.
   const [purging, setPurging] = useState<Binned | null>(null);
 
-  const filed = shownFolders(folders);
-  const folder = findFolder(folders, filter) ?? null;
+  const contents = byFolder.get(filter);
+  const folder = contents?.folder ?? null;
   const words = query.trim();
   const binned = filter === 'deleted';
-  const shown = (binned ? deleted : characters)
-    .filter(({ character }) => binned || filter === 'all' || (filter === 'loose' ? character.folder === null || !filed.has(character.folder) : folder !== null && holds(folder, character)))
-    .filter(({ character }) => matches(character, query));
+  const candidates = binned ? deleted : filter === 'all' ? characters : filter === 'loose' ? loose : contents?.characters ?? [];
+  const shown = candidates.filter(({ character }) => matches(character, query));
   if (byName) shown.sort((a, b) => a.character.card.name.localeCompare(b.character.card.name, 'ko'));
   // shelve lists only the deleted chats of a character not deleted, or of none.
-  const shelfOf = ({ chat }: ChatSummary): Shelf<ChatSummary> => (chat.character === null ? none : characters.find((shelf) => shelf.id === chat.character)!);
+  const shelfOf = ({ chat }: ChatSummary): Shelf<ChatSummary> => (chat.character === null ? none : byCharacter.get(chat.character)!);
   const named = (name: string) => name.toLowerCase().includes(words.toLowerCase());
   const shownChats = binned
     ? deletedChats.filter((item) => {

@@ -3,13 +3,11 @@ import type { FolderTree } from '../../model/library';
 import { useLibrary, useStore } from '../session';
 import { useToast } from '../toast';
 
-export const findFolder = (folders: FolderTree[], id: string | null) => folders.flatMap((top) => [top, ...top.children]).find((folder) => folder.id === id);
-
 // Making, renaming, removing and filling folders. Each says in a toast how it went, and a removal offers 되돌리기.
 export function useFolderActions() {
   const store = useStore();
   const toast = useToast();
-  const { folders } = useLibrary();
+  const { byFolder } = useLibrary();
 
   async function create(name: string, parent: string | null) {
     const saved = await createFolder(store, name, parent);
@@ -45,7 +43,7 @@ export function useFolderActions() {
       toast.failed(moved);
       return false;
     }
-    const name = findFolder(folders, to)?.value.name;
+    const name = to === null ? undefined : byFolder.get(to)?.folder.value.name;
     toast.show(to ? `${ids.length}명을 ‘${name}’ 폴더로 옮겼어요.` : `${ids.length}명을 폴더에서 뺐어요.`);
     return true;
   }

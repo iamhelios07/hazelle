@@ -1,5 +1,5 @@
 import { FolderPlus, FolderTree as SubfolderIcon, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
-import { holds, type FolderTree } from '../../../model/library';
+import type { FolderTree } from '../../../model/library';
 import { BIN } from '../../common/words';
 import { useBin, useLibrary } from '../../session';
 import { IconButton, Menu, MenuItem, Row, Stack, Tab, Tabs } from '../../ui';
@@ -19,14 +19,13 @@ type Props = {
 };
 
 export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
-  const { characters, folders, deleted, deletedChats } = useLibrary();
+  const { characters, folders, deleted, deletedChats, byFolder } = useLibrary();
   const bin = useBin();
   const { remove } = useFolderActions();
   // The top folder whose subfolders show as a second row of tabs: the one picked, or the one holding it.
-  const top = folder && (folders.find((candidate) => candidate === folder || candidate.children.includes(folder)) ?? null);
+  const top = folder && byFolder.get(folder.id)!.top;
   const binned = filter === 'deleted';
   const inBin = deleted.length + deletedChats.length + bin.modules.length + bin.prompts.length + bin.personas.length + bin.profiles.length;
-  const count = (candidate: FolderTree) => characters.filter(({ character }) => holds(candidate, character)).length;
 
   async function drop(target: FolderTree) {
     const removed = await remove(target);
@@ -39,7 +38,7 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
         <Tabs label="폴더">
           <Tab label="전체" count={characters.length} current={filter === 'all'} onClick={() => onFilter('all')} />
           {folders.map((candidate) => (
-            <Tab key={candidate.id} label={candidate.value.name} count={count(candidate)} current={candidate === top} onClick={() => onFilter(candidate.id)} />
+            <Tab key={candidate.id} label={candidate.value.name} count={byFolder.get(candidate.id)!.characters.length} current={candidate === top} onClick={() => onFilter(candidate.id)} />
           ))}
           {folders.length > 0 && <Tab label="폴더 없음" current={filter === 'loose'} onClick={() => onFilter('loose')} />}
           {(inBin > 0 || binned) && <Tab label={BIN} count={inBin} current={binned} onClick={() => onFilter('deleted')} />}
@@ -57,7 +56,7 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
         <Tabs label={`${top.value.name} 안의 폴더`}>
           <Tab label={`${top.value.name} 전체`} current={filter === top.id} onClick={() => onFilter(top.id)} />
           {top.children.map((child) => (
-            <Tab key={child.id} label={child.value.name} count={count(child)} current={filter === child.id} onClick={() => onFilter(child.id)} />
+            <Tab key={child.id} label={child.value.name} count={byFolder.get(child.id)!.characters.length} current={filter === child.id} onClick={() => onFilter(child.id)} />
           ))}
         </Tabs>
       )}
