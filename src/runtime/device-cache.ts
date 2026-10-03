@@ -133,14 +133,11 @@ const changed = new WeakSet<IDBTransaction>();
 let opened: Promise<IDBDatabase> | undefined;
 function database(): Promise<IDBDatabase> {
   opened ??= new Promise((resolve, reject) => {
-    // Version 2 adds the generations; a version 1 cache has none, so open() drops its rows.
     const req = indexedDB.open('risu-alpha-objects', 2);
-    req.onupgradeneeded = (event) => {
-      if (event.oldVersion < 1) {
-        req.result.createObjectStore('states');
-        req.result.createObjectStore('objects').createIndex('scope', ['account', 'scope']);
-      }
+    req.onupgradeneeded = () => {
       req.result.createObjectStore('generations');
+      req.result.createObjectStore('states');
+      req.result.createObjectStore('objects').createIndex('scope', ['account', 'scope']);
     };
     // A tab of an older version holding the database open blocks the upgrade: this tab goes on without the cache rather
     // than wait, and this version lets go of it for a newer one.
