@@ -9,14 +9,16 @@ import { api, holdAccount } from './api';
 import { addCharacter, copyCharacter, importCharacter, markDeleted, purgeExpired, purgeNow, resetToggles, setDeleted, setPictures, setToggle } from './characters';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
+import { thumbnail } from './picture';
 import type { ObjectStore } from './store';
 import { testCard, testServer } from './testing';
 
 const server = testServer();
+vi.mock('./picture', () => ({ thumbnail: vi.fn(async () => 'data:thumb') }));
 
 // The bytes of a picture as far as the import reads one: a PNG's signature.
 const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
-const picture = () => ({ bytes: randomBytes(64), type: 'image/png', thumb: 'data:thumb' });
+const picture = () => ({ bytes: randomBytes(64), type: 'image/png' });
 const bare = (name: string, over: Partial<Character> = {}): Character => ({ card: testCard(name), folder: null, loreFolders: [], ...over });
 const none = { avatar: null, assets: [], lore: [] };
 
@@ -83,6 +85,21 @@ describe('importCharacter', () => {
     const saved = await importCharacter(store, files, { card: { name: '루나' } as Card, lore: [], loreFolders: [], assets }, null, () => {});
     expect(saved).toMatchObject({ ok: true, data: { skipped: 2 } });
     expect(store.children('asset', saved.ok ? saved.data.id : '').map(({ value }) => value.name)).toEqual(['smile']);
+  });
+
+  it('owns thumbnail failures and upload refusals in faceless while an absent source picture is not a failure', async () => {
+    const { store, files } = await server.account();
+    const card = { card: testCard('루나'), lore: [], loreFolders: [], assets: [] };
+    const missing = await importCharacter(store, files, card, null, () => {});
+    expect(missing).toMatchObject({ ok: true, data: { faceless: false } });
+
+    vi.mocked(thumbnail).mockRejectedValueOnce(new Error('unreadable picture'));
+    const unreadable = await importCharacter(store, files, card, picture(), () => {});
+    expect(unreadable).toMatchObject({ ok: true, data: { faceless: true } });
+    const refused = new Files(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'too-large' } : api<T>(...args), store);
+    expect(await importCharacter(store, refused, card, picture(), () => {})).toMatchObject({ ok: true, data: { faceless: true } });
+    expect(store.list('avatar')).toEqual([]);
+    expect(store.list('character')).toHaveLength(3);
   });
 });
 

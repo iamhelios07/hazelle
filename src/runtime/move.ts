@@ -93,19 +93,18 @@ async function move(store: ObjectStore, files: Files, { characters, personas, pr
     const folder = character.folder === null ? null : await folderNamed(store, character.folder);
     if (folder && !folder.ok) return folder;
     const avatar = await character.avatar();
-    const thumb = avatar && (await thumbnail(avatar).catch(() => null));
     const id = crypto.randomUUID();
     // Moved chats start with long-term memory off: on, opening a long one would summarize its whole past at once (user,
     // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
     const memory = { ...defaultMemory(store), on: false };
     const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).flatMap((chat) => chatOf(id, character.card, chat, personaIds, memory));
-    const saved = await importCharacter(store, files, character, avatar && thumb ? { ...avatar, thumb } : null, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats });
+    const saved = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats });
     if (!saved.ok) return saved;
     picturesDone += character.assets.length;
     chatsDone += character.chats.length;
     progress({ kind: 'chats', done: chatsDone, total: chatTotal });
     const { skipped, faceless } = saved.data;
-    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless: faceless || (avatar !== null && thumb === null) });
+    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless });
   }
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
 }

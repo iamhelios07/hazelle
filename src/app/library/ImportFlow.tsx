@@ -5,7 +5,6 @@ import type { ImportFailure } from '../../engine/import/types';
 import { importCharacter } from '../../runtime/characters';
 import { importModule } from '../../runtime/modules';
 import { fillPictures, risuMatch } from '../../runtime/move';
-import { thumbnail } from '../../runtime/picture';
 import { describeFailure } from '../common/failure';
 import { useFiles, useStore } from '../session';
 import { navigate } from '../shell/router';
@@ -66,12 +65,9 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       if (!filled.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(filled)}` };
       return { kind: 'filled', file: file.name, name, kept: filled.data.kept, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
     }
-    const { avatar } = parsed.card;
-    const thumb = avatar ? await thumbnail(avatar).catch(() => null) : null;
-    const picture = avatar && thumb !== null ? { ...avatar, thumb } : null;
-    const saved = await importCharacter(store, files, parsed.card, picture, (step) => progress(describeStep(step)));
+    const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(describeStep(step)));
     if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
-    return characterOutcome(file.name, parsed.card, { ...saved.data, faceless: saved.data.faceless || (avatar !== null && thumb === null) });
+    return characterOutcome(file.name, parsed.card, saved.data);
   }
 
   async function take(files: File[]) {

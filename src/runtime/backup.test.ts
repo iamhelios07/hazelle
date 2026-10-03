@@ -1,5 +1,5 @@
 import { unzipSync, zipSync } from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, type Chat } from '../model/chat';
 import type { Lore } from '../model/library';
@@ -15,6 +15,7 @@ import type { ObjectStore } from './store';
 import { testServer } from './testing';
 
 const server = testServer();
+vi.mock('./picture', () => ({ thumbnail: async () => 'data:thumb' }));
 
 const held = async (store: ObjectStore) => {
   const objects = new Map<string, { kind: string; parent: string | null; value: unknown }>();
@@ -84,7 +85,7 @@ async function oldAccount({ profile = true } = {}) {
     { name: 'smile', read: async () => smile },
     { name: 'grin', read: async () => smile },
   ];
-  const added = await importCharacter(store, files, { card, lore: [{ ...lore, folder: null }], loreFolders: [], assets }, { bytes: image, type: 'image/png', thumb: 'data:thumb' }, () => {});
+  const added = await importCharacter(store, files, { card, lore: [{ ...lore, folder: null }], loreFolders: [], assets }, { bytes: image, type: 'image/png' }, () => {});
   const character = added.ok ? added.data.id : '';
   const chat = crypto.randomUUID();
   await server.hold(store, chat);
@@ -140,7 +141,7 @@ describe('backup', () => {
 
   it('leaves out what is in 휴지통: a deleted character with its chat and picture, and a deleted prompt', async () => {
     const old = await oldAccount();
-    const added = await importCharacter(old.store, old.files, { card, lore: [], loreFolders: [], assets: [] }, { bytes: old.image, type: 'image/png', thumb: 'data:thumb' }, () => {});
+    const added = await importCharacter(old.store, old.files, { card, lore: [], loreFolders: [], assets: [] }, { bytes: old.image, type: 'image/png' }, () => {});
     const binned = added.ok ? added.data.id : '';
     const chat = crypto.randomUUID();
     await server.hold(old.store, chat);

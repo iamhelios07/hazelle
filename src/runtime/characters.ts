@@ -1,16 +1,15 @@
 import { imageType } from '../engine/import/card';
-import type { Card, Imported } from '../engine/import/types';
+import type { Card, Imported, Picture } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { Stored, Values } from '../model/kinds';
 import { daysLeft, holds, nest, REMOVABLE, type Asset, type Avatar, type Character, type Lore, type Mark, type Pictures, type Removable } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
+import { thumbnail } from './picture';
 import { removeOwned } from './removal';
 import { without, type ObjectStore, type Write } from './store';
 
-// The picture of a new character: the original is stored as a file, the thumbnail goes into the avatar object.
-export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string; thumb: string };
 export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 
 // What a character owns, its files stored already. chats: a move's, with their entries.
@@ -37,8 +36,7 @@ export async function addCharacter(store: ObjectStore, character: Character, { a
   return result.ok ? { ok: true, data: id } : result;
 }
 
-// What an import kept. skipped: assets not kept, as not a picture this app reads or too large to store. faceless: a
-// picture that was too large to store.
+// Both import entrances use faceless for thumbnail failures and refused uploads, not absent source pictures.
 export type ImportedCharacter = { id: string; skipped: number; faceless: boolean };
 
 export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress): Promise<ApiResult<{ kept: Asset[]; skipped: number }>> {
@@ -80,10 +78,13 @@ export async function importCharacter(
   let avatar: Avatar | null = null;
   if (picture) {
     progress({ kind: 'picture' });
-    const saved = await files.save([picture.bytes]);
-    if (!saved.ok) return saved;
-    const [file] = saved.data;
-    if (file) avatar = { type: picture.type, size: picture.bytes.length, thumb: picture.thumb, file };
+    const thumb = await thumbnail(picture).catch(() => null);
+    if (thumb !== null) {
+      const saved = await files.save([picture.bytes]);
+      if (!saved.ok) return saved;
+      const [file] = saved.data;
+      if (file) avatar = { type: picture.type, size: picture.bytes.length, thumb, file };
+    }
   }
   const stored = await saveAssets(files, assets, progress);
   if (!stored.ok) return stored;
