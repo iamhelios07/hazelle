@@ -1,8 +1,11 @@
 import { KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
-import { objectKey, openObject, sealObject } from '../vault/objects';
+import { objectKey } from '../vault/objects';
 import type { VaultKey } from '../vault/keys';
 import type { ApiFailure, ApiResult, api as realApi } from './api';
 import { pause } from './pause';
+import { ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SEAL_ITEMS } from './object-codec';
+import { codecValue, type CodecResult, type OpenItem, type SealItem } from './object-codec-core';
+import { CodecAborted, CodecUnavailable } from './object-codec-transport';
 import { orderOwned } from './removal';
 import { GenerationChanged, SCOPED, type CachedScope, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
 import { projectChat, summaryId, summaryStale, type Projection } from './summary';
@@ -39,7 +42,6 @@ const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 // A write waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
 const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable']);
 const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
-const OPEN_AHEAD = 256;
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
 type Scope = { opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
 export type ChatLease = { ready: Promise<ApiFailure | null>; release: () => void };
@@ -92,13 +94,15 @@ export class ObjectStore {
   private readonly rewoundListeners = new Set<(dropped: number) => void>();
   private known = 0;
   private restored = false;
+  private openingFailure: ApiFailure | null = null;
+  private readonly codec: ObjectCodec;
 
   private constructor(
-    private readonly accountId: string,
-    private readonly key: CryptoKey,
+    accountId: string,
+    key: CryptoKey,
     private readonly request: Api,
     private readonly cache?: DeviceCache,
-  ) {}
+  ) { this.codec = new ObjectCodec(accountId, key); }
 
   static async open(accountId: string, vaultKey: VaultKey, request: Api, cache?: DeviceCache, signal?: AbortSignal): Promise<ObjectStore> {
     const store = new ObjectStore(accountId, await objectKey(vaultKey), request, cache);
@@ -109,6 +113,7 @@ export class ObjectStore {
   // What a page load does: take the stored cache generation, and its rows when it has a timeline.
   private async load(epoch: number, signal?: AbortSignal) {
     if (!this.cache || this.cacheFailed) return;
+    const stop = AbortSignal.any([this.closing.signal, this.ended.signal, ...(signal ? [signal] : [])]);
     try {
       const { generation, saved } = await this.cache.open();
       if (epoch !== this.epoch) return;
@@ -125,14 +130,20 @@ export class ObjectStore {
       this.known = Math.max(state.cursor, state.until ?? 0);
       for (const [, rev] of [...state.heads, ...state.revisions]) this.known = Math.max(this.known, rev);
       const rows = saved.changes.sort((a, b) => a.rev - b.rev);
-      const opened = this.opener(rows, false);
+      const opened = this.opener(rows, false, stop);
       for (const [index, row] of rows.entries()) {
-        if (signal?.aborted || epoch !== this.epoch) return;
-        await this.apply(row, false, undefined, opened(index));
+        if (stop.aborted || epoch !== this.epoch) return;
+        await this.apply(row, () => opened(index), false, stop);
       }
       this.changed();
       this.restored = true;
-    } catch {
+    } catch (error) {
+      // Cancellation and a failed worker say nothing about the validity of the encrypted device copy.
+      if (error instanceof CodecAborted) return;
+      if (error instanceof CodecUnavailable) {
+        this.openingFailure = this.codecFailure(error, epoch);
+        return;
+      }
       this.cacheFailed = true;
       this.reset(false);
     }
@@ -298,6 +309,7 @@ export class ObjectStore {
 
   close() {
     this.closing.abort();
+    this.codec.close();
     for (const scope of this.scopes.values()) scope.abort.abort();
     this.listeners.clear();
     this.rewoundListeners.clear();
@@ -356,7 +368,17 @@ export class ObjectStore {
     scope.users++;
     const held = scope;
     if (held.state !== 'loaded' && !held.opening) {
-      const opening = this.openChat(chat, held).finally(() => { if (held.opening === opening) held.opening = null; });
+      const epoch = this.epoch;
+      const opening = this.openChat(chat, held).catch((error: unknown) => {
+        const failure = this.codecFailure(error, epoch);
+        if (this.scopes.get(chat) === held && epoch === this.epoch && !this.closing.signal.aborted) {
+          held.state = 'failed';
+          held.error = failure;
+          this.changes.push({ kind: 'scope', id: chat, parent: chat });
+          this.changed();
+        }
+        return failure;
+      }).finally(() => { if (held.opening === opening) held.opening = null; });
       held.opening = opening;
     }
     const ready = held.opening ?? Promise.resolve(null);
@@ -371,7 +393,7 @@ export class ObjectStore {
 
   private async openChat(chat: string, scope: Scope): Promise<ApiFailure | null> {
     const epoch = this.epoch;
-    const signal = scope.abort.signal;
+    const signal = AbortSignal.any([scope.abort.signal, this.closing.signal, this.ended.signal]);
     scope.state = 'loading';
     this.changes.push({ kind: 'scope', id: chat, parent: chat });
     this.changed();
@@ -381,9 +403,9 @@ export class ObjectStore {
     if (saved) {
       scope.cursor = saved.state.cursor;
       const rows = saved.changes.sort((a, b) => a.rev - b.rev);
-      const opened = this.opener(rows, true);
+      const opened = this.opener(rows, true, signal);
       for (const [index, row] of rows.entries()) {
-        await this.apply(row, true, signal, opened(index));
+        await this.apply(row, () => opened(index), true, signal);
         if (signal.aborted) return this.halted(epoch);
         if (row.body && this.live.get(row.id)?.value === undefined) {
           scope.state = 'failed';
@@ -411,6 +433,12 @@ export class ObjectStore {
   // stopped for the store closing, the caller's own stop and a released lease.
   private halted(epoch: number): ApiFailure {
     return epoch !== this.epoch && !this.closing.signal.aborted ? changed() : { ok: false, error: 'stopped' };
+  }
+
+  private codecFailure(error: unknown, epoch: number): ApiFailure {
+    if (error instanceof CodecAborted) return this.halted(epoch);
+    if (error instanceof CodecUnavailable) return { ok: false, error: 'codec-unavailable' };
+    throw error;
   }
 
   // A chat's cached rows, only while the stored generation is the one this tab holds: rows another tab cached of
@@ -442,7 +470,7 @@ export class ObjectStore {
     const abort = new AbortController();
     scope.abort = abort;
     const epoch = this.epoch;
-    scope.loading = this.pullParent(chat, scope, abort.signal).then((failure) => {
+    scope.loading = this.pullParent(chat, scope, abort.signal).catch((error: unknown) => this.codecFailure(error, epoch)).then((failure) => {
       if (abort.signal.aborted || this.scopes.get(chat) !== scope) return this.halted(epoch);
       scope.error = failure;
       scope.state = failure && (scope.state !== 'loaded' || failure.error === 'unreadable') ? 'failed' : 'loaded';
@@ -508,7 +536,7 @@ export class ObjectStore {
     let cursor = 0;
     let more = true;
     while (more) {
-      if (pin.epoch !== this.epoch) return changed();
+      if (pin.epoch !== this.epoch || this.closing.signal.aborted) return this.halted(pin.epoch);
       const result = await this.request<Page>('GET', `objects?since=${cursor}${options.parent ? `&parent=${encodeURIComponent(options.parent)}` : ''}${options.metadata ? '&metadata=1' : ''}&timeline=${encodeURIComponent(pin.timeline)}`, undefined, this.closing.signal);
       // An answer to a request sent before a reset is of the old timeline, a refusal too: it never resets the new one.
       if (pin.epoch !== this.epoch) return changed();
@@ -518,11 +546,19 @@ export class ObjectStore {
         return changed();
       }
       this.limits = result.data.limits;
-      for (const { body, omitted, ...row } of result.data.changes) {
+      const signal = AbortSignal.any([this.closing.signal, this.ended.signal]);
+      const opened = this.opener(result.data.changes, true, signal, true);
+      for (const [index, { body, omitted, ...row }] of result.data.changes.entries()) {
+        if (signal.aborted) return this.halted(pin.epoch);
         if (body === null) continue;
-        const value = omitted ? undefined : await openObject(this.key, this.accountId, row, body!);
-        if (pin.epoch !== this.epoch) return changed();
-        // Awaited, so a slow visitor (a backup written to disk) holds the walk instead of queueing opened bodies.
+        let value: unknown;
+        try {
+          value = omitted ? undefined : await opened(index);
+        } catch (error) {
+          return this.codecFailure(error, pin.epoch);
+        }
+        if (signal.aborted) return this.halted(pin.epoch);
+        // Awaited, so a slow visitor holds the walk; no next codec window starts ahead of its demand.
         await visit(row, value);
       }
       cursor = result.data.cursor;
@@ -572,7 +608,9 @@ export class ObjectStore {
   // One pull at a time: a caller arriving during a pull waits for that pull instead of starting another.
   // The caller starting it owns its signal and progress.
   pull(options: PullOptions = {}): Promise<ApiFailure | null> {
-    this.pulling ??= this.pullPages(options).finally(() => (this.pulling = null));
+    if (this.openingFailure) return Promise.resolve(this.openingFailure);
+    const epoch = this.epoch;
+    this.pulling ??= this.pullPages(options).catch((error: unknown) => this.codecFailure(error, epoch)).finally(() => (this.pulling = null));
     return this.pulling;
   }
 
@@ -759,11 +797,14 @@ export class ObjectStore {
   private async commit(steps: Step[], progress: (index: number) => void = () => {}, signal?: AbortSignal): Promise<ApiResult<(Held | null)[]>> {
     const stop = signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal;
     if (stop.aborted) return { ok: false, error: 'stopped' };
+    const epoch = this.epoch;
     const saved: (Held | null)[] = [];
     const unsent = () => steps.slice(saved.length).filter((step) => !step.derived).length;
     this.unsent.add(unsent);
     try {
       return await this.send(steps, saved, progress, stop);
+    } catch (error) {
+      return this.codecFailure(error, epoch);
     } finally {
       this.unsent.delete(unsent);
     }
@@ -782,24 +823,43 @@ export class ObjectStore {
         const resolved: Resolved[] = [];
         const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null }[] = [];
         let bytes = new TextEncoder().encode(JSON.stringify({ timeline, writes: [] })).length;
-        for (const step of steps.slice(start, start + limits.items)) {
-          const ready = step.resolve();
-          if (!ready.ok) return ready;
-          const { pending } = ready.data;
-          if (pending) {
-            const { id, kind, parent, baseRev, value } = pending;
-            const body = value === undefined ? null : await sealObject(this.key, this.accountId, { id, kind, parent }, value);
-            if (body !== null && body.length > limits.body) return { ok: false, error: 'too-large' };
-            const write = { id, kind, parent, baseRev, body };
-            const size = new TextEncoder().encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
-            if (bytes + size > limits.bytes) {
-              if (!resolved.length) return { ok: false, error: 'too-large' };
-              break;
-            }
-            bytes += size;
-            writes.push(write);
+        // Resolve and seal afresh INSIDE every retry. Keep only a small value window, not the server's entire
+        // item page. Future failures stay in their slots until the byte-limited prefix reaches them.
+        filling: for (let from = start; from < Math.min(steps.length, start + limits.items); from += SEAL_ITEMS) {
+          if (halt.aborted) return this.halted(epoch);
+          const window = steps.slice(from, Math.min(from + SEAL_ITEMS, start + limits.items)).map((step) => {
+            try { return { ready: step.resolve() }; }
+            catch (error) { return { error }; }
+          });
+          const items: SealItem[] = [];
+          const slots = new Map<number, number>();
+          for (const [index, entry] of window.entries()) {
+            const pending = entry.ready?.ok ? entry.ready.data.pending : null;
+            if (!pending || pending.value === undefined) continue;
+            slots.set(index, items.length);
+            items.push(pending);
           }
-          resolved.push(ready.data);
+          const sealed = items.length ? await this.codec.seal(items, limits.body, halt) : [];
+          for (const [index, entry] of window.entries()) {
+            if (!entry.ready) throw entry.error;
+            const ready = entry.ready;
+            if (!ready.ok) return ready;
+            const { pending } = ready.data;
+            if (pending) {
+              const { id, kind, parent, baseRev, value } = pending;
+              const body = value === undefined ? null : codecValue(sealed[slots.get(index)!]!);
+              if (value !== undefined && body === null) return { ok: false, error: 'too-large' };
+              const write = { id, kind, parent, baseRev, body };
+              const size = new TextEncoder().encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
+              if (bytes + size > limits.bytes) {
+                if (!resolved.length) return { ok: false, error: 'too-large' };
+                break filling;
+              }
+              bytes += size;
+              writes.push(write);
+            }
+            resolved.push(ready.data);
+          }
         }
         if (writes.length) {
           if (epoch !== this.epoch) return changed();
@@ -848,16 +908,17 @@ export class ObjectStore {
   }
 
   private async pullPages({ signal = this.closing.signal, progress }: PullOptions): Promise<ApiFailure | null> {
+    const stopped = () => signal.aborted || this.closing.signal.aborted;
     let more = true;
     let objects = 0;
     let pages = 0;
     while (more) {
       if (this.opening) await this.opening;
-      if (signal?.aborted) return { ok: false, error: 'stopped' };
+      if (stopped()) return { ok: false, error: 'stopped' };
       const epoch = this.epoch;
       const sent = this.timeline;
       const result = await this.request<Page>('GET', `objects?since=${this.cursor}&exclude=entry,memory${this.bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds()}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal);
-      if (signal?.aborted) return { ok: false, error: 'stopped' };
+      if (stopped()) return { ok: false, error: 'stopped' };
       if (epoch !== this.epoch) continue;
       if (!result.ok) {
         if (result.error === 'cache-reset') {
@@ -873,14 +934,21 @@ export class ObjectStore {
       progress?.({ objects, pages: ++pages });
       this.limits = result.data.limits;
       this.bootstrap ??= result.data.until ?? null;
-      const opened = this.opener(result.data.changes, false);
+      const stop = AbortSignal.any([signal, this.closing.signal, this.ended.signal]);
+      const opened = this.opener(result.data.changes, false, stop);
       for (const [index, change] of result.data.changes.entries()) {
-        if (signal?.aborted) {
+        if (stopped()) {
           this.changed();
           return { ok: false, error: 'stopped' };
         }
         if (epoch !== this.epoch) break;
-        await this.apply(change, false, undefined, opened(index));
+        try {
+          await this.apply(change, () => opened(index), false, stop);
+        } catch (error) {
+          if (error instanceof CodecAborted && epoch !== this.epoch) break;
+          if (error instanceof CodecAborted) this.changed();
+          throw error;
+        }
       }
       if (epoch !== this.epoch) continue;
       this.cursor = result.data.cursor;
@@ -901,7 +969,7 @@ export class ObjectStore {
       const failure = await this.refreshChat(chat);
       if (failure) return failure;
     }
-    return signal?.aborted ? { ok: false, error: 'stopped' } : null;
+    return stopped() ? { ok: false, error: 'stopped' } : null;
   }
 
   private async pullParent(chat: string, scope: Scope, signal: AbortSignal): Promise<ApiFailure | null> {
@@ -921,10 +989,10 @@ export class ObjectStore {
         return result;
       }
       this.limits = result.data.limits;
-      const opened = this.opener(result.data.changes, true);
+      const opened = this.opener(result.data.changes, true, signal);
       for (const [index, change] of result.data.changes.entries()) {
         if (signal.aborted) return { ok: false, error: 'stopped' };
-        await this.apply(change, true, signal, opened(index));
+        await this.apply(change, () => opened(index), true, signal);
         if (change.body && SCOPED.has(change.kind) && this.live.get(change.id)?.value === undefined) return { ok: false, error: 'unreadable' };
       }
       if (signal.aborted) return { ok: false, error: 'stopped' };
@@ -935,24 +1003,37 @@ export class ObjectStore {
     return null;
   }
 
-  // Bodies open ahead of the row being applied, so decryption and inflation overlap; rows still apply in rev order. A body
-  // that throws while opening counts as unreadable, as one that fails authentication does.
-  private opener(rows: SealedChange[], scoped: boolean): (index: number) => Promise<unknown> | undefined {
-    const opened = new Map<number, Promise<unknown>>();
-    let next = 0;
-    return (index) => {
-      for (; next < Math.min(rows.length, index + OPEN_AHEAD); next++) {
-        const { id, kind, parent, rev, body, omitted } = rows[next]!;
-        if (typeof body !== 'string' || omitted || (SCOPED.has(kind) && !scoped) || this.stale(id, rev)) continue;
-        opened.set(next, openObject(this.key, this.accountId, { id, kind, parent }, body).catch(() => undefined));
+  // Whole windows refill on demand, not one new RPC per consumed row. Only one window of decoded values is
+  // retained; the encoded-byte cap admits one atomic oversized object alone. A batch has one promise, so skipping
+  // a row that became stale cannot leave a future item's rejection unobserved. Strict scans preserve codec errors.
+  private opener(rows: SealedChange[], scoped: boolean, signal: AbortSignal, strict = false): (index: number) => Promise<unknown> {
+    let end = 0;
+    let slots = new Map<number, number>();
+    let batch: Promise<CodecResult[]> = Promise.resolve([]);
+    return async (index) => {
+      if (index >= end) {
+        const items: OpenItem[] = [];
+        slots = new Map();
+        let bytes = 0;
+        for (end = index; end < rows.length && items.length < OPEN_ITEMS; end++) {
+          const { id, kind, parent, rev, body, omitted } = rows[end]!;
+          if (typeof body !== 'string' || omitted || (!strict && ((SCOPED.has(kind) && !scoped) || this.stale(id, rev)))) continue;
+          if (items.length && bytes + body.length > OPEN_BYTES) break;
+          slots.set(end, items.length);
+          items.push({ id, kind, parent, body });
+          bytes += body.length;
+        }
+        batch = items.length ? this.codec.open(items, signal) : Promise.resolve([]);
       }
-      const open = opened.get(index);
-      opened.delete(index);
-      return open;
+      const results = await batch;
+      const slot = slots.get(index);
+      if (slot === undefined) return undefined;
+      const result = results[slot]!;
+      return strict ? codecValue(result) : result.ok ? result.value : undefined;
     };
   }
 
-  private async apply({ id, kind, parent, rev, body, omitted }: SealedChange, scoped = false, signal?: AbortSignal, opened?: Promise<unknown>) {
+  private async apply({ id, kind, parent, rev, body, omitted }: SealedChange, opened: () => Promise<unknown>, scoped: boolean, signal: AbortSignal) {
     if (signal?.aborted || this.closing.signal.aborted) return;
     this.recordRevision({ id, kind, parent, rev });
     if (scoped && kind === 'entry' && parent) {
@@ -968,7 +1049,7 @@ export class ObjectStore {
     if (this.stale(id, rev)) return;
     if (body === null) return this.drop(id, rev, { kind, id, parent });
     const epoch = this.epoch;
-    const value = await (opened ?? openObject(this.key, this.accountId, { id, kind, parent }, body!));
+    const value = await opened();
     if (!signal?.aborted && epoch === this.epoch) this.hold({ id, kind, parent, rev, value });
   }
 
