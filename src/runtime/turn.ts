@@ -28,7 +28,7 @@ import { appendUserMessage, startChat, type Said } from './chat-log';
 import { greetingOf, type Greetings } from './greetings';
 import { cacheViewOf } from './generate';
 import { withTurn, type Ask, type Shown, type TalkFailure, type Turn } from './talk';
-import { EvaluationFailed, EvaluationStopped } from './evaluation';
+import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
 import { endCall, type CallTarget } from './streams';
 import { resumeTranslation, translate, type TranslateFailure, type TranslateInput } from './translate';
 
@@ -93,6 +93,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
   const route = chatModel(store, chat, 'main');
+  const toggles = togglesOf(store, chat, prompt);
   return {
     card,
     packs: packs.map(({ pack }) => pack),
@@ -107,7 +108,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     }),
     variables: chat.variables ?? [],
     greeting: card && greetingOf(messages),
-    toggle: togglesOf(store, chat, prompt).value,
+    toggles: new Map(toggles.declared.map(({ key }) => [key, toggles.value(key)])),
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     assets: packs.flatMap(({ id: pack, module }) => store.children('asset', pack).map(({ id, value }) => ({ id, name: value.name, ...(module && { module: module.namespace }) }))),
@@ -277,16 +278,23 @@ function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, targ
 // The request the chat would send for target now; null while it cannot send, or the prompt is over the model's budget.
 export type Sending = { turn: TurnContext; prompt: Assembled };
 
-export async function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, signal?: AbortSignal): Promise<Sending | null> {
-  const projection = await session.store.evaluated(chat);
-  if (!projection) return null;
-  const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
-  const revisions = reads.map((read) => session.store.revision(read));
-  if (turn === null || 'kind' in turn) return null;
-  const lane = `forecast:${turn.reply.id}`;
-  const prompt = await session.store.evaluation.prompt(lane, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, continuing: false, memory: turn.memory }, signal).finally(() => session.store.evaluation.forget(lane));
-  if (signal?.aborted || session.store.loadedHead(chat) !== projection.summary.head || reads.some((read, at) => session.store.revision(read) !== revisions[at])) return null;
-  return 'kind' in prompt ? null : { turn, prompt };
+// asker: whose forecast this is, each with its own evaluation lane, kept with the chat so a forecast sends the worker
+// only what changed since its last: the composer's, background memory's (Rememberer) and the memory panel's. One lane
+// shared by two would have each cancel the other's.
+export async function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, signal?: AbortSignal, asker: 'forecast' | 'memory' | 'view' = 'forecast'): Promise<Sending | null> {
+  // What the prompt reads may change while it is evaluated: it is gathered and evaluated again once, so a save landing
+  // mid-flight does not cost memory its round.
+  for (let tries = 0; tries < 2; tries++) {
+    const projection = await session.store.evaluated(chat);
+    if (!projection) return null;
+    const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
+    const revisions = reads.map((read) => session.store.revision(read));
+    if (turn === null || 'kind' in turn) return null;
+    const prompt = await session.store.evaluation.prompt(`${asker}:${chat}`, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, continuing: false, memory: turn.memory }, signal);
+    if (signal?.aborted) return null;
+    if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? null : { turn, prompt };
+  }
+  return null;
 }
 
 // A request as its cache reads it, for the forecast beside the send button.
@@ -307,13 +315,13 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
   if (start) {
     const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const said = target.kind === 'send' ? { id: ids.said, text: target.text } : null;
-    const again = (answer: boolean) => gatherTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
+    const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
     return unhalted(session.talk.run({ chat, said, reply: { id: ids.reply, message: null, replaces: null, continues: null } }, async (signal) => {
       const unstarted = await startChat(session.store, chat, start.chat, start.greetings);
       if (unstarted) return { kind: 'unstarted', failure: unstarted };
       start.started();
       // The chat was just saved and a new chat's target names no message, so it is there.
-      const turn = gatherTurn(session, chat, target, ids)!;
+      const turn = (await gatheredTurn(session, chat, target, ids))!;
       return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);
     }));
   }
@@ -322,13 +330,13 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
     const ids = { said: crypto.randomUUID(), reply: crypto.randomUUID() };
     const showing = gatherTurn(session, chat, target, ids);
     if (showing === null || 'kind' in showing) return Promise.resolve(showing);
-    const again = (answer: boolean) => gatherTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
+    const again = (answer: boolean) => gatheredTurn(session, chat, answer ? { kind: 'answer' } : target, ids);
     return unhalted(session.talk.run({ chat, said: showing.said, reply: showing.reply }, async (signal) => {
       // Another device may have written to this chat while this page stood open without focus or a timer's pull, so the
       // prompt is gathered again after a pull. A turn it cannot pull does not send on what may be stale.
       const unpulled = await session.store.pull();
       if (unpulled) return { kind: 'unpulled', failure: unpulled };
-      const turn = gatherTurn(session, chat, target, ids);
+      const turn = await gatheredTurn(session, chat, target, ids);
       if (turn === null) return { kind: 'gone' };
       return 'kind' in turn ? turn : prepare(session, chat, turn, signal, again);
     }));
@@ -341,18 +349,30 @@ export function takeTurn(session: Session, chat: string, target: Target, start: 
 // is said of it.
 const unhalted = (turn: Promise<TurnFailure | Halted | null>): Promise<TurnFailure | null> => turn.then((failure) => (failure?.kind === 'halted' ? null : failure));
 
+// An evaluation a turn waits on, or why it could not be made: stopped with the turn, or a worker that failed. Either
+// way the screen puts the typed text back and reports it, as for any message not sent.
+type Unevaluated = { kind: 'unsent'; failure: ApiFailure };
+const evaluating = <T>(work: Promise<T>): Promise<T | Unevaluated> => work.catch((error: unknown) => ({ kind: 'unsent' as const, failure: evaluationFailure(error) }));
+
+// The turn as the chat stands once what was last written to it is evaluated: a write returns before its chat's
+// projection is made again (ObjectStore.refreshHeld).
+async function gatheredTurn(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, ids: Parameters<typeof gatherTurn>[3]): Promise<TurnContext | Blocked | Unevaluated | null> {
+  const evaluated = await evaluating(session.store.evaluated(chat));
+  return evaluated && 'kind' in evaluated ? evaluated : gatherTurn(session, chat, target, ids);
+}
+
 // again: the turn gathered anew, once the bot's Lua has changed the chat under it (Scripts.starting).
-async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => TurnContext | Blocked | null): Promise<Ask | Halted | TurnFailure> {
+async function prepare(session: Session, chat: string, gathered: TurnContext, signal: AbortSignal, again: (answer: boolean) => Promise<TurnContext | Blocked | Unevaluated | null>): Promise<Ask | Halted | TurnFailure> {
   const translated = gathered.said && translateSwitches(session.store, gathered.chat.character).input ? await sendTranslated(session, chat, gathered, signal) : gathered;
   if ('kind' in translated) return translated;
   const started = await session.scripts.starting(chat, translated, again, signal);
   if ('kind' in started) return started;
   const { route, settings, scope, budget, memory, said, reply } = started.turn;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const prompt = await session.store.evaluation.prompt(`send:${chat}`, { scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal).catch((error: unknown) => ({ kind: 'unsent' as const, failure: { ok: false as const, error: error instanceof EvaluationStopped ? 'stopped' : 'evaluation-unavailable' } }));
+  const prompt = await evaluating(session.store.evaluation.prompt(`send:${chat}`, { scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
-  const sent = requested.messages === prompt.messages ? prompt : await session.store.evaluation.rewrite(`send:${chat}`, scope, { prompt, messages: requested.messages, budget }, signal);
+  const sent = requested.messages === prompt.messages ? prompt : await evaluating(session.store.evaluation.rewrite(`send:${chat}`, scope, { prompt, messages: requested.messages, budget }, signal));
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
   return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }) };

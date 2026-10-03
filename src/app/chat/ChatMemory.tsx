@@ -2,7 +2,6 @@ import { MoreHorizontal, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
 import { memorySetup, memoryView, removeFact, removeThread, setChatMemory, setFact, setThread, type MemoryView } from '../../runtime/memory';
-import { tokenizer } from '../../runtime/tokenizer';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
@@ -26,7 +25,7 @@ function useView(id: string, busy: boolean, inputs: unknown[]): MemoryView | nul
   useEffect(() => {
     if (busy) return;
     let live = true;
-    void tokenizer().then((countTokens) => memoryView(session, id, countTokens)).then(
+    void memoryView(session, id).then(
       (view) => live && setView(view),
       () => live && setView(null),
     );

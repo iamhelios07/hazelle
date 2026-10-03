@@ -1,24 +1,43 @@
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
-import { assemble, rewritten, type Assembled, type PromptInput } from '../engine/pipeline';
-import type { ChatScope } from '../engine/render';
+import { standing, type Standing } from '../engine/memory';
+import { activeLore, assemble, assembleMemory, assembleTranslation, rewritten, type Assembled, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
+import { renderChat, type ChatScope } from '../engine/render';
+import type { Memory, Source } from '../model/memory';
 import { applyTail, type Tail } from './history-delta';
 import { tokenizer } from './tokenizer';
 
 // What a version's text became in the bot's editDisplay pass, with the text and state it was run on.
 export type LuaText = { text: string; stamp: string; shown: string };
 const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
-export type ScopeData = Omit<ChatScope, 'toggle' | 'lua' | 'messages'> & { toggle: [string, string | null][] };
+export type ScopeData = Omit<ChatScope, 'lua' | 'messages'>;
+// read: the chat's texts as the prompt renders them, with their tokens; with memory, what of it a request sends.
+// lore: the lorebook entries a prompt built now would hold, as many as fit within limit tokens.
 export type EvaluationJob =
   | { kind: 'display'; take: ReadonlySet<number>; lua?: { generation: number; revision: number; waits: boolean } }
   | { kind: 'prompt'; input: Omit<PromptInput, 'scope' | 'countTokens'> }
-  | { kind: 'rewrite'; prompt: Assembled; messages: Parameters<typeof rewritten>[1]; budget: number | null };
+  | { kind: 'rewrite'; prompt: Assembled; messages: Parameters<typeof rewritten>[1]; budget: number | null }
+  | { kind: 'translation'; input: Omit<TranslationInput, 'scope' | 'countTokens'> }
+  | { kind: 'memory'; input: Omit<MemoryTaskInput, 'scope' | 'countTokens'> }
+  | { kind: 'read'; memory: { memory: Memory; shown: Source[]; budget: number } | null }
+  | { kind: 'lore'; seed: string; limit: number };
 export type LuaResult = LuaText & { version: string };
-export type EvaluationInput = { lane: string; scope: ScopeData; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob } | { lane: string; patch: { revision: number; generation: number; items: LuaResult[] } };
+export type EvaluationInput =
+  | { lane: string; scope: ScopeData; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
+  | { lane: string; patch: { revision: number; generation: number; items: LuaResult[] } }
+  | { lane: string; count: string[] };
 export type DisplayEvaluation = { display: Display; work: DisplayWork | null };
-export type EvaluatedPrompt = ReturnType<typeof assemble> | { kind: 'tokenizer' };
-export type EvaluationResult = DisplayEvaluation | DisplayPatch | EvaluatedPrompt | null;
-export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string };
-export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string };
+// Every count is made here, in the worker, the only realm that loads the tokenizer.
+export type Counted<T> = T | { kind: 'tokenizer' };
+export type EvaluatedPrompt = Counted<ReturnType<typeof assemble>>;
+export type ChatTexts = { texts: string[]; tokens: number[]; standing: Standing | null };
+export type EvaluationResult =
+  | DisplayEvaluation
+  | DisplayPatch
+  | EvaluatedPrompt
+  | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
+  | null;
+export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true };
+export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true };
 
 export class Evaluator {
   private readonly displays = new Map<string, { revision: number; pass: DisplayPass }>();
@@ -38,16 +57,44 @@ export class Evaluator {
       if (!patch.pass) this.displays.delete(input.lane);
       return patch;
     }
+    if ('count' in input) {
+      const countTokens = await tokenizer().catch(() => null);
+      return countTokens ? input.count.map(countTokens) : { kind: 'tokenizer' };
+    }
     const { lane, scope: data, history, job } = input;
     const messages = applyTail(this.histories.get(lane) ?? [], history);
     this.histories.set(lane, messages);
-    const toggles = new Map(data.toggle);
-    const scope: ChatScope = { ...data, messages, toggle: (key) => toggles.get(key) ?? null };
+    const scope: ChatScope = { ...data, messages };
     if (job.kind !== 'display') {
       const countTokens = await tokenizer().catch(() => null);
       if (!countTokens) return { kind: 'tokenizer' };
-      if (job.kind === 'rewrite') return rewritten(job.prompt, job.messages, countTokens, job.budget);
-      return assemble({ ...job.input, scope: scope as PromptInput['scope'], countTokens });
+      switch (job.kind) {
+        case 'rewrite':
+          return rewritten(job.prompt, job.messages, countTokens, job.budget);
+        case 'prompt':
+          return assemble({ ...job.input, scope: scope as PromptInput['scope'], countTokens });
+        case 'translation':
+          return assembleTranslation({ ...job.input, scope, countTokens });
+        case 'memory':
+          return assembleMemory({ ...job.input, scope, countTokens });
+        case 'read': {
+          const { texts } = renderChat('prompt', scope);
+          const sent = job.memory && standing(job.memory.memory, { shown: job.memory.shown, roles: messages.map(({ role }) => role), texts }, job.memory.budget, countTokens);
+          return { texts, tokens: texts.map((text) => countTokens(text.trim())), standing: sent };
+        }
+        case 'lore': {
+          const lore = activeLore(scope, job.seed, countTokens);
+          if ('kind' in lore) return lore;
+          let total = 0;
+          const fitting: typeof lore = [];
+          for (const entry of lore) {
+            total += countTokens(entry.text);
+            if (total > job.limit) break;
+            fitting.push(entry);
+          }
+          return fitting;
+        }
+      }
     }
     const lua = job.lua;
     const held = this.held.get(lane) ?? new Map<string, LuaText>();

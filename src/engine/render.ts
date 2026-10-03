@@ -30,7 +30,9 @@ export type ChatScope = {
   // one made, shown until the new one lands. null: never run, and the message shows nothing until it is.
   lua?: (version: string, text: string, stamp: string) => { text: string; fresh: boolean } | null;
   greeting: CbsContext['greeting'];
-  toggle: CbsContext['toggle'];
+  // The declared toggles' values, the one table a turn, the display and the bot's Lua globals read; a key nothing
+  // declares reads null.
+  toggles: ReadonlyMap<string, string | null>;
   model: CbsContext['model'];
   clock: CbsContext['clock'];
   assets: CbsContext['assets'];
@@ -46,8 +48,9 @@ export const authorNote = (note: string | null, prompt: ConversationPrompt) => n
 const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prompt.blocks.find((block): block is TextBlock => block.kind === 'text' && block.mark === mark)?.text ?? '';
 
 // One chat's CBS contexts for a stage, by the text's source and the variables it reads. language: a translation's.
-export function contexts(scope: ChatScope, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
-  const { card, persona, prompt, note, messages, greeting, toggle, model, clock, assets, modules, faces, screen, pick } = scope;
+// toggles: the bot's Lua reads them from its globals as they stand mid-run.
+export function contexts(scope: Omit<ChatScope, 'toggles'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
+  const { card, persona, prompt, note, messages, greeting, toggles, model, clock, assets, modules, faces, screen, pick } = scope;
   const fixed = {
     stage,
     card,
@@ -57,7 +60,7 @@ export function contexts(scope: ChatScope, stage: Stage, language: string | null
     messages,
     previous: previousMessages(messages),
     greeting,
-    toggle,
+    toggle: (key: string) => toggles.get(key) ?? null,
     model,
     screen: stage === 'display' ? screen : null,
     clock,

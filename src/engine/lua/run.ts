@@ -43,7 +43,7 @@ export type DisplayItem = { index: number; text: string; variables: [string, str
 // listening: false for a script whose engine holds no editDisplay listener, which has no part in any pass.
 export type Displayed = { texts: string[]; listening: boolean[]; errors: ScriptError[]; missing: string[] };
 export type DisplayBatch = Displayed & { from: number; remaining: number };
-type DisplaySession = { generation: number; scripts: Script[]; snapshot: Snapshot; items: DisplayItem[]; variables: Map<string, string>; undo: [string, string | undefined][][]; remaining: number; messages: Working[]; globals: Map<string, string> };
+type DisplaySession = { revision: number; scripts: Script[]; snapshot: Snapshot; items: DisplayItem[]; variables: Map<string, string>; undo: [string, string | undefined][][]; remaining: number; messages: Working[]; globals: Map<string, string> };
 
 // Only idle worksets count toward this budget. Splitting an active script set loses globals and thrashes every pass.
 const IDLE_ENGINES = 8;
@@ -149,25 +149,25 @@ export class Lua {
     }
   }
 
-  async installDisplay(owner: string, generation: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {
+  async installDisplay(owner: string, revision: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {
     const variables = new Map(snapshot.variables);
     const undo = items.map((item) => item.variables.map(([name, value]): [string, string | undefined] => {
       const previous = variables.get(name);
       variables.set(name, value);
       return [name, previous];
     }));
-    this.displays.set(owner, { generation, scripts, snapshot, items, variables, undo, remaining: items.length, messages: working(snapshot), globals: new Map(snapshot.globals) });
+    this.displays.set(owner, { revision, scripts, snapshot, items, variables, undo, remaining: items.length, messages: working(snapshot), globals: new Map(snapshot.globals) });
   }
 
-  forgetDisplay(owner: string, generation: number) {
-    if (this.displays.get(owner)?.generation === generation) this.displays.delete(owner);
+  forgetDisplay(owner: string, revision: number) {
+    if (this.displays.get(owner)?.revision === revision) this.displays.delete(owner);
   }
 
   // Each item's text after every script's editDisplay listeners, in order; an item a script fails on keeps the text
   // it had. Stretches start newest-first, but each stretch threads its input variable deltas oldest-first.
-  async display(owner: string, generation: number, size: number): Promise<DisplayBatch> {
+  async display(owner: string, revision: number, size: number): Promise<DisplayBatch> {
     const session = this.displays.get(owner);
-    if (!session || session.generation !== generation) throw new Error('Display session expired');
+    if (!session || session.revision !== revision) throw new Error('Display session expired');
     const { scripts, snapshot, messages, globals } = session;
     const from = Math.max(0, session.remaining - size);
     const items = session.items.slice(from, session.remaining);

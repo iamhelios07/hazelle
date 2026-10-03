@@ -37,7 +37,7 @@ const scope: ChatScope = {
   lore: [],
   messages: [message('u1', 'user', 'Is the lamp lit?'), message('a1', 'assistant', 'The lamp is lit, {{user}}.')],
   greeting: null,
-  toggle: () => null,
+  toggles: new Map(),
   model: null,
   clock: { now: 0, timeZone: 'UTC' },
   assets: [],

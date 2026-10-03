@@ -4,6 +4,7 @@ import { fold, shown } from '../model/chat';
 import { setTranslate } from './characters';
 import { appendUserMessage, removeChat, startChat } from './chat-log';
 import { projectGreetings } from './greetings';
+import type { EvaluationDown } from './evaluation-core';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
@@ -54,7 +55,24 @@ const luna: Card = {
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 
-it('discards a draft forecast when a dependency changes before worker completion', () =>
+it('keeps a chat\'s forecast history, so a second forecast sends the worker only what changed', () =>
+  server.withSession(async (session) => {
+    await answerable(session);
+    const chat = crypto.randomUUID();
+    await server.hold(session.store, chat);
+    await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+    await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
+    const posted = vi.spyOn(Worker.prototype, 'postMessage');
+    expect(await wouldSend(session, chat, { kind: 'send', text: 'one' })).not.toBeNull();
+    expect(await wouldSend(session, chat, { kind: 'send', text: 'two' })).not.toBeNull();
+    const forecasts = posted.mock.calls.map(([message]) => message as EvaluationDown).flatMap((message) => ('input' in message && 'history' in message.input && message.input.lane === `forecast:${chat}` ? [message.input.history] : []));
+    expect(forecasts).toHaveLength(2);
+    expect(forecasts[0]!.from).toBe(0);
+    expect(forecasts[1]!.from).toBe(1);
+    posted.mockRestore();
+  }));
+
+it('evaluates a draft forecast once more when a dependency changes before worker completion', () =>
   server.withSession(async (session) => {
     await answerable(session);
     const chat = crypto.randomUUID();
@@ -74,7 +92,8 @@ it('discards a draft forecast when a dependency changes before worker completion
     await vi.waitFor(() => expect(started).toBe(true));
     await session.store.update('chat', chat, (value) => ({ ...value, note: 'changed while evaluating' }));
     finish();
-    expect(await forecast).toBeNull();
+    expect((await forecast)?.turn.chat.note).toBe('changed while evaluating');
+    expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
   }));
 

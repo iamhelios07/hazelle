@@ -9,12 +9,12 @@ export type LuaMessage = { role: 'user' | 'char'; data: string; time: number };
 // The chat as a run finds it. messages: without the greeting, each as it stands after the bot's input or output
 // scripts. variables: as of the point in the story the run stands at. globals: what getGlobalVar reads, which is the
 // chat's toggle values. scope: what CBS in a script's text is evaluated over and where its lorebook is read from: the
-// chat's scope without what does not cross to a worker or no tag reads (its toggle function, its packs).
+// chat's scope without what does not cross to a worker or no tag reads (its toggles, which globals carry, its packs).
 export type Snapshot = {
   messages: LuaMessage[];
   variables: [string, string][];
   globals: [string, string][];
-  scope: Omit<ChatScope, 'toggle' | 'lua' | 'packs' | 'pending'>;
+  scope: Omit<ChatScope, 'toggles' | 'lua' | 'packs' | 'pending'>;
   character: { name: string; description: string; firstMessage: string };
   persona: { name: string; description: string };
   note: string;
@@ -82,7 +82,7 @@ const CONTEXTS = new WeakMap<Snapshot, ReturnType<typeof contexts>>();
 export function cbs(run: Run, value: string): string {
   let context = CONTEXTS.get(run.snapshot);
   if (!context) {
-    context = contexts({ ...run.snapshot.scope, packs: [], toggle: (key) => run.globals.get(`${TOGGLE_GLOBAL}${key}`) ?? null }, 'prompt', null);
+    context = contexts({ ...run.snapshot.scope, packs: [], toggles: { get: (key) => run.globals.get(`${TOGGLE_GLOBAL}${key}`) } }, 'prompt', null);
     CONTEXTS.set(run.snapshot, context);
   }
   run.ranAway = false;

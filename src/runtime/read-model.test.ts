@@ -9,6 +9,7 @@ import { removeChat, restoreChat } from './chat-log';
 import { Files } from './files';
 import { backfillSummaries, summaryId, summaryStale } from './summary';
 import type { api, ApiResult } from './api';
+import { EvaluationFailed } from './evaluation';
 import { ReadModels } from './read-model';
 import { planRemoval } from './removal';
 import { openSession } from './session';
@@ -401,6 +402,20 @@ describe('per-chat read models', () => {
     read.close();
   });
 
+  it('answers a write the server took as done when its chat cannot be evaluated after it, and shows that on the chat', async () => {
+    const { store } = await account();
+    await store.batch([
+      { type: 'create', kind: 'chat', id: 'a', parent: null, value: chat },
+      { type: 'create', kind: 'entry', id: 'a1', parent: 'a', value: message('hello') },
+    ]);
+    const release = await hold(store, 'a');
+    vi.spyOn(store.evaluation, 'display').mockRejectedValueOnce(new EvaluationFailed('crashed'));
+    expect(await store.update('chat', 'a', (value) => ({ ...value, note: 'kept' }))).toMatchObject({ ok: true });
+    await vi.waitFor(() => expect(store.scopeState('a')).toBe('failed'));
+    expect(store.scopeError('a')).toEqual({ ok: false, error: 'evaluation-unavailable' });
+    release();
+  });
+
   it('never publishes an evaluated projection whose dependencies changed while the worker was busy', async () => {
     const { store } = await account();
     await store.create('persona', { name: 'first', description: '', picture: null }, { id: 'person' });
@@ -428,6 +443,7 @@ describe('per-chat read models', () => {
     await vi.waitFor(() => expect(store.get('persona', 'person')?.value.name).toBe('latest'));
     finish();
     await Promise.all([old, latest]);
+    await store.evaluated('a');
     expect(seen).toEqual(['latest']);
     await store.saveSummary('a');
     expect(read.summary('a').snapshot()?.preview).toBe('latest');

@@ -91,7 +91,7 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   lore: [],
   messages: [message('g1', 'assistant', 'The lamp is lit, {{user}}.'), message('u1', 'user', 'Is it safe?'), message('a1', 'assistant', '{{setvar::mood::calm}}She nods. [OOC] ignore'), message('u2', 'user', 'Good.')],
   greeting: { index: 0 },
-  toggle: (key) => (key === 'sims' ? '1' : null),
+  toggles: new Map([['sims', '1']]),
   model: { id: 'model', maxContext: null, prefill: null },
   clock: { now: Date.UTC(2026, 8, 28), timeZone: 'UTC' },
   assets: [],
@@ -200,7 +200,7 @@ describe('assemble', () => {
       ...starter.blocks.filter((block) => (block.kind === 'text' ? block.mark === 'main' : block.slot === 'chat')),
     ];
     const entries = [lore('end', '@@depth 0\nLast word'), lore('bell', '@@position pt_bell\nThe bell rings.'), lore('kind', '@@inject_at main\nStay kind.')];
-    const sent = build({ prompt: { ...starter, blocks }, toggle: (key) => (key === 'sims' ? '0' : null), lore: entries });
+    const sent = build({ prompt: { ...starter, blocks }, toggles: new Map([['sims', '0']]), lore: entries });
     expect(sent[0]).toEqual({ role: 'system', content: 'Notes: The bell rings.' });
     expect(sent[1]!.content).not.toContain('one person among many');
     expect(sent[1]!.content.endsWith('---\n Stay kind.')).toBe(true);
@@ -369,7 +369,7 @@ describe('assemble with memory', () => {
       ...starter,
       blocks: starter.blocks.map((block) => (block.id === 'memory' ? { ...block, wrapper: '{{#if {{getglobalvar::toggle_sims}}}}{{slot}}{{/if}}' } : block)),
     } as Prompt & { task?: never };
-    const off = withMemory(memory, 25_000, { prompt: toggled, toggle: () => '0' });
+    const off = withMemory(memory, 25_000, { prompt: toggled, toggles: new Map([['sims', '0']]) });
     expect([off.memory, memoryOfSent(off)]).toEqual([{ sent: ['r1'], covered: 2, missing: 2, slot: false }, undefined]);
     const empty = withMemory({ records: [], state: [], threads: [] });
     expect([empty.memory, memoryOfSent(empty), chatOf(empty)]).toEqual([{ sent: [], covered: 0, missing: 0, slot: true }, undefined, messages.map(() => expect.any(String))]);

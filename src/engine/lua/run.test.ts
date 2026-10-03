@@ -54,10 +54,10 @@ describe('Lua runs', () => {
       listenEdit('editDisplay', function(id, value) counter = counter + 1; return value .. ':' .. counter end)
     ` }));
     const event = () => machine.run('active', scripts, SNAPSHOT, { kind: 'start' }, host());
-    let generation = 0;
+    let revision = 0;
     const display = async () => {
-      await machine.installDisplay('active', ++generation, scripts, SNAPSHOT, [{ index: 0, text: '', variables: [] }]);
-      return machine.display('active', generation, 1);
+      await machine.installDisplay('active', ++revision, scripts, SNAPSHOT, [{ index: 0, text: '', variables: [] }]);
+      return machine.display('active', revision, 1);
     };
     try {
       expect((await event()).writes.map(([, value]) => value)).toEqual(Array(9).fill('1'));
@@ -224,7 +224,7 @@ describe('Lua display', () => {
     expect(shown).toEqual({ texts: ['a:0:10:hello', 'b:1:4:hello'], listening: [true], errors: [], missing: [], from: 0, remaining: 0 });
   });
 
-  it('retains full-chat reads while walking newest-first variable deltas and replacing a generation', async () => {
+  it('retains full-chat reads while walking newest-first variable deltas and replacing a revision', async () => {
     const scripts: Script[] = [{ kind: 'lua', name: 'state', code: "listenEdit('editDisplay', function(id, value) return value .. ':' .. getChatVar(id, 'hp') .. ':' .. getChatVar(id, 'x') .. ':' .. getChatLength(id) end)" }];
     const items = [
       { index: 0, text: 'a', variables: [['hp', '1']] as [string, string][] },

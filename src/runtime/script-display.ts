@@ -88,7 +88,7 @@ export class ScriptDisplay {
     // Until an engine has answered, its script is passed all the same, and the source is only a guess at what to show
     // meanwhile: one that names the hook waits empty as a listening one does, any other shows its text as it is.
     const waits = scripts.some(({ code }) => this.listens.get(code) ?? code.includes('editDisplay'));
-    const standing = luaStanding(this.store, chat, scope);
+    const standing = luaStanding(scope);
     const { character, persona } = standing;
     // Of all the bot's scripts, not only those passed: an engine's answer takes its script out of the passes and must
     // not make the others' results stale.

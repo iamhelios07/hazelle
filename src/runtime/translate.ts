@@ -1,4 +1,4 @@
-import { assembleTranslation, type RanAway } from '../engine/pipeline';
+import type { RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
 import type { Chat, Receipt, Translation, Version } from '../model/chat';
@@ -18,7 +18,7 @@ import { modelProfile } from './profiles';
 import { translationPrompt } from './prompts';
 import type { ObjectStore } from './store';
 import { receiptOf } from './talk';
-import { tokenizer } from './tokenizer';
+import { evaluationFailure } from './evaluation';
 
 // What one translation is made from: the chat, whose character's 번역 picks the prompt and the language and whose
 // layers the 보조 모델 a prompt without a model takes, its scope with each message's translation text or null, and what to translate.
@@ -26,7 +26,8 @@ import { tokenizer } from './tokenizer';
 export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest };
 
 // prompt-missing: the translation prompt chosen (own) or the default is gone. failed: the call's receipt says why, and
-// a cut one that wrote nothing is failed too.
+// a cut one that wrote nothing is failed too. unsaved: what failure says stopped it, the chat's evaluation before a
+// call or the translation's save after one.
 export type TranslateFailure =
   | RouteFailure
   | { kind: 'prompt-missing'; own: boolean }
@@ -34,6 +35,7 @@ export type TranslateFailure =
   | { kind: 'tokenizer' }
   | { kind: 'failed'; receipt: Receipt }
   | { kind: 'stopped' }
+  | { kind: 'unsaved'; failure: ApiFailure }
   | RanAway;
 
 type Deps = { store: ObjectStore; credentials: Credentials };
@@ -54,10 +56,11 @@ export async function translate(
   const { prompt, route } = translator;
   const profile = modelProfile(store, route.model);
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
-  const countTokens = await tokenizer().catch(() => null);
-  if (!countTokens) return { ok: false, failure: { kind: 'tokenizer' } };
   const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
-  const assembled = assembleTranslation({ scope, take, prompt, translations, request, language, seed: crypto.randomUUID(), countTokens });
+  const assembled = await store.evaluation.translation({ scope, take, prompt, translations, request, language, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
+    const failure = evaluationFailure(error);
+    return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
+  });
   if ('kind' in assembled) return { ok: false, failure: assembled };
   const text = gather(onText);
   const answer = await generate({
@@ -110,7 +113,7 @@ export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt
   return 'kind' in route ? { ok: false, failure: route } : { ok: true, prompt: prompt.prompt.value, route };
 }
 
-export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }> | { kind: 'unsaved'; failure: ApiFailure };
+export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }>;
 
 // live: the text so far of each translation being made, by the version's id. failed: why the last try at a version
 // did not translate it, kept for the session so a chat does not try it again on its own.

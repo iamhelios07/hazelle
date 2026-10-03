@@ -2,19 +2,19 @@ import type { Trigger } from '../../engine/import/types';
 import type { DisplayBatch, DisplayItem, Event, Lua, Outcome, Script } from '../../engine/lua/run';
 import type { Host, LuaMessage, Snapshot } from '../../engine/lua/state';
 import { changedTail, sameHistory, type Tail } from '../history-delta';
-import { moduleWorker } from '../worker';
+import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
 // What the runtime asks of the bot scripts' machines: the engine itself in tests, a worker in the browser.
 export type Runner = Pick<Lua, 'run' | 'installDisplay' | 'display' | 'forgetDisplay' | 'close'>;
 
-export type DisplayInstall = { generation: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
+export type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
 
 export type Down =
   | { kind: 'run'; id: number; owner: string; triggers: Trigger[]; snapshot: Snapshot; event: Event }
   | { kind: 'install-display'; id: number; owner: string; install: DisplayInstall }
-  | { kind: 'display'; id: number; owner: string; generation: number; size: number }
-  | { kind: 'forget-display'; owner: string; generation: number }
+  | { kind: 'display'; id: number; owner: string; revision: number; size: number }
+  | { kind: 'forget-display'; owner: string; revision: number }
   | { kind: 'answer'; call: number; value: unknown }
   | { kind: 'ping' };
 export type Up =
@@ -27,7 +27,6 @@ export type Up =
   | { kind: 'lore'; id: number; call: number; args: Parameters<Host['lore']> }
   | { kind: 'pong' };
 
-const BEAT_MS = 1000;
 // The engine stops a script's stretch at 5 s by itself; this catches what it cannot count, such as one pattern match
 // that never ends.
 const STUCK_MS = 8000;
@@ -40,35 +39,34 @@ type Pending = { resolve: (result: Outcome | DisplayBatch | null) => void; rejec
 export class LuaWorker implements Runner {
   private worker: Worker | null = null;
   private readonly pending = new Map<number, Pending>();
-  private readonly displays = new Map<string, { generation: number; snapshot: Snapshot }>();
+  private readonly displays = new Map<string, { revision: number; snapshot: Snapshot }>();
   private ids = 0;
-  private beat: ReturnType<typeof setInterval> | null = null;
-  private pinged: number | null = null;
+  private readonly heart = new Heartbeat(STUCK_MS, () => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
 
   run(owner: string, triggers: Trigger[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
     return this.send((id) => ({ kind: 'run', id, owner, triggers, snapshot, event }), host) as Promise<Outcome>;
   }
 
-  installDisplay(owner: string, generation: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {
+  installDisplay(owner: string, revision: number, scripts: Script[], snapshot: Snapshot, items: DisplayItem[]): Promise<void> {
     const previous = this.displays.get(owner)?.snapshot;
     const { messages, scope, ...rest } = snapshot;
     const { messages: history, ...fixed } = scope;
     const install: DisplayInstall = {
-      generation, scripts, items, snapshot: { ...rest, scope: fixed },
+      revision, scripts, items, snapshot: { ...rest, scope: fixed },
       messages: changedTail(previous?.messages ?? [], messages, (a, b) => a.role === b.role && a.data === b.data && a.time === b.time),
       history: changedTail(previous?.scope.messages ?? [], history, sameHistory),
     };
-    this.displays.set(owner, { generation, snapshot });
+    this.displays.set(owner, { revision, snapshot });
     return this.send((id) => ({ kind: 'install-display', id, owner, install }), null).then(() => {});
   }
 
-  display(owner: string, generation: number, size: number): Promise<DisplayBatch> {
-    return this.send((id) => ({ kind: 'display', id, owner, generation, size }), null) as Promise<DisplayBatch>;
+  display(owner: string, revision: number, size: number): Promise<DisplayBatch> {
+    return this.send((id) => ({ kind: 'display', id, owner, revision, size }), null) as Promise<DisplayBatch>;
   }
 
-  forgetDisplay(owner: string, generation: number) {
-    if (this.displays.get(owner)?.generation === generation) this.displays.delete(owner);
-    this.worker?.postMessage({ kind: 'forget-display', owner, generation } satisfies Down);
+  forgetDisplay(owner: string, revision: number) {
+    if (this.displays.get(owner)?.revision === revision) this.displays.delete(owner);
+    this.worker?.postMessage({ kind: 'forget-display', owner, revision } satisfies Down);
   }
 
   close() {
@@ -80,7 +78,7 @@ export class LuaWorker implements Runner {
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject, host });
       this.open().postMessage(message(id));
-      this.beat ??= setInterval(() => this.check(), BEAT_MS);
+      this.heart.start();
     });
   }
 
@@ -94,12 +92,12 @@ export class LuaWorker implements Runner {
   }
 
   private receive(message: Up) {
-    if (message.kind === 'pong') return void (this.pinged = null);
+    if (message.kind === 'pong') return this.heart.answered();
     const run = this.pending.get(message.id);
     if (!run) return;
     if (message.kind === 'done' || message.kind === 'failed') {
       this.pending.delete(message.id);
-      if (this.pending.size === 0) this.rest();
+      if (this.pending.size === 0) this.heart.rest();
       if (message.kind === 'done') run.resolve(message.result);
       else run.reject(new Error(message.message));
       return;
@@ -113,28 +111,11 @@ export class LuaWorker implements Runner {
     void answering.then(answer, () => answer(null));
   }
 
-  // A ping still unanswered after STUCK_MS means a script holds the worker. Counted from the ping, never from the
-  // clock alone: a hidden tab's timers run late, and the worker answers at once all the same.
-  private check() {
-    if (this.pinged !== null) {
-      if (Date.now() - this.pinged > STUCK_MS) this.end(new LuaStuck('stuck'));
-      return;
-    }
-    this.pinged = Date.now();
-    this.worker?.postMessage({ kind: 'ping' } satisfies Down);
-  }
-
-  private rest() {
-    if (this.beat) clearInterval(this.beat);
-    this.beat = null;
-    this.pinged = null;
-  }
-
   private end(error: Error) {
     this.worker?.terminate();
     this.worker = null;
     this.displays.clear();
-    this.rest();
+    this.heart.rest();
     const pending = [...this.pending.values()];
     this.pending.clear();
     for (const run of pending) run.reject(error);

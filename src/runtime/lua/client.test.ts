@@ -12,7 +12,7 @@ const snapshot: Snapshot = {
 
 afterEach(() => vi.unstubAllGlobals());
 
-it('installs history deltas once per revision and sends only generation/size for stretches', async () => {
+it('installs history deltas once per revision and sends only revision/size for stretches', async () => {
   const sent: Down[] = [];
   vi.stubGlobal('Worker', class {
     onmessage: ((event: { data: Up }) => void) | null = null;
@@ -34,8 +34,8 @@ it('installs history deltas once per revision and sends only generation/size for
     const installed = sent.filter((message) => message.kind === 'install-display');
     expect(installed.map(({ install }) => [install.messages.from, install.messages.items.length, install.history.from, install.history.items.length])).toEqual([[0, 2, 0, 2], [1, 1, 1, 1], [2, 0, 2, 0]]);
     expect(sent.filter((message) => message.kind === 'display')).toEqual([
-      { kind: 'display', id: 2, owner: 'chat', generation: 1, size: 8 },
-      { kind: 'display', id: 3, owner: 'chat', generation: 1, size: 512 },
+      { kind: 'display', id: 2, owner: 'chat', revision: 1, size: 8 },
+      { kind: 'display', id: 3, owner: 'chat', revision: 1, size: 512 },
     ]);
   } finally { runner.close(); }
 });

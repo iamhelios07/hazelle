@@ -366,7 +366,10 @@ export class ObjectStore {
     const scope = this.scopes.get(chat)!;
     const work = (async () => {
       for (;;) {
-        const next = await projectChat(this, chat, this.projections.get(chat), AbortSignal.any([scope.abort.signal, this.ended.signal, this.closing.signal]));
+        const next = await projectChat(this, chat, this.projections.get(chat), AbortSignal.any([scope.abort.signal, this.ended.signal, this.closing.signal])).catch((error: unknown) => {
+          this.failScope(chat, scope, epoch, error);
+          throw error;
+        });
         if (epoch !== this.epoch || this.scopes.get(chat) !== scope || scope.state !== 'loaded' || this.closing.signal.aborted) return null;
         if (scope.loading) return this.projections.get(chat) ?? null;
         if (next && summaryStale(this, chat, next.summary, this.loadedHead(chat))) continue;
@@ -384,10 +387,26 @@ export class ObjectStore {
     return scope.loading ? this.evaluated(chat) : result;
   }
 
-  private async evaluateHeld() {
+  // A write or a pull is done once the server took it; the held chats' projections follow. Whoever reads a chat as the
+  // write left it waits for evaluated(chat), and a projection that fails is shown on its chat's scope, never as the
+  // write's failure.
+  private refreshHeld() {
+    const epoch = this.epoch;
     for (const [chat, scope] of this.scopes) {
-      if (scope.state === 'loaded' && !scope.loading) await this.evaluated(chat);
+      if (scope.state === 'loaded' && !scope.loading) void this.evaluated(chat).catch((error: unknown) => void this.codecFailure(error, epoch));
     }
+  }
+
+  // A held chat that could not be opened or evaluated: its screen says so and offers 다시 시도 (useChatModel).
+  private failScope(chat: string, scope: Scope, epoch: number, error: unknown): ApiFailure {
+    const failure = this.codecFailure(error, epoch);
+    if (this.scopes.get(chat) === scope && epoch === this.epoch && !this.closing.signal.aborted) {
+      scope.state = 'failed';
+      scope.error = failure;
+      this.changes.push({ kind: 'scope', id: chat, parent: chat });
+      this.changed();
+    }
+    return failure;
   }
 
   // created: the caller is writing this chat's first objects under a new id, so the server has nothing to pull for it.
@@ -403,16 +422,7 @@ export class ObjectStore {
     const held = scope;
     if (held.state !== 'loaded' && !held.opening) {
       const epoch = this.epoch;
-      const opening = this.openChat(chat, held).catch((error: unknown) => {
-        const failure = this.codecFailure(error, epoch);
-        if (this.scopes.get(chat) === held && epoch === this.epoch && !this.closing.signal.aborted) {
-          held.state = 'failed';
-          held.error = failure;
-          this.changes.push({ kind: 'scope', id: chat, parent: chat });
-          this.changed();
-        }
-        return failure;
-      }).finally(() => { if (held.opening === opening) held.opening = null; });
+      const opening = this.openChat(chat, held).catch((error: unknown) => this.failScope(chat, held, epoch, error)).finally(() => { if (held.opening === opening) held.opening = null; });
       held.opening = opening;
     }
     const epoch = this.epoch;
@@ -516,7 +526,7 @@ export class ObjectStore {
       scope.loading = null;
       if (!failure) {
         try { await this.evaluated(chat); }
-        catch (error) { failure = this.codecFailure(error, epoch); scope.error = failure; scope.state = 'failed'; }
+        catch (error) { failure = this.codecFailure(error, epoch); }
       }
       this.changes.push({ kind: 'scope', id: chat, parent: chat });
       this.changed();
@@ -534,9 +544,7 @@ export class ObjectStore {
       for (const id of [...(this.byParent.get(chat)?.get(kind) ?? [])]) this.forget(id);
     }
     this.projections.delete(chat);
-    this.evaluation.forget(`projection:${chat}`);
-    this.evaluation.forget(`headless:${chat}`);
-    this.evaluation.forget(`send:${chat}`);
+    for (const lane of ['projection', 'headless', 'send', 'forecast', 'memory', 'view']) this.evaluation.forget(`${lane}:${chat}`);
     scope.state = 'unloaded';
     scope.cursor = 0;
     scope.head = 0;
@@ -701,9 +709,6 @@ export class ObjectStore {
       }
       const result = await this.commit(ordered.map((write) => this.step(write)), (index) => progress(ordered[index]!), signal);
       if (!result.ok) return result;
-      const writes = await Promise.all([...chats].map((chat) => this.summaryWrite(chat)));
-      const summaries = await this.commit(writes.filter((write): write is Write => write !== null).map((write) => this.step(write)));
-      if (!summaries.ok) return summaries;
       this.summarizeHeld();
       return { ok: true, data: null };
     } finally {
@@ -955,7 +960,7 @@ export class ObjectStore {
       saved.push(...result.data);
       for (let index = start; index < saved.length; index++) progress(index);
     }
-    await this.evaluateHeld();
+    this.refreshHeld();
     return { ok: true, data: saved };
   }
 
@@ -1030,7 +1035,7 @@ export class ObjectStore {
       const failure = await this.refreshChat(chat);
       if (failure) return failure;
     }
-    await this.evaluateHeld();
+    this.refreshHeld();
     return stopped() ? { ok: false, error: 'stopped' } : null;
   }
 

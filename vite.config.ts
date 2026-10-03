@@ -8,5 +8,8 @@ export default defineConfig({
   // An explicit ?inline import (the starter prompt, runtime/prompts) is read in code as a string and never
   // loaded as a URL, so it stays within the CSP.
   build: { assetsInlineLimit: 0 },
+  // Workers are module workers (runtime/worker moduleWorker), so a worker's dynamic import stays its own chunk: the
+  // evaluation worker starts small and loads the tokenizer apart (runtime/tokenizer).
+  worker: { format: 'es' },
   assetsInclude: ['**/*.risup'],
 });

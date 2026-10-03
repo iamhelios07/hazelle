@@ -1,9 +1,8 @@
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
-import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, standing, threadLabel, windowStart, type ChatRead, type Drafted, type MemoryInput, type RecordStatus, type Staleness } from '../engine/memory';
-import { assembleMemory, type Assembled, type RanAway } from '../engine/pipeline';
+import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type MemoryInput, type RecordStatus, type Staleness, type Standing } from '../engine/memory';
+import type { Assembled, RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
-import { renderChat } from '../engine/render';
 import { fold, shown, type Chat, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
@@ -12,7 +11,7 @@ import type { MemoryPrompt } from '../model/prompt';
 import { SETTINGS_ID } from '../model/settings';
 import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
-import { EvaluationFailed, EvaluationStopped } from './evaluation';
+import { evaluationFailure } from './evaluation';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { generate, resume, type Reply } from './generate';
 import { modelProfile } from './profiles';
@@ -21,7 +20,6 @@ import type { Session } from './session';
 import { without, type ObjectStore } from './store';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { receiptOf } from './talk';
-import { tokenizer } from './tokenizer';
 import { asSent, promptBudget, scopeOf, wouldSend } from './turn';
 
 export type { RecordStatus } from '../engine/memory';
@@ -154,19 +152,24 @@ export const removeThread = (store: ObjectStore, chat: string, thread: string): 
     (memory, found) => ({ ...memory, threads: memory.threads.filter((each) => each !== found) }),
   );
 
-// A saved chat as memory reads it: its messages as a request sends them, and their texts as the prompt renders them.
-type ChatSent = { chat: Chat; scope: ChatScope; read: ChatRead };
+// A saved chat as memory reads it, once what was last written to it is evaluated: its messages as a request sends
+// them, their texts as the prompt renders them with their tokens, and given memory, what of it a request sends.
+// asker: background memory's lane or the memory panel's (turn wouldSend).
+type ChatSent = { chat: Chat; scope: ChatScope; read: ChatRead; tokens: number[]; standing: Standing | null };
 
-function chatSent(session: Pick<Session, 'store' | 'read'>, id: string): ChatSent | null {
+async function chatSent(session: Pick<Session, 'store' | 'read'>, id: string, asker: 'memory' | 'view', memory: Memory | null): Promise<ChatSent | { kind: 'tokenizer' } | null> {
+  if (!(await session.store.evaluated(id))) return null;
   const stored = session.store.get('chat', id);
   const model = session.read.chat(id).snapshot();
   if (!stored || !model) return null;
   const messages = asSent(session.store, stored.value, model.messages);
   const scope = scopeOf(session, id, stored.value, messages);
-  return { chat: stored.value, scope, read: { shown: sourcesOf(messages), roles: messages.map(({ role }) => role), texts: renderChat('prompt', scope).texts } };
+  const shown = sourcesOf(messages);
+  const budget = memoryBudget(memorySetup(session.store, stored.value).budget, promptBudget(session.store, stored.value));
+  const texts = await session.store.evaluation.read(`${asker}:${id}`, scope, memory && { memory, shown, budget });
+  if ('kind' in texts) return texts;
+  return { chat: stored.value, scope, read: { shown, roles: messages.map(({ role }) => role), texts: texts.texts }, tokens: texts.tokens, standing: texts.standing };
 }
-
-const tokensOf = (read: ChatRead, countTokens: (text: string) => number) => read.texts.map((text) => countTokens(text.trim()));
 
 // What the memory panel shows of one chat. slot: whether the chat's prompt holds 장기 기억 where a request reaches it,
 // false while the chat cannot send. stale: why each stale record is, a record the user edited or pinned included, which
@@ -183,20 +186,20 @@ export type MemoryView = {
   tokens: { used: number; budget: number; state: number; stateLimit: number };
 };
 
-export async function memoryView(session: Pick<Session, 'store' | 'read'>, chat: string, countTokens: (text: string) => number): Promise<MemoryView | null> {
-  const sent = chatSent(session, chat);
-  if (!sent) return null;
-  const setup = memorySetup(session.store, sent.chat);
+export async function memoryView(session: Pick<Session, 'store' | 'read'>, chat: string): Promise<MemoryView | null> {
   const memory = chatMemory(session.store, chat);
-  const held = standing(memory, sent.read, memoryBudget(setup.budget, promptBudget(session.store, sent.chat)), countTokens);
+  const sent = await chatSent(session, chat, 'view', memory);
+  if (!sent || 'kind' in sent) return null;
+  const setup = memorySetup(session.store, sent.chat);
+  const held = sent.standing!;
   return {
     memory,
     setup,
-    slot: (await wouldSend(session, chat, { kind: 'answer' }))?.prompt.memory?.slot ?? false,
+    slot: (await wouldSend(session, chat, { kind: 'answer' }, undefined, 'view'))?.prompt.memory?.slot ?? false,
     records: held.status,
     stale: held.stale,
     covered: held.covered,
-    waiting: Math.max(windowStart(tokensOf(sent.read, countTokens), setup.window) - held.covered, 0),
+    waiting: Math.max(windowStart(sent.tokens, setup.window) - held.covered, 0),
     tokens: held.tokens,
   };
 }
@@ -395,9 +398,8 @@ export class Rememberer {
       if (failure) return this.change(chat, { failed: { kind: 'unsaved', failure } });
       if (!this.closed) await work();
     } catch (error) {
-      if (error instanceof EvaluationStopped) return;
-      if (error instanceof EvaluationFailed) return this.change(chat, { failed: { kind: 'unsaved', failure: { ok: false, error: 'evaluation-unavailable' } } });
-      throw error;
+      const failure = evaluationFailure(error);
+      if (failure.error !== 'stopped') this.change(chat, { failed: { kind: 'unsaved', failure } });
     } finally { lease.release(); }
   }
 
@@ -408,14 +410,12 @@ export class Rememberer {
   }
 
   private async work(chat: string) {
-    const countTokens = await tokenizer().catch(() => null);
-    if (!countTokens) return this.change(chat, { failed: { kind: 'tokenizer' } });
     while (!this.closed) {
-      const planned = await this.plan(chat, countTokens);
+      const planned = await this.plan(chat);
       if (!planned) return;
       if ('kind' in planned) return this.change(chat, { failed: planned });
       this.change(chat, { running: { model: planned.route.model.name, left: planned.left } });
-      const outcome = await this.summarize(chat, planned, countTokens);
+      const outcome = await this.summarize(chat, planned);
       if (planned.job.redo) this.reread.add(readKey(planned.job.sources));
       if (outcome === 'stopped') return;
       if (typeof outcome !== 'string') return this.change(chat, { failed: outcome });
@@ -424,10 +424,10 @@ export class Rememberer {
 
   // The next job, first the record the user asked for, then a stale automatic record, then new messages. A record one
   // of whose messages was deleted waits for the user.
-  private async plan(chat: string, countTokens: (text: string) => number): Promise<Planned | MemoryFailure | null> {
+  private async plan(chat: string): Promise<Planned | MemoryFailure | null> {
     const { store } = this.session;
-    const sent = chatSent(this.session, chat);
-    if (!sent) return null;
+    const sent = await chatSent(this.session, chat, 'memory', null);
+    if (!sent || 'kind' in sent) return sent;
     const setup = memorySetup(store, sent.chat);
     if (!setup.on) return null;
     const memory = chatMemory(store, chat);
@@ -438,9 +438,9 @@ export class Rememberer {
     // Without a 장기 기억 slot in the request, a new record would only take its messages out of it, and a stale one
     // summarized again would be paid for and never read. What the user asked for is made whatever the prompt holds.
     let slot: boolean | null = null;
-    const reaches = async () => (slot ??= (await wouldSend(this.session, chat, { kind: 'answer' }))?.prompt.memory?.slot === true);
+    const reaches = async () => (slot ??= (await wouldSend(this.session, chat, { kind: 'answer' }, undefined, 'memory'))?.prompt.memory?.slot === true);
     const again = asked ?? (stale.length && await reaches() ? stale[0] : undefined);
-    const span = !again && this.full.has(chat) && await reaches() ? await this.span(chat, sent.read, coveredBy(memory, places), setup, countTokens) : null;
+    const span = !again && this.full.has(chat) && await reaches() ? await this.span(chat, sent.tokens, coveredBy(memory, places), setup) : null;
     if (!again && !span) return null;
     const indices = again ? again.sources.flatMap(({ message }) => places.get(message) ?? []) : [];
     if (again && !indices.length) return null;
@@ -461,20 +461,19 @@ export class Rememberer {
 
   // New messages to summarize, by their tokens as the prompt renders them; earlier than batch when the next request
   // drops messages for want of room.
-  private async span(chat: string, read: ChatRead, covered: number, setup: MemorySettings, countTokens: (text: string) => number) {
-    const tokens = tokensOf(read, countTokens);
+  private async span(chat: string, tokens: number[], covered: number, setup: MemorySettings) {
     const end = windowStart(tokens, setup.window);
     if (end <= covered) return null;
     const waiting = tokens.slice(covered, end).reduce((sum, count) => sum + count, 0);
-    const dropped = waiting < setup.batch ? ((await wouldSend(this.session, chat, { kind: 'answer' }))?.prompt.dropped ?? 0) : 0;
+    const dropped = waiting < setup.batch ? ((await wouldSend(this.session, chat, { kind: 'answer' }, undefined, 'memory'))?.prompt.dropped ?? 0) : 0;
     const span = nextSpan(tokens, covered, setup, dropped);
     return span && { ...span, waiting };
   }
 
-  private async summarize(chat: string, { job, sent, from, to, memory, before, prompt, route, settings }: Planned, countTokens: (text: string) => number): Promise<Outcome> {
+  private async summarize(chat: string, { job, sent, from, to, memory, before, prompt, route, settings }: Planned): Promise<Outcome> {
     const { store, credentials } = this.session;
     const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
-    const assembled = assembleMemory({ scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID(), countTokens });
+    const assembled = await store.evaluation.memory(`memory:${chat}`, { scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID() });
     if ('kind' in assembled) return assembled;
     const { messages, span } = assembled;
     const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));
@@ -493,7 +492,8 @@ export class Rememberer {
   private async resumed(chat: string, stream: Stored<'stream'>, { sources, print }: Extract<Stream['for'], { kind: 'memory' }>) {
     const text = gather();
     const answer = await this.reads(stream.id, (signal) => resume(this.session.store, stream, signal, text.add));
-    const sent = chatSent(this.session, chat);
+    const sent = await chatSent(this.session, chat, 'memory', null);
+    if (sent && 'kind' in sent) return this.change(chat, { failed: sent });
     const places = placesOf(sent?.read.shown ?? []);
     const indices = sources.flatMap(({ message }) => places.get(message) ?? []);
     const read = indices.map((index) => ({ role: sent!.read.roles[index]!, text: sent!.read.texts[index]! }));

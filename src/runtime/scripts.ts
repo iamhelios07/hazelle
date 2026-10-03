@@ -6,7 +6,6 @@ import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Event, Outcome, Script } from '../engine/lua/run';
 import type { Host, ModelMessage, Question, Snapshot } from '../engine/lua/state';
-import { activeLore } from '../engine/pipeline';
 import { authorNote, renderChat, type ChatScope } from '../engine/render';
 import { shown, type Chat, type Message, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
@@ -15,18 +14,17 @@ import { setBotModels } from './characters';
 import { appendCall, appendScripted, appendUserMessage, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
+import { evaluationFailure } from './evaluation';
 import { generate } from './generate';
 import { luaSnapshot, type LuaStanding } from './lua/snapshot';
 import { LuaStuck, type Runner } from './lua/client';
 import { modelProfile } from './profiles';
-import { chatPrompt } from './prompts';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
 import { botCall, callOf, endCall } from './streams';
 import { receiptOf } from './talk';
-import { tokenizer } from './tokenizer';
-import { packsOf, scopeOf, togglesOf, type Blocked, type TurnContext } from './turn';
+import { packsOf, scopeOf, type Blocked, type TurnContext } from './turn';
 
 // What the bot's scripts have for the chat screen. said: the bot's own words (alertNormal, alertError, showAlert). The
 // others are the app's about the bot: a script's error, the functions it called and the block effects it holds that
@@ -55,7 +53,7 @@ export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 export type Halted = { kind: 'halted' };
 // turn: as it goes on. Its said is null once the user's message was saved here; a failure after that is kept
 // (runtime/turn TurnFailure).
-export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone' }) & { kept?: true }) | { kind: 'unsent'; failure: ApiFailure };
+export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone' } | { kind: 'unsent'; failure: ApiFailure }) & { kept?: true });
 
 // The triggers of a chat's packs, in the packs' order (design §6.5), which is the order a run walks them in. A block
 // trigger keeps its name as written, since a press finds it by that.
@@ -66,10 +64,9 @@ export const scriptsOf = (packs: readonly Pack[]): Script[] => triggersOf(packs)
 type Read = { snapshot: Snapshot; wrote: Writes[]; greeting: number };
 type Anchor = { version: string; stays?: true };
 
-export function luaStanding(store: ObjectStore, chat: Chat, scope: ChatScope): LuaStanding {
-  const toggles = togglesOf(store, chat, chatPrompt(store, chat));
+export function luaStanding(scope: ChatScope): LuaStanding {
   return {
-    globals: toggles.declared.map(({ key }) => [`${TOGGLE_GLOBAL}${key}`, toggles.value(key) ?? '']),
+    globals: [...scope.toggles].map(([key, value]) => [`${TOGGLE_GLOBAL}${key}`, value ?? '']),
     character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
     persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
     note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
@@ -120,7 +117,7 @@ export class Scripts {
   async starting(
     chat: string,
     first: TurnContext,
-    again: (answer: boolean) => TurnContext | Blocked | null,
+    again: (answer: boolean) => Promise<TurnContext | Blocked | { kind: 'unsent'; failure: ApiFailure } | null>,
     signal: AbortSignal,
   ): Promise<Started> {
     const scripts = triggersOf(first.scope.packs);
@@ -132,8 +129,8 @@ export class Scripts {
     const stopped = new Promise<Halted>((resolve) => signal.addEventListener('abort', () => resolve(halted), { once: true }));
     const started = this.queued(chat, async (): Promise<Started> => {
       let turn = first;
-      const regather = (answer: boolean) => {
-        const next = again(answer);
+      const regather = async (answer: boolean) => {
+        const next = await again(answer);
         const failed = next === null ? ({ kind: 'gone' } as const) : 'kind' in next ? next : null;
         if (next && !('kind' in next)) turn = next;
         return failed && answer ? { ...failed, kept: true as const } : failed;
@@ -141,17 +138,17 @@ export class Scripts {
       const { said } = first;
       if (said) {
         const history = (): ChatScope => ({ ...turn.scope, messages: turn.scope.messages.slice(0, -1) });
-        const input = await this.event(chat, first.chat, scripts, history(), { kind: 'input' }, null);
+        const input = await this.event(chat, scripts, history(), { kind: 'input' }, null);
         let { stop, writes: before } = input.outcome;
         let text = said.text;
         // A stop ends the turn where it is called: what would have run after it does not, and the message is saved
         // as it stands, with what was written until then.
         if (!stop) {
           if (input.changed) {
-            const failed = regather(false);
+            const failed = await regather(false);
             if (failed) return failed;
           }
-          const edited = await this.event(chat, first.chat, scripts, { ...history(), pending: before }, { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } }, null);
+          const edited = await this.event(chat, scripts, { ...history(), pending: before }, { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } }, null);
           before = [...before, ...edited.outcome.writes];
           if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
           stop = edited.outcome.stop;
@@ -159,11 +156,11 @@ export class Scripts {
         const sent = await appendUserMessage(this.session.store, chat, { ...said, text, ...(before.length > 0 && { before }) });
         if (!sent.ok) return { kind: 'unsent', failure: sent };
         if (stop) return halted;
-        const failed = regather(true);
+        const failed = await regather(true);
         if (failed) return failed;
       }
       if (signal.aborted) return halted;
-      const start = await this.event(chat, first.chat, scripts, turn.scope, { kind: 'start' }, null);
+      const start = await this.event(chat, scripts, turn.scope, { kind: 'start' }, null);
       if (start.outcome.stop) {
         const last = turn.scope.messages.at(-1);
         const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: start.outcome.writes } }));
@@ -171,7 +168,7 @@ export class Scripts {
         return halted;
       }
       if (start.changed) {
-        const failed = regather(said !== null);
+        const failed = await regather(said !== null);
         if (failed) return failed;
       }
       const before = start.outcome.writes;
@@ -188,7 +185,7 @@ export class Scripts {
     const scripts = scriptsOf(turn.scope.packs);
     if (scripts.length === 0) return { messages, writes: [] };
     return this.queued(chat, async () => {
-      const { outcome } = await this.event(chat, turn.chat, scripts, turn.scope, { kind: 'edit', stage: 'editRequest', value: messages, meta: {} }, null);
+      const { outcome } = await this.event(chat, scripts, turn.scope, { kind: 'edit', stage: 'editRequest', value: messages, meta: {} }, null);
       if (!outcome.handled) return { messages, writes: outcome.writes };
       const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
         if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
@@ -207,7 +204,7 @@ export class Scripts {
       const messages = this.session.read.chat(chat).snapshot()?.messages ?? [];
       const at = reply.message === null ? -1 : messages.findIndex((message) => message.id === reply.message);
       const scope = { ...scopeOf(this.session, chat, stored.value, at === -1 ? messages : messages.slice(0, at)), pending: reply.before ?? [] };
-      const { outcome } = await this.event(chat, stored.value, scripts, scope, { kind: 'edit', stage: 'editOutput', value: reply.text, meta: { index: -1 } }, null);
+      const { outcome } = await this.event(chat, scripts, scope, { kind: 'edit', stage: 'editOutput', value: reply.text, meta: { index: -1 } }, null);
       const before = [...(reply.before ?? []), ...outcome.writes];
       return { ...reply, text: typeof outcome.value === 'string' ? outcome.value : reply.text, ...(before.length > 0 && { before }) };
     });
@@ -233,7 +230,7 @@ export class Scripts {
     if (!stored || scripts.length === 0) return Promise.resolve(null);
     return this.queued(chat, async () => {
       const scope = scopeOf(this.session, chat, stored.value, this.session.read.chat(chat).snapshot()?.messages ?? []);
-      const { outcome } = await this.event(chat, stored.value, scripts, scope, event, anchor(scope.messages.at(-1)?.id ?? null));
+      const { outcome } = await this.event(chat, scripts, scope, event, anchor(scope.messages.at(-1)?.id ?? null));
       return outcome.handled;
     });
   }
@@ -244,8 +241,8 @@ export class Scripts {
 
   // One run over scope, and what it did to the chat saved. anchor: where its writes stand; null leaves them to the
   // caller. changed: it wrote to the chat's messages.
-  private async event(chat: string, value: Chat, scripts: Trigger[], scope: ChatScope, event: Event, anchor: Anchor | null): Promise<{ outcome: Outcome; changed: boolean }> {
-    const read = this.reading(value, scope);
+  private async event(chat: string, scripts: Trigger[], scope: ChatScope, event: Event, anchor: Anchor | null): Promise<{ outcome: Outcome; changed: boolean }> {
+    const read = this.reading(scope);
     const outcome = await this.run(chat, scripts, scope, read.snapshot, event);
     const messages = new Map((this.session.read.chat(chat).snapshot()?.messages ?? []).map((message) => [shown(message).id, message]));
     const at = (index: number): { message: Message; wrote: Writes } | null => {
@@ -264,9 +261,9 @@ export class Scripts {
     return { outcome, changed: edits.length + removed.length + added.length > 0 };
   }
 
-  private reading(chat: Chat, scope: ChatScope): Read {
+  private reading(scope: ChatScope): Read {
     const { staged, wrote, variables } = renderChat('prompt', scope);
-    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(scope, luaStanding(this.session.store, chat, scope), staged, [...variables]) };
+    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(scope, luaStanding(scope), staged, [...variables]) };
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.
@@ -303,25 +300,19 @@ export class Scripts {
       say: (tone, text) => this.note(chat, { kind: 'said', tone, text }),
       ask: (question) => this.ask(chat, question),
       model: (role, messages) => this.model(chat, role, messages),
-      tokens: (text) => tokenizer().then((count) => count(text)),
+      tokens: async (text) => {
+        const counted = await this.session.store.evaluation.count([text]);
+        if ('kind' in counted) throw new Error('tokenizer');
+        return counted[0]!;
+      },
       lore: async (reserve) => {
-        const count = await tokenizer();
         const context = scope.model?.maxContext ?? null;
-        const limit = reserve === null || context === null ? Infinity : context - reserve;
-        let total = 0;
-        const fitting: Awaited<ReturnType<Host['lore']>> = [];
-        const lore = activeLore(scope, crypto.randomUUID(), count);
+        const lore = await this.session.store.evaluation.lore(scope, crypto.randomUUID(), reserve === null || context === null ? Infinity : context - reserve);
+        if (!('kind' in lore)) return lore;
+        if (lore.kind === 'tokenizer') throw new Error('tokenizer');
         // The script reads none, and the person is told why.
-        if ('kind' in lore) {
-          this.tell(chat, 'runaway', { kind: 'runaway' });
-          return fitting;
-        }
-        for (const entry of lore) {
-          total += count(entry.text);
-          if (total > limit) break;
-          fitting.push(entry);
-        }
-        return fitting;
+        this.tell(chat, 'runaway', { kind: 'runaway' });
+        return [];
       },
     };
   }
@@ -391,11 +382,13 @@ export class Scripts {
     return answer.state === 'failed' ? refused(answer.error?.kind ?? 'failed') : { success: true, result: text };
   }
 
-  // One run at a time per chat, each reading the chat as the one before left it. A question still open when the next
-  // comes is dismissed, so a card the user passed over never holds up a send.
+  // One run at a time per chat, each reading the chat as the one before left it: a write returns before its chat's
+  // projection is made again, so each waits for it, and a projection that fails is shown on the chat's scope
+  // (ObjectStore.evaluated). A question still open when the next comes is dismissed, so a card the user passed over
+  // never holds up a send.
   private queued<T>(chat: string, task: () => Promise<T>): Promise<T> {
     for (const { id, chat: asked } of this.state.questions) if (asked === chat) this.answer(id, null);
-    const next = (this.queues.get(chat) ?? Promise.resolve()).then(task);
+    const next = (this.queues.get(chat) ?? Promise.resolve()).then(() => this.session.store.evaluated(chat).catch(evaluationFailure)).then(task);
     this.queues.set(chat, next.catch(() => {}));
     return next;
   }

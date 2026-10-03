@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
-import { Evaluation, EvaluationStopped } from './evaluation';
+import { Evaluation, EvaluationFailed, EvaluationStopped } from './evaluation';
 import { Evaluator, type EvaluationDown, type EvaluationUp } from './evaluation-core';
 
-const scope: ChatScope = { card: null, packs: [], persona: null, prompt: null, note: null, lore: [], messages: [], variables: [], greeting: null, toggle: () => null, model: null, clock: { now: 0, timeZone: 'UTC' }, assets: [], modules: [], faces: { char: null, user: null }, screen: null, pick: 'chat' };
+const scope: ChatScope = { card: null, packs: [], persona: null, prompt: null, note: null, lore: [], messages: [], variables: [], greeting: null, toggles: new Map(), model: null, clock: { now: 0, timeZone: 'UTC' }, assets: [], modules: [], faces: { char: null, user: null }, screen: null, pick: 'chat' };
 const message = (id: string, text: string) => ({ id, seed: id, role: 'user' as const, text, time: 0 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -61,4 +61,22 @@ it('does not let an older Lua patch cancel a newer whole-input revision', async 
   expect((await next).display.texts).toEqual(['']);
   expect(await old).toBeNull();
   evaluation.close();
+});
+
+it('ends a worker held by a job that leaves its ping unanswered, failing the job', async () => {
+  vi.useFakeTimers();
+  const ended: boolean[] = [];
+  vi.stubGlobal('Worker', class {
+    onmessage = null;
+    constructor() { ended.push(false); }
+    postMessage() {}
+    terminate() { ended[0] = true; }
+  });
+  const evaluation = new Evaluation();
+  const stuck = expect(evaluation.display('screen', scope, new Set())).rejects.toBeInstanceOf(EvaluationFailed);
+  await vi.advanceTimersByTimeAsync(25_000);
+  await stuck;
+  expect(ended).toEqual([true]);
+  evaluation.close();
+  vi.useRealTimers();
 });

@@ -269,6 +269,9 @@ export class ChatScreenRead {
   readonly snapshot = () => this.state.snapshot();
   readonly subscribe = (listener: () => void) => {
     if (!this.leave) {
+      // The tokenizer is loaded when a chat opens rather than with the page, a new chat not saved yet included, so a
+      // first send never waits for it.
+      this.models.store.evaluation.warm();
       const lease = this.models.store.retainChat(this.id);
       const detach = this.models.attach(this);
       const store = this.models.store.subscribe((changes) => {

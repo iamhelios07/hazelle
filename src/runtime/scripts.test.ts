@@ -5,6 +5,7 @@ import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown } from '../model/chat';
 import { setToggle } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
+import { EvaluationFailed } from './evaluation';
 import { projectGreetings } from './greetings';
 import type { Runner } from './lua/client';
 import { openSession, type Session } from './session';
@@ -164,6 +165,16 @@ describe("a turn with the bot's Lua", () => {
     }));
 });
 
+describe("a request the bot's Lua rewrote", () => {
+  it('is reported, not lost, when the worker fails to count it', () =>
+    server.withSession(async (session) => {
+      const { chat } = await chatWith(session, `listenEdit('editRequest', function(id, value) value[#value + 1] = { role = 'system', content = 'from lua' } return value end)`);
+      stubRelay(() => saying('왔구나'));
+      vi.spyOn(session.store.evaluation, 'rewrite').mockRejectedValueOnce(new EvaluationFailed('crashed'));
+      expect(await takeTurn(session, chat, { kind: 'send', text: '안녕' })).toMatchObject({ kind: 'unsent', failure: { ok: false, error: 'evaluation-unavailable' } });
+    }));
+});
+
 describe("the bot scripts' machine", () => {
   it('is ended when its session closes, one still being made then too', async () => {
     vi.stubGlobal('window', new EventTarget());
@@ -184,6 +195,23 @@ describe("the bot scripts' machine", () => {
   });
 });
 
+// Lua's editDisplay stretches as the engine runs them, each held at the gate hold() set until that is let go, so the
+// display shown before a pass lands can be read.
+function luaDisplays() {
+  const run = Lua.prototype.display;
+  const display = vi.spyOn(Lua.prototype, 'display');
+  const hold = () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    display.mockImplementation(async function (this: Lua, ...args) {
+      await held;
+      return run.apply(this, args);
+    });
+    return release;
+  };
+  return { display, hold };
+}
+
 describe("the display with the bot's Lua", () => {
   it('shows each message after its editDisplay pass, with the state as of it, and again when the state changes', () =>
     server.withSession(async (session) => {
@@ -194,15 +222,19 @@ describe("the display with the bot's Lua", () => {
       );
       stubRelay(() => saying('왔구나'));
       await takeTurn(session, chat, { kind: 'send', text: '안녕' });
+      const lua = luaDisplays();
+      const release = lua.hold();
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
       const screen = session.read.screen(chat, session.talk, opening);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       expect(screen.snapshot().pending).toBe(true);
-      expect(screen.snapshot().display.texts).toEqual([]);
+      await vi.waitFor(() => expect(screen.snapshot().display.texts).toEqual(['', '', '']));
+      release();
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
       await session.scripts.press(chat, { trigger: 'hit' });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:9>']);
+      lua.display.mockRestore();
       leave();
     }));
 
@@ -257,17 +289,21 @@ describe("the display with the bot's Lua", () => {
         screen.setInputs(opening, { width: 1200, height: 800 });
         return { texts: () => screen.snapshot().display.texts, again: () => screen.setInputs(opening, { width: 800, height: 800 }), leave };
       };
-      const display = vi.spyOn(Lua.prototype, 'display');
+      const { display, hold } = luaDisplays();
+      let release = hold();
       const named = await open(`-- editDisplay\nfunction onStart(id) end`);
-      expect(named.texts()).toEqual([]);
+      await vi.waitFor(() => expect(named.texts()).toEqual(['']));
+      release();
       await expect.poll(named.texts).toEqual(['어서 와.']);
       named.again();
       expect(named.texts()).toEqual(['어서 와.']);
       expect(display).toHaveBeenCalledOnce();
       named.leave();
 
+      release = hold();
       const computed = await open(`listenEdit('edit' .. 'Display', function(id, value) return value .. '!' end)`);
-      expect(computed.texts()).toEqual([]);
+      await vi.waitFor(() => expect(computed.texts()).toEqual(['어서 와.']));
+      release();
       await expect.poll(computed.texts).toEqual(['어서 와.!']);
       computed.leave();
 

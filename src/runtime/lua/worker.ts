@@ -6,7 +6,7 @@ import type { Down, Up } from './client';
 
 const scope = self as unknown as { postMessage(message: Up): void };
 let lua: Promise<Lua> | null = null;
-const displays = new Map<string, { generation: number; snapshot: Snapshot }>();
+const displays = new Map<string, { revision: number; snapshot: Snapshot }>();
 let calls = 0;
 const waiting = new Map<number, (value: never) => void>();
 
@@ -34,8 +34,8 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
     return;
   }
   if (data.kind === 'forget-display') {
-    if (displays.get(data.owner)?.generation === data.generation) displays.delete(data.owner);
-    void lua?.then((machine) => machine.forgetDisplay(data.owner, data.generation));
+    if (displays.get(data.owner)?.revision === data.revision) displays.delete(data.owner);
+    void lua?.then((machine) => machine.forgetDisplay(data.owner, data.revision));
     return;
   }
   lua ??= Lua.create({ wasm });
@@ -43,12 +43,12 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
   lua
     .then<Outcome | DisplayBatch | null>(async (machine) => {
       if (data.kind === 'run') return machine.run(data.owner, data.triggers, data.snapshot, data.event, host(id));
-      if (data.kind === 'display') return machine.display(data.owner, data.generation, data.size);
+      if (data.kind === 'display') return machine.display(data.owner, data.revision, data.size);
       const previous = displays.get(data.owner)?.snapshot;
       const { install } = data;
       const snapshot: Snapshot = { ...install.snapshot, messages: applyTail(previous?.messages ?? [], install.messages), scope: { ...install.snapshot.scope, messages: applyTail(previous?.scope.messages ?? [], install.history) } };
-      displays.set(data.owner, { generation: install.generation, snapshot });
-      await machine.installDisplay(data.owner, install.generation, install.scripts, snapshot, install.items);
+      displays.set(data.owner, { revision: install.revision, snapshot });
+      await machine.installDisplay(data.owner, install.revision, install.scripts, snapshot, install.items);
       return null;
     })
     .then(
