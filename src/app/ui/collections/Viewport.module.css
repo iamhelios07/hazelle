@@ -11,7 +11,7 @@
 
 .list {
   --viewport-estimate: var(--row-min-height);
-  --viewport-gap: 0;
+  --viewport-gap: var(--space-2);
 }
 
 /* No transform: row menus position against the viewport, not a transformed containing block. */
@@ -28,4 +28,15 @@
 
 .last {
   padding-bottom: 0;
+}
+
+.rail {
+  --viewport-estimate: var(--control-md);
+  --viewport-gap: var(--space-4);
+  width: var(--control-md);
+}
+
+.grid {
+  --viewport-estimate: var(--viewport-card-estimate);
+  --viewport-gap: var(--space-16);
 }

@@ -126,3 +126,10 @@
 .bar > :first-child {
   flex-grow: 1;
 }
+
+.window { grid-column: 1 / -1; min-width: 0; }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(var(--card-columns), minmax(0, 1fr));
+  gap: var(--space-16);
+}

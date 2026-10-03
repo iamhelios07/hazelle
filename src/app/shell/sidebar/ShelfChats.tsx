@@ -1,12 +1,12 @@
 import { ChevronLeft, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { matches, noResults, SEARCH_FROM } from '../../common/search';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary, useWritingChat } from '../../session';
-import { Empty, FaceButton, FaceStrip, ItemRow, NavRow, SearchField, SideTitle, Sidebar } from '../../ui';
+import { Empty, FaceButton, FaceStrip, ItemRow, NavRow, SearchField, SideTitle, Sidebar, Viewport } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { characterPage, type Route } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
@@ -26,11 +26,12 @@ type Props = {
 // Keyed by its character, so the search starts empty in each.
 export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: Props) {
   const [query, setQuery] = useState('');
-  const found = shelf.chats.filter((item) => matches(query, item.title, item.preview ?? ''));
+  const found = useMemo(() => shelf.chats.filter((item) => matches(query, item.title, item.preview ?? '')), [shelf.chats, query]);
   const { characters } = useLibrary();
   const writing = useWritingChat();
   const route = useRoute();
   const openChat = route.kind === 'chat' ? route.id : undefined;
+  const keys = useMemo(() => found.map(({ id }) => id), [found]);
   const others = characters.filter((candidate) => candidate !== shelf && candidate.chats.length > 0).slice(0, STRIP);
   // 캐릭터 없이 has a page only beside its chats.
   const about: Route | null = shelf.id !== null ? characterPage(shelf.id, !page) : page ? null : { kind: 'shelf', character: null };
@@ -55,10 +56,11 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
           {shelf.chats.length >= SEARCH_FROM && <SearchField size="sm" label="채팅 검색" value={query} onChange={setQuery} />}
         </>
       }
-      current={openChat}
       footer={<SidebarFooter />}
     >
-      {found.map((item) => (
+      <Viewport keys={keys} current={openChat}>{(index) => {
+        const item = found[index]!;
+        return (
         <ItemRow
           key={item.id}
           title={item.title}
@@ -68,7 +70,8 @@ export function ShelfChats({ page, onCollapse, shelf, typing, onEnter, onUp }: P
           current={item.id === openChat}
           onClick={() => navigate({ kind: 'chat', id: item.id })}
         />
-      ))}
+        );
+      }}</Viewport>
       {shelf.chats.length === 0 ? <Empty variant="side">{`${NO_CHATS}.`}</Empty> : found.length === 0 && <Empty variant="side">{noResults(query.trim())}</Empty>}
     </Sidebar>
   );

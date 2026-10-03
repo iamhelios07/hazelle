@@ -1,10 +1,11 @@
+import { useMemo } from 'react';
 import { Import, LayoutGrid, PackageOpen, Settings } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { useImport } from '../../library/ImportFlow';
 import { ShelfFace, shelfName } from '../../library/shelf';
 import { SETTINGS } from '../../common/words';
-import { FaceButton, IconButton, Rail } from '../../ui';
+import { FaceButton, IconButton, Rail, Viewport } from '../../ui';
 import { navigate } from '../router';
 import { HOME } from '../routes';
 import { settingsEntry } from '../settings/SettingsNav';
@@ -19,6 +20,7 @@ type Props = {
 
 export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Props) {
   const { pick, move } = useImport();
+  const keys = useMemo(() => shelves.map((shelf) => shelf.id ?? 'none'), [shelves]);
   return (
     <Rail
       onExpand={onExpand}
@@ -31,11 +33,14 @@ export function SidebarRail({ shelves, current, typing, onEnter, onExpand }: Pro
       }
       footer={<IconButton icon={Settings} label={SETTINGS} onClick={() => navigate(settingsEntry(true))} />}
     >
-      {shelves.map((shelf) => (
+      <Viewport keys={keys} variant="rail" current={current && (current.id ?? 'none')}>{(index) => {
+        const shelf = shelves[index]!;
+        return (
         <FaceButton key={shelf.id ?? 'none'} label={shelfName(shelf)} current={shelf === current} dot={typing(shelf) ? 'accent' : undefined} onClick={() => onEnter(shelf)}>
           <ShelfFace shelf={shelf} />
         </FaceButton>
-      ))}
+        );
+      }}</Viewport>
     </Rail>
   );
 }

@@ -79,11 +79,11 @@ and only this folder styles elements.**
 | controls | `TitleField` | `TitleField.module.css` | A title that is also the field that renames it |
 | controls | `ToolButton` | `ToolButton.module.css` | A labeled tool around the story, such as 토글 and 노트, with a count or a dot |
 | controls | `useAutosize.ts` (inside the kit only) | — | Grows `Composer`'s and `EditBox`'s text areas with their text |
-| collections | `Viewport` | `Viewport.module.css` | A keyed, measured window within its existing scroll parent; keeps focused rows, reading choices and source jumps across remounts |
+| collections | `Viewport` | `Viewport.module.css` | A keyed, measured window within its scroll parent or document; keeps focused rows, reading choices, keyboard traversal and source/current jumps across remounts |
 | collections | `Breakdown` | `Breakdown.module.css` | A total split into parts |
 | collections | `CardGrid` (`FaceCard`, `Portrait`, `SelectionBar`) | `CardGrid.module.css` | Characters as faces |
 | collections | `Facts` | `Facts.module.css` | Label and value pairs |
-| collections | `FolderRow` | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
+| collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: its leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), the sidebar's, lists' and menus', and tabs' colours, and the hover and current fills (`--color-item-hover`, `--color-item-current`) |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
 | collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them; a model id; a figure at a row's end; a control beside a row and rows set in under it |

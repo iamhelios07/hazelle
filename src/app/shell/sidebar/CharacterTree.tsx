@@ -1,5 +1,5 @@
 import { Import, LayoutGrid, PackageOpen } from 'lucide-react';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import { matches, type FolderTree, type Shelf } from '../../../model/library';
 import { noResults } from '../../common/search';
@@ -8,7 +8,7 @@ import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../library/ImportFlow';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary } from '../../session';
-import { Button, Empty, FolderRow, IconButton, ItemRow, Row, SearchField, Sidebar, useWide } from '../../ui';
+import { Button, Empty, FolderRow, IconButton, ItemRow, Row, SearchField, Sidebar, TreeRow, Viewport, useWide } from '../../ui';
 import { navigate } from '../router';
 import { HOME } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
@@ -48,16 +48,21 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
       />
     );
   };
-  const folderRow = (folder: FolderTree): ReactNode => {
-    const open = opened.has(folder.id);
-    const contents = byFolder.get(folder.id)!;
-    return (
-      <FolderRow key={folder.id} name={folder.value.name} count={contents.characters.length} open={open} onToggle={() => onToggleFolder(folder.id)}>
-        {open && <>{folder.children.map(folderRow)}{contents.direct.map(row)}</>}
-      </FolderRow>
-    );
-  };
-  const found = words ? characters.filter(({ character }) => matches(character, query)) : [];
+  type TreeItem = { key: string; depth: number } & ({ folder: FolderTree } | { shelf: Shelf<ChatSummary> });
+  const items = useMemo(() => {
+    const result: TreeItem[] = [];
+    const add = (shelf: Shelf<ChatSummary>, depth: number) => result.push({ key: shelf.id ?? 'none', depth, shelf });
+    const visit = (folder: FolderTree, depth: number) => {
+      result.push({ key: folder.id, depth, folder });
+      if (!opened.has(folder.id)) return;
+      folder.children.forEach((child) => visit(child, depth + 1));
+      byFolder.get(folder.id)!.direct.forEach((shelf) => add(shelf, depth + 1));
+    };
+    if (words) characters.filter(({ character }) => matches(character, query)).forEach((shelf) => add(shelf, 0));
+    else { folders.forEach((folder) => visit(folder, 0)); loose.forEach((shelf) => add(shelf, 0)); add(none, 0); }
+    return result;
+  }, [words, characters, query, folders, loose, none, opened, byFolder]);
+  const keys = useMemo(() => items.map(({ key }) => key), [items]);
 
   return (
     <Sidebar
@@ -78,15 +83,14 @@ export function CharacterTree({ page, onCollapse, current, typing, onEnter, quer
       footer={<SidebarFooter />}
     >
       {empty && (page ? <Welcome /> : <Empty variant="side">아직 캐릭터가 없어요. 봇을 가져와 보세요.</Empty>)}
-      {!empty && words && found.map(row)}
-      {!empty && words && found.length === 0 && <Empty variant="side">{noResults(words)}</Empty>}
-      {!empty && !words && (
-        <>
-          {folders.map(folderRow)}
-          {loose.map(row)}
-          {row(none)}
-        </>
-      )}
+      {!empty && words && items.length === 0 && <Empty variant="side">{noResults(words)}</Empty>}
+      {!empty && <Viewport keys={keys} current={current && (current.id ?? 'none')}>{(index) => {
+        const item = items[index]!;
+        return <TreeRow depth={item.depth}>{'shelf' in item ? row(item.shelf) :
+          <FolderRow name={item.folder.value.name} count={byFolder.get(item.folder.id)!.characters.length}
+            open={opened.has(item.folder.id)} onToggle={() => onToggleFolder(item.folder.id)} />}</TreeRow>;
+      }}</Viewport>}
+
     </Sidebar>
   );
 }

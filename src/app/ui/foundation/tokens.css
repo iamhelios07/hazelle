@@ -182,6 +182,7 @@
   --icon-sm: 18px;
   --icon-md: 22px;
   --row-min-height: 64px;
+  --viewport-card-estimate: 280px;
   --viewport-story-estimate: 320px;
   --icon-stroke: 1.8;
   --dot: 6px;

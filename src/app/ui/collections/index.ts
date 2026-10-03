@@ -1,7 +1,7 @@
 export { Breakdown } from './Breakdown';
 export { CardGrid, FaceCard, Portrait, SelectionBar } from './CardGrid';
 export { Facts } from './Facts';
-export { FolderRow } from './FolderRow';
+export { FolderRow, TreeRow } from './FolderRow';
 export { ItemRow } from './ItemRow';
 export { List, ListItem } from './List';
 export { NavGroup } from './NavGroup';
