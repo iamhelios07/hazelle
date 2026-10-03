@@ -8,16 +8,38 @@ export const recordTitle = (record: MemoryRecord) => record.what.trim() || '내�
 // When and where, as the story says them.
 export const recordScene = (record: MemoryRecord) => [record.when, record.where].filter(Boolean).join(' · ');
 
+export class MessagePositions {
+  private messages: readonly { id: string }[] | undefined;
+  private places: ReadonlyMap<string, number> = new Map();
+
+  read(messages: readonly { id: string }[]): ReadonlyMap<string, number> {
+    if (messages === this.messages) return this.places;
+    this.messages = messages;
+    // Streamed text and version changes do not move a source; only message identity and order invalidate the index.
+    if (messages.length !== this.places.size || messages.some(({ id }, at) => this.places.get(id) !== at)) {
+      this.places = new Map(messages.map(({ id }, at) => [id, at]));
+    }
+    return this.places;
+  }
+}
+
 // A record's messages as the chat shows them now, counted from 1: the ones still there, to jump to, and how many are
 // gone, which a deletion leaves until the user decides.
-export function spanOf(sources: readonly Source[], messages: readonly { id: string }[]): { words: string; there: string[] } {
-  const places = sources.map(({ message }) => messages.findIndex(({ id }) => id === message)).filter((at) => at !== -1);
-  const gone = sources.length - places.length;
-  if (places.length === 0) return { words: `지운 메시지 ${gone}개`, there: [] };
-  const from = Math.min(...places) + 1;
-  const to = Math.max(...places) + 1;
+export function spanOf(sources: readonly Source[], positions: ReadonlyMap<string, number>): { words: string; there: string[] } {
+  const there: string[] = [];
+  let from = Infinity;
+  let to = -Infinity;
+  for (const { message } of sources) {
+    const at = positions.get(message);
+    if (at === undefined) continue;
+    there.push(message);
+    from = Math.min(from, at + 1);
+    to = Math.max(to, at + 1);
+  }
+  const gone = sources.length - there.length;
+  if (there.length === 0) return { words: `지운 메시지 ${gone}개`, there };
   const span = from === to ? `${from}번째 메시지` : `메시지 ${from}–${to}`;
-  return { words: gone ? `${span} · 지운 메시지 ${gone}개` : span, there: places.map((at) => messages[at]!.id) };
+  return { words: gone ? `${span} · 지운 메시지 ${gone}개` : span, there };
 }
 
 // The state's facts by whom or what they concern, in the order each first appears.

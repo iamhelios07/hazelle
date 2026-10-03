@@ -13,7 +13,7 @@ import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, use
 import { useToast } from '../toast';
 import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, ListItem, Menu, MenuItem, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
 import { ChatMemoryRecord } from './ChatMemoryRecord';
-import { factGroups, recordScene, recordTitle, spanOf, STATUS_WORDS } from './memory';
+import { factGroups, MessagePositions, recordScene, recordTitle, spanOf, STATUS_WORDS } from './memory';
 import type { OpenChat } from './useChat';
 
 const NO_MEMORY = emptyMemory();
@@ -49,6 +49,8 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const prompts = usePrompts();
   const { running, failed } = useRemembering();
   const { item, messages, prompt, busy, actions } = chat;
+  const [messagePositions] = useState(() => new MessagePositions());
+  const positions = messagePositions.read(messages);
   // The panel opens only from a saved chat, whose item is there.
   const own = item!.chat;
   const setup = memorySetup(store, own);
@@ -62,7 +64,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   });
 
   const opened = record === null ? undefined : memory.records.find((each) => each.id === record);
-  if (opened) return <ChatMemoryRecord chat={id} record={opened} status={view?.records.get(opened.id) ?? null} stale={view?.stale.get(opened.id) ?? null} messages={messages} actions={actions} />;
+  if (opened) return <ChatMemoryRecord chat={id} record={opened} status={view?.records.get(opened.id) ?? null} stale={view?.stale.get(opened.id) ?? null} positions={positions} actions={actions} />;
 
   async function revert() {
     if (!(await save.flush())) return;
@@ -135,7 +137,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
                 <ListItem
                   key={each.id}
                   title={recordTitle(each)}
-                  description={[spanOf(each.sources, messages).words, recordScene(each)].filter(Boolean).join(' · ')}
+                  description={[spanOf(each.sources, positions).words, recordScene(each)].filter(Boolean).join(' · ')}
                   tags={[...(each.pinned ? ['항상 넣기'] : []), ...(status && status !== 'sent' ? [STATUS_WORDS[status]] : [])]}
                   onClick={() => actions.memory(each.id)}
                 />

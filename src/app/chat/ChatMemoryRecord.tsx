@@ -1,7 +1,6 @@
 import type { MemoryRecord } from '../../model/memory';
 import type { Staleness } from '../../engine/memory';
 import { editRecord, forgetRecord, pinRecord, restoreRecord, type RecordPatch, type RecordStatus } from '../../runtime/memory';
-import type { Shown } from '../../runtime/talk';
 import { EntryList } from '../common/EntryList';
 import { ago } from '../common/time';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
@@ -18,19 +17,19 @@ type Props = {
   status: RecordStatus | null;
   // Why its messages read differently now; a record the user edited or pinned is still sent while stale.
   stale: Staleness | null;
-  messages: Shown[];
+  positions: ReadonlyMap<string, number>;
   actions: ChatActions;
 };
 
 // Its fields save as they are typed.
-export function ChatMemoryRecord({ chat, record, status, stale, messages, actions }: Props) {
+export function ChatMemoryRecord({ chat, record, status, stale, positions, actions }: Props) {
   const session = useSession();
   const { store } = session;
   const toast = useToast();
   const wide = useWide();
   const save = useAutosave<RecordPatch>(`record:${chat}:${record.id}`, (patch) => editRecord(store, chat, record.id, patch));
   const shown = { ...record, ...save.unsaved };
-  const span = spanOf(record.sources, messages);
+  const span = spanOf(record.sources, positions);
   const back = () => actions.memory(null);
   const change = (patch: RecordPatch) => save.change(patch);
 
