@@ -5,8 +5,7 @@ import { evaluate, Runaway, type CbsContext } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card, Pack } from './import/types';
 import type { LoreInput } from './lorebook/activate';
-import { applyScripts, type Box } from './regex/scripts';
-import { RepeatMatches } from './regex/repeat';
+import { Scripts, type Box } from './regex/scripts';
 
 export type Stage = 'display' | 'prompt';
 
@@ -84,8 +83,7 @@ export function renderChat(
   take: ReadonlySet<number> = new Set(),
 ): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; stopped: Runaway | null } {
   const context = contexts(scope, stage, null);
-  const scripts = scope.packs.flatMap(({ regex }) => regex);
-  const repeat = new RepeatMatches(scope.messages);
+  const scripts = new Scripts(scope.packs.flatMap(({ regex }) => regex), scope.messages);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
   const variables = new Logged();
   const lua = stage === 'display' ? scope.lua : undefined;
@@ -112,13 +110,13 @@ export function renderChat(
   };
   const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
-    const at = { repeat, index };
+    const at = { index };
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
     // CBS still writes.
-    const written = (index === 0 && scope.greeting !== null) || staged ? [] : scripts;
+    const written = !((index === 0 && scope.greeting !== null) || staged);
     for (const [name, value] of before) variables.set(name, value);
     variables.log = [];
-    const replayed = guarded(() => applyScripts(role === 'user' ? 'input' : 'output', text, { ...at, scripts: written, cbs: cbs(variables) }).text, text);
+    const replayed = guarded(() => written ? scripts.apply(role === 'user' ? 'input' : 'output', text, { ...at, cbs: cbs(variables) }).text : cbs(variables)(text), text);
     wrote.push(variables.log);
     variables.log = null;
     for (const [name, value] of after) variables.set(name, value);
@@ -138,7 +136,7 @@ export function renderChat(
       }
       edited = held?.text ?? '';
     }
-    const shown = guarded(() => applyScripts(stage === 'prompt' ? 'process' : 'display', edited, { ...at, scripts, take, cbs: cbs(new Map(variables)) }), { text: edited, skipped: [], drawn: [], boxes: [] });
+    const shown = guarded(() => scripts.apply(stage === 'prompt' ? 'process' : 'display', edited, { ...at, take, cbs: cbs(new Map(variables)) }), { text: edited, skipped: [], drawn: [], boxes: [] });
     drawn.push(shown.drawn);
     boxes.push(shown.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })));
     return unescapeCbs(shown.text);

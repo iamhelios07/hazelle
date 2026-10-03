@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
 import type { RegexScript } from '../import/types';
-import { applyScripts, type Context } from './scripts';
+import { Scripts, type Context } from './scripts';
 import { RepeatMatches } from './repeat';
 
 const script = (find: string, replace: string, over: Partial<RegexScript> = {}): RegexScript => ({ name: find, find, replace, stage: 'display', flags: null, ...over });
 const message = (role: HistoryMessage['role'], text: string, index: number): HistoryMessage => ({ id: `m${index}`, seed: `m${index}`, role, text, time: null });
 const cbs = (text: string) => text.replaceAll('{{user}}', 'jin');
 const apply = (scripts: RegexScript[], text: string, over: Partial<Context> = {}) =>
-  applyScripts('display', text, { scripts, repeat: new RepeatMatches([message('assistant', text, 0)]), index: 0, cbs, ...over });
+  new Scripts(scripts, [message('assistant', text, 0)]).apply('display', text, { index: 0, cbs, ...over });
 
-describe('applyScripts', () => {
+describe('Scripts', () => {
   it('runs only its stage, globally by default; a custom flag string replaces g and keeps only valid flag letters', () => {
     expect(apply([script('a', 'b'), script('a', 'X', { stage: 'output' })], 'aAa').text).toBe('bAb');
     expect(apply([script('a', 'b', { flags: 'iz' })], 'AaA').text).toBe('baA');
@@ -51,6 +51,26 @@ describe('applyScripts', () => {
     expect([apply(scripts, 'a', { cbs: roll }).text, apply(scripts, 'a', { cbs: roll }).text]).toEqual(['1', '2']);
   });
 
+  it('prepares a pass once while resetting sticky/global patterns and reevaluating random replacements and CBS patterns', () => {
+    let options = 0;
+    let replacements = 0;
+    let rolls = 0;
+    let needle = 'a';
+    const scripts = [
+      { ...script('a', 'b'), get flags() { options++; return 'y'; }, get replace() { replacements++; return 'b'; } },
+      script('b', '{{roll}}'),
+      script('{{needle}}', 'X', { stage: 'output', flags: '<cbs>' }),
+    ];
+    const executor = new Scripts(scripts, [message('assistant', 'aa', 0), message('assistant', 'aa', 1)]);
+    const cbs = (text: string) => text.replaceAll('{{roll}}', () => String(++rolls)).replaceAll('{{needle}}', needle);
+    expect(executor.apply('display', 'aa', { index: 0, cbs }).text).toBe('1a');
+    expect(executor.apply('display', 'aa', { index: 1, cbs }).text).toBe('2a');
+    expect(executor.apply('output', 'aa', { index: 0, cbs }).text).toBe('XX');
+    needle = 'b';
+    expect(executor.apply('output', 'bb', { index: 1, cbs }).text).toBe('XX');
+    expect([options, replacements]).toEqual([1, 1]);
+  });
+
   it('moves only the first match to the top or the bottom, with $1 expanded', () => {
     const text = 'a<s>1</s>b<s>2</s>';
     expect(apply([script('<s>(\\d)</s>', '@@move_top [$1]')], text).text).toBe('[1]ab<s>2</s>');
@@ -66,7 +86,7 @@ describe('applyScripts', () => {
       message('assistant', 'still none', 4),
     ];
     const at = (out: string, text: string, flags: string | null = null) =>
-      applyScripts('display', text, { scripts: [script('<hp>\\d+</hp>', out, { flags })], repeat: new RepeatMatches(messages), index: 4, cbs }).text;
+      new Scripts([script('<hp>\\d+</hp>', out, { flags })], messages).apply('display', text, { index: 4, cbs }).text;
     expect(at('@@repeat_back end_nl', 'still none')).toBe('still none\n<hp>9</hp>');
     expect(at('@@repeat_back start', 'still none')).toBe('<hp>9</hp>still none');
     expect(at('', 'still none', '<repeat_back>')).toBe('still none<hp>9</hp>');
@@ -77,7 +97,8 @@ describe('applyScripts', () => {
     const messages = [message('assistant', '<HP>9</HP>', 0), message('user', '<hp>1</hp>', 1), message('assistant', '<hp>8</hp>', 2), message('assistant', 'none', 3)];
     const repeat = new RepeatMatches(messages);
     const scripts = [script('{{pattern}}', '@@repeat_back end', { flags: 'i<cbs>' })];
-    const at = (index: number, pattern: string) => apply(scripts, 'none', { repeat, index, cbs: (text) => text.replaceAll('{{pattern}}', pattern) }).text;
+    const executor = new Scripts(scripts, messages);
+    const at = (index: number, pattern: string) => executor.apply('display', 'none', { index, cbs: (text) => text.replaceAll('{{pattern}}', pattern) }).text;
     expect(at(1, '<hp>.*?</hp>')).toBe('none');
     expect(at(2, '<hp>.*?</hp>')).toBe('none<HP>9</HP>');
     expect(at(3, '<hp>9</hp>')).toBe('none<HP>9</HP>');

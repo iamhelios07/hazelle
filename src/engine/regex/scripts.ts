@@ -1,4 +1,5 @@
-import type { RepeatMatches } from './repeat';
+import type { HistoryMessage } from '../history';
+import { RepeatMatches } from './repeat';
 import type { RegexScript } from '../import/types';
 
 export type Skipped = { script: RegexScript; reason: { kind: 'invalid'; detail: string } | { kind: 'emotion' } };
@@ -8,13 +9,9 @@ export type Skipped = { script: RegexScript; reason: { kind: 'invalid'; detail: 
 export type Box = { script: number; html: string; at: 'top' | 'bottom' };
 
 export type Context = {
-  // In the caller's source order (spec §c); <order N> reorders them here.
-  scripts: readonly RegexScript[];
   // The scripts, by place, whose boxes are taken out of the text instead of drawn in it.
   take?: ReadonlySet<number>;
-  // The chat as shown, oldest first, and the place in it of the message the text belongs to: the stored
-  // message index display uses, never a position in a filtered history.
-  repeat: RepeatMatches;
+  // The stored message index display uses, never a position in a filtered history.
   index: number;
   cbs: (text: string) => string;
 };
@@ -39,77 +36,99 @@ const OPEN = '\uFDD0';
 const CLOSE = '\uFDD1';
 const TAKEN = new RegExp(`${OPEN}([\\s\\S]*?)${CLOSE}`, 'g');
 
-// Runs the one CBS pass over the text itself, so the caller hands in the text before CBS.
-// No result cache: Risu's froze random CBS in a replacement.
-// drawn: the scripts, by place, that drew a box in this text. A taken box goes on through the scripts after its
-// own, as it would have in the text: bots turn the <img src=name> of a status box into pictures with a later script.
-export function applyScripts(
-  stage: RegexScript['stage'],
-  text: string,
-  { scripts, take = new Set(), repeat, index, cbs }: Context,
-): { text: string; skipped: Skipped[]; drawn: number[]; boxes: Box[] } {
-  const skipped: Skipped[] = [];
-  const drawn: number[] = [];
-  const boxes: Box[] = [];
-  const run = scripts
-    .map((script, place) => ({ script, place, ...options(script.flags) }))
-    .filter(({ script }) => script.stage === stage)
-    .sort((a, b) => b.order - a.order);
-  let result = cbs(text);
-  for (const { script, place, flags, actions } of run) {
-    const out = prepare(script.replace, actions);
-    const directive = DIRECTIVE.exec(out);
-    const kind = directive?.[1] ?? ACTIONS.find((action) => actions.has(action)) ?? 'replace';
-    if (kind === 'emo') {
-      skipped.push({ script, reason: { kind: 'emotion' } });
-      continue;
-    }
-    const source = actions.has('cbs') ? cbs(script.find) : script.find;
-    // An empty pattern would match between every character.
-    if (!source) continue;
-    let regex: RegExp;
-    try {
-      regex = new RegExp(source, flags);
-    } catch (error) {
-      skipped.push({ script, reason: { kind: 'invalid', detail: error instanceof Error ? error.message : String(error) } });
-      continue;
-    }
-    // A fresh regex per use, so no lastIndex carries over between searches.
-    const once = () => new RegExp(source, flags.replace('g', ''));
-    const argument = directive ? out.slice(directive[0].length) : out;
-    const matched = result.search(regex) !== -1;
-    if (kind === 'replace' || kind === 'inject') {
-      for (const box of boxes) if (box.html.search(regex) !== -1) box.html = cbs(box.html.replace(regex, kind === 'inject' ? '' : argument));
-    }
-    if (kind === 'repeat_back') {
-      const copied = matched ? null : repeat.find(once(), index, actions.has('cbs'));
-      if (copied !== null) result = cbs((PLACEMENTS.get(argument.trim()) ?? append)(result, copied));
-    } else if (!matched) {
-      continue;
-    } else if (kind === 'move_top' || kind === 'move_bottom') {
-      const { block, rest } = cut(result, once, argument);
-      if (take.has(place)) boxes.push({ script: place, html: cbs(block), at: kind === 'move_top' ? 'top' : 'bottom' });
-      if (take.has(place) || BOX_TAG.test(argument)) drawn.push(place);
-      result = cbs(take.has(place) ? rest : kind === 'move_top' ? block + rest : rest + block);
-    } else if (kind === 'replace' && take.has(place)) {
-      const pieces: string[] = [];
-      const marked = result.replace(regex, OPEN + argument + CLOSE);
-      result = cbs(
-        marked.replace(TAKEN, (_, piece: string) => {
-          pieces.push(piece);
-          return '';
-        }),
-      );
-      boxes.push({ script: place, html: cbs(pieces.join('')), at: marked.slice(0, marked.indexOf(OPEN)).trim() ? 'bottom' : 'top' });
-      drawn.push(place);
-    } else {
-      // inject: the match leaves this stage's text. Risu also rewrote the stored message; stored text is never
-      // rewritten here, so that half has nothing to do.
-      result = cbs(result.replace(regex, kind === 'inject' ? '' : argument));
-      if (kind === 'replace' && BOX_TAG.test(argument)) drawn.push(place);
-    }
+type Pattern = { regex: RegExp; first: RegExp } | { error: string };
+type Plan = { script: RegexScript; place: number; order: number; flags: string; dynamic: boolean; kind: string; argument: string; pattern: Pattern | null };
+
+export class Scripts {
+  private readonly plans: Record<RegexScript['stage'], Plan[]> = { input: [], output: [], process: [], display: [] };
+  private readonly repeat: RepeatMatches;
+
+  // Scripts are in source order (spec §c); <order N> reorders them here. History is raw, oldest first.
+  constructor(scripts: readonly RegexScript[], messages: readonly HistoryMessage[]) {
+    this.repeat = new RepeatMatches(messages);
+    scripts.forEach((script, place) => {
+      const { flags, actions, order } = options(script.flags);
+      const out = prepare(script.replace, actions);
+      const directive = DIRECTIVE.exec(out);
+      const kind = directive?.[1] ?? ACTIONS.find((action) => actions.has(action)) ?? 'replace';
+      const dynamic = actions.has('cbs');
+      this.plans[script.stage].push({ script, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern: dynamic || kind === 'emo' ? null : compile(script.find, flags) });
+    });
+    for (const plans of Object.values(this.plans)) plans.sort((a, b) => b.order - a.order);
   }
-  return { text: result, skipped, drawn, boxes };
+
+  // Runs the one CBS pass over the text itself, so the caller hands in the text before CBS.
+  // No result cache: Risu's froze random CBS in a replacement.
+  // drawn: the scripts, by place, that drew a box in this text. A taken box goes on through the scripts after its
+  // own, as it would have in the text: bots turn the <img src=name> of a status box into pictures with a later script.
+  apply(stage: RegexScript['stage'], text: string, { take = new Set(), index, cbs }: Context): { text: string; skipped: Skipped[]; drawn: number[]; boxes: Box[] } {
+    const skipped: Skipped[] = [];
+    const drawn: number[] = [];
+    const boxes: Box[] = [];
+    let result = cbs(text);
+    for (const { script, place, flags, dynamic, kind, argument, pattern: fixed } of this.plans[stage]) {
+      if (kind === 'emo') {
+        skipped.push({ script, reason: { kind: 'emotion' } });
+        continue;
+      }
+      const pattern = dynamic ? compile(cbs(script.find), flags) : fixed;
+      if (!pattern) continue;
+      if ('error' in pattern) {
+        skipped.push({ script, reason: { kind: 'invalid', detail: pattern.error } });
+        continue;
+      }
+      const regex = () => reset(pattern.regex);
+      const once = () => reset(pattern.first);
+      const matched = result.search(regex()) !== -1;
+      if (kind === 'replace' || kind === 'inject') {
+        for (const box of boxes) if (box.html.search(regex()) !== -1) box.html = cbs(box.html.replace(regex(), kind === 'inject' ? '' : argument));
+      }
+      if (kind === 'repeat_back') {
+        const copied = matched ? null : this.repeat.find(once(), index, dynamic);
+        if (copied !== null) result = cbs((PLACEMENTS.get(argument.trim()) ?? append)(result, copied));
+      } else if (!matched) {
+        continue;
+      } else if (kind === 'move_top' || kind === 'move_bottom') {
+        const { block, rest } = cut(result, once, argument);
+        if (take.has(place)) boxes.push({ script: place, html: cbs(block), at: kind === 'move_top' ? 'top' : 'bottom' });
+        if (take.has(place) || BOX_TAG.test(argument)) drawn.push(place);
+        result = cbs(take.has(place) ? rest : kind === 'move_top' ? block + rest : rest + block);
+      } else if (kind === 'replace' && take.has(place)) {
+        const pieces: string[] = [];
+        const marked = result.replace(regex(), OPEN + argument + CLOSE);
+        result = cbs(
+          marked.replace(TAKEN, (_, piece: string) => {
+            pieces.push(piece);
+            return '';
+          }),
+        );
+        boxes.push({ script: place, html: cbs(pieces.join('')), at: marked.slice(0, marked.indexOf(OPEN)).trim() ? 'bottom' : 'top' });
+        drawn.push(place);
+      } else {
+        // inject: the match leaves this stage's text. Risu also rewrote the stored message; stored text is never
+        // rewritten here, so that half has nothing to do.
+        result = cbs(result.replace(regex(), kind === 'inject' ? '' : argument));
+        if (kind === 'replace' && BOX_TAG.test(argument)) drawn.push(place);
+      }
+    }
+    return { text: result, skipped, drawn, boxes };
+  }
+}
+
+function compile(source: string, flags: string): Pattern | null {
+  // An empty pattern would match between every character.
+  if (!source) return null;
+  try {
+    return { regex: new RegExp(source, flags), first: new RegExp(source, flags.replace('g', '')) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// Neither global nor sticky lastIndex may carry over between searches or messages.
+function reset(regex: RegExp): RegExp {
+  regex.lastIndex = 0;
+  return regex;
 }
 
 function options(flags: string | null): { flags: string; actions: Set<string>; order: number } {
