@@ -124,38 +124,67 @@ export const fileBlocks = new Hono<AppEnv>().put('/files/:id/blocked', async (c)
   return c.body(null, 204);
 });
 
-// Safe to repeat: the account's deletion reruns it after a crash (lifecycle.ts).
+const CLEANUP_PAGE = 1000;
+const CLEANUP_BUDGET = 20;
+
+// Safe to repeat: the account's deletion reruns it after a crash (lifecycle.ts). Finish this direct request: leaving
+// accounts cannot sign in again, so a scheduled-work budget must not deliberately strand their own deletion.
 export async function removeAccountFiles(env: Env, incarnation: string): Promise<void> {
-  await removePrefix(env.BLOBS, `files/${incarnation}/`);
+  for (;;) {
+    if (await removePrefixPage(env.BLOBS, `files/${incarnation}/`)) return;
+  }
 }
 
 // Removes the pictures of every incarnation that has no account: bytes an upload put after its account's deletion
 // removed the prefix. R2 is listed before D1 is read, so a listed prefix of a live account had its row already: a
 // prefix appears only after a put, which follows its account's signup.
 export async function sweepDeadPrefixes(env: Env): Promise<void> {
-  const listed: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await env.BLOBS.list({ prefix: 'files/', delimiter: '/', cursor });
-    listed.push(...page.delimitedPrefixes);
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
-  const { results } = await env.DB.prepare('SELECT incarnation FROM accounts').all<{ incarnation: string }>();
-  const live = new Set(results.map(({ incarnation }) => `files/${incarnation}/`));
-  for (const prefix of listed) if (!live.has(prefix)) await removePrefix(env.BLOBS, prefix);
+  let pages = CLEANUP_BUDGET;
+  let finished = false;
+  while (pages > 0) {
+    const { results: queued } = await env.DB.prepare('SELECT prefix FROM file_cleanup ORDER BY prefix LIMIT ?').bind(CLEANUP_PAGE).all<{ prefix: string }>();
+    for (const { prefix } of queued) {
+      let emptied = false;
+      while (pages > 0 && !emptied) {
+        pages--;
+        emptied = await removePrefixPage(env.BLOBS, prefix);
+      }
+      if (!emptied) return;
+      await env.DB.prepare('DELETE FROM file_cleanup WHERE prefix = ?').bind(prefix).run();
+      if (pages === 0) return;
+    }
+    if (finished) return;
+    const after = (await env.DB.prepare('SELECT after_key FROM file_sweep WHERE singleton = 1').first<string>('after_key'))!;
+    const page = await env.BLOBS.list({ prefix: 'files/', delimiter: '/', startAfter: after || undefined, limit: CLEANUP_PAGE });
+    pages--;
+    const prefixes = page.delimitedPrefixes;
+    // Incarnations are 32 lowercase hex digits (signup) and keys under them are file hashes. Replacing the slash
+    // after one incarnation with '0' sorts after EVERY key of that incarnation and before EVERY later incarnation.
+    // This lexical bound remains valid when prefixes disappear: unlike an R2 cursor, it names no deleted listing.
+    const next = page.truncated ? `${prefixes.at(-1)!.slice(0, -1)}0` : '';
+    await env.DB.batch([
+      // Check only the listed incarnations, after the listing. Never reuse an all-account snapshot here. The
+      // queue and marker commit together, so a crash cannot skip a prefix; concurrent sweeps use the same CAS.
+      // Advancing requires an empty queue, so overlapping runs cannot accumulate more than one prefix page.
+      env.DB.prepare(`UPDATE file_sweep SET after_key = ?1
+        WHERE singleton = 1 AND after_key = ?2 AND NOT EXISTS (SELECT 1 FROM file_cleanup)`).bind(next, after),
+      env.DB.prepare(`INSERT INTO file_cleanup (prefix)
+        SELECT value FROM json_each(?1) WHERE changes() = 1
+          AND NOT EXISTS (SELECT 1 FROM accounts WHERE incarnation = substr(value, 7, 32))
+        ON CONFLICT DO NOTHING`).bind(JSON.stringify(prefixes)),
+    ]);
+    // The last listing's work remains durable if this invocation spends its budget before deleting it. Stop after
+    // a complete scan so a service containing only live prefixes does not loop on its first page forever.
+    finished = !page.truncated;
+  }
 }
 
-// Collects every key before deleting any, so no page is listed from a cursor whose keys were deleted under it. One
-// delete takes at most 1,000 keys.
-async function removePrefix(blobs: R2Bucket, prefix: string) {
-  const keys: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await blobs.list({ prefix, cursor });
-    keys.push(...page.objects.map(({ key }) => key));
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
-  for (let start = 0; start < keys.length; start += 1000) await blobs.delete(keys.slice(start, start + 1000));
+// Re-list the first bounded page after deleting it: no cursor survives deletion of its keys. One delete takes at
+// most 1,000 keys. A partial prefix stays in the durable queue, and repeating a delete after a crash is harmless.
+async function removePrefixPage(blobs: R2Bucket, prefix: string): Promise<boolean> {
+  const page = await blobs.list({ prefix, limit: CLEANUP_PAGE });
+  if (page.objects.length) await blobs.delete(page.objects.map(({ key }) => key));
+  return !page.truncated;
 }
 
 const fileKey = (incarnation: string, id: string) => `files/${incarnation}/${id}`;

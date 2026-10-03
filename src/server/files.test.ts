@@ -241,34 +241,99 @@ describe('files', () => {
     await t.env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(gone.id).run();
     expect(await rows(gone.incarnation)).toEqual([]);
 
-    // An account and its upload landing between the sweep's two reads: a D1-first sweep would list it as dead.
-    const db = t.env.DB;
+    // An account and its upload landing while R2 is listed: a D1-first sweep would list it as dead.
+    const blobs = t.env.BLOBS;
     let late!: Awaited<ReturnType<typeof signup>>;
-    t.env.DB = new Proxy(db, {
-      get: (target, key) =>
-        key === 'prepare'
-          ? (sql: string) => {
-              const statement = target.prepare(sql);
-              if (sql !== 'SELECT incarnation FROM accounts') return statement;
-              return Object.assign(Object.create(statement) as D1PreparedStatement, {
-                all: async () => {
-                  const read = await statement.all();
-                  t.env.DB = db;
-                  late = await signup(signupBody('late'));
-                  await put(id, bytes, late.cookie);
-                  return read;
-                },
-              });
-            }
-          : (Reflect.get(target, key) as (...args: unknown[]) => unknown).bind(target),
+    t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
+      list: async (options: R2ListOptions) => {
+        if (options.delimiter && !late) {
+          late = await signup(signupBody('late'));
+          await put(id, bytes, late.cookie);
+        }
+        return blobs.list(options);
+      },
     });
     try {
       await sweepDeadPrefixes(env());
     } finally {
-      t.env.DB = db;
+      t.env.BLOBS = blobs;
     }
     expect(await stored(gone.incarnation, id)).toBeUndefined();
     expect(await stored(live.incarnation, id)).toBeDefined();
     expect(await stored(late.incarnation, id)).toBeDefined();
   });
+
+  it('finishes a direct account deletion beyond the scheduled budget without retaining its full inventory', async () => {
+    const total = 20_001;
+    let removed = 0;
+    let largest = 0;
+    const blobs = t.env.BLOBS;
+    t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
+      list: async (options: R2ListOptions) => {
+        expect(options.cursor).toBeUndefined();
+        const count = Math.min(options.limit!, total - removed);
+        largest = Math.max(largest, count);
+        return { objects: Array.from({ length: count }, (_, index) => ({ key: `${options.prefix}${removed + index}` })), truncated: removed + count < total };
+      },
+      delete: async (keys: string[]) => { removed += keys.length; },
+    });
+    try {
+      await removeAccountFiles(env(), 'a'.repeat(32));
+      expect(removed).toBe(total);
+      expect(largest).toBe(1000);
+    } finally {
+      t.env.BLOBS = blobs;
+    }
+  });
+
+  it('resumes bounded durable cleanup across prefix pages and failed deletes without using a deleted cursor', async () => {
+    const live = await signup();
+    const keys = new Set<string>();
+    for (let account = 1; account <= 25; account++) {
+      for (let file = 0; file < 1001; file++) keys.add(`files/${account.toString(16).padStart(32, '0')}/${file.toString(16).padStart(64, '0')}`);
+    }
+    const kept = `files/${live.incarnation}/${'f'.repeat(64)}`;
+    keys.add(kept);
+    const blobs = t.env.BLOBS;
+    let failDelete = true;
+    let largest = 0;
+    let listings = 0;
+    t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
+      list: async (options: R2ListOptions) => {
+        expect(options.cursor).toBeUndefined();
+        listings++;
+        const sorted = [...keys].filter((key) => key.startsWith(options.prefix!) && (!options.startAfter || key > options.startAfter)).sort();
+        if (options.delimiter) {
+          const all = [...new Set(sorted.map((key) => key.slice(0, key.lastIndexOf('/') + 1)))];
+          return { objects: [], delimitedPrefixes: all.slice(0, 2), truncated: all.length > 2 };
+        }
+        const objects = sorted.slice(0, options.limit).map((key) => ({ key }));
+        largest = Math.max(largest, objects.length);
+        return { objects, delimitedPrefixes: [], truncated: sorted.length > objects.length };
+      },
+      delete: async (removed: string[]) => {
+        if (failDelete) {
+          failDelete = false;
+          throw new Error('cut before deleting');
+        }
+        for (const key of removed) keys.delete(key);
+      },
+    });
+    try {
+      await expect(sweepDeadPrefixes(env())).rejects.toThrow('cut before deleting');
+      expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBe(2);
+      for (let attempts = 0; keys.size > 1 && attempts < 10; attempts++) {
+        listings = 0;
+        await sweepDeadPrefixes(env());
+        expect(listings).toBeLessThanOrEqual(20);
+        expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBeLessThanOrEqual(2);
+      }
+      expect(largest).toBe(1000);
+      expect([...keys]).toEqual([kept]);
+      expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBe(0);
+    } finally {
+      t.env.BLOBS = blobs;
+    }
+  });
+
 });
