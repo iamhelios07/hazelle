@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from '../vault/aead';
 import { objectKey, openObject } from '../vault/objects';
 import type { api, ApiResult } from './api';
-import { ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SEAL_ITEMS } from './object-codec';
+import { CodecAborted, CodecUnavailable, ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SEAL_ITEMS } from './object-codec';
 import { codeObjects, codecValue, type CodecJob, type CodecResult, type CodecDown, type CodecUp } from './object-codec-core';
-import * as transport from './object-codec-transport';
 import type { DeviceCache } from './object-cache';
 import { ObjectStore, type Write } from './store';
+import { CodecWorker } from './testing/object-codec-setup';
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const signal = () => new AbortController().signal;
@@ -17,6 +17,15 @@ const deferred = <T,>() => {
 };
 const key = () => objectKey(randomBytes(32));
 const item = { id: 'one', kind: 'connection', parent: null };
+// The codec worker answers each job with run's results, or crashes when run throws.
+function scripted(run: (job: CodecJob) => Promise<CodecResult[]>) {
+  const made: CodecWorker[] = [];
+  vi.stubGlobal('Worker', class extends CodecWorker {
+    constructor() { super(); made.push(this); }
+    override run(job: CodecJob) { return run(job); }
+  });
+  return made;
+}
 
 describe('persistent object codec', () => {
   it('keeps the vault wire format, ordered item errors and oversized-body suppression', async () => {
@@ -39,15 +48,14 @@ describe('persistent object codec', () => {
     const first = deferred<CodecResult[]>();
     const next = deferred<CodecResult[]>();
     const run = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(next.promise);
-    const close = vi.fn();
-    vi.spyOn(transport, 'objectCodecTransport').mockReturnValue({ run, close });
+    const made = scripted(run);
     const codec = new ObjectCodec('account', await key());
     const active = new AbortController();
     const queued = new AbortController();
     const one = codec.open([{ ...item, body: 'first' }], active.signal);
     const two = codec.open([{ ...item, body: 'cancelled' }], queued.signal);
     const three = codec.open([{ ...item, body: 'last' }], signal());
-    const rejected = [expect(one).rejects.toBeInstanceOf(transport.CodecAborted), expect(two).rejects.toBeInstanceOf(transport.CodecAborted)];
+    const rejected = [expect(one).rejects.toBeInstanceOf(CodecAborted), expect(two).rejects.toBeInstanceOf(CodecAborted)];
     await Promise.resolve();
     active.abort();
     queued.abort();
@@ -58,9 +66,10 @@ describe('persistent object codec', () => {
     expect(run.mock.calls[1]?.[0].items[0].body).toBe('last');
     next.resolve([{ ok: true, value: 'kept' }]);
     expect(await three).toEqual([{ ok: true, value: 'kept' }]);
+    const terminate = vi.spyOn(made[0]!, 'terminate');
     codec.close();
-    await expect(codec.open([], signal())).rejects.toBeInstanceOf(transport.CodecAborted);
-    expect(close).toHaveBeenCalledOnce();
+    await expect(codec.open([], signal())).rejects.toBeInstanceOf(CodecAborted);
+    expect(terminate).toHaveBeenCalledOnce();
   });
 
   it('initializes one browser worker with its key once and distinguishes a crash from corrupt objects', async () => {
@@ -74,8 +83,6 @@ describe('persistent object codec', () => {
       constructor() { made.push(this); }
     }
     vi.stubGlobal('Worker', FakeWorker);
-    const original = await vi.importActual<typeof transport>('./object-codec-transport');
-    vi.spyOn(transport, 'objectCodecTransport').mockImplementation(original.objectCodecTransport);
     const secret = await key();
     const codec = new ObjectCodec('account', secret);
     const first = codec.open([{ ...item, body: 'first' }], signal());
@@ -85,7 +92,7 @@ describe('persistent object codec', () => {
     made[0]!.onmessage!({ data: { id: 1, results: [{ ok: true, value: 'opened' }] } });
     expect(await first).toEqual([{ ok: true, value: 'opened' }]);
     const second = codec.open([{ ...item, body: 'second' }], signal());
-    const crashed = expect(second).rejects.toBeInstanceOf(transport.CodecUnavailable);
+    const crashed = expect(second).rejects.toBeInstanceOf(CodecUnavailable);
     await vi.waitFor(() => expect(made[0]?.postMessage).toHaveBeenCalledTimes(3));
     expect(made[0]!.postMessage.mock.calls[2]![0]).toMatchObject({ kind: 'batch', id: 2 });
     made[0]!.onerror!();
@@ -115,10 +122,10 @@ function feed(bodies: string[], limits = { items: 200, bytes: 10000000, body: 10
 describe('object codec store boundaries', () => {
   it('opens full item/byte bounded windows in order and obeys a scan visitor’s backpressure', async () => {
     const jobs: CodecJob[] = [];
-    vi.spyOn(transport, 'objectCodecTransport').mockReturnValue({ close: () => {}, run: async (job) => {
+    scripted(async (job) => {
       jobs.push(job);
       return job.items.map(({ id }) => ({ ok: true, value: { label: id } }));
-    } });
+    });
     const { request } = feed(Array.from({ length: 150 }, () => 'a'.repeat(100000)));
     const store = await ObjectStore.open('account', randomBytes(32), request);
     expect(await store.pull()).toBeNull();
@@ -152,7 +159,7 @@ describe('object codec store boundaries', () => {
   });
 
   it('does not turn transport failures into unreadable objects or successful scans', async () => {
-    vi.spyOn(transport, 'objectCodecTransport').mockReturnValue({ close: () => {}, run: async () => { throw new transport.CodecUnavailable('crashed'); } });
+    scripted(async () => { throw new Error('crashed'); });
     const { request } = feed(['body']);
     const store = await ObjectStore.open('account', randomBytes(32), request);
     expect(await store.pull()).toEqual({ ok: false, error: 'codec-unavailable' });
@@ -162,7 +169,7 @@ describe('object codec store boundaries', () => {
   });
 
   it('keeps an encrypted cache intact when its worker fails during opening', async () => {
-    vi.spyOn(transport, 'objectCodecTransport').mockReturnValue({ close: () => {}, run: async () => { throw new transport.CodecUnavailable('crashed'); } });
+    scripted(async () => { throw new Error('crashed'); });
     const generation = { id: 'device', timeline: 'one' };
     const cache: DeviceCache = {
       open: async () => ({ generation, saved: {
@@ -185,10 +192,10 @@ describe('object codec store boundaries', () => {
 
   it('lands a byte-limited prefix before consuming a future seal failure and keeps no-op progress slots', async () => {
     const jobs: CodecJob[] = [];
-    vi.spyOn(transport, 'objectCodecTransport').mockReturnValue({ close: () => {}, run: async (job) => {
+    scripted(async (job) => {
       jobs.push(job);
       return job.items.map(({ id }) => id === 'broken' ? { ok: false, name: 'Error', message: 'future error' } : { ok: true, value: 'x'.repeat(120) });
-    } });
+    });
     const { request, writes } = feed([], { items: 200, bytes: 250, body: 1000 });
     const store = await ObjectStore.open('account', randomBytes(32), request);
     const value = { type: 'openrouter', label: 'a', baseUrl: null, protocol: null, secret: 'key', starred: [] } as const;

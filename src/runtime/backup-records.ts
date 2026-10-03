@@ -65,18 +65,23 @@ async function openRecords(): Promise<BackupRecords> {
   }
 }
 
+export function byDepth(records: BackupRecord[]): Map<number, BackupRecord[]> {
+  const depths = new Map<number, BackupRecord[]>();
+  for (const record of records) {
+    const depth = ownershipDepth(record.object.kind);
+    let page = depths.get(depth);
+    if (!page) depths.set(depth, (page = []));
+    page.push(record);
+  }
+  return depths;
+}
+
 class DiskRecords implements BackupRecords {
   private next = 0;
   constructor(private readonly name: string, private readonly db: IDBDatabase, private readonly key: CryptoKey, private readonly release: () => Promise<void>) {}
 
   async write(records: BackupRecord[], signal: AbortSignal) {
-    const depths = new Map<number, BackupRecord[]>();
-    for (const record of records) {
-      const depth = ownershipDepth(record.object.kind);
-      let page = depths.get(depth);
-      if (!page) depths.set(depth, (page = []));
-      page.push(record);
-    }
+    const depths = byDepth(records);
     const cells: Cell[] = [];
     // Seal bounded pages, not one crypto job per tiny message. The page ordinal preserves equal-revision source
     // order within its depth; the existing vault codec remains the only temporary JSON/compression format owner.

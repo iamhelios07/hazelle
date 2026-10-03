@@ -1,7 +1,6 @@
 import type { ApiFailure, ApiResult } from './api';
-import { exportBackup, readBackup, restoreBackup, type Backup, type BackupFailure, type Options } from './backup-core';
+import { exportBackup, readBackup, restoreBackup, type BackupFailure, type BackupPin, type Options, type ReadArchive } from './backup-core';
 import type { BackupPeer } from './backup-peer';
-import type { BackupPin } from './backup-metadata';
 import type { BackupRecords } from './backup-records';
 import { bufferedBackupOutput } from './backup-zip';
 import type { Files } from './files';
@@ -20,14 +19,14 @@ export type ScanCall = { scan: number; options: Parameters<ObjectStore['scan']>[
 export type ScanRows = { scan: number; rows: { row: ObjectRow; value: unknown }[] };
 export type BatchCall = { writes: Write[]; unheld?: boolean };
 export type BatchAnswer = { result: ApiResult<null>; count: number };
-export type SaveFilesCall = { bytes: Uint8Array<ArrayBuffer>[]; expected?: NonNullable<Parameters<Files['save']>[1]>['expected'] };
+export type SaveFilesCall = { bytes: Uint8Array<ArrayBuffer>[] };
 export type OutputCall = { kind: 'write'; bytes: Uint8Array<ArrayBuffer> } | { kind: 'close' | 'abort' };
 export type Progress = { done: number; total: number };
 export type ReadAnswer = { ok: true } | BackupFailure;
 
 // One worker owns one backup job and its temporary parsed-record session. No decoded archive returns to the host.
 export class BackupJobs {
-  private backup: Backup | null = null;
+  private backup: ReadArchive | null = null;
   private running: { id: number; abort: AbortController } | null = null;
   private nextScan = 0;
   private readonly visits = new Map<number, Parameters<ObjectStore['scan']>[1]>();
@@ -106,7 +105,7 @@ export class BackupJobs {
           return result;
         },
       };
-      const files: RestoreFiles = { save: (bytes, options) => this.peer.call('saveFiles', { bytes, expected: options?.expected } satisfies SaveFilesCall) };
+      const files: RestoreFiles = { save: (bytes) => this.peer.call('saveFiles', { bytes } satisfies SaveFilesCall) };
       return await restoreBackup(store, files, this.backup, options);
     } finally {
       this.running = null;

@@ -1,14 +1,7 @@
 import type { BackupResult, Imported, ImportedModule, ImportResult, RisuCharacter, RisuChat } from '../../engine/import/types';
 import { ImportReadError, type AssetRead, type Down, type Method, type ModuleData, type Replies, type Request, type Up } from './protocol';
+import { moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
-
-type Policy = { createScriptURL(url: string): string };
-const policy = (globalThis as { trustedTypes?: { createPolicy(name: string, rules: Policy): Policy } }).trustedTypes?.createPolicy('import-worker', {
-  createScriptURL: (url) => {
-    if (url !== workerUrl) throw new TypeError('not the import worker');
-    return url;
-  },
-});
 
 type Pending = { resolve: (value: Replies[Method]) => void; reject: (error: ImportReadError) => void };
 
@@ -88,7 +81,7 @@ export class ImportWorker {
 
   private open(): Worker {
     if (this.worker) return this.worker;
-    const worker = new Worker((policy?.createScriptURL(workerUrl) ?? workerUrl) as string, { type: 'module' });
+    const worker = moduleWorker(workerUrl);
     worker.onmessage = ({ data }: MessageEvent<Up>) => {
       const pending = this.pending.get(data.id);
       if (!pending) return;

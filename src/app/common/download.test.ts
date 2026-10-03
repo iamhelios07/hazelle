@@ -1,6 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { exportBackup } from '../../runtime/backup-testing';
-import { clearDownloadOutputs, downloadOutput, DownloadUnavailable, pendingDownloadOutputs } from './download';
+import { downloadOutput } from './download';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -27,25 +26,16 @@ function temporaryStorage() {
   return { directory, stream, click };
 }
 
-it('aborts and removes a temporary file without downloading when export stops', async () => {
+it('aborts and removes a temporary file without downloading', async () => {
   const { directory, stream, click } = temporaryStorage();
   const url = vi.spyOn(URL, 'createObjectURL');
-  const abort = new AbortController();
   const output = await downloadOutput('backup.zip');
-  const result = await exportBackup({
-    pin: async () => ({ ok: true, data: { timeline: 't', epoch: 0 } }),
-    list: () => [],
-    scan: async (options, visit) => {
-      await visit({ id: 'person', kind: 'persona', parent: null, rev: 1 }, options.metadata ? undefined : { name: '달', description: '', picture: null });
-      return null;
-    },
-  }, { read: vi.fn(), missing: vi.fn() }, output, { signal: abort.signal, progress: (done) => { if (done) abort.abort(); } });
-  expect(result).toEqual({ ok: false, error: 'stopped' });
+  await output.write(new Uint8Array([1]));
+  await output.abort();
   expect(click).not.toHaveBeenCalled();
   expect(url).not.toHaveBeenCalled();
   expect(stream.abort).toHaveBeenCalledOnce();
   expect(directory.removeEntry).toHaveBeenCalledOnce();
-  expect(await pendingDownloadOutputs()).toBe(0);
 });
 
 it('opens the native picker synchronously and aborts its writable without closing it', async () => {
@@ -63,7 +53,7 @@ it('opens the native picker synchronously and aborts its writable without closin
   expect(stream.close).not.toHaveBeenCalled();
 });
 
-it('writes through to disk and retains the downloadable File until explicit cleanup', async () => {
+it('writes through to disk and keeps the downloadable File until the next export starts', async () => {
   const { directory, stream, click } = temporaryStorage();
   const create = vi.spyOn(URL, 'createObjectURL');
   const revoke = vi.spyOn(URL, 'revokeObjectURL');
@@ -77,15 +67,21 @@ it('writes through to disk and retains the downloadable File until explicit clea
   expect(new Uint8Array(await (create.mock.calls[0]![0] as Blob).arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
   expect(directory.removeEntry).not.toHaveBeenCalled();
   expect(revoke).not.toHaveBeenCalled();
-  expect(await pendingDownloadOutputs()).toBe(1);
-  await expect(downloadOutput('another.zip')).rejects.toMatchObject({ reason: 'pending' });
-  await clearDownloadOutputs();
-  expect(revoke).toHaveBeenCalledOnce();
-  expect(await pendingDownloadOutputs()).toBe(0);
+  const spool = directory.getFileHandle.mock.calls[0]![0];
+  await downloadOutput('another.zip');
+  expect(directory.removeEntry).toHaveBeenCalledExactlyOnceWith(spool);
+  expect(revoke).toHaveBeenCalledExactlyOnceWith(create.mock.results[0]!.value);
 });
 
-it('refuses an unsupported destination without accumulating a whole backup', async () => {
+it('holds the archive in memory where neither a picker nor a disk spool exists', async () => {
   vi.stubGlobal('window', {});
   vi.stubGlobal('navigator', { storage: {} });
-  await expect(downloadOutput('backup.zip')).rejects.toEqual(new DownloadUnavailable('unsupported'));
+  const click = vi.fn();
+  vi.stubGlobal('document', { createElement: () => ({ click }) });
+  const create = vi.spyOn(URL, 'createObjectURL');
+  const output = await downloadOutput('backup.zip');
+  await output.write(new Uint8Array([1, 2]));
+  await output.close();
+  expect(click).toHaveBeenCalledOnce();
+  expect(new Uint8Array(await (create.mock.calls[0]![0] as Blob).arrayBuffer())).toEqual(new Uint8Array([1, 2]));
 });

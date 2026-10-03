@@ -7,7 +7,7 @@ export type CodecResult<T = unknown> = { ok: true; value: T } | { ok: false; nam
 export type CodecDown = { kind: 'init'; account: string; key: CryptoKey } | { kind: 'batch'; id: number; job: CodecJob };
 export type CodecUp = { id: number; results: CodecResult[] };
 
-// The worker and explicitly selected test transport share this adapter and the vault's one wire codec.
+// The worker and the tests' in-process worker share this adapter and the vault's one wire codec.
 // Item failures stay ordered with successes: an opener may mark them unreadable, but a backup must fail.
 export async function codeObjects(key: CryptoKey, account: string, job: CodecJob): Promise<CodecResult[]> {
   return Promise.all(job.items.map(async (item): Promise<CodecResult> => {

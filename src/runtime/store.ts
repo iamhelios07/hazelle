@@ -3,9 +3,8 @@ import { objectKey } from '../vault/objects';
 import type { VaultKey } from '../vault/keys';
 import type { ApiFailure, ApiResult, api as realApi } from './api';
 import { pause } from './pause';
-import { ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SEAL_ITEMS } from './object-codec';
+import { CodecAborted, CodecUnavailable, ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SEAL_ITEMS } from './object-codec';
 import { codecValue, type CodecResult, type OpenItem, type SealItem } from './object-codec-core';
-import { CodecAborted, CodecUnavailable } from './object-codec-transport';
 import { orderOwned } from './removal';
 import { GenerationChanged, SCOPED, type CachedScope, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
 import { projectChat, summaryId, summaryStale, type Projection } from './summary';
@@ -1006,6 +1005,7 @@ export class ObjectStore {
   // Whole windows refill on demand, not one new RPC per consumed row. Only one window of decoded values is
   // retained; the encoded-byte cap admits one atomic oversized object alone. A batch has one promise, so skipping
   // a row that became stale cannot leave a future item's rejection unobserved. Strict scans preserve codec errors.
+  // Outside a strict scan, a body that throws while opening counts as unreadable, as one that fails authentication does.
   private opener(rows: SealedChange[], scoped: boolean, signal: AbortSignal, strict = false): (index: number) => Promise<unknown> {
     let end = 0;
     let slots = new Map<number, number>();

@@ -1,6 +1,7 @@
 import type { Trigger } from '../../engine/import/types';
 import type { DisplayItem, Displayed, Event, Lua, Outcome, Script } from '../../engine/lua/run';
 import type { Host, Snapshot } from '../../engine/lua/state';
+import { moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
 // What the runtime asks of the bot scripts' machines: the engine itself in tests, a worker in the browser.
@@ -27,14 +28,6 @@ const BEAT_MS = 1000;
 const STUCK_MS = 8000;
 
 export class LuaStuck extends Error {}
-
-type Policy = { createScriptURL(url: string): string };
-const policy = (globalThis as { trustedTypes?: { createPolicy(name: string, rules: Policy): Policy } }).trustedTypes?.createPolicy('lua-worker', {
-  createScriptURL: (url) => {
-    if (url !== workerUrl) throw new TypeError('not the Lua worker');
-    return url;
-  },
-});
 
 type Pending = { resolve: (result: Outcome | Displayed) => void; reject: (error: Error) => void; host: Host | null };
 
@@ -69,7 +62,7 @@ export class LuaWorker implements Runner {
 
   private open(): Worker {
     if (this.worker) return this.worker;
-    const worker = new Worker((policy?.createScriptURL(workerUrl) ?? workerUrl) as string, { type: 'module' });
+    const worker = moduleWorker(workerUrl);
     worker.onmessage = ({ data }: MessageEvent<Up>) => this.receive(data);
     worker.onerror = () => this.end(new LuaStuck('crashed'));
     this.worker = worker;

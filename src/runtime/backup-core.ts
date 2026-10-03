@@ -7,7 +7,6 @@ import { toBase64 } from '../vault/aead';
 import type { FileRef } from '../vault/files';
 import { BackupZip, indexZip, readEntry, unzipEntry, type BackupOutput, type ZipEntry } from './backup-zip';
 import type { Files } from './files';
-import type { BackupPin } from './backup-metadata';
 import { BACKUP_PAGE_BYTES as PAGE_BYTES, BACKUP_PAGE_ROWS as PAGE_ROWS, BackupStorageError, type BackupRecord, type BackupRecords } from './backup-records';
 import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
@@ -30,8 +29,9 @@ const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, F
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 
 export type Options = { signal?: AbortSignal; progress?: (done: number, total: number) => void };
-export type Backup = { file: Blob; entries: Map<string, ZipEntry>; objects: ObjectRow[]; files: Map<string, FileRef>; records: BackupRecords };
-export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' | 'backup-storage' };
+export type ReadArchive = { file: Blob; entries: Map<string, ZipEntry>; objects: ObjectRow[]; files: Map<string, FileRef>; records: BackupRecords };
+export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' | 'backup-storage' | 'backup-crashed' };
+export type BackupPin = { pin: Pin; excluded: Set<string> };
 export type { BackupOutput } from './backup-zip';
 
 // Every object the account reaches, decrypted, with the files they name, once each; connection keys are kept. What is
@@ -163,7 +163,7 @@ export async function exportBackup(
 // The file comes from outside, so its shape and every body are checked before anything is written; one bad
 // line refuses the whole file. The index keeps metadata and references only, never decrypted bodies; validated
 // pages go to an encrypted temporary stage, so restoring ownership depths never inflates the archive again.
-export async function readBackup(file: Blob, createRecords: () => Promise<BackupRecords>, { signal = new AbortController().signal, progress = () => {} }: Options = {}): Promise<{ ok: true; backup: Backup } | BackupFailure> {
+export async function readBackup(file: Blob, createRecords: () => Promise<BackupRecords>, { signal = new AbortController().signal, progress = () => {} }: Options = {}): Promise<{ ok: true; backup: ReadArchive } | BackupFailure> {
   let records: BackupRecords | null = null;
   let complete = false;
   try {
@@ -174,7 +174,7 @@ export async function readBackup(file: Blob, createRecords: () => Promise<Backup
     if (!isRecord(manifest) || manifest.format !== FORMAT.format) return { ok: false, error: 'not-backup' };
     if (manifest.version !== FORMAT.version) return { ok: false, error: 'other-version' };
     records = await createRecords();
-    const backup: Backup = { file, entries, objects: [], files: new Map(), records };
+    const backup: ReadArchive = { file, entries, objects: [], files: new Map(), records };
     let page: BackupRecord[] = [];
     let bytes = 0;
     const flush = async () => {
@@ -213,7 +213,7 @@ export async function readBackup(file: Blob, createRecords: () => Promise<Backup
   }
 }
 
-async function* readObjects(backup: Backup, signal: AbortSignal) {
+async function* readObjects(backup: ReadArchive, signal: AbortSignal) {
   const entry = backup.entries.get(OBJECTS);
   if (!entry) throw new Error('Missing objects');
   const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -243,14 +243,14 @@ async function* readObjects(backup: Backup, signal: AbortSignal) {
 // The backup's copies replace what opening added, whatever it holds now, and what it added that the backup lacks
 // goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
 // the operator, or too large), which are left out. What is checked and what is written are of one timeline.
-export function restoreBackup(store: Pick<ObjectStore, 'scan' | 'batch' | 'pinned'>, files: Pick<Files, 'save'>, backup: Backup, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
+export function restoreBackup(store: Pick<ObjectStore, 'scan' | 'batch' | 'pinned'>, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
   return store.pinned((pin) => restoreOn(store, files, backup, options, pin), options.signal);
 }
 
 async function restoreOn(
   store: Pick<ObjectStore, 'scan' | 'batch'>,
   files: Pick<Files, 'save'>,
-  backup: Backup,
+  backup: ReadArchive,
   { signal = new AbortController().signal, progress = () => {} }: Options,
   pin: Pin,
 ): Promise<ApiResult<{ skipped: number }>> {
@@ -291,7 +291,7 @@ async function restoreOn(
     let pictureBytes = 0;
     const savePictures = async () => {
       signal.throwIfAborted();
-      const saved = await files.save(pictures.map(({ bytes }) => bytes), { expected: pictures.map(({ ref }) => ref), signal });
+      const saved = await files.save(pictures.map(({ bytes }) => bytes), { signal });
       if (!saved.ok) return saved;
       for (let i = 0; i < pictures.length; i++) {
         const ref = pictures[i]!.ref;
@@ -312,7 +312,11 @@ async function restoreOn(
         const saved = await savePictures();
         if (!saved.ok) return saved;
       }
-      const bytes = await readEntry(backup.file, entry, signal);
+      const bytes = await readEntry(backup.file, entry, signal).catch(() => null);
+      if (!bytes) {
+        signal.throwIfAborted();
+        return { ok: false, error: 'not-backup' };
+      }
       pictures.push({ ref, bytes });
       pictureBytes += bytes.length;
     }
@@ -354,11 +358,12 @@ async function restoreOn(
     const removed = await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })), undefined, { signal });
     return removed.ok ? { ok: true, data: { skipped } } : removed;
   } catch (error) {
-    return { ok: false, error: signal.aborted ? 'stopped' : error instanceof BackupStorageError ? 'backup-storage' : 'not-backup' };
+    // A picture entry that does not read refuses the file above; what throws here is the stage, the host or the worker.
+    return { ok: false, error: signal.aborted ? 'stopped' : error instanceof BackupStorageError ? 'backup-storage' : 'backup-crashed' };
   }
 }
 
-function depthsOf(backup: Backup, wanted: ReadonlySet<string>): number[] {
+function depthsOf(backup: ReadArchive, wanted: ReadonlySet<string>): number[] {
   return [...new Set(backup.objects.filter(({ id }) => wanted.has(id)).map(({ kind }) => ownershipDepth(kind as Kind)))].sort((a, b) => b - a);
 }
 

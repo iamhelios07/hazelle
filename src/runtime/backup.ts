@@ -1,9 +1,11 @@
+import { REMOVABLE } from '../model/library';
 import type { ApiResult } from './api';
-import type { BackupFailure, Options } from './backup-core';
+import type { BackupFailure, BackupPin, Options } from './backup-core';
 import type { BackupInput, BatchAnswer, BatchCall, ExportFiles, ExportStore, OutputCall, Progress, ReadAnswer, RestoreFiles, RestoreStore, SaveFilesCall, ScanCall, ScanRows } from './backup-job';
-import { pinBackup } from './backup-metadata';
 import { BackupPeer, type BackupMessage } from './backup-peer';
 import type { BackupOutput } from './backup-zip';
+import type { ObjectStore } from './store';
+import { moduleWorker } from './worker';
 import type { FileRef } from '../vault/files';
 import workerUrl from './backup-worker?worker&url';
 
@@ -12,16 +14,20 @@ export type { BackupFailure } from './backup-core';
 export type Backup = { close: () => Promise<void>; worker: BackupWorker };
 
 type Host = { store: ExportStore; files: ExportFiles; output: BackupOutput } | { store: RestoreStore; files: RestoreFiles };
-type Policy = { createScriptURL(url: string): string };
-const policy = (globalThis as { trustedTypes?: { createPolicy(name: string, rules: Policy): Policy } }).trustedTypes?.createPolicy('backup-worker', {
-  createScriptURL: (url) => {
-    if (url !== workerUrl) throw new TypeError('not the backup worker');
-    return url;
-  },
-});
+
+// The metadata scan cannot see a deletion mark or a chat's character: both are sealed in the body. Only their ids
+// cross to the backup worker, never the library's complete character cards and chat values. Pin can hydrate a fresh
+// or rewound store, so capture these marks only after pin settles, as part of the same host request.
+export async function pinBackup(store: Pick<ObjectStore, 'pin' | 'list'>, signal?: AbortSignal): Promise<ApiResult<BackupPin>> {
+  const pinned = await store.pin(signal);
+  if (!pinned.ok) return pinned;
+  const excluded = new Set(REMOVABLE.flatMap((kind) => store.list(kind).filter(({ value }) => value.deleted !== undefined).map(({ id }) => id)));
+  for (const { id, value } of store.list('chat')) if (value.character !== null && excluded.has(value.character)) excluded.add(id);
+  return { ok: true, data: { pin: pinned.data, excluded } };
+}
 
 class BackupWorker {
-  private readonly worker = new Worker((policy?.createScriptURL(workerUrl) ?? workerUrl) as string, { type: 'module' });
+  private readonly worker = moduleWorker(workerUrl);
   private readonly peer = new BackupPeer((message) => this.worker.postMessage(message), (name, args) => this.handle(name, args));
   private next = 0;
   private host: Host | null = null;
@@ -108,8 +114,7 @@ class BackupWorker {
         return { result, count } satisfies BatchAnswer;
       }
       if (name === 'saveFiles') {
-        const { bytes, expected } = args as SaveFilesCall;
-        return host.files.save(bytes, { expected, signal });
+        return host.files.save((args as SaveFilesCall).bytes, { signal });
       }
     }
     throw new Error('Unknown backup host call');
@@ -124,7 +129,7 @@ export async function exportBackup(store: ExportStore, files: ExportFiles, outpu
     return await worker.run({ kind: 'export' }, { store, files, output }, options);
   } catch {
     await output.abort().catch(() => {});
-    return { ok: false, error: options.signal?.aborted ? 'stopped' : 'backup-write' };
+    return { ok: false, error: options.signal?.aborted ? 'stopped' : 'backup-crashed' };
   } finally { await worker?.close(); }
 }
 
@@ -138,7 +143,7 @@ export async function readBackup(file: Blob, options: Options = {}): Promise<{ o
     return read;
   } catch {
     await worker?.close();
-    return { ok: false, error: options.signal?.aborted ? 'stopped' : 'backup-storage' };
+    return { ok: false, error: options.signal?.aborted ? 'stopped' : 'backup-crashed' };
   }
 }
 
@@ -146,6 +151,6 @@ export async function restoreBackup(store: RestoreStore, files: RestoreFiles, ba
   try {
     return await store.pinned((pin) => backup.worker.run({ kind: 'restore', pin }, { store, files }, options), options.signal);
   } catch {
-    return { ok: false, error: options.signal?.aborted ? 'stopped' : 'backup-storage' };
+    return { ok: false, error: options.signal?.aborted ? 'stopped' : 'backup-crashed' };
   }
 }

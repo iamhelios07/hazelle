@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { expect, it, vi } from 'vitest';
 import type { Kind, Stored } from '../model/kinds';
 import { sealFile } from '../vault/files';
-import { exportBackup, readBackup, restoreBackup, type BackupOutput } from './backup-testing';
+import { exportBackup, readBackup, restoreBackup, type BackupOutput } from './testing/backup';
 import type { ObjectStore } from './store';
 import * as zip from './backup-zip';
 
@@ -89,7 +89,7 @@ it('round-trips streamed objects and files and filters unreachable objects from 
   const next = store();
   const save = vi.fn(async (bytes: Uint8Array<ArrayBuffer>[]) => ({ ok: true as const, data: await Promise.all(bytes.map(async (bytes) => (await sealFile(bytes)).ref)) }));
   expect(await restoreBackup(next.api, { save }, opened)).toEqual({ ok: true, data: { skipped: 0 } });
-  expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes], { expected: [source.ref], signal: expect.any(AbortSignal) });
+  expect(save).toHaveBeenCalledExactlyOnceWith([source.bytes], { signal: expect.any(AbortSignal) });
   for (const object of source.objects) expect(next.held.get(object.id)).toMatchObject({ ...object, rev: expect.any(Number) });
   expect(next.held.size).toBe(source.objects.length);
   expect(read).toHaveBeenCalledTimes(1);
@@ -185,6 +185,14 @@ it('leaves out what names a picture the server refuses, and counts it', async ()
   const next = store();
   expect(await restoreBackup(next.api, { save: async () => ({ ok: true, data: [null] }) }, await backup(target.file()))).toEqual({ ok: true, data: { skipped: 1 } });
   expect(next.written).toEqual(['person', 'character']);
+});
+
+it('reports a failing host call as a broken job, not a broken file', async () => {
+  const source = await pictureObjects();
+  const target = destination();
+  await exportBackup(store(source.objects).api, { read: async () => ({ ok: true, data: source.bytes }), missing }, target.output);
+  const save = async () => { throw new Error('Backup worker is closed'); };
+  expect(await restoreBackup(store().api, { save }, await backup(target.file()))).toEqual({ ok: false, error: 'backup-crashed' });
 });
 
 it('exports without a picture the operator blocked and what names it, and counts them', async () => {
