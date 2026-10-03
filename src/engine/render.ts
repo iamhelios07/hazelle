@@ -136,7 +136,7 @@ export function renderChat(
       }
       edited = held?.text ?? '';
     }
-    const shown = guarded(() => scripts.apply(stage === 'prompt' ? 'process' : 'display', edited, { ...at, take, cbs: cbs(new Map(variables)) }), { text: edited, skipped: [], drawn: [], boxes: [] });
+    const shown = guarded(() => scripts.apply(stage === 'prompt' ? 'process' : 'display', edited, { ...at, take, cbs: cbs(new Map(variables)) }), { text: edited, drawn: [], boxes: [] });
     drawn.push(shown.drawn);
     boxes.push(shown.boxes.map((box) => ({ ...box, html: unescapeCbs(box.html) })));
     return unescapeCbs(shown.text);

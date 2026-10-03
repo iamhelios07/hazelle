@@ -16,7 +16,7 @@ describe('Scripts', () => {
     expect(apply([script('a', 'b', { flags: 'iz' })], 'AaA').text).toBe('baA');
     expect(apply([script('a', 'b', { flags: '<no_end_nl>' })], 'aa').text).toBe('bb');
     // No valid letter means no flags, not Risu's `u`, under which `\-` does not compile.
-    expect(apply([script('\\-', '+', { flags: 'z' })], 'a-b-')).toMatchObject({ text: 'a+b-', skipped: [] });
+    expect(apply([script('\\-', '+', { flags: 'z' })], 'a-b-')).toMatchObject({ text: 'a+b-' });
   });
 
   it('stable-sorts by <order N>, highest first, with scripts that have none at 0', () => {
@@ -41,7 +41,7 @@ describe('Scripts', () => {
 
   it('skips a script whose pattern is empty, also after CBS', () => {
     const blank = (text: string) => text.replaceAll('{{unset}}', '');
-    expect(apply([script('', 'X'), script('{{unset}}', 'X', { flags: '<cbs>' })], 'ab', { cbs: blank })).toMatchObject({ text: 'ab', skipped: [] });
+    expect(apply([script('', 'X'), script('{{unset}}', 'X', { flags: '<cbs>' })], 'ab', { cbs: blank })).toMatchObject({ text: 'ab' });
   });
 
   it('keeps no result cache, so a random tag in a replacement rolls on each call (design §5 row 11)', () => {
@@ -136,13 +136,13 @@ describe('Scripts', () => {
     expect(apply(scripts, 'hi [hp=3]', { take: new Set([0]) })).toMatchObject({ text: 'hi ', boxes: [{ script: 0, html: '<div>HP 3</div>\n', at: 'top' }] });
   });
 
-  it('skips a script with an invalid pattern and says why, and runs the rest', () => {
+  it('skips a script with an invalid pattern and runs the rest', () => {
     const scripts = [script('(', 'x'), script('a', 'b')];
-    expect(apply(scripts, 'a(')).toMatchObject({ text: 'b(', skipped: [{ script: scripts[0], reason: { kind: 'invalid', detail: expect.stringContaining('Invalid regular expression') } }] });
+    expect(apply(scripts, 'a(')).toEqual({ text: 'b(', drawn: [], boxes: [] });
   });
 
   it('skips an emotion script, since emotion images are not supported, and leaves the text', () => {
-    const scripts = [script('a', '@@emo happy')];
-    expect(apply(scripts, 'a')).toMatchObject({ text: 'a', skipped: [{ script: scripts[0], reason: { kind: 'emotion' } }] });
+    const scripts = [script('a', '@@emo happy'), script('b', 'c')];
+    expect(apply(scripts, 'ab')).toEqual({ text: 'ac', drawn: [], boxes: [] });
   });
 });

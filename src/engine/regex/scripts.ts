@@ -2,8 +2,6 @@ import type { HistoryMessage } from '../history';
 import { RepeatMatches } from './repeat';
 import type { RegexScript } from '../import/types';
 
-export type Skipped = { script: RegexScript; reason: { kind: 'invalid'; detail: string } | { kind: 'emotion' } };
-
 // A box a script drew, taken out of the text (상태창 지정, design §6.4). script is its place in the caller's scripts.
 // at: which end of the text it stood at, or for a box within the text, the end.
 export type Box = { script: number; html: string; at: 'top' | 'bottom' };
@@ -36,8 +34,8 @@ const OPEN = '\uFDD0';
 const CLOSE = '\uFDD1';
 const TAKEN = new RegExp(`${OPEN}([\\s\\S]*?)${CLOSE}`, 'g');
 
-type Pattern = { regex: RegExp; first: RegExp } | { error: string };
-type Plan = { script: RegexScript; place: number; order: number; flags: string; dynamic: boolean; kind: string; argument: string; pattern: Pattern | null };
+type Pattern = { regex: RegExp; first: RegExp };
+type Plan = { source: string; place: number; order: number; flags: string; dynamic: boolean; kind: string; argument: string; pattern: Pattern | null };
 
 export class Scripts {
   private readonly plans: Record<RegexScript['stage'], Plan[]> = { input: [], output: [], process: [], display: [] };
@@ -52,7 +50,8 @@ export class Scripts {
       const directive = DIRECTIVE.exec(out);
       const kind = directive?.[1] ?? ACTIONS.find((action) => actions.has(action)) ?? 'replace';
       const dynamic = actions.has('cbs');
-      this.plans[script.stage].push({ script, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern: dynamic || kind === 'emo' ? null : compile(script.find, flags) });
+      const source = script.find;
+      this.plans[script.stage].push({ source, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern: dynamic || kind === 'emo' ? null : compile(source, flags) });
     });
     for (const plans of Object.values(this.plans)) plans.sort((a, b) => b.order - a.order);
   }
@@ -61,22 +60,14 @@ export class Scripts {
   // No result cache: Risu's froze random CBS in a replacement.
   // drawn: the scripts, by place, that drew a box in this text. A taken box goes on through the scripts after its
   // own, as it would have in the text: bots turn the <img src=name> of a status box into pictures with a later script.
-  apply(stage: RegexScript['stage'], text: string, { take = new Set(), index, cbs }: Context): { text: string; skipped: Skipped[]; drawn: number[]; boxes: Box[] } {
-    const skipped: Skipped[] = [];
+  apply(stage: RegexScript['stage'], text: string, { take = new Set(), index, cbs }: Context): { text: string; drawn: number[]; boxes: Box[] } {
     const drawn: number[] = [];
     const boxes: Box[] = [];
     let result = cbs(text);
-    for (const { script, place, flags, dynamic, kind, argument, pattern: fixed } of this.plans[stage]) {
-      if (kind === 'emo') {
-        skipped.push({ script, reason: { kind: 'emotion' } });
-        continue;
-      }
-      const pattern = dynamic ? compile(cbs(script.find), flags) : fixed;
+    for (const { source, place, flags, dynamic, kind, argument, pattern: fixed } of this.plans[stage]) {
+      if (kind === 'emo') continue;
+      const pattern = dynamic ? compile(cbs(source), flags) : fixed;
       if (!pattern) continue;
-      if ('error' in pattern) {
-        skipped.push({ script, reason: { kind: 'invalid', detail: pattern.error } });
-        continue;
-      }
       const regex = () => reset(pattern.regex);
       const once = () => reset(pattern.first);
       const matched = result.search(regex()) !== -1;
@@ -111,7 +102,7 @@ export class Scripts {
         if (kind === 'replace' && BOX_TAG.test(argument)) drawn.push(place);
       }
     }
-    return { text: result, skipped, drawn, boxes };
+    return { text: result, drawn, boxes };
   }
 }
 
@@ -120,8 +111,8 @@ function compile(source: string, flags: string): Pattern | null {
   if (!source) return null;
   try {
     return { regex: new RegExp(source, flags), first: new RegExp(source, flags.replace('g', '')) };
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : String(error) };
+  } catch {
+    return null;
   }
 }
 
@@ -162,4 +153,3 @@ function cut(text: string, once: () => RegExp, block: string): { block: string; 
   const replaced = text.replace(once(), block);
   return { block: replaced.slice(at, replaced.length - (rest.length - at)), rest };
 }
-
