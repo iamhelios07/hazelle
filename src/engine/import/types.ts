@@ -1,4 +1,4 @@
-import type { PresetResult } from './preset';
+import type { PresetFailure, PresetResult } from './preset';
 import type { BlockCondition, BlockEffect } from './blocks';
 
 export type Card = {
@@ -161,17 +161,24 @@ export type RisuCharacter = Omit<Imported, 'avatar'> & {
 export type RisuPersona = { id: string | null; name: string; alias: string; description: string; picture: () => Promise<Picture | null> };
 export type RisuPreset = { name: string; result: PresetResult };
 // pictures: the picture entries the files hold, in all; 0 says the account backup was written without its assets.
-export type RisuBackup = {
+export type BackupCatalog = {
   pictures: number;
-  characters: RisuCharacter[];
-  personas: RisuPersona[];
-  presets: RisuPreset[];
-  // Each with its pictures read from the backup when it is brought.
-  modules: ImportedModule[];
+  characters: { key: number; id: string; name: string; chatCount: number; assetCount: number; lastTalk: number }[];
+  personas: { key: number; name: string; alias: string }[];
+  presets: { key: number; name: string; failure: PresetFailure['kind'] | null }[];
+  modules: { key: number; name: string; risu: string | null; assetCount: number }[];
   // The Risu ids of the modules on in every chat, whether or not the backup holds them.
   alwaysModules: string[];
   // What the backup held outside its characters that does not come (group chats).
   unsupported: MoveUnsupported[];
+};
+// Catalog rows carry no history or asset readers. Keys identify source positions even when Risu ids repeat.
+export type RisuBackup = {
+  catalog: BackupCatalog;
+  character(key: number): Promise<RisuCharacter>;
+  persona(key: number): Promise<RisuPersona>;
+  preset(key: number): Promise<RisuPreset>;
+  module(key: number): Promise<ImportedModule>;
 };
 export type BackupFailure = { kind: 'encrypted' | 'no-database' | 'unreadable'; detail?: string };
 export type BackupResult = { ok: true; backup: RisuBackup } | { ok: false; failure: BackupFailure };

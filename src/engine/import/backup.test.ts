@@ -174,14 +174,17 @@ describe('readBackup', () => {
       [source.size - data.length, data.length],
     ]);
     if (!result.ok) throw new Error(result.failure.kind);
-    const avatar = await result.backup.characters[0]!.avatar();
+    const character = await result.backup.character(result.backup.catalog.characters[0]!.key);
+    if (!reference.ok) throw new Error(reference.failure.kind);
+    expect(JSON.stringify(character)).toBe(JSON.stringify(await reference.backup.character(reference.backup.catalog.characters[0]!.key)));
+    const avatar = await character.avatar();
     expect(avatar?.type).toBe('image/png');
     expect(avatar?.bytes.length).toBe(picture.length);
     expect(avatar?.bytes.every((byte, i) => byte === picture[i])).toBe(true);
     expect(read.mock.calls.at(-1)).toEqual([window + 14, picture.length]);
   });
 
-  it('bounds cold character and nested chat reads together while preserving their order', async () => {
+  it('bounds cold metadata reads and loads only the selected character as message histories', async () => {
     const characters = Array.from({ length: 12 }, (_, i) => ({ chaId: `c${i}`, coldstorage: `c${i}` }));
     const entries: [string, Uint8Array][] = characters.flatMap(({ chaId }) => {
       const chats = Array.from({ length: 3 }, (_, i) => ({ name: `${chaId}-${i}`, message: [{ role: 'char', data: `${COLD}${chaId}-${i}` }] }));
@@ -208,9 +211,12 @@ describe('readBackup', () => {
     expect(peak).toBe(8);
     expect(active).toBe(0);
     if (!result.ok) throw new Error(result.failure.kind);
-    expect(result.backup.characters.map(({ id, chats }) => [id, chats.map((chat) => chat.messages[0]!.text)])).toEqual(
-      characters.map(({ chaId }) => [chaId, [`${chaId}-0`, `${chaId}-1`, `${chaId}-2`]]),
-    );
+    const { catalog } = result.backup;
+    expect(catalog.characters.map(({ id, chatCount }) => [id, chatCount])).toEqual(characters.map(({ chaId }) => [chaId, 3]));
+    expect(catalog.characters.every((character) => !('chats' in character))).toBe(true);
+    const selected = await result.backup.character(catalog.characters[5]!.key);
+    expect(selected.chats.map((chat) => chat.messages[0]!.text)).toEqual(['c5-0', 'c5-1', 'c5-2']);
+    expect(peak).toBe(8);
   });
 
   it('takes the text from the partial backup and the pictures from the account backup dropped with it', async () => {
@@ -219,8 +225,8 @@ describe('readBackup', () => {
       bin([['database.risudat', database(db)]]),
     ]);
     if (!result.ok) throw new Error(result.failure.kind);
-    expect(result.backup.pictures).toBe(2);
-    const card = result.backup.characters[0]!;
+    expect(result.backup.catalog.pictures).toBe(2);
+    const card = await result.backup.character(result.backup.catalog.characters[0]!.key);
     expect(await card.avatar()).toEqual({ bytes: PNG, type: 'image/png' });
     expect(card.assets.map(({ name }) => name)).toEqual(['map']);
   });
@@ -232,13 +238,18 @@ describe('readBackup', () => {
   });
 
   it('brings characters out of cold storage, in Risu order, as cards with lazy pictures', async () => {
-    const { characters, unsupported } = await read();
+    const backup = await read();
+    const characters = await Promise.all(backup.catalog.characters.map(({ key }) => backup.character(key)));
+    expect(backup.catalog.characters).toEqual([
+      { key: 2, id: 'sleeper', name: 'Sleeper', chatCount: 1, assetCount: 0, lastTalk: 5 },
+      { key: 1, id: 'mira', name: 'Mira', chatCount: 2, assetCount: 1, lastTalk: 1000 },
+    ]);
     expect(characters.map(({ id, folder }) => [id, folder])).toEqual([
       ['sleeper', 'Fav'],
       ['mira', null],
     ]);
     expect(characters[0]!.chats).toEqual([{ title: 'Nap', note: null, persona: null, greeting: 0, variables: [], messages: [{ role: 'user', text: 'wake', at: 5 }] }]);
-    expect(unsupported).toEqual([
+    expect(backup.catalog.unsupported).toEqual([
       { kind: 'group-chat', count: 1 },
       { kind: 'cold-missing', count: 1 },
     ]);
@@ -256,7 +267,8 @@ describe('readBackup', () => {
   });
 
   it('maps chats and counts what they held that does not come', async () => {
-    const card = (await read()).characters[1]!;
+    const backup = await read();
+    const card = await backup.character(backup.catalog.characters[1]!.key);
     expect(card.chats).toEqual([
       {
         title: 'Live',
@@ -290,8 +302,8 @@ describe('readBackup', () => {
       modules: [{ name: 'Lore', lorebook: lore }],
     })]])]);
     if (!result.ok) throw new Error(result.failure.kind);
-    const character = result.backup.characters[0]!;
-    const module = result.backup.modules[0]!;
+    const character = await result.backup.character(result.backup.catalog.characters[0]!.key);
+    const module = await result.backup.module(result.backup.catalog.modules[0]!.key);
     expect(character.lore).toEqual(module.lore);
     expect(character.loreFolders).toEqual(['Places']);
     expect(character.lore.map(({ content }) => content)).toEqual([
@@ -303,7 +315,9 @@ describe('readBackup', () => {
   });
 
   it('reads a module with its pictures from the asset storage, and where Risu had it on as Risu ids', async () => {
-    const { modules, alwaysModules, characters } = await read();
+    const backup = await read();
+    const modules = await Promise.all(backup.catalog.modules.map(({ key }) => backup.module(key)));
+    const characters = await Promise.all(backup.catalog.characters.map(({ key }) => backup.character(key)));
     expect(modules).toMatchObject([
       {
         name: 'Bell',
@@ -317,7 +331,7 @@ describe('readBackup', () => {
     ]);
     expect(modules[0]!.assets.map(({ name }) => name)).toEqual(['bell']);
     expect(await modules[0]!.assets[0]!.read()).toEqual(PNG);
-    expect(alwaysModules).toEqual(['m1']);
+    expect(backup.catalog.alwaysModules).toEqual(['m1']);
     expect(characters.map(({ id, modules }) => [id, modules])).toEqual([
       ['sleeper', []],
       ['mira', ['m1', 'm2']],
@@ -326,15 +340,16 @@ describe('readBackup', () => {
 
   it('takes the selected persona and the active preset from their live values, without keys', async () => {
     const backup = await read();
-    expect(backup.personas.map(({ id, name, alias, description }) => ({ id, name, alias, description }))).toEqual([
+    const personas = await Promise.all(backup.catalog.personas.map(({ key }) => backup.persona(key)));
+    expect(personas.map(({ id, name, alias, description }) => ({ id, name, alias, description }))).toEqual([
       { id: 'p1', name: 'Ann', alias: '', description: 'live' },
       { id: 'p2', name: 'Bob', alias: 'the rich one', description: 'b' },
     ]);
-    expect(await backup.personas[0]!.picture()).toEqual({ bytes: PNG, type: 'image/png' });
-    expect(await backup.personas[1]!.picture()).toBeNull();
-    const [main, legacy] = backup.presets;
+    expect(await personas[0]!.picture()).toEqual({ bytes: PNG, type: 'image/png' });
+    expect(await personas[1]!.picture()).toBeNull();
+    const [main, legacy] = await Promise.all(backup.catalog.presets.map(({ key }) => backup.preset(key)));
     expect(main!.result).toMatchObject({ ok: true, prompt: { name: 'Main', blocks: [{ kind: 'text', text: 'live', mark: 'main' }] } });
     expect(legacy).toEqual({ name: 'Legacy', result: { ok: false, failure: { kind: 'no-template' } } });
-    expect(JSON.stringify(backup)).not.toContain('sk-');
+    expect(JSON.stringify({ catalog: backup.catalog, personas, presets: [main, legacy] })).not.toContain('sk-');
   });
 });

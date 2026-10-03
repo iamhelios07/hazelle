@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { readBackup } from '../../engine/import/backup';
+import { useEffect, useRef, useState } from 'react';
 import type { PresetFailure } from '../../engine/import/preset';
-import type { BackupFailure, BackupSource, RisuBackup, RisuCharacter } from '../../engine/import/types';
-import { unused, type Unused } from '../../engine/pipeline';
-import { broughtFromRisu, modulesFromRisu, moveFromRisu, type Moved, type MovePick, type MoveStep } from '../../runtime/move';
+import type { BackupCatalog, BackupFailure, RisuBackup } from '../../engine/import/types';
+import type { Unused } from '../../engine/pipeline';
+import { ImportWorker } from '../../runtime/import/client';
+import { ImportReadError } from '../../runtime/import/protocol';
+import { broughtFromRisu, modulesFromRisu, moveFromRisu, type Moved, type MoveStep } from '../../runtime/move';
 import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
@@ -33,13 +34,7 @@ type Phase =
   | { kind: 'failed'; message: string; again: (() => void) | null }
   | { kind: 'picking'; backup: RisuBackup; have: Have; can: Ticks; ticks: Ticks }
   | { kind: 'running'; step: MoveStep | null }
-  | { kind: 'done'; backup: RisuBackup; pick: MovePick; moved: Moved };
-
-// The file is read a slice at a time; a backup can be far larger than memory should hold.
-const sourceOf = (file: File): BackupSource => ({
-  size: file.size,
-  read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
-});
+  | { kind: 'done'; backup: BackupCatalog; moved: Moved };
 
 // Risu backups dropped or picked, read as one: pick what to bring, bring it, and say what came and what did not (design
 // F7). aside: other files dropped with them, which are not imported.
@@ -47,34 +42,61 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   const store = useStore();
   const files = useFiles();
   const [phase, setPhase] = useState<Phase>({ kind: 'reading' });
+  const reader = useRef<ImportWorker | null>(null);
 
   useEffect(() => {
     let live = true;
-    void readBackup(dropped.map(sourceOf)).then((read) => {
+    const source = new ImportWorker();
+    reader.current = source;
+    void source.backup(dropped).then((read) => {
       if (!live) return;
-      if (!read.ok) return setPhase({ kind: 'failed', message: FAILURE[read.failure.kind], again: null });
+      if (!read.ok) {
+        source.close();
+        return setPhase({ kind: 'failed', message: FAILURE[read.failure.kind], again: null });
+      }
       const have: Have = { characters: broughtFromRisu(store), modules: new Set(modulesFromRisu(store).keys()) };
-      const can = tickable(read.backup, have);
+      const can = tickable(read.backup.catalog, have);
       // Personas and presets carry no Risu id, so once anything was brought they start unticked rather than come twice.
       const ticks = have.characters.size + have.modules.size === 0 ? can : { ...can, personas: can.personas.map(() => false), presets: can.presets.map(() => false) };
       setPhase({ kind: 'picking', backup: read.backup, have, can, ticks });
+    }).catch((error: unknown) => {
+      if (!live) return;
+      if (!(error instanceof ImportReadError)) throw error;
+      source.close();
+      setPhase({ kind: 'failed', message: '백업을 읽지 못했어요. 다시 가져와 주세요.', again: null });
     });
     return () => {
       live = false;
+      source.close();
+      reader.current = null;
     };
   }, [dropped, store]);
 
   async function run(backup: RisuBackup, ticks: Ticks) {
-    const pick = toPick(backup, ticks);
+    const pick = toPick(backup.catalog, ticks);
+    const source = reader.current!;
     const seen: { last: MoveStep | null } = { last: null };
     setPhase({ kind: 'running', step: null });
-    const moved = await moveFromRisu(store, files, pick, (step) => setPhase({ kind: 'running', step: (seen.last = step) }));
-    if (moved.ok) return setPhase({ kind: 'done', backup, pick, moved: moved.data });
-    // What a failed run saved stays, and the move skips characters and modules already here by itself. Personas and
-    // presets carry no Risu id, so a run that got past them is not asked for them again.
-    const past = seen.last !== null && seen.last.kind !== 'personas' && seen.last.kind !== 'prompts';
-    const rest = past ? { ...ticks, personas: ticks.personas.map(() => false), presets: ticks.presets.map(() => false) } : ticks;
-    setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, rest) });
+    try {
+      const moved = await moveFromRisu(store, files, backup, pick, (step) => {
+        if (reader.current === source) setPhase({ kind: 'running', step: (seen.last = step) });
+      });
+      if (reader.current !== source) return;
+      if (moved.ok) {
+        source.close();
+        return setPhase({ kind: 'done', backup: backup.catalog, moved: moved.data });
+      }
+      // What a failed run saved stays, and the move skips characters and modules already here by itself. Personas and
+      // presets carry no Risu id, so a run that got past them is not asked for them again.
+      const past = seen.last !== null && seen.last.kind !== 'personas' && seen.last.kind !== 'prompts';
+      const rest = past ? { ...ticks, personas: ticks.personas.map(() => false), presets: ticks.presets.map(() => false) } : ticks;
+      setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, rest) });
+    } catch (error) {
+      if (reader.current !== source) return;
+      if (!(error instanceof ImportReadError)) throw error;
+      source.close();
+      setPhase({ kind: 'failed', message: '백업을 읽지 못했어요. 이미 저장한 것은 그대로 있어요.', again: null });
+    }
   }
 
   const names = dropped.map((file) => file.name).join(' + ');
@@ -126,6 +148,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   }
 
   const { backup, have, can, ticks } = phase;
+  const { catalog } = backup;
   const count = tickCount(ticks);
   const tick = (part: keyof Ticks, next: boolean[]) => setPhase({ ...phase, ticks: { ...ticks, [part]: next } });
   return (
@@ -140,25 +163,25 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       }
     >
       <Stack gap="section">
-        <Text variant="note">{backup.pictures > 0 ? `그림 ${backup.pictures}개가 들어 있어요.` : '그림이 들어 있지 않아요. 그림을 뺀 백업이면, 그림이 든 전체 백업을 함께 넣어 주세요.'}</Text>
+        <Text variant="note">{catalog.pictures > 0 ? `그림 ${catalog.pictures}개가 들어 있어요.` : '그림이 들어 있지 않아요. 그림을 뺀 백업이면, 그림이 든 전체 백업을 함께 넣어 주세요.'}</Text>
         <Picks
           title="캐릭터"
-          rows={backup.characters.map((character) => ({ label: character.card.name, note: have.characters.has(character.id) ? '이미 있음' : `대화 ${character.chats.length}개` }))}
+          rows={catalog.characters.map((character) => ({ label: character.name, note: have.characters.has(character.id) ? '이미 있음' : `대화 ${character.chatCount}개` }))}
           can={can.characters}
           ticks={ticks.characters}
           onChange={(next) => tick('characters', next)}
         />
-        <Picks title="페르소나" rows={backup.personas.map((persona) => ({ label: aliased(persona.name, persona.alias) }))} can={can.personas} ticks={ticks.personas} onChange={(next) => tick('personas', next)} />
+        <Picks title="페르소나" rows={catalog.personas.map((persona) => ({ label: aliased(persona.name, persona.alias) }))} can={can.personas} ticks={ticks.personas} onChange={(next) => tick('personas', next)} />
         <Picks
           title="프롬프트"
-          rows={backup.presets.map((preset) => ({ label: preset.name, note: preset.result.ok ? undefined : PRESET_FAILURE[preset.result.failure.kind] }))}
+          rows={catalog.presets.map((preset) => ({ label: preset.name, note: preset.failure === null ? undefined : PRESET_FAILURE[preset.failure] }))}
           can={can.presets}
           ticks={ticks.presets}
           onChange={(next) => tick('presets', next)}
         />
         <Picks
           title="모듈"
-          rows={backup.modules.map((module) => ({ label: moduleName(module.name), note: hasModule(have, module.risu) ? '이미 있음' : undefined }))}
+          rows={catalog.modules.map((module) => ({ label: moduleName(module.name), note: hasModule(have, module.risu) ? '이미 있음' : undefined }))}
           can={can.modules}
           ticks={ticks.modules}
           onChange={(next) => tick('modules', next)}
@@ -196,24 +219,21 @@ function Picks({ title, rows, can, ticks, onChange }: PicksProps) {
   );
 }
 
-function Summary({ backup, pick, moved }: { backup: RisuBackup; pick: MovePick; moved: Moved }) {
+function Summary({ backup, moved }: { backup: BackupCatalog; moved: Moved }) {
   const chats = moved.characters.reduce((sum, character) => sum + character.chats, 0);
-  const sources = new Map<string, RisuCharacter>();
-  for (const source of pick.characters) if (!sources.has(source.id)) sources.set(source.id, source);
   const missed = [
     ...moved.characters.flatMap((character) => {
-      const source = sources.get(character.risu)!;
-      const lines = [...cardMissed(source.report, character.skipped, character.faceless), ...moveMissed(source.missed)];
+      const lines = [...cardMissed(character.report, character.skipped, character.faceless), ...moveMissed(character.missed)];
       return lines.length ? [{ tone: 'missed' as const, title: character.name, note: lines.join(' · ') }] : [];
     }),
-    ...backup.presets.flatMap((preset) => (preset.result.ok ? [] : [{ tone: 'missed' as const, title: preset.name, note: `프롬프트 · ${PRESET_FAILURE[preset.result.failure.kind]}` }])),
-    ...moved.modules.flatMap(({ module, skipped }) => {
-      const lines = moduleMissed(module.unsupported, skipped);
-      return lines.length ? [{ tone: 'missed' as const, title: moduleName(module.name), note: `모듈 · ${lines.join(' · ')}` }] : [];
+    ...backup.presets.flatMap((preset) => (preset.failure === null ? [] : [{ tone: 'missed' as const, title: preset.name, note: `프롬프트 · ${PRESET_FAILURE[preset.failure]}` }])),
+    ...moved.modules.flatMap(({ name, unsupported, skipped }) => {
+      const lines = moduleMissed(unsupported, skipped);
+      return lines.length ? [{ tone: 'missed' as const, title: moduleName(name), note: `모듈 · ${lines.join(' · ')}` }] : [];
     }),
   ];
   const totals = new Map<Unused['kind'], number>();
-  for (const item of pick.characters.flatMap((character) => unused(character.card))) totals.set(item.kind, (totals.get(item.kind) ?? 0) + item.count);
+  for (const item of moved.characters.flatMap((character) => character.unused)) totals.set(item.kind, (totals.get(item.kind) ?? 0) + item.count);
   const notUsed = describeUnused([...totals].map(([kind, count]) => ({ kind, count })));
   return (
     <Stack gap="section">

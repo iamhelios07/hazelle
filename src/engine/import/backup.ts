@@ -3,17 +3,17 @@ import { add, convertModule, counted, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
 import { convertPreset } from './preset';
-import { picture, risuCharacter, type Entry, type Read } from './risu-character';
+import { chatInfo, picture, risuCharacter, type Entry, type Read } from './risu-character';
 import {
   MOVE_UNSUPPORTED_KINDS,
   UNSUPPORTED_KINDS,
   type BackupFailure,
+  type BackupCatalog,
   type BackupResult,
   type BackupSource,
   type ImportedModule,
   type MoveUnsupportedKind,
   type RisuBackup,
-  type RisuCharacter,
   type RisuPersona,
   type RisuPreset,
 } from './types';
@@ -39,7 +39,7 @@ const fail = (kind: BackupFailure['kind'], detail?: string): BackupResult => ({ 
 // Several files are read as one: the database comes from the first whose database is not encrypted, and every entry is
 // looked up in all of them, that one first. So an account's full backup, whose database is locked with Risu's server key
 // but whose pictures are plain, supplies the pictures beside the partial backup that supplies the text. Only the database
-// and the cold-storage entries are read here; a picture is read when it is asked for.
+// and cold metadata are read here; histories are normalized only for a selected character, pictures only when asked.
 export async function readBackup(sources: BackupSource[]): Promise<BackupResult> {
   try {
     const indexed = await Promise.all(sources.map((source) => index(readAhead(source), source)));
@@ -141,10 +141,15 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
     }
   }
 
+  const raw = list(db.characters);
+  const load = async (key: number) => {
+    const stub = raw[key] as Json;
+    return typeof stub.coldstorage === 'string' ? coldCharacter(stub, stub.coldstorage, cold) : stub;
+  };
   const unsupported: Tally<MoveUnsupportedKind> = new Map();
-  const loaded = await Promise.all(list(db.characters).map(async (stub): Promise<RisuCharacter | null> => {
+  const loaded = await Promise.all(raw.map(async (stub, key): Promise<BackupCatalog['characters'][number] | null> => {
     if (!isRecord(stub) || text(stub.chaId).startsWith('§')) return null;
-    const char = typeof stub.coldstorage === 'string' ? await coldCharacter(stub, stub.coldstorage, cold) : stub;
+    const char = await load(key);
     if (!char) {
       add(unsupported, 'cold-missing');
       return null;
@@ -154,8 +159,14 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
       add(unsupported, 'group-chat', list(char.chats).filter((chat) => list(record(chat).message).length > 0).length);
       return null;
     }
-    const chats = await Promise.all(list(char.chats).map((chat) => coldChat(record(chat), cold)));
-    return risuCharacter(char, chats, folders.get(text(char.chaId)) ?? null, entry);
+    // A cold payload may be needed for exact counts/order, but no unselected RisuChat or message text is kept.
+    const chats = await Promise.all(list(char.chats).map(async (chat) => chatInfo(await coldChat(record(chat), cold))));
+    const character = risuCharacter(char, [], folders.get(text(char.chaId)) ?? null, entry);
+    return {
+      key, id: character.id, name: character.card.name, assetCount: character.assets.length,
+      chatCount: chats.filter((chat) => chat !== null).length,
+      lastTalk: chats.reduce((latest, chat) => Math.max(latest, chat?.lastTalk ?? 0), 0),
+    };
   }));
   const characters = loaded.filter((char) => char !== null);
   characters.sort((a, b) => (order.get(a.id) ?? order.size) - (order.get(b.id) ?? order.size));
@@ -178,7 +189,23 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
   const alwaysModules = list(db.enabledModules).filter((id) => typeof id === 'string');
 
   const pictures = [...files.keys()].filter(isPicture).length;
-  return { pictures, characters, personas, presets, modules, alwaysModules, unsupported: counted(MOVE_UNSUPPORTED_KINDS, unsupported) };
+  return {
+    catalog: {
+      pictures, characters,
+      personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
+      presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
+      modules: modules.map(({ name, risu, assets }, key) => ({ key, name, risu, assetCount: assets.length })),
+      alwaysModules, unsupported: counted(MOVE_UNSUPPORTED_KINDS, unsupported),
+    },
+    async character(key) {
+      const char = (await load(key))!;
+      const chats = await Promise.all(list(char.chats).map((chat) => coldChat(record(chat), cold)));
+      return risuCharacter(char, chats, folders.get(text(char.chaId)) ?? null, entry);
+    },
+    persona: async (key) => personas[key]!,
+    preset: async (key) => presets[key]!,
+    module: async (key) => modules[key]!,
+  };
 }
 
 // A module's pictures are in the backup's asset storage, each under the key its entry of module.assets holds. One the

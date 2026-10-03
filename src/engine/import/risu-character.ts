@@ -13,6 +13,20 @@ const record = (value: unknown): Json => (isRecord(value) ? value : {});
 const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 const INLAY = /\{\{inlay(?:ed|eddata)?::/;
 
+export function chatInfo(chat: Json | null): { lastTalk: number } | null {
+  const messages = list(chat?.message);
+  if (!messages.length) return null;
+  let hasMessage = false;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (!isRecord(message)) continue;
+    hasMessage = true;
+    const at = number(message.time);
+    if (at !== null) return { lastTalk: at };
+  }
+  return { lastTalk: hasMessage ? (number(chat!.lastDate) ?? 0) : 0 };
+}
+
 export async function picture(read: Read): Promise<Picture | null> {
   const bytes = await read();
   const type = imageType(bytes);

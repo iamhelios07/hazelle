@@ -1,8 +1,9 @@
 import { MessageSquarePlus, Package } from 'lucide-react';
-import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
-import { importCard } from '../../engine/import/card';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ImportFailure } from '../../engine/import/types';
 import { importCharacter } from '../../runtime/characters';
+import { ImportWorker } from '../../runtime/import/client';
+import { ImportReadError } from '../../runtime/import/protocol';
 import { importModule } from '../../runtime/modules';
 import { fillPictures, risuMatch } from '../../runtime/move';
 import { describeFailure } from '../common/failure';
@@ -45,29 +46,50 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
   const files = useFiles();
   const input = useRef<HTMLInputElement>(null);
+  const readers = useRef(new Set<ImportWorker>());
+  const mounted = useRef(true);
   const [state, setState] = useState<State | null>(null);
   const [moving, setMoving] = useState<{ files: File[]; aside: number } | null>(null);
   const [asking, setAsking] = useState(false);
 
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      for (const reader of readers.current) reader.close();
+      readers.current.clear();
+    };
+  }, []);
+
   async function save(file: File, progress: (busy: string) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
-    const parsed = importCard(file.name, new Uint8Array(await file.arrayBuffer()));
-    if (!parsed.ok) return { kind: 'failed', file: file.name, failure: FAILURE[parsed.failure.kind] };
-    if ('module' in parsed) {
-      const saved = await importModule(store, files, parsed.module, (step) => progress(describeStep(step)));
+    const reader = new ImportWorker();
+    readers.current.add(reader);
+    try {
+      const parsed = await reader.card(file);
+      if (!parsed.ok) return { kind: 'failed', file: file.name, failure: FAILURE[parsed.failure.kind] };
+      if ('module' in parsed) {
+        const saved = await importModule(store, files, parsed.module, (step) => progress(describeStep(step)));
+        if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
+        return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.skipped);
+      }
+      const { name } = parsed.card.card;
+      const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
+      if (match !== null && (await ask(name))) {
+        progress('그림 올리는 중');
+        const filled = await fillPictures(store, files, match, parsed.card.assets);
+        if (!filled.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(filled)}` };
+        return { kind: 'filled', file: file.name, name, kept: filled.data.kept, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
+      }
+      const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(describeStep(step)));
       if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
-      return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.skipped);
+      return characterOutcome(file.name, parsed.card, saved.data);
+    } catch (error) {
+      if (!(error instanceof ImportReadError)) throw error;
+      return { kind: 'failed', file: file.name, failure: '파일을 읽지 못했어요. 다시 가져와 주세요.' };
+    } finally {
+      reader.close();
+      readers.current.delete(reader);
     }
-    const { name } = parsed.card.card;
-    const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
-    if (match !== null && (await ask(name))) {
-      progress('그림 올리는 중');
-      const filled = await fillPictures(store, files, match, parsed.card.assets);
-      if (!filled.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(filled)}` };
-      return { kind: 'filled', file: file.name, name, kept: filled.data.kept, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
-    }
-    const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(describeStep(step)));
-    if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
-    return characterOutcome(file.name, parsed.card, saved.data);
   }
 
   async function take(files: File[]) {
@@ -76,6 +98,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     if (backups.length > 0) return setMoving({ files: backups, aside: files.length - backups.length });
     const results: Result[] = [];
     for (const file of files) {
+      if (!mounted.current) return;
       setState({ busy: file.name, results, ask: null });
       const progress = (busy: string) => setState({ busy: `${file.name} · ${busy}`, results, ask: null });
       const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: file.name, results, ask: { name, answer } }));

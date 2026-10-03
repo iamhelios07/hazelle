@@ -1,4 +1,5 @@
-import type { Card, Imported, ImportedModule, RisuCharacter, RisuChat, RisuPersona, RisuPreset } from '../engine/import/types';
+import type { BackupCatalog, Card, Imported, ImportReport, MoveUnsupported, RisuBackup, RisuChat } from '../engine/import/types';
+import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';
 import type { MemorySettings } from '../model/memory';
 import type { ApiResult } from './api';
@@ -13,14 +14,13 @@ import { thumbnail } from './picture';
 import { savePreset } from './prompts';
 import type { ObjectStore, Write } from './store';
 
-// alwaysModules: the Risu ids of the modules Risu had on in every chat.
-export type MovePick = { characters: RisuCharacter[]; personas: RisuPersona[]; presets: RisuPreset[]; modules: ImportedModule[]; alwaysModules: string[] };
+export type MovePick = Pick<BackupCatalog, 'characters' | 'personas' | 'presets' | 'modules'>;
 // pictures counts every picture the pick holds, across its modules and characters, as they go up.
 export type MoveStep = { kind: 'characters' | 'chats' | 'personas' | 'prompts' | 'modules' | 'pictures'; done: number; total: number };
 // risu: its Risu chaId. skipped as in runtime/characters ImportedCharacter; faceless also when the picture did not read.
-export type MovedCharacter = { id: string; risu: string; name: string; chats: number; skipped: number; faceless: boolean };
+export type MovedCharacter = { id: string; risu: string; name: string; chats: number; skipped: number; faceless: boolean; report: ImportReport; missed: MoveUnsupported[]; unused: Unused[] };
 // skipped: its pictures that were not kept.
-export type MovedModule = { module: ImportedModule; skipped: number };
+export type MovedModule = { name: string; unsupported: ImportReport['unsupported']; skipped: number };
 export type Moved = { characters: MovedCharacter[]; personas: number; prompts: number; modules: MovedModule[] };
 
 // Those in 휴지통 too, until they are removed for good.
@@ -35,14 +35,15 @@ export const modulesFromRisu = (store: ObjectStore): Map<string, string> => new 
 // 항상 is written before it, under the id it is then saved at, so a move cut between the two leaves only an id that
 // names nothing, which reads as off, and the next run brings the module again. Every write is of the timeline the move
 // began on: an account restored meanwhile stops it.
-export function moveFromRisu(store: ObjectStore, files: Files, pick: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
-  return store.pinned(() => move(store, files, pick, progress));
+export function moveFromRisu(store: ObjectStore, files: Files, backup: RisuBackup, pick: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+  return store.pinned(() => move(store, files, backup, pick, progress));
 }
 
-async function move(store: ObjectStore, files: Files, { characters, personas, presets, modules, alwaysModules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+async function move(store: ObjectStore, files: Files, backup: RisuBackup, { characters, personas, presets, modules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
   const personaIds = new Map<string, string>();
-  for (const [done, persona] of personas.entries()) {
+  for (const [done, { key }] of personas.entries()) {
     progress({ kind: 'personas', done, total: personas.length });
+    const persona = await backup.persona(key);
     const picture = await persona.picture();
     const thumb = picture && (await thumbnail(picture).catch(() => null));
     const saved = await addPersona(store, { name: persona.name, description: persona.description, picture: thumb, ...(persona.alias && { alias: persona.alias }) });
@@ -51,8 +52,9 @@ async function move(store: ObjectStore, files: Files, { characters, personas, pr
   }
 
   let prompts = 0;
-  for (const [done, { result }] of presets.entries()) {
+  for (const [done, { key }] of presets.entries()) {
     progress({ kind: 'prompts', done, total: presets.length });
+    const { result } = await backup.preset(key);
     const saved = await savePreset(store, result);
     if (saved.ok) prompts++;
     else if (saved.failure.kind === 'save') return saved.failure.failure;
@@ -61,36 +63,38 @@ async function move(store: ObjectStore, files: Files, { characters, personas, pr
   const moduleIds = modulesFromRisu(store);
   const dueModules = modules.filter(({ risu }) => risu === null || !moduleIds.has(risu));
   const brought = broughtFromRisu(store);
-  const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => Math.max(0, ...a.chats.map(lastTalk)) - Math.max(0, ...b.chats.map(lastTalk)));
-  const pictureTotal = [...dueModules, ...due].reduce((sum, { assets }) => sum + assets.length, 0);
+  const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => a.lastTalk - b.lastTalk);
+  const pictureTotal = [...dueModules, ...due].reduce((sum, { assetCount }) => sum + assetCount, 0);
   let picturesDone = 0;
   // Uploading pictures is the long part of a move, so each window of them is reported over the whole pick.
   const uploading: Progress = (step) => {
     if (step.kind === 'assets') progress({ kind: 'pictures', done: picturesDone + step.done, total: pictureTotal });
   };
   const movedModules: MovedModule[] = [];
-  for (const [done, module] of dueModules.entries()) {
+  for (const [done, { key }] of dueModules.entries()) {
     progress({ kind: 'modules', done, total: dueModules.length });
+    const module = await backup.module(key);
     const id = crypto.randomUUID();
     // Only one this run brings: one already here keeps the 항상 the user has since given it.
-    if (module.risu !== null && alwaysModules.includes(module.risu)) {
+    if (module.risu !== null && backup.catalog.alwaysModules.includes(module.risu)) {
       const always = await setModuleAlways(store, id, true);
       if (!always.ok) return always;
     }
     const saved = await importModule(store, files, module, uploading, module.risu === null ? undefined : { id, risu: module.risu });
     if (!saved.ok) return saved;
     picturesDone += module.assets.length;
-    movedModules.push({ module, skipped: saved.data.skipped });
+    movedModules.push({ name: module.name, unsupported: module.unsupported, skipped: saved.data.skipped });
     if (module.risu !== null) moduleIds.set(module.risu, saved.data.id);
   }
 
   // Chats and characters are listed by the server's rev, the latest first, and a batch takes its revs in the order
   // written. So what was talked in last is written last, whatever order Risu kept it in (due).
-  const chatTotal = due.reduce((sum, { chats }) => sum + chats.length, 0);
+  const chatTotal = due.reduce((sum, { chatCount }) => sum + chatCount, 0);
   let chatsDone = 0;
   const moved: MovedCharacter[] = [];
-  for (const [done, character] of due.entries()) {
+  for (const [done, { key }] of due.entries()) {
     progress({ kind: 'characters', done, total: due.length });
+    const character = await backup.character(key);
     const folder = character.folder === null ? null : await folderNamed(store, character.folder);
     if (folder && !folder.ok) return folder;
     const avatar = await character.avatar();
@@ -105,7 +109,7 @@ async function move(store: ObjectStore, files: Files, { characters, personas, pr
     chatsDone += character.chats.length;
     progress({ kind: 'chats', done: chatsDone, total: chatTotal });
     const { skipped, faceless } = saved.data;
-    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless });
+    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed: character.missed, unused: unused(character.card) });
   }
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
 }

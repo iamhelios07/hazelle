@@ -1,0 +1,116 @@
+import { readBackup } from '../../engine/import/backup';
+import { importCard } from '../../engine/import/card';
+import type { BackupSource, Imported, ImportedModule, Picture, RisuBackup, RisuChat } from '../../engine/import/types';
+import { MESSAGE_BYTES, MESSAGE_PAGE, type AssetRead, type CardData, type Method, type ModuleData, type Replies, type Request } from './protocol';
+
+// A backup can exceed memory; indexing reads slices, never an arrayBuffer of the whole archive.
+const sourceOf = (file: File): BackupSource => ({
+  size: file.size,
+  read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
+});
+
+export class ImportReader {
+  private backup: RisuBackup | null = null;
+  private chats: RisuChat[] = [];
+  private next = 0;
+  private assets = new Map<number, Imported['assets'][number]['read']>();
+  private pictures = new Map<number, () => Promise<Picture | null>>();
+
+  async handle(request: Request): Promise<Replies[Method]> {
+    switch (request.kind) {
+      case 'backup': {
+        this.clear();
+        this.backup = null;
+        const result = await readBackup(request.files.map(sourceOf));
+        if (!result.ok) return result;
+        this.backup = result.backup;
+        return { ok: true, catalog: result.backup.catalog };
+      }
+      case 'card': {
+        this.clear();
+        this.backup = null;
+        const result = importCard(request.file.name, new Uint8Array(await request.file.arrayBuffer()));
+        if (!result.ok) return result;
+        return 'card' in result ? { ok: true, card: this.card(result.card) } : { ok: true, module: this.module(result.module) };
+      }
+      case 'character': {
+        this.clear();
+        const { chats, avatar, assets, ...character } = await this.backup!.character(request.key);
+        this.chats = chats;
+        return { ...character, chatCount: chats.length, avatar: this.picture(avatar), assets: this.reads(assets) };
+      }
+      case 'persona': {
+        this.clear();
+        const { picture, ...persona } = await this.backup!.persona(request.key);
+        return { ...persona, picture: this.picture(picture) };
+      }
+      case 'preset':
+        this.clear();
+        return this.backup!.preset(request.key);
+      case 'module':
+        this.clear();
+        return this.module(await this.backup!.module(request.key));
+      case 'chat': {
+        const { messages, ...header } = this.chats[request.index]!;
+        return { header, messages: messages.length };
+      }
+      case 'messages': {
+        const source = this.chats[request.index]!.messages;
+        const messages: Replies['messages']['messages'] = [];
+        let bytes = 0;
+        let next = request.from;
+        while (next < source.length && messages.length < MESSAGE_PAGE) {
+          const message = source[next]!;
+          const size = 64 + 2 * (message.text.length + (message.reasoning?.length ?? 0));
+          // A single oversized message must still advance, as the object writer's own size check decides its fate.
+          if (messages.length && bytes + size > MESSAGE_BYTES) break;
+          messages.push(message);
+          bytes += size;
+          // Paging only advances. Release transferred messages without shifting every remaining array element.
+          delete source[next++];
+        }
+        return { messages, next };
+      }
+      case 'release':
+        this.chats = [];
+        return null;
+      case 'asset': {
+        const bytes = await this.assets.get(request.handle)!();
+        // A reader can return a view into the archive. Transferring it would detach other pictures and retries.
+        return bytes && new Uint8Array(bytes);
+      }
+      case 'picture': {
+        const picture = await this.pictures.get(request.handle)!();
+        return picture && { type: picture.type, bytes: new Uint8Array(picture.bytes) };
+      }
+    }
+  }
+
+  private clear() {
+    this.chats = [];
+    this.assets.clear();
+    this.pictures.clear();
+  }
+
+  private reads(assets: Imported['assets']): AssetRead[] {
+    return assets.map(({ name, read }) => {
+      const handle = ++this.next;
+      this.assets.set(handle, read);
+      return { name, handle };
+    });
+  }
+
+  private picture(read: () => Promise<Picture | null>): number {
+    const handle = ++this.next;
+    this.pictures.set(handle, read);
+    return handle;
+  }
+
+  private card({ avatar, assets, ...card }: Imported): CardData {
+    return { ...card, avatar: avatar ? this.picture(async () => avatar) : null, assets: this.reads(assets) };
+  }
+
+  private module({ assets, ...module }: ImportedModule): ModuleData {
+    return { ...module, assets: this.reads(assets) };
+  }
+}

@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import type { Card, ImportedModule, RisuCharacter } from '../engine/import/types';
+import { describe, expect, it, vi } from 'vitest';
+import type { Card, ImportedModule, RisuBackup, RisuCharacter, RisuPersona, RisuPreset } from '../engine/import/types';
 import { fold, shown } from '../model/chat';
 import { randomBytes } from '../vault/aead';
 import { importCharacter } from './characters';
 import { MEMORY_DEFAULTS } from './memory';
-import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch, type MovePick } from './move';
+import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch } from './move';
 import { setModuleAlways } from './modules';
 import { testCard, testServer } from './testing';
 
@@ -53,11 +53,29 @@ const bell: ImportedModule = {
   unsupported: [],
 };
 
+function source({ characters, personas = [], presets = [], modules = [], alwaysModules = [] }: { characters: RisuCharacter[]; personas?: RisuPersona[]; presets?: RisuPreset[]; modules?: ImportedModule[]; alwaysModules?: string[] }): RisuBackup {
+  return {
+    catalog: {
+      pictures: 0,
+      characters: characters.map((character, key) => ({ key, id: character.id, name: character.card.name, chatCount: character.chats.length, assetCount: character.assets.length, lastTalk: character.chats.reduce((at, chat) => Math.max(at, chat.messages.at(-1)?.at ?? 0), 0) })),
+      personas: personas.map(({ name, alias }, key) => ({ key, name, alias })),
+      presets: presets.map(({ name, result }, key) => ({ key, name, failure: result.ok ? null : result.failure.kind })),
+      modules: modules.map(({ name, risu, assets }, key) => ({ key, name, risu, assetCount: assets.length })),
+      alwaysModules, unsupported: [],
+    },
+    character: vi.fn(async (key) => characters[key]!),
+    persona: async (key) => personas[key]!,
+    preset: async (key) => presets[key]!,
+    module: async (key) => modules[key]!,
+  };
+}
+
 describe('moveFromRisu', () => {
   it('brings a character whole, its chat on the greeting Risu showed with its messages staged and its persona, and a second run skips it', async () => {
     const { store, files } = await server.account();
-    const pick: MovePick = { characters: [luna], personas: [{ id: 'risu-jin', name: '진', alias: '부자', description: '여행자', picture: async () => null }], presets: [], modules: [], alwaysModules: [] };
-    const moved = await moveFromRisu(store, files, pick, () => {});
+    const backup = source({ characters: [luna, { ...luna, id: 'unselected' }], personas: [{ id: 'risu-jin', name: '진', alias: '부자', description: '여행자', picture: async () => null }] });
+    const pick = { ...backup.catalog, characters: [backup.catalog.characters[0]!] };
+    const moved = await moveFromRisu(store, files, backup, pick, () => {});
     expect(moved).toMatchObject({ ok: true, data: { personas: 1, prompts: 0, modules: [], characters: [{ risu: 'risu-luna', name: '루나', chats: 1 }] } });
     const id = moved.ok ? moved.data.characters[0]!.id : '';
     const [folder] = store.list('folder');
@@ -79,7 +97,8 @@ describe('moveFromRisu', () => {
     expect(shown(messages[0]!).greeting).toBe(2);
     expect(risuMatch(store, '루나')).toBe(id);
 
-    expect(await moveFromRisu(store, files, { ...pick, personas: [] }, () => {})).toEqual({ ok: true, data: { characters: [], personas: 0, prompts: 0, modules: [] } });
+    expect(await moveFromRisu(store, files, backup, { ...pick, personas: [] }, () => {})).toEqual({ ok: true, data: { characters: [], personas: 0, prompts: 0, modules: [] } });
+    expect(backup.character).toHaveBeenCalledExactlyOnceWith(0);
     expect(store.list('character')).toHaveLength(1);
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
   });
@@ -89,15 +108,17 @@ describe('moveFromRisu', () => {
     const chatAt = (title: string, at: number) => ({ ...luna.chats[0]!, title, messages: [{ role: 'user' as const, text: title, at }] });
     const recent = { ...luna, id: 'risu-recent', chats: [chatAt('어제', 20), chatAt('작년', 5)] };
     const old = { ...luna, id: 'risu-old', chats: [chatAt('옛날', 1)] };
-    await moveFromRisu(store, files, { characters: [recent, old], personas: [], presets: [], modules: [], alwaysModules: [] }, () => {});
+    const backup = source({ characters: [recent, old] });
+    await moveFromRisu(store, files, backup, backup.catalog, () => {});
     expect(store.list('chat').sort((a, b) => a.rev - b.rev).map(({ value }) => value.title)).toEqual(['옛날', '작년', '어제']);
   });
 
   it('brings a module before the character it is on for, on where Risu had it on, and a second run brings neither again nor turns 항상 back on', async () => {
     const { store, files } = await server.account();
-    const pick: MovePick = { characters: [{ ...luna, modules: ['risu-bell', 'risu-gone'] }], personas: [], presets: [], modules: [bell], alwaysModules: ['risu-bell', 'risu-gone'] };
-    const moved = await moveFromRisu(store, files, pick, () => {});
-    expect(moved).toMatchObject({ ok: true, data: { modules: [{ module: bell, skipped: 1 }], characters: [{ risu: 'risu-luna' }] } });
+    const characters = [{ ...luna, modules: ['risu-bell', 'risu-gone'] }];
+    const backup = source({ characters, modules: [bell], alwaysModules: ['risu-bell', 'risu-gone'] });
+    const moved = await moveFromRisu(store, files, backup, backup.catalog, () => {});
+    expect(moved).toMatchObject({ ok: true, data: { modules: [{ name: bell.name, unsupported: bell.unsupported, skipped: 1 }], characters: [{ risu: 'risu-luna' }] } });
     const [module] = store.list('module');
     expect(module!.value).toMatchObject({ name: 'Bell', risu: 'risu-bell' });
     expect(store.children('asset', module!.id).map(({ value }) => value.name)).toEqual(['ring']);
@@ -106,7 +127,8 @@ describe('moveFromRisu', () => {
     expect(character!.value.modules).toEqual([module!.id]);
 
     await setModuleAlways(store, module!.id, false);
-    expect(await moveFromRisu(store, files, { ...pick, characters: [...pick.characters, { ...luna, id: 'risu-sol', modules: ['risu-bell'] }] }, () => {})).toMatchObject({ ok: true, data: { modules: [], characters: [{ risu: 'risu-sol' }] } });
+    const next = source({ characters: [...characters, { ...luna, id: 'risu-sol', modules: ['risu-bell'] }], modules: [bell], alwaysModules: backup.catalog.alwaysModules });
+    expect(await moveFromRisu(store, files, next, next.catalog, () => {})).toMatchObject({ ok: true, data: { modules: [], characters: [{ risu: 'risu-sol' }] } });
     expect(store.list('module')).toHaveLength(1);
     expect(store.list('settings')[0]!.value.modules).toEqual([]);
     expect(store.list('character').find(({ value }) => value.risu === 'risu-sol')!.value.modules).toEqual([module!.id]);
