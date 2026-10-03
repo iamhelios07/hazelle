@@ -63,8 +63,12 @@ export const useTranslator = (): Translator => useSession().translator;
 // loaded, so what shows pictures renders again.
 export function useAssetUrl(): (id: string) => string | undefined {
   const { assets } = useSession();
+  // Page keys ChatScreen by chat id (including an unsaved chat), so leaving releases this view's story, CSS and
+  // status pictures together. Saving the same chat keeps its key and must not revoke its mounted pictures.
+  const view = useMemo(() => assets.view(), [assets]);
+  useLayoutEffect(view.hold, [view]);
   const version = useSyncExternalStore(assets.subscribe, assets.snapshot);
-  return useCallback((id: string) => assets.url(id), [assets, version]);
+  return useCallback((id: string) => view.url(id), [view, version]);
 }
 
 // Every snapshot below is held until its own inputs change: fresh selector arrays would make React re-render forever.
