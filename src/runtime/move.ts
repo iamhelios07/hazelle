@@ -28,10 +28,17 @@ export const broughtFromRisu = (store: ObjectStore): Set<string> => new Set(stor
 // By Risu id, the deleted ones too, until they are removed for good.
 export const modulesFromRisu = (store: ObjectStore): Map<string, string> => new Map(store.list('module').flatMap(({ id, value }) => (value.risu === undefined ? [] : [[value.risu, id]])));
 
-// Personas first, so the chats bound to one use it, and modules before the characters they are on for. The first
-// failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is sound
-// because each one lands whole: its chats' entries are written first, and their roots go with the character in its own
-// batch (runtime/characters addCharacter), so a cut leaves only entries no chat names. So is a module: its
+// A preset names its modules by Risu id or namespace (Risu matches either), the id first; one the backup does not hold
+// is dropped, and one named twice is on once.
+const companionsOf = (names: string[], ids: ReadonlyMap<string, string>, namespaces: ReadonlyMap<string, string>) => [...new Set(names.flatMap((name) => ids.get(name) ?? namespaces.get(name) ?? []))];
+
+// By namespace, the deleted ones too, as modulesFromRisu.
+const namespacesFromRisu = (store: ObjectStore): Map<string, string> => new Map(store.list('module').flatMap(({ id, value }) => (value.risu === undefined || value.namespace === null ? [] : [[value.namespace, id]])));
+
+// Personas first, so the chats bound to one use it, and modules before the prompts and characters they are on for. The
+// first failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is
+// sound because each one lands whole: its chats' entries are written first, and their roots go with the character in its
+// own batch (runtime/characters addCharacter), so a cut leaves only entries no chat names. So is a module: its
 // 항상 is written before it, under the id it is then saved at, so a move cut between the two leaves only an id that
 // names nothing, which reads as off, and the next run brings the module again. Every write is of the timeline the move
 // began on: an account restored meanwhile stops it.
@@ -51,16 +58,8 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     if (persona.id !== null) personaIds.set(persona.id, saved.data.id);
   }
 
-  let prompts = 0;
-  for (const [done, { key }] of presets.entries()) {
-    progress({ kind: 'prompts', done, total: presets.length });
-    const { result } = await backup.preset(key);
-    const saved = await savePreset(store, result);
-    if (saved.ok) prompts++;
-    else if (saved.failure.kind === 'save') return saved.failure.failure;
-  }
-
   const moduleIds = modulesFromRisu(store);
+  const namespaces = namespacesFromRisu(store);
   const dueModules = modules.filter(({ risu }) => risu === null || !moduleIds.has(risu));
   const brought = broughtFromRisu(store);
   const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => a.lastTalk - b.lastTalk);
@@ -84,6 +83,17 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     picturesDone += module.assets.length;
     movedModules.push({ name: module.name, unsupported: module.unsupported, skipped: saved.data.skipped });
     if (module.risu !== null) moduleIds.set(module.risu, saved.data.id);
+    if (module.namespace !== null) namespaces.set(module.namespace, saved.data.id);
+  }
+
+  let prompts = 0;
+  for (const [done, { key }] of presets.entries()) {
+    progress({ kind: 'prompts', done, total: presets.length });
+    const { result } = await backup.preset(key);
+    const paired = result.ok ? companionsOf(result.companions, moduleIds, namespaces) : [];
+    const saved = await savePreset(store, result.ok && paired.length > 0 ? { ...result, prompt: { ...result.prompt, modules: paired } } : result);
+    if (saved.ok) prompts++;
+    else if (saved.failure.kind === 'save') return saved.failure.failure;
   }
 
   // Chats and characters are listed by the server's rev, the latest first, and a batch takes its revs in the order

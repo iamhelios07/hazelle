@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { convertPreset } from '../engine/import/preset';
 import type { Card, ImportedModule, RisuBackup, RisuCharacter, RisuPersona, RisuPreset } from '../engine/import/types';
 import { fold, shown } from '../model/chat';
 import { randomBytes } from '../vault/aead';
@@ -186,6 +187,16 @@ describe('moveFromRisu', () => {
     expect(store.list('module')).toHaveLength(1);
     expect(store.list('settings')[0]!.value.modules).toEqual([]);
     expect(store.list('character').find(({ value }) => value.risu === 'risu-sol')!.value.modules).toEqual([module!.id]);
+  });
+
+  it('turns a preset\'s modules on for its prompt, named by Risu id or namespace, each once, and drops a name the backup lacks', async () => {
+    const { store, files } = await server.account();
+    const chime: ImportedModule = { ...bell, name: 'Chime', namespace: 'chime', risu: null, assets: [] };
+    const presets: RisuPreset[] = [{ name: '짝', result: convertPreset({ name: '짝', promptTemplate: [], moduleIntergration: 'chime, risu-bell ,risu-gone,chime' }) }];
+    const backup = source({ characters: [], presets, modules: [bell, chime] });
+    expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toMatchObject({ ok: true, data: { prompts: 1 } });
+    const ids = new Map(store.list('module').map(({ id, value }) => [value.name, id]));
+    expect(store.list('prompt').find(({ value }) => value.name === '짝')!.value).toMatchObject({ modules: [ids.get('Chime'), ids.get('Bell')] });
   });
 });
 

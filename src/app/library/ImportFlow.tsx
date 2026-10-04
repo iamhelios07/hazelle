@@ -1,14 +1,18 @@
 import { MessageSquarePlus, Package } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ImportFailure } from '../../engine/import/types';
+import { live } from '../../model/library';
 import { importCharacter } from '../../runtime/characters';
 import { ImportWorker } from '../../runtime/import/client';
 import { ImportReadError } from '../../runtime/import/protocol';
-import { importModule } from '../../runtime/modules';
+import { importModule, setModuleAt, type ModulePlace } from '../../runtime/modules';
 import { fillPictures, risuMatch } from '../../runtime/move';
+import { ofSort } from '../../runtime/prompts';
+import type { ObjectStore } from '../../runtime/store';
 import { describeFailure } from '../common/failure';
 import { useFiles, useStore } from '../session';
-import { navigate } from '../shell/router';
+import { navigate, useRoute } from '../shell/router';
+import type { Route } from '../shell/routes';
 import { Button, Callout, Dialog, DropOverlay, Row, Section, Stack, Text, useFileDrop } from '../ui';
 import { characterOutcome, moduleOutcome, type ImportOutcome } from './importOutcome';
 import { assetsMissed } from './missed';
@@ -37,11 +41,38 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요. 깨졌거나 캐릭터 카드나 모듈이 아니에요.',
 };
 
+// Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,
+// a conversation prompt's editor, or 설정 › 모듈 for 항상.
+function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
+  switch (route.kind) {
+    case 'shelf':
+    case 'new-chat':
+      return route.character === null ? null : { kind: 'character', id: route.character };
+    case 'about':
+    case 'edit':
+      return { kind: 'character', id: route.character };
+    case 'chat': {
+      const character = store.get('chat', route.id)?.value.character ?? null;
+      return character === null ? null : { kind: 'character', id: character };
+    }
+    case 'prompt': {
+      const prompt = live(store.get('prompt', route.id));
+      return prompt && ofSort(prompt, 'conversation') ? { kind: 'prompt', prompt } : null;
+    }
+    case 'modules':
+    case 'module':
+      return { kind: 'always' };
+    default:
+      return null;
+  }
+}
+
 // Risu backups (.bin) go to MoveFlow together, and a card named like a character brought from Risu may only fill that
 // character's pictures.
 export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
   const files = useFiles();
+  const route = useRoute();
   const input = useRef<HTMLInputElement>(null);
   const readers = useRef(new Set<ImportWorker>());
   const mounted = useRef(true);
@@ -58,7 +89,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function save(file: File, progress: (busy: string) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
+  async function save(file: File, place: ModulePlace | null, progress: (busy: string) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
     const reader = new ImportWorker();
     readers.current.add(reader);
     try {
@@ -67,7 +98,9 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       if ('module' in parsed) {
         const saved = await importModule(store, files, parsed.module, (step) => progress(describeStep(step)));
         if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
-        return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.skipped);
+        const placed = place && (await setModuleAt(store, place, saved.data.id, true));
+        const failure = placed && !placed.ok ? describeFailure(placed) : null;
+        return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.skipped, { at: place?.kind ?? null, failure });
       }
       const { name } = parsed.card.card;
       const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
@@ -93,13 +126,14 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     if (files.length === 0 || state?.busy || moving) return;
     const backups = files.filter((file) => file.name.toLowerCase().endsWith('.bin'));
     if (backups.length > 0) return setMoving({ files: backups, aside: files.length - backups.length });
+    const place = placeOf(store, route);
     const results: Result[] = [];
     for (const file of files) {
       if (!mounted.current) return;
       setState({ busy: file.name, results, ask: null });
       const progress = (busy: string) => setState({ busy: `${file.name} · ${busy}`, results, ask: null });
       const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: file.name, results, ask: { name, answer } }));
-      results.push(await save(file, progress, ask));
+      results.push(await save(file, place, progress, ask));
     }
     setState({ busy: null, results, ask: null });
   }
@@ -177,6 +211,7 @@ function Summary({ result }: { result: ImportOutcome }) {
   return (
     <Section title={result.title}>
       <Text>{result.holds}</Text>
+      {result.placed && (result.placed.failed ? <Callout tone="warn">{result.placed.text}</Callout> : <Text>{result.placed.text}</Text>)}
       {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
       {result.unused && <Text variant="note">{result.unused}</Text>}
     </Section>

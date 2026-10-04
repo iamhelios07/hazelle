@@ -16,7 +16,8 @@ export type PresetUnsupported = { kind: PresetUnsupportedKind; count: number };
 // unreadable: not RPack'd gzip'd MessagePack. not-preset: a Risu container of another type. decrypt-failed:
 // the preset inside does not open. no-template: a legacy preset, which risu-alpha does not assemble.
 export type PresetFailure = { kind: 'unreadable' | 'not-preset' | 'decrypt-failed' | 'no-template' };
-export type PresetResult = { ok: true; prompt: ConversationPrompt; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure };
+// companions: the modules its moduleIntergration names, each a Risu module id or namespace, in its order.
+export type PresetResult = { ok: true; prompt: ConversationPrompt; unsupported: PresetUnsupported[]; companions: string[] } | { ok: false; failure: PresetFailure };
 
 const ROLES = new Map<unknown, Role>([
   ['system', 'system'],
@@ -82,7 +83,8 @@ export async function importPreset(fileName: string, bytes: Uint8Array): Promise
 export function convertPreset(preset: unknown): PresetResult {
   if (!isRecord(preset)) return fail('unreadable');
   if (!Array.isArray(preset.promptTemplate)) return fail('no-template');
-  return { ok: true, ...convert(preset, preset.promptTemplate) };
+  const companions = text(preset.moduleIntergration).split(',').map((name) => name.trim()).filter(Boolean);
+  return { ok: true, ...convert(preset, preset.promptTemplate), companions };
 }
 
 function convert(preset: Json, template: unknown[]): { prompt: ConversationPrompt; unsupported: PresetUnsupported[] } {

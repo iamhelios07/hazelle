@@ -2,8 +2,8 @@ import type { Stored } from '../../model/kinds';
 import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { aliased } from '../common/alias';
 import { LoreEditor } from '../common/LoreEditor';
-import { ALWAYS, BIN_KEEPS, moduleName } from '../common/words';
-import { useLibrary, useSettings, useStore } from '../session';
+import { ALWAYS, BIN_KEEPS, moduleName, promptName } from '../common/words';
+import { useLibrary, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
@@ -12,6 +12,7 @@ import { useHolds } from './ModulesScreen';
 
 const ALWAYS_ON = `${ALWAYS} 켜기`;
 const USED_BY = '쓰는 캐릭터';
+const PROMPTS_USING = '쓰는 프롬프트';
 
 export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back: Back }) {
   const store = useStore();
@@ -20,6 +21,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   const { id, value } = stored;
   const always = useSettings().modules?.includes(id) ?? false;
   const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
+  const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
   const holds = useHolds(stored);
 
   async function setAlways(on: boolean) {
@@ -44,10 +46,21 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
       <SettingGroup label={ALWAYS_ON}>
         <SettingRow
           label={ALWAYS_ON}
-          help="켜면 모든 채팅에서 일해요. 꺼 두면 캐릭터 편집의 ‘모듈’에서 켠 캐릭터의 채팅에서만 일해요."
+          help="켜면 모든 채팅에서 일해요. 꺼 두면 이 모듈을 켠 프롬프트나 캐릭터의 채팅에서만 일해요."
           control={<Switch label={ALWAYS_ON} checked={always} onChange={(on) => void setAlways(on)} />}
         />
       </SettingGroup>
+      <Section title={PROMPTS_USING}>
+        {prompts.length > 0 ? (
+          <List label={PROMPTS_USING}>
+            {prompts.map(({ id: prompt, value: { name } }) => (
+              <ListItem key={prompt} title={promptName(name)} onClick={() => navigate({ kind: 'prompt', id: prompt, pane: null })} />
+            ))}
+          </List>
+        ) : (
+          <Empty variant="section">{always ? '따로 켠 프롬프트는 없어요.' : '아직 켠 프롬프트가 없어요. 프롬프트 편집의 ‘모듈’에서 켤 수 있어요.'}</Empty>
+        )}
+      </Section>
       <Section title={USED_BY}>
         {users.length > 0 ? (
           <List label={USED_BY}>

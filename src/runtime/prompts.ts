@@ -42,7 +42,7 @@ function choose<S extends PromptSort>(store: ObjectStore, sort: S, chosen: strin
   return prompt && ofSort(prompt, sort) ? { kind: 'prompt', prompt, own } : { kind: 'missing', own };
 }
 
-export const chatPrompt = (store: ObjectStore, chat: Chat) => choose(store, 'conversation', chat.prompt);
+export const chatPrompt = (store: ObjectStore, chat: Pick<Chat, 'prompt'>) => choose(store, 'conversation', chat.prompt);
 
 export const translationPrompt = (store: ObjectStore, chosen: string | undefined) => choose(store, 'translate', chosen);
 

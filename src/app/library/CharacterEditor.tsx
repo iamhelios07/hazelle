@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { PICTURE_PERCENT, type Character, type Pictures } from '../../model/library';
 import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
-import { setCharacterModule } from '../../runtime/modules';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/turn';
 import { aliased } from '../common/alias';
 import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
+import { ModuleSwitches } from '../common/ModuleSwitches';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { ALWAYS, BOT_MODELS, BOT_MODELS_HELP, inSettings, moduleName, NOTE_PLACEHOLDER, PAGES, TRANSLATOR_NOTE } from '../common/words';
-import { useModules, useSettings, useStore } from '../session';
+import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, TRANSLATOR_NOTE } from '../common/words';
+import { useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
 
@@ -45,17 +45,9 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
   const decor = character.decor !== false;
   const botModels = character.botModels === true;
   const keepThoughts = character.keepThoughts === true;
-  const modules = useModules();
-  const always = useSettings().modules ?? [];
-  const own = character.modules ?? [];
 
   function flip(field: Switched, on: boolean) {
     void SWITCHES[field](store, id, on).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
-  }
-
-  async function changeModule(module: string, on: boolean) {
-    const saved = await setCharacterModule(store, id, module, on);
-    if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
   }
 
   function changeHeight(field: Height, draft: string) {
@@ -168,25 +160,7 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
           </Disclosure>
         )}
       </Section>
-      {modules.length > 0 && (
-        <Section title={PAGES.modules} hint={`켠 모듈은 이 캐릭터의 모든 채팅에서 일해요. ${inSettings('modules')}에서 ${ALWAYS} 켠 모듈은 여기서 끌 수 없어요.`}>
-          <SettingGroup label={PAGES.modules}>
-            {modules.map(({ id: module, value }) => (
-              <SettingRow
-                key={module}
-                label={moduleName(value.name)}
-                control={
-                  always.includes(module) ? (
-                    <Text variant="note">{ALWAYS} 켜짐</Text>
-                  ) : (
-                    <Switch label={moduleName(value.name)} checked={own.includes(module)} onChange={(on) => void changeModule(module, on)} />
-                  )
-                }
-              />
-            ))}
-          </SettingGroup>
-        </Section>
-      )}
+      <ModuleSwitches owner={{ kind: 'character', id }} own={character.modules ?? []} />
     </>
   );
   const saved = merged(status, pictureSave.status, noteSave.status);
