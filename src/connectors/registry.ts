@@ -6,11 +6,13 @@ import { copilot } from './copilot';
 import { deepseek } from './deepseek';
 import { groq } from './groq';
 import { mistral } from './mistral';
+import { nanogpt } from './nanogpt';
 import { moonshot } from './moonshot';
 import { ollama } from './ollama';
 import { openai } from './openai';
 import { openRouter } from './openrouter';
 import { perplexity } from './perplexity';
+import { surplus } from './surplus';
 import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type SettingsSchema } from './settings';
 import { together } from './together';
 import { vercel } from './vercel';
@@ -26,6 +28,8 @@ export const CONNECTION_TYPES: readonly ConnectionType[] = [
   groq,
   together,
   cerebras,
+  nanogpt,
+  surplus,
   openai,
   anthropic,
   xai,

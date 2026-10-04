@@ -1,7 +1,7 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, Modality } from './types';
-import { amount, count, isRecord, modelEntries, nameOf } from './values';
+import { amount, count, decimal, isRecord, modelEntries, nameOf } from './values';
 
 const API = 'https://ai-gateway.vercel.sh/v1';
 
@@ -10,11 +10,6 @@ const MODALITIES: Partial<Record<string, Modality>> = { text: 'text', image: 'im
 
 function modalities(value: unknown): Modality[] | null {
   return Array.isArray(value) ? [...new Set(value.map((item) => MODALITIES[String(item)]).filter((item) => item !== undefined))] : null;
-}
-
-// Credits come as decimal strings, such as "95.50".
-function decimal(value: unknown): number | null {
-  return typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) ? Number(value) : amount(value);
 }
 
 // reasoning_options names every control a model has, so one it leaves out is not there; a model

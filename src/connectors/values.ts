@@ -22,6 +22,11 @@ export function amount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+// Vercel's credits and NanoGPT's balance come as decimal strings, such as "95.50".
+export function decimal(value: unknown): number | null {
+  return typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) ? Number(value) : amount(value);
+}
+
 export function list(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }

@@ -5,6 +5,7 @@ import copilotModels from './fixtures/copilot-models.json';
 import openRouterKey from './fixtures/openrouter-key.json';
 import openRouterModels from './fixtures/openrouter-models.json';
 import vercelModels from './fixtures/vercel-models.json';
+import { nanogpt } from './nanogpt';
 import { openRouter } from './openrouter';
 import { vercel } from './vercel';
 import {
@@ -52,6 +53,8 @@ describe('detection', () => {
     ['pplx-abc', 'https://api.perplexity.ai/router/v1', 'perplexity'],
     ['gsk_abc', 'https://api.groq.com/openai/v1', 'groq'],
     ['csk-abc', 'https://api.cerebras.ai/v1', 'cerebras'],
+    ['inf_abc', 'https://api.surplusintelligence.ai/v1', 'surplus'],
+    [null, 'https://api.nano-gpt.com/api/v1', 'nanogpt'],
     [null, 'https://api.deepseek.com', 'deepseek'],
     [null, 'https://api.mistral.ai/v1', 'mistral'],
     [null, 'https://api.moonshot.ai/v1', 'moonshot'],
@@ -241,6 +244,14 @@ describe('meters', () => {
       { kind: 'spent', label: '지금까지 쓴 돈', unit: 'usd', amount: 25.5 },
     ]);
     expect(meters.parse({ error: { message: 'User not found.', code: 401 } })).toBeNull();
+  });
+});
+
+describe('nanogpt', () => {
+  it('reads the balance with the key in x-api-key', () => {
+    const { meters } = nanogpt;
+    expect(meters!.request('k')).toEqual({ url: 'https://api.nano-gpt.com/api/check-balance', method: 'POST', headers: { 'x-api-key': 'k' }, body: null });
+    expect(meters!.parse({ usd_balance: '129.46956147', nano_balance: '26.7' })).toEqual([{ kind: 'left', label: '잔액', unit: 'usd', amount: 129.46956147, limit: null, resets: null }]);
   });
 });
 

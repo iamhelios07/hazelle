@@ -1,6 +1,6 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
-import type { ConnectionType, Meter, MeterReset } from './types';
+import type { ConnectionType, Meter, MeterReset, Model } from './types';
 import { amount, count, isRecord, modalities, modelEntries } from './values';
 
 // mandatory: reasoning cannot be turned off. supports_max_tokens: a token budget can be asked for.
@@ -39,6 +39,30 @@ function meters(payload: unknown): Meter[] | null {
   return found;
 }
 
+// Names read "Anthropic: Claude Opus 5.5"; the id already carries the maker, so the prefix is dropped.
+export function openRouterModels(payload: unknown): Model[] | null {
+  return (
+    modelEntries(payload)?.map((raw) => {
+      const architecture = isRecord(raw.architecture) ? raw.architecture : {};
+      const topProvider = isRecord(raw.top_provider) ? raw.top_provider : {};
+      const parameters = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : null;
+      const name = typeof raw.name === 'string' && raw.name ? raw.name.replace(/^[^:]+:\s+(?=\S)/, '') : raw.id;
+      return {
+        id: raw.id,
+        name,
+        input: modalities(architecture.input_modalities),
+        output: modalities(architecture.output_modalities),
+        contextLength: count(raw.context_length),
+        maxOutput: count(topProvider.max_completion_tokens),
+        reasoning: parameters ? parameters.includes('reasoning') : null,
+        tools: parameters ? parameters.includes('tools') : null,
+        protocol: null,
+        takes: { settings: parameters && listedSettings(parameters), reasoning: isRecord(raw.reasoning) ? reasoningTakes(raw.reasoning) : null },
+      };
+    }) ?? null
+  );
+}
+
 export const openRouter: ConnectionType = {
   id: 'openrouter',
   label: 'OpenRouter',
@@ -49,29 +73,7 @@ export const openRouter: ConnectionType = {
   endpoint: { baseUrl: 'https://openrouter.ai/api/v1', protocol: 'chat-completions' },
   detect: { key: /^sk-or-/, host: 'openrouter.ai' },
 
-  // Names read "Anthropic: Claude Opus 5.5"; the id already carries the maker, so the prefix is dropped.
-  parseModels(payload) {
-    return (
-      modelEntries(payload)?.map((raw) => {
-        const architecture = isRecord(raw.architecture) ? raw.architecture : {};
-        const topProvider = isRecord(raw.top_provider) ? raw.top_provider : {};
-        const parameters = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : null;
-        const name = typeof raw.name === 'string' && raw.name ? raw.name.replace(/^[^:]+:\s+(?=\S)/, '') : raw.id;
-        return {
-          id: raw.id,
-          name,
-          input: modalities(architecture.input_modalities),
-          output: modalities(architecture.output_modalities),
-          contextLength: count(raw.context_length),
-          maxOutput: count(topProvider.max_completion_tokens),
-          reasoning: parameters ? parameters.includes('reasoning') : null,
-          tools: parameters ? parameters.includes('tools') : null,
-          protocol: null,
-          takes: { settings: parameters && listedSettings(parameters), reasoning: isRecord(raw.reasoning) ? reasoningTakes(raw.reasoning) : null },
-        };
-      }) ?? null
-    );
-  },
+  parseModels: openRouterModels,
 
   reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 
