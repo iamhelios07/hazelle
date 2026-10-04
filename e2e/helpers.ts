@@ -111,7 +111,7 @@ export async function fakeProvider(page: Page): Promise<unknown[]> {
     sent.push(JSON.parse(request.body));
     const events = [...REPLY.map((content) => ({ choices: [{ delta: { content } }] })), { choices: [{ delta: {}, finish_reason: 'stop' }] }];
     const body = [...events.map((event) => JSON.stringify(event)), '[DONE]'].map((data) => `data: ${data}\n\n`).join('');
-    const box = new StreamBox(memory(), async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
+    const box = new StreamBox(memory(), async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }), { began: () => {}, ended: async () => {} });
     const id = route.request().url().split('/').at(-1)!;
     const frames = await box.handle(new Request('https://stream/start', { method: 'POST', body: JSON.stringify({ id, key, request: { ...request, url: 'https://provider.example/chat' } }) }));
     await route.fulfill({ headers: Object.fromEntries(frames.headers), body: Buffer.from(await frames.arrayBuffer()) });

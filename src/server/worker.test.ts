@@ -1,13 +1,18 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { EXIT } from './relay';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EXIT, type Upstream } from './relay';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
+const answer: Upstream = async () => Response.json({ data: [] });
+let upstream = answer;
 beforeAll(async () => {
-  t = await testApp(async () => Response.json({ data: [] }));
+  t = await testApp((url, init) => upstream(url, init));
 });
 afterAll(() => t.dispose());
-beforeEach(() => t.reset());
+beforeEach(() => {
+  upstream = answer;
+  return t.reset();
+});
 
 const get = (path: string, cookie?: string) => t.get(path, cookie);
 const post = (path: string, body?: unknown, cookie?: string) => t.post(path, body, cookie);
@@ -164,6 +169,21 @@ describe('provider calls', () => {
     expect(await relayed.json()).toEqual({ data: [] });
     await post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null }, cookie);
     expect(t.placed).toEqual([EXIT, EXIT]);
+  });
+
+  it('count a stream as a live call from its start until it ends', async () => {
+    upstream = async (_url, { signal }) => new Response(new ReadableStream({ start: (body) => signal.addEventListener('abort', () => body.error(signal.reason)) }));
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
+    const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+    const live = () => t.env.DB.prepare('SELECT COUNT(*) AS n FROM live_calls').first<number>('n');
+    const id = crypto.randomUUID();
+    const started = await post(`streams/${id}`, { key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } }, cookie);
+    expect(started.status).toBe(200);
+    await started.body?.cancel();
+    await vi.waitFor(async () => expect(await live()).toBe(1));
+    await post(`streams/${id}/stop`, undefined, cookie);
+    await vi.waitFor(async () => expect(await live()).toBe(0));
   });
 });
 

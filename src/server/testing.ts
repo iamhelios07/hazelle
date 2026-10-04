@@ -4,6 +4,7 @@ import { sha256Hex } from './http';
 import { createRelay, type Upstream } from './relay';
 import { nodeStores } from './store-db-node';
 import { StreamBox, type BoxStorage } from './stream-box';
+import { liveCall } from './streams';
 import app from './worker';
 
 const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
@@ -19,7 +20,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   // ADMIN_ACCOUNT: a test names its operator after signing it up, since nobody signs up as the operator's id.
   const env = {
     ...proxy.env,
-    STREAMS: streamObjects(upstream, placed),
+    STREAMS: streamObjects(upstream, placed, proxy.env.DB),
     RELAY: relayObjects(upstream, placed),
     STORES: stores as unknown as Env['STORES'],
     ADMIN_ACCOUNT: '' as string,
@@ -67,7 +68,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       env.ADMIN_ACCOUNT = '';
       clock.now = () => Date.now();
       await env.DB.batch([
-        ...['file_cleanup', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+        ...['live_calls', 'file_cleanup', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
         env.DB.prepare("UPDATE file_sweep SET after_key = ''"),
         env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
@@ -92,7 +93,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
 }
 
 // ReplyStream's namespace, in process: one StreamBox per name over a map, which is all its Durable Object adds.
-function streamObjects(upstream: Upstream, placed: unknown[]) {
+function streamObjects(upstream: Upstream, placed: unknown[], db: D1Database) {
   const boxes = new Map<string, StreamBox>();
   const storage = (): BoxStorage => {
     const held = new Map<string, unknown>();
@@ -104,7 +105,7 @@ function streamObjects(upstream: Upstream, placed: unknown[]) {
       setAlarm: async () => {},
     };
   };
-  const box = (name: string) => boxes.get(name) ?? boxes.set(name, new StreamBox(storage(), upstream)).get(name)!;
+  const box = (name: string) => boxes.get(name) ?? boxes.set(name, new StreamBox(storage(), upstream, liveCall(db, name))).get(name)!;
   return {
     idFromName: (name: string) => name,
     get: (name: string, options: unknown) => {
