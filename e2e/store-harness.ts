@@ -53,6 +53,8 @@ export default {
       await env.DB.batch([
         env.DB.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES (?, 'store-operator', 'unused', ?, lower(hex(randomblob(16))), lower(hex(randomblob(16)))) ON CONFLICT (id) DO NOTHING").bind(env.ADMIN_ACCOUNT, Date.now()),
         env.DB.prepare('INSERT INTO sessions (token_hash, account_id, expires_at) VALUES (?, ?, ?)').bind(hash, env.ADMIN_ACCOUNT, Date.now() + 3600000),
+        // Fresh prices: otherwise the sweep test's scheduled run downloads models.dev's 5 MB list live (1 s to 40 s).
+        env.DB.prepare('UPDATE price_fetch SET fetched_at = ? WHERE id = 1').bind(Date.now()),
       ]);
       return Response.json({ accountId: env.ADMIN_ACCOUNT, cookie: '__Host-session=' + token });
     }
