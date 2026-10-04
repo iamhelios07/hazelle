@@ -46,8 +46,23 @@ describe('detection', () => {
     expect(detect('https://ollama.com/v1/chat/completions')).toMatchObject({ kind: 'url', type: { id: 'ollama' } });
   });
 
+  it.each([
+    ['sk-proj-abc', 'https://api.openai.com/v1', 'openai'],
+    ['xai-abc', 'https://api.x.ai/v1', 'xai'],
+    ['pplx-abc', 'https://api.perplexity.ai/router/v1', 'perplexity'],
+    ['gsk_abc', 'https://api.groq.com/openai/v1', 'groq'],
+    ['csk-abc', 'https://api.cerebras.ai/v1', 'cerebras'],
+    [null, 'https://api.deepseek.com', 'deepseek'],
+    [null, 'https://api.mistral.ai/v1', 'mistral'],
+    [null, 'https://api.moonshot.ai/v1', 'moonshot'],
+    [null, 'https://api.together.ai/v1', 'together'],
+  ])('recognizes %s and %s as %s', (key, address, id) => {
+    if (key) expect(detect(key)).toMatchObject({ kind: 'key', type: { id } });
+    expect(detect(address)).toMatchObject({ kind: 'url', type: { id } });
+  });
+
   it('takes any other address as a generic connection and flags ones the relay cannot reach', () => {
-    expect(detect('https://api.deepseek.com/v1/')).toEqual({ kind: 'generic-url', baseUrl: 'https://api.deepseek.com/v1', problem: null });
+    expect(detect('https://llm.example.com/v1/')).toEqual({ kind: 'generic-url', baseUrl: 'https://llm.example.com/v1', problem: null });
     expect(detect('http://example.com/v1')).toMatchObject({ problem: 'not-https' });
     expect(detect('https://localhost:11434/v1')).toMatchObject({ problem: 'local' });
     expect(detect('https://192.168.0.10/v1')).toMatchObject({ problem: 'local' });
@@ -88,7 +103,7 @@ describe('the 연결 추가 list', () => {
   });
 
   it('finds a name in labels and descriptions, and says when nothing matches without guessing at keys', () => {
-    expect(ids('open')).toEqual(['openrouter']);
+    expect(ids('open')).toEqual(['openrouter', 'openai']);
     expect(ids('ollama')).toEqual(['ollama']);
     expect(ids('Claude')).toEqual(['anthropic', 'copilot']);
     expect(ids('sk-1234')).toBe('none');
@@ -184,6 +199,14 @@ describe('catalogs', () => {
     expect(parseCatalog(generic, { models: [] })).toBeNull();
   });
 
+  it('reads Together’s bare array and keeps only the chat models of Together and Mistral', () => {
+    const together = [{ id: 'meta/llama', type: 'chat', display_name: 'Llama', context_length: 8192 }, { id: 'bge', type: 'embedding' }];
+    expect(parseCatalog(connection('together'), together)).toEqual([model({ id: 'meta/llama', name: 'Llama', contextLength: 8192 })]);
+    expect(parseCatalog(connection('together'), { data: together })).toBeNull();
+    const mistral = { object: 'list', data: [{ id: 'mistral-large', capabilities: { completion_chat: true, vision: true, function_calling: true }, max_context_length: 131072 }, { id: 'mistral-embed', capabilities: { completion_chat: false } }] };
+    expect(parseCatalog(connection('mistral'), mistral)).toEqual([model({ id: 'mistral-large', name: 'mistral-large', input: ['text', 'image'], contextLength: 131072, tools: true })]);
+  });
+
   it('normalizes unknown request capabilities once for both protocol catalogs', () => {
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
     const payload = { data: [{ id: 'm' }] };
@@ -241,6 +264,13 @@ describe('chat requests', () => {
     { role: 'system' as const, content: '짧게 답해.' },
     { role: 'user' as const, content: '안녕' },
   ];
+
+  it('sends OpenAI the output limit as max_completion_tokens, never max_tokens', () => {
+    const openai = connection('openai');
+    const body = JSON.parse(chatRequest(openai, { model: model(), messages, settings: { maxOutput: 1000 } }).body!);
+    expect(body).toMatchObject({ max_completion_tokens: 1000 });
+    expect(body).not.toHaveProperty('max_tokens');
+  });
 
   it('sends max_tokens to a compatible server only when asked', () => {
     const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });

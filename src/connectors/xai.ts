@@ -1,0 +1,25 @@
+import { bareModel } from './chat-completions';
+import { effortLevels } from './settings';
+import type { ConnectionType, Model } from './types';
+import { count, isRecord, modelEntries } from './values';
+
+export const xai: ConnectionType = {
+  id: 'xai',
+  label: 'xAI',
+  group: 'maker',
+  description: 'Grok을 만든 곳에 바로 연결해요.',
+  keyPage: 'https://console.x.ai/team/default/api-keys',
+  endpoint: { baseUrl: 'https://api.x.ai/v1', protocol: 'chat-completions' },
+  detect: { key: /^xai-/, host: 'api.x.ai' },
+
+  parseModels: (payload) =>
+    modelEntries(payload)?.map((raw): Model => {
+      const efforts = isRecord(raw.capabilities) ? effortLevels(raw.capabilities.reasoning_effort) : null;
+      return {
+        ...bareModel(raw.id),
+        contextLength: count(raw.context_length),
+        reasoning: efforts ? true : null,
+        takes: { settings: null, reasoning: efforts && { off: efforts.none || null, levels: efforts.levels, budget: null, adaptive: null } },
+      };
+    }) ?? null,
+};

@@ -122,6 +122,9 @@ export type ConnectionType = {
   // Reasoning by a token budget, in a field of the provider's own where its codec has none. Its
   // parseModels says which models take one.
   reasoningBudget?: (tokens: number) => Record<string, unknown>;
+  // The output limit in a field of the provider's own, sent in place of the codec's (OpenAI's reasoning models refuse
+  // max_tokens).
+  outputLimit?: (tokens: number) => Record<string, unknown>;
   // Its chat-completions endpoint reads cache_control on a message's content (OpenRouter). Models that cache by
   // cache points use it; the provider is left to say whether the others ignore it, so it stays unknown per model.
   cacheControl?: true;

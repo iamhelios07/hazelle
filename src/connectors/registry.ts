@@ -1,15 +1,39 @@
 import { anthropic } from './anthropic';
 import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
+import { cerebras } from './cerebras';
 import { copilot } from './copilot';
+import { deepseek } from './deepseek';
+import { groq } from './groq';
+import { mistral } from './mistral';
+import { moonshot } from './moonshot';
 import { ollama } from './ollama';
+import { openai } from './openai';
 import { openRouter } from './openrouter';
+import { perplexity } from './perplexity';
 import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type SettingsSchema } from './settings';
+import { together } from './together';
 import { vercel } from './vercel';
+import { xai } from './xai';
 import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
-// Adding a provider means adding its connection type here. Nothing else names one.
-export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, ollama, anthropic, copilot];
+// Adding a provider means adding its connection type here. Nothing else names one. The order is the screen's, 주요 too.
+export const CONNECTION_TYPES: readonly ConnectionType[] = [
+  openRouter,
+  vercel,
+  ollama,
+  perplexity,
+  groq,
+  together,
+  cerebras,
+  openai,
+  anthropic,
+  xai,
+  deepseek,
+  mistral,
+  moonshot,
+  copilot,
+];
 
 export const GENERIC = 'generic';
 
@@ -76,9 +100,10 @@ function sending(route: Resolved, { model, messages, settings: stored }: ChatReq
 
 export function chatRequest(route: Resolved, request: ChatRequest): HttpRequest {
   const sent = sending(route, request);
-  const { reasoning } = sent.settings;
+  const { reasoning, maxOutput } = sent.settings;
   const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
-  return route.codec.chat(route.endpoint, sent, fields);
+  if (maxOutput === undefined || !route.type?.outputLimit) return route.codec.chat(route.endpoint, sent, fields);
+  return route.codec.chat(route.endpoint, { ...sent, settings: { ...sent.settings, maxOutput: undefined } }, { ...fields, ...route.type.outputLimit(maxOutput) });
 }
 
 // cache is how long the points keep it, null when none is sent. Reasoning is there because changing it drops the cached

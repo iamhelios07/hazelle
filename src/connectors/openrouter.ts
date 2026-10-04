@@ -1,13 +1,7 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
-import type { ConnectionType, Meter, MeterReset, Modality } from './types';
-import { amount, count, isRecord, modelEntries } from './values';
-
-const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']);
-
-function modalities(value: unknown): Modality[] | null {
-  return Array.isArray(value) ? value.filter((item): item is Modality => MODALITIES.has(item as Modality)) : null;
-}
+import type { ConnectionType, Meter, MeterReset } from './types';
+import { amount, count, isRecord, modalities, modelEntries } from './values';
 
 // mandatory: reasoning cannot be turned off. supports_max_tokens: a token budget can be asked for.
 function reasoningTakes(raw: Record<string, unknown>): ReasoningTakes {

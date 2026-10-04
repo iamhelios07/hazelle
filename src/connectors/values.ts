@@ -1,3 +1,15 @@
+import type { Modality } from './types';
+
+const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']);
+
+export function modalities(value: unknown): Modality[] | null {
+  return Array.isArray(value) ? value.filter((item): item is Modality => MODALITIES.has(item as Modality)) : null;
+}
+
+export function flag(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
