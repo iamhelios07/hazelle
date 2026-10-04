@@ -30,7 +30,7 @@ export async function addConnection({ store, catalogs }: Session, connection: Co
   const [catalog, meters] = await Promise.all([catalogs.load(connection, { fresh: true }), loadMeters(connection, signal)]);
   if (signal?.aborted) return { ok: false, failure: { kind: 'stopped' } };
   if (!catalog.ok) return { ok: false, failure: { kind: 'models', failure: catalog.failure } };
-  const refused = meters && !meters.meters.length && meters.failures.every((failure) => failure.kind === 'provider' && failure.status === 401) ? meters.failures[0] : undefined;
+  const refused = meters && !meters.meters.length && meters.failures.length > 0 && meters.failures.every((failure) => failure.kind === 'provider' && failure.status === 401) ? meters.failures[0] : undefined;
   if (refused) return { ok: false, failure: { kind: 'key', failure: refused } };
   const saved = await store.create('connection', connection);
   return saved.ok ? { ok: true, id: saved.data.id } : { ok: false, failure: { kind: 'save', failure: saved } };
