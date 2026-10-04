@@ -98,7 +98,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         {item && (
           <>
             <Divider variant="menu" />
-            <MenuItem label="이 채팅 지우기" tone="warn" onClick={() => void actions.drop()} />
+            <MenuItem label="이 채팅 지우기" tone="warn" onClick={actions.drop} />
           </>
         )}
       </Menu>
@@ -110,7 +110,7 @@ export function ChatDialogs({ chat }: { chat: OpenChat }) {
   const { dialog, item, actions } = chat;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
   if (dialog === 'rename' && item) {
-    return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 불러요." onSave={(name) => void actions.rename(name)} onClose={actions.closeDialog} />;
+    return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 불러요." onSave={actions.rename} onClose={actions.closeDialog} />;
   }
   return null;
 }

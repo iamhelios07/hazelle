@@ -65,12 +65,15 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
     if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
   }
 
-  async function own() {
-    const made = await addProfile(store, { name: `${model.name}용`, settings: current?.value.settings ?? {} });
-    if (!made.ok) return toast.failed(made, '설정을 만들지 못했어요.');
-    const saved = await setModelProfile(store, connection.id, model.id, made.data.id);
-    if (!saved.ok) return toast.failed(saved, '바꾸지 못했어요.');
-    navigate({ kind: 'profile', id: made.data.id });
+  function own() {
+    const id = crypto.randomUUID();
+    // The model takes the profile only once it exists: a create that fails must leave no model pointing at it.
+    void addProfile(store, { name: `${model.name}용`, settings: current?.value.settings ?? {} }, id).then(async (made) => {
+      if (!made.ok) return toast.failed(made, '설정을 만들지 못했어요.');
+      const saved = await setModelProfile(store, connection.id, model.id, id);
+      if (!saved.ok) toast.failed(saved, '바꾸지 못했어요.');
+    });
+    navigate({ kind: 'profile', id });
   }
 
   const words = current && valueWords(current.value.settings);
@@ -91,7 +94,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
               <MenuItem key={profile.id} label={profile.value.name} tag={profile.id === settings.profile ? '기본' : undefined} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
             ))}
             <Divider variant="menu" />
-            <MenuItem label="이 모델만 따로 설정하기" onClick={() => void own()} />
+            <MenuItem label="이 모델만 따로 설정하기" onClick={own} />
           </Menu>
         }
       >

@@ -80,12 +80,14 @@ export function GalleryScreen({ back }: { back: Back | null }) {
     const trimmed = name.trim();
     if (!trimmed) return;
     setNaming(null);
-    void (id === null ? create(trimmed, parent?.id ?? null) : rename(id, trimmed));
+    if (id === null) create(trimmed, parent?.id ?? null);
+    else rename(id, trimmed);
   }
 
-  async function movePicked(to: string | null) {
+  function movePicked(to: string | null) {
     if (!picked) return;
-    if (await move([...picked], to)) setPicked(null);
+    move([...picked], to);
+    setPicked(null);
   }
 
   const toggle = (id: string) => {
@@ -135,7 +137,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
       {shown.length === 0 && listed.length === 0 && (
         <Empty>{words ? noResults(words) : binned ? `${BIN}이 비어 있어요.` : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Empty>
       )}
-      {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={(to) => void movePicked(to)} />}
+      {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={movePicked} />}
       {purging && (
         <PurgeDialog
           what={purging.what}

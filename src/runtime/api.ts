@@ -48,15 +48,18 @@ export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> 
 // read with no timer. Never move this into fetchApi: the relay's streams are read through it.
 const HEADERS_WAIT = 15_000;
 const SLOWEST_UPLOAD = 16_384;
+// For a route whose server work runs inside the request and can outlast HEADERS_WAIT: 탈퇴's store wipe, an operator's
+// account removal or restore. Timed out, such a request reads as 'offline' while the server may still finish it.
+export const SLOW_ROUTE_WAIT = 5 * 60_000;
 
 // 'offline' means no whole answer came: the request never reached the server, its headers did not come in time, or the
 // connection dropped while its answer was being read. 'server-error' means it answered without the JSON error shape
 // every API route uses.
-export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal): Promise<ApiResult<T>> {
+export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal, headersWait = HEADERS_WAIT): Promise<ApiResult<T>> {
   const bytes = body instanceof Uint8Array ? (body as Uint8Array<ArrayBuffer>) : null;
   const payload = body === undefined ? undefined : (bytes ?? JSON.stringify(body));
   const late = new AbortController();
-  const timer = setTimeout(() => late.abort(), HEADERS_WAIT + ((payload?.length ?? 0) / SLOWEST_UPLOAD) * 1000);
+  const timer = setTimeout(() => late.abort(), headersWait + ((payload?.length ?? 0) / SLOWEST_UPLOAD) * 1000);
   let response: Response;
   let answer: Uint8Array | string;
   try {

@@ -26,7 +26,7 @@ const SessionContext = createContext<{ session: Session; account: Account; saves
 
 export function SessionProvider({ session, account, children }: { session: Session; account: Account; children: ReactNode }) {
   // One session's save queues, closed with it: a queue kept past it would write its change into the next account.
-  const saves = useMemo(() => new Saves(window), [session]);
+  const saves = useMemo(() => new Saves(window, session.store.unsentWrites), [session]);
   useEffect(() => () => saves.close(), [saves]);
   // Leaving closes the session, which drops what has not been written, so it waits for the saves first.
   const leaving = useMemo<Account>(

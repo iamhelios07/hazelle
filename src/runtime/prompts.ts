@@ -52,12 +52,12 @@ export const memoryPrompt = (store: ObjectStore) => choose(store, 'memory', unde
 // at a boundary leaves the rest of the fixed part cached (design §6.2, Cache), and the notes after it, and the two
 // texts a card replaces, empty, so a card's system prompt and post-history instructions have their places. A new
 // task prompt starts as the account's default of its sort is, or the built-in one while that is gone.
-export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): Promise<ApiResult<Stored<'prompt'>>> {
+export function addPrompt(store: ObjectStore, name: string, sort: PromptSort, id?: string): Promise<ApiResult<Stored<'prompt'>>> {
   const named = () => ({ id: crypto.randomUUID(), name: null });
   if (sort !== 'conversation') {
     const base = choose(store, sort, undefined);
     const { blocks, toggles } = base.kind === 'prompt' ? base.prompt.value : BUILT_IN[sort]();
-    return store.create('prompt', { task: sort, name, blocks: blocks.map((block) => ({ ...block, id: crypto.randomUUID() })), toggles });
+    return store.create('prompt', { task: sort, name, blocks: blocks.map((block) => ({ ...block, id: crypto.randomUUID() })), toggles }, { id });
   }
   const blocks: Block[] = [
     { ...named(), kind: 'text', role: 'system', text: '', mark: 'main' },
@@ -70,7 +70,7 @@ export function addPrompt(store: ObjectStore, name: string, sort: PromptSort): P
     { ...named(), kind: 'slot', slot: 'authorNote', role: 'system', wrapper: null },
     { ...named(), kind: 'slot', slot: 'postEverything' },
   ];
-  return store.create('prompt', { name, blocks, toggles: [], authorNote: '', models: {} });
+  return store.create('prompt', { name, blocks, toggles: [], authorNote: '', models: {} }, { id });
 }
 
 export type ImportPromptResult = { ok: true; id: string; unsupported: PresetUnsupported[] } | { ok: false; failure: PresetFailure | { kind: 'save'; failure: ApiFailure } };
@@ -120,11 +120,11 @@ export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) =
 
 // A fork that goes its own way, model layer and toggles included. It remembers its origin, and is the user's
 // own rather than an imported preset.
-export function copyPrompt(store: ObjectStore, id: string, name: string): Promise<ApiResult<Stored<'prompt'>>> {
+export function copyPrompt(store: ObjectStore, id: string, name: string, copy?: string): Promise<ApiResult<Stored<'prompt'>>> {
   const original = store.get('prompt', id)?.value;
   if (!original) return Promise.resolve({ ok: false, error: 'gone' });
   const origin = { id, name: original.name };
-  return store.create('prompt', original.task === undefined ? without({ ...original, name, origin }, 'imported') : { ...original, name, origin });
+  return store.create('prompt', original.task === undefined ? without({ ...original, name, origin }, 'imported') : { ...original, name, origin }, { id: copy });
 }
 
 // To 휴지통 (model/library Mark). A sort's default prompt cannot be deleted until another prompt of its sort is made the

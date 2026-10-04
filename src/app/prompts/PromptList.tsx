@@ -36,7 +36,6 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   const uses = usePromptUse();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  const [adding, setAdding] = useState<PromptSort | null>(null);
   const preset = usePresetImport(onPick);
 
   const use = (id: string) => uses.get(id) ?? EMPTY_USE;
@@ -45,12 +44,10 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역.
   const description = (prompt: Stored<'prompt'>) => (ofSort(prompt, 'conversation') ? used(use(prompt.id)) : undefined);
 
-  async function add(sort: PromptSort) {
-    setAdding(sort);
-    const added = await addPrompt(store, NEW_NAME[sort], sort);
-    setAdding(null);
-    if (!added.ok) return toast.failed(added, '프롬프트를 만들지 못했어요.');
-    onPick(added.data.id);
+  function add(sort: PromptSort) {
+    const id = crypto.randomUUID();
+    void addPrompt(store, NEW_NAME[sort], sort, id).then((added) => added.ok || toast.failed(added, '프롬프트를 만들지 못했어요.'));
+    onPick(id);
   }
 
   const topOf = (sort: PromptSort) =>
@@ -98,7 +95,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       <FileButton accept=".risup,.risupreset" size="sm" icon={Import} onFile={(file) => preset.take([file])}>
         Risu 프리셋 가져오기
       </FileButton>
-      <Button size="sm" icon={Plus} busy={adding === 'conversation'} onClick={() => void add('conversation')}>
+      <Button size="sm" icon={Plus} onClick={() => add('conversation')}>
         새 프롬프트
       </Button>
     </Row>
@@ -147,7 +144,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
             title={`번역 프롬프트 ${translators.length}개`}
             hint="답장 번역과 보낼 말 번역이 쓰는 프롬프트예요. 글 속 {{language}}에는 번역할 언어가 들어가요."
             action={
-              <Button variant="ghost" size="xs" icon={Plus} busy={adding === 'translate'} onClick={() => void add('translate')}>
+              <Button variant="ghost" size="xs" icon={Plus} onClick={() => add('translate')}>
                 새 번역 프롬프트
               </Button>
             }
@@ -158,7 +155,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
             title={`기억 프롬프트 ${memorizers.length}개`}
             hint="지난 메시지를 장기 기억으로 정리할 때 쓰는 프롬프트예요. 모든 채팅이 기본으로 정한 하나로 정리해요."
             action={
-              <Button variant="ghost" size="xs" icon={Plus} busy={adding === 'memory'} onClick={() => void add('memory')}>
+              <Button variant="ghost" size="xs" icon={Plus} onClick={() => add('memory')}>
                 새 기억 프롬프트
               </Button>
             }

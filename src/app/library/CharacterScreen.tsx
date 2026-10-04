@@ -70,7 +70,10 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatSum
         <Button variant="secondary" icon={Copy} busy={copying !== null} disabled={busy !== null} onClick={() => void copy(shelf)}>
           {copying ?? '사본 만들기'}
         </Button>
-        <Button variant="ghost" icon={Trash2} disabled={busy !== null} onClick={() => void remove(shelf).then((removed) => removed && navigate(HOME))}>
+        <Button variant="ghost" icon={Trash2} disabled={busy !== null} onClick={() => {
+          remove(shelf);
+          navigate(HOME);
+        }}>
           지우기
         </Button>
       </Row>

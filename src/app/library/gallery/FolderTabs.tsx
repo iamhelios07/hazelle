@@ -25,8 +25,8 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
   const binned = filter === 'deleted';
   const inBin = deleted.length + deletedChats.length + bin.modules.length + bin.prompts.length + bin.personas.length + bin.profiles.length;
 
-  async function drop(target: FolderTree) {
-    const removed = await remove(target);
+  function drop(target: FolderTree) {
+    const removed = remove(target);
     if (removed) onFilter(removed.up?.id ?? 'all');
   }
 
@@ -46,7 +46,7 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
           <Menu place="below-end" label={`${folder.value.name} 폴더`} trigger={(opener) => <IconButton icon={MoreHorizontal} label="폴더 관리" size="sm" {...opener} />}>
             <MenuItem icon={Pencil} label="이름 바꾸기" onClick={() => onName({ id: folder.id, name: folder.value.name })} />
             {folder === top && <MenuItem icon={SubfolderIcon} label="안에 폴더 만들기" onClick={() => onName({ id: null, name: '', parent: folder })} />}
-            <MenuItem icon={Trash2} label="폴더 지우기" tone="warn" onClick={() => void drop(folder)} />
+            <MenuItem icon={Trash2} label="폴더 지우기" tone="warn" onClick={() => drop(folder)} />
           </Menu>
         )}
       </Row>

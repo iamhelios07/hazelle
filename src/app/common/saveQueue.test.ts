@@ -113,16 +113,23 @@ describe('SaveQueue', () => {
   });
 });
 
+// asks: whether leaving the page now is asked about.
 function page() {
-  const asking = new Set<unknown>();
-  const target = { addEventListener: (_: string, listener: unknown) => void asking.add(listener), removeEventListener: (_: string, listener: unknown) => void asking.delete(listener) };
-  return { target: target as unknown as Window, asks: () => asking.size > 0 };
+  const listeners = new Set<(event: { preventDefault: () => void }) => void>();
+  const target = { addEventListener: (_: string, listener: never) => void listeners.add(listener), removeEventListener: (_: string, listener: never) => void listeners.delete(listener) };
+  const asks = () => {
+    let asked = false;
+    for (const listener of listeners) listener({ preventDefault: () => (asked = true) });
+    return asked;
+  };
+  return { target: target as unknown as Window, asks };
 }
+const nothingUnsent = () => 0;
 
 describe('Saves', () => {
   it('gives a screen opened again the queue the one before it left, so its save lands after the earlier one', async () => {
     const { target, asks } = page();
-    const saves = new Saves(target);
+    const saves = new Saves(target, nothingUnsent);
     const writes: { patch: Partial<Note>; answer: (answer: Answer) => void }[] = [];
     const write = (patch: Partial<Note>) => new Promise<Answer>((answer) => writes.push({ patch, answer }));
 
@@ -150,7 +157,7 @@ describe('Saves', () => {
 
   it('tells a save that failed after its screen was left once, and drops it', async () => {
     const { target, asks } = page();
-    const saves = new Saves(target);
+    const saves = new Saves(target, nothingUnsent);
     const told: ApiFailure[] = [];
     let answer!: (answer: Answer) => void;
     const leave = saves.watch('note', () => {});
@@ -165,9 +172,21 @@ describe('Saves', () => {
     expect(asks()).toBe(false);
   });
 
+  it("asks before the page goes while the store has a write the server has not taken", () => {
+    const { target, asks } = page();
+    let unsent = 1;
+    const saves = new Saves(target, () => unsent);
+    expect(asks()).toBe(true);
+    unsent = 0;
+    expect(asks()).toBe(false);
+    unsent = 1;
+    saves.close();
+    expect(asks()).toBe(false);
+  });
+
   it('drops what waits when the session closes', async () => {
     const { target, asks } = page();
-    const saves = new Saves(target);
+    const saves = new Saves(target, nothingUnsent);
     const written: Partial<Note>[] = [];
     saves.watch('note', () => {});
     const note = saves.queue<Note>('note', async (patch) => (written.push(patch), { ok: true }), () => {});
@@ -179,7 +198,7 @@ describe('Saves', () => {
   });
 
   it('writes what waits its pause at once for leaving, and stops waiting at the bound for a save that is not answered', async () => {
-    const saves = new Saves(page().target);
+    const saves = new Saves(page().target, nothingUnsent);
     const written: Partial<Note>[] = [];
     saves.queue<Note>('note', async (patch) => (written.push(patch), { ok: true }), () => {}).change({ title: 'a' });
     expect(await saves.settled(1000)).toBe(true);

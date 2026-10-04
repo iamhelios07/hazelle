@@ -20,14 +20,14 @@ export function PersonaList({ onPick, current, inUse, frame }: Props) {
   const personas = usePersonas();
   const settings = useSettings();
 
-  async function add() {
-    const saved = await addPersona(store, { name: '새 페르소나', description: '', picture: null });
-    if (!saved.ok) return toast.failed(saved, '페르소나를 만들지 못했어요.');
-    onPick(saved.data.id);
+  function add() {
+    const id = crypto.randomUUID();
+    void addPersona(store, { name: '새 페르소나', description: '', picture: null }, id).then((saved) => saved.ok || toast.failed(saved, '페르소나를 만들지 못했어요.'));
+    onPick(id);
   }
 
   const actions = (
-    <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add()}>
+    <Button variant="secondary" size="sm" icon={Plus} onClick={add}>
       새 페르소나
     </Button>
   );

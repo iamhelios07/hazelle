@@ -42,7 +42,7 @@ export async function addFirstProfile(store: ObjectStore): Promise<void> {
   await store.upsert('settings', (current) => (current?.profile === undefined ? { models: {}, ...current, profile: FIRST_PROFILE_ID } : current));
 }
 
-export const addProfile = (store: ObjectStore, profile: Profile) => store.create('profile', profile);
+export const addProfile = (store: ObjectStore, profile: Profile, id?: string) => store.create('profile', profile, { id });
 
 export const renameProfile = (store: ObjectStore, id: string, name: string) => store.update('profile', id, (current) => ({ ...current, name }));
 

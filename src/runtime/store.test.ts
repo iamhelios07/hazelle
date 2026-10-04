@@ -271,14 +271,18 @@ describe('writes shown before their answer', () => {
   const gated = async () => {
     const { accountId, vaultKey, open } = await server.account();
     let gate: Promise<boolean> | null = null;
+    let held = 0;
     let answer: (ok: boolean) => void = () => {};
     const request = async <T,>(...args: Parameters<typeof api>) => {
-      if (gate && args[1] === 'objects/batch' && !(await gate)) return { ok: false as const, error: 'server-error' };
+      if (gate && args[1] === 'objects/batch') {
+        held++;
+        if (!(await gate)) return { ok: false as const, error: 'server-error' };
+      }
       return api<T>(...args);
     };
     const store = await ObjectStore.open(accountId, vaultKey, request);
     const hold = () => { gate = new Promise((resolve) => { answer = (ok) => { gate = null; resolve(ok); }; }); };
-    return { store, open, hold, answer: (ok: boolean) => answer(ok) };
+    return { store, open, hold, answer: (ok: boolean) => answer(ok), held: () => held };
   };
 
   it('shows a write at once, keeps it through a pull, and the confirmed object takes its place', async () => {
@@ -304,13 +308,32 @@ describe('writes shown before their answer', () => {
   });
 
   it('shows the confirmed copy again after a final failure, whose caller still hears it', async () => {
-    const { store, hold, answer } = await gated();
+    const { store, hold, answer, held } = await gated();
     hold();
     const saving = store.create('connection', connection('a'), { id: 'c' });
-    await vi.waitFor(() => expect(store.list('connection').map(({ value }) => value.label)).toEqual(['a']));
+    expect(store.get('connection', 'c')?.value.label).toBe('a');
+    await vi.waitFor(() => expect(held()).toBe(1));
     answer(false);
     expect(await saving).toEqual({ ok: false, error: 'server-error' });
     expect(store.list('connection')).toEqual([]);
+  });
+
+  it('counts a write as unsent from the moment it shows until its answer, landed or failed', async () => {
+    const { store, hold, answer, held } = await gated();
+    hold();
+    const landing = store.create('connection', connection('a'));
+    expect(store.unsentWrites()).toBe(1);
+    await vi.waitFor(() => expect(held()).toBe(1));
+    answer(true);
+    expect((await landing).ok).toBe(true);
+    expect(store.unsentWrites()).toBe(0);
+    hold();
+    const failing = store.create('connection', connection('b'));
+    expect(store.unsentWrites()).toBe(1);
+    await vi.waitFor(() => expect(held()).toBe(2));
+    answer(false);
+    expect((await failing).ok).toBe(false);
+    expect(store.unsentWrites()).toBe(0);
   });
 
   it("keeps a pending entry in its chat's projection through a pull, after every confirmed one", async () => {

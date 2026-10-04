@@ -27,16 +27,14 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
     if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
   }
 
-  async function mark(at: number | null): Promise<boolean> {
-    const saved = await setModuleDeleted(store, id, at);
-    if (!saved.ok) toast.failed(saved);
-    return saved.ok;
+  function mark(at: number | null) {
+    void setModuleDeleted(store, id, at).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  async function remove() {
-    if (!(await mark(Date.now()))) return;
+  function remove() {
+    mark(Date.now());
     navigate({ kind: 'modules' });
-    toast.undoable(`‘${moduleName(value.name)}’ 모듈을 지웠어요.`, () => void mark(null), BIN_KEEPS);
+    toast.undoable(`‘${moduleName(value.name)}’ 모듈을 지웠어요.`, () => mark(null), BIN_KEEPS);
   }
 
   return (
@@ -63,7 +61,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
       </Section>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <Row kind="actions">
-        <Button variant="danger" size="sm" onClick={() => void remove()}>
+        <Button variant="danger" size="sm" onClick={remove}>
           이 모듈 지우기
         </Button>
       </Row>

@@ -33,10 +33,8 @@ export function useCharacterActions() {
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
 
-  async function mark(id: string, at: number | null): Promise<boolean> {
-    const saved = await setDeleted(store, id, at);
-    if (!saved.ok) toast.failed(saved);
-    return saved.ok;
+  function mark(id: string, at: number | null) {
+    void setDeleted(store, id, at).then((saved) => saved.ok || toast.failed(saved));
   }
 
   async function copy({ id, character }: Shelf) {
@@ -48,17 +46,15 @@ export function useCharacterActions() {
     navigate({ kind: 'edit', character: copied.data });
   }
 
-  async function remove(shelf: Shelf): Promise<boolean> {
+  function remove(shelf: Shelf) {
     const { id, character } = shelf;
-    if (!(await mark(id, Date.now()))) return false;
-    toast.undoable(`‘${character.card.name}’ ${withChats(shelf)} 지웠어요.`, () => void mark(id, null), BIN_KEEPS);
-    return true;
+    mark(id, Date.now());
+    toast.undoable(`‘${character.card.name}’ ${withChats(shelf)} 지웠어요.`, () => mark(id, null), BIN_KEEPS);
   }
 
-  async function restore({ kind, id, name }: Binned) {
-    const saved = await markDeleted(store, kind, id, null);
-    if (saved.ok) toast.show(`‘${name}’ ${OBJECT[kind]} 되살렸어요.`);
-    else toast.failed(saved);
+  function restore({ kind, id, name }: Binned) {
+    void markDeleted(store, kind, id, null).then((saved) => saved.ok || toast.failed(saved));
+    toast.show(`‘${name}’ ${OBJECT[kind]} 되살렸어요.`);
   }
 
   async function purge({ kind, id, name }: Binned) {

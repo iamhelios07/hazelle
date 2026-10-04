@@ -25,7 +25,7 @@ export function BinnedRow({ item, face, description, mark, busy, actions, onPurg
       trailing={
         busy === null && (
           <Menu place="below-end" label={`${item.name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${item.name} 메뉴`} size="sm" {...opener} />}>
-            <MenuItem icon={RotateCcw} label="되살리기" onClick={() => void actions.restore(item)} />
+            <MenuItem icon={RotateCcw} label="되살리기" onClick={() => actions.restore(item)} />
             <MenuItem icon={Trash2} label="지금 지우기" tone="warn" onClick={onPurge} />
           </Menu>
         )

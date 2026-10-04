@@ -1,5 +1,5 @@
 import { Star, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { modelSettings } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
@@ -7,7 +7,7 @@ import { catalogKey, type CatalogResult } from '../../runtime/catalog';
 import { removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { reportsMeters } from '../../runtime/meters';
 import { modelProfile } from '../../runtime/profiles';
-import { describeCatalogFailure, describeFailure } from '../common/failure';
+import { describeCatalogFailure } from '../common/failure';
 import { useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -38,10 +38,6 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [message, setMessage] = useState<string | null>(null);
-  // Stars show at once; the saves behind them run one after another, and a failed one puts the stored list back.
-  const [pendingStars, setPendingStars] = useState<Model[] | null>(null);
-  const saving = useRef({ queue: Promise.resolve(), count: 0 });
 
   const key = catalogKey(connection);
   useEffect(() => {
@@ -54,7 +50,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     // The stored object is replaced on every sync; only a change to its endpoint or key means a new list.
   }, [key, attempt]);
 
-  const starred = pendingStars ?? connection.starred;
+  const starred = connection.starred;
   const starredIds = useMemo(() => new Set(starred.map((model) => model.id)), [starred]);
   const listedIds = useMemo(() => (catalog?.ok ? new Set(catalog.models.map((model) => model.id)) : null), [catalog]);
   const models = useMemo(() => {
@@ -80,27 +76,12 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const restShown = shown.filter((model) => !starredIds.has(model.id));
 
   function toggle(model: Model) {
-    const on = starredIds.has(model.id);
-    setPendingStars(on ? starred.filter((entry) => entry.id !== model.id) : [...starred, model]);
-    setMessage(null);
-    const state = saving.current;
-    state.count++;
-    state.queue = state.queue.then(async () => {
-      const result = store.get('connection', id) ? await setStarred(store, id, model, !on) : null;
-      state.count--;
-      if (result && !result.ok) {
-        setMessage(describeFailure(result));
-        setPendingStars(null);
-      } else if (state.count === 0) {
-        setPendingStars(null);
-      }
-    });
+    void setStarred(store, id, model, !starredIds.has(model.id)).then((result) => result.ok || toast.failed(result));
   }
 
   function row(model: Model) {
     const on = starredIds.has(model.id);
     const listed = !listedIds || listedIds.has(model.id);
-    // Only a star already saved has a page to open; one still saving has none yet.
     const saved = on ? connection.starred.find((entry) => entry.id === model.id) : undefined;
     const choice = saved && modelSettings(connection, saved) ? modelProfile(store, saved) : null;
     const opens = choice && (choice.kind === 'profile' ? `설정 · ${choice.profile.value.name}` : '설정 없음');
@@ -130,14 +111,10 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     );
   }
 
-  async function remove() {
-    const result = await removeConnection(store, id);
-    if (!result.ok) {
-      setMessage(describeFailure(result));
-      return;
-    }
+  function remove() {
+    void removeConnection(store, id).then((result) => result.ok || toast.failed(result));
     navigate({ kind: 'connections' });
-    toast.undoable(`${result.data.value.label} 연결을 지웠어요.`, () => void restoreConnection(store, result.data));
+    toast.undoable(`${connection.label} 연결을 지웠어요.`, () => void restoreConnection(store, stored));
   }
 
   const subtitle = !catalog ? '모델 목록을 불러오는 중…' : catalog.ok ? `모델 ${catalog.models.length}개` : '모델 목록을 불러오지 못했어요';
@@ -149,7 +126,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           title={connection.label}
           subtitle={connection.account ? `${connection.account} · ${subtitle}` : subtitle}
           {...backBar(back)}
-          actions={<IconButton icon={Trash2} label="연결 지우기" onClick={() => void remove()} />}
+          actions={<IconButton icon={Trash2} label="연결 지우기" onClick={remove} />}
         />
       }
       stickyActions
@@ -170,11 +147,6 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       {catalog && !catalog.ok && (
         <Callout tone="warn" action={{ label: '다시 불러오기', onClick: () => setAttempt((count) => count + 1) }}>
           {describeCatalogFailure(catalog.failure)}
-        </Callout>
-      )}
-      {message && (
-        <Callout tone="warn" alert>
-          {message}
         </Callout>
       )}
       {shown.length > 0 ? (

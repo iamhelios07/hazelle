@@ -83,7 +83,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       actions.cancelEdit();
     } else if (pressed(event, SHORTCUTS.saveEdit.keys)) {
       event.preventDefault();
-      void actions.saveEdit(message, false);
+      actions.saveEdit(message, false);
     }
   };
 
@@ -108,11 +108,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
               취소
             </Button>
             {beforeLastReply && (
-              <Button variant="secondary" size="sm" disabled={busy} onClick={() => void actions.saveEdit(message, true)}>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.saveEdit(message, true)}>
                 저장하고 새 답장 받기
               </Button>
             )}
-            <Button size="sm" onClick={() => void actions.saveEdit(message, false)}>
+            <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
               저장
             </Button>
           </>
@@ -255,7 +255,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!mine && <IconButton icon={Info} size="xs" label="답장 정보" controls={infoDrawer} onClick={() => actions.info(message.id)} />}
       {statusTool}
       <Divider variant="tools" />
-      <IconButton icon={Trash2} size="xs" label="지우기 · 되돌릴 수 있어요" onClick={() => void actions.remove(message)} />
+      <IconButton icon={Trash2} size="xs" label="지우기 · 되돌릴 수 있어요" onClick={() => actions.remove(message)} />
     </>
   );
 

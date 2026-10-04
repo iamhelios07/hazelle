@@ -32,7 +32,7 @@ export async function addFirstPersona(store: ObjectStore, username: string): Pro
   await store.upsert('settings', (current) => (current?.persona === undefined ? { models: {}, ...current, persona: FIRST_ID } : current));
 }
 
-export const addPersona = (store: ObjectStore, persona: Persona) => store.create('persona', persona);
+export const addPersona = (store: ObjectStore, persona: Persona, id?: string) => store.create('persona', persona, { id });
 
 export const editPersona = (store: ObjectStore, id: string, patch: Partial<Persona>) => store.update('persona', id, (current) => ({ ...current, ...patch }));
 

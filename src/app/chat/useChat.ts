@@ -207,12 +207,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   async function send() {
     if (!draft.text.trim() || busy) return;
-    await Promise.all(writes.current);
-    // A saved chat is asked of the store, as the turn reads it: this render's copy was made before the wait.
-    const now = id === null ? chat : store.get('chat', id)?.value;
-    if (now && blocked(session, now)) return setStopped(true);
-    // Taken only now: the composer stayed open through the wait, so what was typed in it goes with the message, and a
-    // turn that began meanwhile leaves the text where it is.
+    if (blocked(session, chat)) return setStopped(true);
     const text = drafts.text(draft.key).trim();
     if (!text || talk.snapshot(chatId)) return;
     setStopped(false);
@@ -249,7 +244,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   function ask(target: Target) {
     if (!id || busy) return;
     asking();
-    void Promise.all(writes.current).then(() => takeTurn(session, id, target)).then(report);
+    void takeTurn(session, id, target).then(report);
   }
 
   function select(message: Shown, index: number) {
@@ -288,23 +283,19 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   function setSwitches(change: Partial<TranslateSwitches>) {
-    void track(setTranslate(store, chat.character, change)).then((saved) => saved.ok || toast.failed(saved));
+    void setTranslate(store, chat.character, change).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  async function saveEdit(message: Shown, andReply: boolean) {
+  function saveEdit(message: Shown, andReply: boolean) {
     if (!id || !editing) return;
-    const taken = editing;
-    const saved = await editMessage(store, id, message, taken.text, taken.translation);
-    if (!saved.ok) return toast.failed(saved);
-    // Only the edit that was saved closes: one changed since, or another message's opened meanwhile, stays open.
-    setEditing((current) => (current === taken ? null : current));
+    void editMessage(store, id, message, editing.text, editing.translation).then((saved) => saved.ok || toast.failed(saved));
+    setEditing(null);
     if (andReply && last && last.role === 'assistant') ask({ kind: 'regenerate', message: last.id });
   }
 
-  async function remove(message: Shown) {
+  function remove(message: Shown) {
     if (!id) return;
-    const saved = await removeMessage(store, id, message.id);
-    if (!saved.ok) return toast.failed(saved);
+    void removeMessage(store, id, message.id).then((saved) => saved.ok || toast.failed(saved));
     toast.undoable('메시지를 지웠어요', () => void restoreMessage(store, id, message.id));
   }
 
@@ -319,14 +310,16 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toast.show('여기서 갈라진 새 채팅을 만들었어요');
   }
 
-  async function drop() {
+  function drop() {
     if (!item) return;
-    talk.stop(item.id);
-    const removed = await removeChat(store, item.id);
-    if (!removed.ok) return toast.failed(removed);
-    const stored = removed.data;
-    navigate({ kind: 'shelf', character: stored.value.character });
-    toast.undoable(`‘${item.title}’ 채팅을 지웠어요.`, () => void restoreChat(store, stored.id).then((saved) => saved.ok && navigate({ kind: 'chat', id: stored.id })), BIN_KEEPS);
+    const { id: dropped, title } = item;
+    talk.stop(dropped);
+    void removeChat(store, dropped).then((removed) => removed.ok || toast.failed(removed));
+    navigate({ kind: 'shelf', character: chat.character });
+    toast.undoable(`‘${title}’ 채팅을 지웠어요.`, () => {
+      void restoreChat(store, dropped).then((saved) => saved.ok || toast.failed(saved));
+      navigate({ kind: 'chat', id: dropped });
+    }, BIN_KEEPS);
   }
 
   function copy(text: string) {
@@ -336,22 +329,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     );
   }
 
-  // Every turn waits for these, so a model, note or toggle changed just before it reaches that turn: the turn reads the
-  // store, which takes a write only once the server has it.
-  const writes = useRef(new Set<Promise<unknown>>());
-  function track<T>(write: Promise<T>): Promise<T> {
-    const done = () => writes.current.delete(write);
-    writes.current.add(write);
-    write.then(done, done);
-    return write;
-  }
-
   function pickModel(ref: ModelRef) {
     if (!id) {
       setUnsaved({ ...unsaved, models: { ...unsaved.models, main: ref } });
       return;
     }
-    void track(setChatModel(store, id, ref)).then((saved) => saved.ok || toast.failed(saved));
+    void setChatModel(store, id, ref).then((saved) => saved.ok || toast.failed(saved));
   }
 
   // null: follow the default again. A new chat holds it until its first send. The caller reports a failure.
@@ -365,26 +348,23 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       });
       return { ok: true };
     }
-    return track(WRITE_OWN[field](store, id, value));
+    return WRITE_OWN[field](store, id, value);
   }
 
   // A value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat.
   function flip(key: string, value: string) {
-    void track(setToggle(store, chat.character, key, value)).then((saved) => saved.ok || toast.failed(saved));
+    void setToggle(store, chat.character, key, value).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  async function reset() {
-    const count = toggles.changed;
-    const saved = await track(resetToggles(store, chat.character));
-    if (!saved.ok) return toast.failed(saved);
-    toast.show(`토글 ${count}개를 처음 값으로 되돌렸어요`);
+  function reset() {
+    void resetToggles(store, chat.character).then((saved) => saved.ok || toast.failed(saved));
+    toast.show(`토글 ${toggles.changed}개를 처음 값으로 되돌렸어요`);
   }
 
-  async function markStatus(script: number, on: boolean) {
+  function markStatus(script: number, on: boolean) {
     const character = chat.character;
     if (!character) return;
-    const saved = await track(setStatusScript(store, character, script, on));
-    if (!saved.ok) return toast.failed(saved);
+    void setStatusScript(store, character, script, on).then((saved) => saved.ok || toast.failed(saved));
     if (!on && statusScripts.length === 1) hold('status', false);
     toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, script, !on), [scriptName(script), card?.name].filter(Boolean).join(' · '));
   }
@@ -394,7 +374,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!chat.character) return;
     hold('status', false);
     setHidden(false);
-    void track(setKeepStatus(store, chat.character, keep)).then((saved) => saved.ok || toast.failed(saved));
+    void setKeepStatus(store, chat.character, keep).then((saved) => saved.ok || toast.failed(saved));
   }
 
   // The key shows or hides 상태 for now, storing nothing: in the margin while it stands there, or else the drawer
@@ -419,11 +399,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     seekTo(at, 'center');
   }
 
-  async function rename(name: string) {
+  function rename(name: string) {
     if (!id) return;
-    const saved = await renameChat(store, id, name);
-    if (!saved.ok) toast.failed(saved);
-    else setDialog(null);
+    void renameChat(store, id, name).then((saved) => saved.ok || toast.failed(saved));
+    setDialog(null);
   }
 
   return {
@@ -527,7 +506,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       foldStatus: () => keepStatus(false),
       toggleStatus,
       fitStatus: (script: number, fits: boolean) => setFitting((current) => (current.get(script) === fits ? current : new Map(current).set(script, fits))),
-      markStatus: (script: number, on: boolean) => void markStatus(script, on),
+      markStatus,
       watch,
       openDialog: (which: 'rename' | 'reading') => setDialog(which),
       closeDialog: () => setDialog(null),

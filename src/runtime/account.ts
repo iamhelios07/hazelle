@@ -1,5 +1,5 @@
 import { passwordCredential, recoveryCredential, type Credential, type Method, type VaultRecord } from '../vault/keys';
-import { api, type Heard } from './api';
+import { api, SLOW_ROUTE_WAIT, type Heard } from './api';
 import { page } from './pages';
 
 // Caps are null for none. bytes is null while the account is restored or its store does not answer. fileBytes: the
@@ -68,7 +68,7 @@ export const logOut = () => api<undefined>('POST', 'logout');
 export const changePassword = (current: Proof, next: { passwordProof: string; passwordWrap: string }) =>
   api<undefined>('PUT', 'vault/password', { ...proven(current), ...next });
 
-export const deleteAccount = (credential: Proof) => api<undefined>('DELETE', 'account', proven(credential));
+export const deleteAccount = (credential: Proof) => api<undefined>('DELETE', 'account', proven(credential), undefined, SLOW_ROUTE_WAIT);
 
 // The server's MAX_REPORT_LENGTH (server/admin).
 export const REPORT_LENGTH = 4000;
