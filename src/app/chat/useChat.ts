@@ -245,16 +245,17 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void selectVersion(store, id, message.id, message.versions[index]!.id).then((saved) => saved.ok || toast.failed(saved));
   }
 
+  // The versions go round: ← on the first lands on the last (user, 2026-10-04). → past a reply's last asks for a new one;
+  // a greeting has none to ask for, so it goes round too.
   function swipe(message: Shown, step: -1 | 1) {
     if (busy) return;
+    const count = message.versions.length;
     const next = message.selected + step;
-    const exists = next >= 0 && next < message.versions.length;
-    if (message === opening) {
-      if (exists) setGreeting(next);
-      return;
+    if (message === opening) setGreeting((next + count) % count);
+    else if (next >= count) {
+      if (message === last) ask({ kind: 'regenerate', message: message.id });
     }
-    if (exists) select(message, next);
-    else if (step === 1 && message === last) ask({ kind: 'regenerate', message: message.id });
+    else select(message, (next + count) % count);
   }
 
   function pick(message: Shown, index: number) {

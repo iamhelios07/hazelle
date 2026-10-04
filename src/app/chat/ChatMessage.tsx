@@ -199,8 +199,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!mine && isLast && count > 1 && editing === null && (
         <Switcher
           label={`${message.selected + 1} / ${count}`}
-          prevDisabled={busy || message.selected === 0}
-          nextDisabled={busy || (opening && message.selected === count - 1)}
+          prevDisabled={busy}
+          nextDisabled={busy}
           nextLabel={nextLabel}
           prevTitle={titled('이전', [back])}
           nextTitle={titled(nextLabel, [forward])}
