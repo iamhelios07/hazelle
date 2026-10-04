@@ -32,7 +32,7 @@ export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 둬
 export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', account: '계정', admin: '운영' };
 
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
-// place in 캐릭터 편집 (항상 켜짐).
+// place in 캐릭터 편집's and a prompt's 모듈 section (항상 켜짐).
 export const ALWAYS = '항상';
 // Who a script's words and questions are from in a chat with no character, where only a module's script runs.
 export const MODULE_VOICE = { name: PAGES.modules, face: null };
