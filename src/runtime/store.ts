@@ -1,3 +1,4 @@
+import { ChatFold } from '../model/chat';
 import { KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
 import { objectKey } from '../vault/objects';
 import type { VaultKey } from '../vault/keys';
@@ -62,11 +63,8 @@ const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 // A write waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
 const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable']);
 const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
-// Per chat, the overlay change last made to it, its entries or memory (any), and to its entries alone (entries).
-export type ShownMarks = { any: number; entries: number };
-const UNMARKED: ShownMarks = { any: 0, entries: 0 };
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
-type Scope = { opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
+type Scope = { fold: ChatFold; opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
 export type ChatLease = { ready: Promise<ApiFailure | null>; release: () => void };
 
 export class ScopeUnavailable extends Error {
@@ -79,7 +77,7 @@ export class ObjectStore {
   private readonly closing = new AbortController();
   private readonly live = new Map<string, Held>();
   private readonly overlays = new Map<string, Overlay>();
-  private readonly marks = new Map<string, ShownMarks>();
+  private readonly marks = new Map<string, number>();
   private shownCount = 0;
   // Per id, the commit last called to write it: a later one sends only once the earlier has ended, so writes to one
   // object land in call order and a later overlay is never replaced by an earlier answer.
@@ -267,6 +265,7 @@ export class ObjectStore {
       scope.abort = new AbortController();
       scope.state = 'unloaded';
       scope.cursor = scope.head = 0;
+      scope.fold = this.chatFold(chat);
       scope.loading = scope.opening = null;
       this.behind.add(chat);
     }
@@ -357,8 +356,8 @@ export class ObjectStore {
     return shown.filter((held): held is Stored<K> => held.value !== undefined);
   }
 
-  shownMarks(chat: string): ShownMarks {
-    return this.marks.get(chat) ?? UNMARKED;
+  shownMark(chat: string): number {
+    return this.marks.get(chat) ?? 0;
   }
 
   private showing(chat: string): boolean {
@@ -391,7 +390,8 @@ export class ObjectStore {
     const chat = chatOf(overlay);
     if (!chat) return;
     const mark = ++this.shownCount;
-    this.marks.set(chat, { any: mark, entries: kind === 'entry' ? mark : this.shownMarks(chat).entries });
+    this.marks.set(chat, mark);
+    if (kind === 'entry') this.scopes.get(chat)?.fold.changed(id);
   }
 
   close() {
@@ -435,6 +435,18 @@ export class ObjectStore {
     return this.revisions.get(JSON.stringify('list' in read ? { kind: read.kind, list: true } : { kind: read.kind, parent: read.parent })) ?? 0;
   }
 
+  private chatFold(chat: string) {
+    return new ChatFold((id) => {
+      const held = this.shown(id);
+      return held?.kind === 'entry' && held.parent === chat && held.value !== undefined ? held as Stored<'entry'> : null;
+    });
+  }
+
+  foldedChat(chat: string) {
+    if (this.scopeState(chat) !== 'loaded') throw new ScopeUnavailable(chat);
+    return this.scopes.get(chat)!.fold.snapshot();
+  }
+
   projection(chat: string): Projection | null {
     return this.scopeState(chat) === 'loaded' ? this.projections.get(chat) ?? null : null;
   }
@@ -446,18 +458,18 @@ export class ObjectStore {
     if (loading) { if (await loading) return null; return this.evaluated(chat); }
     if (this.scopeState(chat) !== 'loaded') return null;
     const previous = this.projections.get(chat);
-    if (previous && previous.shown.any === this.shownMarks(chat).any && !summaryStale(this, chat, previous.summary, this.loadedHead(chat))) return previous;
+    if (previous && previous.shown === this.shownMark(chat) && !summaryStale(this, chat, previous.summary, this.loadedHead(chat))) return previous;
     const epoch = this.epoch;
     const scope = this.scopes.get(chat)!;
     const work = (async () => {
       for (;;) {
-        const next = await projectChat(this, chat, this.projections.get(chat), AbortSignal.any([scope.abort.signal, this.ended.signal, this.closing.signal])).catch((error: unknown) => {
+        const next = await projectChat(this, chat, AbortSignal.any([scope.abort.signal, this.ended.signal, this.closing.signal])).catch((error: unknown) => {
           this.failScope(chat, scope, epoch, error);
           throw error;
         });
         if (epoch !== this.epoch || this.scopes.get(chat) !== scope || scope.state !== 'loaded' || this.closing.signal.aborted) return null;
         if (scope.loading) return this.projections.get(chat) ?? null;
-        if (next && (next.shown.any !== this.shownMarks(chat).any || summaryStale(this, chat, next.summary, this.loadedHead(chat)))) continue;
+        if (next && (next.shown !== this.shownMark(chat) || summaryStale(this, chat, next.summary, this.loadedHead(chat)))) continue;
         if (next) this.projections.set(chat, next);
         else this.projections.delete(chat);
         this.changes.push({ kind: 'projection', id: chat, parent: chat });
@@ -499,7 +511,7 @@ export class ObjectStore {
     if (this.closing.signal.aborted) return { ready: Promise.resolve({ ok: false, error: 'stopped' }), release: () => {} };
     let scope = this.scopes.get(chat);
     if (!scope) {
-      scope = { opening: null, abort: new AbortController(), state: created ? 'loaded' : 'unloaded', users: 0, cursor: 0, head: 0, loading: null, error: null };
+      scope = { fold: this.chatFold(chat), opening: null, abort: new AbortController(), state: created ? 'loaded' : 'unloaded', users: 0, cursor: 0, head: 0, loading: null, error: null };
       this.scopes.set(chat, scope);
       if (created) this.cacheWrite([], chat, scope, true);
     }
@@ -669,7 +681,7 @@ export class ObjectStore {
     const projection = await this.evaluated(chat);
     // Neither a chat still showing an overlay nor a projection folded while it did: the commit that ends the chat's last
     // overlay summarizes it again (summarizeHeld).
-    if (!projection || this.showing(chat) || projection.shown.any !== this.shownMarks(chat).any) return null;
+    if (!projection || this.showing(chat) || projection.shown !== this.shownMark(chat)) return null;
     const id = summaryId(chat);
     const current = this.get('summary', id);
     if (current && !summaryStale(this, chat, current.value) && current.value.title === projection.summary.title && current.value.preview === projection.summary.preview) return null;
@@ -1252,6 +1264,8 @@ export class ObjectStore {
     // A chat's entries and memory stay in memory only while the chat is held.
     if (SCOPED.has(object.kind) && !(object.parent && this.scopes.has(object.parent))) return;
     const previous = this.live.get(object.id);
+    if (previous?.kind === 'entry' && previous.parent) this.scopes.get(previous.parent)?.fold.changed(object.id);
+    if (object.kind === 'entry' && object.parent) this.scopes.get(object.parent)?.fold.changed(object.id);
     if (previous && (previous.kind !== object.kind || previous.parent !== object.parent)) this.changes.push({ kind: previous.kind, id: previous.id, parent: previous.parent });
     if (!SCOPED.has(object.kind) || (object.parent && this.scopeState(object.parent) === 'loaded')) this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });
     this.forget(object.id);
@@ -1277,6 +1291,7 @@ export class ObjectStore {
     }
     if (this.stale(id, rev)) return;
     const previous = this.live.get(id);
+    if (change.kind === 'entry' && change.parent) this.scopes.get(change.parent)?.fold.changed(id);
     this.changes.push(previous ? { kind: previous.kind, id, parent: previous.parent } : change);
     this.forget(id);
     this.deleted.set(id, rev);

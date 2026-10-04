@@ -137,9 +137,8 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
   ...(entry.greeting !== undefined && { greeting: entry.greeting }),
 });
 
-// A chat's entries, read in rev order into the messages on screen, the pending ones (Stored.pending) after every
-// confirmed one in the order sent. Entries naming a message or version that is not there (yet) are skipped.
-export function fold(entries: Stored<'entry'>[]): Message[] {
+// Entries naming a message or version that is not there yet are skipped, even if it appears later in the replay.
+function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set<string> } {
   const messages = new Map<string, Message>();
   const deleted = new Set<string>();
   // By a version's own id only: a translation of a replaced version is not its replacement's.
@@ -160,7 +159,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     return version && home.get(version) === message ? places.get(id)! : -1;
   };
 
-  for (const { id, value: entry } of [...entries].sort((a, b) => (a.pending ?? 0) - (b.pending ?? 0) || a.rev - b.rev)) {
+  for (const { id, value: entry } of [...entries].sort(entryOrder)) {
     if (entry.type === 'message') {
       const version = versionOf(id, entry, false, entry.staged === true);
       own.set(id, version);
@@ -225,13 +224,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     const own = receipt.cost === 'pending' && receipt.replyId && costs.has(receipt.replyId) ? { ...receipt, cost: costs.get(receipt.replyId)! } : receipt;
     return earlier === receipt.continues ? own : { ...own, continues: earlier };
   };
-  let kept: Message | null = null;
-  for (const message of messages.values()) {
-    if (!deleted.has(message.id)) kept = message;
-    else if (kept && message.after) kept.after = [...(kept.after ?? []), ...message.after];
-  }
-  return [...messages.values()]
-    .filter((message) => !deleted.has(message.id))
+  return { deleted, messages: [...messages.values()]
     .map((message) => ({
       ...message,
       versions: message.versions.map((version) => {
@@ -241,7 +234,119 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
         if (receipt === version.receipt && translated === version.translation?.receipt && !made?.some((call, index) => call.receipt !== version.calls![index]!.receipt)) return version;
         return { ...version, receipt, ...(version.translation && { translation: { ...version.translation, receipt: translated ?? null } }), ...(made && { calls: made }) };
       }),
-    }));
+    })) };
+}
+
+type EntryIndex = { group: string | null; reference?: string; cost?: string; rev: number; pending?: number; at: number };
+type FoldedMessage = { entries: Set<string>; costs: Set<string>; message: Message | null; deleted: boolean };
+const entryOrder = (a: { rev: number; pending?: number }, b: { rev: number; pending?: number }) => (a.pending ?? 0) - (b.pending ?? 0) || a.rev - b.rev;
+
+// Only indexes and the projection live here. Values, including pending writes, are always read from the store.
+export class ChatFold {
+  private readonly dirty = new Set<string>();
+  private readonly entries = new Map<string, EntryIndex>();
+  private readonly references = new Map<string, Set<string>>();
+  private readonly costs = new Map<string, Set<string>>();
+  private readonly costUsers = new Map<string, Set<string>>();
+  private readonly groups = new Map<string, FoldedMessage>();
+  private result: { messages: Message[]; at: number | null } = { messages: [], at: null };
+
+  constructor(private readonly read: (id: string) => Stored<'entry'> | null) {}
+
+  changed(id: string) { this.dirty.add(id); }
+
+  snapshot(): { messages: Message[]; at: number | null } {
+    if (!this.dirty.size) return this.result;
+    const touched = new Set<string>();
+    const costs = new Set<string>();
+    const ids = new Set(this.dirty);
+    this.dirty.clear();
+    for (const id of ids) for (const reference of this.references.get(id) ?? []) ids.add(reference);
+    for (const id of ids) {
+      const old = this.entries.get(id);
+      if (old && old.group !== null) {
+        this.groups.get(old.group)!.entries.delete(id);
+        touched.add(old.group);
+      }
+      if (old?.reference) this.remove(this.references, old.reference, id);
+      if (old?.cost) { this.remove(this.costs, old.cost, id); costs.add(old.cost); }
+      const stored = this.read(id);
+      if (!stored) { this.entries.delete(id); continue; }
+      const { value, rev, pending } = stored;
+      const reference = 'version' in value && !('message' in value) ? value.version : undefined;
+      const target = reference ? this.read(reference)?.value : undefined;
+      const group = value.type === 'message' ? id : 'message' in value ? value.message
+        : target?.type === 'message' ? reference! : target?.type === 'version' ? target.message : null;
+      const cost = value.type === 'cost' ? value.replyId : undefined;
+      this.entries.set(id, { group, reference, cost, rev, pending, at: value.at });
+      if (reference) this.add(this.references, reference, id);
+      if (cost) { this.add(this.costs, cost, id); costs.add(cost); }
+      if (group !== null) {
+        let held = this.groups.get(group);
+        if (!held) this.groups.set(group, (held = { entries: new Set(), costs: new Set(), message: null, deleted: false }));
+        held.entries.add(id);
+        touched.add(group);
+      }
+    }
+    for (const cost of costs) for (const group of this.costUsers.get(cost) ?? []) touched.add(group);
+    for (const id of touched) {
+      const group = this.groups.get(id)!;
+      for (const cost of group.costs) this.remove(this.costUsers, cost, id);
+      group.costs.clear();
+      const entries = [...group.entries].map((entry) => this.read(entry)!);
+      const receipt = (value: Receipt | null) => {
+        for (let current = value; current; current = current.continues ?? null) {
+          if (current.replyId) group.costs.add(current.replyId);
+        }
+      };
+      for (const { value } of entries) {
+        if ('receipt' in value) receipt(value.receipt);
+        if ('translation' in value && value.translation) receipt(value.translation.receipt);
+      }
+      for (const cost of group.costs) {
+        this.add(this.costUsers, cost, id);
+        for (const entry of this.costs.get(cost) ?? []) entries.push(this.read(entry)!);
+      }
+      const folded = replay(entries);
+      group.message = folded.messages[0] ?? null;
+      group.deleted = folded.deleted.has(id);
+      if (!group.entries.size) this.groups.delete(id);
+    }
+    const ordered = [...this.groups.values()].filter((group) => group.message !== null)
+      .sort((a, b) => entryOrder(this.entries.get(a.message!.id)!, this.entries.get(b.message!.id)!));
+    const messages: Message[] = [];
+    for (const group of ordered) {
+      const message = group.message!;
+      if (!group.deleted) messages.push(message);
+      else if (messages.length && message.after) {
+        const last = messages.at(-1)!;
+        messages[messages.length - 1] = { ...last, after: [...(last.after ?? []), ...message.after] };
+      }
+    }
+    let latest: EntryIndex | null = null;
+    for (const entry of this.entries.values()) if (!latest || entry.rev >= latest.rev) latest = entry;
+    this.result = { messages, at: latest?.at ?? null };
+    return this.result;
+  }
+
+  private add(index: Map<string, Set<string>>, key: string, id: string) {
+    const ids = index.get(key);
+    if (ids) ids.add(id);
+    else index.set(key, new Set([id]));
+  }
+
+  private remove(index: Map<string, Set<string>>, key: string, id: string) {
+    const ids = index.get(key)!;
+    ids.delete(id);
+    if (!ids.size) index.delete(key);
+  }
+}
+
+export function fold(entries: Stored<'entry'>[]): Message[] {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const projection = new ChatFold((id) => byId.get(id) ?? null);
+  for (const id of byId.keys()) projection.changed(id);
+  return projection.snapshot().messages;
 }
 
 export const shown = (message: Message): Version => message.versions[message.selected]!;

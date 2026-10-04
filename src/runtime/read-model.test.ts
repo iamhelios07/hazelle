@@ -89,7 +89,7 @@ describe('selective account reads', () => {
       { type: 'create', kind: 'entry', id: 'a1', parent: 'a', value: message('hello') },
     ]);
     const decrypt = vi.spyOn(sealedObjects, 'openObject');
-    const folded = vi.spyOn(chatModel, 'fold');
+    const folded = vi.spyOn(chatModel.ChatFold.prototype, 'snapshot');
     const displayed = vi.spyOn(store.evaluation, 'display');
     vi.stubGlobal('window', new EventTarget());
     vi.stubGlobal('document', { visibilityState: 'hidden' });
@@ -399,14 +399,14 @@ describe('per-chat read models', () => {
     const personaSnapshot = read.kind('persona').snapshot();
     const bChanged = vi.fn();
     read.chat('b').subscribe(bChanged);
-    const folded = vi.spyOn(chatModel, 'fold');
+    const folded = vi.spyOn(store, 'foldedChat');
     const displayed = vi.spyOn(store.evaluation, 'display');
     await store.create('entry', { type: 'translation', version: 'a1', text: '번역', receipt: null, at: 1 }, { parent: 'a' });
     const phone = await open();
     await phone.create('entry', message('later'), { parent: 'a' });
     await store.pull();
     expect(folded.mock.calls.length).toBeGreaterThanOrEqual(2);
-    expect(folded.mock.calls.every(([entries]) => entries.every((entry) => entry.parent === 'a'))).toBe(true);
+    expect(folded.mock.calls.every(([id]) => id === 'a')).toBe(true);
     expect(displayed.mock.calls.every(([lane]) => lane.endsWith(':a'))).toBe(true);
     expect(read.chat('b').snapshot()).toBe(b);
     expect(bChanged).not.toHaveBeenCalled();
@@ -429,7 +429,7 @@ describe('per-chat read models', () => {
     await hold(store, ...store.list('chat').map(({ id }) => id));
     const read = new ReadModels(store);
     const b = read.chat('b').snapshot();
-    const folded = vi.spyOn(chatModel, 'fold');
+    const folded = vi.spyOn(chatModel.ChatFold.prototype, 'changed');
     const displayed = vi.spyOn(store.evaluation, 'display');
     await store.update('character', 'ca', (current) => ({ ...current, card: { ...current.card, name: 'Luna' } }));
     await store.update('prompt', 'pa', (current) => ({ ...current, authorNote: 'night' }));

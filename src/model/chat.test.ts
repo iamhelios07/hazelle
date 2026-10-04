@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, chatTitle, connectionUsage, fold, modelUsage, previewLine, recentIn, recentModels, shown, usageCalls, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, ChatFold, chatTitle, connectionUsage, fold, modelUsage, previewLine, recentIn, recentModels, shown, usageCalls, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -27,6 +27,56 @@ const bot = (id: string, text: string, over?: Partial<Receipt>) =>
   entry(id, { type: 'message', role: 'assistant', at: rev, text, receipt: receipt(over) });
 const version = (id: string, message: string, text: string, replaces: string | null = null) =>
   entry(id, { type: 'version', message, replaces, edit: false, at: rev, text, receipt: receipt() });
+
+describe('incremental chat projection', () => {
+  it('refolds only the affected message through pending, confirmation, rollback and version removal', () => {
+    const rows = new Map([user('u1', 'one'), user('u2', 'two')].map((row) => [row.id, row]));
+    const projection = new ChatFold((id) => rows.get(id) ?? null);
+    const apply = (row: Stored<'entry'>) => { rows.set(row.id, row); projection.changed(row.id); return projection.snapshot().messages; };
+    for (const id of rows.keys()) projection.changed(id);
+    const [first, second] = projection.snapshot().messages;
+    const edit = { ...version('edit', 'u2', 'edited', 'u2'), rev: 0, pending: 1 };
+    const pending = apply(edit);
+    expect(pending[0]).toBe(first);
+    expect(pending[1]).not.toBe(second);
+    expect(shown(pending[1]!).text).toBe('edited');
+    const confirmed = apply({ ...edit, rev: ++rev, pending: undefined });
+    expect(confirmed[0]).toBe(first);
+    expect(shown(confirmed[1]!).text).toBe('edited');
+    const translation = entry('translation', { type: 'translation', version: 'edit', text: 'translated', receipt: null, at: 0 });
+    expect(shown(apply(translation)[1]!).translation?.text).toBe('translated');
+    rows.delete('edit'); projection.changed('edit');
+    const rolledBack = projection.snapshot().messages;
+    expect(rolledBack[0]).toBe(first);
+    expect(shown(rolledBack[1]!).text).toBe('two');
+    expect(shown(rolledBack[1]!).translation).toBeUndefined();
+    expect(shown(apply(edit)[1]!).translation).toBeUndefined();
+    expect(shown(apply({ ...edit, rev: translation.rev - 1, pending: undefined })[1]!).translation?.text).toBe('translated');
+  });
+
+  it('invalidates shared receipt costs and carries deleted-message variables without mutating old snapshots', () => {
+    const rows = new Map<string, Stored<'entry'>>();
+    const projection = new ChatFold((id) => rows.get(id) ?? null);
+    const apply = (row: Stored<'entry'>) => { rows.set(row.id, row); projection.changed(row.id); return projection.snapshot().messages; };
+    apply(user('u1', 'one'));
+    apply(bot('b1', 'two', { replyId: 'shared', cost: 'pending' }));
+    apply(bot('b2', 'three', { continues: receipt({ replyId: 'shared', cost: 'pending' }) }));
+    const before = apply(entry('vars', { type: 'vars', version: 'b1', set: [['door', 'open']], stays: true, at: 0 }));
+    const cost = entry('cost', { type: 'cost', replyId: 'shared', cost: { unit: 'usd', amount: 1, source: 'reported' }, at: 0 });
+    const priced = apply(cost);
+    expect(priced[0]).toBe(before[0]);
+    expect(shown(priced[1]!).receipt?.cost).toEqual(cost.value.type === 'cost' && cost.value.cost);
+    expect(shown(priced[2]!).receipt?.continues?.cost).toEqual(cost.value.type === 'cost' && cost.value.cost);
+    const deleted = apply(entry('delete', { type: 'delete', message: 'b1', at: 0 }));
+    expect(deleted.map(({ id }) => id)).toEqual(['u1', 'b2']);
+    expect(deleted[0]!.after).toEqual([['door', 'open']]);
+    expect(priced[0]!.after).toBeUndefined();
+    expect(deleted[1]).toBe(priced[2]);
+    rows.delete('cost'); projection.changed('cost');
+    expect(shown(projection.snapshot().messages[1]!).receipt?.continues?.cost).toBe('pending');
+    expect(apply(entry('restore', { type: 'restore', message: 'b1', at: 0 }))[0]).toBe(before[0]);
+  });
+});
 
 describe('fold', () => {
   it('orders by rev, not by the order entries arrive in', () => {
