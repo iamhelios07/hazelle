@@ -14,7 +14,9 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
   // Where toBottom left the view. Its scroll event comes after the story may have grown again, so it is not the reader
   // leaving the bottom.
   const placed = useRef<number | null>(null);
-  const seen = useRef({ count, streaming, answered });
+  // A screen mounted while its reply is still being written (the chat left and come back to) treats that reply as
+  // starting now, so stay holds it too.
+  const seen = useRef({ count, streaming: false, answered: null as string | null });
   const [away, setAway] = useState(false);
   const [unread, setUnread] = useState(false);
   const [seek, setSeek] = useState<Seek | null>(null);
