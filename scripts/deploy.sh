@@ -19,7 +19,13 @@ export NODE_OPTIONS=--max-old-space-size=4096
 checked=$(npm run -s check 2>&1) || { echo "$checked" | tail -20 >&2; echo "deploy: npm run check failed" >&2; exit 1; }
 # The recovery points of this run, read before it changes anything, for the deploy note: a deploy that changes a
 # Durable Object class cannot be rolled back, and D1 Time Travel restores to a bookmark.
-bookmark=$($BIN/wrangler d1 time-travel info risu-alpha 2>&1 | grep -v '@' | grep -i bookmark) || { echo "deploy: could not read the D1 bookmark; nothing applied" >&2; exit 1; }
+# The read fails now and then on a fine login (twice on 2026-10-04); a retry answers.
+for attempt in 1 2 3; do
+  bookmark=$($BIN/wrangler d1 time-travel info risu-alpha 2>&1 | grep -v '@' | grep -i bookmark) && break
+  bookmark=
+  sleep 5
+done
+[ -n "$bookmark" ] || { echo "deploy: could not read the D1 bookmark; nothing applied" >&2; exit 1; }
 running=$($BIN/wrangler deployments status 2>&1 | grep -v '@') || { echo "$running" | tail -20 >&2; echo "deploy: could not read the live version; nothing applied" >&2; exit 1; }
 echo "before this run: $bookmark"
 echo "$running"
