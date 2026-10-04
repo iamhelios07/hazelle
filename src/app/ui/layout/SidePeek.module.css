@@ -29,7 +29,6 @@
   color: var(--color-text-muted);
   font-size: var(--text-xs);
   writing-mode: vertical-rl;
-  /* The width ChatFrame keeps the message tools clear of (--peek-tab-width). */
   width: var(--peek-tab-width);
   box-sizing: border-box;
   pointer-events: auto;

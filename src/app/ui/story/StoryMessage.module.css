@@ -95,15 +95,6 @@
   pointer-events: none;
 }
 
-/* Beside the column in its own gutter, never at the story's edge, where SidePeek's tabs and the StoryAside margin
-   live: ChatFrame decides when there is room. */
-.gutter .rail {
-  right: auto;
-  left: 100%;
-  width: var(--read-gutter);
-  align-items: center;
-}
-
 .tools {
   position: sticky;
   bottom: calc(var(--footer-space) + var(--space-8));
@@ -123,13 +114,7 @@
   pointer-events: none;
 }
 
-/* In the gutter the rail takes the pointer while the bar shows, so a pointer crossing from the text to the bar stays on
-   the message. Over the corner it must not, or it would take the presses on the text beneath. */
-.gutter:focus-within .rail,
-.gutter.pinned .rail {
-  pointer-events: auto;
-}
-
+/* The rail never takes the pointer, or it would take the presses on the text beneath. */
 .message:focus-within .tools,
 .pinned .tools {
   opacity: 1;
@@ -143,10 +128,6 @@
     opacity: 1;
   }
 
-  .gutter:hover .rail {
-    pointer-events: auto;
-  }
-
   .message:hover .tools {
     opacity: 1;
     transform: none;
@@ -157,10 +138,6 @@
     background: var(--color-surface-hover);
     color: var(--color-text);
   }
-}
-
-.gutter .tools {
-  flex-direction: column;
 }
 
 .waiting {
