@@ -1,0 +1,175 @@
+import { streamError } from './errors';
+import type { Reasoning } from './settings';
+import type { ChatMessage, Codec, Model, Phase, StreamFacts, Terminal } from './types';
+import { count, isRecord, list } from './values';
+
+// The Gemini API (generateContent), checked against ai.google.dev/api on 2026-10-04.
+
+const LEVELS = ['minimal', 'low', 'medium', 'high'];
+
+// Gemini 3 takes thinkingLevel and Gemini 2.5 thinkingBudget, where 0 is off and -1 dynamic; Gemini 3.1 Pro cannot
+// turn thinking off and refuses 0. Thoughts come back only with includeThoughts, which a model that does not think may
+// refuse, so with no reasoning setting it is asked only of models the catalog says think.
+function thinkingConfig(reasoning: Reasoning | undefined, model: Model) {
+  switch (reasoning?.kind) {
+    case undefined:
+      return model.reasoning ? { thinkingConfig: { includeThoughts: true } } : {};
+    case 'off':
+      return { thinkingConfig: { thinkingBudget: 0 } };
+    case 'budget':
+      return { thinkingConfig: { thinkingBudget: reasoning.tokens, includeThoughts: true } };
+    case 'level':
+      return { thinkingConfig: { thinkingLevel: reasoning.level, includeThoughts: true } };
+    case 'adaptive':
+      return { thinkingConfig: { ...(reasoning.level === null ? { thinkingBudget: -1 } : { thinkingLevel: reasoning.level }), includeThoughts: true } };
+  }
+}
+
+function contents(messages: ChatMessage[]) {
+  const turns: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
+  for (const message of messages) {
+    const role = message.role === 'assistant' ? 'model' : 'user';
+    const last = turns.at(-1);
+    if (last?.role === role) last.parts.push({ text: message.content });
+    else turns.push({ role, parts: [{ text: message.content }] });
+  }
+  return turns;
+}
+
+// STOP and MAX_TOKENS end a reply that stands; every other reason, and a blocked prompt, is the provider refusing it.
+const STANDING = new Set(['STOP', 'MAX_TOKENS']);
+
+function refusal(event: Record<string, unknown>): string | null {
+  const feedback = isRecord(event.promptFeedback) ? event.promptFeedback : {};
+  if (typeof feedback.blockReason === 'string') return feedback.blockReason;
+  const [candidate] = list(event.candidates);
+  if (!isRecord(candidate) || typeof candidate.finishReason !== 'string' || STANDING.has(candidate.finishReason)) return null;
+  return typeof candidate.finishMessage === 'string' && candidate.finishMessage ? `${candidate.finishReason}: ${candidate.finishMessage}` : candidate.finishReason;
+}
+
+function read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void) {
+  if (!isRecord(event)) return;
+  if (typeof event.responseId === 'string' && event.responseId) facts.id ??= event.responseId;
+  const [candidate] = list(event.candidates);
+  if (isRecord(candidate)) {
+    const content = isRecord(candidate.content) ? candidate.content : {};
+    for (const part of list(content.parts)) {
+      if (isRecord(part) && typeof part.text === 'string') append(part.thought === true ? 'reasoning' : 'text', part.text);
+    }
+    if (typeof candidate.finishReason === 'string') facts.finishReason = candidate.finishReason;
+  }
+  if (isRecord(event.usageMetadata)) Object.assign(facts.rawUsage, event.usageMetadata);
+}
+
+// The stream has no end marker: it closes after the chunk that names finishReason.
+function terminal(event: unknown): Terminal | null {
+  if (!isRecord(event)) return null;
+  if (event.error !== undefined && event.error !== null) return { state: 'failed', error: streamError(event.error) };
+  const refused = refusal(event);
+  return refused === null ? null : { state: 'failed', error: refused };
+}
+
+export const gemini: Codec = {
+  authHeaders: (secret) => ({ 'x-goog-api-key': secret }),
+
+  // 1000 is the most one page holds; a later page (nextPageToken) is not asked for.
+  listModels: (endpoint) => ({ url: `${endpoint.baseUrl}/models?pageSize=1000`, method: 'GET', headers: {}, body: null }),
+
+  systemFirst: true,
+
+  // Google's JSON leaves out a field at its default, so a model without thinking has no thinking key: absent is false.
+  // The list says nothing about input modalities, tools, or which request settings or thinking controls a model takes.
+  parseModels(payload) {
+    if (!isRecord(payload) || !Array.isArray(payload.models)) return null;
+    return payload.models.flatMap((raw): Model[] => {
+      if (!isRecord(raw) || typeof raw.name !== 'string' || !raw.name.startsWith('models/')) return [];
+      if (!list(raw.supportedGenerationMethods).includes('generateContent')) return [];
+      const id = raw.name.slice('models/'.length);
+      return [
+        {
+          id,
+          name: typeof raw.displayName === 'string' && raw.displayName ? raw.displayName : id,
+          input: null,
+          output: null,
+          contextLength: count(raw.inputTokenLimit) || null,
+          maxOutput: count(raw.outputTokenLimit) || null,
+          reasoning: raw.thinking === true,
+          tools: null,
+          protocol: null,
+          takes: { settings: null, reasoning: null },
+        },
+      ];
+    });
+  },
+
+  carries: {
+    numbers: {
+      maxOutput: { min: 1, max: null },
+      temperature: { min: 0, max: 2 },
+      topP: { min: 0, max: 1 },
+      topK: { min: 0, max: null },
+      frequencyPenalty: { min: null, max: null },
+      presencePenalty: { min: null, max: null },
+      seed: { min: null, max: null },
+    },
+    reasoning: { off: true, levels: LEVELS, budget: { min: null, max: null }, adaptive: true },
+    // Gemini caches on its own (implicit caching) or by a separately created cachedContent; it has no cache points.
+    cache: false,
+  },
+
+  chat(endpoint, { model, messages, settings }, fields) {
+    const system = messages.filter((message) => message.role === 'system');
+    const config = {
+      ...(settings.maxOutput === undefined ? {} : { maxOutputTokens: settings.maxOutput }),
+      ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
+      ...(settings.topP === undefined ? {} : { topP: settings.topP }),
+      ...(settings.topK === undefined ? {} : { topK: settings.topK }),
+      ...(settings.frequencyPenalty === undefined ? {} : { frequencyPenalty: settings.frequencyPenalty }),
+      ...(settings.presencePenalty === undefined ? {} : { presencePenalty: settings.presencePenalty }),
+      ...(settings.seed === undefined ? {} : { seed: settings.seed }),
+      ...(settings.stop === undefined ? {} : { stopSequences: settings.stop }),
+      ...thinkingConfig(settings.reasoning, model),
+    };
+    const method = settings.streaming === false ? 'generateContent' : 'streamGenerateContent?alt=sse';
+    return {
+      url: `${endpoint.baseUrl}/models/${model.id}:${method}`,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ...(system.length ? { systemInstruction: { parts: [{ text: system.map((message) => message.content).join('\n\n') }] } } : {}),
+        contents: contents(messages.filter((message) => message.role !== 'system')),
+        ...(Object.keys(config).length ? { generationConfig: config } : {}),
+        ...fields,
+      }),
+    };
+  },
+
+  read,
+
+  terminal,
+
+  whole(payload, facts, append) {
+    if (!isRecord(payload)) return null;
+    const failed = terminal(payload);
+    if (failed) return failed;
+    if (!Array.isArray(payload.candidates)) return null;
+    read(payload, facts, append);
+    return { state: 'completed' };
+  },
+
+  truncated: (finishReason) => finishReason === 'MAX_TOKENS',
+
+  // promptTokenCount already holds the cached part. candidatesTokenCount leaves thoughts out, and a count at zero is
+  // left out of the JSON, so a missing thoughts count adds nothing.
+  usage(raw) {
+    const candidates = count(raw.candidatesTokenCount);
+    const thoughts = count(raw.thoughtsTokenCount);
+    return {
+      inputTokens: count(raw.promptTokenCount),
+      cachedInputTokens: count(raw.cachedContentTokenCount),
+      cacheWriteInputTokens: null,
+      outputTokens: candidates === null && thoughts === null ? null : (candidates ?? 0) + (thoughts ?? 0),
+      reasoningTokens: thoughts,
+    };
+  },
+};
