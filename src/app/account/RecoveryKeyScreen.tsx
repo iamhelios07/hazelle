@@ -5,7 +5,7 @@ import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Link, Screen, S
 import { download } from '../common/download';
 import { PRIVACY, TERMS } from '../common/legal';
 
-const FILENAME = 'risu-alpha-recovery.txt';
+const FILENAME = 'hazelle-recovery.txt';
 
 type Props = {
   username: string;
@@ -23,7 +23,7 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
   function save() {
     const created = new Date().toISOString().slice(0, 10);
     const text = [
-      'risu-alpha 복구 키',
+      '헤이젤 복구 키',
       `계정: ${username}`,
       '',
       recoveryKey,

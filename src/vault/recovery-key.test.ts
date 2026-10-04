@@ -18,7 +18,7 @@ describe('recovery key', () => {
 
   it('finds the key inside the downloaded file', () => {
     // The account line ends in letters right before a blank line, which once got read as part of the key.
-    const file = `risu-alpha 복구 키\n계정: vaulttester\n\n${formatRecoveryKey(bytes)}\n\n만든 날: 2026-09-27\n`;
+    const file = `헤이젤 복구 키\n계정: vaulttester\n\n${formatRecoveryKey(bytes)}\n\n만든 날: 2026-09-27\n`;
     expect(parseRecoveryKey(file)).toEqual(bytes);
   });
 

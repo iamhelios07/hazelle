@@ -11,7 +11,7 @@ export function LegalNotice() {
         © 2026 {OPERATOR}. AGPL-3.0에 따라 누구나 쓰고, 고치고, 다시 나눌 수 있는 자유 소프트웨어예요. 보증은 없어요.
       </Text>
       <Row kind="tags">
-        <Link href="/source.tar.gz" download="risu-alpha-source.tar.gz">
+        <Link href="/source.tar.gz" download="hazelle-source.tar.gz">
           소스 코드 받기
         </Link>
         <Link href="/license.txt">라이선스 전문</Link>

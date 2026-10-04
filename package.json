@@ -16,6 +16,7 @@
     "db:migrate:local": "wrangler d1 migrations apply risu-alpha --local",
     "db:migrate:remote": "wrangler d1 migrations apply risu-alpha --remote",
     "deploy": "npm run build && wrangler deploy",
+    "brand": "node --experimental-strip-types brand/render.mjs",
     "e2e": "npm run build && playwright test && playwright test -c playwright.store.config.ts"
   },
   "dependencies": {

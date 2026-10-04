@@ -8,7 +8,7 @@ import { useToast } from '../toast';
 import { Button, FileButton, Section, SettingGroup, SettingRow } from '../ui';
 
 const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup-crashed', { message: string; detail?: string }> = {
-  'not-backup': { message: 'risu-alpha 백업 파일이 아니거나 망가진 파일이에요.' },
+  'not-backup': { message: '헤이젤 백업 파일이 아니거나 망가진 파일이에요.' },
   'other-version': { message: '이 버전이 모르는 백업 파일이에요.', detail: '새로고침한 뒤 다시 해 보세요.' },
   'backup-storage': { message: '백업을 준비할 임시 저장 공간을 열지 못했어요.', detail: '기기의 저장 공간과 브라우저의 저장 설정을 확인해 주세요.' },
   'backup-crashed': { message: '백업을 다루던 작업이 도중에 멈췄어요.', detail: '새로고침한 뒤 다시 해 보세요.' },
@@ -39,7 +39,7 @@ export function BackupSection() {
   async function save() {
     const options = begin('save');
     try {
-      const destination = downloadOutput(`risu-alpha-${username}-${today()}.zip`);
+      const destination = downloadOutput(`hazelle-${username}-${today()}.zip`);
       const made = await exportBackup(store, files, await destination, options);
       if (!made.ok) {
         if (made.error === 'stopped') return;

@@ -1,5 +1,17 @@
 .brand {
-  font-family: var(--font-serif);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.mark {
+  width: var(--brand-mark);
+  height: auto;
+  color: var(--color-accent);
+}
+
+.name {
+  font-family: var(--font-brand);
   font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-brand);
 }

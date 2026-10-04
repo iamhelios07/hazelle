@@ -4,5 +4,5 @@
 # deploy.sh builds only a clean, pushed HEAD, so the archive of HEAD is the deployed source.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-git archive --format=tar.gz --prefix="risu-alpha-$(git rev-parse --short HEAD)/" -o dist/client/source.tar.gz HEAD
+git archive --format=tar.gz --prefix="hazelle-$(git rev-parse --short HEAD)/" -o dist/client/source.tar.gz HEAD
 cp LICENSE dist/client/license.txt

@@ -3,6 +3,15 @@
  * stylelint enforces that (stylelint.config.js). Palette values come from the approved mockups.
  * Media queries cannot read custom properties, so breakpoints live in MEDIA (media.ts) instead.
  */
+
+/* The wordmark's three glyphs only; the full face is not shipped. */
+@font-face {
+  font-family: NanumSquareRound;
+  font-weight: 800;
+  font-display: block;
+  src: url('./fonts/NanumSquareRoundEB-hazelle.woff2') format('woff2');
+  unicode-range: U+D5E4, U+C774, U+C824;
+}
 :root {
   --palette-ink-900: #131216;
   --palette-ink-850: #17161b;
@@ -166,6 +175,9 @@
   --font-serif: 'Gowun Batang', serif;
   --font-sans: 'IBM Plex Sans KR', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'IBM Plex Sans KR', monospace;
+  --font-brand: 'NanumSquareRound', var(--font-sans);
+  --weight-brand: 800;
+  --brand-mark: 26px;
 
   --text-xs: 12px;
   --text-sm: 13px;
