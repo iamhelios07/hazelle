@@ -6,6 +6,7 @@ import { useChatSummary } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Divider, Empty, Text, Viewport } from '../ui';
 import { ChatMessage } from './ChatMessage';
+import { foldTerm } from './search';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
@@ -21,6 +22,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const character = card && { name: card.nickname || card.name, image: shelf!.face };
   const me = chat.persona.kind === 'persona' ? { name: chat.persona.persona.value.name, image: chat.persona.persona.value.picture } : null;
   const modelName = 'kind' in route ? null : route.model.name;
+  const term = search ? foldTerm(search.term) : '';
   if (chat.displayPending) return chat.displayError === undefined ? <Text>채팅을 불러오는 중</Text> : <>
     <Text>채팅 표시를 계산하지 못했어요.</Text>
     <Button variant="secondary" size="sm" onClick={chat.retryDisplay}>다시 시도</Button>
@@ -58,6 +60,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           pinned={pinned === message.id}
           found={found?.ids.has(message.id) ? found.at : 0}
           marked={search?.at === message.id}
+          term={term}
           branching={branching}
           modelMenu={modelMenu}
           infoDrawer={infoDrawer}
