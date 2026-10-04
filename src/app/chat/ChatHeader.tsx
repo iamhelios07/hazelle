@@ -1,11 +1,13 @@
-import { GitBranch, History, List, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
+import { GitBranch, History, List, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal, Users } from 'lucide-react';
 import { branchTree } from '../../model/chat';
 import { NameDialog } from '../common/NameDialog';
 import { ago } from '../common/time';
+import { CAST } from '../common/words';
 import { useLibrary, useRemembering } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
-import { Avatar, ChatTitle, Divider, IconButton, Menu, MenuHeading, MenuItem, ToolButton, useWide } from '../ui';
+import { Avatar, ChatTitle, Divider, IconButton, Menu, MenuHeading, MenuItem, ToolButton, useMenuOpener, useWide } from '../ui';
+import { ChatCastMenu } from './ChatCastMenu';
 import { ChatModelMenu } from './ChatModelMenu';
 import { ChatPromptMenu } from './ChatPromptMenu';
 import { ReadingDialog, ReadingMenu } from './ChatReading';
@@ -15,10 +17,14 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
   const { item, card, shelf, busy } = chat;
   const title = card ? `${card.name} · ${item?.title ?? '새 채팅'}` : (item?.title ?? '새 채팅');
   const face = card ? <Avatar face={card.name} image={shelf!.face} /> : <Avatar face={MessageSquare} />;
+  const wide = useWide();
   return (
-    <Menu label={card ? `${card.name}의 채팅` : '캐릭터 없이'} size="lg" trigger={(opener) => <ChatTitle avatar={face} title={title} typing={busy} {...opener} />}>
-      <ChatChoices chat={chat} />
-    </Menu>
+    <>
+      <Menu label={card ? `${card.name}의 채팅` : '캐릭터 없이'} size="lg" trigger={(opener) => <ChatTitle avatar={face} title={title} typing={busy} {...opener} />}>
+        <ChatChoices chat={chat} />
+      </Menu>
+      {!wide && <ChatCastMenu chat={chat} button={false} />}
+    </>
   );
 }
 
@@ -26,13 +32,16 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
 const RECENT = 8;
 
 function ChatChoices({ chat }: { chat: OpenChat }) {
-  const { id, shelf, actions } = chat;
+  const { id, shelf, cast, castMenu, actions } = chat;
   const { none } = useLibrary();
+  const wide = useWide();
+  const openCast = useMenuOpener(castMenu);
   const chats = shelf?.chats ?? none.chats;
   return (
     <>
       <MenuItem icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />
       {shelf && <MenuItem icon={Pencil} label="캐릭터 편집" onClick={() => actions.side({ kind: 'character', id: shelf.id })} />}
+      {!wide && <MenuItem icon={Users} label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />}
       {chats.length > 0 && (
         <>
           <Divider variant="menu" />
@@ -65,6 +74,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   return (
     <>
       <ChatPromptMenu chat={chat} />
+      {wide && <ChatCastMenu chat={chat} button />}
       <ChatModelMenu handle={modelMenu} current={current} label={label} onPick={actions.pickModel} />
       <ToolButton
         icon={SlidersHorizontal}

@@ -9,12 +9,13 @@ export type LuaMessage = { role: 'user' | 'char'; data: string; time: number };
 // The chat as a run finds it. messages: without the greeting, each as it stands after the bot's input or output
 // scripts. variables: as of the point in the story the run stands at. globals: what getGlobalVar reads, which is the
 // chat's toggle values. scope: what CBS in a script's text is evaluated over and where its lorebook is read from: the
-// chat's scope without what does not cross to a worker or no tag reads (its toggles, which globals carry, its packs).
+// chat's scope without what does not cross to a worker or no tag reads (its toggles, which globals carry, its packs,
+// its cast).
 export type Snapshot = {
   messages: LuaMessage[];
   variables: [string, string][];
   globals: [string, string][];
-  scope: Omit<ChatScope, 'toggles' | 'lua' | 'packs' | 'pending'>;
+  scope: Omit<ChatScope, 'toggles' | 'lua' | 'packs' | 'pending' | 'cast'>;
   character: { name: string; description: string; firstMessage: string };
   persona: { name: string; description: string };
   note: string;

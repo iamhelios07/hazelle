@@ -15,16 +15,17 @@ type Props = {
   current?: boolean | 'page';
   pressed?: boolean;
   expanded?: boolean;
-  role?: 'menuitem' | 'menuitemradio';
+  role?: 'menuitem' | 'menuitemradio' | 'menuitemcheckbox';
   checked?: boolean;
   tone?: 'default' | 'muted' | 'warn';
+  disabled?: boolean;
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
 };
 
 // The fill under the pointer and on the current row follows aria-current and aria-pressed, so it cannot disagree with
 // what a screen reader is told.
-export function Item({ density, scheme, leading, title, meta, preview, trailing, current, pressed, expanded, role, checked, tone = 'default', onClick }: Props) {
+export function Item({ density, scheme, leading, title, meta, preview, trailing, current, pressed, expanded, role, checked, tone = 'default', disabled, onClick }: Props) {
   const branch = expanded !== undefined;
   const classes = [styles.item, styles[density], styles[scheme], onClick && styles.pressable, branch && styles.branch, tone !== 'default' && styles[tone]].filter(Boolean).join(' ');
   const clip = density === 'regular';
@@ -44,7 +45,7 @@ export function Item({ density, scheme, leading, title, meta, preview, trailing,
   );
   if (!onClick) return <div className={classes}>{content}</div>;
   return (
-    <button type="button" className={classes} role={role} aria-checked={checked} aria-current={current || undefined} aria-pressed={pressed} aria-expanded={expanded} onClick={onClick}>
+    <button type="button" className={classes} role={role} aria-checked={checked} aria-current={current || undefined} aria-pressed={pressed} aria-expanded={expanded} disabled={disabled} onClick={onClick}>
       {content}
     </button>
   );

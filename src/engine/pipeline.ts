@@ -62,34 +62,40 @@ type Part = Sent | ChatPart | CachePart;
 
 type Laid = {
   card: Card | null;
+  cast: ChatScope['cast'];
   activation: Activation | null;
   lorebook: Lore[];
   last: Lore[];
   depths: (Lore & { depth: number })[];
   sides: { before: string[]; after: string[] };
   injections: Map<string, { body: string; operation: Operation }[]>;
-  render: (text: string, place: string) => string;
+  // cast: the id of the 등장인물 whose {{char}} the text reads; the chat's own otherwise.
+  render: (text: string, place: string, cast?: string) => string;
+  entry: (id: string, body: string) => string;
   named: (id: string) => string;
 };
 
 function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
   const { card } = scope;
   const context = contexts(scope, 'prompt', language);
+  const casts = new Map(scope.cast.map((member) => [member.id, contexts({ ...scope, card: member.card }, 'prompt', language)]));
   // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
   // text, and reads the variables as the chat's messages left them. The text last rendered at a place is kept, so
   // what is rendered there again is the same text and not a second roll.
   const held = new Map<string, { text: string; out: string }>();
-  const render = (text: string, place: string) => {
+  const render = (text: string, place: string, cast?: string) => {
     const last = held.get(place);
     if (last?.text === text) return last.out;
-    const out = unescapeCbs(evaluate(text, context({ seed: `${seed}:${place}` }, new Map(variables)))).trim();
+    const out = unescapeCbs(evaluate(text, (cast === undefined ? context : casts.get(cast)!)({ seed: `${seed}:${place}` }, new Map(variables)))).trim();
     held.set(place, { text, out });
     return out;
   };
+  // A module's entries read the chat's {{char}}, as Risu's do; only a 등장인물's own read theirs.
+  const owners = new Map(scope.lore.flatMap(({ id, parent }) => (parent !== null && casts.has(parent) ? [[id, parent] as const] : [])));
   // An entry costs what its body sends, so it is counted as rendered at its own place, where loreMessage sends it.
   // One merged into another entry or set inside another text is evaluated there, and its count is of its own body.
   // The replays below count the same bodies again.
-  const count = (id: string, body: string) => tokens(render(body, id));
+  const count = (id: string, body: string) => tokens(render(body, id, owners.get(id)));
   const book = prepareLore(scope.lore, card?.loreSettings ?? NO_SETTINGS);
   const activation = card || scope.lore.length > 0 ? book.activate(loreInput(scope, history, history.length, afterMatch(scope, book, count), seed, count)) : null;
   const names = new Map(scope.lore.map(({ id, value }) => [id, value.name]));
@@ -121,15 +127,18 @@ function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string,
     }
   }
 
+  const placed = (text: string, place: string, cast?: string) => render(atPositions(text, positions), place, cast);
   return {
     card,
+    cast: scope.cast,
     activation,
     lorebook,
     last,
     depths,
     sides,
     injections,
-    render: (text, place) => render(atPositions(text, positions), place),
+    render: placed,
+    entry: (id, body) => placed(body, id, owners.get(id)),
     named: (id) => names.get(id)!,
   };
 }
@@ -141,7 +150,7 @@ export const activeLore = (scope: ChatScope, seed: string, countTokens: (text: s
 function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) => number): { role: Role; text: string }[] {
   const laid = lay(scope, scope.messages, renderChat('prompt', scope).variables, seed, remembered(countTokens), null);
   return (laid.activation?.placed ?? []).flatMap(({ id, body, placement }) => {
-    const text = laid.render(body, id);
+    const text = laid.entry(id, body);
     return text ? [{ role: 'role' in placement ? placement.role : 'system', text }] : [];
   });
 }
@@ -151,7 +160,7 @@ type Filling =
   | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'memory'; memory: string; span: string };
 
-const loreMessage = ({ render }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: render(body, id) });
+const loreMessage = ({ entry }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: entry(id, body) });
 const throughSlot = (laid: Laid, entries: Lore[], slot: 'lorebook' | 'postEverything') =>
   entries.map((entry): Sent => ({ message: loreMessage(laid, entry), from: { kind: 'lore', name: laid.named(entry.id), slot } }));
 const filled = (parts: Sent[]) => parts.filter(({ message }) => message.content !== '');
@@ -159,11 +168,11 @@ const filled = (parts: Sent[]) => parts.filter(({ message }) => message.content 
 // A prompt's blocks in order, with its chat slots left open and every other block rendered once. memory: whether a
 // 장기 기억 slot reaches the request, its 감싸는 글 keeping {{slot}} once rendered, whether or not memory holds anything.
 function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], filling: Filling): { parts: Part[]; memory: boolean } {
-  const { card, render, sides, injections } = laid;
+  const { card, cast, render, sides, injections } = laid;
   const parts: Part[] = [];
   let memory = false;
   const out = (...sent: Sent[]) => parts.push(...filled(sent));
-  // What a card or a persona holds is CBS of its own, evaluated inside its 감싸는 글.
+  // What a persona or a note holds is CBS of its own, evaluated inside its 감싸는 글.
   const wrapped = (block: WrappedSlot, content: string) => {
     if (content.trim()) out({ message: { role: block.role, content: render(block.wrapper === null ? content : block.wrapper.replace('{{slot}}', () => content), block.id) }, from: blockFrom(block) });
   };
@@ -179,8 +188,21 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
     if (block.kind === 'text') out({ message: { role: block.role, content: render(injected(ownText(block, card), block.mark === null ? [] : (injections.get(block.mark) ?? [])), block.id) }, from: blockFrom(block) });
     else
       switch (block.slot) {
+        // Each character's text is evaluated as its own {{char}}, so the model never reads two characters as one.
         case 'description':
-          wrapped(block, [...sides.before, ...describe(card), ...sides.after].filter((part) => part.trim()).join('\n\n'));
+          verbatim(
+            block,
+            [
+              render(joined([...sides.before, ...describe(card)]), `${block.id}:own`),
+              ...cast.map(({ id, card: own }) => {
+                const text = joined(describe(own));
+                return text && render(`[{{char}}]\n${text}`, `${block.id}:${id}`, id);
+              }),
+              render(joined(sides.after), `${block.id}:after`),
+            ]
+              .filter((part) => part)
+              .join('\n\n'),
+          );
           break;
         case 'persona':
           wrapped(block, persona?.description ?? '');
@@ -523,6 +545,8 @@ function atPositions(text: string, positions: Map<string, string[]>): string {
   }
   return out;
 }
+
+const joined = (parts: string[]) => parts.filter((part) => part.trim()).join('\n\n');
 
 // Example dialogue has no slot of its own, so it goes here.
 function describe(card: Card | null): string[] {

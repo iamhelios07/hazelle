@@ -128,7 +128,7 @@
 }
 
 /* Hover comes first so the current fill stays under the pointer. */
-.pressable:hover {
+.pressable:hover:not(:disabled) {
   background: var(--color-item-hover);
 }
 
@@ -178,4 +178,9 @@
 
 .warn {
   color: var(--color-warn);
+}
+
+.item:disabled {
+  color: var(--color-text-faint);
+  cursor: default;
 }

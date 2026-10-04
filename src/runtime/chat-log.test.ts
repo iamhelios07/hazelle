@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { memoryId, type MemoryRecord } from '../model/memory';
-import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, startChat } from './chat-log';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, setCast, startChat } from './chat-log';
 import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
 import { evaluateChat } from './turn';
@@ -34,6 +34,18 @@ describe('startChat', () => {
     };
     expect(await opened(0)).toEqual(['하나 {{pick}} {{random}}', 3]);
     expect(await opened(2)).toEqual(['셋', 3]);
+  });
+});
+
+describe('setCast', () => {
+  it("keeps each character once, never the chat's own, at most five, and none as no list", async () => {
+    const { store } = await server.account();
+    const id = crypto.randomUUID();
+    expect(await startChat(store, id, { title: null, character: 'own', models: {} }, null)).toBeNull();
+    await setCast(store, id, ['a', 'own', 'b', 'a', 'c', 'd', 'e', 'f']);
+    expect(store.get('chat', id)!.value.cast).toEqual(['a', 'b', 'c', 'd', 'e']);
+    await setCast(store, id, []);
+    expect('cast' in store.get('chat', id)!.value).toBe(false);
   });
 });
 

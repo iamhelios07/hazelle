@@ -11,6 +11,8 @@ export type Stage = 'display' | 'prompt';
 
 export type ChatScope = {
   card: Card | null;
+  // 등장인물 (design §6.9), live ones only, in the order added.
+  cast: { id: string; card: Card }[];
   // In order: the card's own first, so a script's place in the card's regex is its place among all the packs'.
   packs: Pack[];
   // Each null when the chat's is gone: the display still renders, and a turn stops before sending.
@@ -18,7 +20,7 @@ export type ChatScope = {
   prompt: ConversationPrompt | null;
   // The chat's own 작가의 노트; null follows the prompt's.
   note: string | null;
-  lore: LoreEntries;
+  lore: (LoreEntries[number] & { parent: string | null })[];
   // Oldest first, each as its shown version.
   messages: HistoryMessage[];
   // The chat's own starting variables, over the card's defaults.
@@ -48,7 +50,7 @@ export const authorNote = (note: string | null, prompt: ConversationPrompt) => n
 const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prompt.blocks.find((block): block is TextBlock => block.kind === 'text' && block.mark === mark)?.text ?? '';
 
 // toggles: the bot's Lua reads them from its globals as they stand mid-run.
-export function contexts(scope: Omit<ChatScope, 'toggles'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
+export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
   const { card, persona, prompt, note, messages, greeting, toggles, model, clock, assets, modules, faces, screen, pick } = scope;
   const fixed = {
     stage,

@@ -117,21 +117,24 @@ type ItemProps = {
   avatar?: ReactNode;
   tag?: ReactNode;
   checked?: boolean;
+  multiple?: boolean;
   tone?: 'default' | 'muted' | 'warn';
+  disabled?: boolean;
   onClick: () => void;
 };
 
 // The menu closes before onClick runs, so a dialog it opens takes the button that opened the menu as the place to
 // give the focus back to.
-export function MenuItem({ label, sub, icon, avatar, tag, checked, tone, onClick }: ItemProps) {
+export function MenuItem({ label, sub, icon, avatar, tag, checked, multiple, tone, disabled, onClick }: ItemProps) {
   const close = useContext(CloseMenu);
   return (
     <Item
       density="compact"
       scheme="list"
-      role={checked === undefined ? 'menuitem' : 'menuitemradio'}
+      role={checked === undefined ? 'menuitem' : multiple ? 'menuitemcheckbox' : 'menuitemradio'}
       checked={checked}
       tone={tone}
+      disabled={disabled}
       leading={avatar ?? (icon && <Icon icon={icon} size="xs" />)}
       title={label}
       meta={tag}
