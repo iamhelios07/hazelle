@@ -14,7 +14,7 @@ export function cost(value: Cost | 'pending' | null): string {
   if (value === 'pending') return '확인 중…';
   const amount = money(value.unit, value.amount);
   if (value.source === 'reported') return amount;
-  return value.asOf === null ? `약 ${amount}` : `약 ${amount} · 가격표 ${monthDay(value.asOf)} 기준`;
+  return value.asOf === undefined ? `약 ${amount}` : `약 ${amount} · 가격표 ${monthDay(value.asOf)} 기준`;
 }
 
 // A reply that came in one piece, as from a provider that does not stream, has no speed to measure.

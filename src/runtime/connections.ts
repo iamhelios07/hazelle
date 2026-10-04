@@ -48,7 +48,7 @@ export async function setStarred(store: ObjectStore, id: string, model: Model, s
 
 // A loaded model list brings the starred models' prices up to date. A model it leaves unpriced keeps the price it had:
 // a price list that did not load reads the same.
-export async function refreshPrices(store: ObjectStore, id: string, models: Model[]): Promise<void> {
+export async function refreshStarredPrices(store: ObjectStore, id: string, models: Model[]): Promise<void> {
   const loaded = new Map(models.flatMap((model) => (model.price ? [[model.id, model.price] as const] : [])));
   const changed = (model: Starred) => loaded.has(model.id) && JSON.stringify(loaded.get(model.id)) !== JSON.stringify(model.price);
   if (!store.get('connection', id)?.value.starred.some(changed)) return;

@@ -70,8 +70,8 @@ export type Usage = {
 };
 
 // reported: the provider said what the reply cost. price-list: worked out from the model's Price, which can fall behind
-// the provider's, so it is shown as an estimate, with asOf as the price's.
-export type Cost = { unit: 'usd' | 'credit'; amount: number } & ({ source: 'reported' } | { source: 'price-list'; asOf: number | null });
+// the provider's, so it is shown as an estimate. asOf: the Price's, absent when it has none.
+export type Cost = { unit: 'usd' | 'credit'; amount: number } & ({ source: 'reported' } | { source: 'price-list'; asOf?: number });
 
 // Units are never summed together.
 export type Meter =

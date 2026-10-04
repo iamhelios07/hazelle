@@ -4,7 +4,7 @@ import { modelSettings } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
-import { refreshPrices, removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
+import { refreshStarredPrices, removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { reportsMeters } from '../../runtime/meters';
 import { modelProfile } from '../../runtime/profiles';
 import { describeCatalogFailure } from '../common/failure';
@@ -44,7 +44,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     let current = true;
     setCatalog(null);
     void catalogs.load(connection, { fresh: attempt > 0 }).then((result) => {
-      if (result.ok) void refreshPrices(store, id, result.models);
+      if (result.ok) void refreshStarredPrices(store, id, result.models);
       if (current) setCatalog(result);
     });
     return () => {

@@ -31,5 +31,5 @@ export function priceCost(price: Price, usage: Usage | null, unit: Cost['unit'])
   const rates = price.tiers.findLast((tier) => input > tier.above) ?? price;
   // A cache rate the list leaves out bills the token as plain input: earlier OpenAI models have no cache write price.
   const dollars = (fresh * rates.input + cached * (rates.cacheRead ?? rates.input) + written * (rates.cacheWrite ?? rates.input) + usage.outputTokens * rates.output) / 1_000_000;
-  return { unit, amount: unit === 'credit' ? dollars * 100 : dollars, source: 'price-list', asOf: price.asOf };
+  return { unit, amount: unit === 'credit' ? dollars * 100 : dollars, source: 'price-list', ...(price.asOf === null ? {} : { asOf: price.asOf }) };
 }

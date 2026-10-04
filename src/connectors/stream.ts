@@ -12,8 +12,8 @@ export type Outcome = {
   error: { kind: 'provider' | 'bad-event' | 'network'; detail: string } | null;
   finishReason: string | null;
   usage: Usage | null;
-  // pending: the type books the cost after the reply, to be looked up by replyId. What the provider reports or books
-  // outranks the model's price, which is only an estimate, so a type with a lookup never settles for the price.
+  // pending: the type books the cost after the reply, to be looked up by replyId. A pending lookup goes ahead of the
+  // model's price: put after it, a priced model would never be looked up, and the booked cost is the true one.
   cost: Cost | 'pending' | null;
   replyId: string | null;
 };
