@@ -29,6 +29,11 @@ export async function enterShots(page: Page) {
   const signup = page.getByLabel('한 번 더', { exact: true });
   const signin = page.getByRole('button', { name: '로그인', exact: true });
   await expect(signup.or(signin)).toBeVisible();
+  // The landing is the signup form; an account that exists is reached through its 계정이 있으면 로그인 button.
+  if (await signup.isVisible()) {
+    await page.getByRole('button', { name: '계정이 있으면 로그인', exact: true }).click();
+    await expect(signin).toBeVisible();
+  }
   await page.getByLabel('아이디', { exact: true }).fill(SHOTS.username);
   await page.getByLabel('비밀번호', { exact: true }).fill(SHOTS.password);
   if (await signin.isVisible()) return signin.click();
