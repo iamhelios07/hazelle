@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fetchApi } from './api';
 import type { Trigger } from '../engine/import/types';
 import { Lua } from '../engine/lua/run';
-import { fold, modelUsage, shown } from '../model/chat';
+import { fold, modelUsage, shown, usageCalls } from '../model/chat';
 import { setToggle } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import { EvaluationFailed } from './evaluation';
@@ -110,7 +110,7 @@ describe("a turn with the bot's Lua", () => {
       expect(session.store.get('character', character)!.value.botModels).toBe(true);
       expect((JSON.parse(log[1]!.sent.body!) as { messages: unknown }).messages).toEqual([{ role: 'user', content: 'sum' }]);
       expect(shown(messages()[2]!).calls).toMatchObject([{ receipt: { state: 'done', model: 'm' } }]);
-      expect(modelUsage([messages()], { connection: shown(messages()[2]!).receipt!.connection, model: 'm' }).calls).toBe(2);
+      expect(modelUsage([usageCalls(messages())], { connection: shown(messages()[2]!).receipt!.connection, model: 'm' }).calls).toBe(2);
       expect(calls).toHaveLength(2);
       await vi.waitFor(async () => expect((await fetchApi(calls[1]!.slice('/api/'.length))).status).toBe(404));
     }));

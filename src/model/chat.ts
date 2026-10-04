@@ -321,13 +321,13 @@ export function* usageCalls(messages: Iterable<Message>): Generator<UsageCall> {
   }
 }
 
-// Every call to one model in the chats kept, a continued reply counting each of its calls and a translation its own.
+// Every call in the chats kept that counts, a continued reply counting each of its calls and a translation its own.
 // A branch copies the replies it holds with their receipts, so a call is counted once, by its id, however many chats
 // hold it; the cost is read from whichever copy has settled it, as the original settles later than a copy made after.
-export class UsageCounter {
+class UsageCounter {
   private readonly usage: Omit<ModelUsage, 'costs' | 'costUnknown'> = { calls: 0, last: null, input: { total: 0, unknown: 0 }, output: { total: 0, unknown: 0 } };
   private readonly seen = new Map<string, Cost | null>();
-  constructor(private readonly ref: ModelRef) {}
+  constructor(private readonly counts: (made: UsageCall) => boolean) {}
 
   get value(): ModelUsage {
     const costs: ModelUsage['costs'] = [];
@@ -346,8 +346,9 @@ export class UsageCounter {
   add(made: Iterable<UsageCall>) {
     const usage = this.usage;
     const add = (tally: Tally, value: number | null) => (value === null ? tally.unknown++ : (tally.total += value));
-    for (const { at, call } of made) {
-      if (call.connection !== this.ref.connection || call.model !== this.ref.model) continue;
+    for (const one of made) {
+      if (!this.counts(one)) continue;
+      const { at, call } = one;
       const cost = call.cost === 'pending' ? null : call.cost;
       if (this.seen.has(call.id)) {
         // A branch can be walked before the original that later settled the same call.
@@ -364,10 +365,24 @@ export class UsageCounter {
   }
 }
 
-export function modelUsage(chats: Message[][], ref: ModelRef): ModelUsage {
-  const counter = new UsageCounter(ref);
-  for (const messages of chats) counter.add(usageCalls(messages));
+function countUsage(chats: Iterable<Iterable<UsageCall>>, counts: (made: UsageCall) => boolean): ModelUsage {
+  const counter = new UsageCounter(counts);
+  for (const calls of chats) counter.add(calls);
   return counter.value;
+}
+
+export const modelUsage = (chats: Iterable<Iterable<UsageCall>>, { connection, model }: ModelRef) =>
+  countUsage(chats, ({ call }) => call.connection === connection && call.model === model);
+
+export type UsageWindow = 'hour' | 'today' | 'week';
+
+// In local time: today from midnight, the week from Monday's midnight.
+export function connectionUsage(chats: readonly UsageCall[][], connection: string, now: number): Record<UsageWindow, ModelUsage> {
+  const today = new Date(now).setHours(0, 0, 0, 0);
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const since = (start: number) => countUsage(chats, ({ at, call }) => call.connection === connection && at >= start);
+  return { hour: since(now - 3_600_000), today: since(today), week: since(monday.getTime()) };
 }
 
 export function recentIn(messages: Message[]): RecentModel[] {

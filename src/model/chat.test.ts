@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchTree, calls, chatTitle, fold, modelUsage, previewLine, recentIn, recentModels, shown, type ChatItem, type Entry, type Message, type Receipt } from './chat';
+import { branchTree, calls, chatTitle, connectionUsage, fold, modelUsage, previewLine, recentIn, recentModels, shown, usageCalls, type ChatItem, type Entry, type Message, type Receipt } from './chat';
 import type { Stored } from './kinds';
 
 let rev = 0;
@@ -168,7 +168,7 @@ describe('modelUsage', () => {
     const original = fold([bot('original', 'reply', receipt({ cost: { unit: 'usd', amount: 0.5, source: 'reported' } }))]);
     const branch = structuredClone(original);
     branch[0]!.versions[0]!.receipt!.cost = 'pending';
-    expect(modelUsage([branch, original], { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 1, costUnknown: 0, costs: [{ unit: 'usd', amount: 0.5, estimated: false }] });
+    expect(modelUsage([branch, original].map(usageCalls), { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 1, costUnknown: 0, costs: [{ unit: 'usd', amount: 0.5, estimated: false }] });
   });
 
   it('counts a branch’s copy once and each call of a continued reply, and keeps what was not reported apart', () => {
@@ -177,7 +177,7 @@ describe('modelUsage', () => {
     const original = fold([bot('b1', '하나', continued), bot('b2', '둘', { model: 'm2' })]);
     const branch = fold([{ ...bot('b9', '하나', continued), rev: 99 }]);
     branch[0]!.versions[0]!.at = original[0]!.versions[0]!.at;
-    expect(modelUsage([original, branch], { connection: 'c1', model: 'm1' })).toEqual({
+    expect(modelUsage([original, branch].map(usageCalls), { connection: 'c1', model: 'm1' })).toEqual({
       calls: 2,
       last: original[0]!.versions[0]!.at,
       input: { total: 100, unknown: 1 },
@@ -193,14 +193,26 @@ describe('modelUsage of a call held twice', () => {
     const cut = receipt({ state: 'cut', cut: 'length' });
     const original = fold([bot('b1', '하나 둘', { continues: cut })]);
     const branch = fold([bot('b9', '하나', cut), entry('e9', { type: 'version', message: 'b9', replaces: 'b9', edit: true, at: 999, text: '하나.', receipt: cut })]);
-    expect(modelUsage([original, branch], { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 2 });
+    expect(modelUsage([original, branch].map(usageCalls), { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 2 });
   });
 });
 
 describe('modelUsage of translations', () => {
   it('counts a translation as a call of the model that made it, at the time it was made', () => {
     const translated = fold([bot('b1', 'Hello', { model: 'm2' }), entry('t1', { type: 'translation', version: 'b1', text: '안녕', receipt: receipt({ cost: { unit: 'usd', amount: 0.1, source: 'reported' } }), at: 5 })]);
-    expect(modelUsage([translated], { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 1, last: 5, costs: [{ unit: 'usd', amount: 0.1, estimated: false }] });
+    expect(modelUsage([translated].map(usageCalls), { connection: 'c1', model: 'm1' })).toMatchObject({ calls: 1, last: 5, costs: [{ unit: 'usd', amount: 0.1, estimated: false }] });
+  });
+});
+
+describe('connectionUsage', () => {
+  it('counts one connection’s calls over the last hour, today and this week from Monday, a branch’s copy once', () => {
+    const now = new Date(2026, 9, 7, 12, 30).getTime(); // a Wednesday
+    const call = (id: string, at: number, connection = 'c1') => ({ at, call: { id, connection, model: 'm1', usage: { inputTokens: 10, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 5, reasoningTokens: null }, cost: null } });
+    const recent = call('recent', now - 60_000);
+    const original = [recent, call('morning', new Date(2026, 9, 7, 0, 0).getTime()), call('monday', new Date(2026, 9, 5, 0, 0).getTime()), call('sunday', new Date(2026, 9, 4, 23, 59).getTime()), call('other', now, 'c2')];
+    const usage = connectionUsage([original, [recent]], 'c1', now);
+    expect([usage.hour.calls, usage.today.calls, usage.week.calls]).toEqual([1, 2, 3]);
+    expect(usage.week).toMatchObject({ input: { total: 30, unknown: 0 }, output: { total: 15, unknown: 0 }, costUnknown: 3 });
   });
 });
 

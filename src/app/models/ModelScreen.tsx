@@ -3,10 +3,11 @@ import { modelSettings } from '../../connectors/registry';
 import { fit } from '../../connectors/settings';
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
-import type { ModelUsage } from '../../model/chat';
+import { modelUsage, type ModelUsage } from '../../model/chat';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { money } from '../common/money';
 import { UNKNOWN } from '../common/receipt';
+import { tally } from '../common/usage';
 import { ago } from '../common/time';
 import { useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -21,12 +22,6 @@ const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미�
 // What the catalog said when the model was starred. null is unknown, never 안 됨.
 const can = (value: boolean | null) => (value === null ? UNKNOWN : value ? '됨' : '안 됨');
 const tokens = (value: number | null) => (value === null ? UNKNOWN : `${count(value)} 토큰`);
-
-// A total leaves out the calls that did not report it, and says how many there were.
-function tally({ total, unknown }: ModelUsage['input'], calls: number): string {
-  if (unknown === calls) return UNKNOWN;
-  return unknown ? `${count(total)} · ${unknown}번은 알 수 없음` : count(total);
-}
 
 function spent({ costs, costUnknown }: ModelUsage): string {
   if (!costs.length) return UNKNOWN;
@@ -46,7 +41,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
     const abort = new AbortController();
     setUsage(null);
     setUsageFailed(false);
-    void usageIndex.read({ connection: connection.id, model: model.id }, abort.signal).then((result) => {
+    void usageIndex.read((chats) => modelUsage(chats, { connection: connection.id, model: model.id }), abort.signal).then((result) => {
       if (abort.signal.aborted) return;
       if (result.ok) setUsage(result.data);
       else setUsageFailed(true);
