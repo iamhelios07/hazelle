@@ -1,0 +1,11 @@
+import type { ConnectionType } from './types';
+
+export const google: ConnectionType = {
+  id: 'google',
+  label: 'Google',
+  group: 'maker',
+  description: 'Gemini를 만든 곳에 바로 연결해요.',
+  keyPage: 'https://aistudio.google.com/apikey',
+  endpoint: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', protocol: 'gemini' },
+  detect: { key: /^AIza[0-9A-Za-z_-]{35}$/, host: 'generativelanguage.googleapis.com' },
+};

@@ -1,6 +1,6 @@
 import type { Carries, ModelSettings, Takes } from './settings';
 
-export type Protocol = 'chat-completions' | 'anthropic-messages';
+export type Protocol = 'chat-completions' | 'anthropic-messages' | 'gemini';
 
 // Refused before any network call. The code names the reason; the UI words it.
 export class ConnectorError extends Error {

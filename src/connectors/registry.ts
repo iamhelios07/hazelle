@@ -2,6 +2,8 @@ import { anthropic } from './anthropic';
 import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
 import { copilot } from './copilot';
+import { gemini } from './gemini';
+import { google } from './google';
 import { ollama } from './ollama';
 import { openRouter } from './openrouter';
 import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type SettingsSchema } from './settings';
@@ -9,13 +11,13 @@ import { vercel } from './vercel';
 import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
 // Adding a provider means adding its connection type here. Nothing else names one.
-export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, ollama, anthropic, copilot];
+export const CONNECTION_TYPES: readonly ConnectionType[] = [openRouter, vercel, ollama, anthropic, google, copilot];
 
 export const GENERIC = 'generic';
 
 // Keyed by any string: a stored connection or model snapshot may name a protocol that only a newer
 // version of the app speaks.
-const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatCompletions, 'anthropic-messages': anthropicMessages };
+const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatCompletions, 'anthropic-messages': anthropicMessages, gemini };
 
 export type Resolved = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
 
