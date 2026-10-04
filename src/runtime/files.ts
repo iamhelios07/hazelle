@@ -12,7 +12,7 @@ const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
 // A file is sealed by its content, so one the server already holds, from this account or any other, is never sent
 // again; an import cut short and tried again sends only what did not arrive. Asking and uploading wait out a dropped
-// connection the way the store's writes do (store.reaching).
+// connection the way the store's calls do (store.reaching).
 export class Files {
   constructor(
     private readonly request: Api,

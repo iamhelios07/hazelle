@@ -133,9 +133,17 @@ it('renders a saved bootstrap prefix and resumes its original until bound in the
     return Response.json({ ...data, changes: data.changes.slice(0, 1), cursor: 1, more: true });
   }).mockImplementationOnce(async () => Response.json({ error: 'offline' }, { status: 503 }));
   const first = await f.open();
-  expect(await first.pull()).toMatchObject({ error: 'offline' });
-  await vi.waitFor(() => expect(f.cache.states.get('')).toMatchObject({ cursor: 1, until: 2, complete: false }));
+  vi.useFakeTimers({ toFake: ['setTimeout'] });
+  let pulling: Promise<unknown>;
+  try {
+    pulling = first.pull();
+    await vi.waitFor(() => expect(first.waiting()).toBe(true));
+    await vi.waitFor(() => expect(f.cache.states.get('')).toMatchObject({ cursor: 1, until: 2, complete: false }));
+  } finally {
+    vi.useRealTimers();
+  }
   first.close();
+  expect(await pulling).toMatchObject({ error: 'stopped' });
   f.fetch.mockClear();
   f.fetch.mockImplementation(() => new Promise(() => {}));
   vi.stubGlobal('window', new EventTarget());

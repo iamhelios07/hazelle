@@ -167,7 +167,7 @@ describe('selective account reads', () => {
     lease.release();
   });
 
-  it('keeps a failed scope distinct from an empty chat and permits an explicit retry', async () => {
+  it("waits out a dropped connection on a chat's first page instead of failing the scope", async () => {
     const { seed, request, key } = await account();
     await seed('a', 'chat', null, chat);
     await seed('a1', 'entry', 'a', message('not lost'));
@@ -176,16 +176,21 @@ describe('selective account reads', () => {
       ? Promise.resolve({ ok: false, error: 'offline' }) : request(method, path, body, signal);
     const store = await ObjectStore.open('account', key, flaky);
     await store.pull();
-    const first = store.retainChat('a');
-    expect(await first.ready).toEqual({ ok: false, error: 'offline' });
-    expect(store.scopeState('a')).toBe('failed');
-    expect(() => store.children('entry', 'a')).toThrow('not loaded');
-    offline = false;
-    const retry = store.retainChat('a');
-    expect(await retry.ready).toBeNull();
-    expect(store.projection('a')?.model.messages).toHaveLength(1);
-    first.release();
-    retry.release();
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      const lease = store.retainChat('a');
+      await vi.waitFor(() => expect(store.waiting()).toBe(true));
+      expect(store.scopeState('a')).toBe('loading');
+      expect(() => store.children('entry', 'a')).toThrow('not loaded');
+      offline = false;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await lease.ready).toBeNull();
+      expect(store.waiting()).toBe(false);
+      expect(store.projection('a')?.model.messages).toHaveLength(1);
+      lease.release();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('aborts an abandoned scope load instead of retaining its decrypted messages', async () => {
@@ -222,7 +227,7 @@ describe('selective account reads', () => {
     releasePhone();
   });
 
-  it('checks a detached result inside its loaded scope, retrying a failed read without resuming an already saved reply', async () => {
+  it('checks a detached result inside its loaded scope, waiting out a dropped connection, without resuming an already saved reply', async () => {
     const { seed, request, key } = await account();
     await seed('a', 'chat', null, chat);
     await seed('a1', 'entry', 'a', message('saved'));
@@ -235,16 +240,21 @@ describe('selective account reads', () => {
     await store.pull();
     const take = vi.fn();
     const streams = new Streams(store, new Set(), take);
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
     try {
       streams.pickUp();
-      await vi.waitFor(() => expect(store.scopeState('a')).toBe('unloaded'));
+      await vi.waitFor(() => expect(store.waiting()).toBe(true));
+      expect(store.scopeState('a')).toBe('loading');
       expect(store.get('stream', 'stream')).not.toBeNull();
       offline = false;
-      streams.pickUp();
+      await vi.advanceTimersByTimeAsync(1000);
       await vi.waitFor(() => expect(store.get('stream', 'stream')).toBeNull());
       expect(take).not.toHaveBeenCalled();
       expect(store.scopeState('a')).toBe('unloaded');
-    } finally { streams.close(); }
+    } finally {
+      vi.useRealTimers();
+      streams.close();
+    }
   });
 
   it('ends a summary write waiting on the server once its chat is let go, though a catch-up ran during it', async () => {

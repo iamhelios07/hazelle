@@ -15,7 +15,7 @@ type Api = typeof realApi;
 export type ObjectRow = { id: string; kind: string; parent: string | null; rev: number };
 export type StoreChange = { kind: string; id: string; parent: string | null };
 export type StoreRead = { kind: Kind; id: string } | { kind: Kind; list: true } | { kind: Kind; parent: string };
-export type PullProgress = { objects: number; pages: number };
+export type PullProgress = { objects: number; pages: number; waiting: boolean };
 type PullOptions = { signal?: AbortSignal; progress?: (progress: PullProgress) => void };
 
 export const readsChanged = (reads: StoreRead[], changes: readonly StoreChange[]) =>
@@ -60,7 +60,7 @@ async function waited(work: Promise<unknown>, stop: AbortSignal): Promise<boolea
 const MAX_ATTEMPTS = 3;
 // Pauses between tries of a write that could not reach the server; the last repeats until it does.
 const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
-// A write waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
+// A call waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
 const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable']);
 const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
@@ -88,7 +88,7 @@ export class ObjectStore {
   private unreadableCount = 0;
   private readonly listeners = new Set<(changes: readonly StoreChange[]) => void>();
   private readonly waitListeners = new Set<() => void>();
-  private waitingWrites = 0;
+  private waitingCalls = 0;
   private readonly changes: StoreChange[] = [];
   private reading: StoreRead[] | null = null;
   private cursor = 0;
@@ -294,7 +294,7 @@ export class ObjectStore {
     return () => this.listeners.delete(listener);
   };
 
-  readonly waiting = () => this.waitingWrites > 0;
+  readonly waiting = () => this.waitingCalls > 0;
 
   // Writes shown or waiting their turn that the server has not taken yet: a page closed now loses them.
   readonly unsentWrites = () => {
@@ -769,8 +769,18 @@ export class ObjectStore {
   // The caller starting it owns its signal and progress.
   pull(options: PullOptions = {}): Promise<ApiFailure | null> {
     if (this.openingFailure) return Promise.resolve(this.openingFailure);
-    const epoch = this.epoch;
-    this.pulling ??= this.pullPages(options).catch((error: unknown) => this.codecFailure(error, epoch)).finally(() => (this.pulling = null));
+    if (!this.pulling) {
+      const epoch = this.epoch;
+      // The opening pull runs before the shell holds the store, so waiting for the connection rides on its progress.
+      const { progress } = options;
+      let last: PullProgress = { objects: 0, pages: 0, waiting: false };
+      const report = progress && ((next: PullProgress) => progress((last = next)));
+      const unwatch = report ? this.subscribeWaiting(() => report({ ...last, waiting: this.waiting() })) : () => {};
+      this.pulling = this.pullPages({ ...options, progress: report }).catch((error: unknown) => this.codecFailure(error, epoch)).finally(() => {
+        unwatch();
+        this.pulling = null;
+      });
+    }
     return this.pulling;
   }
 
@@ -931,11 +941,12 @@ export class ObjectStore {
     return { ok: false, error: 'conflict' };
   }
 
-  // A write that cannot reach the server waits and tries again until it does, or until stop (the store closing, the
+  // A call that cannot reach the server waits and tries again until it does, or until stop (the store closing, the
   // caller's stop, or a reset) ends it: a dropped connection, a restore under way or a store not answering yet does not
-  // fail it. A try whose answer was lost after it landed comes back as a conflict and is
-  // applied again, so an update's change must read the same applied twice as once (set a value, never add to one).
-  // A file's upload (runtime/files) waits the same way, and shows as the same waiting.
+  // fail it. Reads wait too: a store evicted after an idle hour wakes slower than one page's wait, and a reload landing
+  // in a chat must outlast that, not toast it. A write whose answer was lost after it landed comes back as a conflict
+  // and is applied again, so an update's change must read the same applied twice as once (set a value, never add to
+  // one). A file's upload (runtime/files) waits the same way, and shows as the same waiting.
   async reaching<R extends ApiResult<unknown> | null>(attempt: () => Promise<R>, stop: AbortSignal = this.closing.signal): Promise<R | ApiFailure> {
     let result: R | ApiFailure = await attempt();
     if (!waits(result)) return result;
@@ -953,7 +964,7 @@ export class ObjectStore {
   }
 
   private wait(by: 1 | -1) {
-    this.waitingWrites += by;
+    this.waitingCalls += by;
     for (const listener of this.waitListeners) listener();
   }
 
@@ -1116,7 +1127,7 @@ export class ObjectStore {
     let next: { epoch: number; sent: string | null; answer: Promise<ApiResult<Page>> } | null = null;
     const page = (since: number, bootstrapped: boolean, known: number) => {
       const sent = this.timeline;
-      const answer = this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal);
+      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
       return { epoch: this.epoch, sent, answer };
     };
     while (more) {
@@ -1138,7 +1149,7 @@ export class ObjectStore {
       // refuses a request whose timeline is not its own, so no other answer can name another.
       if (sent === null) this.adopt(result.data.timeline);
       objects += result.data.changes.length;
-      progress?.({ objects, pages: ++pages });
+      progress?.({ objects, pages: ++pages, waiting: this.waiting() });
       this.limits = result.data.limits;
       this.bootstrap ??= result.data.until ?? null;
       // The cursor and bootstrap flag move after the page is applied (pullParent reads them); the next request is
@@ -1194,7 +1205,7 @@ export class ObjectStore {
     while (more) {
       // A reset aborts every scope's signal, so the timeline is the one the pull above, or an earlier one, adopted.
       if (signal.aborted) return { ok: false, error: 'stopped' };
-      const result = await this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}${this.cacheBounds()}&timeline=${encodeURIComponent(this.timeline!)}`, undefined, signal);
+      const result = await this.reaching(() => this.request<Page>('GET', `objects?since=${scope.cursor}&parent=${encodeURIComponent(chat)}${this.cacheBounds()}&timeline=${encodeURIComponent(this.timeline!)}`, undefined, signal), signal);
       // An answer to a request sent before a reset is of the old timeline, a refusal too: it never resets the new one.
       if (signal.aborted) return { ok: false, error: 'stopped' };
       if (!result.ok) {

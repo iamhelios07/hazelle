@@ -14,16 +14,17 @@ import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 import { navigate } from './router';
 
-const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 닿으면 이어서 저장해요.' };
+const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 닿으면 이어서 불러오고 저장해요.' };
 const SUSPENDED: Standing = {
   message: '운영자가 이 계정을 정지했어요',
   detail: `읽기는 그대로 되지만 저장과 모델 부르기는 막혀 있어요. ${inSettings('account')}에서 ${NOTICES.from}을 보거나 백업을 받거나 운영자에게 알리거나 탈퇴할 수 있어요.`,
 };
 // Said once, and standing until the account shrinks: each refused write saying it again would be a stream of toasts.
 const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: `새로 만든 것은 저장되지 않아요. 지운 것을 ${BIN}에서 완전히 지우면 자리가 생겨요.` };
-// Ahead of 연결이 불안정해요: writes wait out a restore as they wait out a dropped connection.
+// Ahead of 연결이 불안정해요: calls wait out a restore as they wait out a dropped connection.
 const RESTORING: Standing = { message: '계정을 복원하는 중이에요', detail: '' };
 const subscribeNothing = () => () => {};
+const NOT_PULLED: PullProgress = { objects: 0, pages: 0, waiting: false };
 const notWaiting = () => false;
 
 // Said once each time the store hears the account was restored: what the tab shows was loaded again, and the writes
@@ -52,7 +53,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
   const [session, setSession] = useState<Session | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [progress, setProgress] = useState<PullProgress>({ objects: 0, pages: 0 });
+  const [progress, setProgress] = useState<PullProgress>(NOT_PULLED);
   const waiting = useSyncExternalStore(session?.store.subscribeWaiting ?? subscribeNothing, session?.store.waiting ?? notWaiting, notWaiting);
   // The notice alone, not the facts, so the counts every write brings render nothing here.
   const { facts } = account;
@@ -66,7 +67,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
     const abandon = new AbortController();
     let opened: Session | null = null;
     setFailure(null);
-    setProgress({ objects: 0, pages: 0 });
+    setProgress(NOT_PULLED);
     void openSession(accountId, vaultKey, username, abandon.signal, (progress) => {
       if (!abandon.signal.aborted) setProgress(progress);
     }).then((result) => {
@@ -91,6 +92,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
   if (!session) return (
     <Screen top={<Brand />} align="center">
       <Text align="center">불러오는 중 · {progress.objects.toLocaleString('ko-KR')}개</Text>
+      {progress.waiting && <Text variant="note" align="center">{RECONNECTING.message} · {RECONNECTING.detail}</Text>}
     </Screen>
   );
   return (
