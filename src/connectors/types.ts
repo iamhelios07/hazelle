@@ -1,3 +1,4 @@
+import type { Rates } from './price-list';
 import type { Carries, ModelSettings, Takes } from './settings';
 
 export type Protocol = 'chat-completions' | 'anthropic-messages' | 'gemini';
@@ -43,7 +44,13 @@ export type Model = {
   protocol: Protocol | 'unsupported' | null;
   // Catalogs that say nothing about request settings keep the Takes fields null.
   takes: Takes;
+  // Absent when neither the model list nor models.dev prices it.
+  price?: Price;
 };
+
+// asOf: when the server fetched the models.dev list it came from; null for a price the provider's own model list
+// states, which wins over models.dev's.
+export type Price = Rates & { asOf: number | null };
 
 // profile: the 설정 묶음 it uses; without one, the default 묶음.
 export type Starred = Model & { profile?: string };
@@ -62,9 +69,9 @@ export type Usage = {
   reasoningTokens: number | null;
 };
 
-// reported: the provider said what the reply cost. price-list: worked out from a price table the app
-// carries, which can fall behind the provider's, so it is shown as an estimate.
-export type Cost = { unit: 'usd' | 'credit'; amount: number; source: 'reported' | 'price-list' };
+// reported: the provider said what the reply cost. price-list: worked out from the model's Price, which can fall behind
+// the provider's, so it is shown as an estimate, with asOf as the price's.
+export type Cost = { unit: 'usd' | 'credit'; amount: number } & ({ source: 'reported' } | { source: 'price-list'; asOf: number | null });
 
 // Units are never summed together.
 export type Meter =

@@ -27,6 +27,12 @@ export function decimal(value: unknown): number | null {
   return typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) ? Number(value) : amount(value);
 }
 
+// OpenRouter and Vercel price per token, as decimal strings; prices here are per million tokens.
+export function perMillion(value: unknown): number | null {
+  const rate = decimal(value);
+  return rate === null ? null : rate * 1_000_000;
+}
+
 export function list(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }

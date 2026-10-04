@@ -57,5 +57,5 @@ export function copilotCost(modelId: string, usage: Usage | null): Cost | null {
   const rate = tiers.find((tier) => tier.maxInput === undefined || input <= tier.maxInput)!;
   // Earlier OpenAI models have no cache write price: a token written to the cache is plain input.
   const dollars = (fresh * rate.input + cached * rate.cached + written * (rate.cacheWrite ?? rate.input) + usage.outputTokens * rate.output) / 1_000_000;
-  return { unit: 'credit', amount: dollars * 100, source: 'price-list' };
+  return { unit: 'credit', amount: dollars * 100, source: 'price-list', asOf: null };
 }

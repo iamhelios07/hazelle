@@ -173,7 +173,7 @@ describe('modelUsage', () => {
 
   it('counts a branch’s copy once and each call of a continued reply, and keeps what was not reported apart', () => {
     const cut = receipt({ usage: { inputTokens: 100, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 50, reasoningTokens: null }, cost: { unit: 'usd', amount: 0.5, source: 'reported' }, totalMs: 500 });
-    const continued = receipt({ continues: cut, cost: { unit: 'usd', amount: 0.25, source: 'price-list' } });
+    const continued = receipt({ continues: cut, cost: { unit: 'usd', amount: 0.25, source: 'price-list', asOf: null } });
     const original = fold([bot('b1', '하나', continued), bot('b2', '둘', { model: 'm2' })]);
     const branch = fold([{ ...bot('b9', '하나', continued), rev: 99 }]);
     branch[0]!.versions[0]!.at = original[0]!.versions[0]!.at;

@@ -136,8 +136,9 @@ describe('catalogs', () => {
           settings: ['maxOutput', 'temperature', 'stop', 'reasoning'],
           reasoning: { off: false, levels: ['max', 'xhigh', 'high', 'medium', 'low'], budget: null, adaptive: null },
         },
+        price: { input: 4, output: 20, cacheRead: expect.closeTo(0.2, 9), cacheWrite: 5, tiers: [], asOf: null },
       },
-      expect.objectContaining({ id: 'openrouter/auto-beta', name: 'Auto Router (Beta)', output: ['text', 'image'] }),
+      expect.objectContaining({ id: 'openrouter/auto-beta', name: 'Auto Router (Beta)', output: ['text', 'image'], price: undefined }),
     ]);
   });
 
@@ -157,8 +158,9 @@ describe('catalogs', () => {
           settings: ['maxOutput', 'stop', 'reasoning'],
           reasoning: { off: true, levels: ['low', 'medium', 'high', 'xhigh', 'max'], budget: { min: null, max: null }, adaptive: null },
         },
+        price: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, tiers: [], asOf: null },
       },
-      expect.objectContaining({ id: 'alibaba/qwen3-coder', input: ['text'], reasoning: false, tools: true }),
+      expect.objectContaining({ id: 'alibaba/qwen3-coder', input: ['text'], reasoning: false, tools: true, price: undefined }),
     ]);
     const [, bare] = vercelModels.data;
     expect(parseCatalog(connection('vercel'), { data: [{ ...bare, tags: undefined, modalities: undefined }] })).toEqual([

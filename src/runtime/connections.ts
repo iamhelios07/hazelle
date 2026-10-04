@@ -1,5 +1,5 @@
 import { fitsRole } from '../connectors/assignment';
-import type { Connection, ConnectionType, Model } from '../connectors/types';
+import type { Connection, ConnectionType, Model, Starred } from '../connectors/types';
 import type { Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
@@ -44,6 +44,15 @@ export async function setStarred(store: ObjectStore, id: string, model: Model, s
   });
   if (saved.ok && starred && fitsRole(model, 'main') && !store.get('settings', SETTINGS_ID)?.value.models.main) await setDefaultModel(store, 'main', { connection: id, model: model.id });
   return saved;
+}
+
+// A loaded model list brings the starred models' prices up to date. A model it leaves unpriced keeps the price it had:
+// a price list that did not load reads the same.
+export async function refreshPrices(store: ObjectStore, id: string, models: Model[]): Promise<void> {
+  const loaded = new Map(models.flatMap((model) => (model.price ? [[model.id, model.price] as const] : [])));
+  const changed = (model: Starred) => loaded.has(model.id) && JSON.stringify(loaded.get(model.id)) !== JSON.stringify(model.price);
+  if (!store.get('connection', id)?.value.starred.some(changed)) return;
+  await store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (changed(model) ? { ...model, price: loaded.get(model.id)! } : model)) }));
 }
 
 export const removeConnection = (store: ObjectStore, id: string) => store.take('connection', id);

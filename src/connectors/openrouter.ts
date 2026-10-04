@@ -1,7 +1,8 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
+import { statedPrice } from './pricing';
 import type { ConnectionType, Meter, MeterReset, Model } from './types';
-import { amount, count, isRecord, modalities, modelEntries } from './values';
+import { amount, count, isRecord, modalities, modelEntries, perMillion } from './values';
 
 // mandatory: reasoning cannot be turned off. supports_max_tokens: a token budget can be asked for.
 function reasoningTakes(raw: Record<string, unknown>): ReasoningTakes {
@@ -46,6 +47,8 @@ export function openRouterModels(payload: unknown): Model[] | null {
       const architecture = isRecord(raw.architecture) ? raw.architecture : {};
       const topProvider = isRecord(raw.top_provider) ? raw.top_provider : {};
       const parameters = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : null;
+      // A router's price is "-1": it depends on the model picked, so it is left unpriced.
+      const pricing = isRecord(raw.pricing) ? raw.pricing : {};
       const name = typeof raw.name === 'string' && raw.name ? raw.name.replace(/^[^:]+:\s+(?=\S)/, '') : raw.id;
       return {
         id: raw.id,
@@ -58,6 +61,7 @@ export function openRouterModels(payload: unknown): Model[] | null {
         tools: parameters ? parameters.includes('tools') : null,
         protocol: null,
         takes: { settings: parameters && listedSettings(parameters), reasoning: isRecord(raw.reasoning) ? reasoningTakes(raw.reasoning) : null },
+        price: statedPrice(perMillion(pricing.prompt), perMillion(pricing.completion), perMillion(pricing.input_cache_read), perMillion(pricing.input_cache_write)),
       };
     }) ?? null
   );
