@@ -1,6 +1,6 @@
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, MemoryRecord } from '../model/memory';
-import type { Block, ChatRange, ConversationPrompt, MemoryPrompt, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
+import type { Block, ChatRange, ConversationPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -148,7 +148,7 @@ function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) 
 
 type Filling =
   | { sort: 'conversation'; note: string; memory: string }
-  | { sort: 'translate'; recent: (count: number) => string; source: string }
+  | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'memory'; memory: string; span: string };
 
 const loreMessage = ({ render }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: render(body, id) });
@@ -198,8 +198,11 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
         case 'chat':
           parts.push({ range: block.range, from: blockFrom(block) });
           break;
+        case 'note':
+          if (filling.sort === 'translate') wrapped(block, filling.note);
+          break;
         case 'recent':
-          if (filling.sort === 'translate') verbatim(block, filling.recent(block.count));
+          if (filling.sort === 'translate') verbatim(block, filling.recent(block));
           break;
         case 'source':
           if (filling.sort === 'translate') verbatim(block, filling.source);
@@ -310,6 +313,8 @@ export type TranslationInput = {
   take: ReadonlySet<number>;
   prompt: TranslatePrompt;
   translations: (string | null)[];
+  // 번역가의 노트, 전역 then the character's, already joined; empty for none.
+  notes: string;
   request: TranslationRequest;
   // What {{language}} reads: the language translated into.
   language: string;
@@ -323,25 +328,25 @@ export type TranslationInput = {
 export const assembleTranslation = (input: TranslationInput): { source: string; messages: ChatMessage[] } | RanAway => stoppable(() => translation(input));
 
 // A message whose CBS ran away is its source as shown, tags as written, and the display says so.
-function translation({ scope, take, prompt, translations, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
+function translation({ scope, take, prompt, translations, notes, request, language, seed, countTokens }: TranslationInput): { source: string; messages: ChatMessage[] } {
   const { texts, variables } = renderChat('display', scope, take);
   const before = request.kind === 'message' ? request.index : texts.length;
   const source = request.kind === 'message' ? texts[request.index]! : request.text;
   const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, seed, role: 'user' as const, text: request.text, time: null }];
   const laid = lay(scope, history, variables, seed, remembered(countTokens), language);
-  const recent = (count: number) => {
+  const recent = ({ count, translations: withTranslations }: RecentSlot) => {
     const from = Math.max(before - count, 0);
     return texts
       .slice(from, before)
       .map((text, offset) => {
         const at = from + offset;
         const speaker = scope.messages[at]!.role === 'user' ? (scope.persona?.name ?? 'User') : (scope.card?.name ?? 'Assistant');
-        const translation = translations[at];
+        const translation = withTranslations === false ? null : translations[at];
         return [`[${speaker}]`, text.slice(-TAIL_CHARS), ...(translation ? ['Its translation:', translation.slice(-TAIL_CHARS)] : [])].join('\n');
       })
       .join('\n\n');
   };
-  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', recent, source });
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', note: notes, recent, source });
   return { source, messages: cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message) };
 }
 

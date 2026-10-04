@@ -14,6 +14,7 @@ export const SLOTS = {
   authorNote: { wrapped: true, repeats: false, sorts: ['conversation'] },
   postEverything: { wrapped: false, repeats: false, sorts: ['conversation'] },
   chat: { wrapped: false, repeats: true, sorts: ['conversation'] },
+  note: { wrapped: true, repeats: false, sorts: ['translate'] },
   recent: { wrapped: true, repeats: false, sorts: ['translate'] },
   source: { wrapped: true, repeats: false, sorts: ['translate'] },
   // 장기 기억: in a conversation, the chat's memory as sent; in a memory task, the memory the new records follow.
@@ -35,8 +36,9 @@ type Named = { id: string; name: string | null; cache?: true };
 // instructions, with {{original}} in the card's text standing for this block's text.
 export type TextBlock = Named & { kind: 'text'; role: Role; text: string; mark: 'main' | 'globalNote' | null };
 type WrappedFields = Named & { kind: 'slot'; role: Role; wrapper: string | null };
-// count: how many messages before the source it holds.
-export type RecentSlot = WrappedFields & { slot: 'recent'; count: number };
+// count: how many messages before the source it holds. translations: false holds their originals only; absent holds
+// each with its translation.
+export type RecentSlot = WrappedFields & { slot: 'recent'; count: number; translations?: false };
 export type WrappedSlot = (WrappedFields & { slot: Exclude<Wrapped, 'recent'> }) | RecentSlot;
 export type ChatSlot = Named & { kind: 'slot'; slot: 'chat'; range: ChatRange };
 export type PlainSlot = Named & { kind: 'slot'; slot: Exclude<SlotKind, Wrapped | 'chat'> };

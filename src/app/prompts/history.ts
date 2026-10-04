@@ -107,6 +107,18 @@ export function setCount(block: RecentSlot, count: number): Step {
   return { label: titled(block, '메시지 수 바꾸기'), block: block.id, undo: to(block.count), redo: to(count) };
 }
 
+export function setTranslations(block: RecentSlot, on: boolean): Step {
+  const to = (value: boolean) =>
+    onBlock(block.id, (each) => {
+      if (each.kind !== 'slot' || each.slot !== 'recent') return each;
+      const next: RecentSlot = { ...each };
+      if (value) delete next.translations;
+      else next.translations = false;
+      return next;
+    });
+  return { label: titled(block, on ? '번역도 함께 넣기' : '원문만 넣기'), block: block.id, undo: to(!on), redo: to(on) };
+}
+
 export function setCache(block: Block, on: boolean): Step {
   const to = (value: boolean) =>
     onBlock(block.id, (each) => {

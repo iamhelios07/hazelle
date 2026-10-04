@@ -20,6 +20,7 @@ type Props = {
   onRole: (block: Extract<Block, { role: Role }>, role: Role) => void;
   onRange: (block: ChatSlot, range: ChatRange) => void;
   onCount: (block: RecentSlot, count: number) => void;
+  onTranslations: (block: RecentSlot, on: boolean) => void;
   onWrapper: (block: WrappedSlot, wrapper: string | null) => void;
   onAuthorNote: (text: string) => void;
   onMark: (block: TextBlock, mark: TextBlock['mark']) => void;
@@ -39,7 +40,7 @@ const CACHE_HELP = {
   auto: '앱이 여기에 캐시 지점을 알아서 둬요. 모델 설정에서 캐시를 켠 모델에만 보내요.',
 };
 
-export function BlockPane({ block, sort, index, count, toggles, authorNote, onChange, onRole, onRange, onCount, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onInsert, onNewToggle, textRef, nameRef }: Props) {
+export function BlockPane({ block, sort, index, count, toggles, authorNote, onChange, onRole, onRange, onCount, onTranslations, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onInsert, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
   const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
   const placeholder = block.kind === 'slot' ? SLOT[block.slot].name : firstLine(block.text) || '이름 붙이기';
@@ -113,11 +114,19 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
       )}
       {block.kind === 'slot' && block.slot === 'chat' && <RangeChoice block={block} onRange={(range) => onRange(block, range)} />}
       {block.kind === 'slot' && block.slot === 'recent' && (
-        <SettingRow
-          place="panel"
-          label="메시지 수"
-          control={<Stepper label="메시지 수" less="메시지 하나 줄이기" more="메시지 하나 늘리기" value={block.count} min={1} max={RECENT_MAX} onChange={(next) => onCount(block, next)} />}
-        />
+        <>
+          <SettingRow
+            place="panel"
+            label="메시지 수"
+            control={<Stepper label="메시지 수" less="메시지 하나 줄이기" more="메시지 하나 늘리기" value={block.count} min={1} max={RECENT_MAX} onChange={(next) => onCount(block, next)} />}
+          />
+          <SettingRow
+            place="panel"
+            label="지금까지 된 번역도 함께"
+            help="끄면 앞 메시지의 원문만 보여 줘요."
+            control={<Switch label="지금까지 된 번역도 함께" checked={block.translations !== false} onChange={(on) => onTranslations(block, on)} />}
+          />
+        </>
       )}
       {block.kind === 'slot' && block.slot === 'authorNote' && authorNote !== null && (
         <Section title="기본 노트" level={3} hint="비워 두면 노트가 없는 채팅에는 아무것도 들어가지 않아요.">

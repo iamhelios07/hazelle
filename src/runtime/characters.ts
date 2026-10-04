@@ -207,6 +207,21 @@ export function setTranslate(store: ObjectStore, character: string | null, chang
   return store.update('character', character, (current) => ({ ...current, translate: merged(current.translate) }));
 }
 
+// 번역가의 노트 add up: the 전역 one, then the character's. Stored as typed, since trimming an autosave eats the newline
+// being typed; read trimmed.
+export function translatorNotes(store: ObjectStore, character: string | null): string {
+  const global = store.get('settings', SETTINGS_ID)?.value.translatorNote;
+  const own = character === null ? undefined : store.get('character', character)?.value.translatorNote;
+  return [global, own].map((note) => note?.trim() ?? '').filter(Boolean).join('\n\n');
+}
+
+// character null is the 전역 note, unlike setTranslate's null, which is 캐릭터 없이's switches. Blank removes the note.
+export function setTranslatorNote(store: ObjectStore, character: string | null, text: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
+  const noted = <T extends { translatorNote?: string }>(current: T): T => (text.trim() ? { ...current, translatorNote: text } : without(current, 'translatorNote'));
+  if (character === null) return store.upsert('settings', (current) => noted({ models: {}, ...current }));
+  return store.update('character', character, noted);
+}
+
 export function setGreetingTranslation(store: ObjectStore, character: string, greeting: string, language: string, translation: Translation) {
   return store.update('character', character, (current) => ({
     ...current,

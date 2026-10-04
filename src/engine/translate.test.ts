@@ -48,7 +48,7 @@ const scope: ChatScope = {
   variables: [],
 };
 const translate = (input: Pick<Parameters<typeof assembleTranslation>[0], 'request' | 'language'> & Partial<Parameters<typeof assembleTranslation>[0]>) => {
-  const assembled = assembleTranslation({ scope, take: new Set(), prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], seed: 'seed', countTokens: (text) => text.length, ...input });
+  const assembled = assembleTranslation({ scope, take: new Set(), prompt: translatorPrompt(), translations: ['등불 켜졌어?', null], notes: '', seed: 'seed', countTokens: (text) => text.length, ...input });
   if ('kind' in assembled) throw new Error(assembled.kind);
   return assembled;
 };
@@ -88,5 +88,13 @@ describe('the default translation prompt', () => {
     const recent = prompt.blocks.map((block) => (block.kind === 'slot' && block.slot === 'recent' ? { ...block, count: 1 } : block));
     const { messages } = translate({ request: { kind: 'input', text: 'Hi' }, language: 'English', prompt: { ...prompt, blocks: recent } });
     expect(messages[3]!.content).toMatch(/:\n\n\[Luna\]\nThe LAMP is lit, jin\.$/);
+  });
+
+  it('sends 번역가의 노트 after the persona, and the earlier messages without their translations when 앞 메시지 says so', () => {
+    const prompt = translatorPrompt();
+    const originals = prompt.blocks.map((block) => (block.kind === 'slot' && block.slot === 'recent' ? { ...block, translations: false as const } : block));
+    const { messages } = translate({ request: { kind: 'message', index: 1 }, language: 'Korean', notes: 'Master -> 주인님\n\nLuna -> 루나', prompt: { ...prompt, blocks: originals } });
+    expect(messages[3]!.content).toMatch(/\n---\nMaster -> 주인님\n\nLuna -> 루나$/);
+    expect(messages[4]!.content).toMatch(/:\n\n\[jin\]\nIs the LAMP lit\?$/);
   });
 });

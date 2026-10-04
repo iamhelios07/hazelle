@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PICTURE_PERCENT, type Character, type Pictures } from '../../model/library';
-import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, type CharacterText } from '../../runtime/characters';
+import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { setCharacterModule } from '../../runtime/modules';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/turn';
@@ -10,7 +10,7 @@ import { LoreEditor } from '../common/LoreEditor';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { ALWAYS, BOT_MODELS, BOT_MODELS_HELP, inSettings, moduleName, PAGES } from '../common/words';
+import { ALWAYS, BOT_MODELS, BOT_MODELS_HELP, inSettings, moduleName, NOTE_PLACEHOLDER, PAGES, TRANSLATOR_NOTE } from '../common/words';
 import { useModules, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
@@ -35,6 +35,7 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
   const toast = useToast();
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
+  const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
   const [typedName, setTypedName] = useState<string>();
   const [typedHeights, setTypedHeights] = useState<Partial<Record<Height, string>>>({});
   const [switching, setSwitching] = useState<Partial<Record<Switched, boolean>>>({});
@@ -135,6 +136,16 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
           help="대화 기록 바로 뒤에 붙어요."
         />
       </Section>
+      <Section title="번역">
+        <TextField
+          label={TRANSLATOR_NOTE}
+          lines={6}
+          value={noteSave.unsaved.note ?? character.translatorNote ?? ''}
+          onChange={(note) => noteSave.change({ note })}
+          placeholder={NOTE_PLACEHOLDER}
+          help={`이 캐릭터의 번역에만 들어가요. 전역 노트는 ${inSettings('chat')}에 있어요.`}
+        />
+      </Section>
       <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />
       <Section title="표시">
         <SettingGroup label="표시">
@@ -183,6 +194,6 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
       )}
     </>
   );
-  const saved = merged(status, pictureSave.status);
+  const saved = merged(status, pictureSave.status, noteSave.status);
   return frame({ head: { title: '캐릭터 편집', subtitle: aliased(text.name, text.alias), status: saved ? SAVE_STATUS[saved] : undefined }, body });
 }

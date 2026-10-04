@@ -8,7 +8,7 @@ import type { Stream } from '../model/stream';
 import type { Phase } from '../connectors/types';
 import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
-import { setGreetingTranslation, translateSwitches } from './characters';
+import { setGreetingTranslation, translateSwitches, translatorNotes } from './characters';
 import { appendTranslation } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
@@ -52,7 +52,7 @@ export async function translate(
   const profile = modelProfile(store, route.model);
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
   const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
-  const assembled = await store.evaluation.translation({ scope, take, prompt, translations, request, language, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
+  const assembled = await store.evaluation.translation({ scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
     const failure = evaluationFailure(error);
     return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
   });

@@ -1,4 +1,5 @@
 import type { PromptSort, Role, SlotKind } from '../../model/prompt';
+import { TRANSLATOR_NOTE } from './words';
 
 export const SLOT_NAMES: Record<SlotKind, string> = {
   description: '캐릭터 설명',
@@ -7,6 +8,7 @@ export const SLOT_NAMES: Record<SlotKind, string> = {
   authorNote: '작가의 노트',
   postEverything: '최종 삽입',
   chat: '채팅',
+  note: TRANSLATOR_NOTE,
   recent: '앞 메시지',
   source: '원문',
   memory: '장기 기억',
