@@ -13,7 +13,7 @@ export function providerConnection(type: ConnectionType, secret: string, account
   return { type: type.id, label: type.label, baseUrl: null, protocol: null, secret, starred: [], ...(account === undefined ? {} : { account }) };
 }
 
-// models: the model list did not load. key: the provider refused the key the meters asked with.
+// models: the model list did not load. key: the provider refused the key every meters request asked with.
 // stopped: the caller gave up (signal) before the save.
 export type AddFailure =
   | { kind: 'models'; failure: CatalogFailure }
@@ -22,14 +22,16 @@ export type AddFailure =
   | { kind: 'stopped' };
 
 // The model list must load before the connection is saved. A model list
-// may be public (OpenRouter's is), so a key the meters' request is refused with (401) stops the save
-// too; any other trouble with the meters leaves them to their own block on the next screen.
+// may be public (OpenRouter's is), so a key every meters request refuses (401) stops the save too. Never one refusal
+// alone: what NanoGPT's subscription usage answers a working key without a subscription is undocumented. Any other
+// trouble with the meters leaves them to their own block on the next screen.
 // Leaving the screen (signal) while these load saves nothing.
 export async function addConnection({ store, catalogs }: Session, connection: Connection, signal?: AbortSignal): Promise<{ ok: true; id: string } | { ok: false; failure: AddFailure }> {
   const [catalog, meters] = await Promise.all([catalogs.load(connection, { fresh: true }), loadMeters(connection, signal)]);
   if (signal?.aborted) return { ok: false, failure: { kind: 'stopped' } };
   if (!catalog.ok) return { ok: false, failure: { kind: 'models', failure: catalog.failure } };
-  if (meters && !meters.ok && meters.failure.kind === 'provider' && meters.failure.status === 401) return { ok: false, failure: { kind: 'key', failure: meters.failure } };
+  const refused = meters && !meters.meters.length && meters.failures.every((failure) => failure.kind === 'provider' && failure.status === 401) ? meters.failures[0] : undefined;
+  if (refused) return { ok: false, failure: { kind: 'key', failure: refused } };
   const saved = await store.create('connection', connection);
   return saved.ok ? { ok: true, id: saved.data.id } : { ok: false, failure: { kind: 'save', failure: saved } };
 }

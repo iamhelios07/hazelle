@@ -1,15 +1,28 @@
 import { useEffect, useState } from 'react';
+import { resolveConnection } from '../../connectors/registry';
 import type { Connection, Meter, MeterReset, MeterUnit } from '../../connectors/types';
 import { loadMeters, type MetersResult } from '../../runtime/meters';
 import { describeMetersFailure } from '../common/failure';
 import { creditAmount, money, usd } from '../common/money';
 import { monthDay } from '../common/time';
-import { Callout, Empty, Facts, Section, Text } from '../ui';
+import { Callout, Empty, Facts, Link, Section, Text } from '../ui';
 
 const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '매일 초기화', weekly: '매주 초기화', monthly: '매달 초기화' };
 
 const number = (unit: MeterUnit, value: number) => (unit === 'credit' ? creditAmount(value) : value.toLocaleString('ko-KR'));
-const figure = (unit: MeterUnit, value: number) => (unit === 'requests' ? `${number(unit, value)}회` : money(unit, value));
+function figure(unit: MeterUnit, value: number): string {
+  switch (unit) {
+    case 'requests':
+      return `${number(unit, value)}회`;
+    case 'tokens':
+      return `${number(unit, value)} 토큰`;
+    case 'concurrency':
+      return number(unit, value);
+    case 'usd':
+    case 'credit':
+      return money(unit, value);
+  }
+}
 
 const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${monthDay(resets.at)} 초기화`);
 
@@ -21,6 +34,17 @@ function fact(meter: Meter) {
 }
 
 export function ConnectionMeters({ connection }: { connection: Connection }) {
+  const type = resolveConnection(connection)?.type;
+  if (!type?.meters && !type?.usagePage) return null;
+  return (
+    <Section title="사용량과 한도">
+      {type.meters && <Figures connection={connection} />}
+      {type.usagePage && <Link href={type.usagePage}>사용량 페이지</Link>}
+    </Section>
+  );
+}
+
+function Figures({ connection }: { connection: Connection }) {
   const [result, setResult] = useState<MetersResult | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -33,21 +57,16 @@ export function ConnectionMeters({ connection }: { connection: Connection }) {
     // The stored object is replaced on every sync; only a change to its address or key asks again.
   }, [key, attempt]);
 
+  const retry = { label: '사용량 다시 불러오기', onClick: () => setAttempt((count) => count + 1) };
+  if (!result) return <Text variant="note">불러오는 중…</Text>;
+  const [failure] = result.failures;
+  if (!result.meters.length) {
+    return failure ? <Callout tone="warn" action={retry}>{describeMetersFailure(failure)}</Callout> : <Empty variant="section">이 연결은 사용량을 알려 주지 않았어요.</Empty>;
+  }
   return (
-    <Section title="사용량과 한도">
-      {!result ? (
-        <Text variant="note">
-          불러오는 중…
-        </Text>
-      ) : !result.ok ? (
-        <Callout tone="warn" action={{ label: '사용량 다시 불러오기', onClick: () => setAttempt((count) => count + 1) }}>
-          {describeMetersFailure(result.failure)}
-        </Callout>
-      ) : result.meters.length ? (
-        <Facts items={result.meters.map(fact)} />
-      ) : (
-        <Empty variant="section">이 연결은 사용량을 알려 주지 않았어요.</Empty>
-      )}
-    </Section>
+    <>
+      <Facts items={result.meters.map(fact)} />
+      {failure && <Callout tone="warn" action={retry}>사용량 일부를 불러오지 못했어요.</Callout>}
+    </>
   );
 }

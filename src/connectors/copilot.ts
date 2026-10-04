@@ -124,10 +124,11 @@ export const copilot: ConnectionType = {
     ...USER_AGENT,
   }),
 
-  meters: {
+  meters: [{
     request: (secret) => github('https://api.github.com/copilot_internal/user', secret),
     parse: quota,
-  },
+  }],
+  usagePage: 'https://github.com/settings/billing',
 
   cost: ({ usage, model }) => copilotCost(model.id, usage),
 
