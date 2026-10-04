@@ -1,5 +1,4 @@
-import type { ModelRef } from '../connectors/assignment';
-import { fold, usageCalls, UsageCounter, type ModelUsage, type UsageCall } from '../model/chat';
+import { fold, usageCalls, type UsageCall } from '../model/chat';
 import { isValue, type Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { ApiResult } from './api';
@@ -10,7 +9,7 @@ export class Usage {
   private readonly chats = new Map<string, { head: number; calls: UsageCall[] }>();
   private readonly closing = new AbortController();
   private pin: Pin | null = null;
-  private running: Promise<ApiResult<ModelUsage>> | null = null;
+  private running: Promise<unknown> | null = null;
 
   constructor(private readonly store: ObjectStore) {}
 
@@ -19,19 +18,20 @@ export class Usage {
     this.chats.clear();
   }
 
-  async read(ref: ModelRef, signal: AbortSignal): Promise<ApiResult<ModelUsage>> {
+  // count is given each remaining chat's calls, once all of them are read.
+  async read<T>(count: (chats: UsageCall[][]) => T, signal: AbortSignal): Promise<ApiResult<T>> {
     const stop = AbortSignal.any([signal, this.closing.signal]);
     while (this.running) {
       await this.running;
       if (stop.aborted) return { ok: false, error: 'stopped' };
     }
-    const running = this.aggregate(ref, stop).catch((): ApiResult<ModelUsage> => ({ ok: false, error: stop.aborted ? 'stopped' : 'usage-unavailable' }));
+    const running = this.aggregate(count, stop).catch((): ApiResult<T> => ({ ok: false, error: stop.aborted ? 'stopped' : 'usage-unavailable' }));
     this.running = running;
     try { return await running; }
     finally { this.running = null; }
   }
 
-  private async aggregate(ref: ModelRef, signal: AbortSignal): Promise<ApiResult<ModelUsage>> {
+  private async aggregate<T>(count: (chats: UsageCall[][]) => T, signal: AbortSignal): Promise<ApiResult<T>> {
     if (signal.aborted) return { ok: false, error: 'stopped' };
     const failed = await this.store.pull({ signal });
     if (failed) return failed;
@@ -64,9 +64,7 @@ export class Usage {
       }
       const current = this.store.list('chat').filter(live);
       if (current.length !== chats.length || current.some(({ id }) => !ids.has(id) || this.chats.get(id)?.head !== this.store.entryHead(id))) continue;
-      const counter = new UsageCounter(ref);
-      for (const { id } of current) counter.add(this.chats.get(id)!.calls);
-      return { ok: true, data: counter.value };
+      return { ok: true, data: count(current.map(({ id }) => this.chats.get(id)!.calls)) };
     }
   }
 }

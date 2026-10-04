@@ -67,7 +67,7 @@ export const vercel: ConnectionType = {
   reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 
   // The team's credits, not the key's: every key of a team draws on one balance.
-  meters: {
+  meters: [{
     request: (secret) => ({ url: `${API}/credits`, method: 'GET', headers: bearer(secret), body: null }),
     parse(payload) {
       if (!isRecord(payload)) return null;
@@ -78,7 +78,7 @@ export const vercel: ConnectionType = {
         ...(used === null ? [] : [{ kind: 'spent' as const, label: '지금까지 쓴 돈', unit: 'usd' as const, amount: used }]),
       ];
     },
-  },
+  }],
 
   // Each stream event carries the generation id (gen_…) as its id.
   settle: {

@@ -5,7 +5,6 @@ import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
 import { removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
-import { reportsMeters } from '../../runtime/meters';
 import { modelProfile } from '../../runtime/profiles';
 import { describeCatalogFailure } from '../common/failure';
 import { useSession } from '../session';
@@ -14,6 +13,7 @@ import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, NavBar, Row, Screen, SearchField, Stack, Text } from '../ui';
 import { ConnectionMeters } from './ConnectionMeters';
+import { ConnectionSent } from './ConnectionSent';
 
 type Filter = 'all' | 'starred' | 'reasoning' | 'vision' | 'tools';
 
@@ -139,7 +139,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         </Stack>
       }
     >
-      {reportsMeters(connection) && <ConnectionMeters connection={connection} />}
+      <ConnectionSent connection={id} />
+      <ConnectionMeters connection={connection} />
       <Stack gap="related">
         <SearchField label="모델 검색" value={query} onChange={setQuery} />
         <ChoiceGroup label="모델 거르기" options={filters} value={filter} onChange={setFilter} />

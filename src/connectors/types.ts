@@ -71,8 +71,11 @@ export type Meter =
   | { kind: 'left'; label: string; unit: MeterUnit; amount: number; limit: number | null; resets: MeterReset | null }
   | { kind: 'spent'; label: string; unit: MeterUnit; amount: number };
 
-export type MeterUnit = 'usd' | 'credit' | 'requests';
+// concurrency: units a provider's plan lets requests hold at once (Featherless), not a count of requests.
+export type MeterUnit = 'usd' | 'credit' | 'requests' | 'tokens' | 'concurrency';
 export type MeterReset = 'daily' | 'weekly' | 'monthly' | { at: number };
+
+export type MeterRequest = { request(secret: string): HttpRequest; parse(payload: unknown): Meter[] | null };
 
 export type Phase = 'text' | 'reasoning';
 
@@ -129,9 +132,11 @@ export type ConnectionType = {
   // cache points use it; the provider is left to say whether the others ignore it, so it stays unknown per model.
   cacheControl?: true;
   cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
-  // Asked with the stored credential. It is also the check that a pasted key works, where the model
-  // list is public (OpenRouter's is).
-  meters?: { request(secret: string): HttpRequest; parse(payload: unknown): Meter[] | null };
+  // Asked with the stored credential, all at once. They are also the check that a pasted key works, where the model
+  // list is public (OpenRouter's is): a key every one of them refuses is not saved.
+  meters?: MeterRequest[];
+  // The provider's own usage page, linked beside the figures, or alone where it reports none (Ollama Cloud).
+  usagePage?: string;
   // A cost the provider books only after the reply, looked up by the reply's id. Until it is booked
   // the lookup answers 404.
   settle?: { request(secret: string, id: string): HttpRequest; parse(payload: unknown): Cost | null };

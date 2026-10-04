@@ -25,4 +25,16 @@ export const featherless: ConnectionType = {
         tools: flag(features.tool_use),
       }];
     }) ?? null,
+
+  // The plan's only allowance: concurrent units held by requests in flight, 1 to 4 per request by model size, not
+  // requests. A null limit is an unlimited plan. Its model list is public, so this call is what checks a pasted key.
+  meters: [{
+    request: (secret) => ({ url: 'https://api.featherless.ai/account/concurrency', method: 'GET', headers: { authorization: `Bearer ${secret}` }, body: null }),
+    parse(payload) {
+      if (!isRecord(payload)) return null;
+      const limit = count(payload.limit);
+      const used = count(payload.used_cost);
+      return limit === null || used === null ? [] : [{ kind: 'left', label: '동시 실행 단위', unit: 'concurrency', amount: Math.max(limit - used, 0), limit, resets: null }];
+    },
+  }],
 };

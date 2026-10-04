@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { fold, modelUsage, type Entry, type Receipt } from '../model/chat';
+import type { ModelRef } from '../connectors/assignment';
+import { fold, modelUsage, usageCalls, type Entry, type Receipt, type UsageCall } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { removeChat, restoreChat } from './chat-log';
 import type { ObjectStore, Write } from './store';
@@ -9,6 +10,7 @@ import { Usage } from './usage';
 
 const server = testServer();
 const ref = { connection: 'connection', model: 'model' };
+const of = (model: ModelRef) => (chats: UsageCall[][]) => modelUsage(chats, model);
 const receipt = (id: string, over: Partial<Receipt> = {}): Receipt => ({
   id, ...ref, source: 'source', modelName: 'model', state: 'done', cut: null, error: null, finishReason: 'stop',
   usage: null, cost: 'pending', replyId: id, firstTextMs: null, totalMs: 100, cache: null, ...over,
@@ -34,18 +36,18 @@ it('shares receipt-only projections across models, invalidating only changed hea
   const retain = vi.spyOn(store, 'retainChat');
   const display = vi.spyOn(store.evaluation, 'display');
   const signal = new AbortController().signal;
-  expect(await usage.read(ref, signal)).toEqual({ ok: true, data: modelUsage(models, ref) });
+  expect(await usage.read(of(ref), signal)).toEqual({ ok: true, data: modelUsage(models.map(usageCalls), ref) });
   expect(scan).toHaveBeenCalledTimes(2);
-  expect(await usage.read({ ...ref, model: 'other' }, signal)).toEqual({ ok: true, data: modelUsage(models, { ...ref, model: 'other' }) });
+  expect(await usage.read(of({ ...ref, model: 'other' }), signal)).toEqual({ ok: true, data: modelUsage(models.map(usageCalls), { ...ref, model: 'other' }) });
   expect(scan).toHaveBeenCalledTimes(2);
   await store.batch([write(chats[1]!, { type: 'cost', replyId: 'continued', at: 15, cost: { unit: 'usd', amount: 1, source: 'reported' } })], undefined, { unheld: true });
-  expect(await usage.read(ref, signal)).toMatchObject({ ok: true, data: { calls: 3, costUnknown: 2, costs: [{ unit: 'usd', amount: 1, estimated: false }] } });
+  expect(await usage.read(of(ref), signal)).toMatchObject({ ok: true, data: { calls: 3, costUnknown: 2, costs: [{ unit: 'usd', amount: 1, estimated: false }] } });
   expect(scan).toHaveBeenCalledTimes(3);
   await removeChat(store, chats[1]!);
-  expect(await usage.read(ref, signal)).toMatchObject({ ok: true, data: { calls: 2, costUnknown: 2, costs: [] } });
+  expect(await usage.read(of(ref), signal)).toMatchObject({ ok: true, data: { calls: 2, costUnknown: 2, costs: [] } });
   expect(scan).toHaveBeenCalledTimes(3);
   await restoreChat(store, chats[1]!);
-  expect(await usage.read(ref, signal)).toMatchObject({ ok: true, data: { calls: 3, costs: [{ amount: 1 }] } });
+  expect(await usage.read(of(ref), signal)).toMatchObject({ ok: true, data: { calls: 3, costs: [{ amount: 1 }] } });
   expect(scan).toHaveBeenCalledTimes(4);
   expect(retain).not.toHaveBeenCalled();
   expect(display).not.toHaveBeenCalled();
@@ -68,7 +70,7 @@ it('does not mark receipts current when an entry lands during their scan', async
     return result;
   });
   const usage = new Usage(store);
-  expect(await usage.read(ref, new AbortController().signal)).toMatchObject({ ok: true, data: { calls: 1, costs: [{ amount: 2 }], costUnknown: 0 } });
+  expect(await usage.read(of(ref), new AbortController().signal)).toMatchObject({ ok: true, data: { calls: 1, costs: [{ amount: 2 }], costUnknown: 0 } });
   expect(reads).toHaveBeenCalledTimes(2);
   usage.close();
 });
@@ -88,12 +90,12 @@ it('aborts a blocked parent request and rebuilds it on a later read rather than 
   });
   const usage = new Usage(store);
   const abort = new AbortController();
-  const reading = usage.read(ref, abort.signal);
+  const reading = usage.read(of(ref), abort.signal);
   await vi.waitFor(() => expect(blocked).toBe(true));
   abort.abort();
   expect(await reading).toEqual({ ok: false, error: 'stopped' });
   requested.mockRestore();
-  expect(await usage.read(ref, new AbortController().signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  expect(await usage.read(of(ref), new AbortController().signal)).toMatchObject({ ok: true, data: { calls: 1 } });
   usage.close();
 });
 
@@ -107,9 +109,9 @@ it('reports an unreadable entry or a stored body that does not open instead of c
   expect((await other.batch([write(foreign, message(receipt('other')))], undefined, { unheld: true })).ok).toBe(true);
   const usage = new Usage(store);
   const signal = new AbortController().signal;
-  expect(await usage.read(ref, signal)).toEqual({ ok: false, error: 'unreadable' });
+  expect(await usage.read(of(ref), signal)).toEqual({ ok: false, error: 'unreadable' });
   expect((await store.remove(foreign)).ok).toBe(true);
-  expect(await usage.read(ref, signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  expect(await usage.read(of(ref), signal)).toMatchObject({ ok: true, data: { calls: 1 } });
   const broken = crypto.randomUUID();
   const real = fetch;
   vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
@@ -119,6 +121,6 @@ it('reports an unreadable entry or a stored body that does not open instead of c
   });
   await seed(store, [], [write(chat, message(receipt('late')), broken)]);
   vi.stubGlobal('fetch', real);
-  expect(await usage.read(ref, signal)).toEqual({ ok: false, error: 'usage-unavailable' });
+  expect(await usage.read(of(ref), signal)).toEqual({ ok: false, error: 'usage-unavailable' });
   usage.close();
 });

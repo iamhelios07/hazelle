@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { modelUsage } from '../model/chat';
 import { randomBytes } from '../vault/aead';
 import { lockVault } from '../vault/device';
 import { objectKey, sealObject } from '../vault/objects';
@@ -504,16 +505,16 @@ it('invalidates session usage on a rewind even when chat IDs and entry heads are
   const store = await f.open();
   const usage = new Usage(store);
   const signal = new AbortController().signal;
-  expect(await usage.read({ connection: 'c', model: 'm' }, signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  expect(await usage.read((chats) => modelUsage(chats, { connection: 'c', model: 'm' }), signal)).toMatchObject({ ok: true, data: { calls: 1 } });
   const head = store.entryHead('chat');
   f.wipe();
   await f.add('chat', 'chat', null, chat);
   await f.add('entry', 'entry', 'chat', { ...message, receipt: null });
   f.restore(f.snapshot(), 't1');
-  expect(await usage.read({ connection: 'c', model: 'm' }, signal)).toMatchObject({ ok: true, data: { calls: 0 } });
+  expect(await usage.read((chats) => modelUsage(chats, { connection: 'c', model: 'm' }), signal)).toMatchObject({ ok: true, data: { calls: 0 } });
   expect(store.entryHead('chat')).toBe(head);
   f.restore(original, 't2');
-  expect(await usage.read({ connection: 'c', model: 'm' }, signal)).toMatchObject({ ok: true, data: { calls: 1 } });
+  expect(await usage.read((chats) => modelUsage(chats, { connection: 'c', model: 'm' }), signal)).toMatchObject({ ok: true, data: { calls: 1 } });
   usage.close();
   store.close();
 });

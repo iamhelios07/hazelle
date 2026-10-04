@@ -10,4 +10,6 @@ export const ollama: ConnectionType = {
   keyPage: 'https://ollama.com/settings/keys',
   endpoint: { baseUrl: 'https://ollama.com/v1', protocol: 'chat-completions' },
   detect: { key: null, host: 'ollama.com' },
+  // No usage API and no rate-limit headers (checked with a real key, 2026-10-04): this page is all there is.
+  usagePage: 'https://ollama.com/settings/usage',
 };

@@ -271,7 +271,7 @@ describe('catalogs', () => {
 });
 
 describe('meters', () => {
-  const meters = openRouter.meters!;
+  const meters = openRouter.meters![0]!;
 
   it('reads an OpenRouter key: its cap, what it spent, and the free model requests', () => {
     expect(meters.request('sk-or-v1-x')).toMatchObject({ url: 'https://openrouter.ai/api/v1/key', method: 'GET', headers: { authorization: 'Bearer sk-or-v1-x' } });
@@ -294,15 +294,30 @@ describe('meters', () => {
 
 describe('nanogpt', () => {
   it('reads the balance with the key in x-api-key', () => {
-    const { meters } = nanogpt;
-    expect(meters!.request('k')).toEqual({ url: 'https://api.nano-gpt.com/api/check-balance', method: 'POST', headers: { 'x-api-key': 'k' }, body: null });
-    expect(meters!.parse({ usd_balance: '129.46956147', nano_balance: '26.7' })).toEqual([{ kind: 'left', label: '잔액', unit: 'usd', amount: 129.46956147, limit: null, resets: null }]);
+    const [balance] = nanogpt.meters!;
+    expect(balance!.request('k')).toEqual({ url: 'https://api.nano-gpt.com/api/check-balance', method: 'POST', headers: { 'x-api-key': 'k' }, body: null });
+    expect(balance!.parse({ usd_balance: '129.46956147', nano_balance: '26.7' })).toEqual([{ kind: 'left', label: '잔액', unit: 'usd', amount: 129.46956147, limit: null, resets: null }]);
+  });
+
+  it('reads the subscription’s input-token quotas, leaving out an unread one, and nothing without a subscription', () => {
+    const [, subscription] = nanogpt.meters!;
+    expect(subscription!.request('k')).toEqual({ url: 'https://api.nano-gpt.com/api/subscription/v1/usage', method: 'GET', headers: { 'x-api-key': 'k' }, body: null });
+    const quota = (used: number | null, remaining: number | null, resetAt: number | null) => ({ used, remaining, percentUsed: null, resetAt, degraded: remaining === null });
+    expect(subscription!.parse({
+      active: true, state: 'active',
+      limits: { dailyInputTokens: 2_000_000, weeklyInputTokens: 10_000_000, dailyImages: null },
+      dailyInputTokens: quota(500_000, 1_500_000, 1_791_158_400_000),
+      weeklyInputTokens: quota(null, null, null),
+    })).toEqual([{ kind: 'left', label: '오늘 입력 토큰', unit: 'tokens', amount: 1_500_000, limit: 2_000_000, resets: { at: 1_791_158_400_000 } }]);
+    expect(subscription!.parse({ active: false, state: 'inactive', limits: {}, dailyInputTokens: null, weeklyInputTokens: null })).toEqual([]);
+    expect(subscription!.parse({ error: 'Unable to read usage' })).toBeNull();
   });
 });
 
 describe('vercel', () => {
   it('reads the team balance from decimal strings, and a booked cost by generation id', () => {
-    const { meters, settle } = vercel;
+    const [meters] = vercel.meters!;
+    const { settle } = vercel;
     expect(meters!.request('vck_x')).toMatchObject({ url: 'https://ai-gateway.vercel.sh/v1/credits', headers: { authorization: 'Bearer vck_x' } });
     expect(meters!.parse({ balance: '95.50', total_used: '4.50' })).toEqual([
       { kind: 'left', label: '잔액', unit: 'usd', amount: 95.5, limit: null, resets: null },
@@ -420,7 +435,7 @@ describe('copilot', () => {
   });
 
   it('reads the allowance model use draws on, and no figure for an unlimited plan', () => {
-    const { meters } = copilot;
+    const [meters] = copilot.meters!;
     expect(meters!.request('gho_x')).toMatchObject({ url: 'https://api.github.com/copilot_internal/user', headers: { authorization: 'Bearer gho_x' } });
     const snapshot = { entitlement: 1500, quota_remaining: 1287.5, remaining: 1287, unlimited: false };
     expect(meters!.parse({ token_based_billing: true, quota_reset_date: '2026-10-01', quota_snapshots: { premium_interactions: snapshot } })).toEqual([
