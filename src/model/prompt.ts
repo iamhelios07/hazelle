@@ -63,6 +63,8 @@ export type ConversationPrompt = {
   models: Assignment;
   origin?: { id: string; name: string };
   imported?: 'risu-preset';
+  // The modules on in its chats, in the order they were turned on (design §6.5). One that is gone reads as off.
+  modules?: string[];
 };
 
 // model: the one place a translation's model is chosen; without one, the chat's 보조 모델. Its text blocks carry no mark,

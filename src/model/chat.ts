@@ -23,7 +23,12 @@ export type Chat = Mark & {
   memory?: MemorySettings;
   // The variables it starts from, over the card's defaults: a chat brought from Risu keeps Risu's.
   variables?: [string, string][];
+  // 등장인물 (design §6.9): characters whose description, lorebook and pictures join the chat's, in the order added, never
+  // the chat's own. One gone or in 휴지통 reads as absent.
+  cast?: string[];
 };
+
+export const CAST_MAX = 5;
 
 // The raw request is never stored.
 export type Receipt = {
