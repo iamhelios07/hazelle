@@ -70,7 +70,7 @@ and only this folder styles elements.**
 | controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |
 | controls | `PhraseField` | `PhraseField.module.css` | Phrases as removable chips and a field that adds one on Enter, such as stop phrases |
 | controls | `Pill` | `Pill.module.css` | A floating button over the story |
-| controls | `SearchField` | `SearchField.module.css` | A search box |
+| controls | `SearchField` | `SearchField.module.css` | A search box; one that fills a row, such as the chat header's search bar, with its count and buttons at its end |
 | controls | `SendButton` | `SendButton.module.css` | Send, or stop a reply |
 | controls | `SendNote` | `SendNote.module.css` | A few words beside `SendButton` about what sending now does (the prompt cache's time left); a `warning` adds its words, which phones leave to its icon, and its reason behind an ⓘ |
 | controls | `Stepper` | `Stepper.module.css` | A whole number stepped one at a time between two bounds, such as the story's text size |
