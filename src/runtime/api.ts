@@ -43,19 +43,33 @@ export async function fetchApi(path: string, init: Omit<RequestInit, 'headers'> 
   return response;
 }
 
-// 'offline' means no whole answer came: the request never reached the server, or the connection dropped while its
-// answer was being read. 'server-error' means it answered without the JSON error shape every API route uses.
+// Headers come only once the whole request body has gone up, so their wait grows with the body at SLOWEST_UPLOAD bytes
+// a second: a slow phone uplink shared by runtime/files' 12 parallel uploads of up to 25 MB each. The answer's body is
+// read with no timer. Never move this into fetchApi: the relay's streams are read through it.
+const HEADERS_WAIT = 15_000;
+const SLOWEST_UPLOAD = 16_384;
+
+// 'offline' means no whole answer came: the request never reached the server, its headers did not come in time, or the
+// connection dropped while its answer was being read. 'server-error' means it answered without the JSON error shape
+// every API route uses.
 export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal): Promise<ApiResult<T>> {
   const bytes = body instanceof Uint8Array ? (body as Uint8Array<ArrayBuffer>) : null;
+  const payload = body === undefined ? undefined : (bytes ?? JSON.stringify(body));
+  const late = new AbortController();
+  const timer = setTimeout(() => late.abort(), HEADERS_WAIT + ((payload?.length ?? 0) / SLOWEST_UPLOAD) * 1000);
   let response: Response;
   let answer: Uint8Array | string;
   try {
-    response = await fetchApi(path, {
-      method,
-      signal,
-      headers: method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' },
-      body: body === undefined ? undefined : (bytes ?? JSON.stringify(body)),
-    });
+    try {
+      response = await fetchApi(path, {
+        method,
+        signal: signal ? AbortSignal.any([signal, late.signal]) : late.signal,
+        headers: method === 'GET' ? {} : { 'content-type': bytes ? 'application/octet-stream' : 'application/json' },
+        body: payload,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (response.status === 204) return { ok: true, data: undefined as T };
     const readBytes = response.ok && response.headers.get('content-type') === 'application/octet-stream';
     answer = readBytes ? new Uint8Array(await response.arrayBuffer()) : await response.text();
