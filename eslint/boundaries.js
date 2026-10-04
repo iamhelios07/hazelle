@@ -43,9 +43,9 @@ const AREAS = {
   ...Object.fromEntries(FEATURES.map((name) => [name, { paths: [`src/app/${name}`], ...FEATURE }])),
   common: { paths: ['src/app/common'], ...FEATURE },
   root: {
-    paths: ['src/app/session', 'src/app/toast', 'src/app/shortcuts'],
+    paths: ['src/app/session', 'src/app/display', 'src/app/toast', 'src/app/shortcuts'],
     imports: ['ui', 'common', ...BELOW_APP],
-    why: 'session, toast and shortcuts are read by every feature, so they compose no feature and take nothing from the shell.',
+    why: 'session, display, toast and shortcuts are read by every feature, so they compose no feature and take nothing from the shell.',
   },
   main: { paths: ['src/app/main'], imports: ['ui', 'shell', 'routes', 'common', 'root', ...FEATURES, ...BELOW_APP], why: 'main.tsx reaches the server over HTTP only.' },
 };

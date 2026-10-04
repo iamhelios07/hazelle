@@ -4,6 +4,7 @@ import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
+import { DisplayProvider } from '../display';
 import { BIN, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
@@ -98,9 +99,11 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
         <Restored store={session.store} />
         <Unread count={unreadNotices} />
         <BotNotes />
-        <ImportProvider>
-          <Layout />
-        </ImportProvider>
+        <DisplayProvider>
+          <ImportProvider>
+            <Layout />
+          </ImportProvider>
+        </DisplayProvider>
       </ToastProvider>
     </SessionProvider>
   );

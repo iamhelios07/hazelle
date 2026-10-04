@@ -28,6 +28,7 @@ import { PromptsScreen } from '../prompts/PromptsScreen';
 import { useAccount, useCharacter, useChatModel, useChatSummary, useSession, useStored } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
+import { DisplayScreen } from '../settings/DisplayScreen';
 import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
 import { backBar } from './router';
@@ -108,6 +109,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <AccountScreen section={at.section} back={sideBack(at)} />;
       case 'chat-settings':
         return <ChatSettingsScreen back={sideBack(at)} />;
+      case 'display':
+        return <DisplayScreen back={sideBack(at)} />;
       // Its path can be typed by anyone; the server refuses every call but the operator's.
       case 'admin':
         return <AdminPage back={sideBack(at)} closeSettings={closeSettings} />;

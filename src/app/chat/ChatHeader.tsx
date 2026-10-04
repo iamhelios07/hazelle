@@ -8,7 +8,7 @@ import { runShortcut } from '../shortcuts';
 import { Avatar, ChatTitle, Divider, IconButton, Menu, MenuHeading, MenuItem, ToolButton, useWide } from '../ui';
 import { ChatModelMenu } from './ChatModelMenu';
 import { ChatPromptMenu } from './ChatPromptMenu';
-import { ReadingDialog, ReadingMenu, type ReadingControl } from './ChatReading';
+import { ReadingDialog, ReadingMenu } from './ChatReading';
 import type { OpenChat } from './useChat';
 
 export function ChatHeading({ chat }: { chat: OpenChat }) {
@@ -54,7 +54,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
   );
 }
 
-export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
+export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const { id, item, route, toggles, panel, held, infoDrawer, modelMenu, actions } = chat;
   const remembering = useRemembering();
   const failed = id !== null && remembering.failed.has(id);
@@ -86,7 +86,7 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
           onClick={toggleMemory}
         />
       )}
-      {wide && <ReadingMenu reading={reading} />}
+      {wide && <ReadingMenu />}
       {/* A phone's header has no room for it: there 정보 opens from its tab and a tapped message's tools. */}
       {wide && <IconButton icon={PanelRight} label="답장 정보" size="sm" expanded={held === 'info'} controls={infoDrawer} onClick={actions.toggleInfo} />}
       <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
@@ -105,9 +105,9 @@ export function ChatHeaderActions({ chat, reading }: { chat: OpenChat; reading: 
   );
 }
 
-export function ChatDialogs({ chat, reading }: { chat: OpenChat; reading: ReadingControl }) {
+export function ChatDialogs({ chat }: { chat: OpenChat }) {
   const { dialog, item, actions } = chat;
-  if (dialog === 'reading') return <ReadingDialog reading={reading} onClose={actions.closeDialog} />;
+  if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
   if (dialog === 'rename' && item) {
     return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 불러요." onSave={(name) => void actions.rename(name)} onClose={actions.closeDialog} />;
   }

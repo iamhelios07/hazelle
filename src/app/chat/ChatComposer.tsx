@@ -22,8 +22,9 @@ const FIX = {
   'profile-missing': { label: '모델 설정 고르기', chip: 'model' },
 } as const satisfies Record<Blocked['kind'], { label: string; chip: Chip }>;
 
-export function ChatComposer({ chat }: { chat: OpenChat }) {
-  const { draft, messages, last, busy, streaming, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, scroll, actions } = chat;
+// folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
+export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
+  const { draft, messages, last, busy, streaming, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, actions } = chat;
   const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: useMenuOpener(personaMenu) };
   const wide = useWide();
   const [focused, setFocused] = useState(false);
@@ -66,7 +67,7 @@ export function ChatComposer({ chat }: { chat: OpenChat }) {
       <ChatAsk chat={chat} onTyped={() => input.current?.focus()} />
       <Composer
         inputRef={input}
-        compact={scroll.away}
+        compact={folded}
         value={draft.text}
         onChange={draft.set}
         onKeyDown={onKey}
