@@ -14,7 +14,7 @@ began_ms=$(date +%s%3N)
 git fetch -q origin master
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ] || { echo "deploy: HEAD differs from origin/master; push first" >&2; exit 1; }
 
-# The cap matches every other run of the suite (CLAUDE.md); without it the suite has died quietly here.
+# The cap every other run of the suite gets (CLAUDE.md); the suite once failed here, silently, with none set.
 export NODE_OPTIONS=--max-old-space-size=4096
 checked=$(npm run -s check 2>&1) || { echo "$checked" | tail -20 >&2; echo "deploy: npm run check failed" >&2; exit 1; }
 # The recovery points of this run, read before it changes anything, for the deploy note: a deploy that changes a
