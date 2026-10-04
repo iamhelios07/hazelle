@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Card } from '../engine/import/types';
-import { fold, shown } from '../model/chat';
+import { fold, shown, type Receipt } from '../model/chat';
 import { setTranslate } from './characters';
-import { appendUserMessage, removeChat, startChat } from './chat-log';
+import { appendUserMessage, removeChat, startChat, type Written } from './chat-log';
 import { projectGreetings } from './greetings';
 import type { EvaluationDown } from './evaluation-core';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
-import { statusBoxes, takeTurn, wouldSend } from './turn';
+import { autoContinue, statusBoxes, takeTurn, wouldSend } from './turn';
 
 const server = testServer();
 
@@ -155,12 +155,25 @@ describe('a new chat', () => {
 });
 
 describe('이어 쓰기', () => {
-  it('sends the chat ending in the cut text with the continue instruction, and saves the joined text in the cut version’s place, keeping both calls and its rolls', () =>
+  it('continues on its own a reply cut at its length or left without its end, once, never a stop, a failure or an empty reply', () => {
+    const cut = (over: Partial<Receipt>): Pick<Written, 'text' | 'receipt'> => ({
+      text: '옛날 옛적에',
+      receipt: { id: 'call', connection: 'c', source: 'OpenRouter', model: 'm', modelName: 'M', state: 'cut', cut: 'length', error: null, finishReason: 'length', usage: null, cost: null, replyId: null, firstTextMs: null, totalMs: 1, cache: null, ...over },
+    });
+    expect(autoContinue(cut({}))).toBe(true);
+    expect(autoContinue(cut({ cut: 'no-terminal', finishReason: null }))).toBe(true);
+    expect(autoContinue(cut({ cut: 'stopped' }))).toBe(false);
+    expect(autoContinue(cut({ state: 'failed', cut: null }))).toBe(false);
+    expect(autoContinue(cut({ continues: cut({}).receipt }))).toBe(false);
+    expect(autoContinue({ ...cut({}), text: '' })).toBe(false);
+  });
+
+  it('continues a cut reply as it is saved: sends the chat ending in the cut text with the continue instruction, and saves the joined text in the cut version’s place, keeping both calls and its rolls', () =>
     server.withSession(async (session) => {
-      const { chat, log, reply, cut } = await cutReply(session, [saying(' 용이 살았어요.')]);
+      const { log, reply, cut } = await cutReply(session, [saying(' 용이 살았어요.')]);
       expect(cut.receipt).toMatchObject({ state: 'cut', cut: 'length', cost: { unit: 'usd', amount: 0.002 } });
 
-      expect(await takeTurn(session, chat, { kind: 'continue', message: reply().id, version: cut.id })).toBeNull();
+      await vi.waitFor(() => expect(shown(reply()).receipt?.state).toBe('done'));
       const [last, instruction] = lastTwo(log[1]!.sent.body);
       expect(last).toEqual({ role: 'assistant', content: '옛날 옛적에' });
       expect(instruction).toMatchObject({ role: 'user', content: expect.stringMatching(/^Your previous reply was cut off\./) });
@@ -168,10 +181,10 @@ describe('이어 쓰기', () => {
       expect(shown(reply())).toMatchObject({ text: '옛날 옛적에 용이 살았어요.', receipt: { state: 'done', continues: cut.receipt }, seed: cut.seed });
     }));
 
-  it('continues again on 다시 시도 after a continuation failed, so the cut text and every call stay', () =>
+  it('continues again on 다시 시도 after the continuation failed, so the cut text and every call stay', () =>
     server.withSession(async (session) => {
       const { chat, log, reply, cut } = await cutReply(session, [upstream(500, { error: { message: 'overloaded' } }), saying(' 끝.')]);
-      await takeTurn(session, chat, { kind: 'continue', message: reply().id, version: cut.id });
+      await vi.waitFor(() => expect(shown(reply()).receipt?.state).toBe('failed'));
       const failed = shown(reply());
       expect(failed).toMatchObject({ text: '옛날 옛적에', receipt: { state: 'failed', continues: cut.receipt } });
 
