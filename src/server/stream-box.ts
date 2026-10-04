@@ -24,17 +24,20 @@ export type BoxStorage = {
 // killed mid-call.
 export type Live = { began(): void; ended(): Promise<void> };
 
-// Body bytes are gathered this long before they are sealed into one frame, so a reply is tens of stored rows, not
-// thousands.
+// Body bytes are gathered this long before they are sealed into one frame: how soon a reader sees them.
 const GATHER_MS = 50;
 const GATHER_BYTES = 64 * 1024;
+// Sealed frames wait in memory until they are written as one page, so a reply is one row per PERSIST_MS, not one per
+// frame: each put is a billed row, and so is its delete. A page stays under the 2 MB a value may hold.
+const PERSIST_MS = 2000;
+const PAGE_BYTES = 256 * 1024;
 // An outbound call keeps a Durable Object alive for up to 15 minutes from its start (tech-spec §6, Detached replies).
 const LIMIT_MS = 14.5 * 60 * 1000;
 // The provider's body bytes a call keeps; past them it ends as limit, as at its time. A long reply with long reasoning
 // is a few MB of text, and its SSE envelope can take some ten times that.
 const LIMIT_BYTES = 32 * 1024 * 1024;
-// Frames a reader takes from storage at once. A frame holds GATHER_BYTES and at most one upstream chunk more.
-const PAGE = 16;
+// Pages a reader takes from storage at once. A page holds PAGE_BYTES and at most one frame more.
+const PAGE = 4;
 // Whatever no device came back for is dropped this long after the call started.
 const KEEP_MS = 24 * 60 * 60 * 1000;
 
@@ -42,7 +45,10 @@ const P256 = { name: 'ECDH', namedCurve: 'P-256' } as const;
 // Named through crypto itself, so this module reads the same under the Worker's types and Node's (e2e/helpers).
 type Key = Awaited<ReturnType<typeof crypto.subtle.importKey>>;
 const encode = (text: string) => new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
+// A page is keyed by the seq of its last frame, so a reader listing from a seq gets the page holding it; the reader
+// drops the frames before its seq. hello is a page of its own at f:0.
 const frameKey = (seq: number) => `f:${String(seq).padStart(10, '0')}`;
+const seqOf = (key: string) => Number(key.slice(2));
 // Past every frame key: ';' follows ':'.
 const FRAMES_END = 'f;';
 
@@ -72,12 +78,14 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> | null {
 
 const json = (status: number, error: string) => Response.json({ error }, { status });
 
-// Storage holds the only copy of the frames, so memory holds what is being sealed and what each reader is sent,
-// however long the answer.
+// Memory holds the frames not yet written (from persisted on, in seq order, no gap) and what each reader is sent;
+// storage holds every page before them, however long the answer.
 export class StreamBox {
-  // The seq of the next frame, and how many are stored: frames are stored in seq order, with no gap.
   private next = 0;
-  private stored = 0;
+  private persisted = 0;
+  private pending: { seq: number; bytes: Uint8Array }[] = [];
+  private pendingBytes = 0;
+  private persisting: ReturnType<typeof setTimeout> | null = null;
   private waiting = new Set<() => void>();
   private call: AbortController | null = null;
   private running = false;
@@ -130,7 +138,7 @@ export class StreamBox {
     await this.storage.put('started', started);
     await this.storage.setAlarm(started + KEEP_MS);
     await this.storage.put(frameKey(0), frame(HELLO, 0, new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
-    this.next = this.stored = 1;
+    this.next = this.persisted = 1;
     this.call = new AbortController();
     this.running = true;
     this.live.began();
@@ -170,7 +178,7 @@ export class StreamBox {
       this.append(sealing, HEAD, encode(JSON.stringify({ status: response.status, statusText: response.statusText, headers: [...response.headers] })));
       const reader = response.body?.getReader();
       while (reader) {
-        // Upstream is read no faster than its frames are stored.
+        // Upstream is read no faster than its frames are sealed and its full pages stored.
         await this.writes;
         const { done, value } = await reader.read();
         if (done) break;
@@ -188,23 +196,54 @@ export class StreamBox {
     }
     flush();
     this.append(sealing, END, encode(JSON.stringify({ ...end, ms: Date.now() - began })));
-    await this.writes;
+    // A call that has ended has stored every frame.
+    await this.persist();
     this.running = false;
     this.call = null;
     this.wake();
     await this.live.ended();
   }
 
-  // Sealed in order: each frame waits for the one before it.
+  // Sealed in order: each frame waits for the one before it. A frame that would take the page past its bytes is
+  // written after the page, as one of its own at most.
   private append(sealing: Key, type: number, body: Uint8Array<ArrayBuffer>) {
     const seq = this.next++;
     this.writes = this.writes.then(async () => {
       const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce(seq), additionalData: new Uint8Array([type]) }, sealing, body));
       if (this.dropped) return;
-      await this.storage.put(frameKey(seq), frame(type, seq, sealed));
-      this.stored = seq + 1;
+      const bytes = frame(type, seq, sealed);
+      if (this.pendingBytes && this.pendingBytes + bytes.byteLength > PAGE_BYTES) await this.writePage();
+      this.pending.push({ seq, bytes });
+      this.pendingBytes += bytes.byteLength;
+      this.persisting ??= setTimeout(() => void this.persist(), PERSIST_MS);
       this.wake();
     });
+  }
+
+  // Pending frames are kept until their page is written, so a reader finds every frame in memory or in storage.
+  private persist(): Promise<void> {
+    this.writes = this.writes.then(() => this.writePage());
+    return this.writes;
+  }
+
+  private async writePage() {
+    if (this.persisting) clearTimeout(this.persisting);
+    this.persisting = null;
+    if (this.dropped || !this.pending.length) return;
+    const page = this.pending;
+    const bytes = new Uint8Array(this.pendingBytes);
+    let at = 0;
+    for (const { bytes: frame } of page) {
+      bytes.set(frame, at);
+      at += frame.byteLength;
+    }
+    const last = page[page.length - 1]!.seq;
+    await this.storage.put(frameKey(last), bytes);
+    this.persisted = last + 1;
+    this.pending = this.pending.slice(page.length);
+    this.pendingBytes -= bytes.byteLength;
+    if (this.pending.length) this.persisting ??= setTimeout(() => void this.persist(), PERSIST_MS);
+    this.wake();
   }
 
   private wake() {
@@ -213,8 +252,8 @@ export class StreamBox {
     for (const resolve of waiting) resolve();
   }
 
-  // hello first, then every frame from seq on, then the live rest while the call runs. Frames are read from storage a
-  // page at a time, as the reader takes them.
+  // hello first, then every frame from seq on, then the live rest while the call runs: stored pages while seq is behind
+  // what is persisted (always, once the call is over or the object was rebuilt), then the frames still in memory.
   private async read(from: number): Promise<Response> {
     const hello = (await this.storage.get(frameKey(0))) as Uint8Array | undefined;
     if (!hello) return json(404, 'stream-gone');
@@ -225,15 +264,24 @@ export class StreamBox {
         pull: async (reader) => {
           for (;;) {
             if (this.dropped) return reader.close();
-            const stored = this.stored;
-            const running = this.running;
-            const page = await this.storage.list({ start: frameKey(seq), end: FRAMES_END, limit: PAGE });
-            for (const bytes of page.values()) reader.enqueue(bytes as Uint8Array);
-            seq += page.size;
-            if (page.size) return;
             // Read before the list: a call that had ended by then had stored every frame.
-            if (!running) return reader.close();
-            if (this.stored === stored && this.running) await new Promise<void>((resolve) => this.waiting.add(resolve));
+            const running = this.running;
+            if (seq < this.persisted || !running) {
+              const pages = await this.storage.list({ start: frameKey(seq), end: FRAMES_END, limit: PAGE });
+              for (const [key, bytes] of pages) {
+                reader.enqueue(bytes as Uint8Array);
+                seq = seqOf(key) + 1;
+              }
+              if (pages.size) return;
+              if (!running) return reader.close();
+            }
+            const held = this.pending.length - (seq - this.persisted);
+            if (held > 0) {
+              for (const { bytes } of this.pending.slice(-held)) reader.enqueue(bytes);
+              seq += held;
+              return;
+            }
+            if (this.running) await new Promise<void>((resolve) => this.waiting.add(resolve));
           }
         },
       },
