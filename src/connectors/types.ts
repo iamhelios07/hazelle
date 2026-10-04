@@ -107,6 +107,8 @@ export type ConnectionType = {
   id: string;
   label: string;
   group: 'gateway' | 'maker' | 'subscription';
+  // Listed again under 주요 on 연결 추가, ahead of the groups (user, 2026-10-04).
+  major?: true;
   description: string;
   keyPage?: string;
   endpoint: Endpoint;
