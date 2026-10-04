@@ -8,7 +8,7 @@ import type { ApiResult } from './api';
 import type { Files } from './files';
 import { thumbnail } from './picture';
 import { removeOwned } from './removal';
-import { without, type ObjectStore, type Write } from './store';
+import { allWritten, without, type ObjectStore, type Write } from './store';
 
 export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 
@@ -239,13 +239,7 @@ export function resetToggles(store: ObjectStore, character: string | null): Prom
 
 type Placement = { id: string; folder: string | null };
 
-async function place(store: ObjectStore, placements: Placement[]): Promise<ApiResult<null>> {
-  for (const { id, folder } of placements) {
-    const saved = await store.update('character', id, (current) => ({ ...current, folder }));
-    if (!saved.ok) return saved;
-  }
-  return { ok: true, data: null };
-}
+const place = (store: ObjectStore, placements: Placement[]) => allWritten(placements.map(({ id, folder }) => store.update('character', id, (current) => ({ ...current, folder }))));
 
 export const moveCharacters = (store: ObjectStore, ids: string[], folder: string | null) => place(store, ids.map((id) => ({ id, folder })));
 
@@ -253,32 +247,23 @@ export const createFolder = (store: ObjectStore, name: string, parent: string | 
 
 export const renameFolder = (store: ObjectStore, id: string, name: string) => store.update('folder', id, (current) => ({ ...current, name }));
 
-// What restoreFolder needs to undo removeFolder, and up, the top folder the characters moved to (null:
-// out of every folder).
+// What removeFolder writes and restoreFolder undoes, and up, the top folder the characters move to (null: out of every
+// folder).
 export type RemovedFolder = { folders: Stored<'folder'>[]; placements: Placement[]; up: Stored<'folder'> | null };
 
-// A folder goes with the folders inside it, and its characters, those in 휴지통 too, first move up
-// a level, so no character points at a folder that is gone.
-export async function removeFolder(store: ObjectStore, id: string): Promise<ApiResult<RemovedFolder>> {
+// A folder goes with the folders inside it, and its characters, those in 휴지통 too, move up a level. Both go at once:
+// a character left naming a gone folder sits in no folder (model/library indexFolders). null: the folder is gone.
+export function folderRemoval(store: ObjectStore, id: string): RemovedFolder | null {
   const tree = nest(store.list('folder'));
   const target = tree.flatMap((top) => [top, ...top.children]).find((folder) => folder.id === id);
-  if (!target) return { ok: false, error: 'gone' };
+  if (!target) return null;
   const up = tree.find((top) => top.children.includes(target)) ?? null;
   const placements = store.list('character').filter(({ value }) => holds(target, value)).map(({ id, value }) => ({ id, folder: value.folder }));
-  const moved = await place(store, placements.map(({ id }) => ({ id, folder: up?.id ?? null })));
-  if (!moved.ok) return moved;
-  const folders = [target, ...target.children];
-  for (const gone of [...target.children, target]) {
-    const removed = await store.remove(gone.id);
-    if (!removed.ok) return removed;
-  }
-  return { ok: true, data: { folders, placements, up } };
+  return { folders: [target, ...target.children], placements, up };
 }
 
-export async function restoreFolder(store: ObjectStore, { folders, placements }: RemovedFolder): Promise<ApiResult<null>> {
-  for (const folder of folders) {
-    const saved = await store.restore(folder);
-    if (!saved.ok) return saved;
-  }
-  return place(store, placements);
-}
+export const removeFolder = (store: ObjectStore, { folders, placements, up }: RemovedFolder) =>
+  allWritten([place(store, placements.map(({ id }) => ({ id, folder: up?.id ?? null }))), store.batch(folders.map(({ id }) => ({ type: 'remove', id })))]);
+
+export const restoreFolder = (store: ObjectStore, { folders, placements }: RemovedFolder) =>
+  allWritten([store.batch(folders.map(({ id, kind, parent, value }) => ({ type: 'restore', id, kind, parent, value }))), place(store, placements)]);

@@ -52,7 +52,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       footer={
         <>
           {toggles.changed ? `처음 값과 다른 것 ${toggles.changed}개` : '모두 처음 값이에요'}
-          <Button variant="secondary" size="sm" disabled={toggles.changed === 0} onClick={() => void actions.resetToggles()}>
+          <Button variant="secondary" size="sm" disabled={toggles.changed === 0} onClick={actions.resetToggles}>
             처음 값으로 되돌리기
           </Button>
         </>

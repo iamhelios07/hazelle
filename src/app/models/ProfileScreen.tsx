@@ -244,9 +244,9 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
   async function copy() {
     if (!(await flush())) return;
-    const made = await addProfile(store, { name: `${name.trim() || stored.value.name} (사본)`, settings: shown });
-    if (!made.ok) return toast.failed(made, '사본을 만들지 못했어요.');
-    navigate({ kind: 'profile', id: made.data.id });
+    const copied = crypto.randomUUID();
+    void addProfile(store, { name: `${name.trim() || stored.value.name} (사본)`, settings: shown }, copied).then((made) => made.ok || toast.failed(made, '사본을 만들지 못했어요.'));
+    navigate({ kind: 'profile', id: copied });
   }
 
   async function clearAll() {

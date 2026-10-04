@@ -2,7 +2,7 @@ import { DEFAULT_ORDER } from '../engine/import/convert';
 import type { Stored } from '../model/kinds';
 import type { Lore, LoreFolder } from '../model/library';
 import type { ApiResult } from './api';
-import type { ObjectStore } from './store';
+import { allWritten, type ObjectStore } from './store';
 
 export type LoreOwner = { kind: 'character' | 'module'; id: string };
 
@@ -47,28 +47,21 @@ export const renameLoreFolder = (store: ObjectStore, owner: LoreOwner, folder: s
 
 export type RemovedLoreFolder = { folder: LoreFolder; at: number; entries: string[] };
 
-async function place(store: ObjectStore, entries: string[], folder: string | null): Promise<ApiResult<null>> {
-  for (const id of entries) {
-    const saved = await store.update('lore', id, (current) => ({ ...current, folder }));
-    if (!saved.ok) return saved;
-  }
-  return { ok: true, data: null };
-}
+const place = (store: ObjectStore, entries: string[], folder: string | null) => allWritten(entries.map((id) => store.update('lore', id, (current) => ({ ...current, folder }))));
 
-// Its entries move out of every folder first, so none is left naming a folder that is gone.
-export async function removeLoreFolder(store: ObjectStore, owner: LoreOwner, id: string): Promise<ApiResult<RemovedLoreFolder>> {
+// Its entries move out of every folder as it goes. Both go at once: an entry left naming a gone folder sits in no
+// folder (model/lore loreGroups). null: the folder is gone.
+export function loreFolderRemoval(store: ObjectStore, owner: LoreOwner, id: string): RemovedLoreFolder | null {
   const folders = store.get(owner.kind, owner.id)?.value.loreFolders ?? [];
   const at = folders.findIndex((each) => each.id === id);
   const folder = folders[at];
-  if (!folder) return { ok: false, error: 'gone' };
+  if (!folder) return null;
   const entries = store.children('lore', owner.id).filter(({ value }) => value.folder === folder.id).map(({ id }) => id);
-  const moved = await place(store, entries, null);
-  if (!moved.ok) return moved;
-  const removed = await setFolders(store, owner, (folders) => folders.filter((each) => each.id !== folder.id));
-  return removed.ok ? { ok: true, data: { folder, at, entries } } : removed;
+  return { folder, at, entries };
 }
 
-export async function restoreLoreFolder(store: ObjectStore, owner: LoreOwner, { folder, at, entries }: RemovedLoreFolder): Promise<ApiResult<null>> {
-  const restored = await setFolders(store, owner, (folders) => folders.toSpliced(at, 0, folder));
-  return restored.ok ? place(store, entries, folder.id) : restored;
-}
+export const removeLoreFolder = (store: ObjectStore, owner: LoreOwner, { folder, entries }: RemovedLoreFolder) =>
+  allWritten([place(store, entries, null), setFolders(store, owner, (folders) => folders.filter((each) => each.id !== folder.id))]);
+
+export const restoreLoreFolder = (store: ObjectStore, owner: LoreOwner, { folder, at, entries }: RemovedLoreFolder) =>
+  allWritten([setFolders(store, owner, (folders) => folders.toSpliced(at, 0, folder)), place(store, entries, folder.id)]);

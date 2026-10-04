@@ -862,8 +862,11 @@ export class ObjectStore {
   private async writeOne<K extends Kind>(step: Step, chat: string | null): Promise<ApiResult<Stored<K>>> {
     const lease = chat ? this.retainChat(chat) : null;
     try {
-      const failure = await lease?.ready;
-      if (failure) return failure;
+      // Never await without a lease: commit shows the write, and a create must be readable as its call returns.
+      if (lease) {
+        const failure = await lease.ready;
+        if (failure) return failure;
+      }
       const result = await this.one<K>(step);
       if (result.ok) this.summarizeHeld();
       return result;
@@ -1312,6 +1315,12 @@ export class ObjectStore {
     const changes = [...new Map(this.changes.splice(0).map((change) => [`${change.kind}\n${change.id}\n${change.parent}`, change])).values()];
     for (const listener of this.listeners) listener(changes);
   }
+}
+
+// Writes sent together, each shown at once: the first failure among them, or ok once all landed.
+export async function allWritten(writes: Promise<ApiResult<unknown>>[]): Promise<ApiResult<null>> {
+  const results = await Promise.all(writes);
+  return results.find((result): result is ApiFailure => !result.ok) ?? { ok: true, data: null };
 }
 
 export function without<T extends object>(from: T, key: keyof T): T {

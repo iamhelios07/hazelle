@@ -235,9 +235,9 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const isDefault = isDefaultPrompt(settings, stored);
   const copy = async () => {
     if (!(await save.flush())) return;
-    const copied = await copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`);
-    if (!copied.ok) return toast.failed(copied, '사본을 만들지 못했어요.');
-    onCopied(copied.data.id);
+    const made = crypto.randomUUID();
+    void copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`, made).then((copied) => copied.ok || toast.failed(copied, '사본을 만들지 못했어요.'));
+    onCopied(made);
     toast.show('사본을 만들었어요.', { detail: '이름부터 바꿔 보세요.' });
   };
   const makeDefault = async () => {

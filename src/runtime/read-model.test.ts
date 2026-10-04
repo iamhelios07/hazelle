@@ -486,9 +486,9 @@ describe('per-chat read models', () => {
     const old = store.update('persona', 'person', (value) => ({ ...value, name: 'obsolete' }));
     await vi.waitFor(() => expect(started).toBe(true));
     const latest = store.update('persona', 'person', (value) => ({ ...value, name: 'latest' }));
-    await vi.waitFor(() => expect(store.get('persona', 'person')?.value.name).toBe('latest'));
+    expect((await latest).ok).toBe(true);
     finish();
-    await Promise.all([old, latest]);
+    await old;
     await store.evaluated('a');
     expect(seen).toEqual(['latest']);
     await store.saveSummary('a');

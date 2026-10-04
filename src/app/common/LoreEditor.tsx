@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { Lore, LoreFolder } from '../../model/library';
 import { loreGroups } from '../../model/lore';
-import { addLore, addLoreFolder, editLore, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, type LoreOwner } from '../../runtime/lore';
+import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, type LoreOwner } from '../../runtime/lore';
 import { useChildren, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, ChipButton, ChoiceGroup, Disclosure, Empty, Menu, MenuItem, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Text, TextField } from '../ui';
@@ -63,12 +63,14 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
     void (folder ? renameLoreFolder(store, owner, folder.id, trimmed) : addLoreFolder(store, owner, trimmed)).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
-  async function removeFolder(folder: LoreFolder, held: number) {
-    const removed = await removeLoreFolder(store, owner, folder.id);
-    if (!removed.ok) return toast.failed(removed, '폴더를 지우지 못했어요.');
+  function removeFolder(folder: LoreFolder) {
+    const removal = loreFolderRemoval(store, owner, folder.id);
+    if (!removal) return;
+    void removeLoreFolder(store, owner, removal).then((removed) => removed.ok || toast.failed(removed, '폴더를 지우지 못했어요.'));
+    const held = removal.entries.length;
     toast.undoable(
       `‘${folder.name}’ 폴더를 지웠어요.`,
-      () => void restoreLoreFolder(store, owner, removed.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')),
+      () => void restoreLoreFolder(store, owner, removal).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')),
       held > 0 ? `항목 ${held}개는 폴더 밖으로 옮겼어요.` : undefined,
     );
   }
@@ -90,7 +92,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
               <Button variant="secondary" size="sm" onClick={() => setNaming({ folder, name: folder!.name })}>
                 이름 바꾸기
               </Button>
-              <Button variant="danger" size="sm" onClick={() => void removeFolder(folder!, inside.length)}>
+              <Button variant="danger" size="sm" onClick={() => removeFolder(folder!)}>
                 폴더 지우기
               </Button>
             </Row>

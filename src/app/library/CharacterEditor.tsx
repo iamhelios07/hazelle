@@ -38,24 +38,19 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
   const [typedName, setTypedName] = useState<string>();
   const [typedHeights, setTypedHeights] = useState<Partial<Record<Height, string>>>({});
-  const [switching, setSwitching] = useState<Partial<Record<Switched, boolean>>>({});
   const held: CharacterText = { ...character.card, alias: character.alias ?? '', ...unsaved };
   const text = { ...held, name: typedText(typedName, filled, held.name, String) };
   const pictures: Pictures = { ...character.pictures, ...pictureSave.unsaved };
   const fold = pictures.fold !== false;
-  const decor = switching.decor ?? character.decor !== false;
-  const botModels = switching.botModels ?? character.botModels === true;
-  const keepThoughts = switching.keepThoughts ?? character.keepThoughts === true;
+  const decor = character.decor !== false;
+  const botModels = character.botModels === true;
+  const keepThoughts = character.keepThoughts === true;
   const modules = useModules();
   const always = useSettings().modules ?? [];
   const own = character.modules ?? [];
 
   function flip(field: Switched, on: boolean) {
-    setSwitching((current) => ({ ...current, [field]: on }));
-    void SWITCHES[field](store, id, on).then((saved) => {
-      setSwitching((current) => ({ ...current, [field]: undefined }));
-      if (!saved.ok) toast.failed(saved, '저장하지 못했어요.');
-    });
+    void SWITCHES[field](store, id, on).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
   }
 
   async function changeModule(module: string, on: boolean) {

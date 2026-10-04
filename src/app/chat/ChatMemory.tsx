@@ -65,8 +65,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
 
   async function revert() {
     if (!(await save.flush())) return;
-    const done = await setChatMemory(store, id, null);
-    if (!done.ok) return toast.failed(done, '되돌리지 못했어요.');
+    void setChatMemory(store, id, null).then((done) => done.ok || toast.failed(done, '되돌리지 못했어요.'));
     setResets((count) => count + 1);
   }
 
@@ -226,9 +225,8 @@ function NewFact({ chat }: { chat: string }) {
     );
   }
   const ready = draft.about.trim() !== '' && draft.field.trim() !== '' && draft.value.trim() !== '';
-  async function add() {
-    const done = await setFact(store, chat, { ...draft!, record: null }, null);
-    if (!done.ok) return toast.failed(done, '저장하지 못했어요.');
+  function add() {
+    void setFact(store, chat, { ...draft!, record: null }, null).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'));
     setDraft(null);
   }
   return (
@@ -240,7 +238,7 @@ function NewFact({ chat }: { chat: string }) {
         <Button variant="secondary" size="sm" onClick={() => setDraft(null)}>
           취소
         </Button>
-        <Button size="sm" disabled={!ready} onClick={() => void add()}>
+        <Button size="sm" disabled={!ready} onClick={add}>
           추가
         </Button>
       </Row>

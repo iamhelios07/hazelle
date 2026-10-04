@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ORDER } from '../engine/import/convert';
 import type { Character } from '../model/library';
-import { addLore, addLoreFolder, editLore, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, type LoreOwner } from './lore';
+import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, type LoreOwner } from './lore';
 import type { ObjectStore } from './store';
 import { testCard, testServer } from './testing';
 
@@ -70,11 +70,11 @@ describe('lore folders', () => {
     const { store } = await server.account();
     const owner = await owned(store);
     const inside = await added(store, owner.id, 'sea');
-    const removed = await removeLoreFolder(store, owner, 'sea');
-    if (!removed.ok) throw new Error(removed.error);
+    const removal = loreFolderRemoval(store, owner, 'sea')!;
+    expect(await removeLoreFolder(store, owner, removal)).toEqual({ ok: true, data: null });
     expect(store.get('character', owner.id)?.value.loreFolders).toEqual([]);
     expect(store.get('lore', inside.id)?.value.folder).toBeNull();
-    await restoreLoreFolder(store, owner, removed.data);
+    await restoreLoreFolder(store, owner, removal);
     expect(store.get('character', owner.id)?.value.loreFolders).toEqual([{ id: 'sea', name: '바다' }]);
     expect(store.get('lore', inside.id)?.value.folder).toBe('sea');
   });
