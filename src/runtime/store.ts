@@ -1244,8 +1244,7 @@ export class ObjectStore {
     };
     return async (index) => {
       while (windows.length && windows[0]!.end <= index) windows.shift();
-      // The byte cap can end a window before this row: dispatch until one holds it, and keep the lookahead full.
-      while ((windows.length < ahead || windows.at(-1)!.end <= index) && next < rows.length) dispatch();
+      while (windows.length < ahead && next < rows.length) dispatch();
       const held = windows[0];
       const slot = held?.slots.get(index);
       if (held === undefined || slot === undefined) return undefined;
