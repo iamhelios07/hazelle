@@ -580,13 +580,14 @@ describe('per-chat read models', () => {
       { type: 'create', kind: 'chat', id: 'c', parent: null, value: chat },
       { type: 'create', kind: 'entry', id: 'e', parent: 'c', value: message('hi') },
     ]);
-    expect(observed).toEqual([[{ kind: 'entry', id: 'e', parent: 'c' }, { kind: 'chat', id: 'c', parent: null }]]);
+    const both = [{ kind: 'entry', id: 'e', parent: 'c' }, { kind: 'chat', id: 'c', parent: null }];
+    expect(observed).toEqual([both, both]);
     const entry = store.get('entry', 'e')!;
     await store.pull();
-    expect(observed).toHaveLength(1);
+    expect(observed).toHaveLength(2);
     await store.remove('e');
     await store.restore(entry);
-    expect(observed.slice(1)).toEqual([[{ kind: 'entry', id: 'e', parent: 'c' }], [{ kind: 'entry', id: 'e', parent: 'c' }]]);
+    expect(observed.slice(2)).toEqual(Array(4).fill([{ kind: 'entry', id: 'e', parent: 'c' }]));
     const phone = await open();
     for (let index = 0; index < 3; index++) await phone.create('entry', message('remote'), { id: `r${index}`, parent: 'c' });
     observed.length = 0;

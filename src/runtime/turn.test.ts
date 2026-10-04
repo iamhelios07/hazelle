@@ -185,6 +185,8 @@ describe('이어 쓰기', () => {
     server.withSession(async (session) => {
       const { chat, log, reply, cut } = await cutReply(session, [upstream(500, { error: { message: 'overloaded' } }), saying(' 끝.')]);
       await vi.waitFor(() => expect(shown(reply()).receipt?.state).toBe('failed'));
+      // The failed version shows before its save lands, and the turn holds Talk until then.
+      await vi.waitFor(() => expect(session.talk.snapshot()).toBeNull());
       const failed = shown(reply());
       expect(failed).toMatchObject({ text: '옛날 옛적에', receipt: { state: 'failed', continues: cut.receipt } });
 

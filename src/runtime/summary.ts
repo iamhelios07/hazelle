@@ -2,13 +2,15 @@ import type { Display } from '../engine/display';
 import { chatTitle, fold, previewLine, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
 import { live } from '../model/library';
 import type { ApiFailure } from './api';
-import type { ObjectStore } from './store';
+import type { ObjectStore, ShownMarks } from './store';
 import { pinned, scopeOf } from './turn';
 import { pause } from './pause';
 
 const VERSION = 1;
 export type ChatModel = ChatItem & { display: Display };
-export type Projection = { model: ChatModel; summary: Summary };
+// shown: the chat's overlay marks it was folded at. Never on Summary, which is saved: no write
+// still unanswered ever reaches the server inside a summary.
+export type Projection = { model: ChatModel; summary: Summary; shown: ShownMarks };
 
 // Like memoryId, a summary has one id under its chat, independent of which device builds it.
 export const summaryId = (chat: string) => chat.replace(/[0-9a-f]/, (digit) => (parseInt(digit, 16) ^ 8).toString(16));
@@ -23,7 +25,8 @@ export async function projectChat(store: ObjectStore, id: string, previous?: Pro
   if (!stored) return null;
   const entries = store.children('entry', id);
   const head = store.loadedHead(id);
-  const messages = previous?.summary.head === head ? previous.model.messages : fold(entries);
+  const marks = store.shownMarks(id);
+  const messages = previous?.summary.head === head && previous.shown.entries === marks.entries ? previous.model.messages : fold(entries);
   const rendered = { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
   const { value: input, reads } = store.capture(() => ({ scope: { ...scopeOf({ store }, id, stored.value, messages), clock: rendered }, take: pinned({ store }, stored.value) }));
   const dependencies = [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()];
@@ -40,7 +43,7 @@ export async function projectChat(store: ObjectStore, id: string, previous?: Pro
     preview: last === undefined ? '' : previewLine(last).slice(0, 256),
     at: latest?.value.at ?? null, order: head || stored.rev, recent: recentIn(messages),
   };
-  return { summary, model: { ...summary, id, chat: stored.value, messages, display } };
+  return { summary, model: { ...summary, id, chat: stored.value, messages, display }, shown: marks };
 }
 
 // One chat held at a time, so a pass over a whole account never holds more than one history. A chat with a summary is
