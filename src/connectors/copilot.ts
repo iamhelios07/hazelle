@@ -1,4 +1,3 @@
-import { copilotCost } from './copilot-prices';
 import { effortLevels, type ReasoningTakes } from './settings';
 import type { ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
 import { count, isRecord, modelEntries, nameOf } from './values';
@@ -128,8 +127,6 @@ export const copilot: ConnectionType = {
     request: (secret) => github('https://api.github.com/copilot_internal/user', secret),
     parse: quota,
   },
-
-  cost: ({ usage, model }) => copilotCost(model.id, usage),
 
   // The list also holds embedding models, and models that VS Code's model picker does not offer.
   parseModels(payload) {
