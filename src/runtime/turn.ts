@@ -188,12 +188,9 @@ export function translationInput(reader: Reader, id: string, chat: Chat, message
 // version switched to and the switch turned on leave it to 번역 (user ruling, 2026-10-04). The reply is as saved; the
 // bot's onOutput may have edited or removed its message since, so the message is read again. Its chat must stay
 // loaded until this returns (session).
-export async function translateReceived(session: Pick<Session, 'store' | 'read' | 'translator'>, chat: string, reply: Written) {
+async function translateReceived(session: Pick<Session, 'store' | 'read' | 'translator'>, chat: string, reply: Written) {
   if (reply.receipt.state === 'failed') return;
-  const view = await session.read.displayed(chat).catch((error: unknown) => {
-    if (error instanceof EvaluationStopped || error instanceof EvaluationFailed) return null;
-    throw error;
-  });
+  const view = await displayed(session, chat);
   if (!view || !translateSwitches(session.store, view.chat.character).replies) return;
   const index = view.messages.findIndex((message) => message.id === (reply.message ?? reply.id));
   if (index === -1) return;
@@ -201,6 +198,47 @@ export async function translateReceived(session: Pick<Session, 'store' | 'read' 
   // Another version, already translated, may have been switched to while onOutput ran.
   if (version.translation || !view.display.texts[index]!.trim()) return;
   session.translator.translate(chat, version, translationInput(session, chat, view.chat, view.messages, { kind: 'message', index }));
+}
+
+const displayed = (session: Pick<Session, 'read'>, chat: string) =>
+  session.read.displayed(chat).catch((error: unknown) => {
+    if (error instanceof EvaluationStopped || error instanceof EvaluationFailed) return null;
+    throw error;
+  });
+
+// 자동 이어 쓰기 (design §6.7): a reply cut at its length, or whose stream closed without its end (a deploy rebuilds the
+// server object), is continued once (user, 2026-10-02). A continuation is never continued on its own, a manual one
+// included; nor is a stop (멈추기), nor an empty reply, on which 이어 쓰기 is not offered either.
+export function autoContinue({ text, receipt }: Pick<Written, 'text' | 'receipt'>): boolean {
+  return receipt.state === 'cut' && (receipt.cut === 'length' || receipt.cut === 'no-terminal') && !receipt.continues && text !== '';
+}
+
+const idle = (talk: Session['talk']) =>
+  new Promise<void>((done) => {
+    if (!talk.snapshot()) return done();
+    const stop = talk.subscribe(() => {
+      if (talk.snapshot()) return;
+      stop();
+      done();
+    });
+  });
+
+// A reply this page has just saved (session's saved hook): continued when autoContinue says so and it is still the
+// chat's last message as saved, else translated. Never both: a continuation that ran leaves the translation to the hook
+// its own save calls, on the finished version. takeTurn answers null as well when a turn begun meanwhile turned it
+// away, and the cut reply then stays untranslated. Its chat must stay loaded until this returns (session).
+export async function receiveReply(session: Session, chat: string, reply: Written) {
+  if (autoContinue(reply)) {
+    // The reply's own turn still holds Talk when its save calls the hook.
+    await idle(session.talk);
+    const last = (await displayed(session, chat))?.messages.at(-1);
+    // An onOutput edit is a version of its own, which is not continued, as 이어 쓰기 is not offered on it.
+    if (last?.id === (reply.message ?? reply.id) && shown(last).id === reply.id) {
+      const failure = await takeTurn(session, chat, { kind: 'continue', message: last.id, version: reply.id });
+      if (!failure) return;
+    }
+  }
+  await translateReceived(session, chat, reply);
 }
 
 function sendable(scope: ChatScope, chat: Chat): PromptInput['scope'] | Blocked {

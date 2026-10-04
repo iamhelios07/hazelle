@@ -23,7 +23,7 @@ import { ScriptDisplay } from './script-display';
 import { Scripts } from './scripts';
 import { Streams } from './streams';
 import { backfillSummaries } from './summary';
-import { resumeSend, translateReceived } from './turn';
+import { receiveReply, resumeSend } from './turn';
 
 export type Session = {
   username: string;
@@ -93,11 +93,11 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     costs,
     (chat, reply) => scripts.ending(chat, reply),
     // The bot's onOutput may rewrite the reply, so what reads the reply waits for it. The lease, taken while Talk still
-    // holds the chat, keeps it loaded for the translation however soon the chat is left.
+    // holds the chat, keeps it loaded for the continuation or translation however soon the chat is left.
     (chat, reply) => {
       const lease = store.retainChat(chat);
       void scripts.ended(chat, reply).finally(() => {
-        void translateReceived({ store, read, translator }, chat, reply).finally(lease.release);
+        void receiveReply(session, chat, reply).finally(lease.release);
         memory.check(chat);
       });
     },
@@ -149,5 +149,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  return { ok: true, data: { username, store, files, assets, talk, costs, usage, translator, memory, drafts, streams, scripts, credentials, catalogs, read, close, startBackground } };
+  const session: Session = { username, store, files, assets, talk, costs, usage, translator, memory, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  return { ok: true, data: session };
 }
