@@ -2,14 +2,31 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { fail, ID, readObject, type AppEnv } from './http';
 import { EXIT } from './relay';
-import { StreamBox } from './stream-box';
+import { StreamBox, type Live } from './stream-box';
 import { canCall, requireSession } from './session';
+
+// name: the object's, `account:call` (box below). A failed write leaves the count wrong, never the call.
+export function liveCall(db: D1Database, name: string): Live {
+  const at = name.indexOf(':');
+  const key = [name.slice(0, at), name.slice(at + 1)];
+  let began = Promise.resolve();
+  return {
+    began: () => {
+      began = db.prepare('INSERT INTO live_calls (account, call, started_at) VALUES (?, ?, ?)').bind(...key, Date.now()).run().then(() => {}, () => {});
+    },
+    ended: () =>
+      began
+        .then(() => db.prepare('DELETE FROM live_calls WHERE account = ? AND call = ?').bind(...key).run())
+        .then(() => {}, () => {}),
+  };
+}
 
 export class ReplyStream {
   private readonly box: StreamBox;
 
-  constructor(state: DurableObjectState) {
-    this.box = new StreamBox(state.storage, fetch);
+  constructor(state: DurableObjectState, env: Env) {
+    // id.name is set inside the object only because box() gets it by idFromName.
+    this.box = new StreamBox(state.storage, fetch, liveCall(env.DB, state.id.name!));
   }
 
   fetch(request: Request) {

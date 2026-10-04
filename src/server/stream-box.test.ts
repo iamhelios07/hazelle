@@ -3,6 +3,7 @@ import type { Upstream } from './relay';
 import { StreamBox, type BoxStorage } from './stream-box';
 
 const CHUNK = 64 * 1024;
+const uncounted = { began: () => {}, ended: async () => {} };
 
 function memory(): BoxStorage {
   const held = new Map<string, unknown>();
@@ -53,7 +54,7 @@ it('reads the provider no faster than its frames are stored', async () => {
     return put(key, value);
   };
   const { counted, upstream } = endless();
-  const box = new StreamBox(storage, upstream);
+  const box = new StreamBox(storage, upstream, uncounted);
   await start(box);
   await new Promise((resolve) => setTimeout(resolve, 200));
   expect(counted.pulled).toBeLessThan(4);
@@ -63,7 +64,7 @@ it('reads the provider no faster than its frames are stored', async () => {
 
 it('ends a call whose answer passes the byte bound, with what came before it sent', async () => {
   const { upstream } = endless();
-  const response = await start(new StreamBox(memory(), upstream));
+  const response = await start(new StreamBox(memory(), upstream, uncounted));
   const reader = response.body!.getReader();
   let buffer = new Uint8Array(0);
   let last = -1;

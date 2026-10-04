@@ -20,6 +20,10 @@ export type BoxStorage = {
   setAlarm(at: number): Promise<void>;
 };
 
+// scripts/deploy.sh waits until no call is live. ended never rejects; the alarm sends it again for an object a deploy
+// killed mid-call.
+export type Live = { began(): void; ended(): Promise<void> };
+
 // Body bytes are gathered this long before they are sealed into one frame, so a reply is tens of stored rows, not
 // thousands.
 const GATHER_MS = 50;
@@ -83,6 +87,7 @@ export class StreamBox {
   constructor(
     private readonly storage: BoxStorage,
     private readonly upstream: Upstream,
+    private readonly live: Live,
   ) {}
 
   async handle(request: Request): Promise<Response> {
@@ -103,8 +108,8 @@ export class StreamBox {
     }
   }
 
-  expire() {
-    return this.storage.deleteAll();
+  async expire() {
+    await Promise.all([this.storage.deleteAll(), this.live.ended()]);
   }
 
   private async start({ id, key, request }: { id: string; key: unknown; request: unknown }): Promise<Response> {
@@ -128,6 +133,7 @@ export class StreamBox {
     this.next = this.stored = 1;
     this.call = new AbortController();
     this.running = true;
+    this.live.began();
     void this.run(request, sealing, this.call.signal);
     return this.read(0);
   }
@@ -186,6 +192,7 @@ export class StreamBox {
     this.running = false;
     this.call = null;
     this.wake();
+    await this.live.ended();
   }
 
   // Sealed in order: each frame waits for the one before it.
@@ -239,6 +246,7 @@ export class StreamBox {
     this.dropped = true;
     this.call?.abort();
     this.wake();
-    await this.storage.deleteAll();
+    // A call the object lost to a deploy has no run left to end it.
+    await Promise.all([this.storage.deleteAll(), this.live.ended()]);
   }
 }
