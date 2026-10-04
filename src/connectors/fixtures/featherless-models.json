@@ -1,0 +1,121 @@
+{
+  "data": [
+    {
+      "id": "recursal/EagleX_1-7T",
+      "is_gated": false,
+      "created": 1719250778,
+      "model_class": "rwkv5-7b",
+      "owned_by": "Feather",
+      "context_length": 16384,
+      "concurrency_cost": 1,
+      "pricing": {
+        "prompt": "0.0000001",
+        "completion": "0.0000002",
+        "image": "0",
+        "request": "0",
+        "input": 0.1,
+        "output": 0.2
+      }
+    },
+    {
+      "id": "moonshotai/Kimi-K2.5",
+      "is_gated": false,
+      "created": 1769554074,
+      "model_class": "kimi-k25",
+      "owned_by": "Feather",
+      "context_length": 262144,
+      "concurrency_cost": 4,
+      "pricing": {
+        "prompt": "0.0000008",
+        "completion": "0.0000034",
+        "image": "0",
+        "request": "0",
+        "input": 0.8,
+        "output": 3.4
+      },
+      "features": {
+        "tool_use": true,
+        "image_input": true
+      }
+    },
+    {
+      "id": "meta-llama/Llama-3.3-70B-Instruct",
+      "is_gated": true,
+      "created": 1733521405,
+      "model_class": "llama33-70b",
+      "owned_by": "Feather",
+      "context_length": 32768,
+      "concurrency_cost": 4,
+      "pricing": {
+        "prompt": "0.00000065",
+        "completion": "0.00000075",
+        "image": "0",
+        "request": "0",
+        "input": 0.65,
+        "output": 0.75
+      },
+      "features": {
+        "tool_use": true
+      }
+    },
+    {
+      "id": "SWivid/F5-TTS",
+      "is_gated": false,
+      "created": 1785442328,
+      "model_class": "tts-f5-tts",
+      "owned_by": "Feather",
+      "concurrency_cost": 1,
+      "pricing": {
+        "prompt": "0.0000003",
+        "completion": "0.0000012",
+        "image": "0",
+        "request": "0",
+        "input": 0.3,
+        "output": 1.2
+      },
+      "features": {
+        "audio_output": true
+      }
+    },
+    {
+      "id": "featherless-ai/Qwen3.6-35B-A3B-classifier",
+      "is_gated": false,
+      "created": 1789743546,
+      "model_class": "qwen3-5-moevl-35b",
+      "owned_by": "Feather",
+      "context_length": 32768,
+      "max_completion_tokens": 32768,
+      "concurrency_cost": 2,
+      "pricing": {
+        "prompt": "0.00000028",
+        "completion": "0",
+        "image": "0",
+        "request": "0",
+        "input": 0.28,
+        "output": 0
+      },
+      "features": {
+        "classifier": true,
+        "image_input": true
+      }
+    },
+    {
+      "id": "AI-Sweden-Models/gpt-sw3-356m",
+      "is_gated": true,
+      "created": 1751169327,
+      "model_class": "gpt-sw3-356m",
+      "owned_by": "Feather",
+      "context_length": 2048,
+      "max_completion_tokens": 2048,
+      "concurrency_cost": 1,
+      "pricing": {
+        "prompt": "0.00000004",
+        "completion": "0.00000008",
+        "image": "0",
+        "request": "0",
+        "input": 0.04,
+        "output": 0.08
+      }
+    }
+  ]
+}

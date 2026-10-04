@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { strFromU8, unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
+import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
+import { featherless } from '../src/connectors/featherless';
 import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED } from './helpers';
 
 const CSP = /Content-Security-Policy: (.+)/.exec(readFileSync(new URL('../public/_headers', import.meta.url), 'utf8'))![1];
@@ -204,5 +206,70 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(last).toContainText('[bell:2]');
     await expect(messages.first()).toContainText('[bell:]');
     expect(violations).toEqual([]);
+  });
+
+  await test.step('a large catalog windows its rows without losing search, filters, stars or missing starred models', async () => {
+    const recorded = process.env.CATALOG_FIXTURE;
+    const payload = recorded ? JSON.parse(readFileSync(recorded, 'utf8')) as typeof featherlessModels : {
+      data: [
+        ...Array.from({ length: 22_000 }, (_, index) => {
+          const model = featherlessModels.data[index % 3]!;
+          return { ...model, id: `${model.id}/sample-${index}` };
+        }),
+        ...featherlessModels.data,
+      ],
+    };
+    const models = featherless.parseModels!(payload)!;
+    const last = models.at(-1)!;
+    let missing = false;
+    const bodies: number[] = [];
+    page.on('request', (request) => {
+      if (!request.url().endsWith('/api/objects/batch')) return;
+      const { writes } = request.postDataJSON() as { writes: { kind: string; body: string }[] };
+      bodies.push(...writes.filter((write) => write.kind === 'connection').map((write) => Buffer.byteLength(write.body)));
+    });
+    await page.route('**/api/relay', async (route) => {
+      const request = route.request().postDataJSON() as { url: string };
+      await route.fulfill({ headers: { 'x-relay': 'upstream' }, json: request.url.endsWith('/models')
+        ? { data: payload.data.filter((model) => !missing || model.id !== last.id) }
+        : { limit: 4, used_cost: 0 } });
+    });
+    await page.goto('/connections/new');
+    await page.getByRole('button', { name: /^Featherless/ }).click();
+    await page.getByLabel('API 키', { exact: true }).fill('catalog-fixture-key');
+    await page.getByRole('button', { name: '모델 고르기', exact: true }).click();
+    await expect(page.getByText(`모델 ${models.length}개`, { exact: true })).toBeVisible();
+    const list = page.getByRole('list', { name: '모델', exact: true });
+    const rows = list.locator(':scope > li');
+    await expect(rows.first()).toBeVisible();
+    expect(await rows.count()).toBeLessThan(100);
+    await page.evaluate(`(() => {
+      let frame = document.querySelector('ul[aria-label="모델"]').parentElement;
+      while (frame && !/auto|scroll/.test(getComputedStyle(frame).overflowY)) frame = frame.parentElement;
+      (frame ?? document.scrollingElement).scrollTop = (frame ?? document.scrollingElement).scrollHeight;
+    })()`);
+    await expect(page.getByRole('button', { name: `${last.name} 별표하기`, exact: true })).toBeVisible();
+    expect(await rows.count()).toBeLessThan(100);
+    const search = page.getByRole('searchbox', { name: '모델 검색' });
+    await search.fill(last.id);
+    await page.getByRole('button', { name: `${last.name} 별표하기`, exact: true }).click();
+    const starred = page.getByRole('list', { name: '별표한 모델', exact: true });
+    await expect(starred).toContainText(last.name);
+    await search.fill('');
+    await page.getByRole('button', { name: '비전', exact: true }).click();
+    await expect(rows.first()).toBeVisible();
+    expect(await rows.count()).toBeLessThan(100);
+    await expect(rows.first()).toContainText('비전');
+    await page.getByRole('button', { name: '별표', exact: true }).click();
+    await expect(starred).toContainText(last.name);
+    await expect(list).toHaveCount(0);
+    expect(bodies).toHaveLength(2);
+    expect(Math.max(...bodies)).toBeLessThan(1024);
+    missing = true;
+    await page.reload();
+    await expect(page.getByText(`모델 ${models.length - 1}개`, { exact: true })).toBeVisible();
+    await expect(starred).toContainText('목록에 없음');
+    await starred.getByRole('button', { name: `${last.name} 별표 빼기`, exact: true }).click();
+    await expect(starred).toHaveCount(0);
   });
 });

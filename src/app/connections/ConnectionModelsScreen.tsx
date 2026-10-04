@@ -155,8 +155,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       )}
       {shown.length > 0 ? (
         <Stack gap="group">
-          {starredShown.length > 0 && <List label="별표한 모델">{starredShown.map(row)}</List>}
-          {restShown.length > 0 && <List label="모델">{restShown.map(row)}</List>}
+          {starredShown.length > 0 && <List label="별표한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
+          {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
         </Stack>
       ) : (
         catalog?.ok && <Empty>{needle || filter !== 'all' ? '맞는 모델이 없어요.' : '이 연결은 모델을 하나도 알려 주지 않았어요.'}</Empty>
