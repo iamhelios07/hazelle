@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BIN=./node_modules/.bin
-LIVE=https://risu-alpha.risu-alpha.workers.dev
+LIVE=https://hazelle.app
 began_ms=$(date +%s%3N)
 
 [ "$(git branch --show-current)" = master ] || { echo "deploy: not on master" >&2; exit 1; }
