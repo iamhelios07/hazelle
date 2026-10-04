@@ -27,6 +27,11 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
   const shown = search.kind === 'types' ? search.types : search.kind === 'key' ? [search.type] : [];
   const connected = (type: ConnectionType) => connections.filter((entry) => resolveConnection(entry.value)?.type === type).length;
   const connectKey = (type: ConnectionType, secret: string) => run((signal) => connect(session, providerConnection(type, secret), signal));
+  // A major type stays in its group too, so it is found in either place. A narrowed list has no 주요.
+  const sections: [string, readonly ConnectionType[]][] = [
+    ['주요', query.trim() ? [] : shown.filter((type) => type.major)],
+    ...(Object.keys(GROUPS) as ConnectionType['group'][]).map((group): [string, readonly ConnectionType[]] => [GROUPS[group], shown.filter((type) => type.group === group)]),
+  ];
 
   return (
     <Screen top={<NavBar title="연결 추가" {...backBar(back)} />}>
@@ -46,12 +51,10 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
           {failure}
         </Callout>
       )}
-      {(Object.keys(GROUPS) as ConnectionType['group'][]).map((group) => {
-        const types = shown.filter((type) => type.group === group);
-        if (!types.length) return null;
-        return (
-          <Section key={group} title={GROUPS[group]}>
-            <List label={GROUPS[group]}>
+      {sections.map(([title, types]) =>
+        types.length ? (
+          <Section key={title} title={title}>
+            <List label={title}>
               {types.map((type) => {
                 const count = connected(type);
                 return (
@@ -68,8 +71,8 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
               })}
             </List>
           </Section>
-        );
-      })}
+        ) : null,
+      )}
       <Section title="목록에 없는 곳">
         <List label="직접 연결">
           <ListItem

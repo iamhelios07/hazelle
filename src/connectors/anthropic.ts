@@ -4,6 +4,7 @@ export const anthropic: ConnectionType = {
   id: 'anthropic',
   label: 'Anthropic',
   group: 'maker',
+  major: true,
   description: 'Claude를 만든 곳에 바로 연결해요.',
   keyPage: 'https://console.anthropic.com/settings/keys',
   endpoint: { baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic-messages' },

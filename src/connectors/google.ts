@@ -4,6 +4,7 @@ export const google: ConnectionType = {
   id: 'google',
   label: 'Google',
   group: 'maker',
+  major: true,
   description: 'Gemini를 만든 곳에 바로 연결해요.',
   keyPage: 'https://aistudio.google.com/apikey',
   endpoint: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', protocol: 'gemini' },

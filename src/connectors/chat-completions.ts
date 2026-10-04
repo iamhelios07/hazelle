@@ -1,12 +1,12 @@
 import { streamError } from './errors';
 import type { NumberSetting, Reasoning, Setting } from './settings';
 import { wireMessage } from './anthropic-messages';
-import type { Codec } from './types';
+import type { Codec, Model } from './types';
 import { count, isRecord, list, modelEntries } from './values';
 
 // OpenRouter's and Vercel's catalogs name the same fields in supported_parameters. max_tokens rather than
-// max_completion_tokens: OpenAI's reasoning models refuse the first in favor of the second, which many compatible
-// servers do not know.
+// max_completion_tokens, which many compatible servers do not know; a type whose provider refuses max_tokens names its
+// own field (outputLimit).
 const FIELDS: Record<NumberSetting | 'stop', string> = {
   maxOutput: 'max_tokens',
   temperature: 'temperature',
@@ -20,6 +20,19 @@ const FIELDS: Record<NumberSetting | 'stop', string> = {
   stop: 'stop',
 };
 const CARRIED = Object.keys(FIELDS) as (keyof typeof FIELDS)[];
+
+export const bareModel = (id: string): Model => ({
+  id,
+  name: id,
+  input: null,
+  output: null,
+  contextLength: null,
+  maxOutput: null,
+  reasoning: null,
+  tools: null,
+  protocol: null,
+  takes: { settings: null, reasoning: null },
+});
 
 export function listedSettings(names: unknown[]): Setting[] {
   const settings: Setting[] = CARRIED.filter((setting) => names.includes(FIELDS[setting]));
@@ -48,19 +61,7 @@ export const chatCompletions: Codec = {
   systemFirst: false,
 
   // The standard list names models and nothing else, so every capability stays unknown.
-  parseModels: (payload) =>
-    modelEntries(payload)?.map(({ id }) => ({
-      id,
-      name: id,
-      input: null,
-      output: null,
-      contextLength: null,
-      maxOutput: null,
-      reasoning: null,
-      tools: null,
-      protocol: null,
-      takes: { settings: null, reasoning: null },
-    })) ?? null,
+  parseModels: (payload) => modelEntries(payload)?.map(({ id }) => bareModel(id)) ?? null,
 
   // top_k, min_p and repetition_penalty are not OpenAI's, but vLLM and OpenRouter take them.
   carries: {

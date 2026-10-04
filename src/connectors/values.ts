@@ -1,3 +1,15 @@
+import type { Modality } from './types';
+
+const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']);
+
+export function modalities(value: unknown): Modality[] | null {
+  return Array.isArray(value) ? value.filter((item): item is Modality => MODALITIES.has(item as Modality)) : null;
+}
+
+export function flag(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -8,6 +20,11 @@ export function count(value: unknown): number | null {
 
 export function amount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+// Vercel's credits and NanoGPT's balance come as decimal strings, such as "95.50".
+export function decimal(value: unknown): number | null {
+  return typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) ? Number(value) : amount(value);
 }
 
 export function list(value: unknown): unknown[] {

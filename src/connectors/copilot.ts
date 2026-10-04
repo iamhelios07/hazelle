@@ -87,6 +87,7 @@ export const copilot: ConnectionType = {
   id: 'copilot',
   label: 'Copilot',
   group: 'subscription',
+  major: true,
   description: 'GitHub Copilot 구독으로 Claude, GPT 같은 모델을 써요.',
   endpoint: { baseUrl: API, protocol: 'chat-completions' },
   routes: { 'anthropic-messages': `${API}/v1` },
