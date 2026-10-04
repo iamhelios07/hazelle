@@ -1,10 +1,13 @@
 import { anthropic } from './anthropic';
 import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
+import { chutes } from './chutes';
 import { cerebras } from './cerebras';
 import { copilot } from './copilot';
 import { deepinfra } from './deepinfra';
 import { deepseek } from './deepseek';
+import { featherless } from './featherless';
+import { friendli } from './friendli';
 import { gemini } from './gemini';
 import { google } from './google';
 import { groq } from './groq';
@@ -18,6 +21,7 @@ import { perplexity } from './perplexity';
 import { surplus } from './surplus';
 import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type SettingsSchema } from './settings';
 import { together } from './together';
+import { upstage } from './upstage';
 import { vercel } from './vercel';
 import { xai } from './xai';
 import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
@@ -34,6 +38,9 @@ export const CONNECTION_TYPES: readonly ConnectionType[] = [
   deepinfra,
   nanogpt,
   surplus,
+  chutes,
+  featherless,
+  friendli,
   openai,
   anthropic,
   google,
@@ -41,6 +48,7 @@ export const CONNECTION_TYPES: readonly ConnectionType[] = [
   deepseek,
   mistral,
   moonshot,
+  upstage,
   copilot,
 ];
 

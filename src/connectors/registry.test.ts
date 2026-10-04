@@ -54,6 +54,10 @@ describe('detection', () => {
     ['gsk_abc', 'https://api.groq.com/openai/v1', 'groq'],
     ['csk-abc', 'https://api.cerebras.ai/v1', 'cerebras'],
     ['inf_abc', 'https://api.surplusintelligence.ai/v1', 'surplus'],
+    ['cpk_abc', 'https://llm.chutes.ai/v1', 'chutes'],
+    ['up_abc', 'https://api.upstage.ai/v1', 'upstage'],
+    ['flp_abc', 'https://api.friendli.ai/serverless/v1', 'friendli'],
+    [null, 'https://api.featherless.ai/v1', 'featherless'],
     [null, 'https://api.nano-gpt.com/api/v1', 'nanogpt'],
     [null, 'https://api.deepinfra.com/v1/openai', 'deepinfra'],
     [null, 'https://api.deepseek.com', 'deepseek'],
@@ -209,6 +213,46 @@ describe('catalogs', () => {
     expect(parseCatalog(connection('together'), { data: together })).toBeNull();
     const mistral = { object: 'list', data: [{ id: 'mistral-large', capabilities: { completion_chat: true, vision: true, function_calling: true }, max_context_length: 131072 }, { id: 'mistral-embed', capabilities: { completion_chat: false } }] };
     expect(parseCatalog(connection('mistral'), mistral)).toEqual([model({ id: 'mistral-large', name: 'mistral-large', input: ['text', 'image'], contextLength: 131072, tools: true })]);
+  });
+
+  it('reads Chutes features, and leaves a model without them unknown', () => {
+    const payload = { data: [
+      { id: 'gemma', context_length: 131072, max_model_len: 262144, max_output_length: 65536, input_modalities: ['text', 'image'], output_modalities: ['text'], supported_features: ['json_mode', 'tools', 'reasoning'] },
+      { id: 'nemo' },
+    ] };
+    expect(parseCatalog(connection('chutes'), payload)).toEqual([
+      model({ id: 'gemma', name: 'gemma', input: ['text', 'image'], output: ['text'], contextLength: 131072, maxOutput: 65536, reasoning: true, tools: true }),
+      model({ id: 'nemo', name: 'nemo' }),
+    ]);
+  });
+
+  it('drops Featherless speech and classifier models and keeps an unnamed feature unknown', () => {
+    const payload = { data: [
+      { id: 'llama', context_length: 32768, max_completion_tokens: 4096, features: { tool_use: true, image_input: true } },
+      { id: 'rwkv', context_length: 16384 },
+      { id: 'kokoro', features: { audio_output: true } },
+      { id: 'judge', context_length: 32768, features: { classifier: true } },
+    ] };
+    expect(parseCatalog(connection('featherless'), payload)).toEqual([
+      model({ id: 'llama', name: 'llama', input: ['text', 'image'], contextLength: 32768, maxOutput: 4096, tools: true }),
+      model({ id: 'rwkv', name: 'rwkv', contextLength: 16384 }),
+    ]);
+  });
+
+  it('reads Friendli reasoning options, never offers off, and sends a budget in reasoning_budget', () => {
+    const payload = { data: [{
+      id: 'glm', context_length: 202752, max_completion_tokens: 202752, input_modalities: ['text'], output_modalities: ['text'], reasoning: true,
+      functionality: { tool_call: true }, reasoning_options: [{ type: 'toggle' }, { type: 'effort', values: ['high', 'max'] }, { type: 'budget_tokens', min: -1, max: 202752 }],
+    }] };
+    const friendli = connection('friendli');
+    const [glm] = parseCatalog(friendli, payload)!;
+    expect(glm).toEqual(model({
+      id: 'glm', name: 'glm', input: ['text'], output: ['text'], contextLength: 202752, maxOutput: 202752, reasoning: true, tools: true,
+      takes: { settings: null, reasoning: { off: false, levels: ['high', 'max'], budget: { min: null, max: 202752 }, adaptive: null } },
+    }));
+    const body = JSON.parse(chatRequest(friendli, { model: glm!, messages: [{ role: 'user', content: '안녕' }], settings: { reasoning: { kind: 'budget', tokens: 8000 } } }).body!);
+    expect(body).toMatchObject({ reasoning_budget: 8000 });
+    expect(body).not.toHaveProperty('reasoning_effort');
   });
 
   it('normalizes unknown request capabilities once for both protocol catalogs', () => {
