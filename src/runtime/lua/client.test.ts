@@ -1,5 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import type { Snapshot } from '../../engine/lua/state';
+import type { ChatScope } from '../../engine/render';
+import type { Host, Snapshot } from '../../engine/lua/state';
+import { applyTail } from '../history-delta';
 import { LuaWorker, type Down, type Up } from './client';
 
 const snapshot: Snapshot = {
@@ -37,5 +39,38 @@ it('installs history deltas once per revision and sends only revision/size for s
       { kind: 'display', id: 2, owner: 'chat', revision: 1, size: 8 },
       { kind: 'display', id: 3, owner: 'chat', revision: 1, size: 512 },
     ]);
+  } finally { runner.close(); }
+});
+
+it('sends event history tails in order across edits, truncation, chat switches and a worker restart', async () => {
+  const sent: Down[] = [];
+  const histories: ChatScope['messages'][] = [];
+  let crash: () => void;
+  vi.stubGlobal('Worker', class {
+    onmessage: ((event: { data: Up }) => void) | null = null;
+    onerror: (() => void) | null = null;
+    history: ChatScope['messages'] = [];
+    constructor() { crash = () => this.onerror?.(); }
+    postMessage(message: Down) {
+      sent.push(structuredClone(message));
+      if (message.kind !== 'run') return;
+      this.history = applyTail(this.history, message.input.history);
+      histories.push(this.history);
+      queueMicrotask(() => this.onmessage?.({ data: { kind: 'done', id: message.id, result: { value: undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, errors: [], missing: [] } } }));
+    }
+    terminate() {}
+  });
+  const runner = new LuaWorker();
+  const host: Host = { say() {}, ask: async () => null, model: async () => ({ success: true, result: '' }), tokens: async () => 0, lore: async () => [] };
+  const scope: ChatScope = { ...snapshot.scope, packs: [], toggles: new Map() };
+  const changed = { ...scope, messages: [scope.messages[0]!, { ...scope.messages[1]!, text: 'edited', after: [['turn', '2']] as [string, string][] }] };
+  const shorter = { ...changed, messages: changed.messages.slice(0, 1) };
+  const other = { ...scope, messages: [{ ...scope.messages[0]!, id: 'other' }] };
+  try {
+    for (const next of [scope, scope, changed, shorter, other]) await runner.run(next === other ? 'other' : 'chat', [], next, { kind: 'start' }, host);
+    crash!();
+    await runner.run('other', [], other, { kind: 'start' }, host);
+    expect(sent.filter(message => message.kind === 'run').map(({ input }) => [input.history.from, input.history.items.length])).toEqual([[0, 2], [2, 0], [1, 1], [1, 0], [0, 1], [0, 1]]);
+    expect(histories).toEqual([scope.messages, scope.messages, changed.messages, shorter.messages, other.messages, other.messages]);
   } finally { runner.close(); }
 });

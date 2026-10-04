@@ -1,12 +1,15 @@
 import wasm from 'wasmoon/dist/glue.wasm?url';
-import { Lua, type DisplayBatch, type Outcome } from '../../engine/lua/run';
+import { Lua, type DisplayBatch } from '../../engine/lua/run';
 import type { Host, Snapshot } from '../../engine/lua/state';
+import type { ChatScope } from '../../engine/render';
+import { runEvent, type ScriptOutcome } from './event';
 import { applyTail } from '../history-delta';
 import type { Down, Up } from './client';
 
 const scope = self as unknown as { postMessage(message: Up): void };
 let lua: Promise<Lua> | null = null;
 const displays = new Map<string, { revision: number; snapshot: Snapshot }>();
+let history: ChatScope['messages'] = [];
 let calls = 0;
 const waiting = new Map<number, (value: never) => void>();
 
@@ -38,11 +41,12 @@ addEventListener('message', ({ data }: MessageEvent<Down>) => {
     void lua?.then((machine) => machine.forgetDisplay(data.owner, data.revision));
     return;
   }
+  const eventScope = data.kind === 'run' ? { ...data.input.scope, messages: history = applyTail(history, data.input.history) } : null;
   lua ??= Lua.create({ wasm });
   const { id } = data;
   lua
-    .then<Outcome | DisplayBatch | null>(async (machine) => {
-      if (data.kind === 'run') return machine.run(data.owner, data.triggers, data.snapshot, data.event, host(id));
+    .then<ScriptOutcome | DisplayBatch | null>(async (machine) => {
+      if (data.kind === 'run') return runEvent(machine, data.owner, data.triggers, eventScope!, data.event, host(id));
       if (data.kind === 'display') return machine.display(data.owner, data.revision, data.size);
       const previous = displays.get(data.owner)?.snapshot;
       const { install } = data;

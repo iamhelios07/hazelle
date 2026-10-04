@@ -1,5 +1,6 @@
+import { TOGGLE_GLOBAL } from '../../engine/cbs/tags';
 import type { Snapshot } from '../../engine/lua/state';
-import type { ChatScope } from '../../engine/render';
+import { authorNote, type ChatScope } from '../../engine/render';
 
 // What Lua's own functions read of a chat besides its messages and variables; its CBS and lorebook reads go through
 // the snapshot's scope. An editDisplay pass run on one is not fresh for another (ScriptDisplay).
@@ -17,5 +18,14 @@ export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: str
     variables,
     ...standing,
     scope: cbsScope(scope),
+  };
+}
+
+export function luaStanding(scope: ChatScope): LuaStanding {
+  return {
+    globals: [...scope.toggles].map(([key, value]) => [`${TOGGLE_GLOBAL}${key}`, value ?? '']),
+    character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
+    persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
+    note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
   };
 }

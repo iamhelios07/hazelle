@@ -1,13 +1,12 @@
 import { Runaway } from '../engine/cbs/evaluate';
-import { TOGGLE_GLOBAL } from '../engine/cbs/tags';
 import type { Pack, Trigger } from '../engine/import/types';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Event, Outcome, Script } from '../engine/lua/run';
-import type { Host, ModelMessage, Question, Snapshot } from '../engine/lua/state';
-import { authorNote, renderChat, type ChatScope } from '../engine/render';
-import { shown, type Chat, type Message, type Writes } from '../model/chat';
+import type { Host, ModelMessage, Question } from '../engine/lua/state';
+import type { ChatScope } from '../engine/render';
+import { shown, type Chat, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
 import { chatModel } from './assignment';
 import { setBotModels } from './characters';
@@ -16,7 +15,7 @@ import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { evaluationFailure } from './evaluation';
 import { generate } from './generate';
-import { luaSnapshot, type LuaStanding } from './lua/snapshot';
+import type { ScriptOutcome } from './lua/event';
 import { LuaStuck, type Runner } from './lua/client';
 import { modelProfile } from './profiles';
 import type { ReadModels } from './read-model';
@@ -58,17 +57,7 @@ export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone
 export const triggersOf = (packs: readonly Pack[]): Trigger[] => packs.flatMap(({ triggers }) => triggers).map((trigger) => (trigger.kind === 'lua' ? { ...trigger, name: trigger.name || 'Lua' } : trigger));
 export const scriptsOf = (packs: readonly Pack[]): Script[] => triggersOf(packs).filter((trigger) => trigger.kind === 'lua');
 
-type Read = { snapshot: Snapshot; wrote: Writes[]; greeting: number };
 type Anchor = { version: string; stays?: true };
-
-export function luaStanding(scope: ChatScope): LuaStanding {
-  return {
-    globals: [...scope.toggles].map(([key, value]) => [`${TOGGLE_GLOBAL}${key}`, value ?? '']),
-    character: { name: scope.card?.name ?? '', description: scope.card?.description ?? '', firstMessage: scope.card?.greetings[0] ?? '' },
-    persona: { name: scope.persona?.name ?? '', description: scope.persona?.description ?? '' },
-    note: scope.prompt ? authorNote(scope.note, scope.prompt) : (scope.note ?? ''),
-  };
-}
 
 // The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
@@ -234,18 +223,15 @@ export class Scripts {
 
   // anchor: where its writes stand; null leaves them to the caller.
   private async event(chat: string, scripts: Trigger[], scope: ChatScope, event: Event, anchor: Anchor | null): Promise<{ outcome: Outcome; changed: boolean }> {
-    const read = this.reading(scope);
-    const outcome = await this.run(chat, scripts, scope, read.snapshot, event);
+    const outcome = await this.run(chat, scripts, scope, event);
+    const greeting = scope.greeting === null ? 0 : 1;
     const messages = new Map((this.session.read.chat(chat).snapshot()?.messages ?? []).map((message) => [shown(message).id, message]));
-    const at = (index: number): { message: Message; wrote: Writes } | null => {
-      const message = messages.get(scope.messages[index + read.greeting]?.id ?? '');
-      return message ? { message, wrote: read.wrote[index + read.greeting]! } : null;
-    };
-    const edits = outcome.edits.flatMap(({ index, text }) => {
-      const found = at(index);
-      return found ? [{ ...found, text }] : [];
+    const at = (index: number) => messages.get(scope.messages[index + greeting]?.id ?? '');
+    const edits = outcome.edits.flatMap(({ index, text, wrote }) => {
+      const message = at(index);
+      return message ? [{ message, wrote, text }] : [];
     });
-    const removed = outcome.removed.flatMap((index) => at(index)?.message.id ?? []);
+    const removed = outcome.removed.flatMap((index) => at(index)?.id ?? []);
     const added = outcome.added.map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
     if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved });
@@ -253,18 +239,13 @@ export class Scripts {
     return { outcome, changed: edits.length + removed.length + added.length > 0 };
   }
 
-  private reading(scope: ChatScope): Read {
-    const { staged, wrote, variables } = renderChat('prompt', scope);
-    return { wrote, greeting: scope.greeting === null ? 0 : 1, snapshot: luaSnapshot(scope, luaStanding(scope), staged, [...variables]) };
-  }
-
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.
-  private async run(chat: string, scripts: Trigger[], scope: ChatScope, snapshot: Snapshot, event: Event): Promise<Outcome> {
-    const nothing: Outcome = { value: event.kind === 'edit' ? event.value : undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, errors: [], missing: [] };
+  private async run(chat: string, scripts: Trigger[], scope: ChatScope, event: Event): Promise<ScriptOutcome> {
+    const nothing: ScriptOutcome = { value: event.kind === 'edit' ? event.value : undefined, stop: false, handled: false, writes: [], edits: [], removed: [], added: [], reload: false, errors: [], missing: [] };
     if (this.closing.signal.aborted) return nothing;
     try {
       const runner = await this.open();
-      const outcome = await runner.run(chat, scripts, snapshot, event, this.host(chat, scope));
+      const outcome = await runner.run(chat, scripts, scope, event, this.host(chat, scope));
       this.report(chat, outcome);
       return outcome;
     } catch (error) {

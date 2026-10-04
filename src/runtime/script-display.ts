@@ -5,8 +5,8 @@ import type { ChatScope, Missed } from '../engine/render';
 import type { Chat, Message } from '../model/chat';
 import { EvaluationStopped } from './evaluation';
 import type { Runner } from './lua/client';
-import { luaSnapshot } from './lua/snapshot';
-import { luaStanding, scriptsOf } from './scripts';
+import { luaSnapshot, luaStanding } from './lua/snapshot';
+import { scriptsOf } from './scripts';
 import type { ObjectStore } from './store';
 import { pinned, scopeOf } from './turn';
 

@@ -140,6 +140,16 @@ describe("a turn with the bot's Lua", () => {
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
     }));
 
+  it('keeps replayed CBS writes on Lua-edited versions after worker-side snapshot preparation', () =>
+    server.withSession(async (session) => {
+      const { chat, messages, shownTexts } = await chatWith(session, `function edit(id) setChat(id, 0, getChat(id, 0).data .. '!') end`);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '{{setvar::hp::7}}health {{getvar::hp}}' });
+      expect(await session.scripts.press(chat, { trigger: 'edit' })).toBe(true);
+      expect(shown(messages()[1]!)).toMatchObject({ text: 'health 7!', staged: true, before: [['hp', '7']] });
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'still {{getvar::hp}}' });
+      expect((await shownTexts()).slice(-2)).toEqual(['health 7!', 'still 7']);
+    }));
+
   it("tells a script's cbs() that ran away as the runaway note, not as its error", () =>
     server.withSession(async (session) => {
       const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";

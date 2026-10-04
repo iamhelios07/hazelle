@@ -9,6 +9,7 @@ import { randomBytes } from '../vault/aead';
 import type { VaultKey } from '../vault/keys';
 import { api, holdAccount } from './api';
 import { setDefaultModel } from './assignment';
+import { runEvent } from './lua/event';
 import { Files } from './files';
 import { openSession, type Session } from './session';
 import { ObjectStore } from './store';
@@ -160,7 +161,10 @@ export function testServer() {
       vi.stubGlobal('window', new EventTarget());
       vi.stubGlobal('document', { visibilityState: 'hidden' });
       const { accountId, vaultKey } = await harness.account();
-      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, () => lua);
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, async () => {
+        const machine = await lua;
+        return { run: (...args) => runEvent(machine, ...args), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
+      });
       if (!opened.ok) throw new Error(opened.error);
       try {
         await test(opened.data);
