@@ -6,6 +6,10 @@ and only this folder styles elements.**
 - `foundation/tokens.css` holds every color, font, size, spacing, radius, border width, duration and
   layer (z-index). The palette layer is raw values from the approved mockups; the semantic layer
   (`--color-text-muted`, `--space-16`, `--layer-dialog`, …) is what components use.
+- Themes: `:root` in `tokens.css` is dark and `:root[data-theme='light']` gives every palette-backed
+  color token a light value; `foundation/theme.ts` (`applyTheme`) sets the attribute. A module never
+  reads `--palette-*`; a surface that needs the other theme's colors (the toast) reads tokens
+  defined per theme.
 - `foundation/global.css` loads fonts and tokens and sets element defaults. `main.tsx` imports it once.
 - `foundation/media.ts` lists every media query in `MEDIA` and reads them in JavaScript (`useWide`,
   `useSplit`, `useHover`). A stylesheet cannot read it, so it writes the query out in full, and
