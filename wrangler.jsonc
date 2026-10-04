@@ -7,8 +7,9 @@
   // Without this flag request.signal never fires on client disconnect, so a closed tab would not end
   // a relayed call (tech-spec §6).
   "compatibility_flags": ["enable_request_signal"],
-  // The custom domain is bought in this account (user, 2026-10-04); the workers.dev host stays open beside it for now.
+  // The custom domain is bought in this account; the workers.dev host is off (user, 2026-10-04: "옛 주소 제거하자").
   "routes": [{ "pattern": "hazelle.app", "custom_domain": true }],
+  "workers_dev": false,
   "assets": {
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
