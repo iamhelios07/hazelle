@@ -48,7 +48,7 @@ describe('persistent object codec', () => {
     const next = deferred<CodecResult[]>();
     const run = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(next.promise);
     const made = scripted(run);
-    const codec = new ObjectCodec('account', await key());
+    const codec = new ObjectCodec('account', await key(), 1);
     const active = new AbortController();
     const queued = new AbortController();
     const one = codec.open([{ ...item, body: 'first' }], active.signal);
@@ -71,7 +71,7 @@ describe('persistent object codec', () => {
     expect(terminate).toHaveBeenCalledOnce();
   });
 
-  it('initializes one browser worker with its key once and distinguishes a crash from corrupt objects', async () => {
+  it('initializes every pool worker with its key once, spreads jobs, and ends the pool when one worker crashes', async () => {
     const made: FakeWorker[] = [];
     class FakeWorker {
       onmessage: ((event: { data: CodecUp }) => void) | null = null;
@@ -84,19 +84,22 @@ describe('persistent object codec', () => {
     vi.stubGlobal('Worker', FakeWorker);
     const secret = await key();
     const codec = new ObjectCodec('account', secret);
+    expect(codec.workers).toBe(2);
     const first = codec.open([{ ...item, body: 'first' }], signal());
-    await vi.waitFor(() => expect(made[0]?.postMessage).toHaveBeenCalledTimes(2));
-    expect(made).toHaveLength(1);
-    expect(made[0]!.postMessage.mock.calls[0]![0]).toEqual({ kind: 'init', account: 'account', key: secret });
+    const second = codec.open([{ ...item, body: 'second' }], signal());
+    await vi.waitFor(() => expect(made).toHaveLength(2));
+    for (const worker of made) {
+      await vi.waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(2));
+      expect(worker.postMessage.mock.calls[0]![0]).toEqual({ kind: 'init', account: 'account', key: secret });
+      expect(worker.postMessage.mock.calls[1]![0]).toMatchObject({ kind: 'batch' });
+    }
     made[0]!.onmessage!({ data: { id: 1, results: [{ ok: true, value: 'opened' }] } });
     expect(await first).toEqual([{ ok: true, value: 'opened' }]);
-    const second = codec.open([{ ...item, body: 'second' }], signal());
     const crashed = expect(second).rejects.toBeInstanceOf(CodecUnavailable);
-    await vi.waitFor(() => expect(made[0]?.postMessage).toHaveBeenCalledTimes(3));
-    expect(made[0]!.postMessage.mock.calls[2]![0]).toMatchObject({ kind: 'batch', id: 2 });
-    made[0]!.onerror!();
+    made[1]!.onerror!();
     await crashed;
-    expect(made[0]!.terminate).toHaveBeenCalled();
+    expect(made.every((worker) => worker.terminate.mock.calls.length === 1)).toBe(true);
+    await expect(codec.open([{ ...item, body: 'third' }], signal())).rejects.toBeInstanceOf(CodecUnavailable);
     codec.close();
   });
 });
@@ -119,7 +122,7 @@ function feed(bodies: string[], limits = { items: 200, bytes: 10000000, body: 10
 }
 
 describe('object codec store boundaries', () => {
-  it('opens full item/byte bounded windows in order and obeys a scan visitor’s backpressure', async () => {
+  it('opens full item/byte bounded windows in order and holds a scan to its dispatch-ahead bound', async () => {
     const jobs: CodecJob[] = [];
     scripted(async (job) => {
       jobs.push(job);
@@ -138,7 +141,7 @@ describe('object codec store boundaries', () => {
     const visit = vi.fn(async () => { await wait.promise; });
     const scan = store.scan({}, visit, pin.data);
     await vi.waitFor(() => expect(visit).toHaveBeenCalledOnce());
-    expect(jobs).toHaveLength(1);
+    expect(jobs).toHaveLength(3);
     wait.resolve();
     expect(await scan).toBeNull();
     expect(visit).toHaveBeenCalledTimes(150);

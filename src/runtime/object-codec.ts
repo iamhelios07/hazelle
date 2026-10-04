@@ -6,46 +6,59 @@ export const OPEN_ITEMS = 64;
 export const OPEN_BYTES = 4 * 1024 * 1024;
 // Values have no cheap encoded size before the worker serializes them. Bound those atomic objects by count.
 export const SEAL_ITEMS = 8;
+// Opening an account is CPU in the workers (base64, decrypt, inflate, parse) while the main thread waits, so the pool
+// takes the cores the main thread can spare, bounded: more workers than that only share the same cores.
+export const codecWorkers = () => Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
 
 export class CodecAborted extends Error {}
 export class CodecUnavailable extends Error {}
 type CodecTransport = { run(job: CodecJob): Promise<CodecResult[]>; close(): void };
 
-// One worker per open store. Its nonextractable derived key is cloned once, never exported per object.
-function objectCodecTransport(account: string, key: CryptoKey): CodecTransport {
-  let worker: Worker;
-  try {
-    worker = moduleWorker(workerUrl);
-  } catch {
-    throw new CodecUnavailable('Object codec worker could not start');
-  }
+// A pool of workers per open store, each initialized once with the same nonextractable derived key, which is cloned,
+// never exported per object. A job goes to the least loaded worker. One worker failing ends the pool: a crash says
+// nothing about which objects are corrupt, so no caller may read a partial answer as unreadable objects.
+function objectCodecTransport(account: string, key: CryptoKey, count: number): CodecTransport {
+  const workers: Worker[] = [];
+  const loads: number[] = [];
   let failure: Error | null = null;
   let ids = 0;
-  const pending = new Map<number, { resolve: (results: CodecResult[]) => void; reject: (error: Error) => void }>();
+  const pending = new Map<number, { worker: number; resolve: (results: CodecResult[]) => void; reject: (error: Error) => void }>();
   const end = (error: Error) => {
     failure ??= error;
-    worker.terminate();
+    for (const worker of workers) worker.terminate();
     for (const call of pending.values()) call.reject(failure);
     pending.clear();
   };
-  worker.onmessage = ({ data }: MessageEvent<CodecUp>) => {
-    const call = pending.get(data.id);
-    pending.delete(data.id);
-    call?.resolve(data.results);
-  };
-  worker.onerror = worker.onmessageerror = () => end(new CodecUnavailable('Object codec worker failed'));
   try {
-    worker.postMessage({ kind: 'init', account, key } satisfies CodecDown);
+    for (let index = 0; index < count; index++) workers.push(moduleWorker(workerUrl));
   } catch {
-    end(new CodecUnavailable('Object codec worker could not initialize'));
+    end(new CodecUnavailable('Object codec worker could not start'));
+  }
+  for (const worker of workers) {
+    loads.push(0);
+    worker.onmessage = ({ data }: MessageEvent<CodecUp>) => {
+      const call = pending.get(data.id);
+      pending.delete(data.id);
+      if (!call) return;
+      loads[call.worker]!--;
+      call.resolve(data.results);
+    };
+    worker.onerror = worker.onmessageerror = () => end(new CodecUnavailable('Object codec worker failed'));
+    try {
+      worker.postMessage({ kind: 'init', account, key } satisfies CodecDown);
+    } catch {
+      end(new CodecUnavailable('Object codec worker could not initialize'));
+    }
   }
   return {
     run: (job) => new Promise((resolve, reject) => {
       if (failure) return reject(failure);
       const id = ++ids;
-      pending.set(id, { resolve, reject });
+      const index = loads.indexOf(Math.min(...loads));
+      loads[index]!++;
+      pending.set(id, { worker: index, resolve, reject });
       try {
-        worker.postMessage({ kind: 'batch', id, job } satisfies CodecDown);
+        workers[index]!.postMessage({ kind: 'batch', id, job } satisfies CodecDown);
       } catch {
         end(new CodecUnavailable('Object codec request could not be sent'));
       }
@@ -57,9 +70,10 @@ function objectCodecTransport(account: string, key: CryptoKey): CodecTransport {
 export class ObjectCodec {
   private readonly closing = new AbortController();
   private transport: CodecTransport | null = null;
-  private tail: Promise<void> = Promise.resolve();
+  private active = 0;
+  private readonly waiting: (() => void)[] = [];
 
-  constructor(private readonly account: string, private readonly key: CryptoKey) {}
+  constructor(private readonly account: string, private readonly key: CryptoKey, readonly workers = codecWorkers()) {}
 
   open(items: OpenItem[], signal: AbortSignal): Promise<CodecResult[]> {
     return this.run({ kind: 'open', items }, signal);
@@ -74,24 +88,39 @@ export class ObjectCodec {
     this.transport?.close();
   }
 
-  // All scopes share one admission queue. Cancelling a caller rejects it promptly, but an already posted batch
-  // keeps the slot until it answers: neither other scopes nor repeated cancelled calls flood the worker's queue.
+  // All scopes share one admission queue with one slot per worker. Cancelling a caller rejects it promptly, but an
+  // already posted batch keeps its slot until it answers: neither other scopes nor repeated cancelled calls flood the
+  // workers' queues.
   private run(job: CodecJob, signal: AbortSignal): Promise<CodecResult[]> {
     const stop = AbortSignal.any([signal, this.closing.signal]);
     const check = () => { if (stop.aborted) throw new CodecAborted('Object codec request stopped'); };
-    const work = this.tail.then(async () => {
-      check();
-      this.transport ??= objectCodecTransport(this.account, this.key);
-      const results = await this.transport.run(job);
-      check();
-      return results;
+    const work = this.admit().then(async () => {
+      try {
+        check();
+        this.transport ??= objectCodecTransport(this.account, this.key, this.workers);
+        const results = await this.transport.run(job);
+        check();
+        return results;
+      } finally {
+        // A slot is handed to the next waiter, never freed and retaken: a newcomer could otherwise slip past the queue.
+        const next = this.waiting.shift();
+        if (next) next();
+        else this.active--;
+      }
     });
-    this.tail = work.then(() => {}, () => {});
     return new Promise((resolve, reject) => {
       const abort = () => reject(new CodecAborted('Object codec request stopped'));
       if (stop.aborted) abort();
       else stop.addEventListener('abort', abort, { once: true });
       void work.then(resolve, reject).finally(() => stop.removeEventListener('abort', abort));
     });
+  }
+
+  private admit(): Promise<void> {
+    if (this.active < this.workers) {
+      this.active++;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => this.waiting.push(resolve));
   }
 }

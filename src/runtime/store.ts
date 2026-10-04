@@ -285,8 +285,8 @@ export class ObjectStore {
     if (heard && (held || dropped)) for (const listener of this.rewoundListeners) listener(dropped);
   }
 
-  private cacheBounds() {
-    return this.cache ? `&known=${this.known}` : '';
+  private cacheBounds(known = this.known) {
+    return this.cache ? `&known=${known}` : '';
   }
 
   readonly subscribe = (listener: (changes: readonly StoreChange[]) => void) => {
@@ -1111,12 +1111,20 @@ export class ObjectStore {
     let more = true;
     let objects = 0;
     let pages = 0;
+    // The page after the one being applied, requested as soon as that one answered: the server's time and the codec's
+    // overlap. It carries the epoch and timeline it was sent under, and is dropped when either moved.
+    let next: { epoch: number; sent: string | null; answer: Promise<ApiResult<Page>> } | null = null;
+    const page = (since: number, bootstrapped: boolean, known: number) => {
+      const sent = this.timeline;
+      const answer = this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal);
+      return { epoch: this.epoch, sent, answer };
+    };
     while (more) {
       if (this.opening) await this.opening;
       if (stopped()) return { ok: false, error: 'stopped' };
-      const epoch = this.epoch;
-      const sent = this.timeline;
-      const result = await this.request<Page>('GET', `objects?since=${this.cursor}&exclude=entry,memory${this.bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds()}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal);
+      const { epoch, sent, answer } = next?.epoch === this.epoch ? next : page(this.cursor, this.bootstrapped, this.known);
+      next = null;
+      const result = await answer;
       if (stopped()) return { ok: false, error: 'stopped' };
       if (epoch !== this.epoch) continue;
       if (!result.ok) {
@@ -1133,6 +1141,15 @@ export class ObjectStore {
       progress?.({ objects, pages: ++pages });
       this.limits = result.data.limits;
       this.bootstrap ??= result.data.until ?? null;
+      // The cursor and bootstrap flag move after the page is applied (pullParent reads them); the next request is
+      // computed from the page itself, with the revisions it carries already known.
+      const after = { cursor: result.data.cursor, more: result.data.more, bootstrapped: this.bootstrapped };
+      if (!after.more && !this.bootstrapped) {
+        after.cursor = this.bootstrap ?? after.cursor;
+        after.bootstrapped = true;
+        after.more = true;
+      }
+      if (after.more) next = page(after.cursor, after.bootstrapped, result.data.changes.reduce((known, change) => Math.max(known, change.rev), this.known));
       const stop = AbortSignal.any([signal, this.closing.signal, this.ended.signal]);
       const opened = this.opener(result.data.changes, false, stop);
       for (const [index, change] of result.data.changes.entries()) {
@@ -1150,14 +1167,10 @@ export class ObjectStore {
         }
       }
       if (epoch !== this.epoch) continue;
-      this.cursor = result.data.cursor;
-      more = result.data.more;
       if (result.data.changes.length) this.changed();
-      if (!more && !this.bootstrapped) {
-        this.cursor = this.bootstrap ?? this.cursor;
-        this.bootstrapped = true;
-        more = true;
-      }
+      this.cursor = after.cursor;
+      this.bootstrapped = after.bootstrapped;
+      more = after.more;
       this.cacheWrite(result.data.changes);
     }
     for (const chat of [...this.behind]) {
@@ -1203,33 +1216,40 @@ export class ObjectStore {
     return null;
   }
 
-  // Whole windows refill on demand, not one new RPC per consumed row. Only one window of decoded values is
-  // retained; the encoded-byte cap admits one atomic oversized object alone. A batch has one promise, so skipping
-  // a row that became stale cannot leave a future item's rejection unobserved. Strict scans preserve codec errors.
+  // Windows are dispatched ahead of the row being applied, one more than there are codec workers, so every worker
+  // holds a window while the main thread applies an earlier one; only those windows' decoded values are retained. The
+  // encoded-byte cap admits one atomic oversized object alone. Every window's promise gets an observer when dispatched:
+  // a caller that stops consuming after an abort leaves no rejection unobserved. Strict scans preserve codec errors.
   // Outside a strict scan, a body that throws while opening counts as unreadable, as one that fails authentication does.
   private opener(rows: SealedChange[], scoped: boolean, signal: AbortSignal, strict = false): (index: number) => Promise<unknown> {
-    let end = 0;
-    let slots = new Map<number, number>();
-    let batch: Promise<CodecResult[]> = Promise.resolve([]);
-    return async (index) => {
-      if (index >= end) {
-        const items: OpenItem[] = [];
-        slots = new Map();
-        let bytes = 0;
-        for (end = index; end < rows.length && items.length < OPEN_ITEMS; end++) {
-          const { id, kind, parent, rev, body, omitted } = rows[end]!;
-          if (typeof body !== 'string' || omitted || (!strict && ((SCOPED.has(kind) && !scoped) || this.stale(id, rev)))) continue;
-          if (items.length && bytes + body.length > OPEN_BYTES) break;
-          slots.set(end, items.length);
-          items.push({ id, kind, parent, body });
-          bytes += body.length;
-        }
-        batch = items.length ? this.codec.open(items, signal) : Promise.resolve([]);
+    type Window = { end: number; slots: Map<number, number>; batch: Promise<CodecResult[]> };
+    const ahead = this.codec.workers + 1;
+    const windows: Window[] = [];
+    let next = 0;
+    const dispatch = () => {
+      const items: OpenItem[] = [];
+      const slots = new Map<number, number>();
+      let bytes = 0;
+      for (; next < rows.length && items.length < OPEN_ITEMS; next++) {
+        const { id, kind, parent, rev, body, omitted } = rows[next]!;
+        if (typeof body !== 'string' || omitted || (!strict && ((SCOPED.has(kind) && !scoped) || this.stale(id, rev)))) continue;
+        if (items.length && bytes + body.length > OPEN_BYTES) break;
+        slots.set(next, items.length);
+        items.push({ id, kind, parent, body });
+        bytes += body.length;
       }
-      const results = await batch;
-      const slot = slots.get(index);
-      if (slot === undefined) return undefined;
-      const result = results[slot]!;
+      const batch = items.length ? this.codec.open(items, signal) : Promise.resolve([]);
+      batch.catch(() => {});
+      windows.push({ end: next, slots, batch });
+    };
+    return async (index) => {
+      while (windows.length && windows[0]!.end <= index) windows.shift();
+      // The byte cap can end a window before this row: dispatch until one holds it, and keep the lookahead full.
+      while ((windows.length < ahead || windows.at(-1)!.end <= index) && next < rows.length) dispatch();
+      const held = windows[0];
+      const slot = held?.slots.get(index);
+      if (held === undefined || slot === undefined) return undefined;
+      const result = (await held.batch)[slot]!;
       return strict ? codecValue(result) : result.ok ? result.value : undefined;
     };
   }

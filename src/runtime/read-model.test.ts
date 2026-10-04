@@ -88,6 +88,8 @@ describe('selective account reads', () => {
       { type: 'create', kind: 'chat', id: 'a', parent: null, value: chat },
       { type: 'create', kind: 'entry', id: 'a1', parent: 'a', value: message('hello') },
     ]);
+    // The summary is saved after the batch answers; the session below must open with it already on the server.
+    await vi.waitFor(() => expect(store.list('summary')).toHaveLength(1));
     const decrypt = vi.spyOn(sealedObjects, 'openObject');
     const folded = vi.spyOn(chatModel.ChatFold.prototype, 'snapshot');
     const displayed = vi.spyOn(store.evaluation, 'display');

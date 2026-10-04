@@ -35,3 +35,5 @@ export class CodecWorker {
 }
 
 globalThis.Worker = CodecWorker as unknown as typeof Worker;
+// Two codec workers and three windows ahead on every machine: tests count dispatched windows.
+Object.defineProperty(navigator, 'hardwareConcurrency', { value: 3, configurable: true });

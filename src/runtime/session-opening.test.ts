@@ -1,7 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { randomBytes } from '../vault/aead';
+import type { CodecJob } from './object-codec-core';
+import type { api, ApiResult } from './api';
 import { openSession } from './session';
-import type { PullProgress } from './store';
+import { ObjectStore, type PullProgress } from './store';
+import { CodecWorker } from './testing/object-codec-setup';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -32,4 +35,37 @@ it('reports received objects and pages during opening and aborts the in-flight i
   abandon.abort();
   expect(await opening).toEqual({ ok: false, error: 'stopped' });
   expect(fetch.mock.calls.map(([url]) => url.replace(/&known=\d+|&timeline=t$/g, ''))).toEqual(['/api/objects?since=0&exclude=entry,memory&bootstrap=1', '/api/objects?since=2&exclude=entry,memory&bootstrap=1', '/api/objects?since=3&exclude=entry,memory&bootstrap=1']);
+});
+
+it('requests the next page while the current one is still being opened, across the bootstrap transition', async () => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  vi.stubGlobal('Worker', class extends CodecWorker {
+    override async run(job: CodecJob) {
+      await held;
+      return job.items.map(() => ({ ok: true as const, value: { label: 'opened' } }));
+    }
+  });
+  const asked: string[] = [];
+  const request: typeof api = async <T,>(_method: string, path: string): Promise<ApiResult<T>> => {
+    asked.push(path.replace(/&known=\d+|&timeline=t$/g, ''));
+    const bootstrap = asked.at(-1) === 'objects?since=0&exclude=entry,memory&bootstrap=1';
+    return { ok: true, data: {
+      timeline: 't',
+      changes: bootstrap ? [1, 2].map((rev) => ({ id: `c${rev}`, kind: 'connection', parent: null, rev, body: 'sealed' })) : [],
+      cursor: 2,
+      more: false,
+      limits: { items: 100, bytes: 1_000_000, body: 100_000 },
+      ...(bootstrap ? { until: 2 } : {}),
+    } as T };
+  };
+  const store = await ObjectStore.open('account', randomBytes(32), request);
+  const pulling = store.pull();
+  await vi.waitFor(() => expect(asked).toHaveLength(2));
+  expect(asked).toEqual(['objects?since=0&exclude=entry,memory&bootstrap=1', 'objects?since=2&exclude=entry,memory']);
+  expect(store.list('connection')).toEqual([]);
+  release();
+  expect(await pulling).toBeNull();
+  expect(store.list('connection').map(({ id }) => id)).toEqual(['c1', 'c2']);
+  store.close();
 });
