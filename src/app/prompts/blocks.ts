@@ -1,4 +1,4 @@
-import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, MessageSquare, MessagesSquare, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, MessageSquare, MessagesSquare, NotebookPen, PenLine, Sparkle, Text, User, UserRound, type LucideIcon } from 'lucide-react';
 import { autoCachePoints } from '../../engine/pipeline';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
@@ -18,6 +18,13 @@ export const SLOT = {
   authorNote: { name: SLOT_NAMES.authorNote, hint: '채팅마다 따로 쓰는 노트', line: '채팅마다 따로 쓰는 작가의 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
   postEverything: { name: SLOT_NAMES.postEverything, hint: '맨 끝으로 정한 로어북 항목이 여기 붙어요', line: '로어북에서 맨 끝으로 정한 항목이 여기 붙어요.', kind: 'lore', icon: ArrowDownToLine },
   chat: { name: SLOT_NAMES.chat, hint: '지금까지 주고받은 메시지', line: '지금까지 주고받은 메시지 가운데 아래 범위가 여기에 들어가요.', kind: 'chat', icon: MessageSquare },
+  note: {
+    name: SLOT_NAMES.note,
+    hint: '이름과 용어를 늘 같게 옮기는 메모',
+    line: '설정 › 채팅의 전역 노트와 캐릭터 편집의 캐릭터 노트가 함께 여기에 들어가요. 둘 다 비었으면 아무것도 보내지 않아요.',
+    kind: 'note',
+    icon: NotebookPen,
+  },
   recent: {
     name: SLOT_NAMES.recent,
     hint: '번역할 메시지 바로 앞의 메시지와 그 번역',
@@ -84,7 +91,7 @@ export const blockIcon = (block: Block): LucideIcon => (block.kind === 'text' ? 
 export function blockMeta(block: Block): string {
   if (block.kind === 'text') return block.text ? `${block.text.length.toLocaleString('ko-KR')}자` : '비어 있음';
   if (block.slot === 'chat') return describeRange(block.range).meta;
-  if (block.slot === 'recent') return `${block.count}개 · ${MESSAGE_ROLES[block.role]}`;
+  if (block.slot === 'recent') return `${block.count}개${block.translations === false ? ' · 원문만' : ''} · ${MESSAGE_ROLES[block.role]}`;
   return 'role' in block ? MESSAGE_ROLES[block.role] : '';
 }
 

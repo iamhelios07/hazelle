@@ -25,6 +25,9 @@ export const BIN_KEEPS = `${KEEP_DAYS}일 안에는 ‘${BIN}’에서 되살릴
 
 export const COMMAND = '명령어';
 
+export const TRANSLATOR_NOTE = '번역가의 노트';
+export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 둬 주세요';
+
 // 설정's pages, which SettingsNav lists and a sentence points to.
 export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', account: '계정', admin: '운영' };
 

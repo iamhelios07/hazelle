@@ -16,6 +16,8 @@ export type Character = Mark & {
   origin?: { id: string; name: string };
   toggles?: ToggleValues;
   translate?: TranslateSwitches;
+  // 번역가의 노트: added to the 전역 one (Settings.translatorNote), never replacing it as the switches do.
+  translatorNote?: string;
   // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
   decor?: boolean;
   // Whether the bot's Lua may call models, which costs the user. Absent: not asked yet, and the first call asks.

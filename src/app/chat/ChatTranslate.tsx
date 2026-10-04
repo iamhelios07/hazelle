@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ofSort, translationPrompt } from '../../runtime/prompts';
 import { describeTranslateFailure } from '../common/failure';
 import { LANGUAGES, languageLabel, withRo } from '../common/languages';
-import { follows, MODEL_ROLES } from '../common/words';
+import { follows, inSettings, MODEL_ROLES, TRANSLATOR_NOTE } from '../common/words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, Row, SettingRow, Stack, Switch, Tag, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
@@ -42,6 +42,7 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
           control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => actions.setTranslate({ reverse })} />}
         />
         <Divider variant="menu" />
+        <NoteRow chat={chat} />
         <SettingRow place="panel" label="번역 프롬프트" control={<PromptMenu chat={chat} />} />
         <SettingRow
           place="panel"
@@ -58,6 +59,33 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
         </Text>
       </Stack>
     </Menu>
+  );
+}
+
+const lineCount = (note: string | undefined) => (note ?? '').split('\n').filter((line) => line.trim()).length;
+
+function NoteRow({ chat }: { chat: OpenChat }) {
+  const { shelf, translation, actions } = chat;
+  const global = lineCount(useSettings().translatorNote);
+  const own = shelf && lineCount(shelf.character.translatorNote);
+  const counts = [global > 0 && `전역 ${global}줄`, own && `캐릭터 ${own}줄`].filter(Boolean).join(' · ');
+  // A prompt made before the slot existed, the stored 기본 번역 among them, sends no note until the user adds the block.
+  const unsent = counts !== '' && translation.ok && !translation.prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'note');
+  return (
+    <SettingRow
+      place="panel"
+      label={TRANSLATOR_NOTE}
+      help={`번역할 때 이름과 용어를 늘 같게 옮기도록 적어 두는 메모예요. 전역 노트는 ${inSettings('chat')}, 캐릭터 노트는 캐릭터 편집에 있어요.`}
+      sub={counts || '없음'}
+      error={unsent ? `번역 프롬프트에 ‘${TRANSLATOR_NOTE}’ 블록이 없어서 보내지 않아요. 프롬프트에서 넣어 주세요.` : undefined}
+      control={
+        shelf && (
+          <Button variant="ghost" size="sm" onClick={() => actions.side({ kind: 'character', id: shelf.id })}>
+            캐릭터 편집
+          </Button>
+        )
+      }
+    />
   );
 }
 

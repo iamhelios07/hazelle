@@ -44,6 +44,13 @@ export function translatorPrompt(): TranslatePrompt {
       {
         ...named(),
         kind: 'slot',
+        slot: 'note',
+        role: 'system',
+        wrapper: `${CONTEXT}\nTranslator's notes from the user: fixed renderings of names and terms, and style the translation must follow.\n---\n{{slot}}`,
+      },
+      {
+        ...named(),
+        kind: 'slot',
         slot: 'recent',
         role: 'system',
         count: 4,

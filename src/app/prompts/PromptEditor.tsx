@@ -27,6 +27,7 @@ import {
   renameKey,
   setCache,
   setCount,
+  setTranslations,
   setMark,
   setRange,
   setRole,
@@ -370,6 +371,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           onRole={(target, role) => role !== target.role && perform(setRole(target, role))}
           onRange={(target, range) => rangeKey(range) !== rangeKey(target.range) && perform(setRange(target, range))}
           onCount={(target, count) => perform(setCount(target, count))}
+          onTranslations={(target, on) => perform(setTranslations(target, on))}
           onWrapper={wrap}
           onAuthorNote={(authorNote) => update(() => ({ authorNote }))}
           onMark={mark}
