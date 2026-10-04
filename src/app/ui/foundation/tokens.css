@@ -46,6 +46,42 @@
   --palette-ink-line: rgb(29 27 34 / 16%);
   --palette-ink-trace: rgb(29 27 34 / 22%);
   --palette-scrim: rgb(8 8 10 / 55%);
+  --palette-paper-50: #faf7f2;
+  --palette-paper-100: #f6f2ec;
+  --palette-paper-150: #f3efe8;
+  --palette-paper-200: #ece7df;
+  --palette-paper-250: #e9e4db;
+  --palette-paper-300: #e7e1d7;
+  --palette-paper-400: #d9d2c7;
+  --palette-paper-500: #bab1a4;
+  --palette-lilac-550: #766e7f;
+  --palette-lilac-650: #6b6474;
+  --palette-lilac-700: #5f5869;
+  --palette-lilac-800: #3f3a46;
+  --palette-gold-650: #8d6828;
+  --palette-gold-700: #8a5d0f;
+  --palette-gold-800: #734d0b;
+  --palette-coral-700: #b0461f;
+  --palette-mint-150: #dcefe3;
+  --palette-mint-700: #2b7350;
+  --palette-mint-900: #1f4a36;
+  --palette-umber-700: #3a342d;
+  --palette-umber-900: #15120e;
+  --palette-violet-100: #ece6fb;
+  --palette-violet-700: #6a4fcf;
+  --palette-sky-100: #e2edf7;
+  --palette-sky-700: #2f6ca0;
+  --palette-jade-100: #dff1e7;
+  --palette-jade-700: #267a51;
+  --palette-rose-100: #f8e3eb;
+  --palette-rose-700: #b0466f;
+  --palette-blue-700: #3b5796;
+  --palette-shadow-soft: rgb(29 27 34 / 12%);
+  --palette-shadow-soft-deep: rgb(29 27 34 / 24%);
+  --palette-scrim-soft: rgb(29 27 34 / 32%);
+  --palette-cream-wash: rgb(241 236 228 / 7%);
+  --palette-cream-line: rgb(241 236 228 / 16%);
+  --palette-cream-trace: rgb(241 236 228 / 22%);
 
   color-scheme: dark;
 
@@ -105,6 +141,17 @@
 
   --shadow-popover: 0 12px 32px var(--palette-shadow);
   --shadow-toast: 0 22px 44px -14px var(--palette-shadow-deep), 0 4px 12px var(--palette-shadow);
+
+  /* The toast wears the other theme's colors; Toast.module.css turns the kit's tokens to these. */
+  --color-toast-bg: var(--palette-cream-100);
+  --color-toast-text: var(--palette-ink-800);
+  --color-toast-muted: var(--palette-lilac-600);
+  --color-toast-line: var(--palette-ink-line);
+  --color-toast-wash: var(--palette-ink-wash);
+  --color-toast-trace: var(--palette-ink-trace);
+  --color-toast-accent: var(--palette-ink-800);
+  --color-toast-accent-hover: var(--palette-ink-600);
+  --color-toast-on-accent: var(--palette-cream-100);
 
   --color-accent-bg: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
   --color-accent-border: color-mix(in srgb, var(--color-accent) 40%, var(--color-bg));
@@ -289,4 +336,66 @@
   --layer-dialog: 40;
   --layer-toast: 45;
   --layer-drop: 50;
+}
+
+/* Every color token above that names a palette step needs a value here; the color-mix ones follow on their own.
+   A bot's own 꾸밈 CSS is written for dark and is not turned (design §F3, light theme). */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --color-bg: var(--palette-paper-50);
+  --color-surface: var(--palette-paper-150);
+  --color-surface-hover: var(--palette-paper-200);
+  --color-surface-raised: var(--palette-paper-300);
+  --color-border: var(--palette-paper-400);
+  --color-border-strong: var(--palette-paper-500);
+  --color-text: var(--palette-ink-800);
+  --color-text-muted: var(--palette-lilac-700);
+  --color-text-faint: var(--palette-lilac-550);
+  --color-text-soft: var(--palette-lilac-800);
+  --color-accent: var(--palette-gold-700);
+  --color-accent-hover: var(--palette-gold-800);
+  --color-on-accent: var(--palette-sand-10);
+  --color-warn: var(--palette-coral-700);
+  --color-success: var(--palette-mint-700);
+  --color-sidebar: var(--palette-paper-100);
+  --color-divider: var(--palette-paper-250);
+  --color-scrim: var(--palette-scrim-soft);
+  --color-you-bg: var(--palette-mint-150);
+  --color-you-text: var(--palette-mint-900);
+
+  --color-prose-narration: var(--palette-umber-700);
+  --color-prose-dialogue: var(--palette-umber-900);
+  --color-prose-action: var(--palette-lilac-650);
+
+  --color-kind-text: var(--palette-lilac-300);
+  --color-kind-text-line: var(--palette-lilac-550);
+  --color-kind-char: var(--palette-violet-700);
+  --color-kind-char-bg: var(--palette-violet-100);
+  --color-kind-lore: var(--palette-sky-700);
+  --color-kind-lore-bg: var(--palette-sky-100);
+  --color-kind-chat: var(--palette-jade-700);
+  --color-kind-chat-bg: var(--palette-jade-100);
+  --color-kind-note: var(--palette-rose-700);
+  --color-kind-note-bg: var(--palette-rose-100);
+
+  --color-markup-body: var(--palette-ink-700);
+  --color-markup-heading: var(--palette-ink-900);
+  --color-markup-rule: var(--palette-lilac-550);
+  --color-markup-cbs: var(--palette-gold-650);
+  --color-markup-slot: var(--palette-gold-800);
+  --color-markup-angle: var(--palette-blue-700);
+
+  --shadow-popover: 0 12px 32px var(--palette-shadow-soft);
+  --shadow-toast: 0 22px 44px -14px var(--palette-shadow-soft-deep), 0 4px 12px var(--palette-shadow-soft);
+
+  --color-toast-bg: var(--palette-ink-800);
+  --color-toast-text: var(--palette-cream-100);
+  --color-toast-muted: var(--palette-lilac-300);
+  --color-toast-line: var(--palette-cream-line);
+  --color-toast-wash: var(--palette-cream-wash);
+  --color-toast-trace: var(--palette-cream-trace);
+  --color-toast-accent: var(--palette-cream-100);
+  --color-toast-accent-hover: var(--palette-sand-200);
+  --color-toast-on-accent: var(--palette-ink-800);
 }
