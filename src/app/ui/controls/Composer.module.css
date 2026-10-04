@@ -26,9 +26,12 @@
 .input {
   min-height: var(--control-lg);
   max-height: var(--composer-max-height);
+  overflow: auto;
+  /* Restore scrolling only after the unfolding height can hold the text. */
   transition:
     min-height var(--duration-slow) var(--ease-enter),
-    max-height var(--duration-slow) var(--ease-enter);
+    max-height var(--duration-slow) var(--ease-enter),
+    overflow var(--duration-slow) step-end allow-discrete;
   padding: 0 var(--space-8) 0 0;
   border: 0;
   outline: none;
@@ -47,6 +50,7 @@
   min-height: var(--one-line);
   max-height: var(--one-line);
   overflow: hidden;
+  transition-timing-function: var(--ease-enter), var(--ease-enter), step-start;
 }
 
 .fold {
@@ -58,16 +62,18 @@
 /* The row folds to nothing only around a box without padding: the bar's space above it folds inside. */
 .tools {
   min-height: 0;
+  overflow: visible;
+  /* Unclipping before the row finishes growing makes the bar overflow the page below the footer. */
+  transition: overflow var(--duration-slow) step-end allow-discrete;
 }
 
-/* The bar clips only while folded: open, its tools' menus rise out of it. It shows once the fold has mostly grown, so
-   the moment it spills below the fold is not seen. */
 .compact:not(:focus-within) .fold {
   grid-template-rows: 0fr;
 }
 
 .compact:not(:focus-within) .tools {
   overflow: hidden;
+  transition-timing-function: step-start;
 }
 
 .compact:not(:focus-within) .bar {
