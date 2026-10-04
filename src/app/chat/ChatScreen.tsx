@@ -11,6 +11,7 @@ import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
 import { ChatMemory } from './ChatMemory';
+import { ChatSearch } from './ChatSearch';
 import { ChatStatusAside, ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useChat, type Side } from './useChat';
@@ -40,12 +41,13 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
     if (!chat.status.length) return false;
     actions.toggleStatus();
   });
+  useShortcut('find', () => actions.openSearch());
   const inUse = { personas: persona.kind === 'persona' ? persona.persona.id : null, prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
   return (
     <>
       <ChatFrame
         back={back ? { label: back.label, onClick: () => navigate(back.to) } : undefined}
-        title={<ChatHeading chat={chat} />}
+        title={chat.search ? <ChatSearch search={chat.search} actions={actions} /> : <ChatHeading chat={chat} />}
         actions={<ChatHeaderActions chat={chat} />}
         above={scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
         footer={<ChatComposer chat={chat} folded={folded} />}

@@ -58,6 +58,11 @@ img {
   max-width: 100%;
 }
 
+/* Story.tsx registers it: the chat search's term in every mounted message. */
+::highlight(found-term) {
+  background-color: var(--color-found-term);
+}
+
 /* A line that is only a picture, as a bot draws its character's tall portrait, shows its top until it is pointed at (a
    moment later, so a pointer the story scrolls under opens nothing) or tapped. The line is cut, not the picture, so a
    small one is never stretched; the picture itself is only shrunk to the most it may be. The pictures in a bot's own

@@ -15,6 +15,8 @@ type Props = {
   buttons?: 'live' | 'inert';
   // A press on one of the bot's buttons; null for a plain button, which names nothing to run.
   onPress?: (button: BotButton | null) => void;
+  // Lit wherever a text node holds it; lower case and NFC, as the caller's search folds it. '' for none.
+  term?: string;
 };
 
 const NAMED = '[risu-trigger], [risu-btn]';
@@ -46,6 +48,27 @@ const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*\)/gi;
 const OWN_SOURCE = /^(?:data|blob):/;
 const IMPORT = /@import[^;]*;?/gi;
 const XLINK = 'http://www.w3.org/1999/xlink';
+// Named in Story.shadow.css. One registry entry, which every mounted story adds its own ranges to.
+const FOUND_TERM = 'found-term';
+let foundTerm: Highlight | null = null;
+
+// A term split across elements (he<em>llo</em>) is not lit, nor one in a node whose folding changes its length, where
+// the offsets would lie; the message's own mark still shows it.
+function termRanges(shadow: ShadowRoot, term: string): Range[] {
+  const ranges: Range[] = [];
+  const walker = document.createTreeWalker(shadow, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const text = node.data.normalize('NFC').toLowerCase();
+    if (text.length !== node.data.length) continue;
+    for (let at = text.indexOf(term); at !== -1; at = text.indexOf(term, at + term.length)) {
+      const range = new Range();
+      range.setStart(node, at);
+      range.setEnd(node, at + term.length);
+      ranges.push(range);
+    }
+  }
+  return ranges;
+}
 
 // For a stylesheet and a style attribute alike. Risu prefixes every class with x-risu- in the HTML and in the CSS, so
 // a bot may write either, and both lose it. Only the app's own URLs load: the CSP refuses the others anyway, and a
@@ -113,7 +136,7 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
-export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress }: Props) {
+export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '' }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
@@ -125,6 +148,18 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     }
     root().replaceChildren(fragment);
   }, [html, cursor, pictures]);
+
+  // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
+  useEffect(() => {
+    if (!term || !('highlights' in CSS)) return;
+    if (!foundTerm) CSS.highlights.set(FOUND_TERM, (foundTerm = new Highlight()));
+    const lit = foundTerm;
+    const ranges = termRanges(root(), term);
+    for (const range of ranges) lit.add(range);
+    return () => {
+      for (const range of ranges) lit.delete(range);
+    };
+  }, [html, cursor, pictures, term]);
 
   useLayoutEffect(() => {
     if (!base) (base = new CSSStyleSheet()).replaceSync(shadowCss);

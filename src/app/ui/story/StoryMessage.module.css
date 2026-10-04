@@ -62,13 +62,17 @@
   opacity: 1;
 }
 
-.found {
-  composes: fadeAway from '../foundation/motion.module.css';
+.marked {
   position: absolute;
   inset: calc(var(--space-8) * -1);
   border: var(--border-thick) solid var(--color-accent-border);
   border-radius: var(--radius-md);
   pointer-events: none;
+}
+
+.found {
+  composes: marked;
+  composes: fadeAway from '../foundation/motion.module.css';
 }
 
 .bubble {

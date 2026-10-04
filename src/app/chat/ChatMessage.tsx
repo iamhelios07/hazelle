@@ -12,6 +12,7 @@ import { timeOfDay } from '../common/time';
 import { hints, SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
+import { seenText } from './search';
 import { useReveal } from './useReveal';
 
 type Props = {
@@ -40,6 +41,10 @@ type Props = {
   pinned: boolean;
   // One of the messages a memory record was made from, marked as StoryMessage's found; the collection seeks the first.
   found: number;
+  // The search bar's current hit, marked until the bar moves on or closes.
+  marked: boolean;
+  // The search term as foldTerm makes it, lit in the text; '' while the bar is closed.
+  term: string;
   branching: boolean;
   modelMenu: MenuHandle;
   infoDrawer: string;
@@ -54,7 +59,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, branching, modelMenu, infoDrawer, actions } = props;
+  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, infoDrawer, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -63,7 +68,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const translation = version.translation ?? null;
   const translatingText = translating.live.get(version.id) ?? null;
   const untranslated = translating.failed.get(version.id) ?? null;
-  const text = flipped ? original : translatingText || (translation?.text ?? original);
+  const text = seenText(original, translation?.text ?? null, translatingText, flipped);
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live && !message.whole);
   const html = useMemo(() => shownHtml(reveal.text, decor), [reveal.text, decor.bot, decor.url]);
@@ -150,7 +155,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
         {/* A message may be all box: a status window's script took every word of it. */}
-        {!empty && <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />}
+        {!empty && <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} term={term} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );
@@ -265,6 +270,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       tools={tools}
       pinned={pinned}
       found={found}
+      marked={marked}
       onTap={() => actions.pin(message)}
     >
       {body}

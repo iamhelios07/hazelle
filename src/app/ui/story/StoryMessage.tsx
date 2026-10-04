@@ -22,9 +22,11 @@ type Props = {
   // Marked for a moment from this timestamp, again with each look; 0 for none. The collection
   // brings the first marked row into view, even when it has not been mounted.
   found?: number;
+  // Marked while true, with no fade.
+  marked?: boolean;
 };
 
-export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap, found = 0 }: Props) {
+export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap, found = 0, marked = false }: Props) {
   const hover = useHover();
   const foundDelay = useMemo(() => `-${Math.max(0, Date.now() - found)}ms`, [found]);
   const memory = useContext(RowMemoryContext);
@@ -37,6 +39,7 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
   return (
     <article className={`${styles.message} ${pinned ? styles.pinned : ''} ${revisited.current ? styles.revisited : ''}`} onClick={tap}>
       {found !== 0 && <span key={found} className={styles.found} style={{ animationDelay: foundDelay }} aria-hidden />}
+      {marked && <span className={styles.marked} aria-hidden />}
       {avatar}
       <div className={styles.main}>
         <div className={styles.head}>

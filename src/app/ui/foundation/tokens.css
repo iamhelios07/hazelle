@@ -161,6 +161,7 @@
   --color-success-bg: color-mix(in srgb, var(--color-success) 10%, var(--color-bg));
   --color-success-border: color-mix(in srgb, var(--color-success) 40%, var(--color-bg));
   --color-selection: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  --color-found-term: color-mix(in srgb, var(--color-accent) 30%, transparent);
 
   --font-serif: 'Gowun Batang', serif;
   --font-sans: 'IBM Plex Sans KR', system-ui, sans-serif;

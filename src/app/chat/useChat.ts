@@ -39,6 +39,7 @@ import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui'
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { pickStarted } from './infoReply';
+import { finder, seenText } from './search';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
 import { useSeen } from './useSeen';
@@ -129,6 +130,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // 토글, 장기 기억 and the persona and prompt lists take the same place beside the story, so one closes another.
   const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
   const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
+  // The search bar's term and current hit, by message id so rows coming and going keep it. focus asks the field to take
+  // the focus again, as Ctrl+F does while the bar is open.
+  const [search, setSearch] = useState<{ term: string; at: string | null; focus: number } | null>(null);
+  const [find] = useState(finder);
   // Where the status window stands: in its latest message, or with 옆에 두기 in the story's margin, while each box
   // fits there (fitting, which the margin reports whether it is shown or not). The key hides it there for now.
   const [fitting, setFitting] = useState<ReadonlyMap<number, boolean>>(() => new Map());
@@ -149,6 +154,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
+  const readAs = (message: Shown, index: number) => {
+    const version = shown(message);
+    return seenText(texts[index]!, version.translation?.text ?? null, translating.live.get(version.id) ?? null, flipped.has(version.id));
+  };
+  const hitsFor = (term: string) => find(messages.map(readAs), term).map((index) => messages[index]!.id);
+  const hits = useMemo(() => (search ? hitsFor(search.term) : []), [search?.term, messages, texts, translating, flipped]);
+  // null with no current hit, or when its message was deleted.
+  const searchAt = search?.at != null && hits.includes(search.at) ? search.at : null;
   // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
@@ -392,6 +405,21 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (beside) setHidden(!hidden);
   }
 
+  // A new term starts at the newest hit, nearest where a chat is read.
+  function searchFor(term: string) {
+    const at = hitsFor(term).at(-1) ?? null;
+    setSearch((current) => current && { ...current, term, at });
+    if (at) seekTo(at, 'center');
+  }
+
+  function stepSearch(step: -1 | 1) {
+    if (!hits.length) return;
+    const index = searchAt === null ? (step > 0 ? -1 : hits.length) : hits.indexOf(searchAt);
+    const at = hits[(index + step + hits.length) % hits.length]!;
+    setSearch((current) => current && { ...current, at });
+    seekTo(at, 'center');
+  }
+
   async function rename(name: string) {
     if (!id) return;
     const saved = await renameChat(store, id, name);
@@ -436,6 +464,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     cache,
     leaving,
     found,
+    // place: the current hit's 1-based place among hits, null when there is none.
+    search: search && { term: search.term, focus: search.focus, hits: hits.length, place: searchAt === null ? null : hits.indexOf(searchAt) + 1, at: searchAt },
     problem,
     editing,
     pinned,
@@ -486,6 +516,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
         seekTo(ids[0]!, 'center');
         setFound({ ids: new Set(ids), at: Date.now() });
       },
+      openSearch: () => setSearch((current) => ({ term: current?.term ?? '', at: current?.at ?? null, focus: (current?.focus ?? 0) + 1 })),
+      searchFor,
+      stepSearch,
+      closeSearch: () => setSearch(null),
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.
       toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),

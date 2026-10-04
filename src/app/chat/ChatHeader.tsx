@@ -93,6 +93,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
         {!wide && item && <MenuItem label="장기 기억" sub={failed ? '마지막 정리가 실패했어요' : undefined} onClick={toggleMemory} />}
         {!wide && <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />}
+        {!wide && <MenuItem label="검색" onClick={actions.openSearch} />}
         <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>
