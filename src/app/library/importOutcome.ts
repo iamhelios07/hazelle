@@ -1,12 +1,18 @@
 import type { Imported, ImportedModule } from '../../engine/import/types';
 import { unused } from '../../engine/pipeline';
 import type { ImportedCharacter } from '../../runtime/characters';
+import type { ModulePlace } from '../../runtime/modules';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
+import { ALWAYS, inSettings } from '../common/words';
 import { cardMissed, moduleMissed } from './missed';
 
 // Completed reports must not retain asset readers: their closures keep the source archive alive.
-export type ImportOutcome = { kind: 'character' | 'module'; file: string; id: string; title: string; holds: string; missed: string[]; unused: string | null };
+export type ImportOutcome = { kind: 'character' | 'module'; file: string; id: string; title: string; holds: string; placed: { text: string; failed: boolean } | null; missed: string[]; unused: string | null };
+// at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
+export type Placement = { at: ModulePlace['kind'] | null; failure: string | null };
+
+const PLACES: Record<ModulePlace['kind'], string> = { character: '이 캐릭터에', prompt: '이 프롬프트에', always: ALWAYS };
 
 export function characterOutcome(file: string, imported: Imported, { id, skipped, faceless }: ImportedCharacter): ImportOutcome {
   const { card, lore, assets, report } = imported;
@@ -18,13 +24,16 @@ export function characterOutcome(file: string, imported: Imported, { id, skipped
     card.toggles.trim() && '토글',
     assets.length - skipped > 0 && `에셋 ${assets.length - skipped}개`,
   ].filter(Boolean).join(' · ');
-  return { kind: 'character', file, id, title: card.name, holds, missed: cardMissed(report, skipped, faceless), unused: describeUnused(unused(card)) };
+  return { kind: 'character', file, id, title: card.name, holds, placed: null, missed: cardMissed(report, skipped, faceless), unused: describeUnused(unused(card)) };
 }
 
-export function moduleOutcome(file: string, module: ImportedModule, id: string, skipped: number): ImportOutcome {
+export function moduleOutcome(file: string, module: ImportedModule, id: string, skipped: number, { at, failure }: Placement): ImportOutcome {
   return {
     kind: 'module', file, id, title: `모듈 · ${module.name}`,
     holds: packHolds(module.pack, module.lore.length, module.assets.length - skipped),
+    placed: at === null
+      ? { text: `켜진 곳은 아직 없어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
+      : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true },
     missed: moduleMissed(module.unsupported, skipped), unused: null,
   };
 }

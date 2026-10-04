@@ -4,6 +4,7 @@ import type { Module } from '../model/library';
 import type { ApiResult } from './api';
 import { markDeleted, saveAssets, type Progress } from './characters';
 import type { Files } from './files';
+import type { StoredPrompt } from './prompts';
 import type { ObjectStore, Write } from './store';
 
 // A module as the importer read it (design §6.5). Its pictures are stored first; then it is written with its lorebook
@@ -41,6 +42,20 @@ export function setModuleAlways(store: ObjectStore, id: string, on: boolean): Pr
 
 export function setCharacterModule(store: ObjectStore, character: string, id: string, on: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', character, (current) => ({ ...current, modules: switched(current.modules, id, on) }));
+}
+
+// A task prompt has no modules, so the type takes a conversation prompt only; the sort never changes, so the check
+// inside only narrows.
+export function setPromptModule(store: ObjectStore, prompt: StoredPrompt<'conversation'>, id: string, on: boolean): Promise<ApiResult<Stored<'prompt'>>> {
+  return store.update('prompt', prompt.id, (current) => (current.task === undefined ? { ...current, modules: switched(current.modules, id, on) } : current));
+}
+
+export type ModulePlace = { kind: 'always' } | { kind: 'character'; id: string } | { kind: 'prompt'; prompt: StoredPrompt<'conversation'> };
+
+export function setModuleAt(store: ObjectStore, place: ModulePlace, id: string, on: boolean): Promise<ApiResult<unknown>> {
+  if (place.kind === 'always') return setModuleAlways(store, id, on);
+  if (place.kind === 'character') return setCharacterModule(store, place.id, id, on);
+  return setPromptModule(store, place.prompt, id, on);
 }
 
 // at is when it was deleted: it is off everywhere at once, and removed for good with what it owns KEEP_DELETED later

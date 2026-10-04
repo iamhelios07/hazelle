@@ -4,7 +4,8 @@ import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
-import { copyPrompt, editPrompt, isDefaultPrompt, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
+import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
+import { ModuleSwitches } from '../common/ModuleSwitches';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
@@ -336,6 +337,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           drill={!split}
         />
       </Section>
+      {ofSort(stored, 'conversation') && <ModuleSwitches owner={{ kind: 'prompt', prompt: stored }} own={stored.value.modules ?? []} />}
     </>
   );
 

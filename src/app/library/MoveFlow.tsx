@@ -75,11 +75,12 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   async function run(backup: RisuBackup, ticks: Ticks) {
     const pick = toPick(backup.catalog, ticks);
     const source = reader.current!;
-    const seen: { last: MoveStep | null } = { last: null };
+    const reached = new Set<MoveStep['kind']>();
     setPhase({ kind: 'running', step: null });
     try {
       const moved = await moveFromRisu(store, files, backup, pick, (step) => {
-        if (reader.current === source) setPhase({ kind: 'running', step: (seen.last = step) });
+        reached.add(step.kind);
+        if (reader.current === source) setPhase({ kind: 'running', step });
       });
       if (reader.current !== source) return;
       if (moved.ok) {
@@ -87,9 +88,13 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         return setPhase({ kind: 'done', backup: backup.catalog, moved: moved.data });
       }
       // What a failed run saved stays, and the move skips characters and modules already here by itself. Personas and
-      // presets carry no Risu id, so a run that got past them is not asked for them again.
-      const past = seen.last !== null && seen.last.kind !== 'personas' && seen.last.kind !== 'prompts';
-      const rest = past ? { ...ticks, personas: ticks.personas.map(() => false), presets: ticks.presets.map(() => false) } : ticks;
+      // presets carry no Risu id, so a run that got past them is not asked for them again. Presets come after the
+      // modules they pair with (runtime/move), so only a run that reached the characters got past them.
+      const rest = {
+        ...ticks,
+        ...([...reached].some((kind) => kind !== 'personas') && { personas: ticks.personas.map(() => false) }),
+        ...(reached.has('characters') && { presets: ticks.presets.map(() => false) }),
+      };
       setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, rest) });
     } catch (error) {
       if (reader.current !== source) return;

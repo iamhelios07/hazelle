@@ -63,12 +63,13 @@ export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 
 
 type Reader = Pick<Session, 'store'>;
 
-// Order (design §6.5): its character's own, then the modules on in every chat, then the character's, each once. A
-// module that is gone or deleted is off.
+// Order (design §6.5): its character's own, then the modules on in every chat, then its prompt's, then the
+// character's, each once where it first appears. A module that is gone or deleted is off.
 // module: null for the character's own pack.
-export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character'>): { id: string; pack: Pack; module: { namespace: string | null } | null }[] {
+export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character' | 'prompt'>): { id: string; pack: Pack; module: { namespace: string | null } | null }[] {
   const character = chat.character === null ? null : store.get('character', chat.character);
-  const modules = [...new Set([...(store.get('settings', SETTINGS_ID)?.value.modules ?? []), ...(character?.value.modules ?? [])])];
+  const prompt = chatPrompt(store, chat);
+  const modules = [...new Set([...(store.get('settings', SETTINGS_ID)?.value.modules ?? []), ...(prompt.kind === 'prompt' ? (prompt.prompt.value.modules ?? []) : []), ...(character?.value.modules ?? [])])];
   return [
     ...(character ? [{ id: character.id, pack: character.value.card, module: null }] : []),
     ...modules.flatMap((id) => {
