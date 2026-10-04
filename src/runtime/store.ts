@@ -24,16 +24,37 @@ type Limits = { items: number; bytes: number; body: number };
 type Page = { timeline: string; until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits };
 export type Pin = { timeline: string; epoch: number };
 const changed = (): ApiFailure => ({ ok: false, error: 'timeline-changed' });
-type ObjectValue = Omit<Stored<Kind>, 'rev'>;
+type ObjectValue = Omit<Stored<Kind>, 'rev' | 'pending'>;
 export type Write = (ObjectValue & { type: 'create' | 'restore' }) | { type: 'remove'; id: string };
 type Pending = { id: string; kind: string; parent: string | null; value: unknown; baseRev: number | null };
 type Resolved = { pending: Pending | null; held: Held | null };
-// derived: a write the store makes on its own (a summary), which is not counted among the person's dropped writes.
-type Step = { resolve: () => ApiResult<Resolved>; derived?: boolean };
+// derived: a write the store makes on its own (a summary), which is not counted among the person's dropped writes and
+// not shown before its answer. at: the copy a change applies to, live when sent and what reads show when previewed.
+type Step = { id: string; resolve: (at: (id: string) => Held | undefined) => ApiResult<Resolved>; derived?: boolean };
 
 // value is undefined for a body that did not open. Such an object is counted, never
 // shown as if it were empty, and never overwritten. kind may be one a newer version wrote.
-type Held = { id: string; kind: string; parent: string | null; rev: number; value: unknown };
+type Held = { id: string; kind: string; parent: string | null; rev: number; value: unknown; pending?: number };
+// A write sent and not yet answered, which every read shows over live (held null: a removal). Pending is a state of its
+// own, never a rev: live, deleted, revisions and heads stay confirmed-only, and the pull cursors and cache bounds with
+// them (user, 2026-10-04: the screen leads, the network follows).
+type Overlay = { id: string; kind: string; parent: string | null; held: Held | null };
+const chatOf = ({ id, kind, parent }: Overlay) => (kind === 'chat' ? id : SCOPED.has(kind) ? parent : null);
+
+// false when stop ends the wait first.
+async function waited(work: Promise<unknown>, stop: AbortSignal): Promise<boolean> {
+  if (stop.aborted) return false;
+  let quit = () => {};
+  const stopped = new Promise<false>((resolve) => {
+    quit = () => resolve(false);
+    stop.addEventListener('abort', quit, { once: true });
+  });
+  try {
+    return await Promise.race([work.then(() => true as const), stopped]);
+  } finally {
+    stop.removeEventListener('abort', quit);
+  }
+}
 
 const MAX_ATTEMPTS = 3;
 // Pauses between tries of a write that could not reach the server; the last repeats until it does.
@@ -41,6 +62,9 @@ const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 // A write waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
 const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable']);
 const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
+// Per chat, the overlay change last made to it, its entries or memory (any), and to its entries alone (entries).
+export type ShownMarks = { any: number; entries: number };
+const UNMARKED: ShownMarks = { any: 0, entries: 0 };
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
 type Scope = { opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
 export type ChatLease = { ready: Promise<ApiFailure | null>; release: () => void };
@@ -54,6 +78,12 @@ export class ScopeUnavailable extends Error {
 export class ObjectStore {
   private readonly closing = new AbortController();
   private readonly live = new Map<string, Held>();
+  private readonly overlays = new Map<string, Overlay>();
+  private readonly marks = new Map<string, ShownMarks>();
+  private shownCount = 0;
+  // Per id, the commit last called to write it: a later one sends only once the earlier has ended, so writes to one
+  // object land in call order and a later overlay is never replaced by an earlier answer.
+  private readonly claims = new Map<string, Promise<void>>();
   private readonly deleted = new Map<string, number>();
   private readonly byKind = new Map<string, Set<string>>();
   private readonly byParent = new Map<string, Map<string, Set<string>>>();
@@ -230,7 +260,9 @@ export class ObjectStore {
     this.epoch++;
     this.ended.abort();
     this.ended = new AbortController();
-    for (const object of this.live.values()) this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });
+    for (const object of [...this.live.values(), ...this.overlays.values()]) this.changes.push({ kind: object.kind, id: object.id, parent: object.parent });
+    this.overlays.clear();
+    this.marks.clear();
     for (const [chat, scope] of this.scopes) {
       scope.abort.abort();
       scope.abort = new AbortController();
@@ -286,21 +318,74 @@ export class ObjectStore {
 
   get<K extends Kind>(kind: K, id: string): Stored<K> | null {
     this.reading?.push({ kind, id });
-    const held = this.live.get(id);
-    if (SCOPED.has(kind) && (!held?.parent || this.scopeState(held.parent) !== 'loaded')) throw new ScopeUnavailable(held?.parent ?? null);
+    const held = this.shown(id);
+    const parent = (this.overlays.get(id) ?? this.live.get(id))?.parent;
+    if (SCOPED.has(kind) && (!parent || this.scopeState(parent) !== 'loaded')) throw new ScopeUnavailable(parent ?? null);
     return held && held.kind === kind && held.value !== undefined ? (held as Stored<K>) : null;
   }
 
   list<K extends Kind>(kind: K): Stored<K>[] {
     if (SCOPED.has(kind)) throw new ScopeUnavailable(null);
     this.reading?.push({ kind, list: true });
-    return [...(this.byKind.get(kind) ?? [])].map((id) => this.live.get(id)!).filter((held): held is Stored<K> => held.value !== undefined);
+    return this.shownOf(this.byKind.get(kind), (held) => held.kind === kind);
   }
 
   children<K extends Kind>(kind: K, parent: string): Stored<K>[] {
     if (SCOPED.has(kind) && this.scopeState(parent) !== 'loaded') throw new ScopeUnavailable(parent);
     this.reading?.push({ kind, parent });
-    return [...(this.byParent.get(parent)?.get(kind) ?? [])].map((id) => this.live.get(id)!).filter((held): held is Stored<K> => held.value !== undefined);
+    return this.shownOf(this.byParent.get(parent)?.get(kind), (held) => held.kind === kind && held.parent === parent);
+  }
+
+  private shown(id: string): Held | undefined {
+    const overlay = this.overlays.get(id);
+    return overlay ? overlay.held ?? undefined : this.live.get(id);
+  }
+
+  private shownOf<K extends Kind>(ids: Set<string> | undefined, matches: (held: Held) => boolean): Stored<K>[] {
+    const shown: Held[] = [];
+    for (const id of ids ?? []) {
+      const held = this.shown(id);
+      if (held && matches(held)) shown.push(held);
+    }
+    for (const { id, held } of this.overlays.values()) if (held && !ids?.has(id) && matches(held)) shown.push(held);
+    return shown.filter((held): held is Stored<K> => held.value !== undefined);
+  }
+
+  shownMarks(chat: string): ShownMarks {
+    return this.marks.get(chat) ?? UNMARKED;
+  }
+
+  private showing(chat: string): boolean {
+    for (const overlay of this.overlays.values()) if (chatOf(overlay) === chat) return true;
+    return false;
+  }
+
+  private show({ id, kind, parent, value }: Pending, mine: Map<string, Overlay>) {
+    // As hold keeps them: a chat's entries and memory only while the chat is held.
+    if (SCOPED.has(kind) && !(parent && this.scopes.has(parent))) return;
+    const held = value === undefined ? null : { id, kind, parent, value, rev: this.live.get(id)?.rev ?? 0, pending: ++this.shownCount };
+    const overlay = { id, kind, parent, held };
+    this.overlays.set(id, overlay);
+    mine.set(id, overlay);
+    this.marked(overlay);
+  }
+
+  // Only the commit's own overlay goes: a later write's stays until its own answer.
+  private unshow(id: string, mine: Map<string, Overlay>) {
+    const overlay = mine.get(id);
+    mine.delete(id);
+    if (!overlay || this.overlays.get(id) !== overlay) return;
+    this.overlays.delete(id);
+    this.marked(overlay);
+  }
+
+  private marked(overlay: Overlay) {
+    const { id, kind, parent } = overlay;
+    if (!SCOPED.has(kind) || (parent && this.scopeState(parent) === 'loaded')) this.changes.push({ kind, id, parent });
+    const chat = chatOf(overlay);
+    if (!chat) return;
+    const mark = ++this.shownCount;
+    this.marks.set(chat, { any: mark, entries: kind === 'entry' ? mark : this.shownMarks(chat).entries });
   }
 
   close() {
@@ -311,6 +396,7 @@ export class ObjectStore {
     this.listeners.clear();
     this.rewoundListeners.clear();
     this.live.clear();
+    this.overlays.clear();
     this.byKind.clear();
     this.byParent.clear();
     this.projections.clear();
@@ -354,7 +440,7 @@ export class ObjectStore {
     if (loading) { if (await loading) return null; return this.evaluated(chat); }
     if (this.scopeState(chat) !== 'loaded') return null;
     const previous = this.projections.get(chat);
-    if (previous && !summaryStale(this, chat, previous.summary, this.loadedHead(chat))) return previous;
+    if (previous && previous.shown.any === this.shownMarks(chat).any && !summaryStale(this, chat, previous.summary, this.loadedHead(chat))) return previous;
     const epoch = this.epoch;
     const scope = this.scopes.get(chat)!;
     const work = (async () => {
@@ -365,7 +451,7 @@ export class ObjectStore {
         });
         if (epoch !== this.epoch || this.scopes.get(chat) !== scope || scope.state !== 'loaded' || this.closing.signal.aborted) return null;
         if (scope.loading) return this.projections.get(chat) ?? null;
-        if (next && summaryStale(this, chat, next.summary, this.loadedHead(chat))) continue;
+        if (next && (next.shown.any !== this.shownMarks(chat).any || summaryStale(this, chat, next.summary, this.loadedHead(chat)))) continue;
         if (next) this.projections.set(chat, next);
         else this.projections.delete(chat);
         this.changes.push({ kind: 'projection', id: chat, parent: chat });
@@ -575,7 +661,9 @@ export class ObjectStore {
 
   private async summaryWrite(chat: string): Promise<Write | null> {
     const projection = await this.evaluated(chat);
-    if (!projection) return null;
+    // Neither a chat still showing an overlay nor a projection folded while it did: the commit that ends the chat's last
+    // overlay summarizes it again (summarizeHeld).
+    if (!projection || this.showing(chat) || projection.shown.any !== this.shownMarks(chat).any) return null;
     const id = summaryId(chat);
     const current = this.get('summary', id);
     if (current && !summaryStale(this, chat, current.value) && current.value.title === projection.summary.title && current.value.preview === projection.summary.preview) return null;
@@ -622,8 +710,8 @@ export class ObjectStore {
   }
 
   async removeRows(rows: ObjectRow[]): Promise<ApiResult<null>> {
-    const removed = await this.commit(rows.map((row) => ({ resolve: () => {
-      const held = this.live.get(row.id);
+    const removed = await this.commit(rows.map((row) => ({ id: row.id, resolve: (at) => {
+      const held = at(row.id);
       if (!held && (this.deleted.get(row.id) ?? 0) >= row.rev) return { ok: true, data: { pending: null, held: null } };
       return { ok: true, data: { pending: { ...row, value: undefined, baseRev: held?.rev ?? row.rev }, held: null } };
     } })));
@@ -714,8 +802,9 @@ export class ObjectStore {
   // it changes is no longer there in the copy it is applied to, and nothing is written.
   update<K extends Exclude<Kind, AppendOnly>>(kind: K, id: string, change: (current: Values[K]) => Values[K] | null): Promise<ApiResult<Stored<K>>> {
     return this.writeOne<K>({
-      resolve: () => {
-        const held = this.live.get(id);
+      id,
+      resolve: (at) => {
+        const held = at(id);
         if (!held || held.kind !== kind) return { ok: false, error: SCOPED.has(kind) ? 'not-loaded' : 'gone' };
         if (held.value === undefined) return { ok: false, error: 'unreadable' };
         const value = change(held.value as Values[K]);
@@ -729,8 +818,9 @@ export class ObjectStore {
   upsert<K extends Singleton>(kind: K, change: (current: Values[K] | undefined) => Values[K]): Promise<ApiResult<Stored<K>>> {
     const id = KINDS[kind].id;
     return this.writeOne<K>({
-      resolve: () => {
-        const held = this.live.get(id);
+      id,
+      resolve: (at) => {
+        const held = at(id);
         if (held && held.value === undefined) return { ok: false, error: 'unreadable' };
         return { ok: true, data: { pending: { kind, id, parent: null, value: change(held?.value as Values[K] | undefined), baseRev: held?.rev ?? null }, held: null } };
       },
@@ -789,9 +879,10 @@ export class ObjectStore {
 
   private step(write: Write): Step {
     return {
+      id: write.id,
       derived: write.type !== 'remove' && write.kind === 'summary',
-      resolve: () => {
-        const held = this.live.get(write.id);
+      resolve: (at) => {
+        const held = at(write.id);
         if (write.type === 'remove') {
           if (!held && !this.deleted.has(write.id)) return { ok: false, error: 'not-loaded' };
           return { ok: true, data: { pending: held ? { ...held, value: undefined, baseRev: held.rev } : null, held: null } };
@@ -852,16 +943,47 @@ export class ObjectStore {
     const saved: (Held | null)[] = [];
     const unsent = () => steps.slice(saved.length).filter((step) => !step.derived).length;
     this.unsent.add(unsent);
+    const ids = [...new Set(steps.map((step) => step.id))];
+    const earlier = ids.flatMap((id) => this.claims.get(id) ?? []);
+    let release = () => {};
+    const claim = new Promise<void>((resolve) => { release = resolve; });
+    for (const id of ids) this.claims.set(id, claim);
+    const shown = new Map<string, Overlay>();
     try {
-      return await this.send(steps, saved, progress, stop);
+      // Shown before the wait for an earlier write to the same object, applied to what reads show: the real resolve,
+      // against live, runs inside send.
+      for (const step of steps) {
+        if (step.derived) continue;
+        let preview: ApiResult<Resolved>;
+        try { preview = step.resolve((id) => this.shown(id)); } catch { continue; }
+        if (preview.ok && preview.data.pending) this.show(preview.data.pending, shown);
+      }
+      if (shown.size) {
+        this.changed();
+        this.refreshHeld();
+      }
+      if (earlier.length) {
+        if (!(await waited(Promise.all(earlier), stop))) return { ok: false, error: 'stopped' };
+        if (epoch !== this.epoch) return this.halted(epoch);
+      }
+      return await this.send(steps, saved, progress, stop, shown);
     } catch (error) {
       return this.codecFailure(error, epoch);
     } finally {
       this.unsent.delete(unsent);
+      release();
+      for (const id of ids) if (this.claims.get(id) === claim) this.claims.delete(id);
+      // A write that failed for good shows the confirmed copy again; its caller still gets the failure.
+      if (shown.size) {
+        for (const id of [...shown.keys()]) this.unshow(id, shown);
+        this.changed();
+        this.refreshHeld();
+      }
     }
   }
 
-  private async send(steps: Step[], saved: (Held | null)[], progress: (index: number) => void, stop: AbortSignal): Promise<ApiResult<(Held | null)[]>> {
+  private async send(steps: Step[], saved: (Held | null)[], progress: (index: number) => void, stop: AbortSignal, shown: Map<string, Overlay>): Promise<ApiResult<(Held | null)[]>> {
+    const confirmed = (id: string) => this.live.get(id);
     const pinned = await this.pin(stop);
     if (!pinned.ok) return pinned;
     const { timeline, epoch } = pinned.data;
@@ -882,7 +1004,7 @@ export class ObjectStore {
         filling: for (let from = start; from < end; from += SEAL_ITEMS) {
           if (halt.aborted) return this.halted(epoch);
           const window = steps.slice(from, Math.min(from + SEAL_ITEMS, end)).map((step) => {
-            try { return { ready: step.resolve() }; }
+            try { return { ready: step.resolve(confirmed) }; }
             catch (error) { return { error }; }
           });
           const items: SealItem[] = [];
@@ -941,8 +1063,9 @@ export class ObjectStore {
             }
           }
           this.cacheWrite(writes.map(({ id, kind, parent, body }, index) => ({ id, kind, parent, body, rev: answer.data.revs[index]! })));
-          this.changed();
         }
+        for (let index = 0; index < resolved.length; index++) this.unshow(steps[start + index]!.id, shown);
+        this.changed();
         return { ok: true, data: resolved.map(({ held }) => held) };
       }, halt);
       if (!result.ok) return epoch === this.epoch ? result : this.halted(epoch);
@@ -1185,7 +1308,8 @@ export class ObjectStore {
 
   private changed() {
     if (!this.changes.length) return;
-    const changes = this.changes.splice(0);
+    // A confirmed write is told twice over, by hold and by its overlay going.
+    const changes = [...new Map(this.changes.splice(0).map((change) => [`${change.kind}\n${change.id}\n${change.parent}`, change])).values()];
     for (const listener of this.listeners) listener(changes);
   }
 }

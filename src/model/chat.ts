@@ -137,8 +137,8 @@ const versionOf = (id: string, entry: Extract<Entry, { type: 'message' | 'versio
   ...(entry.greeting !== undefined && { greeting: entry.greeting }),
 });
 
-// A chat's entries, read in rev order into the messages on screen. Entries naming a message or version
-// that is not there (yet) are skipped.
+// A chat's entries, read in rev order into the messages on screen, the pending ones (Stored.pending) after every
+// confirmed one in the order sent. Entries naming a message or version that is not there (yet) are skipped.
 export function fold(entries: Stored<'entry'>[]): Message[] {
   const messages = new Map<string, Message>();
   const deleted = new Set<string>();
@@ -160,7 +160,7 @@ export function fold(entries: Stored<'entry'>[]): Message[] {
     return version && home.get(version) === message ? places.get(id)! : -1;
   };
 
-  for (const { id, value: entry } of [...entries].sort((a, b) => a.rev - b.rev)) {
+  for (const { id, value: entry } of [...entries].sort((a, b) => (a.pending ?? 0) - (b.pending ?? 0) || a.rev - b.rev)) {
     if (entry.type === 'message') {
       const version = versionOf(id, entry, false, entry.staged === true);
       own.set(id, version);

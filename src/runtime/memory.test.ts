@@ -220,7 +220,7 @@ describe('a summary picked up after a reload', () => {
     const writer = provider.writable.getWriter();
     const log = stubRelay(inTurn([saying('Luna waves.'), new Response(provider.readable, { headers: { 'x-relay': 'upstream' } })]));
     expect(await takeTurn(first, chat, { kind: 'answer' })).toBeNull();
-    await vi.waitFor(() => expect(first.store.list('stream').map(({ value }) => value.for.kind)).toEqual(['memory']));
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ value, pending }) => [value.for.kind, pending])).toEqual([['memory', undefined]]));
     await vi.waitFor(() => expect(log).toHaveLength(2));
     first.close();
 

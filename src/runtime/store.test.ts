@@ -265,3 +265,71 @@ describe('object store', () => {
     expect(store.get('chat', id)?.rev).toBe(4);
   });
 });
+
+describe('writes shown before their answer', () => {
+  // hold keeps every objects/batch request waiting until answer: true sends it, false fails it.
+  const gated = async () => {
+    const { accountId, vaultKey, open } = await server.account();
+    let gate: Promise<boolean> | null = null;
+    let answer: (ok: boolean) => void = () => {};
+    const request = async <T,>(...args: Parameters<typeof api>) => {
+      if (gate && args[1] === 'objects/batch' && !(await gate)) return { ok: false as const, error: 'server-error' };
+      return api<T>(...args);
+    };
+    const store = await ObjectStore.open(accountId, vaultKey, request);
+    const hold = () => { gate = new Promise((resolve) => { answer = (ok) => { gate = null; resolve(ok); }; }); };
+    return { store, open, hold, answer: (ok: boolean) => answer(ok) };
+  };
+
+  it('shows a write at once, keeps it through a pull, and the confirmed object takes its place', async () => {
+    const { store, open, hold, answer } = await gated();
+    const created = await store.create('connection', connection('a'));
+    if (!created.ok) throw new Error(created.error);
+    const phone = await open();
+    await phone.pull();
+    const told = vi.fn();
+    store.subscribe(told);
+    hold();
+    const saving = store.update('connection', created.data.id, renamed('b'));
+    await vi.waitFor(() => expect(store.get('connection', created.data.id)).toMatchObject({ rev: created.data.rev, pending: expect.any(Number), value: { label: 'ab' } }));
+    expect(told).toHaveBeenCalled();
+    await phone.update('connection', created.data.id, renamed('c'));
+    await store.pull();
+    expect(store.get('connection', created.data.id)?.value.label).toBe('ab');
+    answer(true);
+    const saved = await saving;
+    expect(saved.ok && saved.data.value.label).toBe('acb');
+    expect(saved.ok && store.get('connection', created.data.id)).toBe(saved.ok && saved.data);
+    expect(store.get('connection', created.data.id)?.pending).toBeUndefined();
+  });
+
+  it('shows the confirmed copy again after a final failure, whose caller still hears it', async () => {
+    const { store, hold, answer } = await gated();
+    hold();
+    const saving = store.create('connection', connection('a'), { id: 'c' });
+    await vi.waitFor(() => expect(store.list('connection').map(({ value }) => value.label)).toEqual(['a']));
+    answer(false);
+    expect(await saving).toEqual({ ok: false, error: 'server-error' });
+    expect(store.list('connection')).toEqual([]);
+  });
+
+  it("keeps a pending entry in its chat's projection through a pull, after every confirmed one", async () => {
+    const { store, open, hold, answer } = await gated();
+    const phone = await open();
+    const chat = await store.create('chat', { title: null, character: null, models: {} });
+    if (!chat.ok) throw new Error(chat.error);
+    const message = (text: string) => ({ type: 'message' as const, role: 'user' as const, text, at: 0, receipt: null });
+    await server.hold(store, chat.data.id);
+    await server.hold(phone, chat.data.id);
+    const [mine, theirs] = [crypto.randomUUID(), crypto.randomUUID()];
+    hold();
+    const saving = store.create('entry', message('mine'), { id: mine, parent: chat.data.id });
+    await vi.waitFor(async () => expect((await store.evaluated(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([mine]));
+    expect(await phone.create('entry', message('theirs'), { id: theirs, parent: chat.data.id })).toMatchObject({ ok: true });
+    await store.refreshChat(chat.data.id);
+    expect((await store.evaluated(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([theirs, mine]);
+    answer(true);
+    expect(await saving).toMatchObject({ ok: true });
+    expect((await store.evaluated(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([theirs, mine]);
+  });
+});

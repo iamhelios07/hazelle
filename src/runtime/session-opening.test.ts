@@ -11,7 +11,6 @@ it('reports received objects and pages during opening and aborts the in-flight i
   let started!: () => void;
   const waiting = new Promise<void>((resolve) => { started = resolve; });
   const fetch = vi.fn(async (url: string, init: RequestInit) => {
-    expect(init.signal).toBe(abandon.signal);
     url = url.replace(/&known=\d+|&timeline=t$/g, '');
     if (url === '/api/objects?since=3&exclude=entry,memory&bootstrap=1') {
       started();

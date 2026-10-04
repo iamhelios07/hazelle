@@ -141,4 +141,6 @@ const SHAPES = {
 
 export const isValue = <K extends Kind>(kind: K, value: unknown): value is Values[K] => SHAPES[kind](value);
 
-export type Stored<K extends Kind> = { id: string; kind: K; parent: string | null; rev: number; value: Values[K] };
+// pending: a write this tab sent and the server has not answered, numbered in the order sent (ObjectStore overlays);
+// its rev is then the confirmed one it replaces, 0 for a create, never a rev of its own.
+export type Stored<K extends Kind> = { id: string; kind: K; parent: string | null; rev: number; value: Values[K]; pending?: number };

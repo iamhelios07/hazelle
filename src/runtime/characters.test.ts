@@ -27,6 +27,8 @@ async function savedChat(store: ObjectStore, character: string | null = null) {
   await server.hold(store, id);
   await startChat(store, id, { title: null, character, models: {} }, null);
   await appendUserMessage(store, id, { id: crypto.randomUUID(), text: '안녕' });
+  // The summary follows unawaited, and none is written while a later write to the chat is still pending.
+  await store.saveSummary(id);
   return id;
 }
 

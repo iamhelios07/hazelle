@@ -45,3 +45,15 @@ it('states the account the page holds with every request, and hears what answers
     { kind: 'elsewhere' },
   ]);
 });
+
+it('gives up on headers that never come as offline, so the store waits for the connection instead', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.stubGlobal('fetch', (_url: string, init: RequestInit) => new Promise((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))));
+    const answer = api('POST', 'objects/batch', {});
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await answer).toEqual({ ok: false, error: 'offline' });
+  } finally {
+    vi.useRealTimers();
+  }
+});
