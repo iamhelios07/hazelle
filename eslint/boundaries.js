@@ -4,7 +4,7 @@ import path from 'node:path';
 // without its extension, relative to the repo root (the folder above this one), and a test file belongs where the module
 // it tests does. An area imports itself, the areas in `imports`, with `import type` those in `types`, and from its test
 // files those in `tests`. A module in no area fails lint until this table places it.
-const RUNTIME_IMPORTS = ['model', 'engine', 'connectors', 'vault'];
+const RUNTIME_IMPORTS = ['model', 'engine', 'connectors', 'priceLists', 'vault'];
 const BELOW_APP = ['runtime', ...RUNTIME_IMPORTS];
 const FEATURES = ['account', 'admin', 'library', 'chat', 'connections', 'models', 'prompts', 'personas', 'modules', 'settings'];
 const FEATURE = {
@@ -12,7 +12,12 @@ const FEATURE = {
   why: 'a feature folder imports no other feature folder and nothing from the shell but routes and router (only the shell and main.tsx compose features), and reaches the server over HTTP only.',
 };
 const AREAS = {
-  connectors: { paths: ['src/connectors'], why: 'connectors are the provider contract the engine and the model build on, so they import no other layer, and touch no DOM, network or storage so their golden tests run in node.' },
+  connectors: {
+    paths: ['src/connectors'],
+    imports: ['priceLists'],
+    why: 'connectors are the provider contract the engine and the model build on, so they import no other layer, and touch no DOM, network or storage so their golden tests run in node.',
+  },
+  priceLists: { paths: ['src/connectors/price-list'], why: 'which models.dev price lists a connection type reads, and their shape, is data and types only, shared by the connectors and the server.' },
   engine: {
     paths: ['src/engine'],
     imports: ['connectors'],
@@ -25,7 +30,7 @@ const AREAS = {
     why: 'the model is pure domain, saved values and what is computed from them with no I/O, and takes only types from connectors, the engine and the vault (a stored file\'s reference).',
   },
   vault: { paths: ['src/vault'], why: 'the vault is crypto and device storage only; it never reaches the network.' },
-  server: { paths: ['src/server'], why: 'the server knows nothing about the client or providers.' },
+  server: { paths: ['src/server'], imports: ['priceLists'], why: 'the server knows nothing about the client or providers, but which price lists to keep (connectors/price-list).' },
   runtime: {
     paths: ['src/runtime'],
     imports: RUNTIME_IMPORTS,

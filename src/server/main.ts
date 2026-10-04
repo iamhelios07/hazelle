@@ -2,6 +2,7 @@
 // vitest server tests (plain Node, through worker.ts) cannot load.
 import { forgetOldRecords } from './admin';
 import { sweepDeadPrefixes } from './files';
+import { refreshPrices } from './prices';
 import app from './worker';
 
 export default {
@@ -9,6 +10,7 @@ export default {
   scheduled: (_controller, env, ctx) => {
     ctx.waitUntil(sweepDeadPrefixes(env));
     ctx.waitUntil(forgetOldRecords(env.DB));
+    ctx.waitUntil(refreshPrices(env.DB));
   },
 } satisfies ExportedHandler<Env>;
 
