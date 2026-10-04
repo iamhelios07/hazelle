@@ -24,12 +24,14 @@ export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c
   const body = await readObject(c);
   const text = typeof body?.text === 'string' ? body.text.trim() : '';
   if (!text || text.length > MAX_REPORT_LENGTH) return fail(c, 400, 'bad-input');
-  const { id, username } = c.get('account');
+  const { id, username, incarnation } = c.get('account');
+  // Reports must not predate their account: restore and reply eligibility use that bound even if wall time regresses.
   const sent = await c.env.DB.prepare(
     `INSERT INTO reports (account_id, username, text, created_at)
-     SELECT ?1, ?2, ?3, ?4 WHERE (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND resolved_at IS NULL) < ?5 RETURNING id`,
+     SELECT ?1, ?2, ?3, MAX(?4, created_at) FROM accounts WHERE id = ?1 AND incarnation = ?6
+     AND (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND resolved_at IS NULL) < ?5 RETURNING id`,
   )
-    .bind(id, username, text, Date.now(), MAX_OPEN_REPORTS)
+    .bind(id, username, text, Date.now(), MAX_OPEN_REPORTS, incarnation)
     .first();
   return sent ? c.body(null, 204) : fail(c, 429, 'too-many-reports');
 });

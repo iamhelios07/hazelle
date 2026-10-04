@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hex } from './http';
 import { forgetOldRecords, readAll } from './admin';
+import { beginRestore } from './lifecycle';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -192,6 +193,21 @@ describe('the operator', () => {
     expect((await t.post(`admin/reports/${id}/resolve`, undefined, admin.cookie)).status).toBe(404);
     expect(await (await t.get('admin/reports', admin.cookie)).json()).toMatchObject({ reports: [{ id, resolvedAt: expect.any(Number) }] });
     expect(await log(admin.cookie)).toMatchObject([{ action: 'resolve-report', target: String(id), detail: null }]);
+  });
+
+  it('keeps a report eligible for its account when the wall clock moves backwards after signup', async () => {
+    const other = await account('other');
+    const created = (await t.env.DB.prepare('SELECT created_at FROM accounts WHERE id = ?').bind(other.id).first<number>('created_at'))!;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(created - 645);
+    try {
+      expect((await t.post('reports', { text: 'restore' }, other.cookie)).status).toBe(204);
+    } finally {
+      clock.mockRestore();
+    }
+    const report = (await t.env.DB.prepare('SELECT id, created_at FROM reports WHERE account_id = ?').bind(other.id).first<{ id: number; created_at: number }>())!;
+    const begun = await beginRestore(t.env as Env, other.id, report.id, { at: created - 3_600_000 });
+    expect(begun).toEqual({ begun: expect.any(Number) });
+    expect(report.created_at).toBe(created);
   });
 
   it('refuses an account another report while it has twenty unresolved', async () => {

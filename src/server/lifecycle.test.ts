@@ -159,12 +159,14 @@ async function seeded(username = `u${crypto.randomUUID().slice(0, 8)}`) {
   t.clock.now = () => now - HOUR_MS / 2;
   await write({ id: A, kind: 'chat', parent: null, body: 'new', baseRev: 1 }, { id: B, kind: 'chat', parent: null, body: 'b', baseRev: null });
   t.clock.now = () => Date.now();
-  const report = await reported(body.accountId);
+  const report = await reported(body.accountId, cookie);
   return { id: body.accountId, body, cookie, report, incarnation, timeline, at: now - (3 * HOUR_MS) / 4 };
 }
 
-const reported = async (accountId: string) =>
-  (await t.env.DB.prepare("INSERT INTO reports (account_id, username, text, created_at) VALUES (?, '', '', ?) RETURNING id").bind(accountId, Date.now()).first<number>('id'))!;
+async function reported(accountId: string, cookie: string) {
+  expect((await t.post('reports', { text: 'restore' }, cookie)).status).toBe(204);
+  return (await t.env.DB.prepare('SELECT MAX(id) AS id FROM reports WHERE account_id = ?').bind(accountId).first<number>('id'))!;
+}
 
 const account = (id: string) => t.env.DB.prepare('SELECT incarnation, state, timeline, operation FROM accounts WHERE id = ?').bind(id).first<{ incarnation: string; state: string; timeline: string; operation: number | null }>();
 const operation = (id: number) => t.env.DB.prepare('SELECT phase, verified, target, error FROM restores WHERE id = ?').bind(id).first<{ phase: Phase; verified: number; target: string | null; error: string | null }>();
@@ -215,7 +217,7 @@ describe('a restore', () => {
       { id, reportId: seed.report, at: seed.at, undoes: null, phase: 'done', verified: true, error: null, createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [] },
     ]);
 
-    const report = await reported(seed.id);
+    const report = await reported(seed.id, seed.cookie);
     const undone = await t.post(`admin/accounts/${seed.id}/restores`, { report, undoes: id }, admin.cookie);
     expect(await undone.json()).toEqual({ id: expect.any(Number), phase: 'done', verified: true, error: null });
     expect(await contents(seed.cookie)).toEqual(BEFORE);
