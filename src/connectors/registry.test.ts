@@ -55,6 +55,7 @@ describe('detection', () => {
     ['csk-abc', 'https://api.cerebras.ai/v1', 'cerebras'],
     ['inf_abc', 'https://api.surplusintelligence.ai/v1', 'surplus'],
     [null, 'https://api.nano-gpt.com/api/v1', 'nanogpt'],
+    [null, 'https://api.deepinfra.com/v1/openai', 'deepinfra'],
     [null, 'https://api.deepseek.com', 'deepseek'],
     [null, 'https://api.mistral.ai/v1', 'mistral'],
     [null, 'https://api.moonshot.ai/v1', 'moonshot'],

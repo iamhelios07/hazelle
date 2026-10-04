@@ -3,6 +3,7 @@ import { anthropicMessages } from './anthropic-messages';
 import { chatCompletions } from './chat-completions';
 import { cerebras } from './cerebras';
 import { copilot } from './copilot';
+import { deepinfra } from './deepinfra';
 import { deepseek } from './deepseek';
 import { gemini } from './gemini';
 import { google } from './google';
@@ -30,6 +31,7 @@ export const CONNECTION_TYPES: readonly ConnectionType[] = [
   groq,
   together,
   cerebras,
+  deepinfra,
   nanogpt,
   surplus,
   openai,
