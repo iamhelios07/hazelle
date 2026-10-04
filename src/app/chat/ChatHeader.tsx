@@ -12,11 +12,11 @@ import { ReadingDialog, ReadingMenu } from './ChatReading';
 import type { OpenChat } from './useChat';
 
 export function ChatHeading({ chat }: { chat: OpenChat }) {
-  const { item, card, shelf, streaming } = chat;
+  const { item, card, shelf, busy } = chat;
   const title = card ? `${card.name} · ${item?.title ?? '새 채팅'}` : (item?.title ?? '새 채팅');
   const face = card ? <Avatar face={card.name} image={shelf!.face} /> : <Avatar face={MessageSquare} />;
   return (
-    <Menu label={card ? `${card.name}의 채팅` : '캐릭터 없이'} size="lg" trigger={(opener) => <ChatTitle avatar={face} title={title} typing={streaming} {...opener} />}>
+    <Menu label={card ? `${card.name}의 채팅` : '캐릭터 없이'} size="lg" trigger={(opener) => <ChatTitle avatar={face} title={title} typing={busy} {...opener} />}>
       <ChatChoices chat={chat} />
     </Menu>
   );

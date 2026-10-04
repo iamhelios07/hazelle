@@ -38,7 +38,7 @@ export function endCall(store: ObjectStore, id: string) {
 }
 
 // Picks up the calls this page is not reading (reading, which Talk, Translator and Rememberer keep): when the session
-// opens and whenever a marker or an entry changes, which is also when a reply waiting for Talk to be free can go.
+// opens and whenever a marker or an entry changes, which is also when a reply waiting for its chat's turn in Talk to end can go.
 export class Streams {
   private closed = false;
   private readonly checking = new Set<string>();

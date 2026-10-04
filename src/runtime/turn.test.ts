@@ -116,7 +116,7 @@ describe('a new chat', () => {
           started: () => (preview = session.read.chat(chat).snapshot()?.preview),
         },
       );
-      expect(session.talk.snapshot()).toMatchObject({ chat, said: { text: '안녕' } });
+      expect(session.talk.snapshot(chat)).toMatchObject({ chat, said: { text: '안녕' } });
       expect(store.get('chat', chat)).toBeNull();
       expect(await turn).toBeNull();
       expect(preview).toBe('어서 와, jin.');

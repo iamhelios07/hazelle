@@ -44,7 +44,7 @@ describe('a detached call', () => {
     const { chat, writer } = await streaming(first);
     const turn = takeTurn(first, chat, { kind: 'send', text: 'Hi' });
     await writer.write(delta('Hello, '));
-    await vi.waitFor(() => expect(first.talk.snapshot()?.text).toBe('Hello, '));
+    await vi.waitFor(() => expect(first.talk.snapshot(chat)?.text).toBe('Hello, '));
     await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
     first.close();
     expect(await turn).toBeNull();
@@ -102,8 +102,11 @@ describe('a detached call', () => {
     const second = await open();
     await server.hold(second.store, chat);
     try {
-      await vi.waitFor(() => expect(second.talk.snapshot()?.text).toBe('Hello, '), { timeout: 3000 });
+      await vi.waitFor(() => expect(second.talk.snapshot(chat)?.text).toBe('Hello, '), { timeout: 3000 });
+      const writing = second.talk.writing();
       await writer.write(delta('traveler.'));
+      await vi.waitFor(() => expect(second.talk.snapshot(chat)?.text).toBe('Hello, traveler.'));
+      expect(second.talk.writing()).toBe(writing);
       await writer.write(ending);
       await vi.waitFor(() => expect(shown(messages(second, chat)[1]!).translation?.text).toBe('안녕, 여행자.'));
       expect(log).toHaveLength(1);
@@ -131,7 +134,7 @@ describe('a detached call', () => {
     const second = await open();
     await server.hold(second.store, chat);
     try {
-      await vi.waitFor(() => expect(second.talk.snapshot()?.text).toBe('Hello, '), { timeout: 3000 });
+      await vi.waitFor(() => expect(second.talk.snapshot(chat)?.text).toBe('Hello, '), { timeout: 3000 });
       await writer.write(delta('traveler.'));
       await writer.write(ending);
       await vi.waitFor(() => expect(shown(messages(second, chat)[1]!)).toMatchObject({ text: 'Hello, traveler.', receipt: { state: 'done' } }));
@@ -146,10 +149,10 @@ describe('a detached call', () => {
       const { chat, writer } = await streaming(session);
       const turn = takeTurn(session, chat, { kind: 'send', text: 'Hi' });
       await writer.write(delta('Hello'));
-      await vi.waitFor(() => expect(session.talk.snapshot()?.text).toBe('Hello'));
+      await vi.waitFor(() => expect(session.talk.snapshot(chat)?.text).toBe('Hello'));
       await vi.waitFor(() => expect(session.store.list('stream')).toHaveLength(1));
       const [call] = session.store.list('stream');
-      session.talk.stop();
+      session.talk.stop(chat);
       expect(await turn).toBeNull();
       expect(shown(messages(session, chat)[1]!)).toMatchObject({ text: 'Hello', receipt: { state: 'cut', cut: 'stopped' } });
       await vi.waitFor(async () => expect((await fetchApi(`streams/${call!.id}`)).status).toBe(404));

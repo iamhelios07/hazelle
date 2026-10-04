@@ -10,7 +10,7 @@ import { ObjectStore } from '../runtime/store';
 import type { Turn } from '../runtime/talk';
 import * as display from '../runtime/turn';
 import { randomBytes } from '../vault/aead';
-import { SessionProvider, useChatDisplay, useWritingChat } from './session';
+import { SessionProvider, useChatDisplay } from './session';
 import { probeRoot } from './common/probe';
 
 const facts = new AccountFacts({ accountId: 'a', username: 'jin', admin: false, suspended: false, state: 'active', storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 });
@@ -29,7 +29,7 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   const read = new ReadModels(store);
   let turn: Turn | null = null;
   const listeners = new Set<() => void>();
-  const talk = { snapshot: () => turn, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
+  const talk = { snapshot: (id: string) => (turn?.chat === id ? turn : null), subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
   const session = { read, talk } as Session;
   const opening: Opening = { chat, messages: [] };
   const screen = { width: 800, height: 600 } satisfies NonNullable<ChatScope['screen']>;
@@ -69,34 +69,6 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
     read.close();
     lease.release();
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  }
-});
-
-it('useWritingChat renders when a reply starts or ends, and not for its chunks', async () => {
-  let turn: Turn | null = null;
-  const listeners = new Set<() => void>();
-  const say = (next: Turn | null) => act(() => {
-    turn = next;
-    for (const listener of listeners) listener();
-  });
-  const talk = { snapshot: () => turn, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
-  const renders: (string | null)[] = [];
-  function Probe() {
-    renders.push(useWritingChat());
-    return null;
-  }
-  const root = probeRoot();
-  try {
-    await act(() => root.render(<SessionProvider session={{ talk } as Session} account={{ admin: false, facts, onLock() {}, onLogout: async () => null }}><Probe /></SessionProvider>));
-    const started: Turn = { chat: 'chat', said: null, reply: { id: 'reply', message: null, replaces: null, continues: null }, text: '', reasoning: '' };
-    await say(started);
-    await say({ ...started, text: 'one' });
-    await say({ ...started, text: 'one two' });
-    await say(null);
-    expect(renders).toEqual([null, 'chat', null]);
-  } finally {
-    await act(() => root.unmount());
     vi.unstubAllGlobals();
   }
 });

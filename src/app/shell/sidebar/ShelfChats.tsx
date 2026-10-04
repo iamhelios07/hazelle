@@ -5,7 +5,7 @@ import type { Shelf } from '../../../model/library';
 import { matches, noResults, SEARCH_FROM } from '../../common/search';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
-import { useWritingChat } from '../../session';
+import { useWritingChats } from '../../session';
 import { Empty, ItemRow, NavRow, SearchField, SideTitle, Sidebar, Viewport } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { characterPage, type Route } from '../routes';
@@ -21,7 +21,7 @@ type Props = {
 export function ShelfChats({ page, shelf, onUp }: Props) {
   const [query, setQuery] = useState('');
   const found = useMemo(() => shelf.chats.filter((item) => matches(query, item.title, item.preview ?? '')), [shelf.chats, query]);
-  const writing = useWritingChat();
+  const writing = useWritingChats();
   const route = useRoute();
   const openChat = route.kind === 'chat' ? route.id : undefined;
   // 캐릭터 없이 has a page only beside its chats.
@@ -46,7 +46,7 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
           key={item.id}
           title={item.title}
           time={item.at === null ? '' : ago(item.at)}
-          typing={writing === item.id}
+          typing={writing.has(item.id)}
           preview={item.preview ?? '아직 불러오지 않은 채팅'}
           current={item.id === openChat}
           onClick={() => navigate({ kind: 'chat', id: item.id })}

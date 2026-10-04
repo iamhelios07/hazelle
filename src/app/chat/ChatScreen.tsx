@@ -33,7 +33,7 @@ type Props = {
 export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
   const { reading, display } = useDisplay();
   const chat = useChat(chatId, item, shelf, reading.reply);
-  const { id, streaming, panel, scroll, prompt, persona, actions } = chat;
+  const { id, busy, panel, scroll, prompt, persona, actions } = chat;
   const folded = display.foldComposer && scroll.away;
   useShortcut('personas', () => actions.toggleSide('personas'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));
@@ -49,7 +49,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
         back={back ? { label: back.label, onClick: () => navigate(back.to) } : undefined}
         title={chat.search ? <ChatSearch search={chat.search} actions={actions} /> : <ChatHeading chat={chat} />}
         actions={<ChatHeaderActions chat={chat} />}
-        above={scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
+        above={scroll.pill && <Pill label={scroll.pill} live={busy} onClick={actions.follow} />}
         footer={<ChatComposer chat={chat} folded={folded} />}
         panel={
           panel?.kind === 'toggles' ? (

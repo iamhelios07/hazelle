@@ -30,7 +30,7 @@ describe('Translator', () => {
       const leave = session.talk.subscribe(screen);
       const turn = takeTurn(session, chat, { kind: 'answer' });
       await writer.write(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hello, traveler."}}]}\n\n'));
-      await vi.waitFor(() => expect(session.talk.snapshot()?.text).toBe('Hello, traveler.'));
+      await vi.waitFor(() => expect(session.talk.snapshot(chat)?.text).toBe('Hello, traveler.'));
       expect(log).toHaveLength(1);
       expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
       leave();

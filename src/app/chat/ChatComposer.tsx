@@ -24,7 +24,7 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, busy, streaming, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, actions } = chat;
+  const { draft, messages, last, busy, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, actions } = chat;
   const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: useMenuOpener(personaMenu) };
   const wide = useWide();
   const [focused, setFocused] = useState(false);
@@ -36,7 +36,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
       void actions.send();
       return;
     }
-    if (streaming && pressed(event, SHORTCUTS.stop.keys)) {
+    if (busy && pressed(event, SHORTCUTS.stop.keys)) {
       event.preventDefault();
       actions.stop();
       return;
@@ -55,7 +55,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
     }
   }
 
-  const hint = !focused || !wide ? '' : streaming ? hints(SHORTCUTS.stop) : draft.text ? hints(SHORTCUTS.send, SHORTCUTS.newline) : hints(SHORTCUTS.send, SHORTCUTS.editLast, SHORTCUTS.swipe);
+  const hint = !focused || !wide ? '' : busy ? hints(SHORTCUTS.stop) : draft.text ? hints(SHORTCUTS.send, SHORTCUTS.newline) : hints(SHORTCUTS.send, SHORTCUTS.editLast, SHORTCUTS.swipe);
 
   return (
     <>
@@ -92,10 +92,10 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
             {!busy && chat.leaving ? <SendNote label={`메시지 ${chat.leaving}개`} title="기억 없이 빠질 메시지" warning={{ words: '기억 없이 빠짐', why: LEAVING }} /> : null}
             {!busy && <ChatCache cache={chat.cache} />}
             <SendButton
-              streaming={streaming}
-              disabled={!streaming && (!draft.text.trim() || busy)}
-              title={streaming ? titled(SHORTCUTS.stop.hint, SHORTCUTS.stop.keys) : busy ? '다른 채팅에서 답장을 받는 중이에요' : titled(SHORTCUTS.send.hint, SHORTCUTS.send.keys)}
-              onClick={() => (streaming ? actions.stop() : void actions.send())}
+              streaming={busy}
+              disabled={!busy && !draft.text.trim()}
+              title={busy ? titled(SHORTCUTS.stop.hint, SHORTCUTS.stop.keys) : titled(SHORTCUTS.send.hint, SHORTCUTS.send.keys)}
+              onClick={() => (busy ? actions.stop() : void actions.send())}
             />
           </>
         }

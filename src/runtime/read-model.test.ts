@@ -73,7 +73,7 @@ const liveTalk = () => {
   let turn: Turn | null = null;
   const listeners = new Set<() => void>();
   return {
-    snapshot: () => turn,
+    snapshot: (chat: string) => (turn?.chat === chat ? turn : null),
     subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); },
     set: (next: Turn | null) => { turn = next; for (const listener of listeners) listener(); },
   };

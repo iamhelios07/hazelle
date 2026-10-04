@@ -60,7 +60,7 @@ export type ChatActions = OpenChat['actions'];
 export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null, reply: Reading['reply']) {
   const session = useSession();
   const { store, talk, translator, drafts } = session;
-  const turn = useTurn();
+  const turn = useTurn(chatId);
   const translating = useTranslating();
   const toast = useToast();
   const id = item ? chatId : null;
@@ -111,16 +111,15 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);
   const busy = turn !== null;
-  const streaming = busy && turn.chat === chatId;
   const last = messages.at(-1);
 
-  const replyTarget = streaming ? (turn.reply.message ?? turn.reply.id) : null;
+  const replyTarget = busy ? (turn.reply.message ?? turn.reply.id) : null;
   // 이어 쓰기 answers none, since it goes on under text already read.
   const replyAt = messages.findIndex((message) => message.id === replyTarget);
-  const answered = streaming && replyAt > 0 && !turn.reply.continues ? messages[replyAt - 1]!.id : null;
+  const answered = busy && replyAt > 0 && !turn.reply.continues ? messages[replyAt - 1]!.id : null;
 
   const draft = useDraft(id, chat.character);
-  const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, streaming, answered, reply === 'stay');
+  const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, answered, reply === 'stay');
   const memory = useChatMemory(id);
   const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy);
   const [dialog, setDialog] = useState<'rename' | 'reading' | null>(null);
@@ -215,7 +214,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     // Taken only now: the composer stayed open through the wait, so what was typed in it goes with the message, and a
     // turn that began meanwhile leaves the text where it is.
     const text = drafts.text(draft.key).trim();
-    if (!text || talk.snapshot()) return;
+    if (!text || talk.snapshot(chatId)) return;
     setStopped(false);
     drafts.set(draft.key, '');
     asking();
@@ -322,7 +321,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   async function drop() {
     if (!item) return;
-    if (streaming) talk.stop();
+    talk.stop(item.id);
     const removed = await removeChat(store, item.id);
     if (!removed.ok) return toast.failed(removed);
     const stored = removed.data;
@@ -460,7 +459,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     opening,
     last,
     busy,
-    streaming,
     cache,
     leaving,
     found,
@@ -480,7 +478,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     actions: {
       send,
       answer: () => ask({ kind: 'answer' }),
-      stop: () => talk.stop(),
+      stop: () => talk.stop(chatId),
       regenerate: (message: Shown) => ask({ kind: 'regenerate', message: message.id }),
       retry: (message: Shown) => ask({ kind: 'retry', message: message.id, version: shown(message).id }),
       continue: (message: Shown) => ask({ kind: 'continue', message: message.id, version: shown(message).id }),

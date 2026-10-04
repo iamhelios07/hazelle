@@ -134,7 +134,30 @@ describe('Talk', () => {
     server.withSession(async (session) => {
       const turn = { chat: crypto.randomUUID(), said: null, reply: { id: 'r', message: null, replaces: null, continues: null } };
       await expect(session.talk.run(turn, () => Promise.reject(new Error('prepare broke')))).rejects.toThrow('prepare broke');
-      expect(session.talk.snapshot()).toBeNull();
+      expect(session.talk.snapshot(turn.chat)).toBeNull();
       expect(await session.talk.run(turn, async () => ({ kind: 'probe' }))).toEqual({ kind: 'probe' });
+    }));
+
+  it('runs one turn per chat at once and stops only the chat it is asked to', () =>
+    server.withSession(async (session) => {
+      const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
+      const turn = (chat: string) => ({ chat, said: null, reply: { id: crypto.randomUUID(), message: null, replaces: null, continues: null } });
+      const held = (signal: AbortSignal) => new Promise<{ kind: 'stopped' }>((done) => {
+        if (signal.aborted) done({ kind: 'stopped' });
+        signal.addEventListener('abort', () => done({ kind: 'stopped' }));
+      });
+      const first = session.talk.run(turn(a), held);
+      const second = session.talk.run(turn(b), held);
+      expect(session.talk.snapshot(a)?.chat).toBe(a);
+      expect(session.talk.snapshot(b)?.chat).toBe(b);
+      expect([...session.talk.writing()]).toEqual([a, b]);
+      expect(await session.talk.run(turn(a), held)).toBeNull();
+      session.talk.stop(a);
+      expect(await first).toEqual({ kind: 'stopped' });
+      expect(session.talk.snapshot(a)).toBeNull();
+      expect(session.talk.snapshot(b)?.chat).toBe(b);
+      expect([...session.talk.writing()]).toEqual([b]);
+      session.talk.stop(b);
+      expect(await second).toEqual({ kind: 'stopped' });
     }));
 });
