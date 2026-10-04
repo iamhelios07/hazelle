@@ -1,4 +1,4 @@
-import { api, type ApiResult } from './api';
+import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 import { page } from './pages';
 
 // Only the account the Worker names passes; any other is answered not-admin.
@@ -69,7 +69,7 @@ export const NOTICE_LENGTH = 2000;
 export const sendNotice = (to: string | null, text: string) => api<undefined>('POST', 'admin/notices', { to, text });
 export const setCaps = (account: string, caps: Pick<AdminAccount, 'bytesCap' | 'fileBytesCap'>) => api<undefined>('PUT', `admin/accounts/${account}/caps`, caps);
 // Also finishes the deletion of a leaving account.
-export const removeAccount = (account: string) => api<undefined>('DELETE', `admin/accounts/${account}`);
+export const removeAccount = (account: string) => api<undefined>('DELETE', `admin/accounts/${account}`, undefined, undefined, SLOW_ROUTE_WAIT);
 
 // A restore rewinds an account's stored objects to a time; an undo rewinds them to just before a restore. Each runs only
 // on a report that account sent. The phases run in order; from armed on, a restore can only go forward.
@@ -100,8 +100,8 @@ export async function readRestores(account: string): Promise<ApiResult<Restore[]
 }
 
 // The server runs the restore in this request, so the answer comes when it is done or stopped.
-export const beginRestore = (account: string, ask: RestoreAsk) => api<RestoreRun>('POST', `admin/accounts/${account}/restores`, ask);
-export const continueRestore = (restore: number, action: RestoreAction) => api<RestoreRun>('POST', `admin/restores/${restore}/${action}`);
+export const beginRestore = (account: string, ask: RestoreAsk) => api<RestoreRun>('POST', `admin/accounts/${account}/restores`, ask, undefined, SLOW_ROUTE_WAIT);
+export const continueRestore = (restore: number, action: RestoreAction) => api<RestoreRun>('POST', `admin/restores/${restore}/${action}`, undefined, undefined, SLOW_ROUTE_WAIT);
 
 export const readReports = (before: number | null) => page<'reports', Report>('admin/reports', 'reports', before);
 // reply: a notice to the report's sender, sent with resolving it; blank sends none.

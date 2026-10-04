@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { api, holdAccount } from './api';
+import { api, holdAccount, SLOW_ROUTE_WAIT } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -51,8 +51,14 @@ it('gives up on headers that never come as offline, so the store waits for the c
   try {
     vi.stubGlobal('fetch', (_url: string, init: RequestInit) => new Promise((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))));
     const answer = api('POST', 'objects/batch', {});
+    const slow = api('DELETE', 'account', {}, undefined, SLOW_ROUTE_WAIT);
+    let slowEnded = false;
+    void slow.then(() => (slowEnded = true));
     await vi.advanceTimersByTimeAsync(15_000);
     expect(await answer).toEqual({ ok: false, error: 'offline' });
+    expect(slowEnded).toBe(false);
+    await vi.advanceTimersByTimeAsync(SLOW_ROUTE_WAIT);
+    expect(await slow).toEqual({ ok: false, error: 'offline' });
   } finally {
     vi.useRealTimers();
   }
