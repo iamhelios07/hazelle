@@ -252,8 +252,7 @@ export class ObjectStore {
   // Old-timeline writes are dropped, never replayed: every commit under way ends with the epoch, its unsent writes
   // counted. heard: the server or another tab said the account moved to another timeline, which the person is told.
   private reset(heard: boolean) {
-    let dropped = 0;
-    for (const unsent of this.unsent) dropped += unsent();
+    const dropped = this.unsentWrites();
     this.unsent.clear();
     const held = this.timeline !== null;
     this.timeline = null;
@@ -297,6 +296,13 @@ export class ObjectStore {
   };
 
   readonly waiting = () => this.waitingWrites > 0;
+
+  // Writes shown or waiting their turn that the server has not taken yet: a page closed now loses them.
+  readonly unsentWrites = () => {
+    let count = 0;
+    for (const unsent of this.unsent) count += unsent();
+    return count;
+  };
 
   readonly subscribeWaiting = (listener: () => void) => {
     this.waitListeners.add(listener);

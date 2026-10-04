@@ -118,13 +118,19 @@ type Entry<T extends object> = { queue: SaveQueue<T>; view: SaveView<T>; write: 
 
 // A session's save queues, one per stored thing by its key, so every screen on a thing saves through the same queue:
 // one opened again while an earlier screen's save is still on its way shows that change and saves after it. A queue
-// lives while a screen watches it or it has something to save, and while any does the browser asks before the tab
-// goes. A save that fails with no screen left to show it is told once and dropped.
+// lives while a screen watches it or it has something to save. A save that fails with no screen left to show it is told
+// once and dropped. While a queue or the store (unsent) has something unwritten, the browser asks before the tab goes:
+// this is the page's one beforeunload listener.
 export class Saves {
   private readonly queues = new Map<string, Entry<object>>();
   private readonly watchers = new Map<string, Set<() => void>>();
 
-  constructor(private readonly page: Pick<Window, 'addEventListener' | 'removeEventListener'>) {}
+  constructor(
+    private readonly page: Pick<Window, 'addEventListener' | 'removeEventListener'>,
+    private readonly unsent: () => number,
+  ) {
+    page.addEventListener('beforeunload', this.unload);
+  }
 
   view<T extends object>(key: string): SaveView<T> {
     return this.queues.get(key)?.view ?? IDLE;
@@ -146,7 +152,6 @@ export class Saves {
     if (open) return Object.assign(open, { write, failed }).queue;
     const made: Entry<T> = { queue: new SaveQueue<T>((patch) => made.write(patch), (failure) => this.changed(key, entry, failure)), view: IDLE, write, failed };
     const entry = made as unknown as Entry<object>;
-    if (this.queues.size === 0) this.page.addEventListener('beforeunload', this.unload);
     this.queues.set(key, entry);
     return made.queue;
   }
@@ -167,7 +172,6 @@ export class Saves {
   // The session is over: what waits is dropped, since its store takes no more writes.
   close() {
     const open = [...this.queues.values()];
-    if (open.length === 0) return;
     this.queues.clear();
     this.page.removeEventListener('beforeunload', this.unload);
     for (const { queue } of open) queue.end();
@@ -188,12 +192,11 @@ export class Saves {
     const entry = this.queues.get(key);
     if (!entry || this.watchers.has(key) || entry.queue.busy) return;
     this.queues.delete(key);
-    if (this.queues.size === 0) this.page.removeEventListener('beforeunload', this.unload);
   }
 
   private readonly unload = (event: BeforeUnloadEvent) => {
     const busy = [...this.queues.values()].filter(({ queue }) => queue.busy);
-    if (busy.length === 0) return;
+    if (busy.length === 0 && this.unsent() === 0) return;
     event.preventDefault();
     for (const { queue } of busy) void queue.flush();
   };

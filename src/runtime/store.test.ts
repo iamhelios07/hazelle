@@ -318,6 +318,24 @@ describe('writes shown before their answer', () => {
     expect(store.list('connection')).toEqual([]);
   });
 
+  it('counts a write as unsent from the moment it shows until its answer, landed or failed', async () => {
+    const { store, hold, answer, held } = await gated();
+    hold();
+    const landing = store.create('connection', connection('a'));
+    expect(store.unsentWrites()).toBe(1);
+    await vi.waitFor(() => expect(held()).toBe(1));
+    answer(true);
+    expect((await landing).ok).toBe(true);
+    expect(store.unsentWrites()).toBe(0);
+    hold();
+    const failing = store.create('connection', connection('b'));
+    expect(store.unsentWrites()).toBe(1);
+    await vi.waitFor(() => expect(held()).toBe(2));
+    answer(false);
+    expect((await failing).ok).toBe(false);
+    expect(store.unsentWrites()).toBe(0);
+  });
+
   it("keeps a pending entry in its chat's projection through a pull, after every confirmed one", async () => {
     const { store, open, hold, answer } = await gated();
     const phone = await open();
