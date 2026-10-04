@@ -14,7 +14,9 @@ began_ms=$(date +%s%3N)
 git fetch -q origin master
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ] || { echo "deploy: HEAD differs from origin/master; push first" >&2; exit 1; }
 
-npm run -s check >/dev/null 2>&1 || { echo "deploy: npm run check failed; run it to see why" >&2; exit 1; }
+# The cap matches every other run of the suite (CLAUDE.md); without it the suite has died quietly here.
+export NODE_OPTIONS=--max-old-space-size=4096
+checked=$(npm run -s check 2>&1) || { echo "$checked" | tail -20 >&2; echo "deploy: npm run check failed" >&2; exit 1; }
 # The recovery points of this run, read before it changes anything, for the deploy note: a deploy that changes a
 # Durable Object class cannot be rolled back, and D1 Time Travel restores to a bookmark.
 bookmark=$($BIN/wrangler d1 time-travel info risu-alpha 2>&1 | grep -v '@' | grep -i bookmark) || { echo "deploy: could not read the D1 bookmark; nothing applied" >&2; exit 1; }
