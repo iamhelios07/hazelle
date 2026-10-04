@@ -14,15 +14,15 @@ import { vaults } from './vaults';
 const app = new Hono<AppEnv>().basePath('/api');
 
 // Kept by Workers Logs. A request this slow is the account store waking (storeMs, set by the objects routes) or D1
-// answering the session row; a provider's own answer time is not news.
+// answering the session row; a provider's own answer time and a picture's upload time are not news.
 const SLOW_MS = 5_000;
-const PROVIDER_CALL = /^\/api\/(relay|streams)(\/|$)/;
+const OWN_TIME = [/^\/api\/(relay|streams)(\/|$)/, /^\/api\/files\/[^/]+$/];
 
 app.use(async (c, next) => {
   const started = Date.now();
   await next();
   const ms = Date.now() - started;
-  if (ms > SLOW_MS && !PROVIDER_CALL.test(c.req.path)) {
+  if (ms > SLOW_MS && !OWN_TIME.some((path) => path.test(c.req.path))) {
     console.warn('slow request', { method: c.req.method, path: c.req.path, status: c.res.status, ms, storeMs: c.get('storeMs') ?? null });
   }
 });

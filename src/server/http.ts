@@ -9,7 +9,7 @@ export type Account = { id: string; username: string; suspended: boolean; incarn
 // Account and object ids are UUIDs made by the client.
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export type AppEnv = { Bindings: Env; Variables: { account: Account; storeMs: number } };
+export type AppEnv = { Bindings: Env; Variables: { account: Account; storeMs?: number } };
 
 // The operator is the one account this Worker var names, so no stored value can make another.
 export const isAdmin = (c: Context<AppEnv>, accountId: string) => accountId === c.env.ADMIN_ACCOUNT;
