@@ -4,7 +4,7 @@ import type { ChatScope } from '../engine/render';
 import { Evaluation, EvaluationFailed, EvaluationStopped } from './evaluation';
 import { Evaluator, type EvaluationDown, type EvaluationUp } from './evaluation-core';
 
-const scope: ChatScope = { card: null, packs: [], persona: null, prompt: null, note: null, lore: [], messages: [], variables: [], greeting: null, toggles: new Map(), model: null, clock: { now: 0, timeZone: 'UTC' }, assets: [], modules: [], faces: { char: null, user: null }, screen: null, pick: 'chat' };
+const scope: ChatScope = { card: null, cast: [], packs: [], persona: null, prompt: null, note: null, lore: [], messages: [], variables: [], greeting: null, toggles: new Map(), model: null, clock: { now: 0, timeZone: 'UTC' }, assets: [], modules: [], faces: { char: null, user: null }, screen: null, pick: 'chat' };
 const message = (id: string, text: string) => ({ id, seed: id, role: 'user' as const, text, time: 0 });
 
 afterEach(() => vi.unstubAllGlobals());

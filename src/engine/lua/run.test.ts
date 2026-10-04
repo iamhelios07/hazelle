@@ -20,7 +20,7 @@ const SNAPSHOT: Snapshot = {
     persona: { name: 'Jin', description: 'a traveler' },
     prompt: null,
     note: null,
-    lore: [{ id: 'l1', value: { name: 'Gate', keys: ['gate', 'door'], secondaryKeys: [], content: 'hp {{getvar::hp}}', enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 7, priority: null, position: null } }],
+    lore: [{ id: 'l1', parent: null, value: { name: 'Gate', keys: ['gate', 'door'], secondaryKeys: [], content: 'hp {{getvar::hp}}', enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 7, priority: null, position: null } }],
     messages: [],
     variables: [],
     greeting: null,

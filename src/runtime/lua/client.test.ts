@@ -62,7 +62,7 @@ it('sends event history tails in order across edits, truncation, chat switches a
   });
   const runner = new LuaWorker();
   const host: Host = { say() {}, ask: async () => null, model: async () => ({ success: true, result: '' }), tokens: async () => 0, lore: async () => [] };
-  const scope: ChatScope = { ...snapshot.scope, packs: [], toggles: new Map() };
+  const scope: ChatScope = { ...snapshot.scope, cast: [], packs: [], toggles: new Map() };
   const changed = { ...scope, messages: [scope.messages[0]!, { ...scope.messages[1]!, text: 'edited', after: [['turn', '2']] as [string, string][] }] };
   const shorter = { ...changed, messages: changed.messages.slice(0, 1) };
   const other = { ...scope, messages: [{ ...scope.messages[0]!, id: 'other' }] };

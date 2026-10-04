@@ -57,3 +57,5 @@ export const loreName = (name: string) => name.trim() || '이름 없는 항목';
 export const NOT_STARRED = '별표한 모델에 없음';
 
 export const noStarred = (then: string) => `별표한 모델이 없어요. ${inSettings('connections')}에서 모델에 별표하면 여기서 ${then}.`;
+
+export const CAST = '등장인물';

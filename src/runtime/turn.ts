@@ -83,17 +83,21 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
   const character = chat.character === null ? null : (store.get('character', chat.character)?.value ?? null);
   const card = character?.card ?? null;
   const packs = packsOf(store, chat);
+  const cast = (chat.cast ?? []).flatMap((member) => live(store.get('character', member)) ?? []);
+  // A 등장인물's lorebook and pictures follow the packs', its pictures with no module namespace, as the character's own.
+  const owners = [...packs, ...cast.map(({ id }) => ({ id, module: null }))];
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
   const route = chatModel(store, chat, 'main');
   const toggles = togglesOf(store, chat, prompt);
   return {
     card,
+    cast: cast.map(({ id, value }) => ({ id, card: value.card })),
     packs: packs.map(({ pack }) => pack),
     persona: persona.kind === 'persona' ? { name: persona.persona.value.name, description: persona.persona.value.description } : null,
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
-    lore: packs.flatMap((pack) => store.children('lore', pack.id)),
+    lore: owners.flatMap(({ id: owner }) => store.children('lore', owner)),
     messages: messages.map((message) => {
       const version = shown(message);
       const after = [...(version.after ?? []), ...(message.after ?? [])];
@@ -104,7 +108,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     toggles: new Map(toggles.declared.map(({ key }) => [key, toggles.value(key)])),
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    assets: packs.flatMap(({ id: pack, module }) => store.children('asset', pack).map(({ id, value }) => ({ id, name: value.name, ...(module && { module: module.namespace }) }))),
+    assets: owners.flatMap(({ id: owner, module }) => store.children('asset', owner).map(({ id, value }) => ({ id, name: value.name, ...(module && { module: module.namespace }) }))),
     modules: packs.flatMap(({ module }) => module?.namespace ?? []),
     faces: {
       char: chat.character === null ? null : (store.children('avatar', chat.character)[0]?.value.thumb ?? null),

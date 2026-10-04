@@ -16,10 +16,12 @@ import {
   restoreChat,
   restoreMessage,
   selectVersion,
+  setCast,
   setChatNote,
   setChatPersona,
   setChatPrompt,
   startChat,
+  withCast,
 } from '../../runtime/chat-log';
 import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
 import { chatPersona } from '../../runtime/personas';
@@ -126,6 +128,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
   const personaMenu = useMenuHandle();
+  const castMenu = useMenuHandle();
   // 토글, 장기 기억 and the persona and prompt lists take the same place beside the story, so one closes another.
   const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
   const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
@@ -351,6 +354,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     return WRITE_OWN[field](store, id, value);
   }
 
+  function changeCast(ids: string[]) {
+    if (!id) {
+      setUnsaved((current) => withCast(current, chat.character, ids));
+      return;
+    }
+    void setCast(store, id, ids).then((saved) => saved.ok || toast.failed(saved));
+  }
+
   // A value is the character's, in every chat of it, or shared by every 캐릭터 없이 chat.
   function flip(key: string, value: string) {
     void setToggle(store, chat.character, key, value).then((saved) => saved.ok || toast.failed(saved));
@@ -415,6 +426,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     prompt,
     persona,
     note: chat.note,
+    cast: chat.cast ?? [],
     toggles,
     notUsed: card && describeUnused(unused(card)),
     messages,
@@ -452,6 +464,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     modelMenu,
     promptMenu,
     personaMenu,
+    castMenu,
     draft,
     scroll,
     actions: {
@@ -512,6 +525,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       closeDialog: () => setDialog(null),
       pickModel,
       setOwn,
+      setCast: changeCast,
       flip,
       resetToggles: reset,
       rename,

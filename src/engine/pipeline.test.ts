@@ -75,8 +75,9 @@ const card = (over: Partial<Card> = {}): Card => ({
 
 const script = (stage: RegexScript['stage'], find: string, replace: string): RegexScript => ({ name: stage, find, replace, stage, flags: null });
 
-const lore = (id: string, content: string, over: Partial<LoreEntry> = {}) => ({
+const lore = (id: string, content: string, over: Partial<LoreEntry> = {}, parent: string | null = null) => ({
   id,
+  parent,
   value: { name: id, keys: [], secondaryKeys: [], content, enabled: true, constant: true, selective: false, useRegex: false, caseSensitive: false, insertionOrder: 0, priority: null, position: null, ...over },
 });
 
@@ -84,6 +85,7 @@ const message = (id: string, role: HistoryMessage['role'], text: string): Histor
 
 const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = {}): PromptInput['scope'] => ({
   card: own,
+  cast: [],
   packs: own ? [own] : [],
   persona: { name: 'jin', description: 'A traveler.' },
   prompt: starter,
@@ -147,6 +149,22 @@ describe('assemble', () => {
       { role: 'user', content: 'Good. Is the lighthouse lit?', cache: true },
     ]);
     expect(renderChat('display', scope({ card: card({ regex }), messages })).texts[2]).toBe('She nods slowly. [OOC] ignore');
+  });
+
+  it("puts each 등장인물 under its name after the chat's character, its text and its own lorebook entries read as its own {{char}}", () => {
+    const mira = card({ name: 'Mira', description: '{{char}} likes apples.', personality: 'shy' });
+    const entries = [lore('orchard', '{{char}} tends the orchard.', {}, 'mira'), lore('gate', '{{char}} guards the gate.', {}, 'module')];
+    const sent = build({ cast: [{ id: 'mira', card: mira }], lore: entries });
+    expect(sent.slice(0, 2)).toEqual([
+      { role: 'system', content: '<System Setting>\nYour collaborator performs a single character, jin.\nYou perform everything else: Luna, the world.\n</System Setting>\n\n---' },
+      {
+        role: 'assistant',
+        content:
+          "<Role-play Materials>\n\n[Luna (Main NPC)]\nThis profile is yours to perform. Everything here is Luna's own — their tastes, opinions, and knowledge come from this profile and the scene, nowhere else.\n\nLuna keeps the lighthouse.\n\n[Mira]\nMira likes apples.\n\nMira's personality: shy",
+      },
+    ]);
+    expect(sent).toContainEqual({ role: 'system', content: 'Mira tends the orchard.' });
+    expect(sent).toContainEqual({ role: 'system', content: 'Luna guards the gate.' });
   });
 
   it('marks the message a block marked 여기까지 캐시 ends on, the last one before the chat, and the chat’s last message rather than a block after it', () => {
