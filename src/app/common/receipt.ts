@@ -1,5 +1,6 @@
 import type { Cost } from '../../connectors/types';
 import { money } from './money';
+import { monthDay } from './time';
 
 // A fact the provider did not report reads as unknown, never as zero.
 export const UNKNOWN = '알 수 없음';
@@ -7,12 +8,13 @@ export const UNKNOWN = '알 수 없음';
 export const seconds = (ms: number | null) => (ms === null ? UNKNOWN : `${(ms / 1000).toFixed(1)}초`);
 export const tokens = (count: number | null) => (count === null ? UNKNOWN : count.toLocaleString('ko-KR'));
 
-// A cost the app worked out from a price table is an estimate, and says so.
+// A cost the app worked out from a price is an estimate, and says so, with the date of a models.dev price.
 export function cost(value: Cost | 'pending' | null): string {
   if (value === null) return UNKNOWN;
   if (value === 'pending') return '확인 중…';
   const amount = money(value.unit, value.amount);
-  return value.source === 'price-list' ? `약 ${amount}` : amount;
+  if (value.source === 'reported') return amount;
+  return value.asOf === undefined ? `약 ${amount}` : `약 ${amount} · 가격표 ${monthDay(value.asOf)} 기준`;
 }
 
 // A reply that came in one piece, as from a provider that does not stream, has no speed to measure.

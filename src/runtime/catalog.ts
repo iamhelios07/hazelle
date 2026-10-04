@@ -1,5 +1,8 @@
+import { PRICE_LISTS, type PriceList } from '../connectors/price-list';
+import { joinPrices } from '../connectors/pricing';
 import { parseCatalog, resolveConnection, withCredential } from '../connectors/registry';
 import type { Connection, Model } from '../connectors/types';
+import { api } from './api';
 import type { CredentialFailure, Credentials } from './credential';
 import { relayJson } from './relay';
 
@@ -34,11 +37,16 @@ export class Catalogs {
   private async fetch(connection: Connection): Promise<CatalogResult> {
     const resolved = resolveConnection(connection);
     if (!resolved) return { ok: false, failure: { kind: 'refused', code: 'unknown-connection-type' } };
+    // Prices that do not load leave the models unpriced, and their costs 알 수 없음; the list itself still loads.
+    const list = resolved.type && PRICE_LISTS[resolved.type.id]?.list;
+    const prices = list ? api<PriceList>('GET', `prices?provider=${encodeURIComponent(list)}`) : null;
     const credential = await this.credentials.get(resolved, connection.secret);
     if (!credential.ok) return credential;
     const response = await relayJson(withCredential(resolved, resolved.codec.listModels(resolved.endpoint), credential.credential));
     if (!response.ok) return response;
     const models = parseCatalog(resolved, response.data);
-    return models ? { ok: true, models } : { ok: false, failure: { kind: 'not-a-catalog' } };
+    if (!models) return { ok: false, failure: { kind: 'not-a-catalog' } };
+    const priced = await prices;
+    return { ok: true, models: joinPrices(models, priced?.ok ? priced.data : null) };
   }
 }

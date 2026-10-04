@@ -1,3 +1,5 @@
+import { PRICE_LISTS } from './price-list';
+import { priceCost } from './pricing';
 import type { Resolved } from './registry';
 import { SseParser } from './sse';
 import { thoughts } from './thoughts';
@@ -10,7 +12,8 @@ export type Outcome = {
   error: { kind: 'provider' | 'bad-event' | 'network'; detail: string } | null;
   finishReason: string | null;
   usage: Usage | null;
-  // pending: the type books the cost after the reply, to be looked up by replyId.
+  // pending: the type books the cost after the reply, to be looked up by replyId. A pending lookup goes ahead of the
+  // model's price: put after it, a priced model would never be looked up, and the booked cost is the true one.
   cost: Cost | 'pending' | null;
   replyId: string | null;
 };
@@ -27,6 +30,7 @@ export async function decodeStream({ type, codec }: Resolved, model: Model, resp
   const scanner = inline.keep ? null : thoughts(onText, inline.takeBack ?? (() => {}));
   const append = (phase: Phase, text: string) => text && (scanner ? scanner.push(phase, text) : onText(phase, text));
 
+  const unit = type && PRICE_LISTS[type.id]?.credit ? 'credit' : 'usd';
   const finish = (state: Outcome['state'], cut: Outcome['cut'], error: Outcome['error']): Outcome => {
     scanner?.end(state === 'done');
     const usage = Object.keys(facts.rawUsage).length ? codec.usage(facts.rawUsage) : null;
@@ -36,7 +40,7 @@ export async function decodeStream({ type, codec }: Resolved, model: Model, resp
       error,
       finishReason: facts.finishReason,
       usage,
-      cost: type?.cost?.({ facts, usage, model }) ?? (type?.settle && facts.id ? 'pending' : null),
+      cost: type?.cost?.({ facts, usage, model }) ?? (type?.settle && facts.id ? 'pending' : null) ?? (model.price ? priceCost(model.price, usage, unit) : null),
       replyId: facts.id,
     };
   };

@@ -1,7 +1,8 @@
 import { listedSettings } from './chat-completions';
 import { effortLevels, type ReasoningTakes } from './settings';
-import type { ConnectionType, Modality } from './types';
-import { amount, count, decimal, isRecord, modelEntries, nameOf } from './values';
+import { statedPrice } from './pricing';
+import type { ConnectionType, Modality, Price } from './types';
+import { amount, count, decimal, isRecord, modelEntries, nameOf, perMillion } from './values';
 
 const API = 'https://ai-gateway.vercel.sh/v1';
 
@@ -24,6 +25,12 @@ function reasoningTakes(options: unknown[]): ReasoningTakes {
     budget: budget ? { min: count(budget.min), max: count(budget.max) } : false,
     adaptive: null,
   };
+}
+
+// A model priced by tiers is left to models.dev, which states them by context size as this app reads them.
+function price(value: unknown): Price | undefined {
+  if (!isRecord(value) || Object.keys(value).some((field) => field.endsWith('_tiers'))) return undefined;
+  return statedPrice(perMillion(value.input), perMillion(value.output), perMillion(value.input_cache_read), perMillion(value.input_cache_write));
 }
 
 const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
@@ -60,6 +67,7 @@ export const vercel: ConnectionType = {
             settings: Array.isArray(raw.supported_parameters) ? listedSettings(raw.supported_parameters) : null,
             reasoning: Array.isArray(raw.reasoning_options) ? reasoningTakes(raw.reasoning_options) : null,
           },
+          price: price(raw.pricing),
         };
       });
   },
