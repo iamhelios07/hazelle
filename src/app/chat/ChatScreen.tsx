@@ -4,13 +4,13 @@ import type { CharacterShelf } from '../../model/library';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useShortcut } from '../shortcuts';
+import { useDisplay } from '../display';
 import { ChatFrame, Pill, SidePeeks } from '../ui';
 import { ChatComposer } from './ChatComposer';
 import { ChatDialogs, ChatHeaderActions, ChatHeading } from './ChatHeader';
 import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
 import { ChatMemory } from './ChatMemory';
-import { useReading } from './ChatReading';
 import { ChatStatusAside, ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useChat, type Side } from './useChat';
@@ -30,9 +30,10 @@ type Props = {
 };
 
 export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
-  const reading = useReading();
-  const chat = useChat(chatId, item, shelf, reading.value.reply);
+  const { reading, display } = useDisplay();
+  const chat = useChat(chatId, item, shelf, reading.reply);
   const { id, streaming, panel, scroll, prompt, persona, actions } = chat;
+  const folded = display.foldComposer && scroll.away;
   useShortcut('personas', () => actions.toggleSide('personas'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));
   useShortcut('status', () => {
@@ -45,9 +46,9 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
       <ChatFrame
         back={back ? { label: back.label, onClick: () => navigate(back.to) } : undefined}
         title={<ChatHeading chat={chat} />}
-        actions={<ChatHeaderActions chat={chat} reading={reading} />}
+        actions={<ChatHeaderActions chat={chat} />}
         above={scroll.pill && <Pill label={scroll.pill} live={streaming} onClick={actions.follow} />}
-        footer={<ChatComposer chat={chat} />}
+        footer={<ChatComposer chat={chat} folded={folded} />}
         panel={
           panel?.kind === 'toggles' ? (
             <ChatToggles chat={chat} />
@@ -65,15 +66,16 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
           </SidePeeks>
         }
         aside={chat.status.length > 0 && <ChatStatusAside chat={chat} />}
-        reading={reading.value}
+        reading={reading}
+        hideHeader={display.hideHeader}
         pictures={shelf?.character.pictures}
-        compact={scroll.away}
+        compact={folded}
         scrollRef={scroll.scrollRef}
         onScroll={scroll.onScroll}
       >
         <ChatLog chat={chat} />
       </ChatFrame>
-      <ChatDialogs chat={chat} reading={reading} />
+      <ChatDialogs chat={chat} />
     </>
   );
 }

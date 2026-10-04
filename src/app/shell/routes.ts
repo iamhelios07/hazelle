@@ -34,6 +34,7 @@ export type Route =
   // section opens the page at 운영자가 보낸 알림, which the toast saying they came links to.
   | { kind: 'account'; section: 'notices' | null }
   | { kind: 'chat-settings' }
+  | { kind: 'display' }
   | { kind: 'admin' }
   | { kind: 'settings' };
 
@@ -105,6 +106,7 @@ export function parseRoute(at: string): Route {
     if (top === 'account') return { kind: 'account', section: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('section') === 'notices' ? 'notices' : null };
   }
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
+  if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };
   if (top === 'settings' && id === 'admin' && sub === undefined) return { kind: 'admin' };
   return HOME;
 }
@@ -166,6 +168,8 @@ export function href(route: Route): string {
       return `/account${route.section ? `?section=${route.section}` : ''}`;
     case 'chat-settings':
       return '/settings/chat';
+    case 'display':
+      return '/settings/display';
     case 'admin':
       return '/settings/admin';
     case 'settings':
@@ -200,7 +204,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
   }
 }
 
-export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'account' | 'admin';
+export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'account' | 'admin';
 
 // 'list' for 설정's own list, or null outside 설정. While it is not null, the
 // settings layer stands in for the library.
@@ -220,6 +224,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
     case 'model':
       return 'models';
     case 'account':
+    case 'display':
     case 'admin':
       return route.kind;
     case 'chat-settings':
@@ -279,6 +284,7 @@ export function up(route: Below, wide: boolean, chatShelf?: string | null): Rout
     case 'models':
     case 'account':
     case 'chat-settings':
+    case 'display':
     case 'admin':
       return { kind: 'settings' };
     case 'add-connection':

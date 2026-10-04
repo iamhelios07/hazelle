@@ -34,6 +34,7 @@ type Props = {
   peek?: ReactNode;
   aside?: ReactNode;
   reading: Reading;
+  hideHeader: boolean;
   // A character's own look for the lines that are only a picture, over the defaults in tokens.css.
   pictures?: { fold?: false; peek?: number; most?: number };
   compact: boolean;
@@ -41,7 +42,7 @@ type Props = {
   onScroll: () => void;
 };
 
-export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, pictures, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, hideHeader, pictures, compact, scrollRef, onScroll }: Props) {
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -115,7 +116,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
           } as CSSProperties
         }
       >
-        <div className={`${styles.top} ${shown ? styles.shown : ''}`}>
+        <div className={`${styles.top} ${shown || !hideHeader ? styles.shown : ''}`}>
           <header className={styles.header}>
             {back && <IconButton icon={ChevronLeft} label={back.label} onClick={back.onClick} />}
             <div className={styles.title}>{title}</div>

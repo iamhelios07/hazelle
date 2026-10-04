@@ -1,5 +1,7 @@
-import { ChevronRight, FileText, Layers, Lock, MessageSquare, Package, Plug, ShieldCheck, User, type LucideIcon } from 'lucide-react';
+import { ChevronRight, FileText, Layers, Lock, MessageSquare, Package, Plug, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
 import { PAGES, SETTINGS } from '../../common/words';
+import { presetOf } from '../../common/reading';
+import { useDisplay } from '../../display';
 import { useAccount, useConnections, useModules, usePersonas, usePrompts, useSession } from '../../session';
 import { Icon, LayerSidebar, List, ListItem, NavBar, NavGroup, NavRow, Screen } from '../../ui';
 import { navigate } from '../router';
@@ -19,6 +21,7 @@ const GROUPS: Place[][] = [
     { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
     { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules' } },
   ],
+  [{ page: 'display', label: PAGES.display, icon: SunMoon, route: { kind: 'display' } }],
   [{ page: 'account', label: PAGES.account, icon: Lock, route: { kind: 'account', section: null } }],
 ];
 const ADMIN: Place[] = [{ page: 'admin', label: PAGES.admin, icon: ShieldCheck, route: { kind: 'admin' } }];
@@ -52,6 +55,7 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
   const modules = useModules();
   const connections = useConnections();
   const { username } = useSession();
+  const { reading, display, presets } = useDisplay();
   const groups = useGroups();
   const holds: Record<SettingsPage, string | undefined> = {
     models: `${connections.reduce((sum, connection) => sum + connection.value.starred.length, 0)}개`,
@@ -60,6 +64,7 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
     prompts: `${prompts.length}개`,
     personas: `${personas.length}개`,
     modules: `${modules.length}개`,
+    display: presetOf(presets, reading, display)?.name,
     account: username,
     admin: undefined,
   };
