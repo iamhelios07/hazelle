@@ -191,8 +191,11 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: '봇 가져오기', exact: true }).first().click();
     await (await chooser).setFiles(MODULE);
     await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '모듈 보기', exact: true }).click();
+    // The switch shows on at once and the write lands behind it; a full navigation before it lands would lose it.
+    const landed = page.waitForResponse((response) => response.url().includes('/api/objects/batch') && response.request().method() === 'POST');
     await page.getByRole('switch', { name: '항상 켜기', exact: true }).click();
     await expect(page.getByRole('switch', { name: '항상 켜기', exact: true })).toBeChecked();
+    await landed;
     await page.goto(chat);
     const last = messages.nth(2);
     await expect(last).toContainText('[bell:]');
