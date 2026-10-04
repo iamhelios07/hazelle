@@ -37,8 +37,16 @@ export function useReveal(version: string, text: string, live: boolean): { text:
   }, [revealing]);
 
   if (!own) return { text, revealing: false };
-  let cut = Math.floor(own.shown);
-  // Never half of a surrogate pair, which would show as a broken character for a frame.
-  if (cut < text.length && /[\uD800-\uDBFF]/.test(text[cut - 1] ?? '')) cut -= 1;
-  return { text: text.slice(0, cut), revealing };
+  return { text: text.slice(0, revealCut(text, Math.floor(own.shown))), revealing };
+}
+
+// Never half of a surrogate pair, which would show as a broken character for a frame, and never inside a tag: a bare
+// '<' or '</' left before a closing tag is text, which keeps a picture's line from being a picture line (Story), so the
+// picture shows whole for a frame and folds again.
+export function revealCut(text: string, cut: number): number {
+  if (cut >= text.length) return cut;
+  if (/[\uD800-\uDBFF]/.test(text[cut - 1] ?? '')) cut -= 1;
+  const open = text.lastIndexOf('<', cut - 1);
+  const inside = open >= 0 && /[A-Za-z/!]/.test(text[open + 1] ?? '') && !text.slice(open, cut).includes('>');
+  return inside ? open : cut;
 }
