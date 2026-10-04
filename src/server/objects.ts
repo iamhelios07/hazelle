@@ -34,7 +34,9 @@ objects.get('/', async (c) => {
   }
   const query: FeedQuery = { timeline, since, known, until, bootstrap, metadata: c.req.query('metadata') === '1', excluded, parent };
   const account = c.get('account');
+  const asked = Date.now();
   const page = await store(c.env, account.incarnation).feed(account.incarnation, query);
+  c.set('storeMs', Date.now() - asked);
   if ('refused' in page || 'unavailable' in page) return refused(c, page);
   if ('stale' in page || 'reset' in page) return fail(c, 409, 'cache-reset');
   c.header(USE_HEADERS.bytes, String(page.bytes));
@@ -64,7 +66,9 @@ objects.post('/batch', canWrite, async (c) => {
     writes.push(write);
   }
   const account = c.get('account');
+  const asked = Date.now();
   const done = await store(c.env, account.incarnation).batch(account.incarnation, input.timeline, writes, account.bytesCap);
+  c.set('storeMs', Date.now() - asked);
   if ('revs' in done) {
     c.header(USE_HEADERS.bytes, String(done.bytes));
     return c.json({ revs: done.revs, timeline: done.timeline });

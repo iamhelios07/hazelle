@@ -13,6 +13,20 @@ import { vaults } from './vaults';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
+// Kept by Workers Logs. A request this slow is the account store waking (storeMs, set by the objects routes) or D1
+// answering the session row; a provider's own answer time is not news.
+const SLOW_MS = 5_000;
+const PROVIDER_CALL = /^\/api\/(relay|streams)(\/|$)/;
+
+app.use(async (c, next) => {
+  const started = Date.now();
+  await next();
+  const ms = Date.now() - started;
+  if (ms > SLOW_MS && !PROVIDER_CALL.test(c.req.path)) {
+    console.warn('slow request', { method: c.req.method, path: c.req.path, status: c.res.status, ms, storeMs: c.get('storeMs') ?? null });
+  }
+});
+
 // Another site cannot send either content type here without a CORS preflight, which this API never
 // answers. That makes this a second CSRF guard beside SameSite=Strict.
 const BODY_TYPES = ['application/json', 'application/octet-stream'];
