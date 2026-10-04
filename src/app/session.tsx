@@ -198,16 +198,14 @@ export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['
   return useMemo(() => ({ ...snapshot, retry: () => void model.refresh() }), [snapshot, model]);
 }
 
-export function useTurn(): Turn | null {
+export function useTurn(chat: string): Turn | null {
   const talk = useTalk();
-  return useSyncExternalStore(talk.subscribe, talk.snapshot);
+  return useSyncExternalStore(talk.subscribe, () => talk.snapshot(chat));
 }
 
-// The value is the same through every streamed chunk, so nothing that reads it renders again until the turn starts or
-// ends.
-export function useWritingChat(): string | null {
+export function useWritingChats(): ReadonlySet<string> {
   const talk = useTalk();
-  return useSyncExternalStore(talk.subscribe, () => talk.snapshot()?.chat ?? null);
+  return useSyncExternalStore(talk.subscribe, talk.writing);
 }
 
 export function useTranslating(): Translating {

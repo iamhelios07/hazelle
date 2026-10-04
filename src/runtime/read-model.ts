@@ -299,8 +299,7 @@ export class ChatScreenRead {
   }
 
   private currentTurn() {
-    const turn = this.talk.snapshot();
-    return turn?.chat === this.id ? turn : null;
+    return this.talk.snapshot(this.id);
   }
 
   refresh() {

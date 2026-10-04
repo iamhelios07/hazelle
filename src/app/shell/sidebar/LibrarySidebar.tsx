@@ -3,7 +3,7 @@ import type { ChatSummary } from '../../../model/chat';
 import type { CharacterShelf, FolderTree, Shelf } from '../../../model/library';
 import { shelfName } from '../../library/shelf';
 import { usePersisted } from '../../common/usePersisted';
-import { useCharacter, useChatSummary, useLibrary, useWritingChat } from '../../session';
+import { useCharacter, useChatSummary, useLibrary, useWritingChats } from '../../session';
 import { useWide } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { enterShelf, HOME, href, shelfOf } from '../routes';
@@ -28,7 +28,7 @@ type Props = {
 // visit inside one.
 export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const { none, folders, byFolder, loose } = useLibrary();
-  const writing = useWritingChat();
+  const writing = useWritingChats();
   const route = useRoute();
   const chat = useChatSummary(route.kind === 'chat' ? route.id : null);
   const at = href(route);
@@ -56,7 +56,7 @@ export function LibrarySidebar({ page, collapsed, onCollapse }: Props) {
   const here = shelfOf(route, chat?.chat.character);
   const character = useCharacter(here ?? null);
   const current = here === null ? none : (character ?? undefined);
-  const typing = (shelf: Shelf<ChatSummary>) => shelf.chats.some((item) => item.id === writing);
+  const typing = (shelf: Shelf<ChatSummary>) => shelf.chats.some((item) => writing.has(item.id));
 
   // Picking a character goes inside it, even when its latest chat is the page already open.
   const enter = (shelf: Shelf<ChatSummary>) => {

@@ -80,14 +80,16 @@ export function withTurn(messages: Message[], turn: Turn | null, chat: string): 
   return out;
 }
 
-// One reply is written at a time, app-wide, and it outlives the screen that asked for it: leaving a
-// chat does not stop its reply. The server makes the call (runtime/streams), so close() only stops reading it, for a
-// locked vault; the next load picks it up.
+type Held = { turn: Turn; abort: AbortController; calling: string | null };
+
+// A reply blocks only its own chat: chats, in one tab or several, reply at once (user, 2026-10-04). A reply outlives
+// the screen that asked for it: leaving a chat does not stop it. The server makes the call (runtime/streams), so
+// close() only stops reading it, for a locked vault; the next load picks it up.
 export class Talk {
-  private turn: Turn | null = null;
-  private abort: AbortController | null = null;
-  // The call the turn reads, once it started.
-  private calling: string | null = null;
+  // By chat. calling: the call the turn reads, once it started.
+  private readonly turns = new Map<string, Held>();
+  // Replaced only when a turn starts or ends, never per chunk, so the sidebars that read it do not render per token.
+  private writingChats: ReadonlySet<string> = new Set();
   private closed = false;
   private readonly unsaved = new Map<string, { chat: string; reply: Written; call: string }>();
   private readonly listeners = new Set<() => void>();
@@ -116,7 +118,9 @@ export class Talk {
     return () => this.listeners.delete(listener);
   };
 
-  readonly snapshot = () => this.turn;
+  readonly snapshot = (chat: string): Turn | null => this.turns.get(chat)?.turn ?? null;
+
+  readonly writing = (): ReadonlySet<string> => this.writingChats;
 
   // null: its chat was released, it was not written by this page, or it was written as another version (an edit).
   sent(version: string): Sent | null {
@@ -125,14 +129,16 @@ export class Talk {
 
   // 멈추기: the call ends on the server too, and the text so far is saved as cut. Reading stops first, so the server's
   // end is never read as the stream's own.
-  stop() {
-    this.abort?.abort();
-    if (this.calling) stopStream(this.calling);
+  stop(chat: string) {
+    const held = this.turns.get(chat);
+    if (!held) return;
+    held.abort.abort();
+    if (held.calling) stopStream(held.calling);
   }
 
   close() {
     this.closed = true;
-    this.abort?.abort();
+    for (const held of this.turns.values()) held.abort.abort();
     this.unsaved.clear();
     this.sentBy.clear();
     this.leave();
@@ -170,36 +176,52 @@ export class Talk {
     return null;
   }
 
-  private set(turn: Turn | null) {
-    this.turn = turn;
+  private notify() {
     for (const listener of this.listeners) listener();
+  }
+
+  private seat(turn: Turn): Held {
+    const held: Held = { turn, abort: new AbortController(), calling: null };
+    this.turns.set(turn.chat, held);
+    this.writingChats = new Set(this.turns.keys());
+    this.notify();
+    return held;
+  }
+
+  // In a finally, so on a throw too: a turn left seated turns every later send of its chat away.
+  private unseat(held: Held) {
+    held.abort.abort();
+    if (held.calling) this.reading.delete(held.calling);
+    this.turns.delete(held.turn.chat);
+    this.writingChats = new Set(this.turns.keys());
+    this.notify();
+  }
+
+  private change(held: Held, turn: Turn) {
+    held.turn = turn;
+    this.notify();
   }
 
   // The turn is shown before prepare, which may save a new chat, translate the user's message and builds the prompt,
   // so the user's message appears the moment it is sent; stop() stops prepare too. A failure prepare returns ends the
   // turn unsent.
   async run<F extends { kind: string }>({ chat, said, reply: asked }: Omit<Turn, 'text' | 'reasoning'>, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
-    if (this.turn) return null;
+    if (this.turns.has(chat)) return null;
     const lease = this.store.retainChat(chat);
-    this.set({ chat, said, reply: asked, text: asked.continues?.text ?? '', reasoning: asked.continues?.reasoning ?? '' });
-    const abort = new AbortController();
-    this.abort = abort;
+    const held = this.seat({ chat, said, reply: asked, text: asked.continues?.text ?? '', reasoning: asked.continues?.reasoning ?? '' });
     try {
       // A turn is one workflow: begun on one timeline, none of its writes lands on the next (store pinned).
-      const ran = await this.store.pinned(() => this.turnOn(chat, said, asked, lease, abort, prepare));
+      const ran = await this.store.pinned(() => this.turnOn(held, said, asked, lease, prepare));
       return ran !== null && 'ok' in ran ? { kind: 'unsent', failure: ran } : ran;
     } finally {
-      // On a throw too: a turn left set turns every later send away, and a reply still streaming would write into the next.
-      abort.abort();
-      if (this.calling) this.reading.delete(this.calling);
-      this.calling = null;
-      this.abort = null;
-      this.set(null);
+      this.unseat(held);
       lease.release();
     }
   }
 
-  private async turnOn<F extends { kind: string }>(chat: string, said: Turn['said'], asked: Turn['reply'], lease: ChatLease, abort: AbortController, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
+  private async turnOn<F extends { kind: string }>(held: Held, said: Turn['said'], asked: Turn['reply'], lease: ChatLease, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
+    const { chat } = held.turn;
+    const { abort } = held;
     const failure = await lease.ready;
     if (failure) return { kind: 'unsent', failure };
     const ready = await prepare(abort.signal);
@@ -207,12 +229,12 @@ export class Talk {
     const { route, settings, prompt } = ready;
     const reply = ready.before ? { ...asked, before: ready.before } : asked;
     // A message sent translated or changed by the bot shows as it is saved from the moment it is made so.
-    this.set({ ...this.turn!, reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
+    this.change(held, { ...held.turn, reply, said: ready.said ?? said, ...(settings.streaming === false && { whole: true as const }) });
     const sending = ready.said && appendUserMessage(this.store, chat, ready.said);
     const call = await newCall(this.store, route, { id: crypto.randomUUID(), chat, result: reply.id, for: { kind: 'reply', message: reply.message, replaces: reply.replaces, continues: reply.continues, ...(reply.before && { before: reply.before }) } });
     this.reading.add(call.id);
-    this.calling = call.id;
-    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.write, inline: this.inline(chat) });
+    held.calling = call.id;
+    const replying = generate({ credentials: this.credentials, connection: route.connection.value, model: route.model, settings, messages: prompt.messages, call, signal: abort.signal, onText: this.writer(held), inline: this.inline(held) });
     const sent = await sending;
     if (sent && !sent.ok) {
       abort.abort();
@@ -224,51 +246,47 @@ export class Talk {
     if (this.closed) return null;
     // Kept before the save, whose store change is what shows the reply's 정보.
     this.sentBy.set(reply.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
-    return await this.save(chat, await this.ended(chat, this.written(reply, callOf(route), answer)), call.id);
+    return await this.save(chat, await this.ended(chat, this.written(held, reply, callOf(route), answer)), call.id);
   }
 
-  // A reply the server was writing when this page came, which Streams hands over; it waits while another is written.
+  // A reply the server was writing when this page came, which Streams hands over; it waits while its chat has a turn.
   // One not saved is not reported: its marker stays, and the next pick-up saves it again. One a restore ended goes with
   // the timeline it was begun on (save).
   async resume(stream: Stored<'stream'>) {
     const purpose = stream.value.for;
-    if (this.turn || this.closed || purpose.kind !== 'reply') return;
     const chat = stream.parent!;
+    if (this.closed || purpose.kind !== 'reply' || this.turns.has(chat)) return;
     const lease = this.store.retainChat(chat);
     const reply = { id: stream.value.result, message: purpose.message, replaces: purpose.replaces, continues: purpose.continues, ...(purpose.before && { before: purpose.before }) };
-    this.set({ chat, said: null, reply, text: reply.continues?.text ?? '', reasoning: reply.continues?.reasoning ?? '' });
-    const abort = new AbortController();
-    this.abort = abort;
+    const held = this.seat({ chat, said: null, reply, text: reply.continues?.text ?? '', reasoning: reply.continues?.reasoning ?? '' });
     this.reading.add(stream.id);
-    this.calling = stream.id;
+    held.calling = stream.id;
     try {
       await this.store.pinned(async () => {
         if (await lease.ready) return;
-        const answer = await resume(this.store, stream, abort.signal, this.write, this.inline(chat));
-        if (!this.closed) await this.save(chat, await this.ended(chat, this.written(reply, stream.value.call, answer)), stream.id);
+        const answer = await resume(this.store, stream, held.abort.signal, this.writer(held), this.inline(held));
+        if (!this.closed) await this.save(chat, await this.ended(chat, this.written(held, reply, stream.value.call, answer)), stream.id);
       });
     } finally {
-      abort.abort();
-      this.reading.delete(stream.id);
-      this.calling = null;
-      this.abort = null;
-      this.set(null);
+      this.unseat(held);
       lease.release();
     }
   }
 
-  private readonly write = (phase: Phase, chunk: string) => this.set({ ...this.turn!, [phase]: this.turn![phase] + chunk });
-
-  // A chat without a character has no 생각을 본문에 둠, and strips.
-  private inline(chat: string): InlineThoughts {
-    const character = this.store.get('chat', chat)?.value.character;
-    const keep = character ? this.store.get('character', character)?.value.keepThoughts === true : false;
-    return { keep, takeBack: (chars) => this.set({ ...this.turn!, reasoning: this.turn!.reasoning.slice(0, this.turn!.reasoning.length - chars) }) };
+  private writer(held: Held) {
+    return (phase: Phase, chunk: string) => this.change(held, { ...held.turn, [phase]: held.turn[phase] + chunk });
   }
 
-  private written(reply: Turn['reply'], call: Stream['call'], answer: Reply): Written {
+  // A chat without a character has no 생각을 본문에 둠, and strips.
+  private inline(held: Held): InlineThoughts {
+    const character = this.store.get('chat', held.turn.chat)?.value.character;
+    const keep = character ? this.store.get('character', character)?.value.keepThoughts === true : false;
+    return { keep, takeBack: (chars) => this.change(held, { ...held.turn, reasoning: held.turn.reasoning.slice(0, held.turn.reasoning.length - chars) }) };
+  }
+
+  private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply): Written {
     const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
-    return { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: this.turn!.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(this.turn!.reasoning && { reasoning: this.turn!.reasoning }) };
+    return { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   }
 }
 

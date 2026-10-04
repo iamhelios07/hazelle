@@ -213,11 +213,11 @@ export function autoContinue({ text, receipt }: Pick<Written, 'text' | 'receipt'
   return receipt.state === 'cut' && (receipt.cut === 'length' || receipt.cut === 'no-terminal') && !receipt.continues && text !== '';
 }
 
-const idle = (talk: Session['talk']) =>
+const idle = (talk: Session['talk'], chat: string) =>
   new Promise<void>((done) => {
-    if (!talk.snapshot()) return done();
+    if (!talk.snapshot(chat)) return done();
     const stop = talk.subscribe(() => {
-      if (talk.snapshot()) return;
+      if (talk.snapshot(chat)) return;
       stop();
       done();
     });
@@ -225,12 +225,12 @@ const idle = (talk: Session['talk']) =>
 
 // A reply this page has just saved (session's saved hook): continued when autoContinue says so and it is still the
 // chat's last message as saved, else translated. Never both: a continuation that ran leaves the translation to the hook
-// its own save calls, on the finished version. takeTurn answers null as well when a turn begun meanwhile turned it
+// its own save calls, on the finished version. takeTurn answers null as well when a turn its chat began meanwhile turned it
 // away, and the cut reply then stays untranslated. Its chat must stay loaded until this returns (session).
 export async function receiveReply(session: Session, chat: string, reply: Written) {
   if (autoContinue(reply)) {
-    // The reply's own turn still holds Talk when its save calls the hook.
-    await idle(session.talk);
+    // The reply's own turn still holds its chat in Talk when its save calls the hook.
+    await idle(session.talk, chat);
     const last = (await displayed(session, chat))?.messages.at(-1);
     // An onOutput edit is a version of its own, which is not continued, as 이어 쓰기 is not offered on it.
     if (last?.id === (reply.message ?? reply.id) && shown(last).id === reply.id) {
