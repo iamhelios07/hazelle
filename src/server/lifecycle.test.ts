@@ -375,7 +375,7 @@ describe('a restore', () => {
     await expectRestored(seed, id, []);
   });
 
-  it('ends restored by two resumes at once, or cancelled when cancelled before arming, after a crash and a process restart at every durable boundary', async () => {
+  it('ends restored by two resumes at once, or cancelled when cancelled before arming, after a throw and a registry restart at every durable boundary', async () => {
     const probe = counting();
     await runRestore(probe.env, await begin(await seeded()));
     const total = probe.count();
@@ -452,7 +452,7 @@ describe('a deletion', () => {
     expect(await pictures(held)).toBe(0);
   };
 
-  it('finishes after a crash at every durable boundary, by running again or by the hourly reconciliation once the row is gone, and logs the deletion once', async () => {
+  it('finishes after a throw at every durable boundary, by running again or by the hourly reconciliation once the row is gone, and logs the deletion once', async () => {
     const probe = counting();
     const first = await holding();
     expect(await leave(probe.env, first.id, first.incarnation, true)).toBe('left');

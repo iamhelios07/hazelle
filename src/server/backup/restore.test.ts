@@ -39,7 +39,7 @@ const emptyDir = () => {
 
 class Stop extends Error {}
 
-// env whose run stops right after the operation's phase moved to `phase`, as a process killed there leaves it.
+// env whose run throws right after the operation's phase moved to `phase`, leaving the rows there.
 function stoppingAt(phase: Phase): Services {
   const db: Db = {
     ...t.env.db,

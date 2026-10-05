@@ -54,6 +54,8 @@ export type Restored = { accounts: number; pictures: number; operations: { id: n
 
 export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string): Promise<Restored> {
   const manifest = await readManifest(generation);
+  // No `copied` needed: that marker is for freshness and the copier; a generation with its manifest and verified
+  // hashes is a whole restore source wherever it lies.
   if (manifest === null) throw new Error(`restore: ${generation} has no manifest; it is not a complete generation`);
   if (manifest.version !== 1) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
   await mkdir(dataDir, { recursive: true });

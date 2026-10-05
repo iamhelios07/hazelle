@@ -180,12 +180,12 @@ describe('the account registry', () => {
     expect(await bodies()).toEqual(['old']);
   });
 
-  it('publishes a snapshot only once its file is durable: a take killed before its row leaves an orphan the hourly sweep reclaims', async () => {
+  it('publishes a snapshot only once its file is durable: a take whose catalog insert throws leaves an orphan the hourly sweep reclaims', async () => {
     await signup();
     await write(put(A, 'x'));
-    const killed: Db = { ...db, prepare: (sql) => (sql.startsWith('INSERT INTO snapshots') ? ({ bind: () => ({ run: () => Promise.reject(new Error('killed')) }) } as never) : db.prepare(sql)) };
-    const dying = accountRegistry(dir, killed, serviceReads(db), () => now);
-    await expect(dying.snapshot(INC, 'baseline')).rejects.toThrow('killed');
+    const failing: Db = { ...db, prepare: (sql) => (sql.startsWith('INSERT INTO snapshots') ? ({ bind: () => ({ run: () => Promise.reject(new Error('insert failed')) }) } as never) : db.prepare(sql)) };
+    const dying = accountRegistry(dir, failing, serviceReads(db), () => now);
+    await expect(dying.snapshot(INC, 'baseline')).rejects.toThrow('insert failed');
     dying.close();
     const [orphan, ...more] = readdirSync(join(dir, 'snapshots', INC));
     expect(more).toEqual([]);
@@ -197,7 +197,7 @@ describe('the account registry', () => {
     expect(existsSync(snapshotPath(dir, INC, id))).toBe(true);
   });
 
-  it('installs whole across a kill: before the rename the old file is intact and the next start installs, after it the next start installs nothing', async () => {
+  it('installs whole across registry restarts: a staged file left beside the live one changes nothing and the next start installs, after the install the next start installs nothing', async () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
@@ -209,13 +209,13 @@ describe('the account registry', () => {
       stores.close();
       stores = accountRegistry(dir, db, serviceReads(db), () => now);
     };
-    // Killed between the prepared file's checkpoint and the rename: a prepared file beside the live one.
+    // What a staging cut off before its rename leaves: a staged file beside the live one.
     writeFileSync(join(dir, 'accounts', `${INC}.install-dead.sqlite`), 'prepared, never renamed');
     restart();
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'new' }]);
     expect(stores.inspect(INC).exec('PRAGMA quick_check')).toEqual([{ quick_check: 'ok' }]);
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
-    // Killed after the rename: the marker says it is done, so even with its snapshot gone nothing is installed again.
+    // Installed: the marker says so, and even with its snapshot gone nothing is installed again.
     restart();
     rmSync(snapshotPath(dir, INC, target));
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });

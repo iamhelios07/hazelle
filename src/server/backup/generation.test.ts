@@ -144,8 +144,7 @@ describe('a backup generation', () => {
     const first = Date.now() - 2 * DAY_MS;
     expect((await t.daily(first)).generation).toEqual({ outcome: 'ok', error: null });
     const whole = await newest();
-    // The next night a stored picture's bytes are gone, so the generation stops before its manifest, as one killed
-    // during its compression does.
+    // The next night a stored picture's bytes are gone, so the generation stops before its manifest.
     rmSync(join(t.dir, 'files', lost.incarnation, lostPicture));
     expect((await t.daily(first + DAY_MS)).generation).toMatchObject({ outcome: 'failed' });
     const cut = (await listGenerations(t.dir)).find(({ capturedAt }) => capturedAt === first + DAY_MS)!;
