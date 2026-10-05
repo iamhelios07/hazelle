@@ -8,13 +8,12 @@ import { streamStore } from './streams-db';
 const dir = mkdtempSync(join(tmpdir(), 'hazelle-streams-db-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-it('reserves a name once, keeping started as a number beside the pages', async () => {
+it('reserves a name once, with its hello and its alarm', async () => {
   const store = streamStore(':memory:');
   const storage = store.storage('a');
   const hello = { key: 'f:0000000000', value: new Uint8Array([1, 2]) };
-  expect(await storage.reserve(1_700_000_000_000, hello, 5)).toBe(true);
-  expect(await store.storage('a').reserve(1_700_000_000_001, hello, 6)).toBe(false);
-  expect(await storage.get('started')).toBe(1_700_000_000_000);
+  expect(await storage.reserve(hello, 5)).toBe(true);
+  expect(await store.storage('a').reserve(hello, 6)).toBe(false);
   expect(await storage.get('f:0000000000')).toEqual(new Uint8Array([1, 2]));
   expect(store.due(5)).toEqual(['a']);
   store.close();
