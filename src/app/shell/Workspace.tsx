@@ -9,7 +9,7 @@ import { BIN, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
 import { SessionProvider } from '../session';
 import { ToastProvider, useToast, type Standing } from '../toast';
-import { Brand, Screen, Text } from '../ui';
+import { Brand, Progress, Screen, Text } from '../ui';
 import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 import { navigate } from './router';
@@ -91,7 +91,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
   if (!session) return (
     <Screen top={<Brand />} align="center">
-      <Text align="center">불러오는 중 · {progress.objects.toLocaleString('ko-KR')}개</Text>
+      <Progress steps={[{ label: '불러오는 중', done: progress.objects }]} />
       {progress.waiting && <Text variant="note" align="center">{RECONNECTING.message} · {RECONNECTING.detail}</Text>}
     </Screen>
   );

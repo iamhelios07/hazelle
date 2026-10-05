@@ -6,4 +6,5 @@ export { CodeCard } from './CodeCard';
 export { Empty } from './Empty';
 export { Intro } from './Intro';
 export { Outcome } from './Outcome';
+export { Progress, type ProgressStep } from './Progress';
 export { Steps } from './Steps';

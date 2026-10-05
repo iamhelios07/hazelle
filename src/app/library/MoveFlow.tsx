@@ -10,7 +10,7 @@ import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { moduleName } from '../common/words';
 import { useFiles, useStore } from '../session';
-import { Button, Callout, Checkbox, Dialog, Outcome, Section, Stack, Text } from '../ui';
+import { Button, Callout, Checkbox, Dialog, Outcome, Progress, Section, Stack, Text } from '../ui';
 import { cardMissed, moduleMissed, moveMissed } from './missed';
 import { hasModule, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
 
@@ -118,9 +118,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
     const lines = phase.kind === 'running' ? (Object.keys(STEP) as MoveStep['kind'][]).flatMap((kind) => phase.steps[kind] ?? []) : [];
     return (
       <Dialog title={phase.kind === 'reading' ? '백업 읽는 중' : '가져오는 중'} note={note} onClose={() => {}}>
-        <Stack gap="related">
-          {lines.length ? lines.map((step) => <Text key={step.kind} variant="note">{`${STEP[step.kind]} · ${step.done} / ${step.total}`}</Text>) : <Text variant="note">잠시만요</Text>}
-        </Stack>
+        {lines.length ? <Progress steps={lines.map(({ kind, done, total }) => ({ label: STEP[kind], done, total }))} /> : <Text variant="note">잠시만요</Text>}
       </Dialog>
     );
   }

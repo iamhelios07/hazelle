@@ -1,0 +1,50 @@
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: var(--space-4);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.label {
+  color: var(--color-text);
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  grid-column: 1 / -1;
+  height: var(--bar-height);
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--color-border);
+}
+
+.fill {
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  transform: scaleX(var(--progress));
+  transform-origin: left;
+  transition: transform var(--duration-fast) var(--ease-enter);
+}
+
+.full {
+  transition: none;
+}
+
+.flow {
+  width: 30%;
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+}

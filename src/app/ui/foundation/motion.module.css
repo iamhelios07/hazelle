@@ -40,6 +40,10 @@
   animation: dot var(--duration-dot) var(--ease-loop) infinite;
 }
 
+.slide {
+  animation: slide var(--duration-slide) var(--ease-loop) infinite;
+}
+
 @keyframes fade {
   from {
     opacity: 0;
@@ -97,6 +101,16 @@
 
   40% {
     opacity: 1;
+  }
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(334%);
   }
 }
 

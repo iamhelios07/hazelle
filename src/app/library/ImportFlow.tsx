@@ -13,19 +13,19 @@ import { describeFailure } from '../common/failure';
 import { useFiles, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
-import { Button, Callout, Dialog, DropOverlay, Row, Section, Stack, Text, useFileDrop } from '../ui';
+import { Button, Callout, Dialog, DropOverlay, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
 import { characterOutcome, moduleOutcome, type ImportOutcome } from './importOutcome';
 import { assetsMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
 import { MoveFlow } from './MoveFlow';
-import { describeStep } from './saving';
+import { stepOf } from './saving';
 
 const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin';
 
 type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed: string[] };
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
 type Ask = { name: string; answer: (fill: boolean) => void };
-type State = { busy: string | null; results: Result[]; ask: Ask | null };
+type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Result[]; ask: Ask | null };
 
 const ImportContext = createContext<{ pick: () => void; move: () => void } | null>(null);
 
@@ -89,14 +89,14 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function save(file: File, place: ModulePlace | null, progress: (busy: string) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
+  async function save(file: File, place: ModulePlace | null, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
     const reader = new ImportWorker();
     readers.current.add(reader);
     try {
       const parsed = await reader.card(file);
       if (!parsed.ok) return { kind: 'failed', file: file.name, failure: FAILURE[parsed.failure.kind] };
       if ('module' in parsed) {
-        const saved = await importModule(store, files, parsed.module, (step) => progress(describeStep(step)));
+        const saved = await importModule(store, files, parsed.module, (step) => progress(stepOf(step)));
         if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
         const placed = place && (await setModuleAt(store, place, saved.data.id, true));
         const failure = placed && !placed.ok ? describeFailure(placed) : null;
@@ -105,12 +105,12 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       const { name } = parsed.card.card;
       const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
       if (match !== null && (await ask(name))) {
-        progress('그림 올리는 중');
+        progress(stepOf({ kind: 'picture' }));
         const filled = await fillPictures(store, files, match, parsed.card.assets);
         if (!filled.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(filled)}` };
         return { kind: 'filled', file: file.name, name, kept: filled.data.kept, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
       }
-      const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(describeStep(step)));
+      const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(stepOf(step)));
       if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
       return characterOutcome(file.name, parsed.card, saved.data);
     } catch (error) {
@@ -130,9 +130,9 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     const results: Result[] = [];
     for (const file of files) {
       if (!mounted.current) return;
-      setState({ busy: file.name, results, ask: null });
-      const progress = (busy: string) => setState({ busy: `${file.name} · ${busy}`, results, ask: null });
-      const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: file.name, results, ask: { name, answer } }));
+      setState({ busy: { file: file.name, steps: [] }, results, ask: null });
+      const progress = (step: ProgressStep) => setState({ busy: { file: file.name, steps: [step] }, results, ask: null });
+      const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { name, answer } }));
       results.push(await save(file, place, progress, ask));
     }
     setState({ busy: null, results, ask: null });
@@ -176,7 +176,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
             {state.results.map((result, index) =>
               result.kind === 'failed' ? <Failed key={index} file={result.file} failure={result.failure} /> : result.kind === 'filled' ? <FilledSummary key={index} result={result} /> : <Summary key={index} result={result} />,
             )}
-            {state.ask ? <FillChoice ask={state.ask} onAnswer={() => setState({ ...state, ask: null })} /> : state.busy && <Text variant="note">{state.busy}</Text>}
+            {state.ask ? <FillChoice ask={state.ask} onAnswer={() => setState({ ...state, ask: null })} /> : state.busy && <><Text variant="note">{state.busy.file}</Text><Progress steps={state.busy.steps} /></>}
             {!state.busy && done.length === 1 && (
               <Button
                 icon={MessageSquarePlus}

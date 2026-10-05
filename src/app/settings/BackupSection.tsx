@@ -1,11 +1,11 @@
 import { Download, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { exportBackup, readBackup, restoreBackup, type Backup } from '../../runtime/backup';
+import { exportBackup, readBackup, restoreBackup, type Backup, type BackupStep } from '../../runtime/backup';
 import { downloadOutput } from '../common/download';
 import { describeFailure } from '../common/failure';
 import { useSession } from '../session';
 import { useToast } from '../toast';
-import { Button, FileButton, Section, SettingGroup, SettingRow } from '../ui';
+import { Button, FileButton, Progress, Section, SettingGroup, SettingRow, type ProgressStep } from '../ui';
 
 const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup-crashed', { message: string; detail?: string }> = {
   'not-backup': { message: '헤이젤 백업 파일이 아니거나 망가진 파일이에요.' },
@@ -17,11 +17,14 @@ const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup
 // sv-SE writes the local date as 2026-09-29.
 const today = () => new Date().toLocaleDateString('sv-SE');
 
+const STEP: Record<BackupStep['kind'], string> = { objects: '내용', files: '그림' };
+const lines = (steps: Partial<Record<BackupStep['kind'], BackupStep>>): ProgressStep[] => (Object.keys(STEP) as BackupStep['kind'][]).flatMap((kind) => (steps[kind] ? [{ label: STEP[kind], done: steps[kind].done, total: steps[kind].total }] : []));
+
 // The user's own full backup, loaded back only into a new account.
 export function BackupSection() {
   const { username, store, files } = useSession();
   const toast = useToast();
-  const [active, setActive] = useState<{ direction: 'save' | 'load'; done: number; total: number } | null>(null);
+  const [active, setActive] = useState<{ direction: 'save' | 'load'; steps: Partial<Record<BackupStep['kind'], BackupStep>> } | null>(null);
   const running = useRef<AbortController | null>(null);
   useEffect(() => () => running.current?.abort(), []);
   const saving = active?.direction === 'save';
@@ -30,8 +33,8 @@ export function BackupSection() {
   function begin(direction: 'save' | 'load') {
     const abort = new AbortController();
     running.current = abort;
-    setActive({ direction, done: 0, total: 0 });
-    return { signal: abort.signal, progress: (done: number, total: number) => setActive({ direction, done, total }) };
+    setActive({ direction, steps: {} });
+    return { signal: abort.signal, progress: (step: BackupStep) => setActive((current) => ({ direction, steps: { ...current?.steps, [step.kind]: step } })) };
   }
 
   const unread = (error: keyof typeof UNREAD) => toast.error(UNREAD[error].message, { detail: UNREAD[error].detail });
@@ -87,7 +90,6 @@ export function BackupSection() {
         <SettingRow
           label="전체 백업"
           help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 그 키까지 zip 파일 하나로 받아요. 잠기지 않은 파일이라 비밀번호처럼 보관해 주세요."
-          sub={saving && `받는 중 · ${active.done} / ${active.total}`}
           control={
             saving ? <Button variant="secondary" size="sm" onClick={() => running.current?.abort()}>중지</Button> :
               <Button variant="secondary" size="sm" icon={Download} disabled={active !== null} onClick={() => void save()}>
@@ -95,10 +97,10 @@ export function BackupSection() {
               </Button>
           }
         />
+        {saving && <Progress steps={lines(active.steps)} />}
         <SettingRow
           label="백업 불러오기"
           help="아직 아무것도 저장하지 않은 새 계정에만 불러올 수 있어요."
-          sub={loading && `불러오는 중 · ${active.done} / ${active.total}`}
           control={
             loading ? <Button variant="secondary" size="sm" onClick={() => running.current?.abort()}>중지</Button> :
               <FileButton accept=".zip" size="sm" icon={Upload} disabled={active !== null} onFile={(file) => void load(file)}>
@@ -106,6 +108,7 @@ export function BackupSection() {
               </FileButton>
           }
         />
+        {loading && <Progress steps={lines(active.steps)} />}
       </SettingGroup>
     </Section>
   );
