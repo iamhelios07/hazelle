@@ -115,11 +115,11 @@ describe('the account registry', () => {
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 2500000, 't2', ?, 'targeted', 1, 1)").run(INC, target);
     await store().restart(INC).catch(() => {});
     expect(await store().mark(INC, 7)).toEqual({ marked: true });
-    expect(await store().marked(INC, 7)).toEqual({ marked: true, installedFrom: null });
+    expect(await store().marked(INC, 7)).toEqual({ marked: true, installedFrom: null, installedOp: null });
     raw.prepare("UPDATE restores SET phase = 'armed' WHERE id = 7").run();
     expect(await store().arm(INC, 7, target)).toEqual({ returned: target });
     await store().restart(INC).catch(() => {});
-    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     raw.prepare("UPDATE accounts SET state = 'active', operation = NULL, timeline = 't2' WHERE incarnation = ?").run(INC);
     raw.prepare("UPDATE restores SET phase = 'done' WHERE id = 7").run();
     await store().restart(INC).catch(() => {});
@@ -140,13 +140,42 @@ describe('the account registry', () => {
     expect(await stores.snapshotAt(INC, 4_500_000)).toBeNull();
   });
 
-  it('answers unavailable, not too early, when a catalogued snapshot has lost its file', async () => {
+  it('answers unavailable, not too early, when a catalogued snapshot has lost its file or no longer matches its row, for a time and for an explicit target', async () => {
     await signup('restoring');
     raw.prepare('UPDATE accounts SET operation = 3').run();
+    now = 1_500_000;
+    const altered = await stores.snapshot(INC, 'baseline');
+    const path = snapshotPath(dir, INC, altered);
+    const bytes = readFileSync(path);
+    bytes[bytes.length - 1]! ^= 1;
+    writeFileSync(path, bytes);
     now = 2_000_000;
-    raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, bytes, sha256) VALUES ('lost', ?, 'baseline', 1500000, 1, 'x')").run(INC);
+    await expect(stores.snapshotAt(INC, 1_600_000)).rejects.toThrow(/snapshot-corrupt/);
     expect(await store().target(INC, 3, { at: 1_600_000 })).toEqual({ unavailable: true });
+    expect(await store().target(INC, 3, { snapshot: altered })).toEqual({ unavailable: true });
     expect(await store().target(INC, 3, { at: 1_400_000 })).toEqual({ tooEarly: true });
+    rmSync(path);
+    expect(await store().target(INC, 3, { snapshot: altered })).toEqual({ unavailable: true });
+  });
+
+  it('installs a second rewind to the same snapshot over the edits made since the first', async () => {
+    await signup();
+    await write(put(A, 'old'));
+    now = 2_000_000;
+    const target = await stores.snapshot(INC, 'baseline');
+    const rewind = async (operation: number) => {
+      raw.prepare("UPDATE accounts SET state = 'restoring', operation = ? WHERE incarnation = ?").run(operation, INC);
+      raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (?, ?, 1, 2500000, 't1', ?, 'armed', 1, 1)").run(operation, INC, target);
+      await store().restart(INC).catch(() => {});
+      expect(await store().marked(INC, operation)).toEqual({ marked: false, installedFrom: target, installedOp: operation });
+      raw.prepare("UPDATE accounts SET state = 'active', operation = NULL WHERE incarnation = ?").run(INC);
+      raw.prepare("UPDATE restores SET phase = 'done' WHERE id = ?").run(operation);
+      await store().restart(INC).catch(() => {});
+    };
+    await rewind(7);
+    await write(put(A, 'edited after the first rewind', 1));
+    await rewind(8);
+    expect(await bodies()).toEqual(['old']);
   });
 
   it('publishes a snapshot only once its file is durable: a take killed before its row leaves an orphan the hourly sweep reclaims', async () => {
@@ -183,11 +212,11 @@ describe('the account registry', () => {
     restart();
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'new' }]);
     expect(stores.inspect(INC).exec('PRAGMA quick_check')).toEqual([{ quick_check: 'ok' }]);
-    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     // Killed after the rename: the marker says it is done, so even with its snapshot gone nothing is installed again.
     restart();
     rmSync(snapshotPath(dir, INC, target));
-    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
     expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
   });

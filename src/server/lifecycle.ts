@@ -238,9 +238,9 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       const answer = await store(env, incarnation).marked(incarnation, id);
       if ('unavailable' in answer) return 'store-unavailable';
       if (!('marked' in answer)) return undefined;
-      // The rewind applied only if the file came from the target and the mark written after it is gone; either alone
-      // proves nothing.
-      if (!answer.marked && answer.installedFrom === operation.target) {
+      // The rewind applied only if this operation installed the file from the target and the mark written after it is
+      // gone; either alone proves nothing.
+      if (!answer.marked && answer.installedFrom === operation.target && answer.installedOp === id) {
         await advance(db, id, 'armed', 'rewound');
         return undefined;
       }

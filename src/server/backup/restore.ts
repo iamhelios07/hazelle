@@ -90,7 +90,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     if (source !== null) await gunzipTo(snapshotPath(dataDir, incarnation, source), accountPath(dataDir, incarnation));
   }
   // Past its install already: the live file was the target when the generation was taken.
-  for (const { incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, incarnation, target!);
+  for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id);
   const { results: pictures } = await db.prepare('SELECT incarnation, id FROM account_files WHERE stored = 1').all<{ incarnation: string; id: string }>();
   for (const { incarnation, id } of pictures) await copyInto(join(generation, '..', POOL, id), join(dataDir, 'files', incarnation, id));
   for (const dir of ['', 'accounts', 'snapshots', 'files']) await fsyncPath(join(dataDir, dir)).catch(() => {});

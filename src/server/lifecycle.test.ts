@@ -1,7 +1,8 @@
+import { rmSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Phase, Write } from './account-store';
 import { expireSnapshots } from './backup/snapshots';
-import type { Stores } from './db/account-db';
+import { snapshotPath, type Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
 import type { Bucket } from './files/disk-bucket';
@@ -281,6 +282,18 @@ describe('a restore', () => {
     await expireSnapshots(t.env, t.dir, Date.now() + 31 * 24 * HOUR_MS);
     expect(await runRestore(t.env, undo)).toMatchObject({ phase: 'done', verified: true, error: null });
     expect(await contents(seed.cookie)).toEqual(BEFORE);
+  });
+
+  it('stops an undo whose checkpoint is lost before arming it, and lets it be cancelled', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const { checkpoint } = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(id).first<{ checkpoint: string }>())!;
+    rmSync(snapshotPath(t.dir, seed.incarnation, checkpoint));
+    const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
+    expect(await runRestore(t.env, undo)).toEqual({ id: undo, phase: 'checkpointed', verified: false, error: 'store-unavailable' });
+    expect(await cancelRestore(t.env, undo)).toMatchObject({ phase: 'cancelled', verified: true });
+    expect(await contents(seed.cookie)).toEqual(AT_TARGET);
   });
 
   it('cancels before arming, giving the account back on its timeline with its objects, and refuses once armed', async () => {
