@@ -30,10 +30,13 @@ row, decompress beside the live file, `quick_check`, write `head.installed_from`
 a second rewind to the same snapshot installs again), `wal_checkpoint(TRUNCATE)`, close, verify, fsync, delete the live file's `-wal` and `-shm`, rename over the live
 file, fsync the directory. The WAL and shm go first so an orphan WAL is never replayed onto the installed file.
 
-Snapshots (`src/server/backup/snapshots.ts`, run by the daily job at `HAZELLE_SNAPSHOT_HOUR` UTC): every active account whose newest
-baseline is from before today (UTC), absent, or older than its last finished rewind gets a baseline; a checkpoint never counts as one,
-nor does a baseline stamped after now (a clock since put back). A baseline is taken only of an account that is active or restoring
-before its operation's checkpoint (begun, fenced), read from the service inside the account's queue; any other is skipped.
+Snapshots (`src/server/backup/snapshots.ts`, run by the daily job at `HAZELLE_SNAPSHOT_HOUR` UTC): an account's current baseline is
+its newest one not taken before its last finished rewind; a checkpoint never counts as one, nor does a baseline stamped after now (a
+clock since put back). Every active account whose current baseline is from before today (UTC) or absent is selected; inside the
+account's queue the take compares the file's `head.rev` with the `snapshots.rev` its current baseline recorded and, when they are
+equal, copies nothing (`backup_runs.detail.unchanged`), since that baseline is still the account. A baseline is taken only of an
+account that is active or restoring before its operation's checkpoint (begun, fenced), read from the service inside the account's
+queue; any other is skipped.
 A snapshot goes at 30 days unless pinned. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
 for 30 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
 recoverable by hand. A live account keeps its newest baseline whatever its age. Pins are read from `restores`, so a deleted account
@@ -42,8 +45,8 @@ time asked, never on one taken before the checkpoint of a rewind ended by then; 
 and the install check the snapshot's size and SHA-256 against its row, and a mismatch answers unavailable before anything is armed.
 
 Backup generations (`src/server/backup/generation.ts`), captured by the daily job after the baselines: while a gate keeps signup,
-deletion and every rewind step out (ordinary writes go on), every active account whose newest baseline is absent or older than its
-last finished rewind gets one, as does one restoring before its checkpoint whose baseline is from before today, `VACUUM INTO` copies the service, and what that copy names is hard-linked (copied across filesystems) into
+deletion and every rewind step out (ordinary writes go on), every active account with no current baseline gets one, as does one
+restoring before its checkpoint whose current baseline is from before today unless its file is unchanged since, `VACUUM INTO` copies the service, and what that copy names is hard-linked (copied across filesystems) into
 the generation: each account's newest baseline, every pinned snapshot, every picture whose `account_files` row says `stored = 1`
 into the pool. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The service copy is then gzipped and `manifest.json` written last (temp,
 fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256), the migrations applied,

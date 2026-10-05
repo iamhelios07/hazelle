@@ -1,5 +1,5 @@
 import { rm } from 'node:fs/promises';
-import { RETENTION_MS, snapshotPath, TAKES_BASELINE } from '../db/account-db';
+import { CURRENT_BASELINE, RETENTION_MS, snapshotPath, TAKES_BASELINE } from '../db/account-db';
 import type { Services } from '../http';
 
 // The daily baselines and the retention of every snapshot (docs/research/docker-port-plan.md §10.1). Day boundaries
@@ -18,19 +18,17 @@ export const PINNED = (s: string, now: string) =>
 export const dayStart = (now: number) => now - (now % DAY_MS);
 export const pass = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-// The accounts that take a baseline now (TAKES_BASELINE) whose newest baseline is absent, older than the last rewind
-// finished on them, or older than `before` when active and than today (UTC) when restoring: one restoring before its
-// checkpoint is restored from its baseline should the operation be cut off. Freshness is judged among baselines only:
-// a young checkpoint holds an operation's undo, not the account as it is now. A baseline stamped after `now` is
-// evidence of a clock since put back, not of freshness.
+// The accounts that take a baseline now (TAKES_BASELINE) whose current baseline (CURRENT_BASELINE) is absent, or older
+// than `before` when active and than today (UTC) when restoring: one restoring before its checkpoint is restored from
+// its baseline should the operation be cut off. Freshness is judged among baselines only: a young checkpoint holds an
+// operation's undo, not the account as it is now. An account unchanged since an old current baseline stays selected
+// every day; its take finds it unchanged and copies nothing.
 export async function staleBaselines(env: Services, now: number, before: number): Promise<string[]> {
   const { results } = await env.db
     .prepare(
       `SELECT incarnation FROM accounts a
        WHERE ${TAKES_BASELINE('a')}
-         AND COALESCE((SELECT MAX(taken_at) FROM snapshots WHERE incarnation = a.incarnation AND kind = 'baseline' AND taken_at <= ?1), -1)
-           < MAX(CASE a.state WHEN 'active' THEN ?2 ELSE ?3 END,
-             COALESCE((SELECT MAX(ended_at) FROM restores WHERE incarnation = a.incarnation AND phase = 'done'), -1))
+         AND COALESCE((${CURRENT_BASELINE('taken_at', 'a', '?1')}), -1) < CASE a.state WHEN 'active' THEN ?2 ELSE ?3 END
        ORDER BY incarnation`,
     )
     .bind(now, before, dayStart(now))
@@ -38,22 +36,25 @@ export async function staleBaselines(env: Services, now: number, before: number)
   return results.map(({ incarnation }) => incarnation);
 }
 
-// skipped: accounts that stopped taking a baseline between their selection and their turn. failed: those whose
-// snapshot threw.
-export async function takeBaselines(env: Services, incarnations: string[]): Promise<{ taken: number; skipped: number; failed: string[] }> {
+// skipped: accounts that stopped taking a baseline between their selection and their turn. unchanged: those whose file
+// still holds what their current baseline holds. failed: those whose snapshot threw.
+export async function takeBaselines(env: Services, incarnations: string[]): Promise<{ taken: number; skipped: number; unchanged: number; failed: string[] }> {
   let taken = 0;
   let skipped = 0;
+  let unchanged = 0;
   const failed: string[] = [];
   for (const incarnation of incarnations) {
     try {
-      if ((await env.stores.snapshot(incarnation, 'baseline')) === null) skipped++;
-      else taken++;
+      const outcome = await env.stores.snapshot(incarnation, 'baseline');
+      if ('taken' in outcome) taken++;
+      else if ('unchanged' in outcome) unchanged++;
+      else skipped++;
     } catch {
       failed.push(incarnation);
     }
     await pass();
   }
-  return { taken, skipped, failed };
+  return { taken, skipped, unchanged, failed };
 }
 
 // A snapshot goes once it is 30 days old, unless it is pinned (PINNED) or it is a live account's newest baseline,

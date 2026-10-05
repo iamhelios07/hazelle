@@ -88,9 +88,9 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
     running ??= (async () => {
       const started = Date.now();
       const snapshots = await recorded(env, 'daily', now, async () => {
-        const { taken, skipped, failed } = await takeBaselines(env, await staleBaselines(env, now, dayStart(now)));
+        const { taken, skipped, unchanged, failed } = await takeBaselines(env, await staleBaselines(env, now, dayStart(now)));
         const expired = await expireSnapshots(env, dataDir, now);
-        return { error: failed.length ? 'baseline-failed' : null, detail: { taken, skipped, failed: failed.length, expired } };
+        return { error: failed.length ? 'baseline-failed' : null, detail: { taken, skipped, unchanged, failed: failed.length, expired } };
       });
       const generation = await recorded(env, 'generation', now, async () => {
         const { id, gateMs, manifest } = await captureGeneration(env, dataDir, now, () => now + Date.now() - started, exclusive);
