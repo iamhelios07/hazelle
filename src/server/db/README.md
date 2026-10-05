@@ -38,12 +38,12 @@ equal, copies nothing (`backup_runs.detail.unchanged`), since that baseline is s
 upgrade) selects every live account instead of those from before today, and a take that fails there fails its generation. A baseline is taken only of an
 account that is active or restoring before its operation's checkpoint (begun, fenced), read from the service inside the account's
 queue; any other is skipped.
-A snapshot goes at 30 days unless pinned. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
-for 30 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
-recoverable by hand. A live account keeps its floor, its newest baseline 30 days old or older, whatever its age: a time inside the
+A snapshot goes at 7 days (`RETENTION_MS`) unless pinned. An operation pins its checkpoint and target (an undo's from its begin) until it ends and
+for 7 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
+recoverable by hand. A live account keeps its floor, its newest baseline 7 days old or older, whatever its age: a time inside the
 window may land on it. Pins are read from `restores`, so a deleted account
-(whose restores cascade away) loses every snapshot at 30 days from its taking. A rewind lands on the newest snapshot at or before the
-time asked, however old (the 29-day request window is the lifecycle's), never on one taken before the checkpoint of a rewind ended by then; the preview, the choice of a target (an undo's too)
+(whose restores cascade away) loses every snapshot at 7 days from its taking. A rewind lands on the newest snapshot at or before the
+time asked, however old (the 6-day request window is the lifecycle's), never on one taken before the checkpoint of a rewind ended by then; the preview, the choice of a target (an undo's too)
 and the install check the snapshot's size and SHA-256 against its row, and a mismatch answers unavailable before anything is armed.
 
 Backup generations (`src/server/backup/generation.ts`), captured by the daily job after the baselines: while a gate keeps signup,
@@ -53,7 +53,7 @@ the generation: each account's newest baseline, every pinned snapshot, every pic
 into the pool. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The service copy is then gzipped and `manifest.json` written last (temp,
 fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256), the migrations applied,
 the account schema version, and every operation not done or not yet seen ending. A directory without a manifest is cut off and goes
-after a day; a generation goes at 30 days, then every pooled picture no remaining manifest names.
+after a day; a generation goes at 7 days, then every pooled picture no remaining manifest names.
 
 The copier's contract: after a successful `rclone copy` of `backup/<id>/` (and the pool), it writes `backup/<id>/copied` holding one
 line, the UTC ISO-8601 time of the copy. A generation is complete when it has both `manifest.json` and `copied`; backup freshness is

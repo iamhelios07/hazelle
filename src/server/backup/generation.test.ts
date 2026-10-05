@@ -190,7 +190,7 @@ describe('a backup generation', () => {
     expect(named(unchanged.incarnation)).toBe(unchanged.old);
   });
 
-  it('collects a generation at 30 days and with it only the pictures no kept generation names', async () => {
+  it('collects a generation at 7 days and with it only the pictures no kept generation names', async () => {
     await signedUp('operator');
     const keeper = await signedUp('keeper');
     const leaver = await signedUp('leaver');
@@ -198,7 +198,7 @@ describe('a backup generation', () => {
     expect(await uploaded(leaver.cookie, 'both hold this')).toBe(shared);
     const kept = await uploaded(keeper.cookie, 'kept');
     const gone = await uploaded(leaver.cookie, 'gone with the leaver');
-    const first = Date.now() - 31 * DAY_MS;
+    const first = Date.now() - 8 * DAY_MS;
     await t.daily(first);
     expect((await newest()).pictures.toSorted()).toEqual([shared, kept, gone].toSorted());
     expect((await t.delete('account', { method: 'password', proof: leaver.body.passwordProof }, leaver.cookie)).status).toBe(204);
@@ -206,8 +206,8 @@ describe('a backup generation', () => {
     await t.daily(first + DAY_MS);
     expect((await newest()).pictures.toSorted()).toEqual([shared, kept].toSorted());
     expect(readdirSync(join(generationsDir(t.dir), POOL)).toSorted()).toEqual([shared, kept, gone].toSorted());
-    await t.daily(first + 30 * DAY_MS + DAY_MS / 2);
-    expect((await listGenerations(t.dir)).map(({ capturedAt }) => capturedAt).toSorted()).toEqual([first + DAY_MS, first + 30 * DAY_MS + DAY_MS / 2]);
+    await t.daily(first + 7 * DAY_MS + DAY_MS / 2);
+    expect((await listGenerations(t.dir)).map(({ capturedAt }) => capturedAt).toSorted()).toEqual([first + DAY_MS, first + 7 * DAY_MS + DAY_MS / 2]);
     expect(readdirSync(join(generationsDir(t.dir), POOL)).toSorted()).toEqual([shared, kept].toSorted());
   });
 });

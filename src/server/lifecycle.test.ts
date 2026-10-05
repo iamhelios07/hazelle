@@ -235,7 +235,7 @@ describe('a restore', () => {
     });
   });
 
-  it('begins only on an open report the account sent, a time 10 minutes to 29 days back, or an undo of its latest restore; a refusal leaves no row and no hold', async () => {
+  it('begins only on an open report the account sent, a time 10 minutes to 6 days back, or an undo of its latest restore; a refusal leaves no row and no hold', async () => {
     const seed = await seeded();
     const other = await seeded();
     const refused = async (report: number, from: { at: number } | { undoes: number }) => {
@@ -245,7 +245,7 @@ describe('a restore', () => {
     expect(await refused(other.report, { at: seed.at })).toBe('bad-report');
     expect(await refused(seed.report + 100, { at: seed.at })).toBe('bad-report');
     expect(await refused(seed.report, { at: Date.now() - 5 * 60_000 })).toBe('bad-time');
-    expect(await refused(seed.report, { at: Date.now() - 30 * 24 * HOUR_MS })).toBe('bad-time');
+    expect(await refused(seed.report, { at: Date.now() - 7 * 24 * HOUR_MS })).toBe('bad-time');
     expect(await refused(seed.report, { undoes: 1 })).toBe('cannot-undo');
     await t.env.db.prepare('UPDATE reports SET resolved_at = 1 WHERE id = ?').bind(seed.report).run();
     expect(await refused(seed.report, { at: seed.at })).toBe('bad-report');
@@ -258,17 +258,17 @@ describe('a restore', () => {
     expect(await logged('restore-begun')).toBe(1);
   });
 
-  it('allows the undo for 30 days after the restore ended, however long before that its checkpoint was taken', async () => {
+  it('allows the undo for 7 days after the restore ended, however long before that its checkpoint was taken', async () => {
     const seed = await seeded();
     const id = await begin(seed);
     await runRestore(t.env, id);
     const now = Date.now();
-    await t.env.db.prepare('UPDATE restores SET checkpoint_at = ?, ended_at = ? WHERE id = ?').bind(now - 40 * 24 * HOUR_MS, now - 29 * 24 * HOUR_MS, id).run();
+    await t.env.db.prepare('UPDATE restores SET checkpoint_at = ?, ended_at = ? WHERE id = ?').bind(now - 12 * 24 * HOUR_MS, now - 6 * 24 * HOUR_MS, id).run();
     const listed = (await (await t.get(`admin/accounts/${seed.id}/restores`, operator.cookie)).json()) as { restores: { undoExpiresAt: number }[] };
     expect(listed.restores[0]!.undoExpiresAt).toBe(now + 24 * HOUR_MS);
-    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 30 * 24 * HOUR_MS - 60_000, id).run();
+    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 7 * 24 * HOUR_MS - 60_000, id).run();
     expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toEqual({ refused: 'cannot-undo' });
-    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 29 * 24 * HOUR_MS, id).run();
+    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 6 * 24 * HOUR_MS, id).run();
     expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toHaveProperty('begun');
   });
 
@@ -278,8 +278,8 @@ describe('a restore', () => {
     await runRestore(t.env, id);
     const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
     t.restartProcess();
-    // 31 days on, the undone restore's own pin has lapsed.
-    await expireSnapshots(t.env, t.dir, Date.now() + 31 * 24 * HOUR_MS);
+    // 8 days on, the undone restore's own pin has lapsed.
+    await expireSnapshots(t.env, t.dir, Date.now() + 8 * 24 * HOUR_MS);
     expect(await runRestore(t.env, undo)).toMatchObject({ phase: 'done', verified: true, error: null });
     expect(await contents(seed.cookie)).toEqual(BEFORE);
   });
