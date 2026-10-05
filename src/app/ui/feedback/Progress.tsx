@@ -2,6 +2,7 @@ import { Circle, CircleCheck, CircleDot } from 'lucide-react';
 import { useId, type CSSProperties } from 'react';
 import { MARK } from '../foundation/mark';
 import motion from '../foundation/motion.module.css';
+import a11y from '../foundation/a11y.module.css';
 import styles from './Progress.module.css';
 
 // total absent: how far is unknown, the count alone is shown and the bar flows; done absent too: only the label.
@@ -46,13 +47,14 @@ function Bar(step: ProgressStep) {
 }
 
 const ICON = { done: CircleCheck, active: CircleDot, pending: Circle } as const;
+const SAID: Record<State, string> = { done: '끝남', active: '진행 중', pending: '남음' };
 
 function Stage({ step, state }: { step: ProgressStep; state: State }) {
   const Icon = ICON[state];
   return (
     <li className={`${styles.stage} ${styles[state]}`}>
       <Icon className={styles.icon} aria-hidden="true" />
-      <span className={styles.label}>{step.label}</span>
+      <span className={styles.label}>{step.label}<span className={a11y.srOnly}> · {SAID[state]}</span></span>
       {state === 'active' && <Count {...step} />}
       {state === 'active' && <Track {...step} />}
     </li>
@@ -66,8 +68,9 @@ const [, , MARK_WIDTH, MARK_HEIGHT] = MARK.viewBox.split(' ').map(Number) as [nu
 function Hero({ steps, title, note }: { steps: ProgressStep[]; title?: string; note?: string }) {
   const clip = useId();
   const { done, total } = sum(steps);
-  const share = total > 0 ? done / total : null;
-  const percent = share === null ? null : Math.floor(share * 100);
+  // Counted work of zero is whole, as a Track shows it; only no counted work at all is unknown.
+  const share = counted(steps).length === 0 ? null : total === 0 ? 1 : done / total;
+  const percent = share === null ? null : total === 0 ? 100 : Math.floor((done * 100) / total);
   const filled = MARK_HEIGHT * (share ?? 0);
   return (
     <div className={styles.hero}>
@@ -94,10 +97,7 @@ function Hero({ steps, title, note }: { steps: ProgressStep[]; title?: string; n
 
 type Props = { steps: ProgressStep[]; hero?: boolean; title?: string; note?: string };
 
-// Work under way. Plain: a row per step with the label, the bar and the count, and with two or more counted steps a
-// 전체 row summing them. hero: the mark filling with the whole and the percent, then the steps as stages in order,
-// each a check, the one under way with its count and bar, or a hollow ring still to come; title under the percent and
-// note under the stages.
+// Work under way, plain as rows or hero as the filling mark with stages; the kit README says which shows what.
 export function Progress({ steps, hero = false, title, note }: Props) {
   if (hero) return <Hero steps={steps} title={title} note={note} />;
   const whole = sum(steps);

@@ -138,7 +138,7 @@
   height: var(--text-xl);
 }
 
-.done {
+.done .label {
   color: var(--color-text-muted);
 }
 

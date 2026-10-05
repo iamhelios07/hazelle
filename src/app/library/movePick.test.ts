@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BackupCatalog } from '../../engine/import/types';
-import { tickable, toPick } from './movePick';
+import { stepsOf, tickable, toPick } from './movePick';
 
 describe('tickable', () => {
   it('leaves out characters and modules already brought and presets the importer refused, and picks the rest', () => {
@@ -18,5 +18,7 @@ describe('tickable', () => {
     expect(pick.characters.map((item) => item.id)).toEqual(['b']);
     expect(pick.presets).toEqual([backup.presets[0]]);
     expect(pick.modules).toEqual([backup.modules[1]]);
+    expect(stepsOf(pick)).toEqual(['personas', 'modules', 'prompts', 'characters', 'chats']);
+    expect(stepsOf({ ...pick, personas: [], modules: [{ key: 0, name: 'm', risu: 'm', assetCount: 2 }] })).toEqual(['modules', 'prompts', 'characters', 'chats', 'pictures']);
   });
 });

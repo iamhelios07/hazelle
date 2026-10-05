@@ -12,7 +12,7 @@ import { moduleName } from '../common/words';
 import { useFiles, useStore } from '../session';
 import { Button, Callout, Checkbox, Dialog, Outcome, Progress, Section, Stack, Text, type ProgressStep } from '../ui';
 import { cardMissed, moduleMissed, moveMissed } from './missed';
-import { hasModule, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
+import { hasModule, stepsOf, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
 
 const FAILURE: Record<BackupFailure['kind'], string> = {
   encrypted: 'Risu 계정의 전체 백업은 글이 Risu 서버의 키로 잠겨 있어요. 그림은 읽을 수 있으니, Risu에서 ‘부분 로컬 백업 저장’으로 받은 파일을 이 파일과 함께 넣어 주세요. 글은 그 파일에서, 그림은 이 파일에서 가져와요.',
@@ -36,7 +36,7 @@ type Phase =
   | { kind: 'reading' }
   | { kind: 'failed'; message: string; again: (() => void) | null }
   | { kind: 'picking'; backup: RisuBackup; have: Have; can: Ticks; ticks: Ticks }
-  | { kind: 'running'; steps: Steps }
+  | { kind: 'running'; kinds: MoveStep['kind'][]; steps: Steps }
   | { kind: 'done'; backup: BackupCatalog; moved: Moved };
 
 // Risu backups dropped or picked, read as one (design F7). aside: other files dropped with them, which are not
@@ -79,11 +79,11 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
     const pick = toPick(backup.catalog, ticks);
     const source = reader.current!;
     const steps: Steps = {};
-    setPhase({ kind: 'running', steps });
+    setPhase({ kind: 'running', kinds: stepsOf(pick), steps });
     try {
       const moved = await moveFromRisu(store, files, backup, pick, (step) => {
         steps[step.kind] = step;
-        if (reader.current === source) setPhase({ kind: 'running', steps: { ...steps } });
+        if (reader.current === source) setPhase({ kind: 'running', kinds: stepsOf(pick), steps: { ...steps } });
       });
       if (reader.current !== source) return;
       if (moved.ok) {
@@ -116,11 +116,10 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   );
 
   if (phase.kind === 'reading' || phase.kind === 'running') {
-    const steps = phase.kind === 'running' ? phase.steps : {};
-    const stages = (Object.keys(STEP) as MoveStep['kind'][]).map((kind): ProgressStep => {
-      const step = steps[kind];
+    const stages = phase.kind === 'running' ? phase.kinds.map((kind): ProgressStep => {
+      const step = phase.steps[kind];
       return step ? { label: STEP[kind], done: step.done, total: step.total } : { label: STEP[kind] };
-    });
+    }) : [];
     return (
       <Dialog title={phase.kind === 'reading' ? '백업 읽는 중' : '가져오는 중'} note={note} onClose={() => {}}>
         <Progress hero steps={[{ label: READING, finished: phase.kind === 'running' }, ...stages]} />
