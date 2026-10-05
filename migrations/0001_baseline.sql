@@ -84,11 +84,11 @@ CREATE TABLE admin_log (
 -- One restore of an account's file, run in phases (src/server/lifecycle.ts). Every phase change is a compare-and-set
 -- on (id, phase). at: the time asked for, null for an undo. undoes: the restore an undo rewinds. timeline: installed
 -- when it completes. checkpoint: the snapshot taken while fenced, the exact undo, written once. target: the snapshot
--- the account rewinds to. returned: what arming answered, a record only. error: a short code, never prose. verified:
--- the account's file was seen loading the operation's end state. ended_at: when it reached done, cancelled or failed,
--- written once with that phase; pins and the undo window count from it, never from updated_at, which every retry
--- moves. id is never used again (AUTOINCREMENT): rows go with their account, and a request still holding a deleted
--- operation's id must not name another account's.
+-- the account rewinds to; an undo's is set at its begin. returned: what arming answered, a record only. error: a short
+-- code, never prose. verified: the account's file was seen loading the operation's end state. ended_at: when it
+-- reached done, cancelled or failed, written once with that phase; pins and the undo window count from it, never from
+-- updated_at, which every retry moves. id is never used again (AUTOINCREMENT): rows go with their account, and a
+-- request still holding a deleted operation's id must not name another account's.
 CREATE TABLE restores (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   incarnation TEXT NOT NULL REFERENCES accounts (incarnation) ON DELETE CASCADE,

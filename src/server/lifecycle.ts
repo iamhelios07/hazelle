@@ -104,7 +104,6 @@ type Operation = {
   phase: Phase;
   verified: number;
   error: string | null;
-  undone: string | null;
 };
 
 const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
@@ -123,6 +122,7 @@ export const undoable = (operation: string, now: string) =>
 export type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'bad-time' | 'cannot-undo' };
 
 // The operation's row and the account's hold on it commit together or not at all: the hold is gated on the insert.
+// An undo's target, the undone restore's checkpoint, is recorded with the row, so it is pinned from the begin on.
 export async function beginRestore(env: Services, accountId: string, report: number, from: { at: number } | { undoes: number }): Promise<Begun> {
   const db = env.db;
   const at = 'at' in from ? from.at : null;
@@ -131,8 +131,8 @@ export async function beginRestore(env: Services, accountId: string, report: num
   const [inserted] = await env.backups.hold(() => db.batch<{ id: number }>([
     db
       .prepare(
-        `INSERT INTO restores (incarnation, report_id, at, undoes, timeline, phase, created_at, updated_at)
-         SELECT incarnation, ?2, ?3, ?4, lower(hex(randomblob(16))), 'begun', ?5, ?5 FROM accounts
+        `INSERT INTO restores (incarnation, report_id, at, undoes, target, timeline, phase, created_at, updated_at)
+         SELECT incarnation, ?2, ?3, ?4, (SELECT checkpoint FROM restores WHERE id = ?4), lower(hex(randomblob(16))), 'begun', ?5, ?5 FROM accounts
          WHERE id = ?1 AND ${FREE} AND ${REPORTED} AND (${TIMELY} OR ${undoable('?4', '?5')}) RETURNING id`,
       )
       .bind(accountId, report, at, undoes, now),
@@ -220,7 +220,7 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       return undefined;
     }
     case 'checkpointed': {
-      const answer = await store(env, incarnation).target(incarnation, id, operation.undoes === null ? { at: operation.at! } : { snapshot: operation.undone! });
+      const answer = await store(env, incarnation).target(incarnation, id, operation.undoes === null ? { at: operation.at! } : { snapshot: operation.target! });
       if ('unavailable' in answer) return 'store-unavailable';
       if ('tooEarly' in answer) await release(env, operation, 'failed', ['checkpointed'], 'too-early');
       if (!('target' in answer)) return undefined;
@@ -316,12 +316,7 @@ function terminalLog(db: Db, action: string, operation: Operation, error: string
 }
 
 function readOperation(db: Db, id: number) {
-  return db
-    .prepare(
-      `SELECT r.id, r.incarnation, r.at, r.undoes, r.timeline, r.target, r.phase, r.verified, r.error, u.checkpoint AS undone
-       FROM restores r LEFT JOIN restores u ON u.id = r.undoes WHERE r.id = ?`,
-    )
-    .bind(id)
+  return db.prepare('SELECT id, incarnation, at, undoes, timeline, target, phase, verified, error FROM restores WHERE id = ?').bind(id)
     .first<Operation>();
 }
 

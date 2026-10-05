@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Phase, Write } from './account-store';
+import { expireSnapshots } from './backup/snapshots';
 import type { Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
@@ -268,6 +269,18 @@ describe('a restore', () => {
     expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toEqual({ refused: 'cannot-undo' });
     await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 29 * 24 * HOUR_MS, id).run();
     expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toHaveProperty('begun');
+  });
+
+  it('keeps the checkpoint an undo will install pinned from its begin, past the end of the undone restore’s own pin', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
+    t.restartProcess();
+    // 31 days on, the undone restore's own pin has lapsed.
+    await expireSnapshots(t.env, t.dir, Date.now() + 31 * 24 * HOUR_MS);
+    expect(await runRestore(t.env, undo)).toMatchObject({ phase: 'done', verified: true, error: null });
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
   });
 
   it('cancels before arming, giving the account back on its timeline with its objects, and refuses once armed', async () => {
