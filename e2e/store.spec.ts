@@ -38,11 +38,13 @@ let server: ChildProcess;
 test.use({ baseURL: `http://localhost:${PORT}` });
 
 async function start() {
+  const health = () => fetch(`http://localhost:${PORT}/api/health`).then((response) => response.status, () => 0);
+  // A server an earlier run left on the port would answer for this one.
+  expect(await health()).toBe(0);
   server = spawn(process.execPath, ['dist/server/node.js'], {
     env: { ...process.env, HAZELLE_DATA: DATA, HAZELLE_CLIENT: 'dist/client', PORT: String(PORT) },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
-  const health = () => fetch(`http://localhost:${PORT}/api/health`).then((response) => response.status, () => 0);
   await expect.poll(health, { timeout: 30_000 }).toBe(200);
 }
 
