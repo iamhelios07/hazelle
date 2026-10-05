@@ -17,7 +17,7 @@ import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route, type RouteFailure } from './assignment';
 import { translateSwitches } from './characters';
 import { memoryInput } from './memory';
-import { chatPersona } from './personas';
+import { chatPersona, type PersonaSource } from './personas';
 import { modelProfile } from './profiles';
 import { chatPrompt, type PromptChoice } from './prompts';
 import type { Session } from './session';
@@ -40,7 +40,7 @@ export type Target =
   | { kind: 'continue'; message: string; version: string };
 
 // own says whether the missing one was the chat's (the model's) own or the default.
-export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; own: boolean } | { kind: 'profile-missing'; own: boolean };
+export type Blocked = RouteFailure | { kind: 'prompt-missing'; own: boolean } | { kind: 'persona-missing'; from: PersonaSource } | { kind: 'profile-missing'; own: boolean };
 // A turn also stops before sending on a new chat that was not saved, a pull that failed, a chat or message another
 // device deleted, a user's message that was not translated, a tokenizer that did not load, or a prompt over the
 // model's budget.
@@ -246,10 +246,10 @@ export async function receiveReply(session: Session, chat: string, reply: Writte
   await translateReceived(session, chat, reply);
 }
 
-function sendable(scope: ChatScope, chat: Chat): PromptInput['scope'] | Blocked {
+function sendable({ store }: Reader, scope: ChatScope, chat: Chat): PromptInput['scope'] | Blocked {
   const { prompt, persona } = scope;
   if (!prompt) return { kind: 'prompt-missing', own: chat.prompt !== undefined };
-  if (!persona) return { kind: 'persona-missing', own: chat.persona !== undefined };
+  if (!persona) return { kind: 'persona-missing', from: chatPersona(store, chat).from };
   return { ...scope, prompt, persona };
 }
 
@@ -259,7 +259,7 @@ export function blocked(reader: Reader, chat: Chat): Blocked | null {
   if ('kind' in route) return route;
   const profile = modelProfile(reader.store, route.model);
   if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
-  const scope = sendable(scopeOf(reader, null, chat, []), chat);
+  const scope = sendable(reader, scopeOf(reader, null, chat, []), chat);
   return 'kind' in scope ? scope : null;
 }
 
@@ -291,7 +291,7 @@ function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: string, targ
   // version it continues, as its text, which the continuation is written after.
   const before = asSent(session.store, stored.value, messages.slice(0, at));
   const history = continues ? [...before, { ...messages[at]!, selected: index }] : [...before, ...sending];
-  const scope = sendable(scopeOf(session, chat, stored.value, history), stored.value);
+  const scope = sendable(session, scopeOf(session, chat, stored.value, history), stored.value);
   if ('kind' in scope) return scope;
   return {
     chat: stored.value,

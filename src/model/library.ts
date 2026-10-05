@@ -15,6 +15,8 @@ export type Character = Mark & {
   loreFolders: LoreFolder[];
   origin?: { id: string; name: string };
   toggles?: ToggleValues;
+  // 고정 페르소나: the persona its chats use in place of the default, unless a chat picks its own.
+  persona?: string;
   translate?: TranslateSwitches;
   // 번역가의 노트: added to the 전역 one (Settings.translatorNote), never replacing it as the switches do.
   translatorNote?: string;

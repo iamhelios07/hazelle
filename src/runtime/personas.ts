@@ -5,21 +5,29 @@ import type { Persona } from '../model/persona';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { markDeleted } from './characters';
-import type { ObjectStore } from './store';
+import { without, type ObjectStore } from './store';
 
 // Fixed, so two devices adding the first persona at once meet in a version conflict instead of making two.
 export const FIRST_ID = '00000000-0000-4000-8000-000000000002';
 
+// from: the chat's own pick, the one 고정 on its character, or the default.
+export type PersonaSource = 'chat' | 'character' | 'default';
+
 // There is no chat without a persona; a deleted one, or a default not added yet, reads as missing and never as
 // another persona, and a turn stops on it.
-export type PersonaChoice = { kind: 'persona'; persona: Stored<'persona'>; own: boolean } | { kind: 'missing'; own: boolean };
+export type PersonaChoice = { kind: 'persona'; persona: Stored<'persona'>; from: PersonaSource } | { kind: 'missing'; from: PersonaSource };
 
 export function chatPersona(store: ObjectStore, chat: Chat): PersonaChoice {
-  const own = chat.persona !== undefined;
-  const id = chat.persona ?? store.get('settings', SETTINGS_ID)?.value.persona;
+  const pinned = chat.character === null ? undefined : store.get('character', chat.character)?.value.persona;
+  const [from, id]: [PersonaSource, string | undefined] =
+    chat.persona !== undefined ? ['chat', chat.persona] : pinned !== undefined ? ['character', pinned] : ['default', store.get('settings', SETTINGS_ID)?.value.persona];
   const persona = id === undefined ? null : live(store.get('persona', id));
-  return persona ? { kind: 'persona', persona, own } : { kind: 'missing', own };
+  return persona ? { kind: 'persona', persona, from } : { kind: 'missing', from };
 }
+
+// null takes the 고정 off.
+export const pinPersona = (store: ObjectStore, character: string, persona: string | null) =>
+  store.update('character', character, (current) => (persona === null ? without(current, 'persona') : { ...current, persona }));
 
 // An account that has never had a default persona gets one named after its username, once. The session
 // awaits it when it opens; a failure is tried again next time.

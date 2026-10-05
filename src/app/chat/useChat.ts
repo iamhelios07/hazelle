@@ -24,7 +24,7 @@ import {
   withCast,
 } from '../../runtime/chat-log';
 import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
-import { chatPersona } from '../../runtime/personas';
+import { chatPersona, pinPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
@@ -354,6 +354,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     return WRITE_OWN[field](store, id, value);
   }
 
+  // Pinned from a chat, the persona is that chat's through the 고정, so the chat's own pick goes.
+  async function pin(persona: string | null): Promise<{ ok: true } | ApiFailure> {
+    const pinned = await pinPersona(store, chat.character!, persona);
+    return !pinned.ok || persona === null ? pinned : setOwn('persona', null);
+  }
+
   function changeCast(ids: string[]) {
     if (!id) {
       setUnsaved((current) => withCast(current, chat.character, ids));
@@ -525,6 +531,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       closeDialog: () => setDialog(null),
       pickModel,
       setOwn,
+      pinPersona: pin,
       setCast: changeCast,
       flip,
       resetToggles: reset,

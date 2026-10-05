@@ -156,7 +156,11 @@ export function describeTurnFailure(failure: TurnFailure): string {
     case 'prompt-missing':
       return failure.own ? '이 채팅의 프롬프트가 지워졌어요. 다른 프롬프트를 골라 주세요.' : `기본 프롬프트가 없어요. ${inSettings('prompts')}에서 하나를 기본으로 정해 주세요.`;
     case 'persona-missing':
-      return failure.own ? '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.' : `기본 페르소나가 지워졌어요. ${inSettings('personas')}에서 다른 페르소나를 기본으로 정해 주세요.`;
+      return {
+        chat: '이 채팅의 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.',
+        character: '이 캐릭터에 고정한 페르소나가 지워졌어요. 다른 페르소나를 골라 주세요.',
+        default: `기본 페르소나가 지워졌어요. ${inSettings('personas')}에서 다른 페르소나를 기본으로 정해 주세요.`,
+      }[failure.from];
     case 'profile-missing':
       return failure.own ? `이 모델이 쓰던 설정이 지워졌어요. ${inSettings('models')}에서 다른 설정을 골라 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 다른 설정을 기본으로 정해 주세요.`;
     case 'runaway':
