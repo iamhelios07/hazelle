@@ -50,6 +50,8 @@ resource "vultr_instance" "hazelle" {
   firewall_group_id = vultr_firewall_group.hazelle.id
   reserved_ip_id    = vultr_reserved_ip.hazelle.id
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
+    # https://download.docker.com/linux/ubuntu/gpg, fingerprint 9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88.
+    docker_apt_key = file("${path.module}/docker-apt.asc")
     env = join("\n", [
       "HAZELLE_IMAGE=ghcr.io/jiniill/hazelle@${var.image_digest}",
       "HAZELLE_BACKUP_REMOTE=r2:${var.r2_bucket}",
