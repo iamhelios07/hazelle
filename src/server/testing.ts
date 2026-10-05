@@ -69,6 +69,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     },
     dispose: () => {
       env.stores.close();
+      env.streams.close();
       raw.close();
       rmSync(dir, { recursive: true, force: true });
     },
