@@ -150,7 +150,7 @@ Styling rules are in [`src/app/ui/README.md`](src/app/ui/README.md): design valu
 
 ### Releases and the hosted instance
 
-A `v*` tag builds the image for amd64 and arm64, pushes it to GHCR, and attaches the source archive and the image digest to the GitHub release. The hosted instance is one machine described in [`infra/`](infra/README.md) and updated with `scripts/deploy.sh <tag>`.
+A `v*` tag builds the image for amd64 and arm64, pushes it to GHCR, and attaches the source archive and the image digest to the GitHub release. The hosted instance is one machine described in [`infra/`](infra/README.md) and updated with `scripts/deploy.sh <tag>`; `scripts/release.sh <tag>` tags, waits for the build and deploys in one command.
 
 Design and technical documents are kept in a separate repository until launch.
 

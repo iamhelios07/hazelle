@@ -9,7 +9,8 @@ These steps apply after the cutover (`docs/research/docker-port-plan.md` §16). 
 
 Deploying is an external action. Run it only on the user's go-ahead for this batch.
 
-1. Commit and push first. Then tag the release and push the tag: `/usr/bin/git tag vX.Y.Z`, `/usr/bin/git push origin vX.Y.Z`.
+0. Commit and push first, then `scripts/release.sh vX.Y.Z` does steps 1–3 in one command: it tags HEAD, pushes the tag, waits for the build and runs `scripts/deploy.sh`. Its output is deploy.sh's; the steps below are what it does, and the way to carry on by hand when it stops between them (the tag and build stay; run `scripts/deploy.sh vX.Y.Z`).
+1. Tag the release and push the tag: `/usr/bin/git tag vX.Y.Z`, `/usr/bin/git push origin vX.Y.Z`.
 2. The tag runs `.github/workflows/release.yml`: `npm run check`, the source archive of the tag's commit, the image for amd64 and arm64 on GHCR, and a release whose notes carry the image digest. Wait for it with `gh run watch`.
 3. Run `scripts/deploy.sh vX.Y.Z`. It needs a clean tree, `gh` logged in, docker, the Terraform state in `infra/` (for the machine's address) and ssh as root to the machine with no flags: `ssh root@<ip>` must sign in by itself, so the machine's key is named in `~/.ssh/config` (`Host <ip>`, `IdentityFile ~/.ssh/hazelle_vm`); without it the session ends with status 255 before the first line. It:
    - checks that the release's source archive and the one inside the image are the tag's commit;
