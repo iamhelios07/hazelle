@@ -1,7 +1,7 @@
 import { REMOVABLE } from '../model/library';
 import type { ApiResult } from './api';
-import type { BackupFailure, BackupPin, Options } from './backup-core';
-import type { BackupInput, BatchAnswer, BatchCall, ExportFiles, ExportStore, OutputCall, Progress, ReadAnswer, RestoreFiles, SaveFilesCall, ScanCall, ScanRows } from './backup-job';
+import type { BackupFailure, BackupPin, BackupStep, Options } from './backup-core';
+import type { BackupInput, BatchAnswer, BatchCall, ExportFiles, ExportStore, OutputCall, ReadAnswer, RestoreFiles, SaveFilesCall, ScanCall, ScanRows } from './backup-job';
 import { BackupPeer, type BackupMessage } from './backup-peer';
 import type { BackupOutput } from './backup-zip';
 import type { ObjectStore } from './store';
@@ -11,7 +11,7 @@ import type { FileRef } from '../vault/files';
 import workerUrl from './backup-worker?worker&url';
 
 export type { BackupOutput } from './backup-zip';
-export type { BackupFailure } from './backup-core';
+export type { BackupFailure, BackupStep } from './backup-core';
 export type Backup = { close: () => Promise<void>; worker: BackupWorker };
 
 type Host = { store: ExportStore; files: ExportFiles; output: BackupOutput } | { store: ObjectStore; files: RestoreFiles };
@@ -74,8 +74,7 @@ class BackupWorker {
 
   private async handle(name: string, args: unknown): Promise<unknown> {
     if (name === 'progress') {
-      const { done, total } = args as Progress;
-      this.options.progress?.(done, total);
+      this.options.progress?.(args as BackupStep);
       return;
     }
     const host = this.host;

@@ -1,5 +1,5 @@
 import type { ApiFailure, ApiResult } from './api';
-import { exportBackup, readBackup, restoreBackup, type BackupFailure, type BackupPin, type Options, type ReadArchive, type RestoreStore } from './backup-core';
+import { exportBackup, readBackup, restoreBackup, type BackupFailure, type BackupPin, type BackupStep, type Options, type ReadArchive, type RestoreStore } from './backup-core';
 import type { BackupPeer } from './backup-peer';
 import type { BackupRecords } from './backup-records';
 import { bufferedBackupOutput } from './backup-zip';
@@ -20,7 +20,6 @@ export type BatchCall = { writes: Write[]; unheld?: boolean };
 export type BatchAnswer = { result: ApiResult<null>; count: number };
 export type SaveFilesCall = { bytes: Uint8Array<ArrayBuffer>[] };
 export type OutputCall = { kind: 'write'; bytes: Uint8Array<ArrayBuffer> } | { kind: 'close' | 'abort' };
-export type Progress = { done: number; total: number };
 export type ReadAnswer = { ok: true } | BackupFailure;
 
 // One worker owns one backup job and its temporary parsed-record session. No decoded archive returns to the host.
@@ -61,11 +60,11 @@ export class BackupJobs {
     let shown = 0;
     const options: Options = {
       signal: abort.signal,
-      progress: (done, total) => {
+      progress: (step) => {
         const now = performance.now();
-        if (done !== 0 && done !== total && now - shown < 100) return;
+        if (step.done !== 0 && step.done !== step.total && now - shown < 100) return;
         shown = now;
-        this.peer.notice('progress', { done, total } satisfies Progress);
+        this.peer.notice('progress', step satisfies BackupStep);
       },
     };
     try {

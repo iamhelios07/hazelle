@@ -26,7 +26,8 @@ const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, F
 
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 
-export type Options = { signal?: AbortSignal; progress?: (done: number, total: number) => void };
+export type BackupStep = { kind: 'objects' | 'files'; done: number; total: number };
+export type Options = { signal?: AbortSignal; progress?: (step: BackupStep) => void };
 export type ReadArchive = { file: Blob; entries: Map<string, ZipEntry>; objects: ObjectRow[]; files: Map<string, FileRef>; records: BackupRecords };
 export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' | 'backup-storage' | 'backup-crashed' };
 export type BackupPin = { pin: Pin; excluded: Set<string> };
@@ -57,19 +58,22 @@ export async function exportBackup(
     }, pin);
     if (scanned) return scanned;
     const reached = new Set<string>();
-    let total = 0;
+    const total = { objects: 0, files: 0 };
     for (const row of metadata.values()) {
       if (!Object.hasOwn(KINDS, row.kind) || deleted.has(row.id) || (row.parent !== null && deleted.has(row.parent))) continue;
       const kind = row.kind as Kind;
       const owners = parentKinds(kind);
       if (owners.length > 0 && (row.parent === null || !owners.some((owner) => owner === metadata.get(row.parent!)?.kind))) continue;
       reached.add(row.id);
-      total += 1 + Number('file' in KINDS[kind]);
+      total.objects++;
+      if ('file' in KINDS[kind]) total.files++;
     }
     metadata.clear();
-    let done = 0;
+    const done = { objects: 0, files: 0 };
     let left = 0;
-    progress(done, total);
+    const landed = (kind: BackupStep['kind'], by = 1) => progress({ kind, done: done[kind] += by, total: total[kind] });
+    progress({ kind: 'objects', done: 0, total: total.objects });
+    progress({ kind: 'files', done: 0, total: total.files });
     const zip = new BackupZip(output, signal);
     const manifest = await zip.entry(MANIFEST, false);
     await manifest(strToU8(JSON.stringify(FORMAT)), true);
@@ -99,13 +103,14 @@ export async function exportBackup(
         signal.throwIfAborted();
         if (ref && blocked.has(ref.id)) {
           skipped++;
-          progress(done += 2, total);
+          landed('objects');
+          landed('files');
           continue;
         }
         if (ref) named.set(ref.id, { ref, uses: (named.get(ref.id)?.uses ?? 0) + 1 });
         await objects(strToU8(`${first ? '' : '\n'}${line}`));
         first = false;
-        progress(++done, total);
+        landed('objects');
       }
       held = [];
       heldBytes = 0;
@@ -117,7 +122,10 @@ export async function exportBackup(
       const due = reached.delete(row.id);
       if (value === undefined || !Object.hasOwn(KINDS, row.kind)) {
         left++;
-        if (due) progress(done += 1 + Number('file' in KINDS[row.kind as Kind]), total);
+        if (due) {
+          landed('objects');
+          if ('file' in KINDS[row.kind as Kind]) landed('files');
+        }
         return;
       }
       if (!due) return;
@@ -139,7 +147,7 @@ export async function exportBackup(
       // Pictures are compressed already.
       const push = await zip.entry(FILES + ref.id, false);
       await push(bytes.data, true);
-      progress(done += uses, total);
+      landed('files', uses);
     }
     // The pictures are read after the scans, with no timeline of their own: a restore heard meanwhile fails the export
     // as one between the scans does.
@@ -201,7 +209,8 @@ export async function readBackup(file: Blob, createRecords: () => Promise<Backup
       }
     }
     if (page.length) await flush();
-    progress(0, backup.objects.filter(({ kind }) => kind !== 'summary').length + backup.files.size);
+    progress({ kind: 'objects', done: 0, total: backup.objects.filter(({ kind }) => kind !== 'summary').length });
+    progress({ kind: 'files', done: 0, total: backup.files.size });
     complete = true;
     return { ok: true, backup };
   } catch (error) {
@@ -286,9 +295,11 @@ async function restoreOn(
       if (other) return { ok: false, error: 'not-new' };
     }
     const todo = new Set([...ids].filter((id) => !same.has(id)));
-    const total = backup.files.size + todo.size;
-    let done = 0;
-    progress(done, total);
+    const total = { objects: todo.size, files: backup.files.size };
+    const done = { objects: 0, files: 0 };
+    const landed = (kind: BackupStep['kind']) => progress({ kind, done: ++done[kind], total: total[kind] });
+    progress({ kind: 'objects', done: 0, total: total.objects });
+    progress({ kind: 'files', done: 0, total: total.files });
     // Each file seals to the id its objects name, and one the server holds already is not sent again.
     // A file whose bytes were changed seals to another id, and an object's key may have been changed on its own: either
     // would restore a picture that never opens. All files are checked before the first object write.
@@ -304,7 +315,7 @@ async function restoreOn(
         const sealed = saved.data[i];
         if (!sealed) refused.add(ref.id);
         else if (sealed.id !== ref.id || sealed.key !== ref.key) return { ok: false as const, error: 'not-backup' };
-        progress(++done, total);
+        landed('files');
       }
       pictures = [];
       pictureBytes = 0;
@@ -337,7 +348,7 @@ async function restoreOn(
       let writes: Write[] = [];
       let size = 0;
       const flush = async () => {
-        const result = await store.batch(writes, () => progress(++done, total), { unheld: true, signal });
+        const result = await store.batch(writes, () => landed('objects'), { unheld: true, signal });
         writes = [];
         size = 0;
         return result;
@@ -346,7 +357,7 @@ async function restoreOn(
         const file = fileOf(item.object);
         if (file && refused.has(file.id)) {
           skipped++;
-          progress(++done, total);
+          landed('objects');
           continue;
         }
         if (writes.length && (writes.length === PAGE_ROWS || size + item.size > PAGE_BYTES)) {

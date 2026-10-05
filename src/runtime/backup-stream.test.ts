@@ -147,7 +147,7 @@ it('aborts a stopped export without completing its destination', async () => {
   const source = store([persona('first', 1), persona('second', 2)]);
   const result = await exportBackup(source.api, { read: vi.fn(), missing }, target.output, {
     signal: abort.signal,
-    progress: (done) => { if (done === 1) abort.abort(); },
+    progress: ({ kind, done }) => { if (kind === 'objects' && done === 1) abort.abort(); },
   });
   expect(result).toEqual({ ok: false, error: 'stopped' });
   expect(target.output.close).not.toHaveBeenCalled();
@@ -170,7 +170,7 @@ it('saves files before their objects, leaves owners until last, and resumes afte
   };
   const save = async () => { filesSaved = true; return { ok: true as const, data: [source.ref] }; };
   expect(await restoreBackup(next.api, { save }, opened, {
-    signal: abort.signal, progress: (done) => { if (done === 2) abort.abort(); },
+    signal: abort.signal, progress: ({ kind, done }) => { if (kind === 'objects' && done === 1) abort.abort(); },
   })).toEqual({ ok: false, error: 'stopped' });
   expect(next.written).toEqual(['avatar']);
   expect(next.held.has('character')).toBe(false);
@@ -259,7 +259,7 @@ it('decodes JSONL once and replays staged depths in source order when resuming',
   const abort = new AbortController();
   const files = { save: async () => ({ ok: true as const, data: [] }) };
   expect(await restoreBackup(next.api, files, opened, {
-    signal: abort.signal, progress: (done) => { if (done === 128) abort.abort(); },
+    signal: abort.signal, progress: ({ kind, done }) => { if (kind === 'objects' && done === 128) abort.abort(); },
   })).toEqual({ ok: false, error: 'stopped' });
   expect(await restoreBackup(next.api, files, opened)).toEqual({ ok: true, data: { skipped: 0 } });
   expect(next.written).toEqual(objects.map(({ id }) => id));
