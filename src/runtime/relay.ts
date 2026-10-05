@@ -151,6 +151,7 @@ async function reach(id: string, from: number, tries: number, signal: AbortSigna
 const HEAD = 1;
 const DATA = 2;
 const END = 3;
+const PING = 4;
 const NO_BODY = new Set([101, 204, 205, 304]);
 
 async function unframe(call: StreamCall, body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<Response | RelayFailure> {
@@ -194,6 +195,7 @@ async function* framesOf(id: string, first: ReadableStream<Uint8Array>, signal: 
   for (let tries = 0; ; tries++) {
     try {
       for await (const frame of split(body)) {
+        if (frame.type === PING) continue;
         if (frame.seq !== 0 && frame.seq < next) continue;
         if (frame.seq === 0 && next > 0) continue;
         next = frame.seq + 1;

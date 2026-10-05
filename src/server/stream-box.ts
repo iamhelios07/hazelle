@@ -1,11 +1,14 @@
 import { forward, type Upstream } from './relay';
 
 // A frame is [u32 length of what follows][u8 type][u32 seq][body]. hello's body is the object's ECDH public key in the
-// clear; every other body is sealed. vault/streams opens them and runtime/relay reads them: the three change together.
+// clear and ping's is empty; every other body is sealed. vault/streams opens them and runtime/relay reads them: the
+// three change together. ping keeps one reader's connection alive and is not part of the reply: never stored, seq 0,
+// skipped by its type before its seq is looked at.
 const HELLO = 0;
 const HEAD = 1;
 const DATA = 2;
 const END = 3;
+const PING = 4;
 
 // A stream that closes with no end frame was lost: the process restarted with the call gone. ms: how long the call ran.
 type Reason = { reason: 'done' | 'stopped' | 'limit' } | { reason: 'network'; detail: string };
@@ -38,6 +41,9 @@ const LIMIT_BYTES = 32 * 1024 * 1024;
 const PAGE = 4;
 // Whatever no device came back for is dropped this long after the call started.
 const KEEP_MS = 24 * 60 * 60 * 1000;
+// A reader sent nothing this long gets a ping: under the idle limits between here and a page, Cloudflare's 100 s
+// proxy read timeout and the 30 to 60 s of some mobile networks, while a provider thinks before its first byte.
+const PING_MS = 25 * 1000;
 
 const P256 = { name: 'ECDH', namedCurve: 'P-256' } as const;
 // Named through crypto itself, so this module reads the same under the server's Node types and the DOM types of tests and e2e.
@@ -283,9 +289,11 @@ export class StreamBox {
   async read(from: number, signal: AbortSignal): Promise<Response> {
     this.readers++;
     let reading = true;
+    let ping: ReturnType<typeof setTimeout> | undefined;
     const done = () => {
       if (!reading) return;
       reading = false;
+      clearTimeout(ping);
       this.readers--;
       this.release();
     };
@@ -310,6 +318,9 @@ export class StreamBox {
       {
         start: (reader) => reader.enqueue(first),
         pull: async (reader) => {
+          // A pull starts once the frame before it was taken, so quiet counts from here: a page written meanwhile
+          // wakes the wait below with nothing to send.
+          const pingAt = Date.now() + PING_MS;
           try {
             for (;;) {
               if (this.broken) {
@@ -340,7 +351,19 @@ export class StreamBox {
                 seq += held;
                 return;
               }
-              if (this.running) await new Promise<void>((resolve) => this.waiting.add(resolve));
+              if (!this.running) continue;
+              const woken = await new Promise<boolean>((resolve) => {
+                const wake = () => resolve(true);
+                this.waiting.add(wake);
+                // Armed only while counted: a body read on after its request was aborted would leave a timer behind.
+                if (reading)
+                  ping = setTimeout(() => {
+                    this.waiting.delete(wake);
+                    resolve(false);
+                  }, pingAt - Date.now());
+              });
+              clearTimeout(ping);
+              if (!woken) return reader.enqueue(frame(PING, 0, new Uint8Array()));
             }
           } catch (error) {
             done();

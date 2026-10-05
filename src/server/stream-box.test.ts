@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { Upstream } from './relay';
 import { StreamBox } from './stream-box';
 import { streamStore } from './db/streams-db';
@@ -147,4 +147,104 @@ it.each([true, false])('stops counting a reader whose client left (before its re
   expect((await box.read(0, request.signal)).status).toBe(200);
   request.abort();
   expect(idle).toBe(1);
+});
+
+// A provider that answers its headers at once and its body only as the test writes it.
+function silent() {
+  const body = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = body.writable.getWriter();
+  const upstream: Upstream = async (_url, { signal }) => {
+    signal.addEventListener('abort', () => void writer.abort(signal.reason).catch(() => {}));
+    return new Response(body.readable);
+  };
+  return { upstream, writer };
+}
+
+// The next frame's [type, seq], read only when asked: a box's reader waits, and pings, only while its body is read.
+function framer(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  let buffer = new Uint8Array(0);
+  return async (): Promise<[number, number] | null> => {
+    for (;;) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset);
+      if (buffer.byteLength >= 9 && buffer.byteLength >= 4 + view.getUint32(0)) {
+        const seen: [number, number] = [buffer[4]!, view.getUint32(5)];
+        buffer = buffer.slice(4 + view.getUint32(0));
+        return seen;
+      }
+      const { done, value } = await reader.read();
+      if (done) return null;
+      const joined = new Uint8Array(buffer.byteLength + value.byteLength);
+      joined.set(buffer);
+      joined.set(value, buffer.byteLength);
+      buffer = joined;
+    }
+  };
+}
+
+afterEach(() => void vi.useRealTimers());
+
+// Real crypto seals each frame, so a frame is awaited before fake time moves on.
+it('pings a reader of a silent call, with no seq of its own and nothing stored', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  const held = storage();
+  const { upstream, writer } = silent();
+  const box = new StreamBox(held, upstream, () => {});
+  const next = framer((await start(box)).body!);
+  const seen = [await next(), await next()];
+  for (let i = 0; i < 3; i++) {
+    const ping = next();
+    await vi.advanceTimersByTimeAsync(25_000);
+    seen.push(await ping);
+  }
+  await writer.write(new Uint8Array(100));
+  const data = next();
+  await vi.advanceTimersByTimeAsync(50);
+  seen.push(await data);
+  await writer.close();
+  seen.push(await next(), await next());
+  await box.ended;
+  expect(seen).toEqual([[0, 0], [1, 1], [4, 0], [4, 0], [4, 0], [2, 2], [3, 3], null]);
+  const pages = await held.list({ start: 'f:', end: 'f;', limit: 100 });
+  const kept = await frames(new ReadableStream({ start: (body) => (pages.forEach((page) => body.enqueue(page)), body.close()) }));
+  expect(kept.seen).toEqual([[0, 0], [1, 1], [2, 2], [3, 3]]);
+});
+
+it('leaves no ping timer behind a reader whose client left, and the box still goes idle', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  let idle = 0;
+  const { upstream, writer } = silent();
+  const box = new StreamBox(storage(), upstream, () => idle++);
+  const first = framer((await start(box)).body!);
+  await first();
+  await first();
+  // HEAD's page is written, so the call's limit is the one timer left.
+  await vi.advanceTimersByTimeAsync(3000);
+  const request = new AbortController();
+  const next = framer((await box.read(2, request.signal)).body!);
+  await next();
+  const timers = vi.getTimerCount();
+  expect(timers).toBe(1);
+  const ping = next();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(vi.getTimerCount()).toBe(timers + 1);
+  await vi.advanceTimersByTimeAsync(25_000);
+  expect(await ping).toEqual([4, 0]);
+  const data = next();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(vi.getTimerCount()).toBe(timers + 1);
+  request.abort();
+  expect(vi.getTimerCount()).toBe(timers);
+  // Its body is still read, as a server may go on doing after its client left.
+  await writer.write(new Uint8Array(100));
+  await vi.advanceTimersByTimeAsync(50);
+  expect(await data).toEqual([2, 2]);
+  void next();
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(vi.getTimerCount()).toBe(timers);
+  box.stop();
+  await box.ended;
+  while (await first());
+  expect(idle).toBe(1);
+  expect(vi.getTimerCount()).toBe(0);
 });

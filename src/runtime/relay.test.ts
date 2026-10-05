@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HttpRequest } from '../connectors/types';
+import { streamKey } from '../vault/streams';
 import { holdAccount } from './api';
 import { dropStream, relay, relayJson, stopStream, stream } from './relay';
 
@@ -58,4 +59,64 @@ it('states the account the page holds on the relay and on every stream request',
     [`/api/streams/${id}/stop`, 'account-a'],
     [`/api/streams/${id}`, 'account-a'],
   ]);
+});
+
+// Frames as server/stream-box seals them, for a call this page holds the key to.
+async function sealedCall() {
+  const id = crypto.randomUUID();
+  const mine = await streamKey();
+  const P256 = { name: 'ECDH', namedCurve: 'P-256' } as const;
+  const theirs = await crypto.subtle.generateKey(P256, true, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: mine.private.x, y: mine.private.y }, P256, false, []) }, theirs.privateKey, 256);
+  const encode = (text: string) => new TextEncoder().encode(text);
+  const hkdf = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+  const sealing = await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: encode(id), info: encode('risu-alpha stream') }, hkdf, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const frame = (type: number, seq: number, body: Uint8Array) => {
+    const out = new Uint8Array(9 + body.byteLength);
+    new DataView(out.buffer).setUint32(0, 5 + body.byteLength);
+    out[4] = type;
+    new DataView(out.buffer).setUint32(5, seq);
+    out.set(body, 9);
+    return out;
+  };
+  const sealed = async (type: number, seq: number, text: string) => {
+    const iv = new Uint8Array(12);
+    new DataView(iv.buffer).setUint32(8, seq);
+    return frame(type, seq, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new Uint8Array([type]) }, sealing, encode(text))));
+  };
+  return {
+    call: { id, key: mine.private, public: mine.public },
+    hello: frame(0, 0, new Uint8Array(await crypto.subtle.exportKey('raw', theirs.publicKey))),
+    head: await sealed(1, 1, JSON.stringify({ status: 200, statusText: 'OK', headers: [['x-relay', 'upstream']] })),
+    data: (seq: number, text: string) => sealed(2, seq, text),
+    end: (seq: number) => sealed(3, seq, JSON.stringify({ reason: 'done', ms: 5 })),
+    pings: Array.from({ length: 40 }, () => frame(4, 0, new Uint8Array())),
+  };
+}
+
+// broken: the connection breaks after the last frame, as a body read throws then.
+function framed(frames: Uint8Array[], broken = false) {
+  let at = 0;
+  const pull = (body: ReadableStreamDefaultController<Uint8Array>) => (at < frames.length ? body.enqueue(frames[at++]!) : broken ? body.error(new TypeError('network error')) : body.close());
+  return new Response(new ReadableStream({ pull }, { highWaterMark: 0 }), { headers: { 'x-stream': 'frames' } });
+}
+
+it('skips the pings of a call that stays silent for long, and reads the whole reply', async () => {
+  const { call, hello, head, data, end, pings } = await sealedCall();
+  const frames = [hello, ...pings, head, ...pings, await data(2, 'Hello, '), ...pings, await data(3, 'traveler.'), await end(4)];
+  vi.stubGlobal('fetch', async () => framed(frames));
+  const response = await stream(call, request, new AbortController().signal);
+  expect(response instanceof Response && (await response.text())).toBe('Hello, traveler.');
+  expect(call).toMatchObject({ took: 5 });
+});
+
+it('reads again from the frame after the last one, not after a ping, when the connection breaks', async () => {
+  const { call, hello, head, data, end, pings } = await sealedCall();
+  const fetch = vi.fn<(url: string) => Promise<Response>>();
+  fetch.mockResolvedValueOnce(framed([hello, head, await data(2, 'Hello, '), ...pings], true));
+  fetch.mockResolvedValueOnce(framed([hello, ...pings, await data(3, 'traveler.'), await end(4)]));
+  vi.stubGlobal('fetch', fetch);
+  const response = await stream(call, request, new AbortController().signal);
+  expect(response instanceof Response && (await response.text())).toBe('Hello, traveler.');
+  expect(fetch.mock.calls[1]![0]).toBe(`/api/streams/${call.id}?from=3`);
 });
