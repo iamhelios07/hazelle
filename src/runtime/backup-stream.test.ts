@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { expect, it, vi } from 'vitest';
 import type { Kind, Stored } from '../model/kinds';
-import { sealFile } from '../vault/files';
+import { sealFile, type FileRef } from '../vault/files';
 import { restoreBackup, type RestoreStore } from './backup-core';
 import { exportBackup, readBackup, type BackupOutput } from './testing/backup';
 import type { ObjectStore } from './store';
@@ -218,6 +218,29 @@ it('refuses a file with a body its kind cannot hold', async () => {
 it('distinguishes another backup version from a damaged file', async () => {
   const file = new Blob([zipSync({ 'manifest.json': strToU8(JSON.stringify({ format: 'risu-alpha-backup', version: 3 })) })]);
   expect(await readBackup(file)).toEqual({ ok: false, error: 'other-version' });
+});
+
+it('reads pictures in bounded windows and writes them in order', async () => {
+  const source = await pictureObjects();
+  const pictures = await Promise.all(Array.from({ length: 25 }, async (_, i) => {
+    const bytes = new Uint8Array([i]);
+    return { bytes, ref: (await sealFile(bytes)).ref };
+  }));
+  const character = source.objects.find(({ kind }) => kind === 'character')!;
+  const assets = pictures.map(({ ref }, i): Stored<'asset'> => ({ id: `asset-${i}`, kind: 'asset', parent: character.id, rev: 10 + i, value: { file: ref, name: String(i), type: 'image/png', size: 1 } }));
+  const target = destination();
+  let inFlight = 0;
+  let peak = 0;
+  const read = async (ref: FileRef) => {
+    peak = Math.max(peak, ++inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    inFlight--;
+    return { ok: true as const, data: pictures.find((picture) => picture.ref.id === ref.id)!.bytes };
+  };
+  expect(await exportBackup(store([character, ...assets]).api, { read, missing }, target.output)).toEqual({ ok: true, data: { left: 0, skipped: 0 } });
+  expect(peak).toBe(12);
+  const opened = await backup(target.file());
+  expect([...opened.files.keys()]).toEqual(pictures.map(({ ref }) => ref.id));
 });
 
 it('restores pictures in bounded uploader windows before writing objects', async () => {
