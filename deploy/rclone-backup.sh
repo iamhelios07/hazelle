@@ -11,7 +11,9 @@ set -u
 set -o pipefail
 LOCAL=/data/backup
 REMOTE=${HAZELLE_BACKUP_REMOTE:?set HAZELLE_BACKUP_REMOTE to an rclone remote and path, e.g. r2:hazelle-backup}
-RETENTION_MS=$((30 * 24 * 60 * 60 * 1000))
+# Equals the app's retention (src/server/backup/snapshots.ts): the pool prune below counts on the machine keeping a
+# generation as long as the remote does.
+BACKUP_RETENTION_MS=$((7 * 24 * 60 * 60 * 1000))
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
@@ -42,8 +44,8 @@ pictures() {
 prune_pool() {
   work=$1
   rclone lsf -R --files-only --include '/*/manifest.json' "$REMOTE" >"$work/manifests" || return 1
-  # The local pool holds the pictures of every generation this machine keeps (30 days), so a manifest that a lagging
-  # listing does not show yet cannot cost its pictures. Assumes no listing lags behind by that long.
+  # The local pool holds the pictures of every generation this machine keeps, so a manifest that a lagging listing
+  # does not show yet cannot cost its pictures. Assumes no listing lags behind by the retention.
   ls "$LOCAL/files" >"$work/named" || return 1
   while IFS= read -r manifest; do
     rclone cat "$REMOTE/$manifest" >"$work/manifest" || return 1
@@ -58,7 +60,7 @@ prune_pool() {
   log "pruned $(wc -l <"$work/unnamed") pictures"
 }
 
-# Generations older than 30 days go, then the pool.
+# Generations past the retention go, then the pool.
 prune() {
   now_ms=$(($(date +%s) * 1000))
   dirs=$(rclone lsf --dirs-only "$REMOTE") || return 1
@@ -66,7 +68,7 @@ prune() {
     id=${entry%/}
     at=${id%%-*}
     case $at in '' | *[!0-9]*) continue ;; esac
-    if [ $((now_ms - at)) -ge "$RETENTION_MS" ]; then
+    if [ $((now_ms - at)) -ge "$BACKUP_RETENTION_MS" ]; then
       rclone purge "$REMOTE/$id" || return 1
       log "pruned $id"
     fi
