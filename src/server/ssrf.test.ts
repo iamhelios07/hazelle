@@ -50,7 +50,7 @@ describe('checkTarget', () => {
     expect(checkTarget(new URL('https://0x7f.1/'))).toBe('not-public');
   });
 
-  it('leaves host names to the platform', () => {
+  it('leaves host names to the outbound lookup', () => {
     expect(checkTarget(new URL('https://api.example.com/v1'))).toBeNull();
     expect(checkTarget(new URL('https://8.8.8.8/'))).toBeNull();
   });

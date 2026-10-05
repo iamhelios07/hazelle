@@ -13,6 +13,7 @@ import { openDatabase, serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
 import type { Services } from './http';
 import { tokenBucket } from './limits';
+import { localProviders, pinnedOutbound } from './outbound';
 import { refreshPrices } from './prices';
 import { reconcile } from './reconcile';
 import { streamRegistry } from './stream-registry';
@@ -49,12 +50,13 @@ const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
 const db = serviceDb(raw);
 const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20) };
+const outbound = pinnedOutbound(localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? ''));
 const services: Services = {
   db,
   files: diskBucket(dataDir),
   stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
-  streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), fetch),
-  outbound: fetch,
+  streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), outbound),
+  outbound,
   limits,
 };
 
@@ -81,7 +83,7 @@ root.get('*', serveStatic({ root: clientDir, path: 'index.html' }));
 const server = serve({ fetch: (request) => root.fetch(request, services, ctx), port }, () => log('listening', { port, dataDir, migrationsApplied: applied })) as Server;
 
 const hourly = () => {
-  ctx.waitUntil(refreshPrices(db));
+  ctx.waitUntil(refreshPrices(db, outbound));
   ctx.waitUntil(forgetOldRecords(db));
   ctx.waitUntil(reconcile(dataDir, db).then(({ removed }) => removed.length && log('reconciled', { removed })));
 };

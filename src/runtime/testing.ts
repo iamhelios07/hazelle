@@ -56,6 +56,8 @@ function stubFetch() {
 
 // What ReplyStream calls upstream gets the relay's answers too, so a test says once what the provider answers.
 const viaStreams: Upstream = async (url, { method, headers, body, signal }) => {
+  // The server's own price fetch leaves through the same outbound; runtime tests price nothing.
+  if (url.origin === 'https://models.dev') return Response.json({});
   if (!relay) throw new Error('This test gave the relay no answers.');
   const answer = relay({ url: url.toString(), method: method as HttpRequest['method'], headers: Object.fromEntries(headers), body });
   if (!answer) throw new TypeError('Failed to fetch');

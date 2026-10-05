@@ -1,19 +1,15 @@
-import { afterAll, beforeAll, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { PriceList } from '../connectors/price-list';
 import modelsDev from './fixtures/models-dev.json';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
-  t = await testApp();
+  t = await testApp(async () => Response.json(modelsDev));
 });
-afterAll(() => {
-  vi.unstubAllGlobals();
-  return t.dispose();
-});
+afterAll(() => t.dispose());
 
 it('stores the listed providers models.dev prices, leaving out what it cannot price whole, on the first ask', async () => {
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json(modelsDev)));
   const cookie = sessionCookie(await t.post('signup', { ...signupBody('jin'), accountId: crypto.randomUUID() }));
   const read = async (list: string) => (await (await t.get(`prices?provider=${list}`, cookie)).json()) as PriceList;
 

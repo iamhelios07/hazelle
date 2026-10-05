@@ -38,8 +38,16 @@ export function isPublicAddress(address: string): boolean {
 
 export type TargetRefusal = 'not-https' | 'not-public';
 
-// Only IP literals are checked here. Host names are checked by the platform, whose outbound fetch
-// refuses internal addresses.
+// The outbound refused a destination (outbound.ts): by this URL check before any connection, or by the lookup of a
+// connection whose host name answered a private address. Not a network failure.
+export class PolicyRefusal extends Error {
+  constructor(readonly refusal: TargetRefusal) {
+    super(refusal);
+  }
+}
+
+// Only IP literals are checked here, since a literal is dialled without a lookup. Host names are checked by the
+// outbound's lookup, on every new connection.
 export function checkTarget(url: URL): TargetRefusal | null {
   if (url.protocol !== 'https:') return 'not-https';
   const host = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;
