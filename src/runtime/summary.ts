@@ -49,12 +49,14 @@ export async function projectChat(store: ObjectStore, id: string, signal?: Abort
 // rewrites a summary its chat outgrew is opening that chat (ObjectStore.retainChat), and a stopped restore carries on
 // from the first window it did not finish. An unreadable chat is passed over too; its screen says so.
 export const SUMMARY_WINDOW = 16;
-export async function saveSummaries(store: ObjectStore, chats: Iterable<string>, signal = new AbortController().signal): Promise<ApiFailure | null> {
+export async function saveSummaries(store: ObjectStore, chats: Iterable<string>, signal = new AbortController().signal, progress: (done: number, total: number) => void = () => {}): Promise<ApiFailure | null> {
   const due = [...chats].filter((id) => !store.get('summary', summaryId(id)));
+  progress(0, due.length);
   for (let start = 0; start < due.length; start += SUMMARY_WINDOW) {
     if (signal.aborted) return { ok: false, error: 'stopped' };
     const result = await store.withChats(due.slice(start, start + SUMMARY_WINDOW), async (readable) => await store.summarizeChats(readable, signal) ?? { ok: true, data: null }, { signal, summarize: false });
     if (!result.ok) return result;
+    progress(Math.min(start + SUMMARY_WINDOW, due.length), due.length);
     if (!await pause(0, signal)) return { ok: false, error: 'stopped' };
   }
   return null;

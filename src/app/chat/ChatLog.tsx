@@ -4,7 +4,7 @@ import { shown } from '../../model/chat';
 import { day } from '../common/time';
 import { useChatSummary } from '../session';
 import { navigate } from '../shell/router';
-import { Button, Divider, Empty, Text, Viewport } from '../ui';
+import { Button, Divider, Empty, Progress, Text, Viewport } from '../ui';
 import { ChatMessage } from './ChatMessage';
 import { foldTerm } from './search';
 import type { OpenChat } from './useChat';
@@ -23,7 +23,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const me = chat.persona.kind === 'persona' ? { name: chat.persona.persona.value.name, image: chat.persona.persona.value.picture } : null;
   const modelName = 'kind' in route ? null : route.model.name;
   const term = search ? foldTerm(search.term) : '';
-  if (chat.displayPending) return chat.displayError === undefined ? <Text>채팅을 불러오는 중</Text> : <>
+  if (chat.displayPending) return chat.displayError === undefined ? <Progress steps={[{ label: '채팅을 불러오는 중' }]} /> : <>
     <Text>채팅 표시를 계산하지 못했어요.</Text>
     <Button variant="secondary" size="sm" onClick={chat.retryDisplay}>다시 시도</Button>
   </>;

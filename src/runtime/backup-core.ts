@@ -26,7 +26,7 @@ const SEEDED = new Set([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, FIRST_ID, F
 
 const fileOf = ({ kind, value }: Stored<Kind>): FileRef | null => ('file' in KINDS[kind] ? (value as { file: FileRef }).file : null);
 
-export type BackupStep = { kind: 'objects' | 'files'; done: number; total: number };
+export type BackupStep = { kind: 'objects' | 'files' | 'summaries'; done: number; total: number };
 export type Options = { signal?: AbortSignal; progress?: (step: BackupStep) => void };
 export type ReadArchive = { file: Blob; entries: Map<string, ZipEntry>; objects: ObjectRow[]; files: Map<string, FileRef>; records: BackupRecords };
 export type BackupFailure = { ok: false; error: 'not-backup' | 'other-version' | 'stopped' | 'backup-storage' | 'backup-crashed' };
@@ -71,7 +71,7 @@ export async function exportBackup(
     metadata.clear();
     const done = { objects: 0, files: 0 };
     let left = 0;
-    const landed = (kind: BackupStep['kind'], by = 1) => progress({ kind, done: done[kind] += by, total: total[kind] });
+    const landed = (kind: 'objects' | 'files', by = 1) => progress({ kind, done: done[kind] += by, total: total[kind] });
     progress({ kind: 'objects', done: 0, total: total.objects });
     progress({ kind: 'files', done: 0, total: total.files });
     const zip = new BackupZip(output, signal);
@@ -256,7 +256,7 @@ async function* readObjects(backup: ReadArchive, signal: AbortSignal) {
 // goes, so the account ends as the backup was. skipped: objects naming a picture the server refuses (taken down by
 // the operator, or too large), which are left out. What is checked and what is written are of one timeline.
 // saveSummaries: runtime/summary's, run by the host on its store.
-export type RestoreStore = Pick<ObjectStore, 'scan' | 'batch' | 'pinned'> & { saveSummaries: (chats: string[], signal: AbortSignal) => Promise<ApiFailure | null> };
+export type RestoreStore = Pick<ObjectStore, 'scan' | 'batch' | 'pinned'> & { saveSummaries: (chats: string[], signal: AbortSignal, progress: (step: BackupStep) => void) => Promise<ApiFailure | null> };
 
 export function restoreBackup(store: RestoreStore, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}): Promise<ApiResult<{ skipped: number }>> {
   return store.pinned((pin) => restoreOn(store, files, backup, options, pin), options.signal);
@@ -302,7 +302,7 @@ async function restoreOn(
     const todo = new Set([...ids].filter((id) => !same.has(id)));
     const total = { objects: todo.size, files: backup.files.size };
     const done = { objects: 0, files: 0 };
-    const landed = (kind: BackupStep['kind']) => progress({ kind, done: ++done[kind], total: total[kind] });
+    const landed = (kind: 'objects' | 'files') => progress({ kind, done: ++done[kind], total: total[kind] });
     progress({ kind: 'objects', done: 0, total: total.objects });
     progress({ kind: 'files', done: 0, total: total.files });
     // Each file seals to the id its objects name, and one the server holds already is not sent again.
@@ -380,7 +380,7 @@ async function restoreOn(
     const removed = await store.batch([...SEEDED].filter((id) => !ids.has(id) && present.has(id)).map((id) => ({ type: 'remove', id })), undefined, { signal });
     if (!removed.ok) return removed;
     // Resume includes already-written roots: an interruption may have left their derived summaries unfinished.
-    const summarized = await store.saveSummaries(backup.objects.filter(({ kind }) => kind === 'chat').map(({ id }) => id), signal);
+    const summarized = await store.saveSummaries(backup.objects.filter(({ kind }) => kind === 'chat').map(({ id }) => id), signal, progress);
     return summarized ?? { ok: true, data: { skipped } };
   } catch (error) {
     // A picture entry that does not read refuses the file above; what throws here is the stage, the host or the worker.

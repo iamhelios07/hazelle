@@ -124,6 +124,7 @@ type Entry<T extends object> = { queue: SaveQueue<T>; view: SaveView<T>; write: 
 export class Saves {
   private readonly queues = new Map<string, Entry<object>>();
   private readonly watchers = new Map<string, Set<() => void>>();
+  private holds = 0;
 
   constructor(
     private readonly page: Pick<Window, 'addEventListener' | 'removeEventListener'>,
@@ -194,9 +195,20 @@ export class Saves {
     this.queues.delete(key);
   }
 
+  // Held by work that dies with the page, a backup or a restore under way: the browser asks before the tab goes.
+  hold(): () => void {
+    this.holds++;
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      this.holds--;
+    };
+  }
+
   private readonly unload = (event: BeforeUnloadEvent) => {
     const busy = [...this.queues.values()].filter(({ queue }) => queue.busy);
-    if (busy.length === 0 && this.unsent() === 0) return;
+    if (busy.length === 0 && this.unsent() === 0 && this.holds === 0) return;
     event.preventDefault();
     for (const { queue } of busy) void queue.flush();
   };

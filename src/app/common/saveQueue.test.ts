@@ -155,6 +155,17 @@ describe('Saves', () => {
     expect(asks()).toBe(false);
   });
 
+  it('asks before the tab goes while a hold is held, and stops asking once it is released', () => {
+    const { target, asks } = page();
+    const saves = new Saves(target, nothingUnsent);
+    expect(asks()).toBe(false);
+    const release = saves.hold();
+    expect(asks()).toBe(true);
+    release();
+    release();
+    expect(asks()).toBe(false);
+  });
+
   it('tells a save that failed after its screen was left once, and drops it', async () => {
     const { target, asks } = page();
     const saves = new Saves(target, nothingUnsent);

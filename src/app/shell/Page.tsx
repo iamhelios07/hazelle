@@ -29,7 +29,7 @@ import { useAccount, useCharacter, useChatModel, useChatSummary, useSession, use
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { DisplayScreen } from '../settings/DisplayScreen';
-import { Button, Empty, ListDetail, NavBar, Screen, Text, useSplit, useWide } from '../ui';
+import { Button, Empty, ListDetail, NavBar, Progress, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
 import { backBar } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
@@ -168,7 +168,7 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
   const item = chatModel.model;
   if (!item || chatModel.state !== 'loaded') return (
     <Screen align="center" top={<NavBar title={summary.title} {...backBar(back)} />}>
-      <Text>{chatModel.state === 'failed' ? describeFailure(chatModel.error!) : '채팅을 불러오는 중'}</Text>
+      {chatModel.state === 'failed' ? <Text>{describeFailure(chatModel.error!)}</Text> : <Progress steps={[{ label: '채팅을 불러오는 중' }]} />}
       {chatModel.state === 'failed' && <Button onClick={chatModel.retry}>다시 시도</Button>}
     </Screen>
   );

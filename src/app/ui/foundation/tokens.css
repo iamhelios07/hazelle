@@ -178,6 +178,7 @@
   --font-brand: 'NanumSquareRound', var(--font-sans);
   --weight-brand: 800;
   --brand-mark: 26px;
+  --hero-mark: 96px;
 
   --text-xs: 12px;
   --text-sm: 13px;
@@ -185,16 +186,20 @@
   --text-lg: 16px;
   --text-xl: 20px;
   --text-display: 30px;
+  --text-hero: 64px;
 
+  --weight-light: 300;
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
   --weight-bold: 700;
 
+  --leading-none: 1;
   --leading-tight: 1.3;
   --leading-normal: 1.5;
   --leading-relaxed: 1.6;
 
+  --tracking-tight: -0.04em;
   --tracking-wide: 0.06em;
 
   /* Story text at the reading settings' defaults: 명조, 17, line spacing 보통. Story keeps these outside the

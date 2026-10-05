@@ -10,7 +10,7 @@ import { describeFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { moduleName } from '../common/words';
 import { useFiles, useStore } from '../session';
-import { Button, Callout, Checkbox, Dialog, Outcome, Progress, Section, Stack, Text } from '../ui';
+import { Button, Callout, Checkbox, Dialog, Outcome, Progress, Section, Stack, Text, type ProgressStep } from '../ui';
 import { cardMissed, moduleMissed, moveMissed } from './missed';
 import { hasModule, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
 
@@ -28,7 +28,8 @@ const PRESET_FAILURE: Record<PresetFailure['kind'], string> = {
 };
 
 // In the move's order (runtime/move). The character steps interleave, so each kind reached keeps its own line.
-const STEP: Record<MoveStep['kind'], string> = { personas: '페르소나 저장 중', modules: '모듈 저장 중', prompts: '프롬프트 저장 중', characters: '캐릭터 저장 중', chats: '대화 저장 중', pictures: '그림 올리는 중' };
+const STEP: Record<MoveStep['kind'], string> = { personas: '페르소나', modules: '모듈', prompts: '프롬프트', characters: '캐릭터', chats: '대화', pictures: '그림' };
+const READING = '백업 읽기';
 type Steps = Partial<Record<MoveStep['kind'], MoveStep>>;
 
 type Phase =
@@ -115,10 +116,14 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   );
 
   if (phase.kind === 'reading' || phase.kind === 'running') {
-    const lines = phase.kind === 'running' ? (Object.keys(STEP) as MoveStep['kind'][]).flatMap((kind) => phase.steps[kind] ?? []) : [];
+    const steps = phase.kind === 'running' ? phase.steps : {};
+    const stages = (Object.keys(STEP) as MoveStep['kind'][]).map((kind): ProgressStep => {
+      const step = steps[kind];
+      return step ? { label: STEP[kind], done: step.done, total: step.total } : { label: STEP[kind] };
+    });
     return (
       <Dialog title={phase.kind === 'reading' ? '백업 읽는 중' : '가져오는 중'} note={note} onClose={() => {}}>
-        {lines.length ? <Progress steps={lines.map(({ kind, done, total }) => ({ label: STEP[kind], done, total }))} /> : <Text variant="note">잠시만요</Text>}
+        <Progress hero steps={[{ label: READING, finished: phase.kind === 'running' }, ...stages]} />
       </Dialog>
     );
   }

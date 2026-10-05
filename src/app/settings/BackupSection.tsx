@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { exportBackup, readBackup, restoreBackup, type Backup, type BackupStep } from '../../runtime/backup';
 import { downloadOutput } from '../common/download';
 import { describeFailure } from '../common/failure';
-import { useSession } from '../session';
 import { useToast } from '../toast';
-import { Button, FileButton, Progress, Section, SettingGroup, SettingRow, type ProgressStep } from '../ui';
+import { useSaves, useSession } from '../session';
+import { Button, Dialog, FileButton, Progress, Section, SettingGroup, SettingRow, type ProgressStep } from '../ui';
 
 const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup-crashed', { message: string; detail?: string }> = {
   'not-backup': { message: '헤이젤 백업 파일이 아니거나 망가진 파일이에요.' },
@@ -17,24 +17,43 @@ const UNREAD: Record<'not-backup' | 'other-version' | 'backup-storage' | 'backup
 // sv-SE writes the local date as 2026-09-29.
 const today = () => new Date().toLocaleDateString('sv-SE');
 
-const STEP: Record<BackupStep['kind'], string> = { objects: '내용', files: '그림' };
-const lines = (steps: Partial<Record<BackupStep['kind'], BackupStep>>): ProgressStep[] => (Object.keys(STEP) as BackupStep['kind'][]).flatMap((kind) => (steps[kind] ? [{ label: STEP[kind], done: steps[kind].done, total: steps[kind].total }] : []));
+type Direction = 'save' | 'load';
+type Steps = Partial<Record<BackupStep['kind'], BackupStep>>;
+// In each job's order (runtime/backup-core): a save counts, then writes the objects while reading the pictures; a load
+// reads the file, uploads the pictures, writes the objects, then their summaries. The first stage has no count of its own.
+const STAGES: Record<Direction, { first: string; kinds: { kind: BackupStep['kind']; label: string }[] }> = {
+  save: { first: '세기', kinds: [{ kind: 'objects', label: '내용' }, { kind: 'files', label: '그림' }] },
+  load: { first: '백업 읽기', kinds: [{ kind: 'files', label: '그림' }, { kind: 'objects', label: '내용' }, { kind: 'summaries', label: '요약' }] },
+};
+const TITLE: Record<Direction, string> = { save: '백업 받는 중', load: '백업 불러오는 중' };
+const stages = (direction: Direction, steps: Steps): ProgressStep[] => [
+  { label: STAGES[direction].first, finished: Object.keys(steps).length > 0 },
+  ...STAGES[direction].kinds.map(({ kind, label }): ProgressStep => (steps[kind] ? { label, done: steps[kind].done, total: steps[kind].total } : { label })),
+];
 
 // The user's own full backup, loaded back only into a new account.
 export function BackupSection() {
   const { username, store, files } = useSession();
+  const saves = useSaves();
   const toast = useToast();
-  const [active, setActive] = useState<{ direction: 'save' | 'load'; steps: Partial<Record<BackupStep['kind'], BackupStep>> } | null>(null);
-  const running = useRef<AbortController | null>(null);
-  useEffect(() => () => running.current?.abort(), []);
-  const saving = active?.direction === 'save';
-  const loading = active?.direction === 'load';
+  const [active, setActive] = useState<{ direction: Direction; steps: Steps } | null>(null);
+  const running = useRef<{ abort: AbortController; release: () => void } | null>(null);
+  useEffect(() => () => running.current?.abort.abort(), []);
+  const stop = () => running.current?.abort.abort();
 
-  function begin(direction: 'save' | 'load') {
+  // The job runs only while this screen does, and dies with the tab: the dialog keeps the person here and the hold has
+  // the browser ask before the tab goes.
+  function begin(direction: Direction) {
     const abort = new AbortController();
-    running.current = abort;
+    running.current = { abort, release: saves.hold() };
     setActive({ direction, steps: {} });
     return { signal: abort.signal, progress: (step: BackupStep) => setActive((current) => ({ direction, steps: { ...current?.steps, [step.kind]: step } })) };
+  }
+
+  function end() {
+    running.current?.release();
+    running.current = null;
+    setActive(null);
   }
 
   const unread = (error: keyof typeof UNREAD) => toast.error(UNREAD[error].message, { detail: UNREAD[error].detail });
@@ -56,8 +75,7 @@ export function BackupSection() {
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('백업을 저장하지 못했어요.');
     } finally {
-      running.current = null;
-      setActive(null);
+      end();
     }
   }
 
@@ -79,8 +97,7 @@ export function BackupSection() {
       toast.error('불러오다 멈췄어요.', { detail: `${describeFailure(loaded)} 같은 파일을 다시 불러오면 멈춘 곳부터 이어가요.` });
     } finally {
       await backup?.close();
-      running.current = null;
-      setActive(null);
+      end();
     }
   }
 
@@ -91,25 +108,26 @@ export function BackupSection() {
           label="전체 백업"
           help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 그 키까지 zip 파일 하나로 받아요. 잠기지 않은 파일이라 비밀번호처럼 보관해 주세요."
           control={
-            saving ? <Button variant="secondary" size="sm" onClick={() => running.current?.abort()}>중지</Button> :
-              <Button variant="secondary" size="sm" icon={Download} disabled={active !== null} onClick={() => void save()}>
-                받기
-              </Button>
+            <Button variant="secondary" size="sm" icon={Download} disabled={active !== null} onClick={() => void save()}>
+              받기
+            </Button>
           }
         />
-        {saving && <Progress steps={lines(active.steps)} />}
         <SettingRow
           label="백업 불러오기"
           help="아직 아무것도 저장하지 않은 새 계정에만 불러올 수 있어요."
           control={
-            loading ? <Button variant="secondary" size="sm" onClick={() => running.current?.abort()}>중지</Button> :
-              <FileButton accept=".zip" size="sm" icon={Upload} disabled={active !== null} onFile={(file) => void load(file)}>
-                불러오기
-              </FileButton>
+            <FileButton accept=".zip" size="sm" icon={Upload} disabled={active !== null} onFile={(file) => void load(file)}>
+              불러오기
+            </FileButton>
           }
         />
-        {loading && <Progress steps={lines(active.steps)} />}
       </SettingGroup>
+      {active && (
+        <Dialog title={TITLE[active.direction]} onClose={stop} actions={<Button variant="secondary" size="md" onClick={stop}>중지</Button>}>
+          <Progress hero steps={stages(active.direction, active.steps)} />
+        </Dialog>
+      )}
     </Section>
   );
 }

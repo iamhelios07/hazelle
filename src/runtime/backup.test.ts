@@ -4,6 +4,7 @@ import type { Card } from '../engine/import/types';
 import { fold, type Chat } from '../model/chat';
 import type { Lore } from '../model/library';
 import { randomBytes } from '../vault/aead';
+import type { BackupStep } from './backup-core';
 import { exportBackup, readBackup, restoreBackup } from './testing/backup';
 import type { Files } from './files';
 import { editCharacter, importCharacter, setDeleted } from './characters';
@@ -181,8 +182,11 @@ describe('backup', () => {
     const summarized = new Set<string>(chats.filter((id) => store.get('summary', summaryId(id))));
     expect(summarized.size).toBeGreaterThan(0);
     retained.length = 0;
-    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
+    const steps: BackupStep[] = [];
+    expect(await restoreBackup(store, files, backup, { progress: (step) => { steps.push(step); } })).toEqual({ ok: true, data: { skipped: 0 } });
     expect(retained.filter((id) => summarized.has(id))).toEqual([]);
+    const left = chats.length - summarized.size;
+    expect(steps.filter(({ kind }) => kind === 'summaries').map(({ done, total }) => [done, total])).toEqual([[0, left], ...Array.from({ length: Math.ceil(left / SUMMARY_WINDOW) }, (_, i) => [Math.min((i + 1) * SUMMARY_WINDOW, left), left])]);
     expect(peak).toBe(SUMMARY_WINDOW);
     expect(held.size).toBe(0);
     for (const id of chats) {

@@ -35,4 +35,4 @@ export const exportBackup = (store: ExportStore, files: ExportFiles, output: Bac
 export const readBackup = (file: Blob, options: Options = {}) => readCore(file, async () => new MemoryBackupRecords(), options);
 // As runtime/backup's host serves the worker: the summary pass runs on the store itself.
 export const restoreBackup = (store: ObjectStore, files: Pick<Files, 'save'>, backup: ReadArchive, options: Options = {}) =>
-  restoreCore({ scan: store.scan.bind(store), batch: store.batch.bind(store), pinned: store.pinned.bind(store), saveSummaries: (chats, signal) => saveSummaries(store, chats, signal) }, files, backup, options);
+  restoreCore({ scan: store.scan.bind(store), batch: store.batch.bind(store), pinned: store.pinned.bind(store), saveSummaries: (chats, signal, progress) => saveSummaries(store, chats, signal, (done, total) => progress({ kind: 'summaries', done, total })) }, files, backup, options);

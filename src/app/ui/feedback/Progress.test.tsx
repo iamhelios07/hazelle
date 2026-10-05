@@ -14,3 +14,19 @@ it('draws a row per step, sums the counted ones into 전체 only when there are 
   expect(one).toContain('3 / 3');
   expect(renderToStaticMarkup(<Progress steps={[{ label: '그림 올리는 중' }]} />)).not.toMatch(/>[\d,]+</);
 });
+
+it('hero: fills the mark and says the floored percent of all counted work, checks a finished stage without its count, counts the one under way and leaves the rest hollow', () => {
+  const html = renderToStaticMarkup(<Progress hero title="불러오는 중" note="처음 한 번만 전체를 받아요." steps={[{ label: '계정 확인', finished: true }, { label: '내용 받기', done: 1685, total: 168506 }, { label: '화면 준비' }]} />);
+  expect(html).toContain('>0<span');
+  expect(html).toContain('aria-valuenow="0"');
+  expect(html).toContain('1,685 / 168,506');
+  expect(html).toContain('처음 한 번만 전체를 받아요.');
+  expect(html.indexOf('계정 확인')).toBeLessThan(html.indexOf('내용 받기'));
+  expect(html).not.toContain('1 / 1');
+  expect(html).toMatch(/pending[^>]*>.*화면 준비/);
+  const later = renderToStaticMarkup(<Progress hero steps={[{ label: '내용 받기', done: 168506, total: 168506 }, { label: '화면 준비' }]} />);
+  expect(later).toContain('>100<span');
+  expect(later).toMatch(/active[^>]*>.*화면 준비/);
+  expect(later).toContain('slide');
+  expect(renderToStaticMarkup(<Progress hero steps={[{ label: '세기' }, { label: '내용' }]} />)).not.toContain('%');
+});

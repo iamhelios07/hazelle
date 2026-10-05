@@ -25,6 +25,7 @@ const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: `
 const RESTORING: Standing = { message: '계정을 복원하는 중이에요', detail: '' };
 const subscribeNothing = () => () => {};
 const NOT_PULLED: PullProgress = { objects: 0, pages: 0, waiting: false };
+const FIRST_LOAD = '처음 한 번만 전체를 받고, 다음부터는 바뀐 것만 받아요.';
 const notWaiting = () => false;
 
 // Said once each time the store hears the account was restored: what the tab shows was loaded again, and the writes
@@ -91,7 +92,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
   if (!session) return (
     <Screen top={<Brand />} align="center">
-      <Progress steps={[{ label: '불러오는 중', done: progress.objects, total: progress.total }]} />
+      <Progress hero title="불러오는 중" note={FIRST_LOAD} steps={[{ label: '계정 확인', finished: true }, { label: '금고 열기', finished: true }, { label: '내용 받기', done: progress.objects, total: progress.total }, { label: '화면 준비' }]} />
       {progress.waiting && <Text variant="note" align="center">{RECONNECTING.message} · {RECONNECTING.detail}</Text>}
     </Screen>
   );
