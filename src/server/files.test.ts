@@ -253,6 +253,37 @@ describe('files', () => {
     expect((await Promise.all(replies)).map(({ status }) => status)).toEqual(Array(9).fill(204));
   });
 
+  it('answers an upload whose body ends after its account was deleted as every request of a deleted account', async () => {
+    await signup(signupBody('operator'));
+    const jin = await signup();
+    const bytes = new Uint8Array([2, 7, 1]);
+    const id = await idOf(bytes);
+    let end: (() => void) | undefined;
+    const reply = t.raw(`files/${id}`, {
+      method: 'PUT',
+      headers: { cookie: jin.cookie, 'x-account': jin.id, 'content-type': 'application/octet-stream', 'content-length': String(bytes.length) },
+      body: new ReadableStream<Uint8Array>(
+        {
+          pull: (controller) => {
+            if (end) return;
+            end = () => controller.close();
+            controller.enqueue(bytes);
+          },
+        },
+        { highWaterMark: 0 },
+      ),
+      duplex: 'half',
+    } as RequestInit);
+    await vi.waitFor(() => expect(end).toBeDefined());
+    expect((await t.delete('account', { method: 'password', proof: proof('password') }, jin.cookie)).status).toBe(204);
+    await t.settle();
+    end!();
+    const late = await reply;
+    const other = await t.post('files/missing', { ids: [id] }, jin.cookie);
+    expect({ status: late.status, body: await late.json() }).toEqual({ status: other.status, body: await other.json() });
+    expect(await rows(jin.incarnation)).toEqual([]);
+  });
+
   it('serves a signup that reuses a client id nothing of an old upload finishing late, and the next sweep removes its bytes', async () => {
     await signup(signupBody('operator'));
     const body = signupBody();
