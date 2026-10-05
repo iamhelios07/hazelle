@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hex } from './http';
 import { forgetOldRecords, readAll } from './admin';
 import { beginRestore } from './lifecycle';
+import { hex, type Services } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -11,7 +11,7 @@ beforeAll(async () => {
 afterAll(() => t.dispose());
 beforeEach(async () => {
   await t.reset();
-  await t.env.DB.prepare('UPDATE service SET signup_cap = 3').run();
+  await t.env.db.prepare('UPDATE service SET signup_cap = 3').run();
 });
 
 async function account(username: string) {
@@ -19,11 +19,8 @@ async function account(username: string) {
   return { id: body.accountId, cookie: sessionCookie(await t.post('signup', body)) };
 }
 
-async function operator() {
-  const admin = await account('operator');
-  t.env.ADMIN_ACCOUNT = admin.id;
-  return admin;
-}
+// The first signup of an installation is its operator, so a test calls this before account().
+const operator = () => account('operator');
 
 const log = async (cookie: string) => ((await (await t.get('admin/log', cookie)).json()) as { log: { action: string; target: string; detail: unknown }[] }).log;
 
@@ -34,7 +31,7 @@ async function stored(bytes: Uint8Array<ArrayBuffer>, cookie: string) {
 }
 
 describe('the operator', () => {
-  it('is the one account the Worker names: the session says so, nobody else passes, and nobody signs up as it', async () => {
+  it('is the first account signed up: the session says so, nobody else passes, and the installation keeps naming it', async () => {
     const admin = await operator();
     const other = await account('other');
     expect(await (await t.get('session', admin.cookie)).json()).toMatchObject({ session: { admin: true } });
@@ -44,8 +41,7 @@ describe('the operator', () => {
     expect(refused.status).toBe(403);
     expect(await refused.json()).toEqual({ error: 'not-admin' });
 
-    await t.delete(`admin/accounts/${admin.id}`, undefined, admin.cookie);
-    expect((await t.post('signup', { ...signupBody('again'), accountId: admin.id })).status).toBe(400);
+    expect(await t.env.db.prepare('SELECT operator_account FROM installation').first('operator_account')).toBe(admin.id);
   });
 
   it("lists each account with its store's bytes, its pictures and its own caps, and separately totals what the stores answered", async () => {
@@ -72,12 +68,12 @@ describe('the operator', () => {
   it('bounds account and usage pages, continues tied timestamps, and refreshes one row without a service fan-out', async () => {
     const admin = await operator();
     const ids = Array.from({ length: 101 }, () => crypto.randomUUID());
-    await t.env.DB.prepare(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline)
+    await t.env.db.prepare(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline)
       SELECT value, 'member-' || value, login_hash, created_at + 1, lower(hex(randomblob(16))), lower(hex(randomblob(16)))
       FROM accounts, json_each(?1) WHERE accounts.id = ?2`).bind(JSON.stringify(ids), admin.id).run();
-    const stores = t.env.STORES;
+    const stores = t.env.stores;
     let calls = 0;
-    t.env.STORES = { getByName: () => ({ usage: async () => { calls++; return { bytes: 2, disk: 4 }; } }) } as unknown as Env['STORES'];
+    t.env.stores = { getByName: () => ({ usage: async () => { calls++; return { bytes: 2, disk: 4 }; } }) } as unknown as Services['stores'];
     try {
       type Page = { accounts: { accountId: string }[]; next: string | null };
       const first = await (await t.get('admin/accounts', admin.cookie)).json() as Page;
@@ -96,7 +92,7 @@ describe('the operator', () => {
       expect(calls).toBe(203);
       expect((await t.get('admin/accounts?after=invalid', admin.cookie)).status).toBe(400);
     } finally {
-      t.env.STORES = stores;
+      t.env.stores = stores;
     }
   });
 
@@ -159,7 +155,7 @@ describe('the operator', () => {
   it("gives an account its own caps in place of the service's, none among them, and logs each", async () => {
     const admin = await operator();
     const other = await account('other');
-    await t.env.DB.prepare('UPDATE service SET account_bytes_cap = 0, account_file_bytes_cap = 0').run();
+    await t.env.db.prepare('UPDATE service SET account_bytes_cap = 0, account_file_bytes_cap = 0').run();
     const write = async () => (await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }], other.cookie)).status;
     const session = async () => ((await (await t.get('session', other.cookie)).json()) as { session: { storage: unknown } }).session.storage;
     expect(await write()).toBe(413);
@@ -181,7 +177,7 @@ describe('the operator', () => {
   it('lists the reports accounts send, a suspended one too, and resolves one once', async () => {
     const admin = await operator();
     const other = await account('other');
-    await t.env.DB.prepare('UPDATE accounts SET suspended_at = 1 WHERE id = ?').bind(other.id).run();
+    await t.env.db.prepare('UPDATE accounts SET suspended_at = 1 WHERE id = ?').bind(other.id).run();
     expect((await t.post('reports', { text: '  이 봇이 이상해요  ' }, other.cookie)).status).toBe(204);
     expect((await t.post('reports', { text: 'x'.repeat(4001) }, other.cookie)).status).toBe(400);
 
@@ -197,15 +193,15 @@ describe('the operator', () => {
 
   it('keeps a report eligible for its account when the wall clock moves backwards after signup', async () => {
     const other = await account('other');
-    const created = (await t.env.DB.prepare('SELECT created_at FROM accounts WHERE id = ?').bind(other.id).first<number>('created_at'))!;
+    const created = (await t.env.db.prepare('SELECT created_at FROM accounts WHERE id = ?').bind(other.id).first<number>('created_at'))!;
     const clock = vi.spyOn(Date, 'now').mockReturnValue(created - 645);
     try {
       expect((await t.post('reports', { text: 'restore' }, other.cookie)).status).toBe(204);
     } finally {
       clock.mockRestore();
     }
-    const report = (await t.env.DB.prepare('SELECT id, created_at FROM reports WHERE account_id = ?').bind(other.id).first<{ id: number; created_at: number }>())!;
-    const begun = await beginRestore(t.env as Env, other.id, report.id, { at: created - 3_600_000 });
+    const report = (await t.env.db.prepare('SELECT id, created_at FROM reports WHERE account_id = ?').bind(other.id).first<{ id: number; created_at: number }>())!;
+    const begun = await beginRestore(t.env, other.id, report.id, { at: created - 3_600_000 });
     expect(begun).toEqual({ begun: expect.any(Number) });
     expect(report.created_at).toBe(created);
   });
@@ -245,15 +241,15 @@ it('forgets resolved reports and log rows a year old, and keeps an open report o
   const year = 365 * 24 * 60 * 60 * 1000;
   const old = Date.now() - year - 60_000;
   const recent = Date.now() - year + 60_000;
-  await t.env.DB.batch([
-    ...[
+  await t.env.db.batch([
+    ...([
       [1, old, null],
       [2, old, old],
       [3, old, recent],
-    ].map(([id, created, resolved]) => t.env.DB.prepare(`INSERT INTO reports (id, account_id, username, text, created_at, resolved_at) VALUES (?, 'a', 'a', 'text', ?, ?)`).bind(id, created, resolved)),
-    ...[old, recent].map((at) => t.env.DB.prepare(`INSERT INTO admin_log (at, action, target) VALUES (?, 'lift', 'a')`).bind(at)),
+    ] as const).map(([id, created, resolved]) => t.env.db.prepare(`INSERT INTO reports (id, account_id, username, text, created_at, resolved_at) VALUES (?, 'a', 'a', 'text', ?, ?)`).bind(id, created, resolved)),
+    ...[old, recent].map((at) => t.env.db.prepare(`INSERT INTO admin_log (at, action, target) VALUES (?, 'lift', 'a')`).bind(at)),
   ]);
-  await forgetOldRecords(t.env.DB);
-  expect((await t.env.DB.prepare('SELECT id FROM reports ORDER BY id').all()).results).toEqual([{ id: 1 }, { id: 3 }]);
-  expect((await t.env.DB.prepare('SELECT at FROM admin_log').all()).results).toEqual([{ at: recent }]);
+  await forgetOldRecords(t.env.db);
+  expect((await t.env.db.prepare('SELECT id FROM reports ORDER BY id').all()).results).toEqual([{ id: 1 }, { id: 3 }]);
+  expect((await t.env.db.prepare('SELECT at FROM admin_log').all()).results).toEqual([{ at: recent }]);
 });

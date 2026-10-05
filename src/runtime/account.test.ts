@@ -1,12 +1,16 @@
 import { expect, it, vi } from 'vitest';
 import { AccountFacts, deleteAccount, loadSession } from './account';
+import { setService } from './admin';
 import { api, holdAccount } from './api';
 import { testServer } from './testing';
 
 const server = testServer();
 
 it('deletes the account only with its password proof, after which the session is gone and its seat open again', async () => {
-  await server.account();
+  // The first signup is the operator, whom nothing deletes; the account under test is the second.
+  await server.operator();
+  expect(await setService({ signupCap: 2, accountBytesCap: null, accountFileBytesCap: null })).toMatchObject({ ok: true });
+  await server.account('other');
   expect(await deleteAccount({ method: 'recovery', proof: server.passwordProof.proof })).toEqual({ ok: false, error: 'wrong-login' });
   expect(await deleteAccount(server.passwordProof)).toEqual({ ok: true, data: undefined });
   expect(await loadSession()).toEqual({ ok: true, data: { session: null, signupOpen: true } });

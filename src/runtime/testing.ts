@@ -35,7 +35,7 @@ let relay: Relay | null = null;
 const answered = new Set<Promise<Response>>();
 
 // The browser's fetch in runtime tests: /api/relay answers as the test says, and every other API route
-// is the real server, in process, over an in-memory D1 and R2 (server/testing).
+// is the real server, in process, over SQLite files and pictures in a temp directory (server/testing).
 function stubFetch() {
   vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
     if (init.signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
@@ -138,8 +138,8 @@ export function testServer() {
       }
     },
     // The page holds the account it signed up, as AccountFlow does, so every request states it.
-    async account() {
-      const body = signupBody();
+    async account(username?: string) {
+      const body = signupBody(username);
       server!.cookie = sessionCookie(await app.post('signup', body));
       const { accountId } = body;
       holdAccount(accountId);
@@ -177,11 +177,14 @@ export function testServer() {
     at(now: () => number) {
       app.clock.now = now;
     },
-    async operator() {
-      const opened = await harness.account();
-      app.env.ADMIN_ACCOUNT = opened.accountId;
-      return opened;
+    // What the daily job does for every live account: a baseline snapshot, stamped by the server's clock. A restore by
+    // time lands on the newest baseline at or before that time.
+    async baseline(accountId: string) {
+      const incarnation = (await app.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(accountId).first<string>('incarnation'))!;
+      await app.stores.snapshot(incarnation, 'baseline');
     },
+    // The first signup of a reset installation is its operator, so a test calls this before any account().
+    operator: () => harness.account(),
   };
   return harness;
 }

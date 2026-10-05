@@ -46,6 +46,7 @@ it('restores an account to a time on its report: its open device drops to the ob
   const now = Date.now();
   server.at(() => now - 3_600_000);
   const kept = await store.create('connection', connection('kept'));
+  await server.baseline(accountId);
   server.at(() => now - 1_800_000);
   await store.create('connection', connection('later'));
   server.at(() => Date.now());

@@ -68,7 +68,7 @@ describe('objects', () => {
   it("holds an account to the cap its session read, creating nothing at it while changes may grow it a little", async () => {
     const { cookie } = await signedIn();
     await write(cookie, A, { kind: 'settings', body: '가'.repeat(10) });
-    await t.env.DB.prepare('UPDATE service SET account_bytes_cap = 30').run();
+    await t.env.db.prepare('UPDATE service SET account_bytes_cap = 30').run();
     expect(await write(cookie, B, { kind: 'chat', body: 'x' })).toEqual({ status: 413, json: { error: 'storage-full' } });
     const changed = await write(cookie, A, { kind: 'settings', body: '가'.repeat(11), baseRev: 1 });
     expect(changed.status).toBe(200);

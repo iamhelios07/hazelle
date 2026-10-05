@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EXIT, type Upstream } from './relay';
+import type { Upstream } from './relay';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -16,14 +16,19 @@ beforeEach(() => {
 
 const get = (path: string, cookie?: string) => t.get(path, cookie);
 const post = (path: string, body?: unknown, cookie?: string) => t.post(path, body, cookie);
+// The first signup of an installation is its operator, and a second signup needs a second place under the cap.
+const operator = async () => {
+  await t.env.db.prepare('UPDATE service SET signup_cap = 2').run();
+  return sessionCookie(await post('signup', signupBody('operator')));
+};
 
 describe('accounts', () => {
-  it('signs up the first account with its vault in one request, then closes signup', async () => {
+  it('signs up the first account as the operator with its vault in one request, then closes signup', async () => {
     expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: true });
     const body = signupBody();
     const signup = await post('signup', body);
     expect(signup.status).toBe(201);
-    const described = { accountId: body.accountId, username: 'jin', admin: false, suspended: false, state: 'active', incarnation: expect.stringMatching(/^[0-9a-f]{32}$/), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 };
+    const described = { accountId: body.accountId, username: 'jin', admin: true, suspended: false, state: 'active', incarnation: expect.stringMatching(/^[0-9a-f]{32}$/), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 };
     expect(await signup.json()).toEqual(described);
     const cookie = signup.headers.get('set-cookie')!;
     expect(cookie).toMatch(/^__Host-session=[0-9a-f]{64};/);
@@ -46,12 +51,12 @@ describe('accounts', () => {
   it('gives the last place under the cap to one of two signups sent at once, with no vault or session for the other', async () => {
     const answers = await Promise.all([post('signup', signupBody('one')), post('signup', signupBody('two'))]);
     expect(answers.map(({ status }) => status).sort()).toEqual([201, 403]);
-    const rows = (table: string) => t.env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n');
+    const rows = (table: string) => t.env.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n');
     expect([await rows('accounts'), await rows('vaults'), await rows('sessions')]).toEqual([1, 1, 1]);
   });
 
   it('admits accounts up to the cap the operator stored, and tells a taken username from a closed signup', async () => {
-    await t.env.DB.prepare('UPDATE service SET signup_cap = 2').run();
+    await t.env.db.prepare('UPDATE service SET signup_cap = 2').run();
     await post('signup', signupBody());
     expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: true });
     const taken = await post('signup', signupBody());
@@ -76,7 +81,7 @@ describe('accounts', () => {
       const login = await post('login', { username: 'jin', method, proof: value });
       expect(login.status).toBe(200);
       expect(await login.json()).toEqual({
-        session: { accountId: body.accountId, username: 'jin', admin: false, suspended: false, state: 'active', incarnation: expect.any(String), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 },
+        session: { accountId: body.accountId, username: 'jin', admin: true, suspended: false, state: 'active', incarnation: expect.any(String), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 },
         vault: { passwordWrap: body.passwordWrap, recoveryWrap: body.recoveryWrap },
       });
     }
@@ -107,10 +112,11 @@ describe('accounts', () => {
   });
 
   it('deletes an account for its own proof: its rows, sessions, vault and store go', async () => {
-    const body = signupBody();
+    await operator();
+    const body = signupBody('other');
     const cookie = sessionCookie(await post('signup', body));
     await t.batch([{ id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'sealed', baseRev: null }], cookie);
-    const incarnation = (await t.env.DB.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!;
+    const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(body.accountId).first<string>('incarnation'))!;
 
     expect((await t.delete('account', { method: 'password', proof: proof('wrong') }, cookie)).status).toBe(401);
     expect((await get('objects?since=0', cookie)).status).toBe(200);
@@ -118,33 +124,45 @@ describe('accounts', () => {
     const gone = await t.delete('account', { method: 'password', proof: body.passwordProof }, cookie);
     expect(gone.status).toBe(204);
     expect(gone.headers.get('set-cookie')).toMatch(/^__Host-session=;.*Max-Age=0/);
-    expect((await post('login', { username: 'jin', method: 'password', proof: body.passwordProof })).status).toBe(401);
-    const rows = (table: string) => t.env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n');
-    expect([await rows('accounts'), await rows('sessions'), await rows('vaults')]).toEqual([0, 0, 0]);
-    expect(t.stores.db(incarnation).tables()).toEqual([]);
+    expect((await post('login', { username: 'other', method: 'password', proof: body.passwordProof })).status).toBe(401);
+    const rows = (table: string) => t.env.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n');
+    expect([await rows('accounts'), await rows('sessions'), await rows('vaults')]).toEqual([1, 1, 1]);
+    expect(t.stores.inspect(incarnation).tables()).toEqual([]);
   });
 
   it('refuses a leaving account every route and its login, and admits its own 탈퇴, which finishes the deletion', async () => {
-    const body = signupBody();
+    await operator();
+    const body = signupBody('other');
     const cookie = sessionCookie(await post('signup', body));
     // A deletion cut off after its intent.
-    await t.env.DB.prepare("UPDATE accounts SET state = 'leaving'").run();
+    await t.env.db.prepare("UPDATE accounts SET state = 'leaving' WHERE id = ?").bind(body.accountId).run();
 
     expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
     for (const response of [await get('objects?since=0', cookie), await get('vault', cookie), await t.batch([], cookie)]) {
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual({ error: 'no-session' });
     }
-    const login = await post('login', { username: 'jin', method: 'password', proof: body.passwordProof });
+    const login = await post('login', { username: 'other', method: 'password', proof: body.passwordProof });
     expect(login.status).toBe(403);
     expect(await login.json()).toEqual({ error: 'account-leaving' });
 
     expect((await t.delete('account', { method: 'password', proof: body.passwordProof }, cookie)).status).toBe(204);
-    expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM accounts').first('n')).toBe(0);
+    expect(await t.env.db.prepare('SELECT COUNT(*) AS n FROM accounts').first('n')).toBe(1);
+  });
+
+  it('refuses to delete the only operator, by its own 탈퇴 and by its own operator tools', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    for (const refused of [await t.delete('account', { method: 'password', proof: body.passwordProof }, cookie), await t.delete(`admin/accounts/${body.accountId}`, undefined, cookie)]) {
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toEqual({ error: 'sole-operator' });
+    }
+    expect(await (await get('session', cookie)).json()).toMatchObject({ session: { admin: true, state: 'active' } });
   });
 
   it('refuses 탈퇴 while the operator restores the account', async () => {
-    const body = signupBody();
+    await operator();
+    const body = signupBody('other');
     const cookie = sessionCookie(await post('signup', body));
     await t.lifecycle(body.accountId, "state = 'restoring'");
     const refused = await t.delete('account', { method: 'password', proof: body.passwordProof }, cookie);
@@ -155,20 +173,17 @@ describe('accounts', () => {
 
   it('ends a session once its expiry passes', async () => {
     const cookie = sessionCookie(await post('signup', signupBody()));
-    await t.env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
+    await t.env.db.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
     expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
   });
 });
 
 describe('provider calls', () => {
-  it('leave from a Durable Object placed at EXIT, for the relay and for a reply alike', async () => {
+  it('relay a call to the upstream and answer with its reply', async () => {
     const cookie = sessionCookie(await post('signup', signupBody()));
-    t.placed.length = 0;
     const relayed = await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie);
     expect(relayed.headers.get('x-relay')).toBe('upstream');
     expect(await relayed.json()).toEqual({ data: [] });
-    await post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null }, cookie);
-    expect(t.placed).toEqual([EXIT, EXIT]);
   });
 
   it('count a stream as a live call from its start until it ends', async () => {
@@ -176,21 +191,21 @@ describe('provider calls', () => {
     const cookie = sessionCookie(await post('signup', signupBody()));
     const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
     const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
-    const live = () => t.env.DB.prepare('SELECT COUNT(*) AS n FROM live_calls').first<number>('n');
+    const live = () => t.env.streams.live();
     const id = crypto.randomUUID();
     const started = await post(`streams/${id}`, { key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } }, cookie);
     expect(started.status).toBe(200);
     await started.body?.cancel();
-    await vi.waitFor(async () => expect(await live()).toBe(1));
+    await vi.waitFor(() => expect(live()).toBe(1));
     await post(`streams/${id}/stop`, undefined, cookie);
-    await vi.waitFor(async () => expect(await live()).toBe(0));
+    await vi.waitFor(() => expect(live()).toBe(0));
   });
 });
 
 describe('a suspended account', () => {
   it('reads, and is refused every write, upload and provider call', async () => {
     const cookie = sessionCookie(await post('signup', signupBody()));
-    await t.env.DB.prepare('UPDATE accounts SET suspended_at = 1').run();
+    await t.env.db.prepare('UPDATE accounts SET suspended_at = 1').run();
     expect(await (await get('session', cookie)).json()).toMatchObject({ session: { suspended: true } });
     expect((await get('objects?since=0', cookie)).status).toBe(200);
 
@@ -247,8 +262,8 @@ describe('guards', () => {
     const cookie = sessionCookie(await post('signup', body));
     const call = () => post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie);
     expect((await call()).status).toBe(200);
-    // The rest of the minute's calls, spent on the local binding itself: 240 requests would take seconds.
-    await Promise.all(Array.from({ length: 239 }, () => t.env.CALLS.limit({ key: body.accountId })));
+    // The rest of the minute's calls, spent on the bucket itself: 240 requests would take seconds.
+    for (let i = 0; i < 239; i++) t.env.limits.calls.limit(body.accountId);
     const throttled = await call();
     expect(throttled.status).toBe(429);
     expect(throttled.headers.get('x-relay')).toBeNull();
@@ -260,7 +275,7 @@ describe('guards', () => {
     const body = signupBody();
     const cookie = sessionCookie(await post('signup', body));
     const chat = crypto.randomUUID();
-    await Promise.all(Array.from({ length: 20 }, () => t.env.BOT_CALLS.limit({ key: `${body.accountId}:${chat}` })));
+    for (let i = 0; i < 20; i++) t.env.limits.botCalls.limit(`${body.accountId}:${chat}`);
     const start = (bot?: string) => post(`streams/${crypto.randomUUID()}`, { key: 'k', request: null, ...(bot && { bot }) }, cookie);
     const refused = await start(chat);
     expect(refused.status).toBe(429);

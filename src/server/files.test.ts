@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { fileBlocks, removeAccountFiles, sweepDeadPrefixes } from './files';
+import type { SqlValue, Statement } from './db/service-db';
+import { fileBlocks } from './files';
+import type { Bucket } from './files/disk-bucket';
 import { hex, type AppEnv } from './http';
-import { sessionCookie, signupBody, testApp } from './testing';
+import { proof, sessionCookie, signupBody, testApp } from './testing';
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
@@ -11,31 +13,34 @@ beforeAll(async () => {
 afterAll(() => t.dispose());
 beforeEach(() => t.reset());
 
-// The platform's env types ADMIN_ACCOUNT as any string, since tests name an operator; Env has the configured literal.
-const env = () => t.env as Env;
 const idOf = async (bytes: Uint8Array<ArrayBuffer>) => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
 const signup = async (body = signupBody()) => {
-  await t.env.DB.prepare('UPDATE service SET signup_cap = signup_cap + 1').run();
+  await t.env.db.prepare('UPDATE service SET signup_cap = signup_cap + 1').run();
   const cookie = sessionCookie(await t.post('signup', body));
-  const incarnation = (await t.env.DB.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(body.accountId).first<string>('incarnation'))!;
+  const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(body.accountId).first<string>('incarnation'))!;
   return { id: body.accountId, cookie, incarnation };
 };
 const put = (id: string, bytes: Uint8Array<ArrayBuffer>, cookie?: string) => t.put(`files/${id}`, bytes, cookie);
 const missing = async (ids: string[], cookie: string) => ((await (await t.post('files/missing', { ids }, cookie)).json()) as { missing: string[] }).missing;
-const rows = (incarnation: string) => t.env.DB.prepare('SELECT size, stored FROM account_files WHERE incarnation = ?').bind(incarnation).all().then(({ results }) => results);
-const sum = (incarnation: string) => t.env.DB.prepare('SELECT file_bytes AS sum FROM accounts WHERE incarnation = ?').bind(incarnation).first<number>('sum');
-const stored = async (incarnation: string, id: string) => (await t.env.BLOBS.get(`files/${incarnation}/${id}`))?.arrayBuffer();
+const rows = (incarnation: string) => t.env.db.prepare('SELECT size, stored FROM account_files WHERE incarnation = ?').bind(incarnation).all().then(({ results }) => results);
+const sum = (incarnation: string) => t.env.db.prepare('SELECT file_bytes AS sum FROM accounts WHERE incarnation = ?').bind(incarnation).first<number>('sum');
+const stored = async (incarnation: string, id: string) => {
+  const body = await t.env.files.get(`files/${incarnation}/${id}`);
+  return body ? new Response(body).arrayBuffer() : undefined;
+};
+// Past the hour in which the hourly job spares a prefix with no account: an upload may still be landing in it.
+const later = () => Date.now() + 2 * 3_600_000;
 const operator = new Hono<AppEnv>().route('/', fileBlocks);
 const block = (id: string, blocked: boolean) =>
   operator.request(`/files/${id}/blocked`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ blocked }) }, t.env);
 
-async function withBlobsPut(put: (key: string, value: Parameters<R2Bucket['put']>[1]) => Promise<unknown>, step: () => Promise<void>) {
-  const blobs = t.env.BLOBS;
-  t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, { put });
+async function withFilesPut(put: Bucket['put'], step: () => Promise<void>) {
+  const files = t.env.files;
+  t.env.files = { ...files, put };
   try {
     await step();
   } finally {
-    t.env.BLOBS = blobs;
+    t.env.files = files;
   }
 }
 
@@ -61,24 +66,24 @@ describe('files', () => {
     expect(new Uint8Array(await read.arrayBuffer())).toEqual(bytes);
     expect((await t.get(`files/${absent}`, jin.cookie)).status).toBe(404);
 
-    await removeAccountFiles(env(), jin.incarnation);
-    await removeAccountFiles(env(), jin.incarnation);
-    expect(await stored(jin.incarnation, id)).toBeUndefined();
-    expect(new Uint8Array(await (await t.get(`files/${id}`, other.cookie)).arrayBuffer())).toEqual(bytes);
+    expect((await t.delete('account', { method: 'password', proof: proof('password') }, other.cookie)).status).toBe(204);
+    await t.settle();
+    expect(await stored(other.incarnation, id)).toBeUndefined();
+    expect(new Uint8Array(await (await t.get(`files/${id}`, jin.cookie)).arrayBuffer())).toEqual(bytes);
   });
 
   it('looks up requested file IDs by the account composite key rather than materializing its inventory', async () => {
     const { cookie } = await signup();
-    const db = t.env.DB;
+    const db = t.env.db;
     const plans: { detail: string }[] = [];
-    t.env.DB = new Proxy(db, {
+    t.env.db = new Proxy(db, {
       get: (target, key) => key === 'prepare' ? (sql: string) => {
         const statement = target.prepare(sql);
         if (!sql.includes('json_each(?2)')) return statement;
-        return Object.assign(Object.create(statement) as D1PreparedStatement, {
-          bind: (...values: unknown[]) => {
+        return Object.assign(Object.create(statement) as Statement, {
+          bind: (...values: SqlValue[]) => {
             const bound = statement.bind(...values);
-            return Object.assign(Object.create(bound) as D1PreparedStatement, {
+            return Object.assign(Object.create(bound) as Statement, {
               all: async () => {
                 plans.push(...(await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...values).all<{ detail: string }>()).results);
                 return bound.all();
@@ -94,7 +99,7 @@ describe('files', () => {
       expect(plans.some(({ detail }) => detail.includes('incarnation=? AND id=?'))).toBe(true);
       expect(plans.some(({ detail }) => detail.includes('LIST SUBQUERY'))).toBe(false);
     } finally {
-      t.env.DB = db;
+      t.env.db = db;
     }
   });
 
@@ -113,14 +118,14 @@ describe('files', () => {
     const jin = await signup();
     const [early, late] = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6, 7])];
     const [earlyId, lateId] = [await idOf(early), await idOf(late)];
-    const blobs = t.env.BLOBS;
-    await withBlobsPut(
+    const files = t.env.files;
+    await withFilesPut(
       () => Promise.reject(new Error('cut before the bytes')),
       async () => expect((await put(earlyId, early, jin.cookie)).status).toBe(500),
     );
-    await withBlobsPut(
+    await withFilesPut(
       async (key, value) => {
-        await blobs.put(key, value);
+        await files.put(key, value);
         throw new Error('cut before the finalize');
       },
       async () => expect((await put(lateId, late, jin.cookie)).status).toBe(500),
@@ -142,7 +147,7 @@ describe('files', () => {
   });
 
   it('refuses a file past the cap at its reservation, storing nothing, under the account’s own cap when it has one', async () => {
-    await t.env.DB.prepare('UPDATE service SET account_file_bytes_cap = 5').run();
+    await t.env.db.prepare('UPDATE service SET account_file_bytes_cap = 5').run();
     const jin = await signup();
     const [kept, large] = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
     expect((await put(await idOf(kept), kept, jin.cookie)).status).toBe(204);
@@ -153,13 +158,13 @@ describe('files', () => {
     expect(await stored(jin.incarnation, await idOf(large))).toBeUndefined();
     expect(await sum(jin.incarnation)).toBe(3);
 
-    await t.env.DB.prepare('UPDATE accounts SET own_file_bytes_cap = 1, file_bytes_cap = 6 WHERE id = ?').bind(jin.id).run();
+    await t.env.db.prepare('UPDATE accounts SET own_file_bytes_cap = 1, file_bytes_cap = 6 WHERE id = ?').bind(jin.id).run();
     expect((await put(await idOf(large), large, jin.cookie)).headers.get('x-account-file-bytes')).toBe('6');
   });
 
   it('charges only one concurrent reservation near the cap and retries it after a cap reduction', async () => {
     const { cookie, incarnation } = await signup();
-    await t.env.DB.prepare('UPDATE service SET account_file_bytes_cap = 3').run();
+    await t.env.db.prepare('UPDATE service SET account_file_bytes_cap = 3').run();
     const bodies = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])];
     const ids = await Promise.all(bodies.map(idOf));
     const replies = await Promise.all(bodies.map((body, index) => put(ids[index]!, body, cookie)));
@@ -168,12 +173,12 @@ describe('files', () => {
     expect(await rows(incarnation)).toEqual([{ size: 3, stored: 1 }]);
 
     const kept = replies.findIndex(({ status }) => status === 204);
-    await t.env.DB.prepare('UPDATE account_files SET stored = 0 WHERE incarnation = ?').bind(incarnation).run();
-    await t.env.DB.prepare('UPDATE service SET account_file_bytes_cap = 0').run();
+    await t.env.db.prepare('UPDATE account_files SET stored = 0 WHERE incarnation = ?').bind(incarnation).run();
+    await t.env.db.prepare('UPDATE service SET account_file_bytes_cap = 0').run();
     const retried = await Promise.all([put(ids[kept]!, bodies[kept]!, cookie), put(ids[kept]!, bodies[kept]!, cookie)]);
     expect(retried.map(({ status }) => status)).toEqual([204, 204]);
     expect(await sum(incarnation)).toBe(3);
-    await t.env.DB.prepare('DELETE FROM accounts WHERE incarnation = ?').bind(incarnation).run();
+    await t.env.db.prepare('DELETE FROM accounts WHERE incarnation = ?').bind(incarnation).run();
     expect(await rows(incarnation)).toEqual([]);
     expect(await sum(incarnation)).toBeNull();
   });
@@ -197,7 +202,7 @@ describe('files', () => {
     expect((await block(id, false)).status).toBe(204);
     for (const { cookie } of [jin, other]) expect(new Uint8Array(await (await t.get(`files/${id}`, cookie)).arrayBuffer())).toEqual(bytes);
     expect((await block('0'.repeat(64), true)).status).toBe(204);
-    expect((await t.env.DB.prepare('SELECT action, target FROM admin_log ORDER BY id').all()).results).toEqual([
+    expect((await t.env.db.prepare('SELECT action, target FROM admin_log ORDER BY id').all()).results).toEqual([
       { action: 'block-file', target: id },
       { action: 'unblock-file', target: id },
       { action: 'block-file', target: '0'.repeat(64) },
@@ -209,13 +214,13 @@ describe('files', () => {
     const old = await signup(body);
     const bytes = new Uint8Array([3, 1, 4]);
     const id = await idOf(bytes);
-    const blobs = t.env.BLOBS;
+    const files = t.env.files;
     let reused!: Awaited<ReturnType<typeof signup>>;
-    await withBlobsPut(
+    await withFilesPut(
       async (key, value) => {
-        await t.env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(old.id).run();
+        await t.env.db.prepare('DELETE FROM accounts WHERE id = ?').bind(old.id).run();
         reused = await signup(body);
-        return blobs.put(key, value);
+        return files.put(key, value);
       },
       async () => expect((await put(id, bytes, old.cookie)).status).toBe(401),
     );
@@ -228,123 +233,22 @@ describe('files', () => {
     expect(await missing([id], reused.cookie)).toEqual([id]);
     expect((await t.get(`files/${id}`, reused.cookie)).status).toBe(404);
 
-    await sweepDeadPrefixes(env());
+    await t.reconcile(later());
     expect(await stored(old.incarnation, id)).toBeUndefined();
   });
 
-  it('sweeps a prefix with no account and spares a live one, even one whose account came after the accounts read', async () => {
+  it('sweeps a prefix with no account once it is an hour old, and spares a younger one and a live one', async () => {
     const [live, gone] = [await signup(), await signup(signupBody('gone'))];
     const bytes = new Uint8Array([5]);
     const id = await idOf(bytes);
     for (const { cookie } of [live, gone]) await put(id, bytes, cookie);
-    await t.env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(gone.id).run();
+    await t.env.db.prepare('DELETE FROM accounts WHERE id = ?').bind(gone.id).run();
     expect(await rows(gone.incarnation)).toEqual([]);
 
-    // An account and its upload landing while R2 is listed: a D1-first sweep would list it as dead.
-    const blobs = t.env.BLOBS;
-    let late!: Awaited<ReturnType<typeof signup>>;
-    t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
-      list: async (options: R2ListOptions) => {
-        if (options.delimiter && !late) {
-          late = await signup(signupBody('late'));
-          await put(id, bytes, late.cookie);
-        }
-        return blobs.list(options);
-      },
-    });
-    try {
-      await sweepDeadPrefixes(env());
-    } finally {
-      t.env.BLOBS = blobs;
-    }
+    await t.reconcile();
+    expect(await stored(gone.incarnation, id)).toBeDefined();
+    await t.reconcile(later());
     expect(await stored(gone.incarnation, id)).toBeUndefined();
     expect(await stored(live.incarnation, id)).toBeDefined();
-    expect(await stored(late.incarnation, id)).toBeDefined();
   });
-
-  it('finishes a direct account deletion beyond the scheduled budget without retaining its full inventory', async () => {
-    const total = 20_001;
-    let removed = 0;
-    let largest = 0;
-    const blobs = t.env.BLOBS;
-    t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
-      list: async (options: R2ListOptions) => {
-        expect(options.cursor).toBeUndefined();
-        const count = Math.min(options.limit!, total - removed);
-        largest = Math.max(largest, count);
-        return { objects: Array.from({ length: count }, (_, index) => ({ key: `${options.prefix}${removed + index}` })), truncated: removed + count < total };
-      },
-      delete: async (keys: string[]) => { removed += keys.length; },
-    });
-    try {
-      await removeAccountFiles(env(), 'a'.repeat(32));
-      expect(removed).toBe(total);
-      expect(largest).toBe(1000);
-    } finally {
-      t.env.BLOBS = blobs;
-    }
-  });
-
-  it('resumes bounded durable cleanup across prefix pages and failed deletes without using a deleted cursor', async () => {
-    const live = await signup();
-    const keys = new Set<string>();
-    for (let account = 1; account <= 25; account++) {
-      for (let file = 0; file < 1001; file++) keys.add(`files/${account.toString(16).padStart(32, '0')}/${file.toString(16).padStart(64, '0')}`);
-    }
-    const kept = `files/${live.incarnation}/${'f'.repeat(64)}`;
-    keys.add(kept);
-    // Pre-0009 keys with no incarnation, sorting between incarnations 2 and 3: a page of only these holds no prefix.
-    const bare = [0, 1].map((file) => `files/${(2).toString(16).padStart(32, '0')}${file.toString(16).padStart(32, '0')}`);
-    for (const key of bare) keys.add(key);
-    const blobs = t.env.BLOBS;
-    let failDelete = true;
-    let largest = 0;
-    let listings = 0;
-    const markers: (string | undefined)[] = [];
-    t.env.BLOBS = Object.assign(Object.create(blobs) as R2Bucket, {
-      list: async (options: R2ListOptions) => {
-        expect(options.cursor).toBeUndefined();
-        listings++;
-        const sorted = [...keys].filter((key) => key.startsWith(options.prefix!) && (!options.startAfter || key > options.startAfter)).sort();
-        if (options.delimiter) {
-          markers.push(options.startAfter);
-          const at = options.prefix!.length;
-          const all = [...new Set(sorted.map((key) => key.includes('/', at) ? key.slice(0, key.indexOf('/', at) + 1) : key))];
-          const shown = all.slice(0, 2);
-          return {
-            objects: shown.filter((entry) => !entry.endsWith('/')).map((key) => ({ key })),
-            delimitedPrefixes: shown.filter((entry) => entry.endsWith('/')),
-            truncated: all.length > 2,
-          };
-        }
-        const objects = sorted.slice(0, options.limit).map((key) => ({ key }));
-        largest = Math.max(largest, objects.length);
-        return { objects, delimitedPrefixes: [], truncated: sorted.length > objects.length };
-      },
-      delete: async (removed: string[]) => {
-        if (failDelete) {
-          failDelete = false;
-          throw new Error('cut before deleting');
-        }
-        for (const key of removed) keys.delete(key);
-      },
-    });
-    try {
-      await expect(sweepDeadPrefixes(env())).rejects.toThrow('cut before deleting');
-      expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBe(2);
-      for (let attempts = 0; keys.size > 3 && attempts < 10; attempts++) {
-        listings = 0;
-        await sweepDeadPrefixes(env());
-        expect(listings).toBeLessThanOrEqual(20);
-        expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBeLessThanOrEqual(2);
-      }
-      expect(largest).toBe(1000);
-      expect([...keys].sort()).toEqual([...bare, kept].sort());
-      expect(markers).toContain(bare[1]);
-      expect(await t.env.DB.prepare('SELECT COUNT(*) AS n FROM file_cleanup').first<number>('n')).toBe(0);
-    } finally {
-      t.env.BLOBS = blobs;
-    }
-  });
-
 });
