@@ -155,7 +155,7 @@ describe('object store', () => {
     }, { summarize: false });
     expect(pass).toEqual({ ok: false, error: 'stopped' });
     expect(await screen!.ready).toBeNull();
-    await vi.waitFor(() => expect(store.get('summary', summaryId(a))).toBeDefined());
+    await vi.waitFor(() => expect(store.get('summary', summaryId(a))?.value).toMatchObject({ count: 1 }));
     screen!.release();
   });
 
@@ -167,8 +167,11 @@ describe('object store', () => {
     await store.pull();
     const stop = new AbortController();
     const evaluated = store.evaluated.bind(store);
-    vi.spyOn(store, 'evaluated').mockImplementation(async (chat) => { stop.abort(); return evaluated(chat); });
-    const pass = await store.withChats([a, b], async (ids) => await store.summarizeChats(ids, stop.signal) ?? { ok: true, data: null }, { signal: stop.signal, summarize: false });
+    // Armed once both are open: the stop lands inside the pass, before its first write.
+    const pass = await store.withChats([a, b], async (ids) => {
+      vi.spyOn(store, 'evaluated').mockImplementation(async (chat) => { stop.abort(); return evaluated(chat); });
+      return await store.summarizeChats(ids, stop.signal) ?? { ok: true, data: null };
+    }, { signal: stop.signal, summarize: false });
     expect(pass).toEqual({ ok: false, error: 'stopped' });
     expect([a, b].map((id) => store.scopeState(id))).toEqual(['unloaded', 'unloaded']);
   });
