@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2016 # the single-quoted scripts run by remote() expand on the machine
+# shellcheck disable=SC2016 # LIB and TRANSACTION expand on the machine
 # Deploys a release to the hosted machine by its image digest:
 #   scripts/deploy.sh v1.2.3
 # Needs: a clean tree with the tag, gh logged in, docker, terraform state in infra/ (for the address), and ssh as root
-# to the machine. Order: the release's digest and archive are checked against the tag's commit; the machine pulls the
-# image; the running app captures a pre-upgrade backup generation and the copier sends it off-site;
-# /etc/hazelle/previous records the running digest and that generation; then the image changes, and the deploy is done
-# when the app container runs the selected digest and /api/health answers ok.
+# to the machine. Order: the release's digest and archive are checked against the tag's commit; then one ssh session,
+# holding an flock on /run/hazelle-deploy.lock for an hour at most, reads the running digest, has the machine pull the
+# image and the running app capture a pre-upgrade backup generation that the copier sends off-site, records the running
+# digest and that generation in /etc/hazelle/previous, changes the image, and is done when the app container runs the
+# selected digest and /api/health answers ok. Without the lock a second deploy could read the running digest, wait,
+# and capture its generation after the first deploy migrated the database: a pair the recorded digest cannot restore.
 # Exit 3: no pre-upgrade backup, nothing changed. Exit 4: the new image is selected but does not run healthy; run this
-# again to retry the start, or recover as below.
+# again to retry the start, or recover as below. Exit 5: another deploy holds the lock, nothing changed.
+# A session that ends without an outcome (connection lost, hour run out) stopped at an unknown step; the kernel drops
+# its lock when its last process ends (until then a rerun exits 5). Run this again: /etc/hazelle/env tells where it
+# stopped. The running digest still
+# selected: nothing switched, and what it may have done (a pulled image, a generation, /etc/hazelle/previous naming the
+# running digest and one of its generations) is harmless; the deploy runs from the start. The new digest selected:
+# /etc/hazelle/previous was written before the switch, and the run retries the start as after exit 4.
 #
 # Recovery, when the new image fails or misbehaves. An image refuses a database newer than it knows, so starting the
 # previous digest alone does not work once the new one migrated. As root on the machine:
@@ -35,12 +43,6 @@ tag=${1:?usage: scripts/deploy.sh <tag>}
 git fetch -q origin tag "$tag"
 commit=$(git rev-parse "$tag^{commit}")
 host=$(terraform -chdir=infra output -raw ip)
-# $1: seconds the call may take. ssh gives up on a dead connection within a minute on its own.
-remote() {
-  local limit=$1
-  shift
-  timeout "$limit" ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "root@$host" "$@" </dev/null
-}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -58,7 +60,7 @@ docker rm "$container" >/dev/null
 [ "$(archive_commit "$work/image-source.tar.gz")" = "$commit" ] || { echo "deploy: $image serves a source archive of another commit" >&2; exit 1; }
 echo "deploy: $tag = $commit = $image"
 
-# The functions every remote script starts with. health_ok: the app answers 2xx with "ok":true. wait_healthy <seconds>.
+# The functions the transaction starts with. health_ok: the app answers 2xx with "ok":true. wait_healthy <seconds>.
 # running <image>: the app container runs that image.
 LIB='
 health_ok() {
@@ -79,11 +81,45 @@ running() {
 }
 '
 
-# Asks the running app for a backup generation (node.ts's SIGUSR2 handler), follows its log for the outcome, has the
-# copier send the generation off-site and checks its copied marker; 30 minutes in all. Prints the generation id.
-# The signal goes from inside the container: Docker's kill API marks a container manually stopped, after which
-# restart: unless-stopped no longer restarts it.
-CAPTURE='
+# The deploy on the machine, from reading the selected image to the health check. Every exit other than 0 goes
+# through ended(), which prints the step's summary and exits with the step's code. set -e skips a failing && list
+# that is not the script's last command, so each such list carries its own || exit 1.
+# The capture asks the running app for a backup generation (node.ts's SIGUSR2 handler), follows its log for the
+# outcome, has the copier send the generation off-site and checks its copied marker; 30 minutes in all. The signal goes
+# from inside the container: Docker's kill API marks a container manually stopped, after which restart:
+# unless-stopped no longer restarts it.
+TRANSACTION='
+set -eu
+code=1
+summary="nothing changed"
+ended() {
+  status=$?
+  [ "$status" -eq 0 ] && return
+  echo "deploy: $summary" >&2
+  exit "$code"
+}
+trap ended EXIT
+
+selected=$(sed -n "s/^HAZELLE_IMAGE=//p" /etc/hazelle/env)
+if [ "$selected" = "$image" ]; then
+  # A run that ended with exit 4, or lost its session after the switch, left the image selected; this starts it again
+  # and checks it the same way.
+  code=4 summary="$image is selected but does not run healthy; see the header for recovery"
+  if ! { running "$image" && health_ok; }; then
+    timeout 300 hazelle-compose up -d app >&2
+    wait_healthy 300 && running "$image" || exit 1
+  fi
+  echo "deploy: $image is selected and runs healthy" >&2
+  exit 0
+fi
+
+echo "deploy: running $selected" >&2
+summary="the app is not running $selected healthy; nothing changed"
+running "$selected" && health_ok || exit 1
+summary="the machine could not pull $image; nothing changed"
+timeout 900 docker pull -q "$image" >/dev/null
+
+code=3 summary="no pre-upgrade backup; nothing changed"
 deadline=$(($(date +%s) + 1800))
 app=$(hazelle-compose ps -q app)
 # Since the process started: a request cut off by a crash before it ended never logs its outcome.
@@ -105,33 +141,29 @@ left=$((deadline - $(date +%s)))
 [ "$left" -gt 0 ] && timeout "$left" hazelle-compose exec -T backup /bin/sh /hazelle/rclone-backup.sh once >&2 ||
   { echo "deploy: the copier failed or did not finish within 30 minutes" >&2; exit 1; }
 [ -f "/data/backup/$generation/copied" ] || { echo "deploy: generation $generation is not marked copied" >&2; exit 1; }
-echo "$generation"
+echo "deploy: pre-upgrade generation $generation is off-site" >&2
+
+code=1 summary="could not record the rollback pair or select $image; nothing changed"
+printf "%s\n%s\n" "$selected" "$generation" >/etc/hazelle/previous
+sed -i "s|^HAZELLE_IMAGE=.*|HAZELLE_IMAGE=$image|" /etc/hazelle/env
+code=4 summary="$image is selected but did not start; see the header for recovery"
+timeout 300 hazelle-compose up -d app >&2
+summary="$image does not run healthy within 5 minutes; see the header for recovery"
+wait_healthy 300 && running "$image" || exit 1
+echo "deploy: running $image (previous $selected, pre-upgrade generation $generation)" >&2
 '
 
-selected=$(remote 30 "sed -n 's/^HAZELLE_IMAGE=//p' /etc/hazelle/env")
-if [ "$selected" = "$image" ]; then
-  # A run that ended with exit 4 left the image selected; this starts it again and checks it the same way.
-  remote 400 "set -eu; image=$image; $LIB"'
-    running "$image" && health_ok && exit
-    hazelle-compose up -d app >&2
-    wait_healthy 300 && running "$image"' ||
-    { echo "deploy: $image is selected but does not run healthy; see the header for recovery" >&2; exit 4; }
-  echo "deploy: $image is selected and runs healthy"
-  exit 0
-fi
-
-echo "deploy: running $selected"
-remote 30 "set -eu; image=$selected; $LIB"'running "$image" && health_ok' ||
-  { echo "deploy: the app is not running $selected healthy; nothing changed" >&2; exit 1; }
-remote 900 "docker pull -q $image >/dev/null" || { echo "deploy: the machine could not pull $image; nothing changed" >&2; exit 1; }
-generation=$(remote 1900 "set -eu; $LIB$CAPTURE") || { echo "deploy: no pre-upgrade backup; nothing changed" >&2; exit 3; }
-echo "deploy: pre-upgrade generation $generation is off-site"
-
-remote 300 "set -eu
-  printf '%s\n%s\n' '$selected' '$generation' >/etc/hazelle/previous
-  sed -i 's|^HAZELLE_IMAGE=.*|HAZELLE_IMAGE=$image|' /etc/hazelle/env
-  hazelle-compose up -d app" ||
-  { echo "deploy: $image is selected but did not start; see the header for recovery" >&2; exit 4; }
-remote 400 "set -eu; image=$image; $LIB"'wait_healthy 300 && running "$image"' ||
-  { echo "deploy: $image does not run healthy within 5 minutes; see the header for recovery" >&2; exit 4; }
-echo "deploy: $tag running as $image (previous $selected, pre-upgrade generation $generation)"
+# Every process the transaction starts inherits fd 9 and with it the lock. LIB and TRANSACTION hold no single quote,
+# and $image is a checked digest, so the single-quoted bash -c argument reaches bash whole whatever root's login shell
+# is. ssh gives up on a dead connection within a minute on its own.
+status=0
+ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "root@$host" "
+  exec 9>/run/hazelle-deploy.lock
+  flock -n 9 || { echo 'deploy: another deploy holds /run/hazelle-deploy.lock on the machine; nothing changed' >&2; exit 5; }
+  exec timeout -k 60 3600 bash -c 'image=$image
+$LIB$TRANSACTION'" </dev/null || status=$?
+case $status in
+  0 | 1 | 3 | 4 | 5) exit "$status" ;;
+esac
+echo "deploy: the session ended without an outcome (status $status; 124: the hour on the machine ran out, 255: the connection was lost); run this again, it carries on from what /etc/hazelle/env selects (see the header)" >&2
+exit 1

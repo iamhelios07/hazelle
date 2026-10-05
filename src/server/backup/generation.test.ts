@@ -131,6 +131,12 @@ describe('a backup generation', () => {
     expect(manifest.pictures.toSorted()).toEqual([kept, left, late].toSorted());
     for (const id of manifest.pictures) expect(sha(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
     for (const snapshot of manifest.snapshots) expect(sha(readFileSync(join(generationsDir(t.dir), manifest.id, snapshot.path)))).toBe(snapshot.sha256);
+    for (const artifact of [manifest.service, ...manifest.snapshots]) {
+      expect(artifact.expanded).toBe(gunzipSync(readFileSync(join(generationsDir(t.dir), manifest.id, artifact.path))).length);
+    }
+    const pictureBytes = Object.fromEntries(manifest.accounts.map(({ incarnation, pictureBytes }) => [incarnation, pictureBytes]));
+    expect(pictureBytes).toMatchObject({ [keeper.incarnation]: 'kept picture'.length + 'uploaded during capture'.length, [leaver.incarnation]: 'leaver picture'.length, [rewinder.incarnation]: 0 });
+    expect(readFileSync(join(generationsDir(t.dir), manifest.id, MANIFEST), 'utf8')).toMatch(/"pictures":\[[^\]]*\],"migrations":\[[^\]]*\]\}$/);
     await t.settle();
     expect(existsSync(join(t.dir, 'files', leaver.incarnation))).toBe(false);
     const { gateMs } = (await t.env.db.prepare("SELECT gate_ms AS gateMs FROM backup_runs WHERE kind = 'generation'").first<{ gateMs: number }>())!;

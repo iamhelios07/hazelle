@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { copyFile, link, open, readdir, readFile, rename, rm } from 'node:fs/promises';
+import { copyFile, link, open, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
@@ -22,10 +22,13 @@ export const COPIED = 'copied';
 export const POOL = 'files';
 const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 
-export type Artifact = { path: string; bytes: number; sha256: string };
+// bytes: the gzip on disk. expanded: what it gunzips to; a snapshot's is its gzip trailer, which holds that modulo 4 GiB.
+export type Artifact = { path: string; bytes: number; sha256: string; expanded: number };
 // accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
-// leaving one, whose deletion a restore finishes. snapshots: those baselines, and every snapshot an operation pins.
-// operations: those not done, and any not yet seen ending. pictures: ids, which are their SHA-256, in the pool.
+// leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
+// into every account that holds one. snapshots: those baselines, and every snapshot an operation pins. operations:
+// those not done, and any not yet seen ending. pictures: ids, which are their SHA-256, in the pool. pictures and
+// migrations are the last two keys written: deploy/rclone-backup.sh matches that tail.
 export type Manifest = {
   version: 1;
   id: string;
@@ -33,7 +36,7 @@ export type Manifest = {
   service: Artifact;
   migrations: string[];
   accountSchema: number;
-  accounts: { incarnation: string; state: 'active' | 'restoring' | 'leaving'; baseline: string | null }[];
+  accounts: { incarnation: string; state: 'active' | 'restoring' | 'leaving'; baseline: string | null; pictureBytes: number }[];
   snapshots: (Artifact & { id: string; incarnation: string })[];
   operations: { id: number; incarnation: string; phase: Phase; verified: boolean; checkpoint: string | null; target: string | null }[];
   pictures: string[];
@@ -60,16 +63,19 @@ async function place(source: string, target: string) {
   }
 }
 
-type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema'>;
+type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'snapshots'> & {
+  snapshots: Omit<Manifest['snapshots'][number], 'expanded'>[];
+};
 
 // What the service snapshot names, read from the snapshot itself so the manifest and the service agree.
 function readNamed(path: string, now: number): { named: Named; sources: Map<string, string[]> } {
   const db = new DatabaseSync(path, { readOnly: true });
   try {
     const all = <T>(sql: string, ...binds: (string | number)[]) => db.prepare(sql).all(...binds) as T[];
-    const accounts = all<{ incarnation: string; state: 'active' | 'restoring' | 'leaving'; baseline: string | null }>(
+    const accounts = all<Manifest['accounts'][number]>(
       `SELECT incarnation, state,
-         (SELECT id FROM snapshots s WHERE s.incarnation = a.incarnation AND kind = 'baseline' AND taken_at <= ?1 ORDER BY taken_at DESC, id DESC LIMIT 1) AS baseline
+         (SELECT id FROM snapshots s WHERE s.incarnation = a.incarnation AND kind = 'baseline' AND taken_at <= ?1 ORDER BY taken_at DESC, id DESC LIMIT 1) AS baseline,
+         (SELECT COALESCE(SUM(size), 0) FROM account_files f WHERE f.incarnation = a.incarnation AND stored = 1) AS pictureBytes
        FROM accounts a ORDER BY incarnation`,
       now,
     );
@@ -144,14 +150,18 @@ export async function captureGeneration(
   const compressed = `${plain}.gz`;
   await pipeline(createReadStream(plain), createGzip(), createWriteStream(compressed));
   fsyncPath(compressed);
+  const { size: expanded } = await stat(plain);
   await rm(plain);
+  const snapshots: Manifest['snapshots'] = [];
+  for (const snapshot of named.snapshots) snapshots.push({ ...snapshot, expanded: await gunzippedBytes(join(root, snapshot.path)) });
   const manifest: Manifest = {
     version: 1,
     id,
     capturedAt: now,
-    service: { path: 'service.sqlite.gz', ...(await digest(compressed)) },
+    service: { path: 'service.sqlite.gz', ...(await digest(compressed)), expanded },
     accountSchema: ACCOUNT_SCHEMA_VERSION,
     ...named,
+    snapshots,
   };
   const temp = join(root, `.tmp-${MANIFEST}`);
   const handle = await open(temp, 'w');
@@ -164,6 +174,17 @@ export async function captureGeneration(
   await rename(temp, join(root, MANIFEST));
   fsyncPath(root);
   return { id, gateMs, manifest };
+}
+
+async function gunzippedBytes(path: string) {
+  const handle = await open(path, 'r');
+  try {
+    const trailer = Buffer.alloc(4);
+    await handle.read(trailer, 0, 4, (await handle.stat()).size - 4);
+    return trailer.readUInt32LE(0);
+  } finally {
+    await handle.close();
+  }
 }
 
 // Any account holding the picture is its source: the id is its content.

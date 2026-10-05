@@ -51,7 +51,7 @@ deletion and every rewind step out (ordinary writes go on), every active account
 restoring before its checkpoint whose current baseline is from before today unless its file is unchanged since, `VACUUM INTO` copies the service, and what that copy names is hard-linked (copied across filesystems) into
 the generation: each account's newest baseline, every pinned snapshot, every picture whose `account_files` row says `stored = 1`
 into the pool. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The service copy is then gzipped and `manifest.json` written last (temp,
-fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256), the migrations applied,
+fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256) and a database's size gzipped and gunzipped, each account's stored picture bytes, the migrations applied,
 the account schema version, and every operation not done or not yet seen ending. A directory without a manifest is cut off and goes
 after a day; a generation goes at 7 days, then every pooled picture no remaining manifest names.
 

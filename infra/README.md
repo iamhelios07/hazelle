@@ -34,7 +34,9 @@ terraform apply      # creates the machine; prints ip
 ```
 
 `image_digest` and the files embedded in the user data matter on first boot only: the instance ignores later changes
-to `user_data`, and `scripts/deploy.sh <tag>` is the only path that changes the running image. A change to a compose
+to `user_data`, and `scripts/deploy.sh <tag>` is the only path that changes the running image. Deploys run one at
+a time: each holds an flock on `/run/hazelle-deploy.lock` on the machine from reading the running image to the health
+check, and a second one exits 5 without changing anything. A change to a compose
 file or the copier reaches a running machine by copying it to `/etc/hazelle/` and `hazelle-compose up -d`, or by a
 rebuilt machine.
 

@@ -6,8 +6,9 @@
 # prevent_destroy, against infra/'s state; after the typed confirmation the generation's age is checked again and the
 # saved plan is applied.
 #   scripts/destroy.sh
-# Needs: terraform initialised in infra/, VULTR_API_KEY in the shell, ssh as root to the machine, free space on the
-# machine's disk for twice the generation plus a fifth of the disk (the script checks it).
+# Needs: terraform initialised in infra/, VULTR_API_KEY in the shell, ssh as root to the machine, and free space on the
+# machine's disk, which the live app shares, for the generation as downloaded and as restored plus a fifth of the disk
+# (the script adds it up from the manifest and checks it).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 state=$PWD/infra/terraform.tfstate
@@ -31,8 +32,13 @@ id=$(remote 'set -eu
   [ -f "/data/backup/$id/copied" ] || { echo "destroy: $id is not marked copied" >&2; exit 1; }
   rclone copyto "$remote/$id/manifest.json" /drill/manifest.json
   grep -q "^{\"version\":1,\"id\":\"$id\"," $drill/manifest.json || { echo "destroy: the remote manifest of $id names another generation" >&2; exit 1; }
+  grep -q "\"expanded\":" $drill/manifest.json ||
+    { echo "destroy: the manifest of $id records no expanded sizes (an older build wrote it); run this after the next daily generation" >&2; exit 1; }
   grep -o "\"pictures\":\[[^]]*\]" $drill/manifest.json | grep -o "[0-9a-f]\{64\}" >$drill/pictures || true
-  artifacts=$(grep -o "\"bytes\":[0-9]*" $drill/manifest.json | cut -d: -f2 | awk "{ s += \$1 } END { print s + 0 }")
+  sum() { grep -o "\"$1\":[0-9]*" $drill/manifest.json | cut -d: -f2 | awk "{ s += \$1 } END { print s + 0 }"; }
+  artifacts=$(sum bytes)
+  expanded=$(sum expanded)
+  held=$(sum pictureBytes)
   # No pictures: the remote may have no files/ at all.
   pictures=0
   if [ -s $drill/pictures ]; then
@@ -42,8 +48,13 @@ id=$(remote 'set -eu
   space=$(df -Pk $drill | awk "NR == 2 { print \$2, \$4 }")
   disk_kb=${space% *}
   free_kb=${space#* }
-  need=$(( 2 * (artifacts + pictures) + disk_kb * 1024 / 5 ))
-  echo "destroy: $id holds $((artifacts + pictures)) bytes; the drill needs $need bytes free on $drill (twice that plus a fifth of the disk), $((free_kb * 1024)) are" >&2
+  # The restore gunzips the service and each account file (expanded, summed over every snapshot: a rewound account is
+  # installed from a second one), copies the snapshots as they are (artifacts, which counts the service gzip too) and
+  # copies each picture into every account holding it (held).
+  download=$((artifacts + pictures))
+  restore=$((expanded + artifacts + held))
+  need=$((download + restore + disk_kb * 1024 / 5))
+  echo "destroy: $id downloads $download bytes (generation $artifacts, pictures $pictures) and restores to $restore (databases $expanded, snapshots $artifacts, pictures per account $held); the drill needs $need bytes free on $drill with a fifth of the disk, $((free_kb * 1024)) are" >&2
   [ $((free_kb * 1024)) -ge "$need" ] || { echo "destroy: not enough free space for the drill" >&2; exit 1; }
   rclone copy "$remote/$id" "/drill/$id"
   if [ -s $drill/pictures ]; then rclone copy "$remote/files" /drill/files --files-from-raw /drill/pictures; fi
