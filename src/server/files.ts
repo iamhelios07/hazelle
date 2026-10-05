@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { CAP, USE_HEADERS } from './caps';
 import { fail, hex, readObject, type AppEnv } from './http';
 import { canWrite, requireSession } from './session';
@@ -8,6 +8,38 @@ export const FILE_ID = /^[0-9a-f]{64}$/;
 // Counts sealed bytes, a few more than the file itself. worker.ts enforces it.
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_ASKED = 1000;
+const BUSY_RETRY_SECONDS = 5;
+
+export function uploadSlots(slots: number, waitMs: number) {
+  let free = slots;
+  const waiting: (() => void)[] = [];
+  return {
+    take: () =>
+      new Promise<boolean>((resolve) => {
+        if (free > 0) {
+          free--;
+          return resolve(true);
+        }
+        const enter = () => {
+          clearTimeout(timer);
+          resolve(true);
+        };
+        const timer = setTimeout(() => {
+          waiting.splice(waiting.indexOf(enter), 1);
+          resolve(false);
+        }, waitMs);
+        waiting.push(enter);
+      }),
+    give: () => {
+      const next = waiting.shift();
+      if (next) next();
+      else free++;
+    },
+  };
+}
+
+// One process holds every upload body in its memory until the bytes are on disk, so the count is this module's.
+const uploads = uploadSlots(8, 30_000);
 
 // Each account holds its own copy of a file under its incarnation, so nothing is shared between accounts and removing
 // one account's pictures races no one else. Nothing removes a file while its account lives: an import asks /missing
@@ -42,10 +74,23 @@ files.post('/missing', async (c) => {
 files.put('/:id', canWrite, async (c) => {
   const id = c.req.param('id');
   if (!FILE_ID.test(id)) return fail(c, 400, 'bad-input');
+  // The body is read before any refusal: one answered while it is still being sent reaches the browser as a dropped
+  // connection, which the client would wait out instead of taking the answer. A body refused for want of a slot is
+  // read and dropped, never held.
+  if (!(await uploads.take())) {
+    await c.req.raw.body?.pipeTo(new WritableStream());
+    return fail(c, 503, 'busy', { retryAfter: BUSY_RETRY_SECONDS });
+  }
+  try {
+    return await publish(c, id);
+  } finally {
+    uploads.give();
+  }
+});
+
+async function publish(c: Context<AppEnv>, id: string) {
   const db = c.env.db;
   const { incarnation } = c.get('account');
-  // The body is read before any refusal: one answered while it is still being sent reaches the browser as a dropped
-  // connection, which the client would wait out instead of taking the answer.
   const [held, body] = await Promise.all([
     db
       .prepare('SELECT EXISTS (SELECT 1 FROM file_blocks WHERE id = ?2) AS blocked, (SELECT stored FROM account_files WHERE incarnation = ?1 AND id = ?2) AS stored')
@@ -79,7 +124,7 @@ files.put('/:id', canWrite, async (c) => {
   if (fileBytes === null) return fail(c, 401, 'no-session');
   c.header(USE_HEADERS.fileBytes, String(fileBytes));
   return c.body(null, 204);
-});
+}
 
 // The id is the content, so the answer never changes and the browser may keep it. A block therefore stops only
 // browsers that have not read the file yet.

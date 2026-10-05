@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SqlValue, Statement } from './db/service-db';
-import { fileBlocks } from './files';
+import { fileBlocks, uploadSlots } from './files';
 import type { Bucket } from './files/disk-bucket';
 import { hex, type AppEnv } from './http';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
@@ -235,6 +235,52 @@ describe('files', () => {
 
     await t.reconcile(later());
     expect(await stored(old.incarnation, id)).toBeUndefined();
+  });
+
+  it('lets a taker past the slots wait its turn, and answers false once the wait runs out', async () => {
+    const slots = uploadSlots(2, 20);
+    expect(await Promise.all([slots.take(), slots.take()])).toEqual([true, true]);
+    const third = slots.take();
+    slots.give();
+    expect(await third).toBe(true);
+    expect(await slots.take()).toBe(false);
+    slots.give();
+    expect(await slots.take()).toBe(true);
+  });
+
+  it('holds at most eight upload bodies at once: a ninth is not read until one of them ends', async () => {
+    const jin = await signup();
+    const bytes = Array.from({ length: 9 }, (_, index) => new Uint8Array([index, 42]));
+    const ids = await Promise.all(bytes.map(idOf));
+    const read = new Set<number>();
+    const ends: (() => void)[] = [];
+    const replies = bytes.map((body, index) =>
+      t.raw(`files/${ids[index]}`, {
+        method: 'PUT',
+        headers: { cookie: jin.cookie, 'x-account': jin.id, 'content-type': 'application/octet-stream', 'content-length': String(body.length) },
+        body: new ReadableStream<Uint8Array>(
+          {
+            pull: (controller) => {
+              if (read.has(index)) return new Promise<void>((resolve) => (ends[index] = () => resolve(controller.close())));
+              read.add(index);
+              controller.enqueue(body);
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+        duplex: 'half',
+      } as RequestInit),
+    );
+    await vi.waitFor(() => expect(ends.filter(Boolean)).toHaveLength(8));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(read.size).toBe(8);
+    const waiting = ids.findIndex((_, index) => !read.has(index));
+    const first = ids.findIndex((_, index) => read.has(index));
+    ends[first]!();
+    expect((await replies[first]!).status).toBe(204);
+    await vi.waitFor(() => expect(ends[waiting]).toBeDefined());
+    ends.forEach((end, index) => index !== first && end());
+    expect((await Promise.all(replies)).map(({ status }) => status)).toEqual(Array(9).fill(204));
   });
 
   it('sweeps a prefix with no account once it is an hour old, and spares a younger one and a live one', async () => {
