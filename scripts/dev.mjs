@@ -2,6 +2,7 @@
 // npm run dev: the server (npm run server: tsx watch, data in .data/) and Vite, whose /api proxy reaches it, as one
 // command. Ctrl-C stops both; when Vite ends, the server is stopped and this exits with Vite's code.
 import { spawn } from 'node:child_process';
+import console from 'node:console';
 import process from 'node:process';
 
 // The server runs in a process group of its own, signalled as a whole: npm and tsx watch do not pass a signal on to
@@ -17,7 +18,7 @@ const stopServer = (signal) => {
     // The group is already gone.
   }
 };
-for (const signal of ['SIGINT', 'SIGTERM']) {
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => {
     stopServer(signal);
     vite.kill(signal);
@@ -27,4 +28,15 @@ vite.on('exit', (code) => {
   stopServer('SIGTERM');
   process.exitCode = code ?? 1;
 });
+// A child that cannot be spawned fires error, not exit: the other one must still be stopped.
+vite.on('error', (error) => {
+  console.error(error.message);
+  stopServer('SIGTERM');
+  process.exitCode = 1;
+});
 server.on('exit', () => vite.kill('SIGTERM'));
+server.on('error', (error) => {
+  console.error(error.message);
+  vite.kill('SIGTERM');
+  process.exitCode = 1;
+});

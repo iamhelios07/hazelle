@@ -37,10 +37,11 @@ let server: ChildProcess;
 
 test.use({ baseURL: `http://localhost:${PORT}` });
 
-async function start() {
+async function start(fresh = false) {
   const health = () => fetch(`http://localhost:${PORT}/api/health`).then((response) => response.status, () => 0);
-  // A server an earlier run left on the port would answer for this one.
+  // A server an earlier run left on the port would answer for this one; its data directory is checked for only after.
   expect(await health()).toBe(0);
+  if (fresh) rmSync(DATA, { recursive: true, force: true });
   server = spawn(process.execPath, ['dist/server/node.js'], {
     env: { ...process.env, HAZELLE_DATA: DATA, HAZELLE_CLIENT: 'dist/client', PORT: String(PORT) },
     stdio: ['ignore', 'ignore', 'inherit'],
@@ -145,8 +146,7 @@ async function listing(request: APIRequestContext) {
 }
 
 test.beforeAll(async ({ request }) => {
-  rmSync(DATA, { recursive: true, force: true });
-  await start();
+  await start(true);
   // The first signup claims the installation.
   operator = await signup(request);
   expect(await json(await request.get('/api/session', { headers: headers(operator) }))).toMatchObject({ session: { admin: true } });
