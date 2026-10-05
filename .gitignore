@@ -4,8 +4,6 @@ dist/
 .env.*
 !.env.example
 .wrangler/
-.dev.vars
-worker-configuration.d.ts
 .vitest/
 *.module.d.css.ts
 .claude/*

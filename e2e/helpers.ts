@@ -1,7 +1,6 @@
 import type { Page } from '@playwright/test';
+import { createServer } from 'node:http';
 import { unpack } from '../src/engine/import/risum';
-import { streamRegistry } from '../src/server/stream-registry';
-import { streamStore } from '../src/server/db/streams-db';
 
 export const FAKE_MODEL = 'fake-model';
 export const DESCRIPTION = 'Mira keeps the lantern inn at the edge of the marsh.';
@@ -95,28 +94,51 @@ export const SCRIPTED = {
   ),
 };
 
-const REPLY = ['{{char}} smiles. ', '[[bow]]'];
+// The provider behind FAKE_ADDRESS: an OpenAI-compatible server in this process. A connection takes only a public https
+// address, so the page's relay and stream requests for FAKE_ADDRESS are readdressed to it on their way out; the server
+// then reaches it as a listed local provider (FAKE_PROVIDER in HAZELLE_LOCAL_PROVIDERS) through its own relay, stream
+// registry and outbound. Every chat request body it hears is kept for the test to read.
+export const FAKE_ADDRESS = 'https://fake-provider.test/v1';
+export const FAKE_PROVIDER = '127.0.0.1:4419';
 
-// route.fulfill hands the browser the whole stream in one body: this exercises SSE parsing and the call's sealed
-// frames, not text arriving piece by piece. A chat is answered by the server's own stream registry, in this process,
-// since the server would call a provider it cannot reach here. Every chat request body is kept for the test to read.
+const REPLY = ['{{char}} smiles. ', '[[bow]]'];
+let heard: unknown[] = [];
+let listening: Promise<void> | null = null;
+
+function upstream(): Promise<void> {
+  listening ??= new Promise((resolve, reject) => {
+    const server = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(chunk as Buffer);
+      if (request.url === '/v1/models') return response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: FAKE_MODEL }] }));
+      if (request.url !== '/v1/chat/completions') return response.writeHead(404).end();
+      heard.push(JSON.parse(Buffer.concat(chunks).toString()));
+      const events = [...REPLY.map((content) => ({ choices: [{ delta: { content } }] })), { choices: [{ delta: {}, finish_reason: 'stop' }] }];
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.end([...events.map((event) => JSON.stringify(event)), '[DONE]'].map((data) => `data: ${data}\n\n`).join(''));
+    });
+    const [host, port] = FAKE_PROVIDER.split(':');
+    server.on('error', reject).listen(Number(port), host, () => resolve());
+    server.unref();
+  });
+  return listening;
+}
+
 export async function fakeProvider(page: Page): Promise<unknown[]> {
-  const sent: unknown[] = [];
-  await page.route('**/api/relay', async (route) => {
-    await route.fulfill({ headers: { 'x-relay': 'upstream' }, json: { data: [{ id: FAKE_MODEL }] } });
+  await upstream();
+  heard = [];
+  const readdress = (url: string) => (url.startsWith(FAKE_ADDRESS) ? `http://${FAKE_PROVIDER}/v1${url.slice(FAKE_ADDRESS.length)}` : url);
+  await page.route('**/api/relay', (route) => {
+    const envelope = route.request().postDataJSON() as { url: string };
+    return route.continue({ postData: JSON.stringify({ ...envelope, url: readdress(envelope.url) }) });
   });
-  await page.route('**/api/streams/**', async (route) => {
-    if (route.request().method() !== 'POST' || route.request().url().endsWith('/stop')) return route.fulfill({ status: 204 });
-    const { key, request } = route.request().postDataJSON() as { key: string; request: { body: string } };
-    sent.push(JSON.parse(request.body));
-    const events = [...REPLY.map((content) => ({ choices: [{ delta: { content } }] })), { choices: [{ delta: {}, finish_reason: 'stop' }] }];
-    const body = [...events.map((event) => JSON.stringify(event)), '[DONE]'].map((data) => `data: ${data}\n\n`).join('');
-    const streams = streamRegistry(streamStore(':memory:'), async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
-    const id = route.request().url().split('/').at(-1)!;
-    const frames = await streams.start(id, { id, key, request: { ...request, url: 'https://provider.example/chat' } }, new AbortController().signal);
-    await route.fulfill({ headers: Object.fromEntries(frames.headers), body: Buffer.from(await frames.arrayBuffer()) });
+  // One segment: a start. Its /stop goes to the server as sent, like every read and drop.
+  await page.route('**/api/streams/*', (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const start = route.request().postDataJSON() as { request: { url: string } };
+    return route.continue({ postData: JSON.stringify({ ...start, request: { ...start.request, url: readdress(start.request.url) } }) });
   });
-  return sent;
+  return heard;
 }
 
 // A module file as Risu writes one (src/engine/import/risum.ts), encoded with the inverse of the decode table.

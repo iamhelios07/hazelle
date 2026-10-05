@@ -2,7 +2,8 @@ import { expect, type Page } from '@playwright/test';
 import { CARD } from './helpers';
 
 // The screenshot account on the local dev server (playwright.shots.config.ts), kept across runs so a screenshot
-// script signs in instead of signing up. On an empty dev database the first run makes it, with the test card.
+// script signs in instead of signing up. On a .data/ with no account the first run makes it, with the test card; as the
+// first signup it is the installation's operator.
 export const SHOTS = { username: 'shots', password: 'shots-password' };
 
 // The layouts worth showing: a side panel sits beside the page from 1280px, covers it below, and the phone layout
@@ -29,11 +30,8 @@ export async function enterShots(page: Page) {
   const signup = page.getByLabel('한 번 더', { exact: true });
   const signin = page.getByRole('button', { name: '로그인', exact: true });
   await expect(signup.or(signin)).toBeVisible();
-  // The landing is the signup form; an account that exists is reached through its 계정이 있으면 로그인 button.
-  if (await signup.isVisible()) {
-    await page.getByRole('button', { name: '계정이 있으면 로그인', exact: true }).click();
-    await expect(signin).toBeVisible();
-  }
+  // The landing is the signup form only while signup is open, which with the default cap of one is until the first
+  // account exists.
   await page.getByLabel('아이디', { exact: true }).fill(SHOTS.username);
   await page.getByLabel('비밀번호', { exact: true }).fill(SHOTS.password);
   if (await signin.isVisible()) return signin.click();
