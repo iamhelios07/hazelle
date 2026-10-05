@@ -1,0 +1,52 @@
+# A v* tag: the check, the source archive of the tag's commit, the image for amd64 and arm64 on GHCR, and a release
+# that records the image digest (scripts/deploy.sh reads it from there) and carries the archive.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      # The Dockerfile copies release/source.tar.gz into the image; its context has no .git to make one.
+      - run: |
+          mkdir -p dist/client release
+          scripts/source.sh
+          mv dist/client/source.tar.gz release/source.tar.gz
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: image
+        uses: docker/build-push-action@v7
+        with:
+          # The working tree, not the action's default git context, which would leave release/ out.
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/jiniill/hazelle:${{ github.ref_name }}
+            ghcr.io/jiniill/hazelle:latest
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/source.tar.gz --title "$GITHUB_REF_NAME" --notes "image: ghcr.io/jiniill/hazelle@$DIGEST"

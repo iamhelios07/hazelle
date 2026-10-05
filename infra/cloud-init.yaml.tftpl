@@ -1,0 +1,54 @@
+#cloud-config
+# First boot of the hosted machine: Docker from Docker's own repository, the compose files and their env under
+# /etc/hazelle, /data on the instance disk owned by the app's uid, then the stack. Every file comes from infra/main.tf.
+apt:
+  sources:
+    docker:
+      source: "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable"
+      key: |
+        ${indent(8, docker_apt_key)}
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+write_files:
+  # The one spelling of the stack's compose command; scripts/deploy.sh runs it over ssh.
+  - path: /usr/local/bin/hazelle-compose
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      exec docker compose --project-directory /etc/hazelle --env-file /etc/hazelle/env -f /etc/hazelle/docker-compose.yml -f /etc/hazelle/docker-compose.hosted.yml --profile backup "$@"
+  - path: /etc/hazelle/env
+    permissions: "0600"
+    encoding: b64
+    content: ${base64encode(env)}
+  - path: /etc/hazelle/rclone/rclone.conf
+    permissions: "0600"
+    encoding: b64
+    content: ${base64encode(rclone_conf)}
+  - path: /etc/hazelle/docker-compose.yml
+    encoding: b64
+    content: ${base64encode(compose)}
+  - path: /etc/hazelle/docker-compose.hosted.yml
+    encoding: b64
+    content: ${base64encode(compose_hosted)}
+  - path: /etc/hazelle/deploy/Caddyfile
+    encoding: b64
+    content: ${base64encode(caddyfile)}
+  - path: /etc/hazelle/deploy/rclone-backup.sh
+    encoding: b64
+    content: ${base64encode(copier)}
+  - path: /etc/hazelle/origin.pem
+    encoding: b64
+    content: ${base64encode(origin_cert)}
+  - path: /etc/hazelle/origin.key
+    permissions: "0600"
+    encoding: b64
+    content: ${base64encode(origin_key)}
+runcmd:
+  # 1000 is the node user of node:24-alpine, which the app and the copier run as.
+  - [mkdir, -p, /data]
+  - [chown, "1000:1000", /data]
+  - [chown, -R, "1000:1000", /etc/hazelle/rclone]
+  - [hazelle-compose, up, -d]

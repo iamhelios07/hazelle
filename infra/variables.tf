@@ -1,0 +1,95 @@
+variable "region" {
+  type    = string
+  default = "icn"
+}
+
+variable "plan" {
+  type    = string
+  default = "vhp-4c-8gb-amd"
+}
+
+# "Ubuntu 24.04 LTS x64" in Vultr's GET /v2/os.
+variable "os_id" {
+  type    = number
+  default = 2284
+}
+
+variable "ssh_public_key" {
+  type = string
+}
+
+# The one address allowed to reach port 22, as a CIDR (a.b.c.d/32).
+variable "owner_cidr" {
+  type = string
+  validation {
+    condition     = can(cidrhost(var.owner_cidr, 0)) && !strcontains(var.owner_cidr, ":")
+    error_message = "owner_cidr is an IPv4 CIDR such as 203.0.113.7/32."
+  }
+}
+
+# The image the machine starts with on first boot. Later images go through scripts/deploy.sh only.
+variable "image_digest" {
+  type = string
+  validation {
+    condition     = can(regex("^sha256:[0-9a-f]{64}$", var.image_digest))
+    error_message = "image_digest is sha256:<64 hex>, as the release notes record it."
+  }
+}
+
+# Paths on the owner's machine to the Cloudflare Origin CA certificate and its key.
+variable "origin_cert_file" {
+  type = string
+}
+
+variable "origin_key_file" {
+  type = string
+}
+
+variable "r2_account_id" {
+  type      = string
+  sensitive = true
+}
+
+variable "r2_access_key_id" {
+  type      = string
+  sensitive = true
+}
+
+variable "r2_secret_access_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "r2_bucket" {
+  type = string
+}
+
+# A Discord- or Slack-compatible webhook for backup and disk alerts; empty sends none.
+variable "alert_webhook" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+# Cloudflare's published IPv4 ranges (https://www.cloudflare.com/ips-v4), read 2026-10-05. Only Cloudflare's proxy
+# may reach 80 and 443; the reserved IP is IPv4 and the instance has no IPv6, so no IPv6 ranges are needed.
+variable "cloudflare_ipv4" {
+  type = list(string)
+  default = [
+    "173.245.48.0/20",
+    "103.21.244.0/22",
+    "103.22.200.0/22",
+    "103.31.4.0/22",
+    "141.101.64.0/18",
+    "108.162.192.0/18",
+    "190.93.240.0/20",
+    "188.114.96.0/20",
+    "197.234.240.0/22",
+    "198.41.128.0/17",
+    "162.158.0.0/15",
+    "104.16.0.0/13",
+    "104.24.0.0/14",
+    "172.64.0.0/13",
+    "131.0.72.0/22",
+  ]
+}
