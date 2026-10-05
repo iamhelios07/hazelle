@@ -112,10 +112,14 @@ it('stores a short reply as one page, which a read from inside it still ends', a
   expect(again.seen.at(-1)).toEqual(live.seen.at(-1));
 });
 
-it('ends its readers with an error, aborts the call and writes no END once a page write fails', async () => {
+// Only the first write fails, so a write tried after it would be stored and seen.
+it('ends its readers with an error, aborts the call and tries no write, END included, once a page write fails', async () => {
   const held = storage();
-  held.put = async () => {
-    throw new Error('disk full');
+  const put = held.put;
+  let puts = 0;
+  held.put = async (key, value) => {
+    if (++puts === 1) throw new Error('disk full');
+    return put(key, value);
   };
   let aborted = false;
   const upstream: Upstream = async (_url, { signal }) => {
@@ -128,6 +132,7 @@ it('ends its readers with an error, aborts the call and writes no END once a pag
   await box.ended;
   expect(aborted).toBe(true);
   expect(box.running).toBe(false);
+  expect(puts).toBe(1);
   expect([...(await held.list({ start: 'f:', end: 'f;', limit: 10 })).keys()]).toEqual(['f:0000000000']);
 });
 
