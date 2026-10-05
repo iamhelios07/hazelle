@@ -1,29 +1,24 @@
 import { defineConfig } from '@playwright/test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FAKE_PROVIDER } from './e2e/helpers';
 
 const PORT = 4417;
-// Signup closes after the first account, so every run starts from an empty local D1 and R2 of its own,
-// apart from the one `npm run dev` uses.
-const STATE = '.wrangler/e2e';
-const WRANGLER = './node_modules/.bin/wrangler';
+// The first signup claims the installation and closes signup, so every run starts the built server (npm run e2e
+// builds first) on an empty data directory of its own, apart from the .data/ that npm run dev uses.
+const DATA = join(tmpdir(), 'hazelle-e2e');
 
-// Serves the build (npm run e2e builds first) through wrangler dev; T6 of the Docker port moves this to the Node server.
-// wrangler dev takes no -c: it finds the built Worker and assets through the .wrangler/deploy/config.json
-// that vite build writes, where wrangler.jsonc names no assets at all.
 export default defineConfig({
   testDir: 'e2e',
-  // The store spec runs on a wrapped Worker of its own (playwright.store.config.ts).
-  testIgnore: 'store.spec.ts',
   workers: 1,
   reporter: 'list',
   timeout: 120_000,
   use: { baseURL: `http://localhost:${PORT}` },
+  // e2e/store.spec.ts starts, kills and restarts a server of its own, on another port and directory.
   webServer: {
-    command: [
-      `node -e "require('node:fs').rmSync('${STATE}', { recursive: true, force: true })"`,
-      `${WRANGLER} d1 migrations apply risu-alpha --local --persist-to ${STATE} -c wrangler.jsonc`,
-      `${WRANGLER} dev --port ${PORT} --persist-to ${STATE}`,
-    ].join(' && '),
-    url: `http://localhost:${PORT}/api/session`,
+    command: `node -e "require('node:fs').rmSync('${DATA}', { recursive: true, force: true })" && node dist/server/node.js`,
+    env: { HAZELLE_DATA: DATA, HAZELLE_CLIENT: 'dist/client', PORT: String(PORT), HAZELLE_LOCAL_PROVIDERS: FAKE_PROVIDER },
+    url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: false,
     timeout: 60_000,
   },

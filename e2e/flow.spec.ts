@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
 import { featherless } from '../src/connectors/featherless';
 import { CSP } from '../src/server/static';
-import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED } from './helpers';
+import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED } from './helpers';
 
 const PASSWORD = 'e2e-password';
 const NICKNAME = 'rich-steve';
@@ -36,7 +36,7 @@ test('a new account imports a card, chats through the fake provider and finds th
   await test.step('connect the fake provider and make its model the default', async () => {
     await page.getByRole('button', { name: /^연결 추가/ }).click();
     await page.getByRole('button', { name: /^직접 연결/ }).click();
-    await page.getByLabel('주소', { exact: true }).fill('https://fake-provider.test/v1');
+    await page.getByLabel('주소', { exact: true }).fill(FAKE_ADDRESS);
     await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();
     await page.getByRole('button', { name: '모델 고르기', exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_MODEL} 별표하기` }).click();
