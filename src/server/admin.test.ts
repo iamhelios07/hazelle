@@ -144,7 +144,7 @@ describe('the operator', () => {
     const admin = await operator();
     await stored(new Uint8Array([1, 2, 3]), admin.cookie);
     expect(await (await t.get('admin/service', admin.cookie)).json()).toEqual({
-      signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, fileBytes: 3, backupAgeHours: null, diskFreePercent: expect.any(Number), warnings: [],
+      signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, fileBytes: 3, backupAgeHours: null, diskFreePercent: 50, warnings: [],
     });
 
     expect((await t.put('admin/service', { signupCap: 1, accountBytesCap: 1000, accountFileBytesCap: 2000 }, admin.cookie)).status).toBe(204);

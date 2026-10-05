@@ -1,5 +1,5 @@
 import type { Services } from '../http';
-import { freshness, type Freshness } from './freshness';
+import { freePercent, freshness, type DiskFree, type Freshness } from './freshness';
 import { captureGeneration, expireGenerations } from './generation';
 import { DAY_MS, dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
 
@@ -35,7 +35,7 @@ const ALERTS: Record<string, string> = {
 };
 
 // webhook: a Discord- or Slack-compatible URL, or null for none.
-export function backups(dataDir: string, hour: number, webhook: string | null): Backups {
+export function backups(dataDir: string, hour: number, webhook: string | null, free: DiskFree = freePercent): Backups {
   let holds = 0;
   let capturing: Promise<void> | null = null;
   let drained: (() => void) | null = null;
@@ -111,7 +111,7 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
     if (webhook === null) return;
     const day = dayStart(now);
     const failed = await env.db.prepare("SELECT 1 FROM backup_runs WHERE outcome = 'failed' AND started_at >= ?1 AND started_at < ?1 + ?2").bind(day, DAY_MS).first();
-    const standing = [...(await freshness(env, dataDir, now)).warnings, ...(failed === null ? [] : ['job-failed'])];
+    const standing = [...(await freshness(env, dataDir, now, free)).warnings, ...(failed === null ? [] : ['job-failed'])];
     for (const condition of standing) {
       if ((await env.db.prepare('SELECT 1 FROM alerts_sent WHERE condition = ? AND day = ?').bind(condition, day).first()) !== null) continue;
       const text = `[Hazelle] ${ALERTS[condition]}`;
@@ -137,7 +137,7 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
       while (running) await running;
       return job(env, Date.now(), true);
     },
-    freshness: (env, now) => freshness(env, dataDir, now),
+    freshness: (env, now) => freshness(env, dataDir, now, free),
     // One tick at a time: a second that comes while one runs gets that one, so no alert goes out twice. Today is the
     // UTC day itself, not "from its start on": a run stamped by a clock since put back belongs to no day yet.
     tick: (env, now) =>

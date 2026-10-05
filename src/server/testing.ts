@@ -24,6 +24,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   migrate(raw, 'migrations');
   const db = serviceDb(raw);
   const clock = { now: () => Date.now() };
+  const disk = { freePercent: 50 };
   const outbound: Upstream = (url, init) => upstream(url, init);
   const env: Services = {
     db,
@@ -33,7 +34,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     outbound,
     localProviders: new Set(),
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
-    backups: backups(dir, 3, 'https://alerts.test/hook'),
+    backups: backups(dir, 3, 'https://alerts.test/hook', async () => disk.freePercent),
   };
 
   const pending: Promise<unknown>[] = [];
@@ -67,6 +68,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     env,
     dir,
     clock,
+    disk,
     get stores() {
       return env.stores;
     },

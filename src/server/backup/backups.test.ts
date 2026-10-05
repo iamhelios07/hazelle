@@ -67,8 +67,13 @@ it('raises the banner and the webhook once a day for a failed night after a back
     { url: 'https://alerts.test/hook', body: { content: '[Hazelle] 오늘 백업 작업 실패', text: '[Hazelle] 오늘 백업 작업 실패' } },
   ]);
   const service = (await (await t.get('admin/service', cookie)).json()) as Record<string, unknown>;
-  expect(service).toMatchObject({ warnings: ['backup-stale'], diskFreePercent: expect.any(Number) });
+  expect(service).toMatchObject({ warnings: ['backup-stale'], diskFreePercent: 50 });
   expect(service.backupAgeHours).toBeGreaterThanOrEqual(40);
+
+  t.disk.freePercent = 19.9;
+  await t.env.backups.tick(t.env, now + 2);
+  expect(sent.at(-1)).toEqual({ url: 'https://alerts.test/hook', body: { content: '[Hazelle] 디스크 80% 초과', text: '[Hazelle] 디스크 80% 초과' } });
+  expect(await (await t.get('admin/service', cookie)).json()).toMatchObject({ warnings: ['backup-stale', 'disk-full'], diskFreePercent: 19.9 });
 });
 
 it('captures a generation of its own for a fresh ask that comes while a daily job runs', async () => {
