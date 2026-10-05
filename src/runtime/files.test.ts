@@ -40,6 +40,20 @@ describe('files on a bad link', () => {
     expect(dropped).toBe(2);
   });
 
+  it('waits out a dropped connection while reading a picture, then opens it', async () => {
+    const { store } = await server.account();
+    let dropped = 0;
+    const files = new Files(async <T,>(...args: Parameters<typeof api>) => {
+      if (args[0] === 'GET' && dropped++ === 0) return { ok: false as const, error: 'offline' };
+      return api<T>(...args);
+    }, store);
+    const image = randomBytes(256);
+    const saved = await files.save([image]);
+    expect(saved.ok).toBe(true);
+    expect(await files.read((saved as { ok: true; data: { id: string; key: string }[] }).data[0]!)).toEqual({ ok: true, data: image });
+    expect(dropped).toBe(2);
+  });
+
   it('never sends a body past the size the server names, and leaves it out of the result', async () => {
     const { store } = await server.account();
     const puts: string[] = [];
