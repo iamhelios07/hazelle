@@ -67,13 +67,15 @@ const raw = openDatabase(join(dataDir, 'service.sqlite'));
 const { applied } = migrate(raw, migrationsDir);
 const db = serviceDb(raw);
 const limits = { calls: tokenBucket(240), botCalls: tokenBucket(20) };
-const outbound = pinnedOutbound(localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? ''));
+const local = localProviders(process.env.HAZELLE_LOCAL_PROVIDERS ?? '');
+const outbound = pinnedOutbound(local);
 const services: Services = {
   db,
   files: diskBucket(dataDir),
   stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
   streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), outbound),
   outbound,
+  localProviders: local,
   limits,
   backups: backups(dataDir, snapshotHour, alertWebhook),
 };

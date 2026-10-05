@@ -28,7 +28,7 @@ describe('accounts', () => {
     const body = signupBody();
     const signup = await post('signup', body);
     expect(signup.status).toBe(201);
-    const described = { accountId: body.accountId, username: 'jin', admin: true, suspended: false, state: 'active', incarnation: expect.stringMatching(/^[0-9a-f]{32}$/), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 };
+    const described = { accountId: body.accountId, username: 'jin', admin: true, suspended: false, state: 'active', incarnation: expect.stringMatching(/^[0-9a-f]{32}$/), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, localProviders: [] };
     expect(await signup.json()).toEqual(described);
     const cookie = signup.headers.get('set-cookie')!;
     expect(cookie).toMatch(/^__Host-session=[0-9a-f]{64};/);
@@ -81,7 +81,7 @@ describe('accounts', () => {
       const login = await post('login', { username: 'jin', method, proof: value });
       expect(login.status).toBe(200);
       expect(await login.json()).toEqual({
-        session: { accountId: body.accountId, username: 'jin', admin: true, suspended: false, state: 'active', incarnation: expect.any(String), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0 },
+        session: { accountId: body.accountId, username: 'jin', admin: true, suspended: false, state: 'active', incarnation: expect.any(String), storage: { bytes: 0, bytesCap: null, fileBytes: 0, fileBytesCap: null }, unreadNotices: 0, localProviders: [] },
         vault: { passwordWrap: body.passwordWrap, recoveryWrap: body.recoveryWrap },
       });
     }

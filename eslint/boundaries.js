@@ -14,10 +14,11 @@ const FEATURE = {
 const AREAS = {
   connectors: {
     paths: ['src/connectors'],
-    imports: ['priceLists'],
+    imports: ['priceLists', 'destination'],
     why: 'connectors are the provider contract the engine and the model build on, so they import no other layer, and touch no DOM, network or storage so their golden tests run in node.',
   },
   priceLists: { paths: ['src/connectors/price-list'], why: 'which models.dev price lists a connection type reads, and their shape, is data and types only, shared by the connectors and the server.' },
+  destination: { paths: ['src/connectors/destination'], why: 'how an address is matched against the operator\'s local providers is shared by 직접 연결 and the server\'s outbound policy, so it imports nothing.' },
   engine: {
     paths: ['src/engine'],
     imports: ['connectors'],
@@ -30,7 +31,11 @@ const AREAS = {
     why: 'the model is pure domain, saved values and what is computed from them with no I/O, and takes only types from connectors, the engine and the vault (a stored file\'s reference).',
   },
   vault: { paths: ['src/vault'], why: 'the vault is crypto and device storage only; it never reaches the network.' },
-  server: { paths: ['src/server'], imports: ['priceLists'], why: 'the server knows nothing about the client or providers, but which price lists to keep (connectors/price-list).' },
+  server: {
+    paths: ['src/server'],
+    imports: ['priceLists', 'destination'],
+    why: 'the server knows nothing about the client or providers, but which price lists to keep (connectors/price-list) and how a local provider\'s address is matched (connectors/destination).',
+  },
   runtime: {
     paths: ['src/runtime'],
     imports: RUNTIME_IMPORTS,

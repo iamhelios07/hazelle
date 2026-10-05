@@ -26,7 +26,7 @@ The dev server's data directory `.data/` keeps an account, so a script signs in 
 
 Facts that cost reruns before:
 - Set the viewport before opening a menu or panel. Crossing 960px remounts the page and closes the panel. `SIZES` has wide (panel beside the page), medium (panel over the page) and phone.
-- A reply needs a model. `fakeProvider(page)` from `e2e/helpers.ts` runs a fake OpenAI-compatible provider on `127.0.0.1:4419` and sends the page's calls for `FAKE_ADDRESS` there through the server. The account needs a connection to `FAKE_ADDRESS` first: see the connection step in `e2e/flow.spec.ts`.
+- A reply needs a model. `fakeProvider()` from `e2e/helpers.ts` runs a fake OpenAI-compatible provider at `FAKE_ADDRESS` (`http://127.0.0.1:4419/v1`), which the server reaches as a listed local provider. The account needs a connection to `FAKE_ADDRESS` first: see the connection step in `e2e/flow.spec.ts`.
 - The server must allow that provider. The shots config starts it with `HAZELLE_LOCAL_PROVIDERS=127.0.0.1:4419`. A server already on `.data/` is reused instead, and one started by a plain `npm run dev` refuses the call: stop it, or start it as `HAZELLE_LOCAL_PROVIDERS=127.0.0.1:4419 npm run dev`.
 - The account is `shots` / `shots-password`, holding the Mira card. On a `.data/` with no account, the next `enterShots` signs it up and imports the card. As the first signup it is the installation's operator, so screens show what the operator sees, and signup closes behind it. Keep signup closed on `.data/`: while it is open, `enterShots` tries to sign up again. To start over, stop the server and remove `.data/`.
 - A shot taken right after `enterShots` can be blank: wait for something on the screen first.

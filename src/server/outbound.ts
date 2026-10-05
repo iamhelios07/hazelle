@@ -1,6 +1,7 @@
 import { promises as dns, type LookupAddress, type LookupOptions } from 'node:dns';
 import type { LookupFunction } from 'node:net';
 import { Agent, fetch } from 'undici';
+import { destination } from '../connectors/destination';
 import type { Upstream } from './relay';
 import { checkTarget, isPublicAddress, PolicyRefusal } from './ssrf';
 
@@ -47,8 +48,6 @@ export function localProviders(list: string): ReadonlySet<string> {
   }
   return entries;
 }
-
-const destination = (url: URL) => `${url.hostname}:${url.port || (url.protocol === 'https:' ? '443' : '80')}`;
 
 function refusalIn(error: unknown): PolicyRefusal | null {
   for (let at = error; at instanceof Error; at = at.cause) if (at instanceof PolicyRefusal) return at;

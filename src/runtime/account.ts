@@ -5,7 +5,7 @@ import { page } from './pages';
 // Caps are null for none. bytes is null while the account is restored or its store does not answer. fileBytes: the
 // pictures stored for it, which deleting them in the app does not lower (server/files).
 export type Storage = { bytes: number | null; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
-export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: 'active' | 'restoring'; storage: Storage; unreadNotices: number };
+export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: 'active' | 'restoring'; storage: Storage; unreadNotices: number; localProviders: readonly string[] };
 export type SignedIn = { session: SessionFacts; vault: VaultRecord };
 export type Boot = { session: null; signupOpen: boolean } | SignedIn;
 export type Signup = { accountId: string; username: string; passwordProof: string; passwordWrap: string; recoveryProof: string; recoveryWrap: string };
