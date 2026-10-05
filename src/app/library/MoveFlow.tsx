@@ -27,13 +27,15 @@ const PRESET_FAILURE: Record<PresetFailure['kind'], string> = {
   'not-preset': '프리셋 아님',
 };
 
-const STEP: Record<MoveStep['kind'], string> = { characters: '캐릭터 저장 중', chats: '대화 저장 중', personas: '페르소나 저장 중', prompts: '프롬프트 저장 중', modules: '모듈 저장 중', pictures: '그림 올리는 중' };
+// In the move's order (runtime/move). The character steps interleave, so each kind reached keeps its own line.
+const STEP: Record<MoveStep['kind'], string> = { personas: '페르소나 저장 중', modules: '모듈 저장 중', prompts: '프롬프트 저장 중', characters: '캐릭터 저장 중', chats: '대화 저장 중', pictures: '그림 올리는 중' };
+type Steps = Partial<Record<MoveStep['kind'], MoveStep>>;
 
 type Phase =
   | { kind: 'reading' }
   | { kind: 'failed'; message: string; again: (() => void) | null }
   | { kind: 'picking'; backup: RisuBackup; have: Have; can: Ticks; ticks: Ticks }
-  | { kind: 'running'; step: MoveStep | null }
+  | { kind: 'running'; steps: Steps }
   | { kind: 'done'; backup: BackupCatalog; moved: Moved };
 
 // Risu backups dropped or picked, read as one (design F7). aside: other files dropped with them, which are not
@@ -75,12 +77,12 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   async function run(backup: RisuBackup, ticks: Ticks) {
     const pick = toPick(backup.catalog, ticks);
     const source = reader.current!;
-    const reached = new Set<MoveStep['kind']>();
-    setPhase({ kind: 'running', step: null });
+    const steps: Steps = {};
+    setPhase({ kind: 'running', steps });
     try {
       const moved = await moveFromRisu(store, files, backup, pick, (step) => {
-        reached.add(step.kind);
-        if (reader.current === source) setPhase({ kind: 'running', step });
+        steps[step.kind] = step;
+        if (reader.current === source) setPhase({ kind: 'running', steps: { ...steps } });
       });
       if (reader.current !== source) return;
       if (moved.ok) {
@@ -92,8 +94,8 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       // modules they pair with (runtime/move), so only a run that reached the characters got past them.
       const rest = {
         ...ticks,
-        ...([...reached].some((kind) => kind !== 'personas') && { personas: ticks.personas.map(() => false) }),
-        ...(reached.has('characters') && { presets: ticks.presets.map(() => false) }),
+        ...(Object.keys(steps).some((kind) => kind !== 'personas') && { personas: ticks.personas.map(() => false) }),
+        ...(steps.characters && { presets: ticks.presets.map(() => false) }),
       };
       setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, rest) });
     } catch (error) {
@@ -113,10 +115,12 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
   );
 
   if (phase.kind === 'reading' || phase.kind === 'running') {
-    const { step } = phase.kind === 'running' ? phase : { step: null };
+    const lines = phase.kind === 'running' ? (Object.keys(STEP) as MoveStep['kind'][]).flatMap((kind) => phase.steps[kind] ?? []) : [];
     return (
       <Dialog title={phase.kind === 'reading' ? '백업 읽는 중' : '가져오는 중'} note={note} onClose={() => {}}>
-        <Text variant="note">{step ? `${STEP[step.kind]} · ${step.done} / ${step.total}` : '잠시만요'}</Text>
+        <Stack gap="related">
+          {lines.length ? lines.map((step) => <Text key={step.kind} variant="note">{`${STEP[step.kind]} · ${step.done} / ${step.total}`}</Text>) : <Text variant="note">잠시만요</Text>}
+        </Stack>
       </Dialog>
     );
   }
