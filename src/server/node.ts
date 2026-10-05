@@ -7,6 +7,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type ExecutionContext } from 'hono';
 import { serviceReads } from './account-store';
 import { forgetOldRecords } from './admin';
+import { backups } from './backup/backups';
 import { accountRegistry } from './db/account-db';
 import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
@@ -23,6 +24,7 @@ import app from './worker';
 const dataDir = process.env.HAZELLE_DATA ?? '/data';
 const port = Number(process.env.PORT ?? 8080);
 const drainMs = Number(process.env.HAZELLE_DRAIN_SECONDS ?? 60) * 1000;
+const snapshotHour = Number(process.env.HAZELLE_SNAPSHOT_HOUR ?? 3);
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
 const clientDir = 'dist/client';
@@ -55,6 +57,7 @@ const services: Services = {
   streams: streamRegistry(fetch),
   outbound: fetch,
   limits,
+  backups: backups(dataDir, snapshotHour),
 };
 
 // Work a request leaves running after its answer; the shutdown waits for it.
@@ -92,6 +95,8 @@ const timers = [
     limits.botCalls.evict();
   }, 10 * MINUTE_MS),
   setTimeout(hourly, MINUTE_MS),
+  setInterval(() => ctx.waitUntil(services.backups.tick(services, Date.now())), HOUR_MS),
+  setTimeout(() => ctx.waitUntil(services.backups.tick(services, Date.now())), MINUTE_MS),
 ];
 for (const timer of timers) timer.unref();
 

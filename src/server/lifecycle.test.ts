@@ -219,7 +219,7 @@ describe('a restore', () => {
     expect(await contents(seed.cookie)).toEqual(AT_TARGET);
     const listed = (await (await t.get(`admin/accounts/${seed.id}/restores`, operator.cookie)).json()) as { restores: Record<string, unknown>[] };
     expect(listed.restores).toEqual([
-      { id, reportId: seed.report, at: seed.at, undoes: null, phase: 'done', verified: true, error: null, createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [] },
+      { id, reportId: seed.report, at: seed.at, undoes: null, targetAt: seed.at - HOUR_MS / 4, phase: 'done', verified: true, error: null, createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [] },
     ]);
 
     const report = await reported(seed.id, seed.cookie);
@@ -286,18 +286,43 @@ describe('a restore', () => {
     expect(mark(seed.incarnation, id)).toEqual([]);
   });
 
-  it('fails one asking for a time before the store existed, and one whose target expired before arming, giving the account back', async () => {
+  it('fails one asking for a time before the store existed, giving the account back', async () => {
     const seed = await seeded();
     const early = await beginRestore(t.env, seed.id, seed.report, { at: seed.at - HOUR_MS });
     expect(await runRestore(t.env, (early as { begun: number }).begun)).toMatchObject({ phase: 'failed', verified: true, error: 'too-early' });
     expect(await account(seed.id)).toMatchObject({ state: 'active', timeline: seed.timeline });
+    expect(await logged('restore-failed')).toBe(1);
+  });
 
-    const expiring = await begin(seed);
-    await expect(runRestore(pausedAt('targeted').env, expiring)).rejects.toThrow(Crash);
-    await t.env.db.prepare('UPDATE restores SET at = ? WHERE id = ?').bind(Date.now() - 31 * 24 * HOUR_MS, expiring).run();
-    expect(await runRestore(t.env, expiring)).toMatchObject({ phase: 'failed', verified: true, error: 'target-expired' });
+  it('never lands a later restore on a snapshot taken before a finished one, until the daily job takes a baseline after it', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const later = Date.now() + 1;
+    expect(await t.stores.snapshotAt(seed.incarnation, later)).toBeNull();
+    expect(await t.daily(later)).toEqual({ outcome: 'ok', error: null });
+    expect(await t.stores.snapshotAt(seed.incarnation, later)).toEqual({ id: expect.any(String), takenAt: later });
+  });
+
+  it('lets no write or answer of an old timeline back in across a rewind, revisions after it and its undo', async () => {
+    const seed = await seeded();
+    const write = (timeline: string, id: string, body: string, baseRev: number | null) =>
+      t.post('objects/batch', { timeline, writes: [{ id, kind: 'chat', parent: null, body, baseRev }] }, seed.cookie);
+    // The offline tab: its write and its feed both name the timeline it last pulled.
+    const held = () => write(seed.timeline, A, 'offline edit', 2);
+    const heldFeed = () => t.get(`objects?since=0&timeline=${seed.timeline}`, seed.cookie);
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const rewound = (await account(seed.id))!.timeline;
+    expect((await write(rewound, B, 'after', null)).status).toBe(200);
+    expect((await write(rewound, B, 'after again', 2)).status).toBe(200);
+    expect((await held()).status).toBe(409);
+    expect((await heldFeed()).status).toBe(409);
+    await runRestore(t.env, await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id }));
+    expect((await held()).status).toBe(409);
+    expect((await heldFeed()).status).toBe(409);
+    expect((await write(rewound, B, 'late', 3)).status).toBe(409);
     expect(await contents(seed.cookie)).toEqual(BEFORE);
-    expect(await logged('restore-failed')).toBe(2);
   });
 
   it('is finalized again and again once the store is seen on its new timeline', async () => {
@@ -310,7 +335,7 @@ describe('a restore', () => {
     await expectRestored(seed, id, []);
   });
 
-  it('ends restored, or cancelled when cancelled before arming, after a crash at every durable boundary', async () => {
+  it('ends restored by two resumes at once, or cancelled when cancelled before arming, after a crash and a process restart at every durable boundary', async () => {
     const probe = counting();
     await runRestore(probe.env, await begin(await seeded()));
     const total = probe.count();
@@ -321,6 +346,7 @@ describe('a restore', () => {
       const id = await begin(seed);
       const crashed = crashing(n);
       await expect(runRestore(crashed.env, id)).rejects.toThrow(Crash);
+      t.restartProcess();
       const { phase } = (await operation(id))!;
       const rerun = counting();
       if (cancel) {
@@ -330,9 +356,10 @@ describe('a restore', () => {
         expect(await logged('restore-cancelled', id)).toBe(1);
         return true;
       }
-      await runRestore(rerun.env, id);
-      expect(crashed.checkpoints() + rerun.checkpoints()).toBe(1);
-      await expectRestored(seed, id, [...crashed.arms, ...rerun.arms]);
+      const twin = counting();
+      await Promise.all([runRestore(rerun.env, id), runRestore(twin.env, id)]);
+      expect(crashed.checkpoints() + rerun.checkpoints() + twin.checkpoints()).toBe(1);
+      await expectRestored(seed, id, [...crashed.arms, ...rerun.arms, ...twin.arms]);
       return BEFORE_ARMED.includes(phase);
     };
     const cancellable: number[] = [];

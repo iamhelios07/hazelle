@@ -29,7 +29,7 @@ const CORRUPT_CODES = new Set([11, 26]);
 
 export const accountPath = (dataDir: string, incarnation: string) => join(dataDir, 'accounts', `${incarnation}.sqlite`);
 const snapshotDir = (dataDir: string, incarnation: string) => join(dataDir, 'snapshots', incarnation);
-const snapshotPath = (dataDir: string, incarnation: string, id: string) => join(snapshotDir(dataDir, incarnation), `${id}.sqlite.gz`);
+export const snapshotPath = (dataDir: string, incarnation: string, id: string) => join(snapshotDir(dataDir, incarnation), `${id}.sqlite.gz`);
 
 // Thrown inside a store call for a file the rules cannot be answered from; the registry turns it into { unavailable }.
 export class StoreUnavailable extends Error {
@@ -95,6 +95,23 @@ function openAccountFile(path: string): DatabaseSync {
 function corruptOr(error: unknown): unknown {
   const code = (error as { errcode?: number }).errcode;
   return code !== undefined && CORRUPT_CODES.has(code) ? new StoreUnavailable('corrupt') : error;
+}
+
+// The snapshot a rewind to `at` lands on: the newest taken at or before it, within retention, and taken after the
+// checkpoint of every rewind finished by then, since one taken before such a rewind holds the state it replaced.
+// A catalogued snapshot whose file is gone is a storage failure, not "too early".
+export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number, now: number): Promise<{ id: string; takenAt: number } | null> {
+  const row = await service
+    .prepare(
+      `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2 AND taken_at > ?3
+         AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND checkpoint_at <= ?2), -1)
+       ORDER BY taken_at DESC LIMIT 1`,
+    )
+    .bind(incarnation, at, now - RETENTION_MS)
+    .first<{ id: string; takenAt: number }>();
+  if (row === null) return null;
+  if (!existsSync(snapshotPath(dataDir, incarnation, row.id))) throw new StoreUnavailable('snapshot-missing');
+  return row;
 }
 
 // Exported for tests that wrap a StoreDb; production code reaches a file only through the registry.
@@ -193,16 +210,7 @@ export class AccountDb implements StoreDb {
       }
       return id;
     },
-    // A catalogued snapshot whose file is gone is a storage failure, not "too early".
-    forTime: async (at: number): Promise<string | null> => {
-      const row = await this.service
-        .prepare('SELECT id FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2 AND taken_at > ?3 ORDER BY taken_at DESC LIMIT 1')
-        .bind(this.incarnation, at, this.clock() - RETENTION_MS)
-        .first<string>('id');
-      if (row === null) return null;
-      if (!existsSync(snapshotPath(this.dataDir, this.incarnation, row))) throw new StoreUnavailable('snapshot-missing');
-      return row;
-    },
+    forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at, this.clock()))?.id ?? null,
   };
 
   close() {
@@ -223,7 +231,10 @@ export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.
   getByName(incarnation: string): StoreStub;
   prepare(incarnation: string, timeline: string): Promise<void>;
+  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles.
   snapshot(incarnation: string, kind: 'baseline'): Promise<string>;
+  // What a rewind of the account to `at` would land on now; throws StoreUnavailable for a catalogued file that is gone.
+  snapshotAt(incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null>;
   evictIdle(now?: number): void;
   close(): void;
   // A separate read of the account's file, for tests and the operator's tools: never through a session.
@@ -313,11 +324,19 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
   return {
     getByName,
     prepare: async (incarnation, timeline) => prepareAccountFile(dataDir, incarnation, timeline),
-    snapshot: (incarnation, kind) =>
-      enqueue(entry(incarnation), async () => {
-        const { db } = await session(incarnation, entry(incarnation));
-        return db.snapshots.take(kind, null);
-      }),
+    snapshot: (incarnation, kind) => {
+      const held = entry(incarnation);
+      return enqueue(held, async () => {
+        const opened = !held.session;
+        const { db } = await session(incarnation, held);
+        try {
+          return await db.snapshots.take(kind, null);
+        } finally {
+          if (opened) closeSession(held);
+        }
+      });
+    },
+    snapshotAt: (incarnation, at) => snapshotFor(dataDir, service, incarnation, at, clock()),
     evictIdle: (now = clock()) => {
       for (const held of entries.values()) if (held.session && held.pending === 0 && now - held.lastUsed >= IDLE_MS) closeSession(held);
     },

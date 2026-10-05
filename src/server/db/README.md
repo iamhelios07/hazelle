@@ -25,5 +25,12 @@ Installing a snapshot over a live account file (an armed restore, `account-db.ts
 `head.installed_from`, `wal_checkpoint(TRUNCATE)`, close, verify, fsync, delete the live file's `-wal` and `-shm`, rename over the live
 file, fsync the directory. The WAL and shm go first so an orphan WAL is never replayed onto the installed file.
 
+Snapshots (`src/server/backup/snapshots.ts`, run by the daily job at `HAZELLE_SNAPSHOT_HOUR` UTC): every active account whose newest
+baseline is from before today (UTC), absent, or older than its last finished rewind gets a baseline; a checkpoint never counts as one.
+A snapshot goes at 30 days unless pinned. An operation pins its checkpoint and target until it ends, and a finished rewind keeps both
+for 30 days more, while its undo lives; a live account keeps its newest baseline whatever its age. Pins are read from `restores`, so a
+deleted account (whose restores cascade away) loses every snapshot at 30 days from its taking. A rewind lands on the newest snapshot
+at or before the time asked, never on one taken before the checkpoint of a rewind finished by then.
+
 Service-table changes ship as a new `migrations/NNNN_*.sql`, applied by `migrate.ts` in one transaction each with a checksum ledger row.
 The account file carries `head.schema_version`; a newer one than this build knows is refused, never downgraded.

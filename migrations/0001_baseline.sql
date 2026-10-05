@@ -138,7 +138,8 @@ INSERT INTO price_fetch (id) VALUES (1);
 
 -- The catalog of an account's snapshot files, snapshots/<incarnation>/<id>.sqlite.gz: a row exists only once its file
 -- is durable (src/server/db/account-db.ts). kind: baseline (the daily copy) or checkpoint (an operation's exact undo,
--- operation set). No cascade: a deleted account's snapshots age out on their own (design.md, retention).
+-- operation set). No cascade: a deleted account's snapshots age out on their own, and what pins one is read from
+-- restores, never stored here (src/server/backup/snapshots.ts).
 CREATE TABLE snapshots (
   id TEXT PRIMARY KEY,
   incarnation TEXT NOT NULL,
@@ -149,3 +150,19 @@ CREATE TABLE snapshots (
   sha256 TEXT NOT NULL
 );
 CREATE INDEX snapshots_incarnation ON snapshots (incarnation, taken_at);
+
+-- One run of the daily job or one backup generation (src/server/backup/). outcome: running, ok or failed. error: a
+-- short code. generation: the backup/<id> directory a generation run wrote. gate_ms: how long the generation held the
+-- gate that keeps lifecycle operations out. detail: JSON counts.
+CREATE TABLE backup_runs (
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  outcome TEXT NOT NULL,
+  error TEXT,
+  generation TEXT,
+  gate_ms INTEGER,
+  detail TEXT
+);
+CREATE INDEX backup_runs_kind ON backup_runs (kind, started_at);

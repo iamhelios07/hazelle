@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExecutionContext } from 'hono';
 import { serviceReads } from './account-store';
+import { backups } from './backup/backups';
 import { accountRegistry } from './db/account-db';
 import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
@@ -30,6 +31,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     streams: streamRegistry(outbound),
     outbound,
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
+    backups: backups(dir, 3),
   };
 
   const pending: Promise<unknown>[] = [];
@@ -78,7 +80,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       clock.now = () => Date.now();
       env.stores.close();
       await env.db.batch([
-        ...['file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
+        ...['file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'backup_runs'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
         env.db.prepare('UPDATE installation SET operator_account = NULL'),
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
@@ -101,6 +103,17 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       await env.stores.getByName(incarnation!).restart(incarnation!).catch(() => {});
     },
     batch: async (writes: unknown[], cookie: string) => send('POST', 'objects/batch', { timeline: await timeline(cookie), writes }, cookie),
+    // The daily job at a time, with the stores' clock set to it so the baselines it takes carry that time.
+    daily: async (now: number) => {
+      clock.now = () => now;
+      return env.backups.daily(env, now);
+    },
+    // A process that died and started again over the same directory: every open account file closed, a registry that
+    // remembers nothing.
+    restartProcess: () => {
+      env.stores.close();
+      env.stores = accountRegistry(dir, db, serviceReads(db), () => clock.now());
+    },
   };
 }
 

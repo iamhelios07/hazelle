@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { loadSession, markNoticesSeen, readNotices, sendReport } from './account';
-import { beginRestore, continueRestore, readAccounts, readAdminAccount, readServiceUsage, readLog, readReports, readRestores, readService, removeAccount, resolveReport, sendNotice, setService, suspend, type Restore } from './admin';
+import { beginRestore, continueRestore, readAccounts, readAdminAccount, readServiceUsage, readLog, readReports, readRestores, readService, readSnapshotTime, removeAccount, resolveReport, sendNotice, setService, suspend, type Restore } from './admin';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -55,6 +55,8 @@ it('restores an account to a time on its report: its open device drops to the ob
   const report = reports.ok ? reports.data.rows[0]!.id : 0;
   const at = now - 2_700_000;
 
+  expect(await readSnapshotTime(accountId, at)).toEqual({ ok: true, data: now - 3_600_000 });
+  expect(await readSnapshotTime(accountId, now - 4_000_000)).toEqual({ ok: true, data: null });
   const rewound = vi.fn();
   store.subscribeRewound(rewound);
   const run = await beginRestore(accountId, { report, at });
@@ -64,7 +66,7 @@ it('restores an account to a time on its report: its open device drops to the ob
   expect(store.list('connection')).toEqual([kept.ok && kept.data]);
 
   expect(await readRestores(accountId)).toEqual({ ok: true, data: [{
-    id: run.ok && run.data.id, reportId: report, at, undoes: null, phase: 'done', verified: true, error: null,
+    id: run.ok && run.data.id, reportId: report, at, undoes: null, targetAt: now - 3_600_000, phase: 'done', verified: true, error: null,
     createdAt: expect.any(Number), updatedAt: expect.any(Number), canUndo: true, undoExpiresAt: expect.any(Number), actions: [],
   }] });
   expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, state: 'active', bytes: expect.any(Number) }], next: null } });
@@ -116,7 +118,7 @@ it('finishes a leaving account by removing it again', async () => {
 
 it('asks a restore and an undo on a report, reads the restores with their actions, and continues one', async () => {
   const restore: Restore = {
-    id: 7, reportId: 3, at: 1_700_000_000_000, undoes: null, phase: 'done', verified: true, error: null,
+    id: 7, reportId: 3, at: 1_700_000_000_000, undoes: null, targetAt: 1_699_999_000_000, phase: 'done', verified: true, error: null,
     createdAt: 1_700_000_100_000, updatedAt: 1_700_000_200_000, canUndo: true, undoExpiresAt: 1_702_000_000_000, actions: [],
   };
   const stuck: Restore = { ...restore, id: 8, at: null, undoes: 7, phase: 'armed', error: 'rewind-pending', canUndo: false, undoExpiresAt: null, actions: ['resume'] };

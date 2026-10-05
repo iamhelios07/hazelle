@@ -13,9 +13,9 @@ const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 // A restore asks for a time at least this far back, so the snapshot chosen for it lies before the restore's own mark.
 const NEWEST_MS = 10 * MINUTE_MS;
-// Snapshots are kept for 30 days (db/account-db.ts). A day less leaves an operation time to reach its arming.
+// Snapshots are kept for 30 days (db/account-db.ts). A day less leaves an operation time to choose its target, which is
+// pinned from then on (backup/snapshots.ts), so nothing expires between choosing it and installing it.
 const OLDEST_MS = 29 * DAY_MS;
-const SNAPSHOT_LIFE_MS = 30 * DAY_MS;
 // Restarts that did not apply the armed rewind before the operation stops and waits for the operator.
 const ARM_TRIES = 3;
 // Steps one run takes before it stops: every phase once, the re-arms, and the compare-and-sets a parallel run won.
@@ -93,7 +93,6 @@ type Operation = {
   verified: number;
   error: string | null;
   undone: string | null;
-  target_at: number;
 };
 
 const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
@@ -214,9 +213,7 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       return undefined;
     }
     case 'targeted':
-      // Past armed there is no way back, so a snapshot that may no longer exist fails the operation here.
-      if (operation.target_at < Date.now() - SNAPSHOT_LIFE_MS) await release(env, operation, 'failed', ['targeted'], 'target-expired');
-      else await advance(db, id, 'targeted', 'armed');
+      await advance(db, id, 'targeted', 'armed');
       return undefined;
     case 'armed': {
       const answer = await store(env, incarnation).marked(incarnation, id);
@@ -302,8 +299,7 @@ function terminalLog(db: Db, action: string, operation: Operation, error: string
 function readOperation(db: Db, id: number) {
   return db
     .prepare(
-      `SELECT r.id, r.incarnation, r.at, r.undoes, r.timeline, r.target, r.phase, r.verified, r.error, u.checkpoint AS undone,
-         COALESCE(r.at, u.checkpoint_at) AS target_at
+      `SELECT r.id, r.incarnation, r.at, r.undoes, r.timeline, r.target, r.phase, r.verified, r.error, u.checkpoint AS undone
        FROM restores r LEFT JOIN restores u ON u.id = r.undoes WHERE r.id = ?`,
     )
     .bind(id)

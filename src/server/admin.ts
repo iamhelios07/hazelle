@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { Phase } from './account-store';
+import { StoreUnavailable } from './db/account-db';
 import { fileBlocks } from './files';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fail, ID, readObject, refused, type AppEnv, type Services, type State } from './http';
@@ -307,11 +308,28 @@ admin.post('/accounts/:id/restores', async (c) => {
 
 const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 400, 'bad-time': 400, 'cannot-undo': 400 } as const;
 
-// Newest first.
+// What a restore to the time would land on, asked before the operator confirms it. takenAt: when that snapshot was
+// taken; null for none, which the restore would answer too-early.
+admin.get('/accounts/:id/snapshot', async (c) => {
+  const id = c.req.param('id');
+  const at = Number(c.req.query('at'));
+  if (!ID.test(id) || !count(at)) return fail(c, 400, 'bad-input');
+  const incarnation = await c.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
+  if (incarnation === null) return fail(c, 404, 'not-found');
+  try {
+    const snapshot = await c.env.stores.snapshotAt(incarnation, at);
+    return c.json({ takenAt: snapshot?.takenAt ?? null });
+  } catch (error) {
+    if (error instanceof StoreUnavailable) return refused(c, { unavailable: true });
+    throw error;
+  }
+});
+
+// Newest first. targetAt: when the snapshot it rewinds to was taken, null until it is chosen.
 admin.get('/accounts/:id/restores', async (c) => {
   const { results } = await c.env.db.prepare(
     `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
-       r.checkpoint_at, ${undoable('r.id', '?2')} AS canUndo
+       (SELECT taken_at FROM snapshots WHERE id = r.target) AS targetAt, r.checkpoint_at, ${undoable('r.id', '?2')} AS canUndo
      FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
   )
     .bind(c.req.param('id'), Date.now())
