@@ -1,0 +1,49 @@
+# Self-hosted Hazelle: the app on http://localhost:8080 and, with `--profile backup`, the off-site copier.
+# docker-compose.hosted.yml layers the hosted machine on top of this file.
+name: hazelle
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 50m
+    max-file: "5"
+
+services:
+  app:
+    image: ${HAZELLE_IMAGE:-ghcr.io/jiniill/hazelle:latest}
+    restart: unless-stopped
+    # Above the app's 60 s drain, so a stop never cuts it short.
+    stop_grace_period: 90s
+    ports:
+      - 127.0.0.1:8080:8080
+    volumes:
+      - data:/data
+    environment:
+      # Ollama, LM Studio and koboldcpp on this machine. Only these host:port pairs may be dialled over plain http or at
+      # a private address; every other such destination stays refused.
+      HAZELLE_LOCAL_PROVIDERS: host.docker.internal:11434,host.docker.internal:1234,host.docker.internal:5001
+      HAZELLE_ALERT_WEBHOOK: ${HAZELLE_ALERT_WEBHOOK:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    logging: *logging
+
+  backup:
+    profiles: [backup]
+    image: rclone/rclone:1.75
+    restart: unless-stopped
+    # The app's user (node in node:24-alpine), so the markers it writes belong to the owner of the generations.
+    user: "1000:1000"
+    entrypoint: ["/bin/sh", "/hazelle/rclone-backup.sh"]
+    environment:
+      HAZELLE_BACKUP_REMOTE: ${HAZELLE_BACKUP_REMOTE:-}
+      HOME: /tmp
+    volumes:
+      # Writable, not read-only: the copier writes backup/<id>/copied. A subpath mount of backup/ alone fails until
+      # the app's first generation creates that directory.
+      - data:/data
+      - ./rclone:/config/rclone
+      - ./deploy/rclone-backup.sh:/hazelle/rclone-backup.sh:ro
+    logging: *logging
+
+volumes:
+  data:

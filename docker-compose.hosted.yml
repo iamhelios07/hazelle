@@ -1,0 +1,39 @@
+# The hosted machine (infra/): docker-compose.yml plus Caddy in front, /data on the instance disk, no local models.
+#   docker compose --env-file /etc/hazelle/env -f docker-compose.yml -f docker-compose.hosted.yml --profile backup up -d
+# /etc/hazelle/env holds HAZELLE_IMAGE (written by scripts/deploy.sh), HAZELLE_BACKUP_REMOTE and HAZELLE_ALERT_WEBHOOK.
+services:
+  app:
+    ports: !reset []
+    volumes:
+      - /data:/data
+    environment:
+      # No local model servers here: every plain-http or private destination is refused.
+      HAZELLE_LOCAL_PROVIDERS: !reset null
+    extra_hosts: !reset []
+
+  backup:
+    volumes:
+      - /data:/data
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The Cloudflare Origin CA pair the owner places on the machine; nothing here issues or fetches a certificate.
+      # A missing file stops the start instead of becoming an empty directory.
+      - { type: bind, source: /etc/hazelle/origin.pem, target: /etc/caddy/origin.pem, read_only: true, bind: { create_host_path: false } }
+      - { type: bind, source: /etc/hazelle/origin.key, target: /etc/caddy/origin.key, read_only: true, bind: { create_host_path: false } }
+      - caddy:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "5"
+
+volumes:
+  caddy:
