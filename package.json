@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
     "server": "HAZELLE_DATA=${HAZELLE_DATA:-.data} tsx watch src/server/node.ts",
     "css-types": "tcm -s -a -p \"src/app/**/*.module.css\"",
     "build": "npm run -s css-types && tsc -b && vite build && npm run -s build:server && scripts/source.sh",
