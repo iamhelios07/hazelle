@@ -11,6 +11,7 @@ import { sha256Hex, type Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
 import { tokenBucket } from '../limits';
 import { streamRegistry } from '../stream-registry';
+import { streamStore } from '../db/streams-db';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
 import app from '../worker';
 import { backups } from './backups';
@@ -127,7 +128,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     db,
     files: diskBucket(dir),
     stores: accountRegistry(dir, db, serviceReads(db), Date.now),
-    streams: streamRegistry(outbound),
+    streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
     backups: backups(dir, 3, null),

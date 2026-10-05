@@ -15,6 +15,7 @@ import type { Services } from '../http';
 import { cancelRestore, leaveAccount, runRestore } from '../lifecycle';
 import { tokenBucket } from '../limits';
 import { streamRegistry } from '../stream-registry';
+import { streamStore } from '../db/streams-db';
 import { backups } from './backups';
 import { POOL, readManifest, type Manifest } from './generation';
 
@@ -99,7 +100,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     db,
     files: diskBucket(dataDir),
     stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
-    streams: streamRegistry(outbound),
+    streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
     limits: { calls: tokenBucket(1), botCalls: tokenBucket(1) },
     backups: backups(dataDir, 0, null),

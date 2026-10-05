@@ -47,7 +47,8 @@ describe('the daily job', () => {
     expect(kept).toEqual([2, 3, 4, ...Array.from({ length: 25 }, (_, index) => index + 7)]);
     expect(await t.env.db.prepare("SELECT COUNT(*) AS n FROM backup_runs WHERE kind = 'daily' AND outcome = 'ok'").first('n')).toBe(30);
     expect(await t.stores.snapshotAt(incarnation, first + 6 * DAY_MS)).toMatchObject({ takenAt: first + 4 * DAY_MS });
-  });
+    // 30 real snapshots and generations: past 5 s when the whole suite runs beside it.
+  }, 30_000);
 
   it('takes a baseline beside a checkpoint younger than a day, and records a run that failed an account, then tries again', async () => {
     const live = await signedUp('jin');
