@@ -63,7 +63,7 @@ afterEach(() => {
 
 const put = (id: string, input: Partial<Write> = {}): Write => ({ id, kind: 'chat', parent: null, body: 'x', baseRev: null, ...input });
 const write = (input: Write | Write[], cap: number | null = null, timeline = 't1') => store().batch(INC, timeline, Array.isArray(input) ? input : [input], cap);
-const query = (input: Partial<FeedQuery> = {}): FeedQuery => ({ timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, ...input });
+const query = (input: Partial<FeedQuery> = {}): FeedQuery => ({ timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, count: false, ...input });
 const feed = (input: Partial<FeedQuery> = {}) => store().feed(INC, query(input));
 const revs = async (input: Partial<FeedQuery> = {}) => ((await feed(input)) as { changes: { rev: number }[] }).changes.map(({ rev }) => rev);
 
@@ -96,6 +96,9 @@ describe('feed', () => {
     expect(await feed({ timeline: null, bootstrap: true, excluded: scoped })).toMatchObject({ timeline: 't1', until: 5, more: false, changes: [
       { id: A, kind: 'chat', body: 'chat-a' }, { id: D, kind: 'chat', body: 'chat-b' },
     ] });
+    expect(await feed({ timeline: null, bootstrap: true, excluded: scoped, count: true })).toMatchObject({ total: 2 });
+    expect(await feed({ timeline: null, bootstrap: true, excluded: scoped })).not.toHaveProperty('total');
+    expect(await feed({ since: 1, known: 1, count: true })).not.toHaveProperty('total');
     expect(await revs({ bootstrap: true, until: 3, excluded: scoped })).toEqual([1]);
     expect(await feed({ bootstrap: true, until: 6 })).toEqual({ reset: true });
 

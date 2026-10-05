@@ -5,7 +5,7 @@ import { emptyMemory } from '../model/memory';
 import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
 import { EvaluationFailed } from './evaluation';
-import { ObjectStore, ScopeUnavailable, type ChatLease, type Write } from './store';
+import { ObjectStore, ScopeUnavailable, type ChatLease, type PullProgress, type Write } from './store';
 import { summaryId, summaryStale } from './summary';
 import { BATCH_LIMITS, testServer } from './testing';
 
@@ -17,6 +17,22 @@ const message = (parent: string, at: number): Write => ({ type: 'create', kind: 
 const root = (id: string): Write => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } });
 
 describe('object store', () => {
+  it('tells a bootstrap how much it holds with its first page, and an incremental pull nothing', async () => {
+    const { store: laptop, open } = await server.account();
+    await laptop.create('connection', connection('a'));
+    await laptop.create('connection', connection('b'));
+    const phone = await open();
+    const seen: PullProgress[] = [];
+    await phone.pull({ progress: (progress) => seen.push(progress) });
+    expect(seen[0]).toMatchObject({ pages: 1, total: seen.at(-1)!.objects });
+    expect(seen.at(-1)!.objects).toBeGreaterThanOrEqual(2);
+    await laptop.create('connection', connection('c'));
+    const later: PullProgress[] = [];
+    await phone.pull({ progress: (progress) => later.push(progress) });
+    expect(later.at(-1)).toMatchObject({ objects: 1 });
+    expect(later.at(-1)).not.toHaveProperty('total');
+  });
+
   it('shares writes between devices and reapplies a change after a conflict', async () => {
     const { store: laptop, open } = await server.account();
     const phone = await open();

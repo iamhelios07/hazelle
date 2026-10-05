@@ -7,9 +7,10 @@ export type Unavailable = { unavailable: true };
 export type Refused = { refused: 'restoring' | 'leaving' | 'gone' } | Unavailable;
 export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null };
 export type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
-export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null };
+// count: the first page of a bootstrap asks how many changes the whole bootstrap holds, for a bar.
+export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null; count: boolean };
 export type Phase = 'begun' | 'fenced' | 'checkpointed' | 'targeted' | 'armed' | 'rewound' | 'done' | 'failed' | 'cancelled';
-export type FeedPage = { timeline: string; bytes: number; until: number | null; changes: Change[]; cursor: number; more: boolean };
+export type FeedPage = { timeline: string; bytes: number; until: number | null; changes: Change[]; cursor: number; more: boolean; total?: number };
 type WrongPhase = { wrongPhase: true };
 
 export type SqlValue = string | number | null;
@@ -118,7 +119,14 @@ export class StoreRules {
         if (page.length === PAGE_ROWS || !row.fits) break;
         page.push(row);
       }
+      const total = query.count && until !== null
+        ? this.db.exec<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM objects WHERE rev > ? AND rev <= ? AND kind NOT IN (SELECT value FROM json_each(?))${query.parent === null ? '' : ' AND parent_id = ?'}`,
+          query.since, until, excluded, ...(query.parent === null ? [] : [query.parent]),
+        )[0]!.n
+        : undefined;
       return {
+        ...(total === undefined ? {} : { total }),
         timeline: head.timeline,
         bytes: head.bytes,
         until,

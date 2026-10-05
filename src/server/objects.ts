@@ -32,7 +32,7 @@ objects.get('/', async (c) => {
   if (excluded.length > 32 || excluded.some((kind) => !KIND.test(kind)) || (parent !== null && !ID.test(parent)) || (timeline !== null && !TIMELINE.test(timeline))) {
     return fail(c, 400, 'bad-input');
   }
-  const query: FeedQuery = { timeline, since, known, until, bootstrap, metadata: c.req.query('metadata') === '1', excluded, parent };
+  const query: FeedQuery = { timeline, since, known, until, bootstrap, metadata: c.req.query('metadata') === '1', excluded, parent, count: c.req.query('count') === '1' };
   const account = c.get('account');
   const asked = Date.now();
   const page = await store(c.env, account.incarnation).feed(account.incarnation, query);
@@ -47,6 +47,7 @@ objects.get('/', async (c) => {
     changes: page.changes,
     cursor: page.cursor,
     more: page.more,
+    ...(page.total === undefined ? {} : { total: page.total }),
   });
 });
 

@@ -41,7 +41,7 @@ const store = () => stores.getByName(INC);
 const baseline = async () => ((await stores.snapshot(INC, 'baseline')) as { taken: string }).taken;
 const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
 const bodies = async () => {
-  const page = (await store().feed(INC, { timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null })) as { changes: { id: string; body: string | null }[] };
+  const page = (await store().feed(INC, { timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, count: false })) as { changes: { id: string; body: string | null }[] };
   return page.changes.map(({ body }) => body);
 };
 
@@ -124,7 +124,7 @@ describe('the account registry', () => {
     raw.prepare("UPDATE accounts SET state = 'active', operation = NULL, timeline = 't2' WHERE incarnation = ?").run(INC);
     raw.prepare("UPDATE restores SET phase = 'done' WHERE id = 7").run();
     await store().restart(INC).catch(() => {});
-    const page = (await store().feed(INC, { timeline: 't2', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null })) as { changes: { body: string | null }[] };
+    const page = (await store().feed(INC, { timeline: 't2', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, count: false })) as { changes: { body: string | null }[] };
     expect(page.changes.map(({ body }) => body)).toEqual(['old']);
     expect(stores.inspect(INC).exec('SELECT installed_from, timeline FROM head')).toEqual([{ installed_from: target, timeline: 't2' }]);
     expect(await bodies().catch(() => 'stale')).toBe('stale');

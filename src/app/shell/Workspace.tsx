@@ -91,7 +91,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
   if (!session) return (
     <Screen top={<Brand />} align="center">
-      <Progress steps={[{ label: '불러오는 중', done: progress.objects }]} />
+      <Progress steps={[{ label: '불러오는 중', done: progress.objects, total: progress.total }]} />
       {progress.waiting && <Text variant="note" align="center">{RECONNECTING.message} · {RECONNECTING.detail}</Text>}
     </Screen>
   );

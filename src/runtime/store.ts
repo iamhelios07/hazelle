@@ -15,14 +15,15 @@ type Api = typeof realApi;
 export type ObjectRow = { id: string; kind: string; parent: string | null; rev: number };
 export type StoreChange = { kind: string; id: string; parent: string | null };
 export type StoreRead = { kind: Kind; id: string } | { kind: Kind; list: true } | { kind: Kind; parent: string };
-export type PullProgress = { objects: number; pages: number; waiting: boolean };
+// total: what the whole bootstrap holds, once its first page said; an incremental pull has none.
+export type PullProgress = { objects: number; pages: number; waiting: boolean; total?: number };
 type PullOptions = { signal?: AbortSignal; progress?: (progress: PullProgress) => void };
 
 export const readsChanged = (reads: StoreRead[], changes: readonly StoreChange[]) =>
   reads.some((read) => changes.some((change) => read.kind === change.kind && ('list' in read || ('id' in read ? read.id === change.id : read.parent === change.parent))));
 
 type Limits = { items: number; bytes: number; body: number };
-type Page = { timeline: string; until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits };
+type Page = { timeline: string; until?: number; changes: SealedChange[]; cursor: number; more: boolean; limits: Limits; total?: number };
 export type Pin = { timeline: string; epoch: number };
 const changed = (): ApiFailure => ({ ok: false, error: 'timeline-changed' });
 type ObjectValue = Omit<Stored<Kind>, 'rev' | 'pending'>;
@@ -1183,12 +1184,13 @@ export class ObjectStore {
     let more = true;
     let objects = 0;
     let pages = 0;
+    let total: number | undefined;
     // The page after the one being applied, requested as soon as that one answered: the server's time and the codec's
     // overlap. It carries the epoch and timeline it was sent under, and is dropped when either moved.
     let next: { epoch: number; sent: string | null; answer: Promise<ApiResult<Page>> } | null = null;
     const page = (since: number, bootstrapped: boolean, known: number) => {
       const sent = this.timeline;
-      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
+      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${pages === 0 ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
       return { epoch: this.epoch, sent, answer };
     };
     while (more) {
@@ -1210,7 +1212,8 @@ export class ObjectStore {
       // refuses a request whose timeline is not its own, so no other answer can name another.
       if (sent === null) this.adopt(result.data.timeline);
       objects += result.data.changes.length;
-      progress?.({ objects, pages: ++pages, waiting: this.waiting() });
+      total ??= result.data.total;
+      progress?.({ objects, pages: ++pages, waiting: this.waiting(), ...(total !== undefined && { total }) });
       this.limits = result.data.limits;
       this.bootstrap ??= result.data.until ?? null;
       // The cursor and bootstrap flag move after the page is applied (pullParent reads them); the next request is
