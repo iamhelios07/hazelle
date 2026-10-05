@@ -11,8 +11,9 @@ const ASKED = 1000;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
 // A file is sealed by its content, so one the server already holds, from this account or any other, is never sent
-// again; an import cut short and tried again sends only what did not arrive. Asking and uploading wait out a dropped
-// connection the way the store's calls do (store.reaching).
+// again; an import cut short and tried again sends only what did not arrive. Asking, uploading and reading wait out a
+// dropped connection the way the store's calls do (store.reaching): a backup reads thousands of pictures in a row, and
+// one dropped read must not end it.
 export class Files {
   constructor(
     private readonly request: Api,
@@ -65,7 +66,7 @@ export class Files {
 
   // A body that does not open answers 'unreadable', never empty bytes.
   async read(ref: FileRef): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
-    const result = await this.request<Uint8Array<ArrayBuffer>>('GET', `files/${ref.id}`);
+    const result = await this.store.reaching(() => this.request<Uint8Array<ArrayBuffer>>('GET', `files/${ref.id}`));
     if (!result.ok) return result;
     const bytes = await openFile(ref, result.data);
     return bytes ? { ok: true, data: bytes } : { ok: false, error: 'unreadable' };
