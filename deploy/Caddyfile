@@ -1,6 +1,8 @@
 # Cloudflare's proxy in Full (strict) mode is the only client: it terminates the public TLS and checks this origin
 # against the Origin CA certificate mounted below. With an explicit certificate Caddy runs no ACME for the name.
-hazelle.app {
+# new.hazelle.app is the same machine under a second name, for trying it before the apex moves over (the Origin CA
+# certificate covers *.hazelle.app).
+hazelle.app, new.hazelle.app {
 	tls /etc/caddy/origin.pem /etc/caddy/origin.key
 	reverse_proxy app:8080 {
 		# Replies stream as they are written; buffering would hold them until the end.
