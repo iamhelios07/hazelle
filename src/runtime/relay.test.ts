@@ -61,7 +61,8 @@ it('states the account the page holds on the relay and on every stream request',
   ]);
 });
 
-it('skips the pings of a call that stays silent for long, and reads the whole reply', async () => {
+// Frames as server/stream-box seals them, for a call this page holds the key to.
+async function sealedCall() {
   const id = crypto.randomUUID();
   const mine = await streamKey();
   const P256 = { name: 'ECDH', namedCurve: 'P-256' } as const;
@@ -83,20 +84,39 @@ it('skips the pings of a call that stays silent for long, and reads the whole re
     new DataView(iv.buffer).setUint32(8, seq);
     return frame(type, seq, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new Uint8Array([type]) }, sealing, encode(text))));
   };
-  const pings = Array.from({ length: 40 }, () => frame(4, 0, new Uint8Array()));
-  const frames = [
-    frame(0, 0, new Uint8Array(await crypto.subtle.exportKey('raw', theirs.publicKey))),
-    ...pings,
-    await sealed(1, 1, JSON.stringify({ status: 200, statusText: 'OK', headers: [['x-relay', 'upstream']] })),
-    ...pings,
-    await sealed(2, 2, 'Hello, '),
-    ...pings,
-    await sealed(2, 3, 'traveler.'),
-    await sealed(3, 4, JSON.stringify({ reason: 'done', ms: 5 })),
-  ];
-  vi.stubGlobal('fetch', async () => new Response(new Blob(frames).stream(), { headers: { 'x-stream': 'frames' } }));
-  const call = { id, key: mine.private, public: mine.public };
+  return {
+    call: { id, key: mine.private, public: mine.public },
+    hello: frame(0, 0, new Uint8Array(await crypto.subtle.exportKey('raw', theirs.publicKey))),
+    head: await sealed(1, 1, JSON.stringify({ status: 200, statusText: 'OK', headers: [['x-relay', 'upstream']] })),
+    data: (seq: number, text: string) => sealed(2, seq, text),
+    end: (seq: number) => sealed(3, seq, JSON.stringify({ reason: 'done', ms: 5 })),
+    pings: Array.from({ length: 40 }, () => frame(4, 0, new Uint8Array())),
+  };
+}
+
+// broken: the connection breaks after the last frame, as a body read throws then.
+function framed(frames: Uint8Array[], broken = false) {
+  let at = 0;
+  const pull = (body: ReadableStreamDefaultController<Uint8Array>) => (at < frames.length ? body.enqueue(frames[at++]!) : broken ? body.error(new TypeError('network error')) : body.close());
+  return new Response(new ReadableStream({ pull }, { highWaterMark: 0 }), { headers: { 'x-stream': 'frames' } });
+}
+
+it('skips the pings of a call that stays silent for long, and reads the whole reply', async () => {
+  const { call, hello, head, data, end, pings } = await sealedCall();
+  const frames = [hello, ...pings, head, ...pings, await data(2, 'Hello, '), ...pings, await data(3, 'traveler.'), await end(4)];
+  vi.stubGlobal('fetch', async () => framed(frames));
   const response = await stream(call, request, new AbortController().signal);
   expect(response instanceof Response && (await response.text())).toBe('Hello, traveler.');
   expect(call).toMatchObject({ took: 5 });
+});
+
+it('reads again from the frame after the last one, not after a ping, when the connection breaks', async () => {
+  const { call, hello, head, data, end, pings } = await sealedCall();
+  const fetch = vi.fn<(url: string) => Promise<Response>>();
+  fetch.mockResolvedValueOnce(framed([hello, head, await data(2, 'Hello, '), ...pings], true));
+  fetch.mockResolvedValueOnce(framed([hello, ...pings, await data(3, 'traveler.'), await end(4)]));
+  vi.stubGlobal('fetch', fetch);
+  const response = await stream(call, request, new AbortController().signal);
+  expect(response instanceof Response && (await response.text())).toBe('Hello, traveler.');
+  expect(fetch.mock.calls[1]![0]).toBe(`/api/streams/${call.id}?from=3`);
 });
