@@ -1,11 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip, createGzip } from 'node:zlib';
 import { StoreRules, type SqlValue, type StoreDb, type StoreReads, type Unavailable } from '../account-store';
-import { digest, fsyncPath } from './durable';
+import { digest, fsyncPath, makeDirs } from './durable';
 import { openDatabase, type Db } from './service-db';
 
 // One account's database file, accounts/<incarnation>.sqlite, behind StoreRules (account-store.ts), and the registry
@@ -46,7 +46,7 @@ const random = () => randomBytes(6).toString('hex');
 // between leaves a file with no row, which the hourly reconciliation removes after an hour.
 export function prepareAccountFile(dataDir: string, incarnation: string, timeline: string): void {
   const path = accountPath(dataDir, incarnation);
-  mkdirSync(join(dataDir, 'accounts'), { recursive: true });
+  makeDirs(join(dataDir, 'accounts'));
   if (existsSync(path)) throw new Error(`account file exists: ${incarnation}`);
   const db = openDatabase(path);
   try {
@@ -185,7 +185,7 @@ export class AccountDb implements StoreDb {
       const takenAt = this.clock();
       const id = `${takenAt}-${random()}`;
       const dir = snapshotDir(this.dataDir, this.incarnation);
-      mkdirSync(dir, { recursive: true });
+      makeDirs(dir);
       const plain = join(dir, `.tmp-${id}.sqlite`);
       const gz = join(dir, `.tmp-${id}.sqlite.gz`);
       // VACUUM INTO takes a literal path and runs outside any transaction; the registry's queue keeps writers out.

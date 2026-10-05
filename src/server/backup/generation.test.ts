@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Statement } from '../db/service-db';
 import type { Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
@@ -11,12 +11,29 @@ import { proof, sessionCookie, signupBody, testApp } from '../testing';
 import { expireGenerations, generationsDir, listGenerations, MANIFEST, POOL, readManifest, type Manifest } from './generation';
 import { DAY_MS } from './snapshots';
 
+// crossDevice: every link answers EXDEV, as when files/ and backup/ are separate filesystems. cutPoolCopy: a copy into
+// the pool writes part of the picture and throws, as a capture cut off mid-copy leaves it.
+const fault = vi.hoisted(() => ({ crossDevice: false, cutPoolCopy: false }));
+vi.mock('node:fs/promises', async (original) => {
+  const real = await original<typeof import('node:fs/promises')>();
+  return {
+    ...real,
+    link: (...args: Parameters<typeof real.link>) => (fault.crossDevice ? Promise.reject(Object.assign(new Error('cross-device link'), { code: 'EXDEV' })) : real.link(...args)),
+    copyFile: async (...args: Parameters<typeof real.copyFile>) => {
+      if (!fault.cutPoolCopy || !String(args[1]).includes('/backup/files/')) return real.copyFile(...args);
+      await real.writeFile(String(args[1]), 'part');
+      throw new Error('cut off mid-copy');
+    },
+  };
+});
+
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
   t = await testApp();
 });
 afterAll(() => t.dispose());
 beforeEach(async () => {
+  Object.assign(fault, { crossDevice: false, cutPoolCopy: false });
   await t.reset();
   await t.env.db.prepare('UPDATE service SET signup_cap = 100').run();
 });
@@ -138,6 +155,19 @@ describe('a backup generation', () => {
     expect(await expireGenerations(t.dir, first + DAY_MS + DAY_MS / 2)).toEqual({ removed: 0, pictures: 0 });
     expect(await expireGenerations(t.dir, first + 2 * DAY_MS)).toEqual({ removed: 1, pictures: 0 });
     expect((await listGenerations(t.dir)).map(({ id }) => id)).toEqual([whole.id]);
+  });
+
+  it('puts a picture copied across filesystems into the pool only whole: a copy cut off leaves nothing under its name, and the next generation copies it again', async () => {
+    const operator = await signedUp('operator');
+    const id = await uploaded(operator.cookie, 'copied, not linked');
+    Object.assign(fault, { crossDevice: true, cutPoolCopy: true });
+    const first = Date.now() - DAY_MS;
+    expect((await t.daily(first)).generation).toMatchObject({ outcome: 'failed' });
+    expect(readdirSync(join(generationsDir(t.dir), POOL)).filter((name) => !name.startsWith('.tmp-'))).toEqual([]);
+    fault.cutPoolCopy = false;
+    expect((await t.daily(first + DAY_MS / 2)).generation).toEqual({ outcome: 'ok', error: null });
+    expect((await newest()).pictures).toEqual([id]);
+    expect(sha(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
   });
 
   it('collects a generation at 30 days and with it only the pictures no kept generation names', async () => {
