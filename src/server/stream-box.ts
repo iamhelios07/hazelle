@@ -13,10 +13,10 @@ export type End = Reason & { ms: number };
 
 // One stream's rows in streams.sqlite (streams-db.ts).
 export type BoxStorage = {
-  // started, hello and the stream's alarm in one transaction; false when the name was already taken, by a call in this
+  // hello and the stream's alarm in one transaction; false when the name was already taken, by a call in this
   // process or before a restart.
-  reserve(started: number, hello: { key: string; value: Uint8Array }, expiresAt: number): Promise<boolean>;
-  get(key: string): Promise<Uint8Array | number | undefined>;
+  reserve(hello: { key: string; value: Uint8Array }, expiresAt: number): Promise<boolean>;
+  get(key: string): Promise<Uint8Array | undefined>;
   put(key: string, value: Uint8Array): Promise<void>;
   // Ascending, from start (inclusive) to end (exclusive), at most limit.
   list(options: { start: string; end: string; limit: number }): Promise<Map<string, Uint8Array>>;
@@ -115,10 +115,9 @@ export class StreamBox {
       } catch {
         return json(400, 'bad-key');
       }
-      const started = Date.now();
       const hello = frame(HELLO, 0, new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer));
       // Two starts of one name both get here; the reservation lets one through.
-      if (!(await this.storage.reserve(started, { key: frameKey(0), value: hello }, started + KEEP_MS))) return json(409, 'stream-exists');
+      if (!(await this.storage.reserve({ key: frameKey(0), value: hello }, Date.now() + KEEP_MS))) return json(409, 'stream-exists');
       this.next = this.persisted = 1;
       this.call = new AbortController();
       this.running = true;
@@ -284,14 +283,14 @@ export class StreamBox {
       this.readers--;
       this.release();
     };
-    let hello: Uint8Array | number | undefined;
+    let hello: Uint8Array | undefined;
     try {
       hello = await this.storage.get(frameKey(0));
     } catch (error) {
       done();
       throw error;
     }
-    if (!(hello instanceof Uint8Array)) {
+    if (!hello) {
       done();
       return json(404, 'stream-gone');
     }

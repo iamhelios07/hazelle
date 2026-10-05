@@ -1,8 +1,7 @@
 import { openDatabase } from './service-db';
 import type { BoxStorage } from '../stream-box';
 
-// Reply stream pages and their alarms, in $HAZELLE_DATA/streams.sqlite. A page's value is a BLOB; started is an INTEGER
-// in the same column (BLOB affinity keeps it one), so get('started') answers a number.
+// Reply stream pages and their alarms, in $HAZELLE_DATA/streams.sqlite. A stream's alarm row is its reservation.
 const VERSION = 1;
 
 export type StreamStore = {
@@ -52,14 +51,13 @@ export function streamStore(path: string): StreamStore {
 
   return {
     storage: (stream) => ({
-      reserve: async (started, hello, expiresAt) =>
+      reserve: async (hello, expiresAt) =>
         transaction(() => {
           if (!reserve.run(stream, expiresAt).changes) return false;
-          insert.run(stream, 'started', started);
           insert.run(stream, hello.key, hello.value);
           return true;
         }),
-      get: async (key) => (get.get(stream, key) as { value: Uint8Array | number } | undefined)?.value,
+      get: async (key) => (get.get(stream, key) as { value: Uint8Array } | undefined)?.value,
       put: async (key, value) => void insert.run(stream, key, value),
       list: async ({ start, end, limit }) =>
         new Map((list.all(stream, start, end, limit) as { key: string; value: Uint8Array }[]).map(({ key, value }) => [key, value])),
