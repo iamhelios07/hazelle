@@ -61,9 +61,11 @@ describe('the daily job', () => {
     t.restartProcess();
     await tickAt(at);
     expect((await baselines(live)).results).toEqual([{ takenAt: at }]);
-    expect(await t.env.db.prepare("SELECT outcome, error, json_extract(detail, '$.failed') AS failed FROM backup_runs").first()).toEqual({ outcome: 'failed', error: 'baseline-failed', failed: 1 });
+    expect(await t.env.db.prepare("SELECT outcome, error, json_extract(detail, '$.failed') AS failed FROM backup_runs WHERE kind = 'daily'").first()).toEqual({ outcome: 'failed', error: 'baseline-failed', failed: 1 });
+    // Its file gone, the account has no baseline a generation could restore it from, so the generation fails too.
+    expect(await t.env.db.prepare("SELECT outcome, error FROM backup_runs WHERE kind = 'generation'").first()).toEqual({ outcome: 'failed', error: 'job-failed' });
     await tickAt(at + HOUR_MS);
-    expect(await t.env.db.prepare("SELECT COUNT(*) AS n FROM backup_runs WHERE outcome = 'failed'").first('n')).toBe(2);
+    expect(await t.env.db.prepare("SELECT COUNT(*) AS n FROM backup_runs WHERE outcome = 'failed' AND kind = 'daily'").first('n')).toBe(2);
     expect((await baselines(live)).results).toHaveLength(1);
   });
 });

@@ -300,7 +300,7 @@ describe('a restore', () => {
     await runRestore(t.env, id);
     const later = Date.now() + 1;
     expect(await t.stores.snapshotAt(seed.incarnation, later)).toBeNull();
-    expect(await t.daily(later)).toEqual({ outcome: 'ok', error: null });
+    expect(await t.daily(later)).toMatchObject({ snapshots: { outcome: 'ok' } });
     expect(await t.stores.snapshotAt(seed.incarnation, later)).toEqual({ id: expect.any(String), takenAt: later });
   });
 

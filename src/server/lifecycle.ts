@@ -35,7 +35,18 @@ async function reload(env: Services, incarnation: string): Promise<Life | Unavai
 
 // left: the account's row is deleted, by this run or an earlier one. Its pictures are removed after the answer.
 // operator: the account is the installation's only operator, which neither path may delete.
-export async function leaveAccount(
+// Every change below runs inside a backup hold (backup/backups.ts), so a generation never captures one half done.
+export function leaveAccount(
+  env: Services,
+  ctx: Pick<ExecutionContext, 'waitUntil'>,
+  accountId: string,
+  incarnation: string,
+  operator: boolean,
+): Promise<'left' | 'busy' | 'unavailable' | 'operator'> {
+  return env.backups.hold(() => leave(env, ctx, accountId, incarnation, operator));
+}
+
+async function leave(
   env: Services,
   ctx: Pick<ExecutionContext, 'waitUntil'>,
   accountId: string,
@@ -116,7 +127,7 @@ export async function beginRestore(env: Services, accountId: string, report: num
   const at = 'at' in from ? from.at : null;
   const undoes = 'undoes' in from ? from.undoes : null;
   const now = Date.now();
-  const [inserted] = await db.batch<{ id: number }>([
+  const [inserted] = await env.backups.hold(() => db.batch<{ id: number }>([
     db
       .prepare(
         `INSERT INTO restores (incarnation, report_id, at, undoes, timeline, phase, created_at, updated_at)
@@ -137,7 +148,7 @@ export async function beginRestore(env: Services, accountId: string, report: num
          FROM accounts WHERE id = ?5 AND state = 'restoring' AND changes() = 1`,
       )
       .bind(now, report, at, undoes, accountId),
-  ]);
+  ]));
   const id = inserted!.results[0]?.id;
   if (id !== undefined) return { begun: id };
   const why = await db
@@ -155,9 +166,12 @@ export async function beginRestore(env: Services, accountId: string, report: num
 export async function runRestore(env: Services, id: number): Promise<Run | null> {
   let arms = 0;
   for (let steps = 0; ; steps++) {
-    const operation = await readOperation(env.db, id);
-    if (!operation) return null;
-    const stop = steps === MAX_STEPS ? 'stuck' : await step(env, operation, () => ++arms > ARM_TRIES);
+    const stepped = await env.backups.hold(async () => {
+      const operation = await readOperation(env.db, id);
+      return operation && { operation, stop: steps === MAX_STEPS ? 'stuck' : await step(env, operation, () => ++arms > ARM_TRIES) };
+    });
+    if (!stepped) return null;
+    const { operation, stop } = stepped;
     if (stop === undefined) continue;
     if (stop !== null) {
       await env.db.prepare("UPDATE restores SET error = ?, updated_at = ? WHERE id = ? AND phase = ? AND phase != 'failed'").bind(stop, Date.now(), id, operation.phase).run();
@@ -170,14 +184,17 @@ export async function runRestore(env: Services, id: number): Promise<Run | null>
 // Gives the account back with its timeline unchanged, possible only before the rewind is armed. too-late: armed or
 // later, from where an operation only goes forward.
 export async function cancelRestore(env: Services, id: number): Promise<Run | null | 'too-late'> {
-  const operation = await readOperation(env.db, id);
-  if (!operation) return null;
-  if (operation.phase !== 'cancelled' && !(await release(env, operation, 'cancelled', BEFORE_ARMED, null))) {
-    const now = await readOperation(env.db, id);
-    if (!now) return null;
-    if (now.phase !== 'cancelled') return 'too-late';
-  }
-  return runRestore(env, id);
+  const cancelled = await env.backups.hold(async () => {
+    const operation = await readOperation(env.db, id);
+    if (!operation) return null;
+    if (operation.phase !== 'cancelled' && !(await release(env, operation, 'cancelled', BEFORE_ARMED, null))) {
+      const now = await readOperation(env.db, id);
+      if (!now) return null;
+      if (now.phase !== 'cancelled') return 'too-late' as const;
+    }
+    return 'cancelled' as const;
+  });
+  return cancelled === 'cancelled' ? runRestore(env, id) : cancelled;
 }
 
 // undefined: go on from the re-read operation. null: stop, nothing to record. A string: stop with this error code.

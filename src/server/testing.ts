@@ -84,7 +84,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
         env.db.prepare('UPDATE installation SET operator_account = NULL'),
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
-      for (const sub of ['accounts', 'files', 'snapshots']) rmSync(join(dir, sub), { recursive: true, force: true });
+      for (const sub of ['accounts', 'files', 'snapshots', 'backup']) rmSync(join(dir, sub), { recursive: true, force: true });
       env.stores = accountRegistry(dir, db, serviceReads(db), () => clock.now());
     },
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),

@@ -6,7 +6,14 @@ import type { Services } from '../http';
 // are UTC. Work goes one account at a time with a yield between, so the event loop keeps serving requests.
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-const RETENTION_MS = 30 * DAY_MS;
+export const RETENTION_MS = 30 * DAY_MS;
+
+// The pin rule, over a snapshots row aliased `s` and the time `now` (a bind or literal): an operation pins its
+// checkpoint and target until it ends, and a finished rewind keeps both for the 30 days its undo lives. Retention and
+// every backup generation read this one rule.
+export const PINNED = (s: string, now: string) =>
+  `EXISTS (SELECT 1 FROM restores r WHERE r.incarnation = ${s}.incarnation AND ${s}.id IN (r.checkpoint, r.target)
+     AND (r.phase NOT IN ('done', 'cancelled', 'failed') OR (r.phase = 'done' AND r.updated_at > ${now} - ${RETENTION_MS})))`;
 
 export const dayStart = (now: number) => now - (now % DAY_MS);
 export const pass = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -44,10 +51,8 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
   return { taken, failed };
 }
 
-// A snapshot goes once it is 30 days old, unless an operation pins it or it is a live account's only current copy:
-// - an operation pins its checkpoint and target until it ends, and a finished rewind keeps both for the 30 days its
-//   undo lives;
-// - a live account keeps its newest baseline whatever its age, so an unchanged account never loses its only copy.
+// A snapshot goes once it is 30 days old, unless it is pinned (PINNED) or it is a live account's newest baseline,
+// kept whatever its age so an unchanged account never loses its only copy.
 // A deleted account has no restores and no row, so every snapshot of it goes at 30 days from its taking, which is
 // within 30 days of the deletion. The row goes before the file; a file left by a crash between has no row, and the
 // hourly reconciliation removes it.
@@ -56,9 +61,7 @@ export async function expireSnapshots(env: Services, dataDir: string, now: numbe
     .prepare(
       `SELECT id, incarnation FROM snapshots s
        WHERE taken_at <= ?1 - ${RETENTION_MS}
-         AND NOT EXISTS (
-           SELECT 1 FROM restores r WHERE r.incarnation = s.incarnation AND s.id IN (r.checkpoint, r.target)
-             AND (r.phase NOT IN ('done', 'cancelled', 'failed') OR (r.phase = 'done' AND r.updated_at > ?1 - ${RETENTION_MS})))
+         AND NOT ${PINNED('s', '?1')}
          AND NOT (kind = 'baseline' AND EXISTS (SELECT 1 FROM accounts WHERE incarnation = s.incarnation)
            AND id = (SELECT id FROM snapshots WHERE incarnation = s.incarnation AND kind = 'baseline' ORDER BY taken_at DESC, id DESC LIMIT 1))
        ORDER BY incarnation`,

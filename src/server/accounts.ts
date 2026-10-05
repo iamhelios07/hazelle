@@ -34,22 +34,26 @@ accounts.post('/signup', async (c) => {
 
   const incarnation = randomBytes(16).toString('hex');
   const timeline = randomBytes(16).toString('hex');
-  const [session, loginHash, recoveryHash] = await Promise.all([startSession(db, accountId, true), hashProof(passwordProof), hashProof(recoveryProof), c.env.stores.prepare(incarnation, timeline)]);
+  const [session, loginHash, recoveryHash] = await Promise.all([startSession(db, accountId, true), hashProof(passwordProof), hashProof(recoveryProof)]);
   const now = Date.now();
   // The insert itself checks the cap and the username, so two signups at once cannot both take the last place or the
   // same name: no read outside this batch decides. changes() carries its outcome to the vault, the session and the claim.
-  const [created, , , claim, room] = await db.batch<{ incarnation?: string; open?: number }>([
-    db
-      .prepare(
-        `INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) SELECT ?1, ?2, ?3, ?4, ?5, ?6
-         WHERE ${ROOM} AND NOT EXISTS (SELECT 1 FROM accounts WHERE id = ?1 OR username = ?2) RETURNING incarnation`,
-      )
-      .bind(accountId, username, loginHash, now, incarnation, timeline),
-    insertVault(db, accountId, { passwordWrap, recoveryWrap, recoveryHash }, now),
-    session.insert,
-    db.prepare('UPDATE installation SET operator_account = ? WHERE id = 1 AND operator_account IS NULL AND changes() = 1').bind(accountId),
-    db.prepare(`SELECT ${ROOM} AS open`),
-  ]);
+  // A backup hold covers the file and the batch, so a generation holds both or neither (backup/backups.ts).
+  const [created, , , claim, room] = await c.env.backups.hold(async () => {
+    await c.env.stores.prepare(incarnation, timeline);
+    return db.batch<{ incarnation?: string; open?: number }>([
+      db
+        .prepare(
+          `INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) SELECT ?1, ?2, ?3, ?4, ?5, ?6
+           WHERE ${ROOM} AND NOT EXISTS (SELECT 1 FROM accounts WHERE id = ?1 OR username = ?2) RETURNING incarnation`,
+        )
+        .bind(accountId, username, loginHash, now, incarnation, timeline),
+      insertVault(db, accountId, { passwordWrap, recoveryWrap, recoveryHash }, now),
+      session.insert,
+      db.prepare('UPDATE installation SET operator_account = ? WHERE id = 1 AND operator_account IS NULL AND changes() = 1').bind(accountId),
+      db.prepare(`SELECT ${ROOM} AS open`),
+    ]);
+  });
   if (!created!.results.length) return room!.results[0]!.open ? fail(c, 409, 'username-taken') : fail(c, 403, 'signup-closed');
   setSessionCookie(c, session.token);
   return c.json(await describe(c, { id: accountId, username, suspended: false, incarnation, state: 'active', admin: claim!.meta.changes === 1 }), 201);
