@@ -130,7 +130,9 @@ export async function captureGeneration(
   await mkdir(root);
   const plain = join(root, 'service.sqlite');
   const { value: named, gateMs } = await exclusive(async () => {
-    await takeBaselines(env, await staleBaselines(env, ['active', 'restoring'], 0));
+    // An older baseline would restore the account as it was before its last rewind.
+    const { failed } = await takeBaselines(env, await staleBaselines(env, ['active', 'restoring'], 0));
+    if (failed.length) throw new Error(`generation: ${failed.length} accounts could not be brought up to their last rewind`);
     await env.db.prepare(`VACUUM INTO '${plain.replaceAll("'", "''")}'`).run();
     const { named, sources } = readNamed(plain, now);
     const dirs = new Set<string>([pool]);

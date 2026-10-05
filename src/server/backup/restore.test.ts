@@ -64,7 +64,8 @@ async function signedUp(username: string) {
   return { id: body.accountId, cookie, ...row };
 }
 
-// An account holding X 'old' in a baseline from an hour ago, then X 'new', and a restore to between them left at `phase`.
+// An account holding X 'old' in a baseline from an hour ago, X 'mid' in a newer baseline, then X 'new', and a restore
+// to the first baseline left at `phase`: 'old' only comes back by installing the target, 'new' only from the checkpoint.
 async function leftAt(username: string, phase: Phase) {
   const now = Date.now();
   t.clock.now = () => now - HOUR_MS;
@@ -72,12 +73,15 @@ async function leftAt(username: string, phase: Phase) {
   const write = (body: string, baseRev: number | null) => t.stores.getByName(user.incarnation).batch(user.incarnation, user.timeline, [{ id: X, kind: 'chat', parent: null, body, baseRev }], null);
   await write('old', null);
   await t.stores.snapshot(user.incarnation, 'baseline');
+  t.clock.now = () => now - (5 * HOUR_MS) / 6;
+  await write('mid', 1);
+  await t.stores.snapshot(user.incarnation, 'baseline');
   t.clock.now = () => now - HOUR_MS / 2;
-  await write('new', 1);
+  await write('new', 2);
   t.clock.now = () => Date.now();
   expect((await t.post('reports', { text: 'restore' }, user.cookie)).status).toBe(204);
   const report = (await t.env.db.prepare('SELECT MAX(id) AS id FROM reports WHERE account_id = ?').bind(user.id).first<number>('id'))!;
-  const begun = await beginRestore(t.env, user.id, report, { at: now - (3 * HOUR_MS) / 4 });
+  const begun = await beginRestore(t.env, user.id, report, { at: now - (11 * HOUR_MS) / 12 });
   const operation = (begun as { begun: number }).begun;
   await expect(runRestore(stoppingAt(phase), operation)).rejects.toThrow(Stop);
   return { ...user, report, operation };
