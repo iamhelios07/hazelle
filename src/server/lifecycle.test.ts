@@ -256,6 +256,20 @@ describe('a restore', () => {
     expect(await logged('restore-begun')).toBe(1);
   });
 
+  it('allows the undo for 30 days after the restore ended, however long before that its checkpoint was taken', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const now = Date.now();
+    await t.env.db.prepare('UPDATE restores SET checkpoint_at = ?, ended_at = ? WHERE id = ?').bind(now - 40 * 24 * HOUR_MS, now - 29 * 24 * HOUR_MS, id).run();
+    const listed = (await (await t.get(`admin/accounts/${seed.id}/restores`, operator.cookie)).json()) as { restores: { undoExpiresAt: number }[] };
+    expect(listed.restores[0]!.undoExpiresAt).toBe(now + 24 * HOUR_MS);
+    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 30 * 24 * HOUR_MS - 60_000, id).run();
+    expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toEqual({ refused: 'cannot-undo' });
+    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 29 * 24 * HOUR_MS, id).run();
+    expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toHaveProperty('begun');
+  });
+
   it('cancels before arming, giving the account back on its timeline with its objects, and refuses once armed', async () => {
     const seed = await seeded();
     const id = await begin(seed);

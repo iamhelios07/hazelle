@@ -129,6 +129,17 @@ describe('the account registry', () => {
     expect(await bodies().catch(() => 'stale')).toBe('stale');
   });
 
+  it('excludes a snapshot taken before a finished rewind only for times after the rewind ended', async () => {
+    await signup();
+    await write(put(A, 'before the rewind'));
+    now = 1_500_000;
+    const before = await stores.snapshot(INC, 'baseline');
+    raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't2', 1900000, 'done', 1, 1, 4000000)").run(INC);
+    now = 5_000_000;
+    expect(await stores.snapshotAt(INC, 3_000_000)).toEqual({ id: before, takenAt: 1_500_000 });
+    expect(await stores.snapshotAt(INC, 4_500_000)).toBeNull();
+  });
+
   it('answers unavailable, not too early, when a catalogued snapshot has lost its file', async () => {
     await signup('restoring');
     raw.prepare('UPDATE accounts SET operation = 3').run();

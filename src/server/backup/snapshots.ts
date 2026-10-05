@@ -1,19 +1,19 @@
 import { rm } from 'node:fs/promises';
-import { snapshotPath } from '../db/account-db';
+import { RETENTION_MS, snapshotPath } from '../db/account-db';
 import type { Services } from '../http';
 
 // The daily baselines and the retention of every snapshot (docs/research/docker-port-plan.md §10.1). Day boundaries
 // are UTC. Work goes one account at a time with a yield between, so the event loop keeps serving requests.
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-export const RETENTION_MS = 30 * DAY_MS;
 
 // The pin rule, over a snapshots row aliased `s` and the time `now` (a bind or literal): an operation pins its
-// checkpoint and target until it ends, and a finished rewind keeps both for the 30 days its undo lives. Retention and
-// every backup generation read this one rule.
+// checkpoint and target until it ends and for 30 days after, whichever way it ended: a finished rewind's undo lives
+// that long, and a cancelled or failed one stays recoverable by hand. Retention and every backup generation read this
+// one rule.
 export const PINNED = (s: string, now: string) =>
   `EXISTS (SELECT 1 FROM restores r WHERE r.incarnation = ${s}.incarnation AND ${s}.id IN (r.checkpoint, r.target)
-     AND (r.phase NOT IN ('done', 'cancelled', 'failed') OR (r.phase = 'done' AND r.updated_at > ${now} - ${RETENTION_MS})))`;
+     AND (r.ended_at IS NULL OR r.ended_at > ${now} - ${RETENTION_MS}))`;
 
 export const dayStart = (now: number) => now - (now % DAY_MS);
 export const pass = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -27,7 +27,7 @@ export async function staleBaselines(env: Services, states: string[], before: nu
       `SELECT incarnation FROM accounts a
        WHERE state IN (SELECT value FROM json_each(?1))
          AND COALESCE((SELECT MAX(taken_at) FROM snapshots WHERE incarnation = a.incarnation AND kind = 'baseline'), -1)
-           < MAX(?2, COALESCE((SELECT MAX(updated_at) FROM restores WHERE incarnation = a.incarnation AND phase = 'done'), -1))
+           < MAX(?2, COALESCE((SELECT MAX(ended_at) FROM restores WHERE incarnation = a.incarnation AND phase = 'done'), -1))
        ORDER BY incarnation`,
     )
     .bind(JSON.stringify(states), before)

@@ -6,9 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
 import type { Phase } from '../account-store';
-import { ACCOUNT_SCHEMA_VERSION, snapshotPath } from '../db/account-db';
+import { ACCOUNT_SCHEMA_VERSION, RETENTION_MS, snapshotPath } from '../db/account-db';
 import type { Services } from '../http';
-import { DAY_MS, pass, PINNED, RETENTION_MS, staleBaselines, takeBaselines } from './snapshots';
+import { DAY_MS, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
 // Backup generations (docs/research/docker-port-plan.md §10.2): backup/<id>/ holds the service snapshot, the
 // snapshots its manifest names and, written last, manifest.json; pictures go once each into the shared pool

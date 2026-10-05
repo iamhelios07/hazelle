@@ -41,7 +41,7 @@ export const restoreError = (code: string) => ERRORS[code] ?? code;
 const REFUSED: Record<string, string> = {
   'bad-report': '이 알림으로는 복원할 수 없어요. 그 계정이 보내고 아직 확인함으로 두지 않은 알림이어야 해요.',
   'bad-time': '10분 전부터 29일 전 사이의 시각으로만 복원할 수 있어요.',
-  'cannot-undo': '복원 전으로 되돌릴 수 없어요. 그 계정의 마지막 복원만 29일 안에 한 번 되돌릴 수 있어요.',
+  'cannot-undo': '복원 전으로 되돌릴 수 없어요. 그 계정의 마지막 복원만, 끝난 뒤 30일 안에 한 번 되돌릴 수 있어요.',
   'account-busy': '그 계정은 다른 복원이나 탈퇴가 진행 중이에요. 그것을 끝내거나 취소한 뒤 다시 해 주세요.',
   'cannot-cancel': '이미 복원을 걸어서 취소할 수 없어요. 이어서 하기로 끝까지 해 주세요.',
 };
@@ -107,7 +107,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
   if (asking?.kind === 'restore') {
     return (
       <ConfirmDialog title={`${username} 계정을 ${moment(asking.takenAt)} 기록으로 복원할까요?`} confirm="복원" icon={History} busy={busy} onConfirm={() => void go(() => beginRestore(accountId, { report: report!.id, at: asking.at }))} onClose={() => setAsking(null)}>
-        그 기록 뒤에 저장한 글, 캐릭터, 채팅, 설정은 사라지고 그림은 남아요. 복원하는 동안 그 계정은 저장하거나 불러올 수 없어요. 복원 바로 전 모습을 기록해 두어서, 29일 안에 그 계정이 다시 알리면 복원 전으로 되돌릴 수 있어요.
+        그 기록 뒤에 저장한 글, 캐릭터, 채팅, 설정은 사라지고 그림은 남아요. 복원하는 동안 그 계정은 저장하거나 불러올 수 없어요. 복원 바로 전 모습을 기록해 두어서, 복원이 끝난 뒤 30일 안에 그 계정이 다시 알리면 복원 전으로 되돌릴 수 있어요.
       </ConfirmDialog>
     );
   }

@@ -21,7 +21,8 @@ const SCHEMA = [
   'CREATE INDEX objects_parent_rev ON objects (parent_id, rev)',
   'CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
 ];
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+// How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
+export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_HANDLES = 256;
 const IDLE_MS = 10 * 60 * 1000;
 // node:sqlite error codes that mean the file itself is unreadable.
@@ -98,13 +99,14 @@ function corruptOr(error: unknown): unknown {
 }
 
 // The snapshot a rewind to `at` lands on: the newest taken at or before it, within retention, and taken after the
-// checkpoint of every rewind finished by then, since one taken before such a rewind holds the state it replaced.
+// checkpoint of every rewind finished by then (ended_at, not the checkpoint's time: one that finished after `at` had
+// not replaced anything yet), since one taken before such a rewind holds the state it replaced.
 // A catalogued snapshot whose file is gone is a storage failure, not "too early".
 export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number, now: number): Promise<{ id: string; takenAt: number } | null> {
   const row = await service
     .prepare(
       `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2 AND taken_at > ?3
-         AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND checkpoint_at <= ?2), -1)
+         AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND ended_at <= ?2), -1)
        ORDER BY taken_at DESC LIMIT 1`,
     )
     .bind(incarnation, at, now - RETENTION_MS)
