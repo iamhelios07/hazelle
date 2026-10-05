@@ -91,7 +91,7 @@ describe('the daily job', () => {
     const lost = await signedUp('lost');
     const at = dayStart(Date.now()) + 3 * HOUR_MS;
     await t.env.db
-      .prepare("INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, sha256) VALUES ('young', ?, 'checkpoint', 1, ?, 0, 1, 'x')")
+      .prepare("INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256) VALUES ('young', ?, 'checkpoint', 1, ?, 0, 1, 1, 'x')")
       .bind(live, at - HOUR_MS)
       .run();
     rmSync(accountPath(t.dir, lost));
@@ -126,7 +126,7 @@ describe('retention', () => {
       ['gone-young', gone, 'baseline', now - 4 * DAY_MS],
     ];
     for (const [id, incarnation, kind, takenAt] of snapshots) {
-      await t.env.db.prepare('INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, sha256) VALUES (?, ?, ?, ?, 0, 1, ?)').bind(id, incarnation, kind, takenAt, 'x').run();
+      await t.env.db.prepare('INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES (?, ?, ?, ?, 0, 1, 1, ?)').bind(id, incarnation, kind, takenAt, 'x').run();
       mkdirSync(join(t.dir, 'snapshots', incarnation), { recursive: true });
       writeFileSync(snapshotPath(t.dir, incarnation, id), 'x');
     }

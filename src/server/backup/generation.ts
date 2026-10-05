@@ -22,7 +22,8 @@ export const COPIED = 'copied';
 export const POOL = 'files';
 const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 
-// bytes: the gzip on disk. expanded: what it gunzips to; a snapshot's is its gzip trailer, which holds that modulo 4 GiB.
+// bytes: the gzip on disk. expanded: what it gunzips to, measured on the plain file before it was gzipped (the gzip
+// trailer holds that only modulo 4 GiB).
 export type Artifact = { path: string; bytes: number; sha256: string; expanded: number };
 // accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
 // leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
@@ -64,7 +65,7 @@ async function place(source: string, target: string) {
 }
 
 type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'snapshots'> & {
-  snapshots: Omit<Manifest['snapshots'][number], 'expanded'>[];
+  snapshots: Manifest['snapshots'];
 };
 
 // What the service snapshot names, read from the snapshot itself so the manifest and the service agree.
@@ -81,8 +82,8 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
     );
     const unbacked = accounts.filter(({ state, baseline }) => state !== 'leaving' && baseline === null);
     if (unbacked.length) throw new Error(`generation: ${unbacked.length} accounts have no baseline`);
-    const snapshots = all<{ id: string; incarnation: string; bytes: number; sha256: string }>(
-      `SELECT id, incarnation, bytes, sha256 FROM snapshots s
+    const snapshots = all<{ id: string; incarnation: string; bytes: number; expanded: number; sha256: string }>(
+      `SELECT id, incarnation, bytes, expanded, sha256 FROM snapshots s
        WHERE id IN (SELECT value FROM json_each(?1)) OR ${PINNED('s', '?2')} ORDER BY incarnation, id`,
       JSON.stringify(accounts.map(({ baseline }) => baseline).filter((id) => id !== null)),
       now,
@@ -152,8 +153,6 @@ export async function captureGeneration(
   fsyncPath(compressed);
   const { size: expanded } = await stat(plain);
   await rm(plain);
-  const snapshots: Manifest['snapshots'] = [];
-  for (const snapshot of named.snapshots) snapshots.push({ ...snapshot, expanded: await gunzippedBytes(join(root, snapshot.path)) });
   const manifest: Manifest = {
     version: 1,
     id,
@@ -161,7 +160,7 @@ export async function captureGeneration(
     service: { path: 'service.sqlite.gz', ...(await digest(compressed)), expanded },
     accountSchema: ACCOUNT_SCHEMA_VERSION,
     ...named,
-    snapshots,
+    snapshots: named.snapshots,
   };
   const temp = join(root, `.tmp-${MANIFEST}`);
   const handle = await open(temp, 'w');
@@ -174,17 +173,6 @@ export async function captureGeneration(
   await rename(temp, join(root, MANIFEST));
   fsyncPath(root);
   return { id, gateMs, manifest };
-}
-
-async function gunzippedBytes(path: string) {
-  const handle = await open(path, 'r');
-  try {
-    const trailer = Buffer.alloc(4);
-    await handle.read(trailer, 0, 4, (await handle.stat()).size - 4);
-    return trailer.readUInt32LE(0);
-  } finally {
-    await handle.close();
-  }
 }
 
 // Any account holding the picture is its source: the id is its content.

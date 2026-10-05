@@ -151,6 +151,7 @@ CREATE TABLE snapshots (
   taken_at INTEGER NOT NULL,
   rev INTEGER NOT NULL,
   bytes INTEGER NOT NULL,
+  expanded INTEGER NOT NULL,
   sha256 TEXT NOT NULL
 );
 CREATE INDEX snapshots_incarnation ON snapshots (incarnation, taken_at);

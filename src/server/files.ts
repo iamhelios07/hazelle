@@ -88,8 +88,9 @@ files.put('/:id', canWrite, async (c) => {
   }
 });
 
-// What requireSession answers every request of a deleted account.
+// What the session answers every request of a deleted or leaving account (session.ts currentAccount).
 const outlived = (c: Context<AppEnv>) => fail(c, 401, 'no-session');
+const ALIVE = "EXISTS (SELECT 1 FROM accounts WHERE incarnation = ?1 AND state != 'leaving')";
 
 async function publish(c: Context<AppEnv>, id: string) {
   const db = c.env.db;
@@ -103,6 +104,8 @@ async function publish(c: Context<AppEnv>, id: string) {
   ]);
   if (held!.blocked) return fail(c, 403, 'file-blocked');
   if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body))) !== id) return fail(c, 400, 'bad-input');
+  // Read once the body is in, not beside it: the account may have begun leaving or be gone since the session check.
+  if (!(await db.prepare(`SELECT ${ALIVE} AS alive`).bind(incarnation).first<number>('alive'))) return outlived(c);
   if (held!.stored) return c.body(null, 204);
   const [, , reservation] = await db.batch<{ reserved: number; alive: number }>([
     db
@@ -116,11 +119,10 @@ async function publish(c: Context<AppEnv>, id: string) {
     // remain retryable even after the cap is lowered. Deletion removes both the account's counter and its file rows.
     db.prepare('UPDATE accounts SET file_bytes = file_bytes + ?2 WHERE incarnation = ?1 AND changes() = 1').bind(incarnation, body.byteLength),
     db
-      .prepare('SELECT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = ?2) AS reserved, EXISTS (SELECT 1 FROM accounts WHERE incarnation = ?1) AS alive')
+      .prepare(`SELECT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = ?2) AS reserved, ${ALIVE} AS alive`)
       .bind(incarnation, id),
   ]);
   const { reserved, alive } = reservation!.results[0]!;
-  // No account row is a body that finished after its account was deleted, not a full one.
   if (!alive) return outlived(c);
   if (!reserved) return fail(c, 413, 'files-full');
   await c.env.files.put(fileKey(incarnation, id), body);

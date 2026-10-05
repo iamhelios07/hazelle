@@ -284,6 +284,36 @@ describe('files', () => {
     expect(await rows(jin.incarnation)).toEqual([]);
   });
 
+  it('answers a duplicate upload whose account began leaving while its body was on the wire as the session would', async () => {
+    await signup(signupBody('operator'));
+    const jin = await signup();
+    const bytes = new Uint8Array([3, 1, 4]);
+    const id = await idOf(bytes);
+    expect((await t.put(`files/${id}`, bytes, jin.cookie)).status).toBe(204);
+    let end: (() => void) | undefined;
+    const reply = t.raw(`files/${id}`, {
+      method: 'PUT',
+      headers: { cookie: jin.cookie, 'x-account': jin.id, 'content-type': 'application/octet-stream', 'content-length': String(bytes.length) },
+      body: new ReadableStream<Uint8Array>(
+        {
+          pull: (controller) => {
+            if (end) return;
+            end = () => controller.close();
+            controller.enqueue(bytes);
+          },
+        },
+        { highWaterMark: 0 },
+      ),
+      duplex: 'half',
+    } as RequestInit);
+    await vi.waitFor(() => expect(end).toBeDefined());
+    // Deletion has begun and not finished: the row is still there, marked leaving.
+    await t.env.db.prepare("UPDATE accounts SET state = 'leaving' WHERE incarnation = ?").bind(jin.incarnation).run();
+    end!();
+    expect((await reply).status).toBe(401);
+    expect((await t.post('files/missing', { ids: [id] }, jin.cookie)).status).toBe(401);
+  });
+
   it('serves a signup that reuses a client id nothing of an old upload finishing late, and the next sweep removes its bytes', async () => {
     await signup(signupBody('operator'));
     const body = signupBody();

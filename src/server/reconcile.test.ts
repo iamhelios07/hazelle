@@ -22,7 +22,7 @@ function setup() {
   const raw = new DatabaseSync(':memory:');
   raw.exec(readFileSync('migrations/0001_baseline.sql', 'utf8'));
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('u', 'jin', 'h', 1, ?, 't')").run(LIVE);
-  raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, sha256) VALUES ('kept', ?, 'k', 1, 0, 1, 's')").run(LIVE);
+  raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, rev, bytes, expanded, sha256) VALUES ('kept', ?, 'k', 1, 0, 1, 1, 's')").run(LIVE);
   return serviceDb(raw);
 }
 

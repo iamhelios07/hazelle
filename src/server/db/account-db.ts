@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
@@ -217,6 +217,7 @@ export class AccountDb implements StoreDb {
           copy.close();
         }
         const hash = createHash('sha256');
+        const { size: expanded } = statSync(plain);
         let bytes = 0;
         await pipeline(createReadStream(plain), createGzip(), async function* (chunks) {
           for await (const chunk of chunks as AsyncIterable<Buffer>) {
@@ -229,8 +230,8 @@ export class AccountDb implements StoreDb {
         renameSync(gz, snapshotPath(this.dataDir, this.incarnation, id));
         fsyncPath(dir);
         await this.service
-          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, hash.digest('hex'))
+          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, hash.digest('hex'))
           .run();
       } finally {
         rmSync(plain, { force: true });
