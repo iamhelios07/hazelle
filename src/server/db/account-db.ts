@@ -104,18 +104,21 @@ function corruptOr(error: unknown): unknown {
   return code !== undefined && CORRUPT_CODES.has(code) ? new StoreUnavailable('corrupt') : error;
 }
 
-// The snapshot a rewind to `at` lands on: the newest taken at or before it, within retention, and taken after the
-// checkpoint of every rewind finished by then (ended_at, not the checkpoint's time: one that finished after `at` had
-// not replaced anything yet), since one taken before such a rewind holds the state it replaced.
+// The snapshot a rewind to `at` lands on: the newest taken at or before it, and taken after the checkpoint of every
+// rewind finished by then (ended_at, not the checkpoint's time: one that finished after `at` had not replaced anything
+// yet), since one taken before such a rewind holds the state it replaced.
+// No age cut here: an account unchanged for longer than retention has only an old baseline, and that baseline is its
+// state at `at`. How far back a rewind may ask is lifecycle's request window; retention keeps the baseline that window
+// needs (backup/snapshots.ts).
 // A catalogued snapshot whose file is gone or altered is a storage failure, not "too early".
-export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number, now: number): Promise<{ id: string; takenAt: number } | null> {
+export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null> {
   const row = await service
     .prepare(
-      `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2 AND taken_at > ?3
+      `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2
          AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND ended_at <= ?2), -1)
        ORDER BY taken_at DESC LIMIT 1`,
     )
-    .bind(incarnation, at, now - RETENTION_MS)
+    .bind(incarnation, at)
     .first<{ id: string; takenAt: number }>();
   if (row === null) return null;
   await verifySnapshot(dataDir, service, incarnation, row.id);
@@ -235,7 +238,7 @@ export class AccountDb implements StoreDb {
       }
       return id;
     },
-    forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at, this.clock()))?.id ?? null,
+    forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at))?.id ?? null,
     verify: (id: string) => verifySnapshot(this.dataDir, this.service, this.incarnation, id),
   };
 
@@ -373,7 +376,7 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
         }
       });
     },
-    snapshotAt: (incarnation, at) => snapshotFor(dataDir, service, incarnation, at, clock()),
+    snapshotAt: (incarnation, at) => snapshotFor(dataDir, service, incarnation, at),
     evictIdle: (now = clock()) => {
       for (const held of entries.values()) if (held.session && held.pending === 0 && now - held.lastUsed >= IDLE_MS) closeSession(held);
     },

@@ -41,7 +41,7 @@ A snapshot goes at 30 days unless pinned. An operation pins its checkpoint and t
 for 30 days after `restores.ended_at`, however it ended: a finished rewind's undo lives that long, and a cancelled or failed one stays
 recoverable by hand. A live account keeps its newest baseline whatever its age. Pins are read from `restores`, so a deleted account
 (whose restores cascade away) loses every snapshot at 30 days from its taking. A rewind lands on the newest snapshot at or before the
-time asked, never on one taken before the checkpoint of a rewind ended by then; the preview, the choice of a target (an undo's too)
+time asked, however old (the 29-day request window is the lifecycle's), never on one taken before the checkpoint of a rewind ended by then; the preview, the choice of a target (an undo's too)
 and the install check the snapshot's size and SHA-256 against its row, and a mismatch answers unavailable before anything is armed.
 
 Backup generations (`src/server/backup/generation.ts`), captured by the daily job after the baselines: while a gate keeps signup,
