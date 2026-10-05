@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { readService, type Report } from '../../runtime/admin';
+import { readService, type BackupWarning, type Report } from '../../runtime/admin';
 import { PAGES } from '../common/words';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -13,6 +13,11 @@ import { ServiceSection } from './ServiceSection';
 import { useLoaded } from '../common/useLoaded';
 import { useAccounts } from './useAccounts';
 import { UsageSection } from './UsageSection';
+
+const WARNINGS: Record<BackupWarning, string> = {
+  'backup-stale': '백업이 36시간 넘게 없음',
+  'disk-full': '디스크 80% 초과',
+};
 
 // Every act lands in the log, which is asked again after one. Only the changed account's row is asked again;
 // whole-service usage is refreshed separately by the operator.
@@ -28,6 +33,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
   };
   return (
     <Screen width="form" top={<NavBar title={PAGES.admin} {...backBar(back)} />}>
+      {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
       {service.failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: service.reload }}>{service.failure}</Callout>}
       {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} onNoticed={acted} />}
       <UsageSection />

@@ -31,7 +31,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     streams: streamRegistry(outbound),
     outbound,
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
-    backups: backups(dir, 3),
+    backups: backups(dir, 3, 'https://alerts.test/hook'),
   };
 
   const pending: Promise<unknown>[] = [];
@@ -80,7 +80,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       clock.now = () => Date.now();
       env.stores.close();
       await env.db.batch([
-        ...['file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'backup_runs'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
+        ...['file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots', 'backup_runs', 'alerts_sent'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
         env.db.prepare('UPDATE installation SET operator_account = NULL'),
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);

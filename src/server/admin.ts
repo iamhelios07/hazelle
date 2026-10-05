@@ -361,13 +361,14 @@ admin.post('/restores/:id/cancel', async (c) => {
   return ran ? c.json(ran) : fail(c, 404, 'not-found');
 });
 
+// With the caps, how fresh the backup is and how full the disk (backup/freshness.ts).
 admin.get('/service', async (c) => {
   const row = await c.env.db.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
        (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes
      FROM service`,
   ).first();
-  return c.json(row);
+  return c.json({ ...row, ...(await c.env.backups.freshness(c.env, Date.now())) });
 });
 
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;

@@ -65,7 +65,7 @@ describe('the server process', () => {
     const port = await freePort();
     const server = start(data, port);
     await server.listening;
-    expect(await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()).toEqual({ ok: true, liveCalls: 0 });
+    expect(await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()).toEqual({ ok: true, liveCalls: 0, backupAgeHours: null, diskFreePercent: expect.any(Number) });
     expect(await (await fetch(`http://127.0.0.1:${port}/api/session`)).json()).toEqual({ session: null, signupOpen: true });
     expect((await fetch(`http://127.0.0.1:${port}/api/nowhere`)).status).toBe(404);
     expect(server.log()).toContain('"migrationsApplied":["0001_baseline.sql"]');

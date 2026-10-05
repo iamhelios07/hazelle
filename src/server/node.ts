@@ -25,6 +25,7 @@ const dataDir = process.env.HAZELLE_DATA ?? '/data';
 const port = Number(process.env.PORT ?? 8080);
 const drainMs = Number(process.env.HAZELLE_DRAIN_SECONDS ?? 60) * 1000;
 const snapshotHour = Number(process.env.HAZELLE_SNAPSHOT_HOUR ?? 3);
+const alertWebhook = process.env.HAZELLE_ALERT_WEBHOOK || null;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
 const clientDir = 'dist/client';
@@ -57,7 +58,7 @@ const services: Services = {
   streams: streamRegistry(fetch),
   outbound: fetch,
   limits,
-  backups: backups(dataDir, snapshotHour),
+  backups: backups(dataDir, snapshotHour, alertWebhook),
 };
 
 // Work a request leaves running after its answer; the shutdown waits for it.
@@ -73,7 +74,11 @@ const ctx: ExecutionContext = {
 
 let draining = false;
 const root = new Hono();
-root.get('/api/health', (c) => (draining ? c.json({ ok: false, draining: true }, 503) : c.json({ ok: true, liveCalls: services.streams.live() })));
+root.get('/api/health', async (c) => {
+  if (draining) return c.json({ ok: false, draining: true }, 503);
+  const { backupAgeHours, diskFreePercent } = await services.backups.freshness(services, Date.now());
+  return c.json({ ok: true, liveCalls: services.streams.live(), backupAgeHours, diskFreePercent });
+});
 root.route('/', app);
 // An unknown API path is a real 404, never the page.
 root.all('/api/*', (c) => c.json({ error: 'not-found' }, 404));

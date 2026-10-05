@@ -166,3 +166,11 @@ CREATE TABLE backup_runs (
   detail TEXT
 );
 CREATE INDEX backup_runs_kind ON backup_runs (kind, started_at);
+
+-- An alert sent to HAZELLE_ALERT_WEBHOOK: each condition at most once per UTC day (src/server/backup/backups.ts).
+-- day: the UTC midnight it was sent on, in milliseconds.
+CREATE TABLE alerts_sent (
+  condition TEXT NOT NULL,
+  day INTEGER NOT NULL,
+  PRIMARY KEY (condition, day)
+);

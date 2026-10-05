@@ -48,5 +48,18 @@ The copier's contract: after a successful `rclone copy` of `backup/<id>/` (and t
 line, the UTC ISO-8601 time of the copy. A generation is complete when it has both `manifest.json` and `copied`; backup freshness is
 measured from the newest complete one. A restore verifies every hash the manifest names and refuses a generation that lacks one.
 
+Freshness (`src/server/backup/freshness.ts`): `backupAgeHours` counts from the newest complete generation's capture (null when there
+is none), `diskFreePercent` is the lowest of the data directory and `files/`. Above 36 hours without one (counted from the
+installation's creation while there is none) or below 20 % free, the admin screen shows a banner and `HAZELLE_ALERT_WEBHOOK` gets a
+Discord/Slack-style `{ content, text }` POST, as it does for a failed run of the day; each condition at most once a UTC day
+(`alerts_sent`, written only after the POST succeeded). Every run of the job and every generation is a `backup_runs` row.
+
+Disaster restore (`scripts/restore.sh <generation> <empty data dir>`, `src/server/backup/restore.ts`, bundled as
+`dist/server/restore-cli.js`): verifies every hash first, writes the service (migrated to this build) before the pictures, drops
+catalog rows for snapshots the generation lacks, restores each account from its newest baseline (a fenced one from its checkpoint,
+one past `rewound` by installing its target), then ends every pending operation through `lifecycle.ts` (before `armed` cancelled,
+from `armed` on finished, unverified ones finalized), finishes pending deletions, and gives every account a fresh timeline. The
+server must not start on the directory until it has finished.
+
 Service-table changes ship as a new `migrations/NNNN_*.sql`, applied by `migrate.ts` in one transaction each with a checksum ledger row.
 The account file carries `head.schema_version`; a newer one than this build knows is refused, never downgraded.

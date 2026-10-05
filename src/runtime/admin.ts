@@ -4,7 +4,19 @@ import { page } from './pages';
 // Only the account the Worker names passes; any other is answered not-admin.
 
 // The caps every account has unless given its own; null is no cap. fileBytes: every account's pictures together.
-export type Service = { signupCap: number; accountBytesCap: number | null; accountFileBytesCap: number | null; accounts: number; fileBytes: number };
+// backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says needs the
+// operator (server/backup/freshness).
+export type BackupWarning = 'backup-stale' | 'disk-full';
+export type Service = {
+  signupCap: number;
+  accountBytesCap: number | null;
+  accountFileBytesCap: number | null;
+  accounts: number;
+  fileBytes: number;
+  backupAgeHours: number | null;
+  diskFreePercent: number;
+  warnings: BackupWarning[];
+};
 // An account's own cap: bytes, null for none, or 'default' for the service's.
 export type OwnCap = number | null | 'default';
 // restoring: held by a restore until it ends. leaving: its deletion stopped before the end; removing it again finishes it.

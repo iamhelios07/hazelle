@@ -143,7 +143,9 @@ describe('the operator', () => {
   it('reads the service values with their totals and sets them, which opens signup again', async () => {
     const admin = await operator();
     await stored(new Uint8Array([1, 2, 3]), admin.cookie);
-    expect(await (await t.get('admin/service', admin.cookie)).json()).toEqual({ signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, fileBytes: 3 });
+    expect(await (await t.get('admin/service', admin.cookie)).json()).toEqual({
+      signupCap: 3, accountBytesCap: null, accountFileBytesCap: null, accounts: 1, fileBytes: 3, backupAgeHours: null, diskFreePercent: expect.any(Number), warnings: [],
+    });
 
     expect((await t.put('admin/service', { signupCap: 1, accountBytesCap: 1000, accountFileBytesCap: 2000 }, admin.cookie)).status).toBe(204);
     expect((await t.post('signup', signupBody('late'))).status).toBe(403);

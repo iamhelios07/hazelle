@@ -9,7 +9,10 @@ const server = testServer();
 it('sets the service, suspends an account and resolves its report, each read back newest first in one short page', async () => {
   const { accountId } = await server.operator();
   expect(await setService({ signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null })).toMatchObject({ ok: true });
-  expect(await readService()).toEqual({ ok: true, data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, fileBytes: 0 } });
+  expect(await readService()).toEqual({
+    ok: true,
+    data: { signupCap: 5, accountBytesCap: 1_000_000, accountFileBytesCap: null, accounts: 1, fileBytes: 0, backupAgeHours: null, diskFreePercent: expect.any(Number), warnings: expect.any(Array) },
+  });
 
   expect(await suspend(accountId, '도배')).toMatchObject({ ok: true });
   expect(await readAccounts()).toMatchObject({ ok: true, data: { accounts: [{ accountId, suspended: true }] } });

@@ -1,4 +1,5 @@
 import type { Services } from '../http';
+import { freshness, type Freshness } from './freshness';
 import { captureGeneration, expireGenerations } from './generation';
 import { dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
 
@@ -17,11 +18,20 @@ export type Backups = {
   // Runs the daily job unless today's (UTC) generation is already captured or the hour has not come: a failed
   // generation is tried again on the next tick, and a run the process missed while down happens on the first tick
   // after it. A baseline that failed beside a captured generation waits for tomorrow; its failed run raises the alert.
+  // Then sends each standing alert to the webhook, at most once a UTC day per condition.
   tick(env: Services, now: number): Promise<void>;
+  freshness(env: Services, now: number): Promise<Freshness>;
   daily(env: Services, now: number): Promise<{ snapshots: Outcome; generation: Outcome }>;
 };
 
-export function backups(dataDir: string, hour: number): Backups {
+const ALERTS: Record<string, string> = {
+  'backup-stale': '백업이 36시간 넘게 없음',
+  'disk-full': '디스크 80% 초과',
+  'job-failed': '오늘 백업 작업 실패',
+};
+
+// webhook: a Discord- or Slack-compatible URL, or null for none.
+export function backups(dataDir: string, hour: number, webhook: string | null): Backups {
   let holds = 0;
   let capturing: Promise<void> | null = null;
   let drained: (() => void) | null = null;
@@ -89,16 +99,42 @@ export function backups(dataDir: string, hour: number): Backups {
     return running;
   };
 
+  // A send that fails is not recorded, so the next tick tries it again.
+  const alert = async (env: Services, now: number) => {
+    if (webhook === null) return;
+    const day = dayStart(now);
+    const failed = await env.db.prepare("SELECT 1 FROM backup_runs WHERE outcome = 'failed' AND started_at >= ?").bind(day).first();
+    const standing = [...(await freshness(env, dataDir, now)).warnings, ...(failed === null ? [] : ['job-failed'])];
+    for (const condition of standing) {
+      if ((await env.db.prepare('SELECT 1 FROM alerts_sent WHERE condition = ? AND day = ?').bind(condition, day).first()) !== null) continue;
+      const text = `[Hazelle] ${ALERTS[condition]}`;
+      const sent = await env
+        .outbound(new URL(webhook), {
+          method: 'POST',
+          headers: new Headers({ 'content-type': 'application/json' }),
+          body: JSON.stringify({ content: text, text }),
+          redirect: 'manual',
+          signal: AbortSignal.timeout(10_000),
+        })
+        .then((response) => response.ok, () => false);
+      if (sent) await env.db.prepare('INSERT INTO alerts_sent (condition, day) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(condition, day).run();
+    }
+  };
+
   return {
     hold,
     daily,
+    freshness: (env, now) => freshness(env, dataDir, now),
     tick: async (env, now) => {
-      if (running || now - dayStart(now) < hour * HOUR_MS) return;
-      const done = await env.db
-        .prepare("SELECT 1 FROM backup_runs WHERE kind = 'generation' AND outcome = 'ok' AND started_at >= ?")
-        .bind(dayStart(now))
-        .first();
-      if (done === null) await daily(env, now);
+      if (running) return;
+      if (now - dayStart(now) >= hour * HOUR_MS) {
+        const done = await env.db
+          .prepare("SELECT 1 FROM backup_runs WHERE kind = 'generation' AND outcome = 'ok' AND started_at >= ?")
+          .bind(dayStart(now))
+          .first();
+        if (done === null) await daily(env, now);
+      }
+      await alert(env, now);
     },
   };
 }

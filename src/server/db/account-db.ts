@@ -383,6 +383,13 @@ async function installArmed(dataDir: string, service: Db, incarnation: string): 
       current.close();
     }
   }
+  await installSnapshot(dataDir, incarnation, armed);
+}
+
+// The install itself, also run by a disaster restore (backup/restore.ts) for an operation already past it. No session
+// may hold the live file.
+export async function installSnapshot(dataDir: string, incarnation: string, armed: string): Promise<void> {
+  const live = accountPath(dataDir, incarnation);
   const source = snapshotPath(dataDir, incarnation, armed);
   if (!existsSync(source)) throw new StoreUnavailable('snapshot-missing');
   const staged = join(dataDir, 'accounts', `${incarnation}.install-${random()}.sqlite`);
