@@ -4,6 +4,7 @@ import type { Lore } from '../model/library';
 import { emptyMemory } from '../model/memory';
 import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
+import { EvaluationFailed } from './evaluation';
 import { ObjectStore, ScopeUnavailable, type Write } from './store';
 import { summaryId, summaryStale } from './summary';
 import { BATCH_LIMITS, testServer } from './testing';
@@ -80,6 +81,48 @@ describe('object store', () => {
     }
     for (const lease of leases) lease.release();
     expect(await store.summarizeChats(ids.slice(0, 1)).catch((error: unknown) => error)).toBeInstanceOf(ScopeUnavailable);
+  });
+
+  it('answers a held chat whose evaluation failed with that failure instead of throwing', async () => {
+    const { store } = await server.account();
+    const id = crypto.randomUUID();
+    const lease = store.retainChat(id, true);
+    expect(await lease.ready).toBeNull();
+    vi.spyOn(store.evaluation, 'display').mockRejectedValue(new EvaluationFailed('down'));
+    expect(await store.batch([{ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } }], undefined, { unheld: true })).toEqual({ ok: true, data: null });
+    await store.evaluated(id).catch(() => null);
+    expect(store.scopeState(id)).toBe('failed');
+    expect(await store.summarizeChats([id])).toEqual({ ok: false, error: 'evaluation-unavailable' });
+    lease.release();
+  });
+
+  it('rewrites a summary its chat outgrew while the others were built', async () => {
+    const { store } = await server.account();
+    const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
+    const leases = [a, b].map((id) => store.retainChat(id, true));
+    for (const lease of leases) expect(await lease.ready).toBeNull();
+    const message = (parent: string, at: number): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'message', role: 'user', at, text: `m${at}`, receipt: null } });
+    const root = (id: string): Write => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } });
+    expect(await store.batch([message(a, 1), message(b, 1)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
+    expect(await store.batch([root(a), root(b)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
+    await store.evaluated(a);
+    await store.evaluated(b);
+    const evaluated = store.evaluated.bind(store);
+    let grown = false;
+    // The second chat's turn comes once the first's summary is captured; a's growth goes unheld, so nothing but the
+    // pass under test could summarize it again.
+    vi.spyOn(store, 'evaluated').mockImplementation(async (chat) => {
+      if (chat === b && !grown) {
+        grown = true;
+        expect(await store.batch([message(a, 2)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
+      }
+      return evaluated(chat);
+    });
+    expect(await store.summarizeChats([a, b])).toBeNull();
+    const summary = store.get('summary', summaryId(a))!.value;
+    expect(summary.count).toBe(2);
+    expect(summaryStale(store, a, summary)).toBe(false);
+    for (const lease of leases) lease.release();
   });
 
   it('answers a create tried again after it landed with the object it made', async () => {

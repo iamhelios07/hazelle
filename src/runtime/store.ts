@@ -679,19 +679,25 @@ export class ObjectStore {
   }
 
   // chats: held by the caller, their entries written under those leases (a move's character), so every summary comes
-  // from memory and all go in one request. One not held and loaded is a caller's error, as in refreshChat.
+  // from memory and all go in one request. A pass runs until no chat has outgrown its summary, as saveSummary does:
+  // one that changed while the others were built would otherwise keep what was captured. One not held is a caller's
+  // error, as in refreshChat; one whose opening or evaluation failed answers with that failure.
   async summarizeChats(chats: Iterable<string>, signal?: AbortSignal): Promise<ApiFailure | null> {
     const epoch = this.epoch;
     try {
-      const writes: Write[] = [];
-      for (const chat of chats) {
-        if (this.scopes.get(chat)?.state !== 'loaded') throw new ScopeUnavailable(chat);
-        const write = await this.summaryWrite(chat);
-        if (write) writes.push(write);
+      for (;;) {
+        const writes: Write[] = [];
+        for (const chat of chats) {
+          const scope = this.scopes.get(chat);
+          if (!scope) throw new ScopeUnavailable(chat);
+          if (scope.state !== 'loaded') return scope.error ?? this.halted(epoch);
+          const write = await this.summaryWrite(chat);
+          if (write) writes.push(write);
+        }
+        if (!writes.length) return null;
+        const result = await this.commit(writes.map((write) => this.step(write)), undefined, signal);
+        if (!result.ok) return result;
       }
-      if (!writes.length) return null;
-      const result = await this.commit(writes.map((write) => this.step(write)), undefined, signal);
-      return result.ok ? null : result;
     } catch (error) {
       return this.codecFailure(error, epoch);
     }
