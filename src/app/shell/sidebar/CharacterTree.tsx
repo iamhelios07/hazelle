@@ -1,4 +1,4 @@
-import { Import, LayoutGrid, PackageOpen } from 'lucide-react';
+import { Import, LayoutGrid, MessageSquarePlus, PackageOpen } from 'lucide-react';
 import { useMemo } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import { matches, type FolderTree, type Shelf } from '../../../model/library';
@@ -71,6 +71,7 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
             </Button>
             <IconButton icon={PackageOpen} label="Risu에서 이사" size="sm" onClick={move} />
             <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery' })} />
+            <IconButton icon={MessageSquarePlus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Row>}
           {characters.length > 0 && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={onQuery} />}
         </>

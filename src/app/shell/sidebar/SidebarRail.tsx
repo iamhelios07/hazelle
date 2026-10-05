@@ -1,4 +1,4 @@
-import { Import, LayoutGrid, PackageOpen, Settings } from 'lucide-react';
+import { Import, LayoutGrid, MessageSquarePlus, PackageOpen, Settings } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { useImport } from '../../library/ImportFlow';
@@ -30,6 +30,7 @@ export function SidebarRail({ shelves, current, typing, onEnter, open, onToggle 
           <IconButton icon={Import} label="봇 가져오기" onClick={pick} />
           <IconButton icon={PackageOpen} label="Risu에서 이사" onClick={move} />
           <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" onClick={() => navigate(HOME)} />
+          <IconButton icon={MessageSquarePlus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: null })} />
         </>
       }
       footer={<IconButton icon={Settings} label={SETTINGS} onClick={() => navigate(settingsEntry(true))} />}
