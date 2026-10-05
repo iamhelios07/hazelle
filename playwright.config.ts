@@ -6,7 +6,7 @@ const PORT = 4417;
 const STATE = '.wrangler/e2e';
 const WRANGLER = './node_modules/.bin/wrangler';
 
-// Serves the build (npm run e2e builds first) through wrangler dev, so public/_headers and its CSP apply.
+// Serves the build (npm run e2e builds first) through wrangler dev; T6 of the Docker port moves this to the Node server.
 // wrangler dev takes no -c: it finds the built Worker and assets through the .wrangler/deploy/config.json
 // that vite build writes, where wrangler.jsonc names no assets at all.
 export default defineConfig({

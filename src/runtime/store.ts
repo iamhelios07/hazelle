@@ -61,7 +61,8 @@ const MAX_ATTEMPTS = 3;
 // Pauses between tries of a write that could not reach the server; the last repeats until it does.
 const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 // A call waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
-const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable']);
+// busy: the server's upload slots are all taken (server/files).
+const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable', 'busy']);
 const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
 type Scope = { fold: ChatFold; opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };

@@ -1,6 +1,6 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 
-// Kept apart from vite.config.ts so tests run in plain Node, without the Cloudflare plugin's dev runtime.
+// Kept apart from vite.config.ts so tests run in plain Node, without the client build's plugins.
 // Vitest stubs out stylesheets; one imported ?raw keeps its text, for src/app/ui/foundation/media.test.ts.
 // Agents' git worktrees live under .claude/, and each is a whole copy of the repository. e2e/ and shots/ are Playwright's.
 // maxWorkers: this machine has crashed from an unbounded run; four workers keep the suite under its memory.
