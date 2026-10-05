@@ -141,7 +141,10 @@ describe('moveFromRisu', () => {
     const steps: MoveStep[] = [];
     const retried = await moveFromRisu(store, files, backup, backup.catalog, (step) => steps.push(step));
     expect(retried.ok).toBe(true);
-    expect(steps.filter(({ kind }) => kind === 'chats').at(-1)).toEqual({ kind: 'chats', done: 2, total: 2 });
+    const last = new Map(steps.map((step) => [step.kind, step]));
+    expect(last.get('chats')).toEqual({ kind: 'chats', done: 2, total: 2 });
+    expect(last.get('characters')).toEqual({ kind: 'characters', done: 1, total: 1 });
+    expect([...last.values()].filter(({ done, total }) => done !== total)).toEqual([]);
     expect(store.list('character')).toHaveLength(1);
     expect(orphans()).toEqual([]);
     const visible = store.list('chat');

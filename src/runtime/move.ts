@@ -46,9 +46,11 @@ export function moveFromRisu(store: ObjectStore, files: Files, backup: RisuBacku
 }
 
 async function move(store: ObjectStore, files: Files, backup: RisuBackup, { characters, personas, presets, modules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+  // A kind's line counts what landed: 0 as its first begins, total once its last did, so it ends whole, not at total - 1.
+  const landed = (kind: MoveStep['kind'], done: number, total: number) => progress({ kind, done, total });
   const personaIds = new Map<string, string>();
   for (const [done, { key }] of personas.entries()) {
-    progress({ kind: 'personas', done, total: personas.length });
+    landed('personas', done, personas.length);
     const persona = await backup.persona(key);
     const picture = await persona.picture();
     const thumb = picture && (await thumbnail(picture).catch(() => null));
@@ -56,6 +58,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     if (!saved.ok) return saved;
     if (persona.id !== null) personaIds.set(persona.id, saved.data.id);
   }
+  if (personas.length) landed('personas', personas.length, personas.length);
 
   const moduleIds = modulesFromRisu(store);
   const namespaces = namespacesFromRisu(store);
@@ -69,7 +72,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   };
   const movedModules: MovedModule[] = [];
   for (const [done, { key }] of dueModules.entries()) {
-    progress({ kind: 'modules', done, total: dueModules.length });
+    landed('modules', done, dueModules.length);
     const module = await backup.module(key);
     const id = crypto.randomUUID();
     // Only one this run brings: one already here keeps the 항상 the user has since given it.
@@ -84,16 +87,18 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     if (module.risu !== null) moduleIds.set(module.risu, saved.data.id);
     if (module.namespace !== null) namespaces.set(module.namespace, saved.data.id);
   }
+  if (dueModules.length) landed('modules', dueModules.length, dueModules.length);
 
   let prompts = 0;
   for (const [done, { key }] of presets.entries()) {
-    progress({ kind: 'prompts', done, total: presets.length });
+    landed('prompts', done, presets.length);
     const { result } = await backup.preset(key);
     const paired = result.ok ? companionsOf(result.companions, moduleIds, namespaces) : [];
     const saved = await savePreset(store, result.ok && paired.length > 0 ? { ...result, prompt: { ...result.prompt, modules: paired } } : result);
     if (saved.ok) prompts++;
     else if (saved.failure.kind === 'save') return saved.failure.failure;
   }
+  if (presets.length) landed('prompts', presets.length, presets.length);
 
   // Chats and characters are listed by the server's rev, the latest first, and a batch takes its revs in the order
   // written. So what was talked in last is written last, whatever order Risu kept it in (due).
@@ -101,7 +106,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   let chatsDone = 0;
   const moved: MovedCharacter[] = [];
   for (const [done, { key }] of due.entries()) {
-    progress({ kind: 'characters', done, total: due.length });
+    landed('characters', done, due.length);
     const character = await backup.character(key);
     const folder = character.folder === null ? null : await folderNamed(store, character.folder);
     if (folder && !folder.ok) return folder;
@@ -136,6 +141,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
       for (const lease of leases) lease.release();
     }
   }
+  if (due.length) landed('characters', due.length, due.length);
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
 }
 

@@ -60,6 +60,7 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
       else skipped++;
     });
   }
+  if (assets.length) progress({ kind: 'assets', done: assets.length, total: assets.length });
   return { ok: true, data: { kept, skipped } };
 }
 
