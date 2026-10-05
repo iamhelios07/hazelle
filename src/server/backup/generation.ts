@@ -1,14 +1,15 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { copyFile, link, mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
+import { copyFile, link, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
 import type { Phase } from '../account-store';
-import { ACCOUNT_SCHEMA_VERSION, snapshotPath } from '../db/account-db';
+import { ACCOUNT_SCHEMA_VERSION, RETENTION_MS, snapshotPath } from '../db/account-db';
+import { digest, fsyncPath, makeDirs } from '../db/durable';
 import type { Services } from '../http';
-import { DAY_MS, pass, PINNED, RETENTION_MS, staleBaselines, takeBaselines } from './snapshots';
+import { DAY_MS, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
 // Backup generations (docs/research/docker-port-plan.md §10.2): backup/<id>/ holds the service snapshot, the
 // snapshots its manifest names and, written last, manifest.json; pictures go once each into the shared pool
@@ -40,17 +41,11 @@ export type Manifest = {
 
 export const generationsDir = (dataDir: string) => join(dataDir, 'backup');
 
-async function fsyncPath(path: string) {
-  const handle = await open(path, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
 // A link where the source and the backup share a filesystem, a copy where they do not (pictures may move to their own
-// volume). An existing target is the same content: snapshot files and pictures are named by what they hold.
+// volume). The copy is written under a .tmp-* name, synced and renamed, so every name here is whole: an existing
+// target holds the same content (snapshot files and pictures are named by what they hold) and is not hashed again. A
+// cut-off copy leaves only its .tmp-*, which the pool sweep (expireGenerations) or its generation's removal collects.
+// The caller syncs the directory.
 async function place(source: string, target: string) {
   try {
     await link(source, target);
@@ -58,18 +53,11 @@ async function place(source: string, target: string) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'EEXIST') return;
     if (code !== 'EXDEV') throw error;
-    await copyFile(source, target);
+    const temp = join(dirname(target), `.tmp-${randomBytes(8).toString('hex')}`);
+    await copyFile(source, temp);
+    fsyncPath(temp);
+    await rename(temp, target);
   }
-}
-
-async function sha256(path: string): Promise<{ sha256: string; bytes: number }> {
-  const hash = createHash('sha256');
-  let bytes = 0;
-  for await (const chunk of createReadStream(path) as AsyncIterable<Buffer>) {
-    hash.update(chunk);
-    bytes += chunk.length;
-  }
-  return { sha256: hash.digest('hex'), bytes };
 }
 
 type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema'>;
@@ -80,8 +68,10 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
   try {
     const all = <T>(sql: string, ...binds: (string | number)[]) => db.prepare(sql).all(...binds) as T[];
     const accounts = all<{ incarnation: string; state: 'active' | 'restoring' | 'leaving'; baseline: string | null }>(
-      `SELECT incarnation, state, (SELECT id FROM snapshots s WHERE s.incarnation = a.incarnation AND kind = 'baseline' ORDER BY taken_at DESC, id DESC LIMIT 1) AS baseline
+      `SELECT incarnation, state,
+         (SELECT id FROM snapshots s WHERE s.incarnation = a.incarnation AND kind = 'baseline' AND taken_at <= ?1 ORDER BY taken_at DESC, id DESC LIMIT 1) AS baseline
        FROM accounts a ORDER BY incarnation`,
+      now,
     );
     const unbacked = accounts.filter(({ state, baseline }) => state !== 'leaving' && baseline === null);
     if (unbacked.length) throw new Error(`generation: ${unbacked.length} accounts have no baseline`);
@@ -114,31 +104,33 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
   }
 }
 
-// Holds the gate (exclusive) while it brings every account's baseline up to its last finished rewind, snapshots the
-// service, and links what that snapshot names; compresses and writes the manifest after. gateMs: how long lifecycle
-// operations waited on it.
+// Holds the gate (exclusive) while it brings every account's baseline up to its last finished rewind (and one restoring
+// before its checkpoint up to today), snapshots the service, and links what that snapshot names; compresses and writes
+// the manifest after. now: the job's time, which names the generation; clock: that time moved on by the job's run, so
+// the baselines the job itself took are never ahead of it. gateMs: how long lifecycle operations waited on it.
 export async function captureGeneration(
   env: Services,
   dataDir: string,
   now: number,
+  clock: () => number,
   exclusive: <T>(work: () => Promise<T>) => Promise<{ value: T; gateMs: number }>,
 ): Promise<{ id: string; gateMs: number; manifest: Manifest }> {
   const id = `${now}-${randomBytes(4).toString('hex')}`;
   const root = join(generationsDir(dataDir), id);
   const pool = join(generationsDir(dataDir), POOL);
-  await mkdir(pool, { recursive: true });
-  await mkdir(root);
+  makeDirs(pool);
+  makeDirs(root);
   const plain = join(root, 'service.sqlite');
   const { value: named, gateMs } = await exclusive(async () => {
     // An older baseline would restore the account as it was before its last rewind.
-    const { failed } = await takeBaselines(env, await staleBaselines(env, ['active', 'restoring'], 0));
+    const { failed } = await takeBaselines(env, await staleBaselines(env, clock(), 0));
     if (failed.length) throw new Error(`generation: ${failed.length} accounts could not be brought up to their last rewind`);
     await env.db.prepare(`VACUUM INTO '${plain.replaceAll("'", "''")}'`).run();
-    const { named, sources } = readNamed(plain, now);
+    const { named, sources } = readNamed(plain, clock());
     const dirs = new Set<string>([pool]);
     for (const snapshot of named.snapshots) {
       const target = join(root, snapshot.path);
-      await mkdir(dirname(target), { recursive: true });
+      makeDirs(dirname(target));
       await place(snapshotPath(dataDir, snapshot.incarnation, snapshot.id), target);
       dirs.add(dirname(target));
     }
@@ -146,18 +138,18 @@ export async function captureGeneration(
       await placePicture(dataDir, join(pool, picture), picture, holders);
       await pass();
     }
-    for (const dir of dirs) await fsyncPath(dir);
+    for (const dir of dirs) fsyncPath(dir);
     return named;
   });
   const compressed = `${plain}.gz`;
   await pipeline(createReadStream(plain), createGzip(), createWriteStream(compressed));
-  await fsyncPath(compressed);
+  fsyncPath(compressed);
   await rm(plain);
   const manifest: Manifest = {
     version: 1,
     id,
     capturedAt: now,
-    service: { path: 'service.sqlite.gz', ...(await sha256(compressed)) },
+    service: { path: 'service.sqlite.gz', ...(await digest(compressed)) },
     accountSchema: ACCOUNT_SCHEMA_VERSION,
     ...named,
   };
@@ -170,7 +162,7 @@ export async function captureGeneration(
     await handle.close();
   }
   await rename(temp, join(root, MANIFEST));
-  await fsyncPath(root);
+  fsyncPath(root);
   return { id, gateMs, manifest };
 }
 

@@ -1,5 +1,6 @@
 import type { ExecutionContext } from 'hono';
 import type { Life, Phase, Unavailable } from './account-store';
+import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
 import type { Services } from './http';
 
@@ -103,7 +104,6 @@ type Operation = {
   phase: Phase;
   verified: number;
   error: string | null;
-  undone: string | null;
 };
 
 const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
@@ -113,15 +113,16 @@ const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 const FREE = "accounts.state = 'active' AND NOT EXISTS (SELECT 1 FROM restores WHERE incarnation = accounts.incarnation AND verified = 0)";
 const REPORTED = 'EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND resolved_at IS NULL AND created_at >= accounts.created_at)';
 const TIMELY = `?3 BETWEEN ?5 - ${OLDEST_MS} AND ?5 - ${NEWEST_MS}`;
-// An undo rewinds the account's latest finished restore to its checkpoint while the checkpoint's snapshot lasts.
+// An undo rewinds the account's latest finished restore to its checkpoint while the checkpoint is pinned
+// (backup/snapshots.ts): for 30 days after the restore ended.
 export const undoable = (operation: string, now: string) =>
   `${operation} = (SELECT id FROM restores WHERE incarnation = accounts.incarnation AND phase = 'done' AND verified = 1 ORDER BY id DESC LIMIT 1)
-   AND (SELECT checkpoint_at FROM restores WHERE id = ${operation}) >= ${now} - ${OLDEST_MS}`;
-export const UNDO_LIFE_MS = OLDEST_MS;
+   AND (SELECT ended_at FROM restores WHERE id = ${operation}) > ${now} - ${RETENTION_MS}`;
 
 export type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'bad-time' | 'cannot-undo' };
 
 // The operation's row and the account's hold on it commit together or not at all: the hold is gated on the insert.
+// An undo's target, the undone restore's checkpoint, is recorded with the row, so it is pinned from the begin on.
 export async function beginRestore(env: Services, accountId: string, report: number, from: { at: number } | { undoes: number }): Promise<Begun> {
   const db = env.db;
   const at = 'at' in from ? from.at : null;
@@ -130,8 +131,8 @@ export async function beginRestore(env: Services, accountId: string, report: num
   const [inserted] = await env.backups.hold(() => db.batch<{ id: number }>([
     db
       .prepare(
-        `INSERT INTO restores (incarnation, report_id, at, undoes, timeline, phase, created_at, updated_at)
-         SELECT incarnation, ?2, ?3, ?4, lower(hex(randomblob(16))), 'begun', ?5, ?5 FROM accounts
+        `INSERT INTO restores (incarnation, report_id, at, undoes, target, timeline, phase, created_at, updated_at)
+         SELECT incarnation, ?2, ?3, ?4, (SELECT checkpoint FROM restores WHERE id = ?4), lower(hex(randomblob(16))), 'begun', ?5, ?5 FROM accounts
          WHERE id = ?1 AND ${FREE} AND ${REPORTED} AND (${TIMELY} OR ${undoable('?4', '?5')}) RETURNING id`,
       )
       .bind(accountId, report, at, undoes, now),
@@ -168,14 +169,15 @@ export async function runRestore(env: Services, id: number): Promise<Run | null>
   for (let steps = 0; ; steps++) {
     const stepped = await env.backups.hold(async () => {
       const operation = await readOperation(env.db, id);
-      return operation && { operation, stop: steps === MAX_STEPS ? 'stuck' : await step(env, operation, () => ++arms > ARM_TRIES) };
+      if (!operation) return null;
+      const stop = steps === MAX_STEPS ? 'stuck' : await step(env, operation, () => ++arms > ARM_TRIES);
+      if (typeof stop === 'string') {
+        await env.db.prepare("UPDATE restores SET error = ?, updated_at = ? WHERE id = ? AND phase = ? AND phase != 'failed'").bind(stop, Date.now(), id, operation.phase).run();
+      }
+      return { stop };
     });
     if (!stepped) return null;
-    const { operation, stop } = stepped;
-    if (stop === undefined) continue;
-    if (stop !== null) {
-      await env.db.prepare("UPDATE restores SET error = ?, updated_at = ? WHERE id = ? AND phase = ? AND phase != 'failed'").bind(stop, Date.now(), id, operation.phase).run();
-    }
+    if (stepped.stop === undefined) continue;
     const end = await readOperation(env.db, id);
     return end && run(end);
   }
@@ -218,7 +220,7 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       return undefined;
     }
     case 'checkpointed': {
-      const answer = await store(env, incarnation).target(incarnation, id, operation.undoes === null ? { at: operation.at! } : { snapshot: operation.undone! });
+      const answer = await store(env, incarnation).target(incarnation, id, operation.undoes === null ? { at: operation.at! } : { snapshot: operation.target! });
       if ('unavailable' in answer) return 'store-unavailable';
       if ('tooEarly' in answer) await release(env, operation, 'failed', ['checkpointed'], 'too-early');
       if (!('target' in answer)) return undefined;
@@ -236,9 +238,9 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       const answer = await store(env, incarnation).marked(incarnation, id);
       if ('unavailable' in answer) return 'store-unavailable';
       if (!('marked' in answer)) return undefined;
-      // The rewind applied only if the file came from the target and the mark written after it is gone; either alone
-      // proves nothing.
-      if (!answer.marked && answer.installedFrom === operation.target) {
+      // The rewind applied only if this operation installed the file from the target and the mark written after it is
+      // gone; either alone proves nothing.
+      if (!answer.marked && answer.installedFrom === operation.target && answer.installedOp === id) {
         await advance(db, id, 'armed', 'rewound');
         return undefined;
       }
@@ -256,7 +258,7 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
     }
     case 'rewound':
       await db.batch([
-        db.prepare("UPDATE restores SET phase = 'done', error = NULL, updated_at = ? WHERE id = ? AND phase = 'rewound'").bind(Date.now(), id),
+        db.prepare("UPDATE restores SET phase = 'done', error = NULL, updated_at = ?1, ended_at = ?1 WHERE id = ?2 AND phase = 'rewound'").bind(Date.now(), id),
         db
           .prepare("UPDATE accounts SET state = 'active', timeline = ?, operation = NULL WHERE incarnation = ? AND operation = ? AND state = 'restoring' AND changes() = 1")
           .bind(operation.timeline, incarnation, id),
@@ -295,8 +297,8 @@ async function release(env: Services, operation: Operation, to: 'cancelled' | 'f
   const db = env.db;
   const [ended] = await db.batch([
     db
-      .prepare(`UPDATE restores SET phase = ?, error = ?, updated_at = ? WHERE id = ? AND phase IN (${from.map(() => '?').join(', ')})`)
-      .bind(to, error, Date.now(), operation.id, ...from),
+      .prepare(`UPDATE restores SET phase = ?1, error = ?2, updated_at = ?3, ended_at = ?3 WHERE id = ?4 AND phase IN (SELECT value FROM json_each(?5))`)
+      .bind(to, error, Date.now(), operation.id, JSON.stringify(from)),
     db.prepare("UPDATE accounts SET state = 'active', operation = NULL WHERE incarnation = ? AND operation = ? AND state = 'restoring' AND changes() = 1").bind(operation.incarnation, operation.id),
     terminalLog(db, to === 'cancelled' ? 'restore-cancelled' : 'restore-failed', operation, error),
   ]);
@@ -314,12 +316,7 @@ function terminalLog(db: Db, action: string, operation: Operation, error: string
 }
 
 function readOperation(db: Db, id: number) {
-  return db
-    .prepare(
-      `SELECT r.id, r.incarnation, r.at, r.undoes, r.timeline, r.target, r.phase, r.verified, r.error, u.checkpoint AS undone
-       FROM restores r LEFT JOIN restores u ON u.id = r.undoes WHERE r.id = ?`,
-    )
-    .bind(id)
+  return db.prepare('SELECT id, incarnation, at, undoes, timeline, target, phase, verified, error FROM restores WHERE id = ?').bind(id)
     .first<Operation>();
 }
 

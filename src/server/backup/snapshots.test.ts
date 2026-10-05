@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { accountPath, snapshotPath } from '../db/account-db';
 import { sessionCookie, signupBody, testApp } from '../testing';
+import { listGenerations, readManifest } from './generation';
 import { DAY_MS, dayStart, expireSnapshots } from './snapshots';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -50,6 +51,17 @@ describe('the daily job', () => {
     // 30 real snapshots and generations: past 5 s when the whole suite runs beside it.
   }, 30_000);
 
+  it('captures the day again after the clock jumps back across midnight, past a run and a baseline stamped in the future', async () => {
+    const incarnation = await signedUp('jin');
+    const today = dayStart(Date.now()) + 4 * HOUR_MS;
+    await tickAt(today + 2 * DAY_MS);
+    await tickAt(today);
+    expect((await baselines(incarnation)).results.map(({ takenAt }) => takenAt)).toEqual([today, today + 2 * DAY_MS]);
+    const generation = (await listGenerations(t.dir)).find(({ capturedAt }) => capturedAt === today)!;
+    const { accounts } = (await readManifest(join(t.dir, 'backup', generation.id)))!;
+    expect(accounts[0]!.baseline).toMatch(new RegExp(`^${today}-`));
+  });
+
   it('takes a baseline beside a checkpoint younger than a day, and records a run that failed an account, then tries again', async () => {
     const live = await signedUp('jin');
     const lost = await signedUp('lost');
@@ -72,7 +84,7 @@ describe('the daily job', () => {
 });
 
 describe('retention', () => {
-  it('lets a snapshot go at 30 days unless an operation pins it or it is a live account’s newest baseline; a deleted account keeps none past 30 days', async () => {
+  it('lets a snapshot go at 30 days unless an operation pins it (open, or ended under 30 days ago however it ended) or it is a live account’s newest baseline; a deleted account keeps none past 30 days', async () => {
     const live = await signedUp('jin');
     const gone = 'f'.repeat(32);
     const now = Date.now();
@@ -83,6 +95,8 @@ describe('retention', () => {
       ['undo', live, 'checkpoint', old],
       ['open-target', live, 'baseline', old - 2 * DAY_MS],
       ['stale-undo', live, 'checkpoint', old],
+      ['cancelled', live, 'checkpoint', old],
+      ['failed', live, 'checkpoint', old],
       ['young', live, 'checkpoint', now - DAY_MS],
       ['gone-only', gone, 'baseline', old],
       ['gone-young', gone, 'baseline', now - 10 * DAY_MS],
@@ -92,20 +106,23 @@ describe('retention', () => {
       mkdirSync(join(t.dir, 'snapshots', incarnation), { recursive: true });
       writeFileSync(snapshotPath(t.dir, incarnation, id), 'x');
     }
-    const restore = (phase: string, checkpoint: string | null, target: string | null, updatedAt: number) =>
+    // updated_at is the latest retry's; only ended_at counts.
+    const restore = (phase: string, checkpoint: string | null, target: string | null, endedAt: number | null) =>
       t.env.db
-        .prepare('INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint, target, phase, created_at, updated_at) VALUES (?, 1, 1, ?, ?, ?, ?, 1, ?)')
-        .bind(live, 'x', checkpoint, target, phase, updatedAt)
+        .prepare('INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint, target, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, ?, ?, ?, ?, 1, ?, ?)')
+        .bind(live, 'x', checkpoint, target, phase, now, endedAt)
         .run();
     await restore('done', 'undo', null, now - 10 * DAY_MS);
     await restore('done', 'stale-undo', null, now - 31 * DAY_MS);
-    await restore('armed', null, 'open-target', now - 40 * DAY_MS);
+    await restore('armed', null, 'open-target', null);
+    await restore('cancelled', 'cancelled', null, now - 5 * DAY_MS);
+    await restore('failed', 'failed', null, now - 31 * DAY_MS);
 
-    expect(await expireSnapshots(t.env, t.dir, now)).toBe(3);
+    expect(await expireSnapshots(t.env, t.dir, now)).toBe(4);
     const left = (await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id);
-    expect(left).toEqual(['gone-young', 'newest', 'open-target', 'undo', 'young']);
+    expect(left).toEqual(['cancelled', 'gone-young', 'newest', 'open-target', 'undo', 'young']);
     for (const [id, incarnation] of snapshots) expect(existsSync(snapshotPath(t.dir, incarnation, id))).toBe(left.includes(id));
     expect(await expireSnapshots(t.env, t.dir, now + 20 * DAY_MS)).toBe(2);
-    expect((await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id)).toEqual(['newest', 'open-target', 'young']);
+    expect((await t.env.db.prepare('SELECT id FROM snapshots ORDER BY id').all<{ id: string }>()).results.map(({ id }) => id)).toEqual(['cancelled', 'newest', 'open-target', 'young']);
   });
 });

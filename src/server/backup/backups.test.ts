@@ -3,14 +3,18 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { sessionCookie, signupBody, testApp } from '../testing';
 import { COPIED, generationsDir, listGenerations } from './generation';
+import { DAY_MS, dayStart } from './snapshots';
 
 const HOUR_MS = 60 * 60 * 1000;
 const sent: { url: string; body: unknown }[] = [];
+// The webhook answers once this settles.
+let answered: Promise<void> = Promise.resolve();
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
   t = await testApp(async (url, init) => {
     sent.push({ url: url.href, body: JSON.parse(init.body!) });
+    await answered;
     return new Response(null, { status: 204 });
   });
 });
@@ -18,6 +22,25 @@ afterAll(() => t.dispose());
 beforeEach(async () => {
   await t.reset();
   sent.length = 0;
+  answered = Promise.resolve();
+});
+
+it('sends each standing alert once when a tick comes while another waits on the webhook', async () => {
+  sessionCookie(await t.post('signup', signupBody('operator')));
+  const at = dayStart(Date.now() + 3 * DAY_MS) + 4 * HOUR_MS;
+  t.clock.now = () => at;
+  let answer = () => {};
+  answered = new Promise((resolve) => (answer = resolve));
+  const first = t.env.backups.tick(t.env, at);
+  await expect.poll(() => sent.length).toBe(1);
+  const second = t.env.backups.tick(t.env, at + 60_000);
+  // Time for a second tick of its own to reach the webhook too.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  answer();
+  await Promise.all([first, second]);
+  const texts = sent.map(({ body }) => (body as { text: string }).text);
+  expect(texts).toContain('[Hazelle] 백업이 36시간 넘게 없음');
+  expect(new Set(texts).size).toBe(texts.length);
 });
 
 it('raises the banner and the webhook once a day for a failed night after a backup older than 36 hours', async () => {

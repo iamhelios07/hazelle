@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { closeSync, createReadStream, createWriteStream, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip, createGzip } from 'node:zlib';
 import { StoreRules, type SqlValue, type StoreDb, type StoreReads, type Unavailable } from '../account-store';
+import { digest, fsyncPath, makeDirs } from './durable';
 import { openDatabase, type Db } from './service-db';
 
 // One account's database file, accounts/<incarnation>.sqlite, behind StoreRules (account-store.ts), and the registry
@@ -14,14 +15,21 @@ import { openDatabase, type Db } from './service-db';
 // Bumped with every change to SCHEMA; a file carrying a newer number is refused, never downgraded.
 export const ACCOUNT_SCHEMA_VERSION = 1;
 const SCHEMA = [
-  'CREATE TABLE head (id INTEGER PRIMARY KEY CHECK (id = 1), rev INTEGER NOT NULL, bytes INTEGER NOT NULL, timeline TEXT NOT NULL, schema_version INTEGER NOT NULL, installed_from TEXT)',
+  'CREATE TABLE head (id INTEGER PRIMARY KEY CHECK (id = 1), rev INTEGER NOT NULL, bytes INTEGER NOT NULL, timeline TEXT NOT NULL, schema_version INTEGER NOT NULL, installed_from TEXT, installed_op INTEGER)',
   'CREATE TABLE objects (id TEXT PRIMARY KEY, kind TEXT NOT NULL, parent_id TEXT, rev INTEGER NOT NULL, body TEXT, deleted_at INTEGER)',
   // The global cursor stays in revision order, including omitted bodies.
   'CREATE INDEX objects_rev ON objects (rev, kind, parent_id, id, deleted_at)',
   'CREATE INDEX objects_parent_rev ON objects (parent_id, rev)',
   'CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
 ];
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+// Over an accounts row aliased `a`: whether a baseline may be taken of the account's file now. Before an operation's
+// checkpoint the file is still the account's own; from the checkpoint until the operation ends it is about to be
+// replaced or already was, and a baseline taken then would read, once the rewind is done, as the account after it.
+export const TAKES_BASELINE = (a: string) =>
+  `(${a}.state = 'active' OR (${a}.state = 'restoring' AND (SELECT phase FROM restores WHERE id = ${a}.operation) IN ('begun', 'fenced')))`;
+
+// How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
+export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_HANDLES = 256;
 const IDLE_MS = 10 * 60 * 1000;
 // node:sqlite error codes that mean the file itself is unreadable.
@@ -33,17 +41,8 @@ export const snapshotPath = (dataDir: string, incarnation: string, id: string) =
 
 // Thrown inside a store call for a file the rules cannot be answered from; the registry turns it into { unavailable }.
 export class StoreUnavailable extends Error {
-  constructor(readonly why: 'missing' | 'newer-schema' | 'snapshot-missing' | 'corrupt') {
+  constructor(readonly why: 'missing' | 'newer-schema' | 'snapshot-missing' | 'snapshot-corrupt' | 'corrupt') {
     super(`account store unavailable: ${why}`);
-  }
-}
-
-function fsyncPath(path: string) {
-  const fd = openSync(path, 'r');
-  try {
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
   }
 }
 
@@ -53,7 +52,7 @@ const random = () => randomBytes(6).toString('hex');
 // between leaves a file with no row, which the hourly reconciliation removes after an hour.
 export function prepareAccountFile(dataDir: string, incarnation: string, timeline: string): void {
   const path = accountPath(dataDir, incarnation);
-  mkdirSync(join(dataDir, 'accounts'), { recursive: true });
+  makeDirs(join(dataDir, 'accounts'));
   if (existsSync(path)) throw new Error(`account file exists: ${incarnation}`);
   const db = openDatabase(path);
   try {
@@ -98,20 +97,37 @@ function corruptOr(error: unknown): unknown {
 }
 
 // The snapshot a rewind to `at` lands on: the newest taken at or before it, within retention, and taken after the
-// checkpoint of every rewind finished by then, since one taken before such a rewind holds the state it replaced.
-// A catalogued snapshot whose file is gone is a storage failure, not "too early".
+// checkpoint of every rewind finished by then (ended_at, not the checkpoint's time: one that finished after `at` had
+// not replaced anything yet), since one taken before such a rewind holds the state it replaced.
+// A catalogued snapshot whose file is gone or altered is a storage failure, not "too early".
 export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number, now: number): Promise<{ id: string; takenAt: number } | null> {
   const row = await service
     .prepare(
       `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2 AND taken_at > ?3
-         AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND checkpoint_at <= ?2), -1)
+         AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND ended_at <= ?2), -1)
        ORDER BY taken_at DESC LIMIT 1`,
     )
     .bind(incarnation, at, now - RETENTION_MS)
     .first<{ id: string; takenAt: number }>();
   if (row === null) return null;
-  if (!existsSync(snapshotPath(dataDir, incarnation, row.id))) throw new StoreUnavailable('snapshot-missing');
+  await verifySnapshot(dataDir, service, incarnation, row.id);
   return row;
+}
+
+// The one check that a snapshot can be installed: its row is there and its file has the size and SHA-256 the row
+// recorded. The preview, the choice of a target and the install all pass through it, so a snapshot the install would
+// refuse is refused before an operation is armed on it.
+async function verifySnapshot(dataDir: string, service: Db, incarnation: string, id: string): Promise<void> {
+  const row = await service.prepare('SELECT bytes, sha256 FROM snapshots WHERE id = ? AND incarnation = ?').bind(id, incarnation).first<{ bytes: number; sha256: string }>();
+  if (row === null) throw new StoreUnavailable('snapshot-missing');
+  let found: { sha256: string; bytes: number };
+  try {
+    found = await digest(snapshotPath(dataDir, incarnation, id));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new StoreUnavailable('snapshot-missing');
+    throw error;
+  }
+  if (found.bytes !== row.bytes || found.sha256 !== row.sha256) throw new StoreUnavailable('snapshot-corrupt');
 }
 
 // Exported for tests that wrap a StoreDb; production code reaches a file only through the registry.
@@ -175,7 +191,7 @@ export class AccountDb implements StoreDb {
       const takenAt = this.clock();
       const id = `${takenAt}-${random()}`;
       const dir = snapshotDir(this.dataDir, this.incarnation);
-      mkdirSync(dir, { recursive: true });
+      makeDirs(dir);
       const plain = join(dir, `.tmp-${id}.sqlite`);
       const gz = join(dir, `.tmp-${id}.sqlite.gz`);
       // VACUUM INTO takes a literal path and runs outside any transaction; the registry's queue keeps writers out.
@@ -211,6 +227,7 @@ export class AccountDb implements StoreDb {
       return id;
     },
     forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at, this.clock()))?.id ?? null,
+    verify: (id: string) => verifySnapshot(this.dataDir, this.service, this.incarnation, id),
   };
 
   close() {
@@ -231,9 +248,10 @@ export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.
   getByName(incarnation: string): StoreStub;
   prepare(incarnation: string, timeline: string): Promise<void>;
-  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles.
-  snapshot(incarnation: string, kind: 'baseline'): Promise<string>;
-  // What a rewind of the account to `at` would land on now; throws StoreUnavailable for a catalogued file that is gone.
+  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles. null: refused,
+  // since the account takes no baseline now (TAKES_BASELINE).
+  snapshot(incarnation: string, kind: 'baseline'): Promise<string | null>;
+  // What a rewind of the account to `at` would land on now; throws StoreUnavailable for a catalogued file gone or altered.
   snapshotAt(incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null>;
   evictIdle(now?: number): void;
   close(): void;
@@ -327,6 +345,10 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
     snapshot: (incarnation, kind) => {
       const held = entry(incarnation);
       return enqueue(held, async () => {
+        // Read here, not from the session's lifecycle: that is cached, and says restoring until the store next
+        // reloads after an operation is done. The checkpoint goes through this queue, so none comes in between.
+        const free = await service.prepare(`SELECT ${TAKES_BASELINE('a')} AS free FROM accounts a WHERE incarnation = ?`).bind(incarnation).first<number>('free');
+        if (!free) return null;
         const opened = !held.session;
         const { db } = await session(incarnation, held);
         try {
@@ -363,35 +385,38 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
 }
 
 // An armed restore is installed when the account's store next starts: the snapshot is decompressed beside the live
-// file, checked, marked with the snapshot it came from, checkpointed into one file, verified, and renamed over the
-// live file after its WAL and shm are gone, so the live file is always either the old one intact or the new one whole.
+// file, checked, marked with the snapshot it came from and the operation installing it, checkpointed into one file,
+// verified, and renamed over the live file after its WAL and shm are gone, so the live file is always either the old
+// one intact or the new one whole. The mark names the operation too: a later rewind to the same snapshot is a new
+// install over a file that has changed since.
 async function installArmed(dataDir: string, service: Db, incarnation: string): Promise<void> {
   const armed = await service
     .prepare(
-      `SELECT r.target FROM restores r JOIN accounts a ON a.incarnation = r.incarnation AND a.operation = r.id
+      `SELECT r.id, r.target FROM restores r JOIN accounts a ON a.incarnation = r.incarnation AND a.operation = r.id
        WHERE a.incarnation = ? AND a.state = 'restoring' AND r.phase = 'armed' AND r.target IS NOT NULL`,
     )
     .bind(incarnation)
-    .first<string>('target');
+    .first<{ id: number; target: string }>();
   if (armed === null) return;
   const live = accountPath(dataDir, incarnation);
   if (existsSync(live)) {
     const current = new DatabaseSync(live, { readOnly: true });
     try {
-      if ((current.prepare('SELECT installed_from FROM head').get() as { installed_from: string | null } | undefined)?.installed_from === armed) return;
+      const head = current.prepare('SELECT installed_from, installed_op FROM head').get() as { installed_from: string | null; installed_op: number | null } | undefined;
+      if (head?.installed_from === armed.target && head.installed_op === armed.id) return;
     } finally {
       current.close();
     }
   }
-  await installSnapshot(dataDir, incarnation, armed);
+  await installSnapshot(dataDir, service, incarnation, armed.target, armed.id);
 }
 
 // The install itself, also run by a disaster restore (backup/restore.ts) for an operation already past it. No session
 // may hold the live file.
-export async function installSnapshot(dataDir: string, incarnation: string, armed: string): Promise<void> {
+export async function installSnapshot(dataDir: string, service: Db, incarnation: string, armed: string, operation: number): Promise<void> {
   const live = accountPath(dataDir, incarnation);
   const source = snapshotPath(dataDir, incarnation, armed);
-  if (!existsSync(source)) throw new StoreUnavailable('snapshot-missing');
+  await verifySnapshot(dataDir, service, incarnation, armed);
   const staged = join(dataDir, 'accounts', `${incarnation}.install-${random()}.sqlite`);
   try {
     await pipeline(createReadStream(source), createGunzip(), createWriteStream(staged));
@@ -401,16 +426,16 @@ export async function installSnapshot(dataDir: string, incarnation: string, arme
       if (check?.quick_check !== 'ok') throw new StoreUnavailable('corrupt');
       const version = (db.prepare('SELECT schema_version FROM head WHERE id = 1').get() as { schema_version: number }).schema_version;
       if (version > ACCOUNT_SCHEMA_VERSION) throw new StoreUnavailable('newer-schema');
-      db.prepare('UPDATE head SET installed_from = ? WHERE id = 1').run(armed);
+      db.prepare('UPDATE head SET installed_from = ?, installed_op = ? WHERE id = 1').run(armed, operation);
       db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     } finally {
       db.close();
     }
     const verify = new DatabaseSync(staged, { readOnly: true });
     try {
-      const head = verify.prepare('SELECT installed_from FROM head').get() as { installed_from: string | null };
+      const head = verify.prepare('SELECT installed_from, installed_op FROM head').get() as { installed_from: string | null; installed_op: number | null };
       const tables = (verify.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map(({ name }) => name);
-      if (head.installed_from !== armed || !tables.includes('objects') || !tables.includes('kv')) throw new StoreUnavailable('corrupt');
+      if (head.installed_from !== armed || head.installed_op !== operation || !tables.includes('objects') || !tables.includes('kv')) throw new StoreUnavailable('corrupt');
     } finally {
       verify.close();
     }

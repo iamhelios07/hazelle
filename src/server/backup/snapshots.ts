@@ -1,54 +1,59 @@
 import { rm } from 'node:fs/promises';
-import { snapshotPath } from '../db/account-db';
+import { RETENTION_MS, snapshotPath, TAKES_BASELINE } from '../db/account-db';
 import type { Services } from '../http';
 
 // The daily baselines and the retention of every snapshot (docs/research/docker-port-plan.md §10.1). Day boundaries
 // are UTC. Work goes one account at a time with a yield between, so the event loop keeps serving requests.
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-export const RETENTION_MS = 30 * DAY_MS;
 
 // The pin rule, over a snapshots row aliased `s` and the time `now` (a bind or literal): an operation pins its
-// checkpoint and target until it ends, and a finished rewind keeps both for the 30 days its undo lives. Retention and
-// every backup generation read this one rule.
+// checkpoint and target until it ends and for 30 days after, whichever way it ended: a finished rewind's undo lives
+// that long, and a cancelled or failed one stays recoverable by hand. Retention and every backup generation read this
+// one rule.
 export const PINNED = (s: string, now: string) =>
   `EXISTS (SELECT 1 FROM restores r WHERE r.incarnation = ${s}.incarnation AND ${s}.id IN (r.checkpoint, r.target)
-     AND (r.phase NOT IN ('done', 'cancelled', 'failed') OR (r.phase = 'done' AND r.updated_at > ${now} - ${RETENTION_MS})))`;
+     AND (r.ended_at IS NULL OR r.ended_at > ${now} - ${RETENTION_MS}))`;
 
 export const dayStart = (now: number) => now - (now % DAY_MS);
 export const pass = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-// The accounts whose newest baseline is absent, older than `before`, or older than the last rewind finished on them,
-// among those in `states`. Freshness is judged among baselines only: a young checkpoint holds an operation's undo, not
-// the account as it is now.
-export async function staleBaselines(env: Services, states: string[], before: number): Promise<string[]> {
+// The accounts that take a baseline now (TAKES_BASELINE) whose newest baseline is absent, older than the last rewind
+// finished on them, or older than `before` when active and than today (UTC) when restoring: one restoring before its
+// checkpoint is restored from its baseline should the operation be cut off. Freshness is judged among baselines only:
+// a young checkpoint holds an operation's undo, not the account as it is now. A baseline stamped after `now` is
+// evidence of a clock since put back, not of freshness.
+export async function staleBaselines(env: Services, now: number, before: number): Promise<string[]> {
   const { results } = await env.db
     .prepare(
       `SELECT incarnation FROM accounts a
-       WHERE state IN (SELECT value FROM json_each(?1))
-         AND COALESCE((SELECT MAX(taken_at) FROM snapshots WHERE incarnation = a.incarnation AND kind = 'baseline'), -1)
-           < MAX(?2, COALESCE((SELECT MAX(updated_at) FROM restores WHERE incarnation = a.incarnation AND phase = 'done'), -1))
+       WHERE ${TAKES_BASELINE('a')}
+         AND COALESCE((SELECT MAX(taken_at) FROM snapshots WHERE incarnation = a.incarnation AND kind = 'baseline' AND taken_at <= ?1), -1)
+           < MAX(CASE a.state WHEN 'active' THEN ?2 ELSE ?3 END,
+             COALESCE((SELECT MAX(ended_at) FROM restores WHERE incarnation = a.incarnation AND phase = 'done'), -1))
        ORDER BY incarnation`,
     )
-    .bind(JSON.stringify(states), before)
+    .bind(now, before, dayStart(now))
     .all<{ incarnation: string }>();
   return results.map(({ incarnation }) => incarnation);
 }
 
-// failed: the accounts whose snapshot threw; the others are taken.
-export async function takeBaselines(env: Services, incarnations: string[]): Promise<{ taken: number; failed: string[] }> {
+// skipped: accounts that stopped taking a baseline between their selection and their turn. failed: those whose
+// snapshot threw.
+export async function takeBaselines(env: Services, incarnations: string[]): Promise<{ taken: number; skipped: number; failed: string[] }> {
   let taken = 0;
+  let skipped = 0;
   const failed: string[] = [];
   for (const incarnation of incarnations) {
     try {
-      await env.stores.snapshot(incarnation, 'baseline');
-      taken++;
+      if ((await env.stores.snapshot(incarnation, 'baseline')) === null) skipped++;
+      else taken++;
     } catch {
       failed.push(incarnation);
     }
     await pass();
   }
-  return { taken, failed };
+  return { taken, skipped, failed };
 }
 
 // A snapshot goes once it is 30 days old, unless it is pinned (PINNED) or it is a live account's newest baseline,

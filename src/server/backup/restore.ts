@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { copyFile, mkdir, open, readdir } from 'node:fs/promises';
+import { copyFile, mkdir, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
@@ -8,6 +7,7 @@ import type { ExecutionContext } from 'hono';
 import type { Phase } from '../account-store';
 import { serviceReads } from '../account-store';
 import { accountPath, accountRegistry, installSnapshot, snapshotPath } from '../db/account-db';
+import { digest, fsyncPath, makeDirs } from '../db/durable';
 import { migrate } from '../db/migrate';
 import { openDatabase, serviceDb } from '../db/service-db';
 import { diskBucket } from '../files/disk-bucket';
@@ -27,37 +27,22 @@ import { POOL, readManifest, type Manifest } from './generation';
 
 const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
-async function sha256(path: string): Promise<string> {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path) as AsyncIterable<Buffer>) hash.update(chunk);
-  return hash.digest('hex');
-}
-
-async function fsyncPath(path: string) {
-  const handle = await open(path, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-}
-
 async function gunzipTo(source: string, target: string) {
-  await mkdir(dirname(target), { recursive: true });
+  makeDirs(dirname(target));
   await pipeline(createReadStream(source), createGunzip(), createWriteStream(target, { flags: 'wx' }));
-  await fsyncPath(target);
+  fsyncPath(target);
 }
 
 async function copyInto(source: string, target: string) {
-  await mkdir(dirname(target), { recursive: true });
+  makeDirs(dirname(target));
   await copyFile(source, target);
-  await fsyncPath(target);
+  fsyncPath(target);
 }
 
 // Throws on the first artifact that is missing or does not hash to what the manifest says.
 async function verify(generation: string, manifest: Manifest) {
   const check = async (path: string, expected: string) => {
-    const actual = await sha256(path).catch(() => 'missing');
+    const actual = await digest(path).then(({ sha256 }) => sha256, () => 'missing');
     if (actual !== expected) throw new Error(`restore: ${path} is ${actual === 'missing' ? 'missing' : 'corrupt'}`);
   };
   await check(join(generation, manifest.service.path), manifest.service.sha256);
@@ -69,6 +54,8 @@ export type Restored = { accounts: number; pictures: number; operations: { id: n
 
 export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string): Promise<Restored> {
   const manifest = await readManifest(generation);
+  // No `copied` needed: that marker is for freshness and the copier; a generation with its manifest and verified
+  // hashes is a whole restore source wherever it lies.
   if (manifest === null) throw new Error(`restore: ${generation} has no manifest; it is not a complete generation`);
   if (manifest.version !== 1) throw new Error(`restore: manifest version ${manifest.version} is not one this build reads`);
   await mkdir(dataDir, { recursive: true });
@@ -90,10 +77,16 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     if (source !== null) await gunzipTo(snapshotPath(dataDir, incarnation, source), accountPath(dataDir, incarnation));
   }
   // Past its install already: the live file was the target when the generation was taken.
-  for (const { incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, incarnation, target!);
+  for (const { id, incarnation, phase, target } of manifest.operations) if (phase === 'rewound') await installSnapshot(dataDir, db, incarnation, target!, id);
   const { results: pictures } = await db.prepare('SELECT incarnation, id FROM account_files WHERE stored = 1').all<{ incarnation: string; id: string }>();
   for (const { incarnation, id } of pictures) await copyInto(join(generation, '..', POOL, id), join(dataDir, 'files', incarnation, id));
-  for (const dir of ['', 'accounts', 'snapshots', 'files']) await fsyncPath(join(dataDir, dir)).catch(() => {});
+  for (const dir of ['', 'accounts', 'snapshots', 'files']) {
+    try {
+      fsyncPath(join(dataDir, dir));
+    } catch {
+      // A generation without pictures or snapshots leaves that directory unmade.
+    }
+  }
 
   const outbound = () => Promise.reject(new Error('A restore calls no provider.'));
   const env: Services = {

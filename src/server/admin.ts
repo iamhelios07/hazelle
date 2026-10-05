@@ -1,11 +1,11 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { Phase } from './account-store';
-import { StoreUnavailable } from './db/account-db';
+import { RETENTION_MS, StoreUnavailable } from './db/account-db';
 import { fileBlocks } from './files';
 import type { Db, SqlValue, Statement } from './db/service-db';
 import { fail, ID, readObject, refused, type AppEnv, type Services, type State } from './http';
-import { beginRestore, cancelRestore, leaveAccount, restoreActions, runRestore, store, undoable, UNDO_LIFE_MS } from './lifecycle';
+import { beginRestore, cancelRestore, leaveAccount, restoreActions, runRestore, store, undoable } from './lifecycle';
 import { requireSession } from './session';
 
 const MAX_REPORT_LENGTH = 4000;
@@ -329,17 +329,17 @@ admin.get('/accounts/:id/snapshot', async (c) => {
 admin.get('/accounts/:id/restores', async (c) => {
   const { results } = await c.env.db.prepare(
     `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
-       (SELECT taken_at FROM snapshots WHERE id = r.target) AS targetAt, r.checkpoint_at, ${undoable('r.id', '?2')} AS canUndo
+       (SELECT taken_at FROM snapshots WHERE id = r.target) AS targetAt, r.ended_at, ${undoable('r.id', '?2')} AS canUndo
      FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
   )
     .bind(c.req.param('id'), Date.now())
-    .all<{ phase: Phase; verified: number; canUndo: number; checkpoint_at: number | null }>();
+    .all<{ phase: Phase; verified: number; canUndo: number; ended_at: number | null }>();
   return c.json({
-    restores: results.map(({ checkpoint_at, canUndo, ...row }) => ({
+    restores: results.map(({ ended_at, canUndo, ...row }) => ({
       ...row,
       verified: Boolean(row.verified),
       canUndo: Boolean(canUndo),
-      undoExpiresAt: canUndo ? checkpoint_at! + UNDO_LIFE_MS : null,
+      undoExpiresAt: canUndo ? ended_at! + RETENTION_MS : null,
       actions: restoreActions(row.phase, Boolean(row.verified)),
     })),
   });

@@ -1,6 +1,8 @@
+import { rmSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Phase, Write } from './account-store';
-import type { Stores } from './db/account-db';
+import { expireSnapshots } from './backup/snapshots';
+import { snapshotPath, type Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
 import { MAX_FILE_BYTES } from './files';
 import type { Bucket } from './files/disk-bucket';
@@ -256,6 +258,44 @@ describe('a restore', () => {
     expect(await logged('restore-begun')).toBe(1);
   });
 
+  it('allows the undo for 30 days after the restore ended, however long before that its checkpoint was taken', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const now = Date.now();
+    await t.env.db.prepare('UPDATE restores SET checkpoint_at = ?, ended_at = ? WHERE id = ?').bind(now - 40 * 24 * HOUR_MS, now - 29 * 24 * HOUR_MS, id).run();
+    const listed = (await (await t.get(`admin/accounts/${seed.id}/restores`, operator.cookie)).json()) as { restores: { undoExpiresAt: number }[] };
+    expect(listed.restores[0]!.undoExpiresAt).toBe(now + 24 * HOUR_MS);
+    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 30 * 24 * HOUR_MS - 60_000, id).run();
+    expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toEqual({ refused: 'cannot-undo' });
+    await t.env.db.prepare('UPDATE restores SET ended_at = ? WHERE id = ?').bind(now - 29 * 24 * HOUR_MS, id).run();
+    expect(await beginRestore(t.env, seed.id, seed.report, { undoes: id })).toHaveProperty('begun');
+  });
+
+  it('keeps the checkpoint an undo will install pinned from its begin, past the end of the undone restore’s own pin', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
+    t.restartProcess();
+    // 31 days on, the undone restore's own pin has lapsed.
+    await expireSnapshots(t.env, t.dir, Date.now() + 31 * 24 * HOUR_MS);
+    expect(await runRestore(t.env, undo)).toMatchObject({ phase: 'done', verified: true, error: null });
+    expect(await contents(seed.cookie)).toEqual(BEFORE);
+  });
+
+  it('stops an undo whose checkpoint is lost before arming it, and lets it be cancelled', async () => {
+    const seed = await seeded();
+    const id = await begin(seed);
+    await runRestore(t.env, id);
+    const { checkpoint } = (await t.env.db.prepare('SELECT checkpoint FROM restores WHERE id = ?').bind(id).first<{ checkpoint: string }>())!;
+    rmSync(snapshotPath(t.dir, seed.incarnation, checkpoint));
+    const undo = await begin({ ...seed, report: await reported(seed.id, seed.cookie) }, { undoes: id });
+    expect(await runRestore(t.env, undo)).toEqual({ id: undo, phase: 'checkpointed', verified: false, error: 'store-unavailable' });
+    expect(await cancelRestore(t.env, undo)).toMatchObject({ phase: 'cancelled', verified: true });
+    expect(await contents(seed.cookie)).toEqual(AT_TARGET);
+  });
+
   it('cancels before arming, giving the account back on its timeline with its objects, and refuses once armed', async () => {
     const seed = await seeded();
     const id = await begin(seed);
@@ -335,7 +375,7 @@ describe('a restore', () => {
     await expectRestored(seed, id, []);
   });
 
-  it('ends restored by two resumes at once, or cancelled when cancelled before arming, after a crash and a process restart at every durable boundary', async () => {
+  it('ends restored by two resumes at once, or cancelled when cancelled before arming, after a throw and a registry restart at every durable boundary', async () => {
     const probe = counting();
     await runRestore(probe.env, await begin(await seeded()));
     const total = probe.count();
@@ -412,7 +452,7 @@ describe('a deletion', () => {
     expect(await pictures(held)).toBe(0);
   };
 
-  it('finishes after a crash at every durable boundary, by running again or by the hourly reconciliation once the row is gone, and logs the deletion once', async () => {
+  it('finishes after a throw at every durable boundary, by running again or by the hourly reconciliation once the row is gone, and logs the deletion once', async () => {
     const probe = counting();
     const first = await holding();
     expect(await leave(probe.env, first.id, first.incarnation, true)).toBe('left');

@@ -38,6 +38,7 @@ async function signup(state = 'active', timeline = 't1') {
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline) VALUES (?, 'jin', 'h', 1, ?, ?, ?)").run(A, INC, state, timeline);
 }
 const store = () => stores.getByName(INC);
+const baseline = async () => (await stores.snapshot(INC, 'baseline'))!;
 const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
 const bodies = async () => {
   const page = (await store().feed(INC, { timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null })) as { changes: { id: string; body: string | null }[] };
@@ -92,7 +93,7 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
-    const id = await stores.snapshot(INC, 'baseline');
+    const id = await baseline();
     const row = raw.prepare('SELECT kind, taken_at, bytes, sha256 FROM snapshots WHERE id = ?').get(id) as { kind: string; taken_at: number; bytes: number; sha256: string };
     expect(row).toMatchObject({ kind: 'baseline', taken_at: 2_000_000 });
     expect(row.bytes).toBeGreaterThan(0);
@@ -108,18 +109,18 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
-    const target = await stores.snapshot(INC, 'baseline');
+    const target = await baseline();
     now = 3_000_000;
     await write(put(A, 'new', 1));
     raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7 WHERE incarnation = ?").run(INC);
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 2500000, 't2', ?, 'targeted', 1, 1)").run(INC, target);
     await store().restart(INC).catch(() => {});
     expect(await store().mark(INC, 7)).toEqual({ marked: true });
-    expect(await store().marked(INC, 7)).toEqual({ marked: true, installedFrom: null });
+    expect(await store().marked(INC, 7)).toEqual({ marked: true, installedFrom: null, installedOp: null });
     raw.prepare("UPDATE restores SET phase = 'armed' WHERE id = 7").run();
     expect(await store().arm(INC, 7, target)).toEqual({ returned: target });
     await store().restart(INC).catch(() => {});
-    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     raw.prepare("UPDATE accounts SET state = 'active', operation = NULL, timeline = 't2' WHERE incarnation = ?").run(INC);
     raw.prepare("UPDATE restores SET phase = 'done' WHERE id = 7").run();
     await store().restart(INC).catch(() => {});
@@ -129,37 +130,78 @@ describe('the account registry', () => {
     expect(await bodies().catch(() => 'stale')).toBe('stale');
   });
 
-  it('answers unavailable, not too early, when a catalogued snapshot has lost its file', async () => {
-    await signup('restoring');
-    raw.prepare('UPDATE accounts SET operation = 3').run();
-    now = 2_000_000;
-    raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, bytes, sha256) VALUES ('lost', ?, 'baseline', 1500000, 1, 'x')").run(INC);
-    expect(await store().target(INC, 3, { at: 1_600_000 })).toEqual({ unavailable: true });
-    expect(await store().target(INC, 3, { at: 1_400_000 })).toEqual({ tooEarly: true });
+  it('excludes a snapshot taken before a finished rewind only for times after the rewind ended', async () => {
+    await signup();
+    await write(put(A, 'before the rewind'));
+    now = 1_500_000;
+    const before = await baseline();
+    raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't2', 1900000, 'done', 1, 1, 4000000)").run(INC);
+    now = 5_000_000;
+    expect(await stores.snapshotAt(INC, 3_000_000)).toEqual({ id: before, takenAt: 1_500_000 });
+    expect(await stores.snapshotAt(INC, 4_500_000)).toBeNull();
   });
 
-  it('publishes a snapshot only once its file is durable: a take killed before its row leaves an orphan the hourly sweep reclaims', async () => {
+  it('answers unavailable, not too early, when a catalogued snapshot has lost its file or no longer matches its row, for a time and for an explicit target', async () => {
+    await signup('restoring');
+    raw.prepare('UPDATE accounts SET operation = 3').run();
+    raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (3, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
+    now = 1_500_000;
+    const altered = await baseline();
+    const path = snapshotPath(dir, INC, altered);
+    const bytes = readFileSync(path);
+    bytes[bytes.length - 1]! ^= 1;
+    writeFileSync(path, bytes);
+    now = 2_000_000;
+    await expect(stores.snapshotAt(INC, 1_600_000)).rejects.toThrow(/snapshot-corrupt/);
+    expect(await store().target(INC, 3, { at: 1_600_000 })).toEqual({ unavailable: true });
+    expect(await store().target(INC, 3, { snapshot: altered })).toEqual({ unavailable: true });
+    expect(await store().target(INC, 3, { at: 1_400_000 })).toEqual({ tooEarly: true });
+    rmSync(path);
+    expect(await store().target(INC, 3, { snapshot: altered })).toEqual({ unavailable: true });
+  });
+
+  it('installs a second rewind to the same snapshot over the edits made since the first', async () => {
+    await signup();
+    await write(put(A, 'old'));
+    now = 2_000_000;
+    const target = await baseline();
+    const rewind = async (operation: number) => {
+      raw.prepare("UPDATE accounts SET state = 'restoring', operation = ? WHERE incarnation = ?").run(operation, INC);
+      raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (?, ?, 1, 2500000, 't1', ?, 'armed', 1, 1)").run(operation, INC, target);
+      await store().restart(INC).catch(() => {});
+      expect(await store().marked(INC, operation)).toEqual({ marked: false, installedFrom: target, installedOp: operation });
+      raw.prepare("UPDATE accounts SET state = 'active', operation = NULL WHERE incarnation = ?").run(INC);
+      raw.prepare("UPDATE restores SET phase = 'done' WHERE id = ?").run(operation);
+      await store().restart(INC).catch(() => {});
+    };
+    await rewind(7);
+    await write(put(A, 'edited after the first rewind', 1));
+    await rewind(8);
+    expect(await bodies()).toEqual(['old']);
+  });
+
+  it('publishes a snapshot only once its file is durable: a take whose catalog insert throws leaves an orphan the hourly sweep reclaims', async () => {
     await signup();
     await write(put(A, 'x'));
-    const killed: Db = { ...db, prepare: (sql) => (sql.startsWith('INSERT INTO snapshots') ? ({ bind: () => ({ run: () => Promise.reject(new Error('killed')) }) } as never) : db.prepare(sql)) };
-    const dying = accountRegistry(dir, killed, serviceReads(db), () => now);
-    await expect(dying.snapshot(INC, 'baseline')).rejects.toThrow('killed');
+    const failing: Db = { ...db, prepare: (sql) => (sql.startsWith('INSERT INTO snapshots') ? ({ bind: () => ({ run: () => Promise.reject(new Error('insert failed')) }) } as never) : db.prepare(sql)) };
+    const dying = accountRegistry(dir, failing, serviceReads(db), () => now);
+    await expect(dying.snapshot(INC, 'baseline')).rejects.toThrow('insert failed');
     dying.close();
     const [orphan, ...more] = readdirSync(join(dir, 'snapshots', INC));
     expect(more).toEqual([]);
     expect(orphan).toMatch(/^[^.].*\.sqlite\.gz$/);
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 0 });
     expect((await reconcile(dir, db, Date.now())).removed).toEqual([]);
-    const id = await stores.snapshot(INC, 'baseline');
+    const id = await baseline();
     expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toEqual([`snapshots/${INC}/${orphan}`]);
     expect(existsSync(snapshotPath(dir, INC, id))).toBe(true);
   });
 
-  it('installs whole across a kill: before the rename the old file is intact and the next start installs, after it the next start installs nothing', async () => {
+  it('installs whole across registry restarts: a staged file left beside the live one changes nothing and the next start installs, after the install the next start installs nothing', async () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
-    const target = await stores.snapshot(INC, 'baseline');
+    const target = await baseline();
     await write(put(A, 'new', 1));
     raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7 WHERE incarnation = ?").run(INC);
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 2500000, 't2', ?, 'armed', 1, 1)").run(INC, target);
@@ -167,18 +209,32 @@ describe('the account registry', () => {
       stores.close();
       stores = accountRegistry(dir, db, serviceReads(db), () => now);
     };
-    // Killed between the prepared file's checkpoint and the rename: a prepared file beside the live one.
+    // What a staging cut off before its rename leaves: a staged file beside the live one.
     writeFileSync(join(dir, 'accounts', `${INC}.install-dead.sqlite`), 'prepared, never renamed');
     restart();
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'new' }]);
     expect(stores.inspect(INC).exec('PRAGMA quick_check')).toEqual([{ quick_check: 'ok' }]);
-    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
-    // Killed after the rename: the marker says it is done, so even with its snapshot gone nothing is installed again.
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
+    // Installed: the marker says so, and even with its snapshot gone nothing is installed again.
     restart();
     rmSync(snapshotPath(dir, INC, target));
-    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
     expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
+  });
+
+  it('takes a baseline before an operation’s checkpoint and after its end, read from the service, and refuses one between', async () => {
+    await signup('restoring');
+    raw.prepare('UPDATE accounts SET operation = 3').run();
+    raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (3, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
+    expect(await store().status(INC)).toMatchObject({ state: 'restoring' });
+    expect(await stores.snapshot(INC, 'baseline')).toEqual(expect.any(String));
+    raw.prepare("UPDATE restores SET phase = 'checkpointed' WHERE id = 3").run();
+    expect(await stores.snapshot(INC, 'baseline')).toBeNull();
+    raw.prepare("UPDATE restores SET phase = 'done' WHERE id = 3").run();
+    raw.prepare("UPDATE accounts SET state = 'active', operation = NULL").run();
+    expect(await stores.snapshot(INC, 'baseline')).toEqual(expect.any(String));
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 2 });
   });
 
   it('closes an idle session after ten minutes and reopens it on the next call', async () => {

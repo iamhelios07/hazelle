@@ -30,6 +30,8 @@ export type StoreDb = {
     take(kind: 'baseline' | 'checkpoint', operation: number | null): Promise<string>;
     // The newest snapshot taken at or before the time and still within retention; null when there is none.
     forTime(at: number): Promise<string | null>;
+    // Throws when the snapshot's file is gone or no longer what its catalog row recorded.
+    verify(id: string): Promise<void>;
   };
 };
 
@@ -190,7 +192,10 @@ export class StoreRules {
   async target(incarnation: string, operation: number, from: { at: number } | { snapshot: string }): Promise<Refused | WrongPhase | { target: string } | { tooEarly: true }> {
     const refused = await this.restoring(incarnation, operation);
     if (refused) return refused;
-    if ('snapshot' in from) return { target: from.snapshot };
+    if ('snapshot' in from) {
+      await this.db.snapshots.verify(from.snapshot);
+      return { target: from.snapshot };
+    }
     const target = await this.db.snapshots.forTime(from.at);
     return target === null ? { tooEarly: true } : { target };
   }
@@ -211,13 +216,14 @@ export class StoreRules {
     return { unmarked: true };
   }
 
-  // installedFrom: the snapshot the file was installed from, which with the mark's absence proves the rewind applied;
-  // the mark alone proves nothing, since a file installed from before the mark never held it.
-  async marked(incarnation: string, operation: number): Promise<Refused | { marked: boolean; installedFrom: string | null }> {
+  // installedFrom, installedOp: the snapshot the file was installed from and the operation that installed it, which with
+  // the mark's absence prove the rewind applied; the mark alone proves nothing, since a file installed from before the
+  // mark never held it.
+  async marked(incarnation: string, operation: number): Promise<Refused | { marked: boolean; installedFrom: string | null; installedOp: number | null }> {
     const refused = await this.stored(incarnation);
     if (refused) return refused;
-    const [head] = this.db.exec<{ installed_from: string | null }>('SELECT installed_from FROM head');
-    return { marked: this.db.kv.get(markKey(operation)) !== undefined, installedFrom: head?.installed_from ?? null };
+    const [head] = this.db.exec<{ installed_from: string | null; installed_op: number | null }>('SELECT installed_from, installed_op FROM head');
+    return { marked: this.db.kv.get(markKey(operation)) !== undefined, installedFrom: head?.installed_from ?? null, installedOp: head?.installed_op ?? null };
   }
 
   // The phase is read from the service inside the call: a runner that lost the arming compare-and-set, or one that
