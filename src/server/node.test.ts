@@ -1,13 +1,19 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { buildSync } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MAX_FILE_BYTES } from './files';
 import { CSP } from './static';
+import { sessionCookie, signupBody } from './testing';
 
-// The emitted server over real sockets: start, health, session, the page, a second owner refused, a drain on SIGTERM.
+// The emitted server over real sockets: start, health, session, the page, a second owner refused, a drain on SIGTERM,
+// uploads cut by one.
 let dir: string;
 let bundle: string;
 let client: string;
@@ -109,5 +115,94 @@ describe('the server process', () => {
     expect(await server.exited).toBe(0);
     expect(codes.every((code) => code === 503)).toBe(true);
     expect(server.log()).toMatch(/"outcome":"drained"/);
+  }, 30_000);
+
+  it('finishes a 25 MiB upload signalled while its body arrives or while its bytes are written, with one charge and no temp file after a restart', async () => {
+    const data = join(dir, 'data-upload');
+    let port = await freePort();
+    let server = start(data, port);
+    await server.listening;
+    const body = signupBody();
+    const cookie = sessionCookie(await fetch(`http://127.0.0.1:${port}/api/signup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+    const service = new DatabaseSync(join(data, 'service.sqlite'), { readOnly: true });
+    const incarnation = service.prepare('SELECT incarnation FROM accounts WHERE id = ?').get(body.accountId)!.incarnation as string;
+    service.close();
+    const pictures = join(data, 'files', incarnation);
+    const pictureOf = () => {
+      const bytes = randomBytes(MAX_FILE_BYTES);
+      return { bytes, id: createHash('sha256').update(bytes).digest('hex') };
+    };
+    // Sent as a browser sends a picture: with its length, here in 1 MiB pieces, `afterPiece` called after each.
+    const upload = (picture: ReturnType<typeof pictureOf>, afterPiece: (piece: number) => Promise<void>) =>
+      new Promise<number>((resolve, reject) => {
+        const sending = request(
+          {
+            host: '127.0.0.1',
+            port,
+            method: 'PUT',
+            path: `/api/files/${picture.id}`,
+            headers: { cookie, 'x-account': body.accountId, 'content-type': 'application/octet-stream', 'content-length': picture.bytes.length },
+          },
+          (response) => {
+            response.resume();
+            response.on('end', () => resolve(response.statusCode!));
+          },
+        );
+        sending.on('error', reject);
+        void (async () => {
+          const piece = 1024 * 1024;
+          for (let at = 0; at < picture.bytes.length; at += piece) {
+            sending.write(picture.bytes.subarray(at, at + piece));
+            await afterPiece(at / piece);
+          }
+          sending.end();
+        })();
+      });
+
+    const receiving = pictureOf();
+    const receivingStatus = upload(receiving, async (piece) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      if (piece === 4) server.child.kill('SIGTERM');
+    });
+    expect(await receivingStatus).toBe(204);
+    expect(await server.exited).toBe(0);
+    expect(server.log()).toMatch(/"outcome":"drained"/);
+
+    port = await freePort();
+    server = start(data, port);
+    await server.listening;
+    const publishing = pictureOf();
+    let signalled = false;
+    const watching = watch(pictures, (_, name) => {
+      if (signalled || !name?.startsWith('.tmp-')) return;
+      signalled = true;
+      server.child.kill('SIGTERM');
+    });
+    try {
+      expect(await upload(publishing, async () => {})).toBe(204);
+    } finally {
+      watching.close();
+    }
+    expect(signalled).toBe(true);
+    expect(await server.exited).toBe(0);
+    expect(server.log()).toMatch(/"outcome":"drained"/);
+
+    port = await freePort();
+    server = start(data, port);
+    await server.listening;
+    expect(await upload(receiving, async () => {})).toBe(204);
+    for (const { id } of [receiving, publishing]) {
+      const read = await fetch(`http://127.0.0.1:${port}/api/files/${id}`, { headers: { cookie, 'x-account': body.accountId } });
+      expect(createHash('sha256').update(new Uint8Array(await read.arrayBuffer())).digest('hex')).toBe(id);
+    }
+    server.child.kill('SIGTERM');
+    expect(await server.exited).toBe(0);
+    const after = new DatabaseSync(join(data, 'service.sqlite'), { readOnly: true });
+    expect(after.prepare('SELECT file_bytes FROM accounts WHERE incarnation = ?').get(incarnation)).toEqual({ file_bytes: 2 * MAX_FILE_BYTES });
+    expect(after.prepare('SELECT id, size, stored FROM account_files WHERE incarnation = ? ORDER BY id').all(incarnation)).toEqual(
+      [receiving.id, publishing.id].sort().map((id) => ({ id, size: MAX_FILE_BYTES, stored: 1 })),
+    );
+    after.close();
+    expect(readdirSync(pictures).sort()).toEqual([receiving.id, publishing.id].sort());
   }, 30_000);
 });
