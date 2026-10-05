@@ -8,7 +8,6 @@
 # One copier per remote prefix: the prune takes every object under it as this machine's, and the lock below serializes
 # passes inside one container only.
 set -u
-set -o pipefail
 LOCAL=/data/backup
 REMOTE=${HAZELLE_BACKUP_REMOTE:?set HAZELLE_BACKUP_REMOTE to an rclone remote and path, e.g. r2:hazelle-backup}
 # Equals the app's retention (src/server/backup/snapshots.ts): the pool prune below counts on the machine keeping a
@@ -36,7 +35,7 @@ copy_generation() {
 # cut-off prefix of a manifest matches it; a change of that order fails every prune here until this follows it.
 pictures() {
   grep -Eq "^\{\"version\":1,\"id\":\"$2\",.*\"pictures\":\[(\"[0-9a-f]{64}\"(,\"[0-9a-f]{64}\")*)?\],\"migrations\":\[[^]]*\]\}\$" "$1" &&
-    sed -e 's/.*"pictures":\[\([^]]*\)\],"migrations".*/\1,/' -e 's/"//g' "$1" | tr ',' '\n'
+    sed -e 's/.*"pictures":\[\([^]]*\)\],"migrations".*/\1,/' -e 's/"//g' -e 's/,/\n/g' "$1"
 }
 
 # Every pooled picture that no remote manifest and no local generation names. Each step is checked: a failed listing,
@@ -51,7 +50,9 @@ prune_pool() {
     rclone cat "$REMOTE/$manifest" >"$work/manifest" || return 1
     pictures "$work/manifest" "${manifest%/manifest.json}" >>"$work/named" || { log "$manifest is not whole"; return 1; }
   done <"$work/manifests"
-  rclone lsf --files-only "$REMOTE/files" >"$work/pool" || return 1
+  # From the root: the remote has no files/ until a generation names a picture, and listing it would fail.
+  rclone lsf -R --files-only --include '/files/*' "$REMOTE" >"$work/listed" || return 1
+  sed 's|^files/||' "$work/listed" >"$work/pool" || return 1
   sort -u "$work/named" >"$work/named.sorted" || return 1
   sort "$work/pool" >"$work/pool.sorted" || return 1
   comm -23 "$work/pool.sorted" "$work/named.sorted" >"$work/unnamed" || return 1
