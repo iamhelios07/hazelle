@@ -8,11 +8,14 @@ const noise = (length: number) => {
   return Uint8Array.from({ length }, () => (state = (state * 1103515245 + 12345) & 0x7fffffff) >> 16);
 };
 
+// toEqual walks 300,000 elements through its deep compare, past the timeout on a slow runner.
+const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((byte, i) => byte === b[i]);
+
 describe('inflate and gunzip', () => {
   it('read data whose packed form spans several steps', () => {
     const data = noise(300_000);
-    expect(inflate(deflateSync(data), data.length)).toEqual(data);
-    expect(gunzip(gzipSync(data))).toEqual(data);
+    expect(same(inflate(deflateSync(data), data.length), data)).toBe(true);
+    expect(same(gunzip(gzipSync(data)), data)).toBe(true);
   });
 
   it('refuse an output that is not the size declared for it, larger or smaller', () => {
