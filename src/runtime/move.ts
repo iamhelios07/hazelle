@@ -12,7 +12,6 @@ import { importModule, setModuleAlways } from './modules';
 import { addPersona } from './personas';
 import { thumbnail } from './picture';
 import { savePreset } from './prompts';
-import { saveSummaries } from './summary';
 import type { ObjectStore, Write } from './store';
 
 export type MovePick = Pick<BackupCatalog, 'characters' | 'personas' | 'presets' | 'modules'>;
@@ -111,23 +110,31 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     // Moved chats start with long-term memory off: on, opening a long one would summarize its whole past at once (user,
     // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
     const memory = { ...defaultMemory(store), on: false };
-    // One chat's entries per batch: the source holds the whole character already, so this holds no more than it.
-    const roots: Write[] = [];
-    for (const chat of [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b))) {
-      const { entries, root } = chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, memory);
-      const staged = await store.batch(entries, undefined, { unheld: true });
+    // A character's chats are held together from their entries, which go in one batch, to their summaries, which read
+    // the published character and go in one request: the source holds the whole character already, so this holds no
+    // more than it. Nothing is pulled: what the leases hold is what this device wrote.
+    const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).map((chat) => chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, memory));
+    const leases = chats.map(({ root }) => store.retainChat(root.id, true));
+    try {
+      for (const lease of leases) {
+        const failure = await lease.ready;
+        if (failure) return failure;
+      }
+      const last = new Set(chats.flatMap(({ entries }) => entries.at(-1)?.id ?? []));
+      let landed = 0;
+      const staged = await store.batch(chats.flatMap(({ entries }) => entries), (write) => { if (last.has(write.id)) progress({ kind: 'chats', done: chatsDone + ++landed, total: chatTotal }); }, { unheld: true });
       if (!staged.ok) return staged;
-      roots.push(root);
-      progress({ kind: 'chats', done: ++chatsDone, total: chatTotal });
+      chatsDone += chats.length;
+      const saved = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats: chats.map(({ root }) => root) });
+      if (!saved.ok) return saved;
+      const summarized = await store.summarizeChats(chats.map(({ root }) => root.id));
+      if (summarized) return summarized;
+      picturesDone += character.assets.length;
+      const { skipped, faceless } = saved.data;
+      moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed: character.missed, unused: unused(character.card) });
+    } finally {
+      for (const lease of leases) lease.release();
     }
-    const saved = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats: roots });
-    if (!saved.ok) return saved;
-    // A summary reads the published card and its revision, so it is written once the character is.
-    const summarized = await saveSummaries(store, roots.map(({ id }) => id));
-    if (summarized) return summarized;
-    picturesDone += character.assets.length;
-    const { skipped, faceless } = saved.data;
-    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed: character.missed, unused: unused(character.card) });
   }
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
 }

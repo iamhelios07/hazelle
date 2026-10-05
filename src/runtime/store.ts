@@ -678,6 +678,25 @@ export class ObjectStore {
     return saving;
   }
 
+  // chats: held by the caller, their entries written under those leases (a move's character), so every summary comes
+  // from memory and all go in one request. One not held and loaded is a caller's error, as in refreshChat.
+  async summarizeChats(chats: Iterable<string>, signal?: AbortSignal): Promise<ApiFailure | null> {
+    const epoch = this.epoch;
+    try {
+      const writes: Write[] = [];
+      for (const chat of chats) {
+        if (this.scopes.get(chat)?.state !== 'loaded') throw new ScopeUnavailable(chat);
+        const write = await this.summaryWrite(chat);
+        if (write) writes.push(write);
+      }
+      if (!writes.length) return null;
+      const result = await this.commit(writes.map((write) => this.step(write)), undefined, signal);
+      return result.ok ? null : result;
+    } catch (error) {
+      return this.codecFailure(error, epoch);
+    }
+  }
+
   private async summaryWrite(chat: string): Promise<Write | null> {
     const projection = await this.evaluated(chat);
     // Neither a chat still showing an overlay nor a projection folded while it did: the commit that ends the chat's last
@@ -788,8 +807,10 @@ export class ObjectStore {
   // One user action's writes, owned objects before their owners and in the order given within a kind, so an owner
   // appears only once whole and a chat's entries keep their rev order, which model/chat fold reads. An action
   // larger than one request goes as several, the owner in the last; one cut short leaves only unreachable pieces.
-  // unheld: the writes' chats are not held or summarized (a restore writing entries before their chats); their next
-  // lease pulls what was written. signal: the caller's stop, which also ends a wait for the connection to return.
+  // unheld: the writes' chats are not held for them and nothing is summarized after them: a restore's entries before
+  // their chats, whose next lease pulls what was written, or a move's, held by the move and summarized together once
+  // their character is published (summarizeChats). signal: the caller's stop, which also ends a wait for the
+  // connection to return.
   async batch(writes: Write[], progress: (write: Write) => void = () => {}, { unheld = false, signal }: { unheld?: boolean; signal?: AbortSignal } = {}): Promise<ApiResult<null>> {
     const puts = orderOwned(writes.filter((write) => write.type !== 'remove'));
     const ordered = [...puts, ...writes.filter((write) => write.type === 'remove')];
@@ -813,7 +834,7 @@ export class ObjectStore {
       }
       const result = await this.commit(ordered.map((write) => this.step(write)), (index) => progress(ordered[index]!), signal);
       if (!result.ok) return result;
-      this.summarizeHeld();
+      if (!unheld) this.summarizeHeld();
       return { ok: true, data: null };
     } finally {
       for (const lease of leases) lease.release();

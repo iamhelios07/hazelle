@@ -5,7 +5,7 @@ import { fold, shown } from '../model/chat';
 import { randomBytes } from '../vault/aead';
 import { importCharacter } from './characters';
 import { MEMORY_DEFAULTS } from './memory';
-import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch } from './move';
+import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch, type MoveStep } from './move';
 import { setModuleAlways } from './modules';
 import { testCard, testServer } from './testing';
 import { summaryId, summaryStale } from './summary';
@@ -105,7 +105,7 @@ describe('moveFromRisu', () => {
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
   });
 
-  it.each(['entry', 'character'] as const)('writes one chat per batch, publishes the chat roots with their character, and retries a cut at the %s write leaving no chat without its character', async (cut) => {
+  it.each(['entry', 'character'] as const)('stages every chat of a character in one batch, publishes the roots with their character, summarizes them in one request from what it wrote, and retries a cut at the %s write leaving no chat without its character', async (cut) => {
     const { store, files } = await server.account();
     const chats = Array.from({ length: 2 }, (_, index) => ({
       ...luna.chats[0]!, greeting: 0,
@@ -118,32 +118,30 @@ describe('moveFromRisu', () => {
     vi.spyOn(store, 'batch').mockImplementation(async (writes, progress, options) => {
       const character = writes.find((write) => write.type === 'create' && write.kind === 'character');
       const roots = writes.flatMap((write) => (write.type === 'create' && write.kind === 'chat' ? [write.id] : []));
+      const staged = new Set(writes.flatMap((write) => (write.type === 'create' && write.kind === 'entry' ? [write.parent] : [])));
       if (character) {
         expect(roots).toHaveLength(2);
         expect(store.list('chat')).toHaveLength(0);
+        // Held through the character's write: their summaries come from what this device wrote, pulling nothing.
+        expect(roots.every((id) => store.scopeState(id) === 'loaded')).toBe(true);
       } else {
         expect(roots).toHaveLength(0);
-        expect(new Set(writes.map((write) => write.type === 'create' && write.parent)).size).toBe(1);
+        expect(staged.size).toBe(2);
       }
       if (armed && cut === 'character' && character) { armed = false; return { ok: false, error: 'stopped' }; }
       const result = await batch(writes, progress, options);
-      // Leased, a new root would be summarized from an empty scope.
-      expect(roots.every((id) => store.scopeState(id) === 'unloaded')).toBe(true);
-      if (armed && cut === 'entry') { armed = false; return { ok: false, error: 'stopped' }; }
+      if (armed && cut === 'entry' && staged.size) { armed = false; return { ok: false, error: 'stopped' }; }
       return result;
     });
-    let peak = 0;
-    const evaluate = store.evaluated.bind(store);
-    vi.spyOn(store, 'evaluated').mockImplementation((id) => {
-      peak = Math.max(peak, store.list('chat').filter(({ id }) => store.scopeState(id) === 'loaded').length);
-      return evaluate(id);
-    });
+    const fetched = vi.spyOn(globalThis, 'fetch');
     expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toEqual({ ok: false, error: 'stopped' });
     expect(store.list('character')).toHaveLength(0);
     expect(orphans()).toEqual([]);
     expect(broughtFromRisu(store).size).toBe(0);
-    const retried = await moveFromRisu(store, files, backup, backup.catalog, () => {});
+    const steps: MoveStep[] = [];
+    const retried = await moveFromRisu(store, files, backup, backup.catalog, (step) => steps.push(step));
     expect(retried.ok).toBe(true);
+    expect(steps.filter(({ kind }) => kind === 'chats').at(-1)).toEqual({ kind: 'chats', done: 2, total: 2 });
     expect(store.list('character')).toHaveLength(1);
     expect(orphans()).toEqual([]);
     const visible = store.list('chat');
@@ -154,7 +152,9 @@ describe('moveFromRisu', () => {
       expect(summaryStale(store, chat.id, summary)).toBe(false);
       expect(store.scopeState(chat.id)).toBe('unloaded');
     }
-    expect(peak).toBe(1);
+    const sent = fetched.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? 'GET', writes: typeof init?.body === 'string' && init.body.startsWith('{"timeline') ? (JSON.parse(init.body) as { writes: { kind: string }[] }).writes : [] }));
+    expect(sent.filter(({ method, url }) => method === 'GET' && url.includes('parent='))).toEqual([]);
+    expect(sent.flatMap(({ writes }) => (writes.length && writes.every(({ kind }) => kind === 'summary') ? [writes.length] : []))).toEqual([2]);
     expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toMatchObject({ ok: true, data: { characters: [] } });
   }, 30_000);
 

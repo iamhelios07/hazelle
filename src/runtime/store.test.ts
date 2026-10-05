@@ -4,7 +4,8 @@ import type { Lore } from '../model/library';
 import { emptyMemory } from '../model/memory';
 import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
-import { ObjectStore, type Write } from './store';
+import { ObjectStore, ScopeUnavailable, type Write } from './store';
+import { summaryId, summaryStale } from './summary';
 import { BATCH_LIMITS, testServer } from './testing';
 
 const server = testServer();
@@ -57,6 +58,28 @@ describe('object store', () => {
     expect(await store.create('entry', entry)).toEqual({ ok: false, error: 'bad-input' });
     expect(await store.create('lore', { name: 'x' } as Lore, { parent: chat.data.id })).toEqual({ ok: false, error: 'bad-input' });
     expect(store.children('entry', chat.data.id).map((child) => child.value)).toEqual([entry]);
+  });
+
+  it('summarizes chats a caller holds in one request from what it wrote, and an unheld batch summarizes nothing', async () => {
+    const { store } = await server.account();
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    const leases = ids.map((id) => store.retainChat(id, true));
+    for (const lease of leases) expect(await lease.ready).toBeNull();
+    const summarizing = vi.spyOn(store, 'saveSummary');
+    const entries: Write[] = ids.map((parent) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'delete', message: 'm', at: 0 } }));
+    expect(await store.batch(entries, undefined, { unheld: true })).toEqual({ ok: true, data: null });
+    const roots: Write[] = ids.map((id) => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } }));
+    expect(await store.batch(roots, undefined, { unheld: true })).toEqual({ ok: true, data: null });
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    expect(await store.summarizeChats(ids)).toBeNull();
+    expect(summarizing).not.toHaveBeenCalled();
+    expect(fetched.mock.calls.map(([url, init]) => `${init?.method} ${String(url)}`)).toEqual(['POST /api/objects/batch']);
+    for (const id of ids) {
+      const summary = store.get('summary', summaryId(id))!.value;
+      expect(summaryStale(store, id, summary)).toBe(false);
+    }
+    for (const lease of leases) lease.release();
+    expect(await store.summarizeChats(ids.slice(0, 1)).catch((error: unknown) => error)).toBeInstanceOf(ScopeUnavailable);
   });
 
   it('answers a create tried again after it landed with the object it made', async () => {
