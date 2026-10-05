@@ -50,7 +50,11 @@ describe('the local provider list', () => {
     expect(localProviders('').size).toBe(0);
   });
 
-  it.each(['localhost', 'localhost:0', 'localhost:65536', 'http://localhost:11434', 'local host:1', 'localhost:11434/v1'])('refuses to start on %s', (entry) => {
+  it('keeps an IPv6 entry as a destination URL spells it', () => {
+    expect([...localProviders('[0:0:0:0:0:0:0:1]:11434,[FD00::0001]:80')]).toEqual(['[::1]:11434', '[fd00::1]:80']);
+  });
+
+  it.each(['localhost', 'localhost:0', 'localhost:65536', 'http://localhost:11434', 'local host:1', 'localhost:11434/v1', '[:::]:11434', '[127.0.0.1]:80', '2130706433:80'])('refuses to start on %s', (entry) => {
     expect(() => localProviders(`a:1,${entry}`)).toThrow(/HAZELLE_LOCAL_PROVIDERS/);
   });
 });

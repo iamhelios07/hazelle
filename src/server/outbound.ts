@@ -38,9 +38,12 @@ export function localProviders(list: string): ReadonlySet<string> {
   const entries = new Set<string>();
   for (const entry of list.split(',').map((each) => each.trim()).filter(Boolean)) {
     const match = /^([a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:.]+\]):(\d{1,5})$/i.exec(entry);
-    const port = Number(match?.[2]);
-    if (!match || port < 1 || port > 65535) throw new Error(`HAZELLE_LOCAL_PROVIDERS: "${entry}" is not host:port`);
-    entries.add(`${match[1]!.toLowerCase()}:${port}`);
+    const url = match && URL.canParse(`http://${entry}`) ? new URL(`http://${entry}`) : null;
+    const [, host = '', port = ''] = match ?? [];
+    // Kept as URL spells the host, which is how a destination is matched. A bracketed address takes that spelling; a
+    // name URL would rewrite (2130706433, 0x7f.1) is a numeric spelling of another host, refused rather than guessed.
+    if (!url || (!host.startsWith('[') && url.hostname !== host.toLowerCase()) || Number(port) < 1) throw new Error(`HAZELLE_LOCAL_PROVIDERS: "${entry}" is not host:port`);
+    entries.add(`${url.hostname}:${Number(port)}`);
   }
   return entries;
 }
