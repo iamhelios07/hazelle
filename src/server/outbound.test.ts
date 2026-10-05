@@ -1,10 +1,18 @@
 import type { LookupAddress } from 'node:dns';
 import { createServer, type Server, type ServerResponse } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer as createSocketServer, type AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { localProviders, pinnedLookup, pinnedOutbound, type Resolve } from './outbound';
 import { createRelay, type UpstreamInit } from './relay';
 import { isPublicAddress, PolicyRefusal } from './ssrf';
+
+// No local address is public, so a test that dials the production dispatcher's pinned connection at a local server
+// lets 127.0.0.1 pass as public for its duration.
+const policy = vi.hoisted(() => ({ loopbackIsPublic: false }));
+vi.mock('./ssrf', async (original) => {
+  const real = await original<typeof import('./ssrf')>();
+  return { ...real, isPublicAddress: (address: string) => (policy.loopbackIsPublic && address === '127.0.0.1') || real.isPublicAddress(address) };
+});
 
 const SLOW_CHUNKS = 50;
 const answer = (...addresses: string[]): LookupAddress[] => addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }));
@@ -69,13 +77,11 @@ describe('the pinned lookup', () => {
     expect(await ask(lookup, false)).toEqual(['93.184.216.34', 4]);
   });
 
-  it('refuses an answer with any private address, and a host that turns private on its next lookup', async () => {
-    const answers = [answer('93.184.216.34'), answer('93.184.216.34'), answer('93.184.216.34', '10.0.0.1'), answer('::ffff:127.0.0.1')];
+  it('refuses an answer with any private address, in either form asked for', async () => {
+    const answers = [answer('93.184.216.34', '10.0.0.1'), answer('::ffff:127.0.0.1')];
     const lookup = pinnedLookup(async () => answers.shift()!, isPublicAddress);
-    expect(await ask(lookup, true)).toEqual(answer('93.184.216.34'));
-    expect(await ask(lookup, false)).toEqual(['93.184.216.34', 4]);
     await expect(ask(lookup, true)).rejects.toBeInstanceOf(PolicyRefusal);
-    await expect(ask(lookup, true)).rejects.toBeInstanceOf(PolicyRefusal);
+    await expect(ask(lookup, false)).rejects.toBeInstanceOf(PolicyRefusal);
   });
 });
 
@@ -93,6 +99,31 @@ describe('the outbound', () => {
   it('refuses a host name that resolves to a private address, or to a public and a private one', async () => {
     expect(await refusal(pinnedOutbound(new Set(), loopback)(new URL('https://provider.test/'), init()))).toBe('not-public');
     expect(await refusal(pinnedOutbound(new Set(), async () => answer('93.184.216.34', '192.168.0.1'))(new URL('https://provider.test/'), init()))).toBe('not-public');
+  });
+
+  // The server ends each connection at once, so the first call fails at its TLS handshake and the next needs a new one.
+  it('looks a host up again for a new connection, and refuses it once it answers a private address', async () => {
+    let opened = 0;
+    const closing = createSocketServer((socket) => {
+      opened++;
+      socket.destroy();
+    });
+    await new Promise<void>((resolve) => closing.listen(0, '127.0.0.1', resolve));
+    let address = '127.0.0.1';
+    const resolve = vi.fn<Resolve>(async () => answer(address));
+    const url = new URL(`https://provider.test:${(closing.address() as AddressInfo).port}/`);
+    policy.loopbackIsPublic = true;
+    try {
+      const outbound = pinnedOutbound(new Set(), resolve);
+      expect(await refusal(outbound(url, init()))).toBe('other');
+      expect(opened).toBe(1);
+      address = '10.0.0.1';
+      expect(await refusal(outbound(url, init()))).toBe('not-public');
+      expect([opened, resolve.mock.calls.length]).toEqual([1, 2]);
+    } finally {
+      policy.loopbackIsPublic = false;
+      await new Promise<void>((resolve) => closing.close(() => resolve()));
+    }
   });
 
   it('tells a policy refusal from a name that does not resolve, at the relay', async () => {
