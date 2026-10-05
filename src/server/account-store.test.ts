@@ -116,6 +116,15 @@ describe('feed', () => {
     expect(await feed({ metadata: true, since: 7 })).toMatchObject({ changes: [{ id: F, omitted: true }] });
   });
 
+  it('pages metadata by its own row count, since a row without its body is small', async () => {
+    await write(Array.from({ length: 600 }, (_, index) => put(`${String(index).padStart(8, '0')}-2222-4222-8222-222222222222`, { kind: 'entry', body: `body-${index}` })));
+    expect(await feed()).toMatchObject({ cursor: 500, more: true });
+    const page = (await feed({ metadata: true })) as { changes: unknown[]; more: boolean };
+    expect(page.changes).toHaveLength(600);
+    expect(page.more).toBe(false);
+    expect(JSON.stringify(page)).not.toContain('body-');
+  });
+
   it('answers reset for a cursor past the head', async () => {
     await write(put(A));
     expect(await feed({ since: 2 })).toEqual({ reset: true });

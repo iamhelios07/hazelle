@@ -140,14 +140,19 @@ export async function exportBackup(
     if (failure) return failure;
     await settle();
     await objects(new Uint8Array(), true);
-    for (const { ref, uses } of named.values()) {
+    // Read a window at a time, as the restore uploads one, and written in order: a zip is sequential.
+    const pictures = [...named.values()];
+    for (let start = 0; start < pictures.length; start += PICTURE_ROWS) {
       signal.throwIfAborted();
-      const bytes = await files.read(ref);
-      if (!bytes.ok) return bytes;
-      // Pictures are compressed already.
-      const push = await zip.entry(FILES + ref.id, false);
-      await push(bytes.data, true);
-      landed('files', uses);
+      const window = pictures.slice(start, start + PICTURE_ROWS);
+      const read = await Promise.all(window.map(({ ref }) => files.read(ref, { signal })));
+      for (const [index, bytes] of read.entries()) {
+        if (!bytes.ok) return bytes;
+        // Pictures are compressed already.
+        const push = await zip.entry(FILES + window[index]!.ref.id, false);
+        await push(bytes.data, true);
+        landed('files', window[index]!.uses);
+      }
     }
     // The pictures are read after the scans, with no timeline of their own: a restore heard meanwhile fails the export
     // as one between the scans does.

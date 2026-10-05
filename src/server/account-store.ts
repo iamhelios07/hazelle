@@ -49,6 +49,8 @@ export const serviceReads = (db: Db): StoreReads => ({
 });
 
 const PAGE_ROWS = 500;
+// A metadata row is a hundred bytes, so a backup's walk over a whole account takes few round trips.
+const METADATA_PAGE_ROWS = 10_000;
 const PAGE_BODY_BYTES = 4_000_000;
 // How far past its cap an account's updates may still grow it, so a full account can still mark what it means to delete
 // (휴지통's mark: a body that grows a little), while nothing new is created. The account's bytes never
@@ -94,6 +96,7 @@ export class StoreRules {
       // Bound candidates before the window sum; an outer LIMIT still sums the rest of the account.
       // The budget is bytes: LENGTH(body) counts characters and stops at a NUL, so a page could pass the RPC limit.
       const excluded = JSON.stringify(query.excluded);
+      const pageRows = query.metadata ? METADATA_PAGE_ROWS : PAGE_ROWS;
       const rows = this.db.exec<Row>(
         `SELECT id, kind, parent_id, rev, deleted_at IS NOT NULL AS deleted, omitted, start < ? AS fits, CASE WHEN start < ? THEN body END AS body
          FROM (
@@ -112,11 +115,11 @@ export class StoreRules {
         ...[PAGE_BODY_BYTES, PAGE_BODY_BYTES, excluded, excluded, query.since],
         ...(query.parent === null ? [] : [query.parent]),
         ...(until === null ? [] : [excluded, until]),
-        PAGE_ROWS + 1,
+        pageRows + 1,
       );
       const page: Row[] = [];
       for (const row of rows) {
-        if (page.length === PAGE_ROWS || !row.fits) break;
+        if (page.length === pageRows || !row.fits) break;
         page.push(row);
       }
       const total = query.count && until !== null
