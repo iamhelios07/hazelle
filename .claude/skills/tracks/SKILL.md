@@ -7,7 +7,7 @@ description: Split multi-part Hazelle work into parallel agent tracks in worktre
 
 Parallel tracks save time only when the parts touch different files. For a small change, do it yourself.
 
-The base branch is the one the main checkout is on (`port` until the Docker cutover, then `master`).
+The base branch is the one the main checkout is on, `master`.
 
 1. Split by file ownership. Each track owns a set of files and does not edit the others' files. Shared pieces, such as a new type or a common helper, go in first, done by you on the base branch, before the tracks start.
 2. Start every track with the Agent tool, `isolation: "worktree"`, all in one message so they run at once. Each brief carries:

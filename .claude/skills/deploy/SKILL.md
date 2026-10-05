@@ -5,8 +5,6 @@ description: Deploy Hazelle to the hosted machine (배포). Use when the user sa
 
 # Deploy
 
-These steps apply after the cutover (`docs/research/docker-port-plan.md` §16). Until then hazelle.app is the Cloudflare Worker, deployed from master with master's own script and skill.
-
 Deploying is an external action. Run it only on the user's go-ahead for this batch.
 
 0. Commit and push first, then `scripts/release.sh vX.Y.Z` does steps 1–3 in one command: it tags HEAD, pushes the tag, waits for the build and runs `scripts/deploy.sh`. Its output is deploy.sh's; the steps below are what it does, and the way to carry on by hand when it stops between them (the tag and build stay; run `scripts/deploy.sh vX.Y.Z`).
