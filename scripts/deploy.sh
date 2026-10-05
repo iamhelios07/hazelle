@@ -86,7 +86,9 @@ running() {
 CAPTURE='
 deadline=$(($(date +%s) + 1800))
 app=$(hazelle-compose ps -q app)
-count() { docker logs "$app" 2>&1 | grep -c "\"event\":\"backup $1\"" || true; }
+# Since the process started: a request cut off by a crash before it ended never logs its outcome.
+started=$(docker inspect --format "{{.State.StartedAt}}" "$app")
+count() { docker logs --since "$started" "$app" 2>&1 | grep -c "\"event\":\"backup $1\"" || true; }
 # An earlier request still running would log the first "backup finished" after this one was sent.
 [ "$(count requested)" -le "$(count finished)" ] || { echo "deploy: an earlier backup request has not finished yet" >&2; exit 1; }
 since=$(date +%s.%N)
