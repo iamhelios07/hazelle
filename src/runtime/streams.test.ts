@@ -5,7 +5,7 @@ import { setTranslate } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
-import { takeTurn } from './turn';
+import { takeTurn, translationInput } from './turn';
 
 const server = testServer();
 const encode = (text: string) => new TextEncoder().encode(text);
@@ -111,6 +111,39 @@ describe('a detached call', () => {
       await vi.waitFor(() => expect(shown(messages(second, chat)[1]!).translation?.text).toBe('안녕, 여행자.'));
       expect(log).toHaveLength(1);
     } finally {
+      second.close();
+    }
+  });
+
+  it('lets two pages reading one translation both end it without a failure', async () => {
+    const open = await pages();
+    const first = await open();
+    await answerable(first);
+    const chat = crypto.randomUUID();
+    await server.hold(first.store, chat);
+    const opened = { title: null, character: null, models: {} };
+    await startChat(first.store, chat, opened, null);
+    const provider = new TransformStream<Uint8Array, Uint8Array>();
+    stubRelay(inTurn([saying('Hello, traveler.'), new Response(provider.readable, { headers: { 'x-relay': 'upstream' } })]));
+    expect(await takeTurn(first, chat, { kind: 'send', text: 'Hi' })).toBeNull();
+    const reply = shown(messages(first, chat)[1]!);
+    first.translator.translate(chat, reply, translationInput(first, chat, opened, messages(first, chat), { kind: 'message', index: 1 }));
+    await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
+
+    const second = await open();
+    await server.hold(second.store, chat);
+    try {
+      await vi.waitFor(() => expect(second.translator.snapshot().live.has(reply.id)).toBe(true), { timeout: 3000 });
+      const writer = provider.writable.getWriter();
+      await writer.write(delta('안녕, 여행자.'));
+      await writer.write(ending);
+      for (const page of [first, second]) {
+        await vi.waitFor(() => expect(page.translator.snapshot().live.size).toBe(0));
+        expect(page.translator.snapshot().failed.size).toBe(0);
+        expect(shown(messages(page, chat)[1]!).translation?.text).toBe('안녕, 여행자.');
+      }
+    } finally {
+      first.close();
       second.close();
     }
   });

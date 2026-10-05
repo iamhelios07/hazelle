@@ -9,7 +9,7 @@ import type { Phase } from '../connectors/types';
 import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { setGreetingTranslation, translateSwitches, translatorNotes } from './characters';
-import { appendTranslation } from './chat-log';
+import { appendTranslation, savedElsewhere } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate, resume, type Reply } from './generate';
@@ -150,7 +150,7 @@ export class Translator {
   translate(chat: string, { id: version, text: original }: Version, input: TranslateInput) {
     if (this.closed || this.aborts.has(version)) return;
     const target: CallTarget = { id: crypto.randomUUID(), chat: this.store.get('chat', chat) ? chat : null, result: crypto.randomUUID(), for: { kind: 'translation', version } };
-    this.run(chat, version, target.id, (signal, onText) => translate({ store: this.store, credentials: this.credentials }, input, target, signal, onText), (made) =>
+    this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials }, input, target, signal, onText), (made) =>
       this.store.get('chat', chat)
         ? appendTranslation(this.store, chat, version, made.translation, target.result)
         : setGreetingTranslation(this.store, input.chat.character!, original, made.language!, made.translation),
@@ -160,14 +160,14 @@ export class Translator {
   resume(stream: Stored<'stream'>, version: string) {
     const chat = stream.parent!;
     if (this.closed || this.aborts.has(version)) return;
-    this.run(chat, version, stream.id, (signal, onText) => resumeTranslation(this.store, stream, signal, onText), (made) =>
+    this.run(chat, version, { id: stream.id, result: stream.value.result }, (signal, onText) => resumeTranslation(this.store, stream, signal, onText), (made) =>
       appendTranslation(this.store, chat, version, made.translation, stream.value.result),
     );
   }
 
   // A failed call ends with its marker, since nothing would make it go otherwise; one stopped by close() keeps it
   // for the next load.
-  private run(chat: string, version: string, id: string, make: (signal: AbortSignal, onText: (text: string) => void) => Promise<Translated>, save: (made: Extract<Translated, { ok: true }>) => Promise<ApiResult<unknown>>) {
+  private run(chat: string, version: string, { id, result }: { id: string; result: string }, make: (signal: AbortSignal, onText: (text: string) => void) => Promise<Translated>, save: (made: Extract<Translated, { ok: true }>) => Promise<ApiResult<unknown>>) {
     const lease = this.store.retainChat(chat);
     const abort = new AbortController();
     this.aborts.set(version, abort);
@@ -188,11 +188,12 @@ export class Translator {
             return this.change(version, { live: null, failed: made.failure.kind === 'stopped' ? null : made.failure });
           }
           const saved = await save(made);
+          if (!saved.ok && !savedElsewhere(this.store, chat, result, saved)) return this.change(version, { live: null, failed: { kind: 'unsaved', failure: saved } });
           // The live text goes once the store holds the translation, so the original never shows in between.
-          this.change(version, { live: null, failed: saved.ok ? null : { kind: 'unsaved', failure: saved } });
-          if (!saved.ok) return;
+          this.change(version, { live: null, failed: null });
           endCall(this.store, id);
-          if (this.store.get('chat', chat)) this.costs.settle(chat, made.translation.receipt!);
+          // The device that saved it counts its cost.
+          if (saved.ok && this.store.get('chat', chat)) this.costs.settle(chat, made.translation.receipt!);
         },
         (error: unknown) => {
           this.change(version, { live: null });

@@ -208,6 +208,11 @@ export function editMessage(store: ObjectStore, chat: string, message: Message, 
 export const appendTranslation = (store: ObjectStore, chat: string, version: string, translation: Translation, id: string) =>
   append(store, chat, { type: 'translation', version, ...translation }, id);
 
+// A conflict over an entry already there is the same call saved by another device that read it too. Each device
+// stamps its own copy, so the store's check for a create that already landed misses it.
+export const savedElsewhere = (store: ObjectStore, chat: string, id: string, failure: ApiFailure) =>
+  failure.error === 'conflict' && store.children('entry', chat).some((entry) => entry.id === id);
+
 export const selectVersion = (store: ObjectStore, chat: string, message: string, version: string) => append(store, chat, { type: 'select', message, version, at: Date.now() });
 
 export const removeMessage = (store: ObjectStore, chat: string, message: string) => append(store, chat, { type: 'delete', message, at: Date.now() });

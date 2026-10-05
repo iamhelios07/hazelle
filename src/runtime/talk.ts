@@ -7,7 +7,7 @@ import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
 import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
-import { appendReply, appendUserMessage, type Said, type Written } from './chat-log';
+import { appendReply, appendUserMessage, savedElsewhere, type Said, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate, resume, type Reply } from './generate';
@@ -154,11 +154,10 @@ export class Talk {
     } finally { lease.release(); }
   }
 
-  // A conflict over an entry already there is the same reply saved by another device that read the call. A reply
-  // not saved keeps its call's marker, so a reload saves it too.
+  // A reply not saved keeps its call's marker, so a reload saves it too.
   private async save(chat: string, reply: Written, call: string): Promise<TalkFailure | null> {
     const appended = await appendReply(this.store, chat, reply);
-    const elsewhere = !appended.ok && appended.error === 'conflict' && this.store.children('entry', chat).some((entry) => entry.id === reply.id);
+    const elsewhere = !appended.ok && savedElsewhere(this.store, chat, reply.id, appended);
     if (!appended.ok && !elsewhere) {
       // Saved again, it would land on the chat the restore rewound, which the reply was never written against.
       if (appended.error === 'timeline-changed') {
