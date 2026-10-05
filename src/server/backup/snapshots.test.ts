@@ -57,10 +57,58 @@ describe('the daily job', () => {
     expect(await t.stores.snapshotAt(incarnation, first + 6 * DAY_MS)).toMatchObject({ takenAt: first + 4 * DAY_MS });
     // 10 real generations: past 5 s when the whole suite runs beside it.
   }, 30_000);
+
+  it('answers a time inside the window from the baseline of an account unchanged for longer than it, and keeps that baseline as the floor once the account changes', async () => {
+    const incarnation = await signedUp('jin');
+    const day = (n: number) => dayStart(Date.now()) - 45 * DAY_MS + 3 * HOUR_MS + n * DAY_MS;
+    await t.daily(day(0));
+    await written(incarnation, 'before the idle stretch');
+    await t.daily(day(1));
+    await t.daily(day(20));
+    await t.daily(day(41));
+    expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(1) }]);
+    expect(await t.stores.snapshotAt(incarnation, day(31))).toMatchObject({ takenAt: day(1) });
+    await written(incarnation, 'after it');
+    await t.daily(day(42));
+    await t.daily(day(45));
+    expect((await baselines(incarnation)).results).toEqual([{ takenAt: day(1) }, { takenAt: day(42) }]);
+    expect(await t.stores.snapshotAt(incarnation, day(38))).toMatchObject({ takenAt: day(1) });
+  });
+
+  it('captures the day again after the clock jumps back across midnight, past a run and a baseline stamped in the future', async () => {
+    const incarnation = await signedUp('jin');
+    const today = dayStart(Date.now()) + 4 * HOUR_MS;
+    await tickAt(today + 2 * DAY_MS);
+    await tickAt(today);
+    expect((await baselines(incarnation)).results.map(({ takenAt }) => takenAt)).toEqual([today, today + 2 * DAY_MS]);
+    const generation = (await listGenerations(t.dir)).find(({ capturedAt }) => capturedAt === today)!;
+    const { accounts } = (await readManifest(join(t.dir, 'backup', generation.id)))!;
+    expect(accounts[0]!.baseline).toMatch(new RegExp(`^${today}-`));
+  });
+
+  it('takes a baseline beside a checkpoint younger than a day, and records a run that failed an account, then tries again', async () => {
+    const live = await signedUp('jin');
+    const lost = await signedUp('lost');
+    const at = dayStart(Date.now()) + 3 * HOUR_MS;
+    await t.env.db
+      .prepare("INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, sha256) VALUES ('young', ?, 'checkpoint', 1, ?, 0, 1, 'x')")
+      .bind(live, at - HOUR_MS)
+      .run();
+    rmSync(accountPath(t.dir, lost));
+    t.restartProcess();
+    await tickAt(at);
+    expect((await baselines(live)).results).toEqual([{ takenAt: at }]);
+    expect(await t.env.db.prepare("SELECT outcome, error, json_extract(detail, '$.failed') AS failed FROM backup_runs WHERE kind = 'daily'").first()).toEqual({ outcome: 'failed', error: 'baseline-failed', failed: 1 });
+    // Its file gone, the account has no baseline a generation could restore it from, so the generation fails too.
+    expect(await t.env.db.prepare("SELECT outcome, error FROM backup_runs WHERE kind = 'generation'").first()).toEqual({ outcome: 'failed', error: 'job-failed' });
+    await tickAt(at + HOUR_MS);
+    expect(await t.env.db.prepare("SELECT COUNT(*) AS n FROM backup_runs WHERE outcome = 'failed' AND kind = 'daily'").first('n')).toBe(2);
+    expect((await baselines(live)).results).toHaveLength(1);
+  });
 });
 
 describe('retention', () => {
-  it('lets a snapshot go at 30 days unless an operation pins it (open, or ended under 30 days ago however it ended) or it is a live account’s newest baseline; a deleted account keeps none past 30 days', async () => {
+  it('lets a snapshot go at 30 days unless an operation pins it (open, or ended under 30 days ago however it ended) or it is a live account’s floor; a deleted account keeps none past 30 days', async () => {
     const live = await signedUp('jin');
     const gone = 'f'.repeat(32);
     const now = Date.now();

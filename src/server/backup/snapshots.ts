@@ -57,8 +57,10 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
   return { taken, skipped, unchanged, failed };
 }
 
-// A snapshot goes once it is 30 days old, unless it is pinned (PINNED) or it is a live account's newest baseline,
-// kept whatever its age so an unchanged account never loses its only copy.
+// A snapshot goes once it is 30 days old, unless it is pinned (PINNED) or it is a live account's floor: its newest
+// baseline 30 days old or older, the account as it was when the window began. Baselines are taken only on days the
+// account changed, so a time inside the window may land on one from before it; the floor is also an unchanged
+// account's only copy.
 // A deleted account has no restores and no row, so every snapshot of it goes at 30 days from its taking, which is
 // within 30 days of the deletion. The row goes before the file; a file left by a crash between has no row, and the
 // hourly reconciliation removes it.
@@ -69,7 +71,8 @@ export async function expireSnapshots(env: Services, dataDir: string, now: numbe
        WHERE taken_at <= ?1 - ${RETENTION_MS}
          AND NOT ${PINNED('s', '?1')}
          AND NOT (kind = 'baseline' AND EXISTS (SELECT 1 FROM accounts WHERE incarnation = s.incarnation)
-           AND id = (SELECT id FROM snapshots WHERE incarnation = s.incarnation AND kind = 'baseline' ORDER BY taken_at DESC, id DESC LIMIT 1))
+           AND id = (SELECT id FROM snapshots WHERE incarnation = s.incarnation AND kind = 'baseline' AND taken_at <= ?1 - ${RETENTION_MS}
+             ORDER BY taken_at DESC, id DESC LIMIT 1))
        ORDER BY incarnation`,
     )
     .bind(now)
