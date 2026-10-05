@@ -103,7 +103,7 @@ export class StreamBox {
     private readonly idle: () => void,
   ) {}
 
-  async start({ id, key, request }: { id: string; key: unknown; request: unknown }): Promise<Response> {
+  async start({ id, key, request }: { id: string; key: unknown; request: unknown }, signal: AbortSignal): Promise<Response> {
     this.starts++;
     try {
       const theirs = typeof key === 'string' ? fromBase64(key) : null;
@@ -127,7 +127,7 @@ export class StreamBox {
       this.call = new AbortController();
       this.running = true;
       this.ended = this.run(request, sealing, this.call.signal);
-      return await this.read(0);
+      return await this.read(0, signal);
     } finally {
       this.starts--;
       this.release();
@@ -280,7 +280,7 @@ export class StreamBox {
 
   // hello first, then every frame from seq on, then the live rest while the call runs: stored pages while seq is behind
   // what is persisted (always, once the call is over or the process restarted), then the frames still in memory.
-  async read(from: number): Promise<Response> {
+  async read(from: number, signal: AbortSignal): Promise<Response> {
     this.readers++;
     let reading = true;
     const done = () => {
@@ -289,6 +289,10 @@ export class StreamBox {
       this.readers--;
       this.release();
     };
+    // The body's cancel alone is not enough: a server whose client left before the response existed never reads or
+    // cancels it.
+    signal.addEventListener('abort', done);
+    if (signal.aborted) done();
     let hello: Uint8Array | undefined;
     try {
       hello = await this.storage.get(frameKey(0));

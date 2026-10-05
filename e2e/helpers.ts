@@ -113,7 +113,7 @@ export async function fakeProvider(page: Page): Promise<unknown[]> {
     const body = [...events.map((event) => JSON.stringify(event)), '[DONE]'].map((data) => `data: ${data}\n\n`).join('');
     const streams = streamRegistry(streamStore(':memory:'), async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
     const id = route.request().url().split('/').at(-1)!;
-    const frames = await streams.start(id, { id, key, request: { ...request, url: 'https://provider.example/chat' } });
+    const frames = await streams.start(id, { id, key, request: { ...request, url: 'https://provider.example/chat' } }, new AbortController().signal);
     await route.fulfill({ headers: Object.fromEntries(frames.headers), body: Buffer.from(await frames.arrayBuffer()) });
   });
   return sent;

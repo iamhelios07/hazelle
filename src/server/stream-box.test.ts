@@ -4,6 +4,8 @@ import { StreamBox } from './stream-box';
 import { streamStore } from './db/streams-db';
 
 const CHUNK = 64 * 1024;
+// A request whose client never leaves.
+const staying = new AbortController().signal;
 const PAGE_BYTES = 256 * 1024;
 const storage = () => streamStore(':memory:').storage('s');
 
@@ -32,7 +34,7 @@ async function start(box: StreamBox) {
   const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
   const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
   const request = { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' };
-  return box.start({ id: crypto.randomUUID(), key, request });
+  return box.start({ id: crypto.randomUUID(), key, request }, staying);
 }
 
 // A page's frames and the one that closed it are read before the first put has to answer.
@@ -105,7 +107,7 @@ it('stores a short reply as one page, which a read from inside it still ends', a
   expect(live.seen.at(-1)![0]).toBe(3);
   const pages = await held.list({ start: 'f:', end: 'f;', limit: 10 });
   expect([...pages.keys()]).toEqual(['f:0000000000', `f:${String(live.seen.length - 1).padStart(10, '0')}`]);
-  const again = await frames((await box.read(3)).body!);
+  const again = await frames((await box.read(3, staying)).body!);
   expect(again.seen[0]).toEqual([0, 0]);
   expect(again.seen.at(-1)).toEqual(live.seen.at(-1));
 });
@@ -127,4 +129,17 @@ it('ends its readers with an error, aborts the call and writes no END once a pag
   expect(aborted).toBe(true);
   expect(box.running).toBe(false);
   expect([...(await held.list({ start: 'f:', end: 'f;', limit: 10 })).keys()]).toEqual(['f:0000000000']);
+});
+
+// As a server does with a request whose client left: the body is never read or cancelled.
+it.each([true, false])('stops counting a reader whose client left (before its response was built: %s)', async (before) => {
+  const held = storage();
+  await held.reserve({ key: 'f:0000000000', value: new Uint8Array(9) }, Date.now() + 60_000);
+  let idle = 0;
+  const box = new StreamBox(held, endless().upstream, () => idle++);
+  const request = new AbortController();
+  if (before) request.abort();
+  expect((await box.read(0, request.signal)).status).toBe(200);
+  request.abort();
+  expect(idle).toBe(1);
 });

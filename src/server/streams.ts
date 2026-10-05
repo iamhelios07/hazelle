@@ -17,9 +17,9 @@ export const streams = new Hono<AppEnv>()
     // bot: the chat whose bot's script asks, as the page states it; a script cannot change what the page sends. The limit
     // stops a script in a loop from spending the user's money unseen.
     if (body.bot !== undefined && !c.env.limits.botCalls.limit(`${c.get('account').id}:${body.bot}`).success) return fail(c, 429, 'too-many-bot-calls');
-    return c.env.streams.start(name(c), { id: c.req.param('id')!, key: body.key, request: body.request });
+    return c.env.streams.start(name(c), { id: c.req.param('id')!, key: body.key, request: body.request }, c.req.raw.signal);
   })
-  .get('/:id', (c) => c.env.streams.read(name(c), Number(c.req.query('from') ?? '0') || 0))
+  .get('/:id', (c) => c.env.streams.read(name(c), Number(c.req.query('from') ?? '0') || 0, c.req.raw.signal))
   .post('/:id/stop', (c) => {
     c.env.streams.stop(name(c));
     return c.body(null, 204);
