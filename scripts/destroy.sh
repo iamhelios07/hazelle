@@ -2,36 +2,81 @@
 # shellcheck disable=SC2016 # the single-quoted scripts run by remote() expand on the machine
 # Destroys the hosted machine (infra/), and only after the off-site backup is proven: the newest remote generation
 # must have its manifest, be marked copied on the machine, be younger than a day, and restore with scripts/restore.sh
-# into a scratch directory on the machine. Then it lifts prevent_destroy for this run (infra/destroy_override.tf,
-# removed on exit) and runs terraform destroy, which still asks for confirmation.
+# into a scratch directory on the machine. Then terraform plans the destroy from a copy of infra/ that lifts
+# prevent_destroy, against infra/'s state; after the typed confirmation the generation's age is checked again and the
+# saved plan is applied.
 #   scripts/destroy.sh
-# Needs: terraform state in infra/, VULTR_API_KEY in the shell, ssh as root to the machine, room on the machine's disk
-# for one restored copy of the data.
+# Needs: terraform initialised in infra/, VULTR_API_KEY in the shell, ssh as root to the machine, free space on the
+# machine's disk for twice the generation plus a fifth of the disk (the script checks it).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+state=$PWD/infra/terraform.tfstate
 host=$(terraform -chdir=infra output -raw ip)
-remote() { ssh -o BatchMode=yes "root@$host" "$@"; }
+remote() { ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "root@$host" "$@" </dev/null; }
 
-remote 'set -eu
+# Prints the drilled generation's id.
+id=$(remote 'set -eu
   remote=$(sed -n "s/^HAZELLE_BACKUP_REMOTE=//p" /etc/hazelle/env)
   image=$(sed -n "s/^HAZELLE_IMAGE=//p" /etc/hazelle/env)
-  rclone() { docker run --rm --user 1000:1000 -e HOME=/tmp -v /etc/hazelle/rclone:/config/rclone -v /var/tmp/hazelle-drill:/drill rclone/rclone:1.75 "$@"; }
-  rm -rf /var/tmp/hazelle-drill && mkdir -p /var/tmp/hazelle-drill/data && chown -R 1000:1000 /var/tmp/hazelle-drill
-  trap "rm -rf /var/tmp/hazelle-drill" EXIT
-  id=$(rclone lsf --dirs-only "$remote" | sed -n "s|^\([0-9]*-[0-9a-f]*\)/$|\1|p" | sort -n | tail -1)
+  drill=/var/tmp/hazelle-drill
+  rclone() { docker run --rm --user 1000:1000 -e HOME=/tmp -v /etc/hazelle/rclone:/config/rclone -v $drill:/drill rclone/rclone:1.75 "$@"; }
+  rm -rf $drill && mkdir -p $drill/data && chown -R 1000:1000 $drill
+  trap "rm -rf $drill" EXIT
+  listing=$(rclone lsf --dirs-only "$remote") || { echo "destroy: cannot list $remote" >&2; exit 1; }
+  id=$(printf "%s\n" "$listing" | sed -n "s|^\([0-9]*-[0-9a-f]\{8\}\)/$|\1|p" | sort -n | tail -1)
   [ -n "$id" ] || { echo "destroy: no generation on $remote" >&2; exit 1; }
   age_ms=$(( $(date +%s%3N) - ${id%%-*} ))
-  [ "$age_ms" -lt 86400000 ] || { echo "destroy: the newest generation $id is $((age_ms / 3600000)) hours old" >&2; exit 1; }
+  [ "$age_ms" -ge 0 ] && [ "$age_ms" -lt 86400000 ] ||
+    { echo "destroy: the newest generation $id is $((age_ms / 3600000)) hours old" >&2; exit 1; }
   [ -f "/data/backup/$id/copied" ] || { echo "destroy: $id is not marked copied" >&2; exit 1; }
+  rclone copyto "$remote/$id/manifest.json" /drill/manifest.json
+  grep -q "^{\"version\":1,\"id\":\"$id\"," $drill/manifest.json || { echo "destroy: the remote manifest of $id names another generation" >&2; exit 1; }
+  grep -o "\"pictures\":\[[^]]*\]" $drill/manifest.json | grep -o "[0-9a-f]\{64\}" >$drill/pictures || true
+  artifacts=$(grep -o "\"bytes\":[0-9]*" $drill/manifest.json | cut -d: -f2 | awk "{ s += \$1 } END { print s + 0 }")
+  # No pictures: the remote may have no files/ at all.
+  pictures=0
+  if [ -s $drill/pictures ]; then
+    size=$(rclone size "$remote/files" --files-from-raw /drill/pictures --json)
+    pictures=$(echo "$size" | sed -n "s/.*\"bytes\":\([0-9]*\).*/\1/p")
+  fi
+  space=$(df -Pk $drill | awk "NR == 2 { print \$2, \$4 }")
+  disk_kb=${space% *}
+  free_kb=${space#* }
+  need=$(( 2 * (artifacts + pictures) + disk_kb * 1024 / 5 ))
+  echo "destroy: $id holds $((artifacts + pictures)) bytes; the drill needs $need bytes free on $drill (twice that plus a fifth of the disk), $((free_kb * 1024)) are" >&2
+  [ $((free_kb * 1024)) -ge "$need" ] || { echo "destroy: not enough free space for the drill" >&2; exit 1; }
   rclone copy "$remote/$id" "/drill/$id"
-  [ -f "/var/tmp/hazelle-drill/$id/manifest.json" ] || { echo "destroy: $id has no manifest on the remote" >&2; exit 1; }
-  grep -o "\"pictures\":\[[^]]*\]" "/var/tmp/hazelle-drill/$id/manifest.json" | grep -o "[0-9a-f]\{64\}" >/var/tmp/hazelle-drill/pictures || true
-  rclone copy "$remote/files" /drill/files --files-from-raw /drill/pictures
-  docker run --rm --user 1000:1000 --entrypoint /app/scripts/restore.sh -v /var/tmp/hazelle-drill:/drill "$image" "/drill/$id" /drill/data
-  echo "destroy: $id restores"' </dev/null
+  if [ -s $drill/pictures ]; then rclone copy "$remote/files" /drill/files --files-from-raw /drill/pictures; fi
+  docker run --rm --user 1000:1000 --entrypoint /app/scripts/restore.sh -v $drill:/drill "$image" "/drill/$id" /drill/data >&2
+  echo "destroy: $id restores" >&2
+  echo "$id"')
 
+fresh() {
+  local now_ms age_ms
+  now_ms=$(remote 'date +%s%3N')
+  age_ms=$((now_ms - ${id%%-*}))
+  [ "$age_ms" -ge 0 ] && [ "$age_ms" -lt 86400000 ] ||
+    { echo "destroy: generation $id is now $((age_ms / 3600000)) hours old; run this again" >&2; exit 1; }
+}
+
+# Beside infra/, so every relative path in the configuration and the variable files resolves as it does there. The guard
+# is lifted only in this copy: if a crash leaves it behind, infra/ still refuses a raw terraform destroy.
+config=$(mktemp -d "$PWD/.destroy.XXXXXX")
+# The saved plan holds the variables and the state, secrets included: outside the repository.
+plans=$(mktemp -d)
+trap 'rm -rf "$config" "$plans"' EXIT
+cp infra/*.tf infra/*.tftpl infra/*.asc infra/.terraform.lock.hcl "$config/"
 printf '%s\n' \
   'resource "vultr_instance" "hazelle" {' '  lifecycle {' '    prevent_destroy = false' '  }' '}' \
-  'resource "vultr_reserved_ip" "hazelle" {' '  lifecycle {' '    prevent_destroy = false' '  }' '}' >infra/destroy_override.tf
-trap 'rm -f infra/destroy_override.tf' EXIT
-terraform -chdir=infra destroy
+  'resource "vultr_reserved_ip" "hazelle" {' '  lifecycle {' '    prevent_destroy = false' '  }' '}' >"$config/destroy_override.tf"
+var_files=()
+for file in infra/terraform.tfvars infra/*.auto.tfvars; do
+  if [ -f "$file" ]; then var_files+=("-var-file=$PWD/$file"); fi
+done
+tf() { TF_DATA_DIR=$PWD/infra/.terraform terraform -chdir="$config" "$@"; }
+
+tf plan -destroy -input=false -state="$state" "${var_files[@]}" -out="$plans/destroy"
+read -r -p "destroy: type destroy to destroy what the plan lists: " answer
+[ "$answer" = destroy ] || { echo "destroy: not confirmed; nothing changed" >&2; exit 1; }
+fresh
+tf apply -input=false -state="$state" -state-out="$state" "$plans/destroy"
