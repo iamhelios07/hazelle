@@ -49,7 +49,11 @@ const LARGER: [method: string, path: RegExp, bytes: number][] = [
   ['POST', /^\/api\/(relay|streams\/[^/]+)$/, CALL_BYTES],
 ];
 
-app.use((c, next) => {
+// bodyLimit trusts Content-Length and passes the stream through, but buffers a chunked body whole before any route
+// runs, so an unauthenticated chunked request could hold a route's whole cap in memory per connection. The browser never
+// sends a chunked request body.
+app.use(async (c, next) => {
+  if (c.req.header('transfer-encoding')?.includes('chunked')) return fail(c, 411, 'length-required');
   const maxSize = LARGER.find(([method, path]) => method === c.req.method && path.test(c.req.path))?.[2] ?? BODY_BYTES;
   return bodyLimit({ maxSize, onError: () => fail(c, 413, 'too-large') })(c, next);
 });

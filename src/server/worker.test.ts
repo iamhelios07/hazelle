@@ -257,6 +257,12 @@ describe('guards', () => {
     expect(large.status).toBe(200);
   });
 
+  it('refuses a chunked body before reading it, since the bound trusts Content-Length', async () => {
+    const response = await t.raw('login', { method: 'POST', headers: { 'content-type': 'application/json', 'transfer-encoding': 'chunked' }, body: '{}' });
+    expect(response.status).toBe(411);
+    expect(await response.json()).toEqual({ error: 'length-required' });
+  });
+
   it('throttles an account that has spent its provider calls, on the relay and on a new stream', async () => {
     const body = signupBody();
     const cookie = sessionCookie(await post('signup', body));
