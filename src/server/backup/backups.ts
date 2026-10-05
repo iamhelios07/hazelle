@@ -22,6 +22,9 @@ export type Backups = {
   tick(env: Services, now: number): Promise<void>;
   freshness(env: Services, now: number): Promise<Freshness>;
   daily(env: Services, now: number): Promise<{ snapshots: Outcome; generation: Outcome }>;
+  // A daily job that began after this was asked: one already running is waited out first, since its generation may
+  // predate what the asker wants covered.
+  fresh(env: Services): Promise<{ snapshots: Outcome; generation: Outcome }>;
 };
 
 const ALERTS: Record<string, string> = {
@@ -126,6 +129,10 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
   return {
     hold,
     daily,
+    fresh: async (env) => {
+      while (running) await running;
+      return daily(env, Date.now());
+    },
     freshness: (env, now) => freshness(env, dataDir, now),
     // One tick at a time: a second that comes while one runs gets that one, so no alert goes out twice. Today is the
     // UTC day itself, not "from its start on": a run stamped by a clock since put back belongs to no day yet.

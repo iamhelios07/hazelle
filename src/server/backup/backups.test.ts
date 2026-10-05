@@ -69,3 +69,12 @@ it('raises the banner and the webhook once a day for a failed night after a back
   expect(service).toMatchObject({ warnings: ['backup-stale'], diskFreePercent: expect.any(Number) });
   expect(service.backupAgeHours).toBeGreaterThanOrEqual(40);
 });
+
+it('captures a generation of its own for a fresh ask that comes while a daily job runs', async () => {
+  sessionCookie(await t.post('signup', signupBody('operator')));
+  const running = t.env.backups.daily(t.env, Date.now());
+  const fresh = t.env.backups.fresh(t.env);
+  await running;
+  expect((await fresh).generation.outcome).toBe('ok');
+  expect((await listGenerations(t.dir)).length).toBe(2);
+});

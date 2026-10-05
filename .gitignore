@@ -17,3 +17,7 @@ docs/
 
 # The local server's data directory (npm run server).
 .data/
+
+# The release workflow's source archive, and a self-hoster's rclone remote with its credentials.
+/release/
+/rclone/

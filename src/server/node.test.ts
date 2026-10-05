@@ -43,9 +43,9 @@ const freePort = () =>
     });
   });
 
-function start(dataDir: string, port: number) {
+function start(dataDir: string, port: number, extra: Record<string, string> = {}) {
   const child = spawn(process.execPath, [bundle], {
-    env: { ...process.env, HAZELLE_DATA: dataDir, PORT: String(port), HAZELLE_DRAIN_SECONDS: '2', HAZELLE_MIGRATIONS: 'migrations', HAZELLE_CLIENT: client },
+    env: { ...process.env, HAZELLE_DATA: dataDir, PORT: String(port), HAZELLE_DRAIN_SECONDS: '2', HAZELLE_MIGRATIONS: 'migrations', HAZELLE_CLIENT: client, ...extra },
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -94,6 +94,33 @@ describe('the server process', () => {
     server.child.kill('SIGTERM');
     expect(await server.exited).toBe(0);
     expect(server.log()).toContain('"event":"stopped"');
+  }, 30_000);
+
+  it('takes a variable left empty as its default, refuses one that is no number, and captures a generation on SIGUSR2 without stopping', async () => {
+    const refused = start(join(dir, 'data-bad-env'), await freePort(), { HAZELLE_SNAPSHOT_HOUR: 'three' });
+    expect(await refused.exited).toBe(1);
+    expect(refused.log()).toContain('HAZELLE_SNAPSHOT_HOUR is not a number');
+
+    const data = join(dir, 'data-signal');
+    const port = await freePort();
+    // An empty drain would be zero seconds: the SIGTERM below must still report a drain, not a timeout at once.
+    const server = start(data, port, { HAZELLE_SNAPSHOT_HOUR: '', HAZELLE_DRAIN_SECONDS: '' });
+    await server.listening;
+    server.child.kill('SIGUSR2');
+    const captured = async () => {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const made = readdirSync(join(data, 'backup'), { withFileTypes: true }).filter((entry) => entry.isDirectory() && entry.name !== 'files');
+        if (made.some((entry) => readdirSync(join(data, 'backup', entry.name)).includes('manifest.json'))) return true;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return false;
+    };
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(await captured()).toBe(true);
+    expect((await fetch(`http://127.0.0.1:${port}/api/health`)).status).toBe(200);
+    server.child.kill('SIGTERM');
+    expect(await server.exited).toBe(0);
+    expect(server.log()).toMatch(/"drainMs":60000/);
   }, 30_000);
 
   it('answers the request in flight on SIGTERM, refuses new connections, and exits 0 once drained', async () => {

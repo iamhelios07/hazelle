@@ -24,9 +24,21 @@ import app from './worker';
 // The process: one data directory, one owner, the services every request gets, the schedulers, and a shutdown that
 // drains before it closes the databases. Configuration is the environment (docs/research/docker-port-plan.md §11).
 const dataDir = process.env.HAZELLE_DATA ?? '/data';
-const port = Number(process.env.PORT ?? 8080);
-const drainMs = Number(process.env.HAZELLE_DRAIN_SECONDS ?? 60) * 1000;
-const snapshotHour = Number(process.env.HAZELLE_SNAPSHOT_HOUR ?? 3);
+// An unset or empty variable takes the default: compose passes "" for one the operator left out, and Number("") is 0,
+// which would read as a zero-second drain and a midnight snapshot. Anything else that is not a number refuses to start.
+function numberFrom(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    console.error(`hazelle: ${name} is not a number: ${raw}`);
+    process.exit(1);
+  }
+  return value;
+}
+const port = numberFrom('PORT', 8080);
+const drainMs = numberFrom('HAZELLE_DRAIN_SECONDS', 60) * 1000;
+const snapshotHour = numberFrom('HAZELLE_SNAPSHOT_HOUR', 3);
 const alertWebhook = process.env.HAZELLE_ALERT_WEBHOOK || null;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
@@ -141,5 +153,8 @@ async function shutdown(signal: string) {
   log('stopped', { outcome, left: background.size });
   process.exit(0);
 }
+// scripts/deploy.sh asks for a generation before it replaces the image. Without a handler Node's default for the signal
+// would end the process with no drain.
+process.on('SIGUSR2', () => ctx.waitUntil(services.backups.fresh(services)));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
