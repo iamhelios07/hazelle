@@ -5,10 +5,14 @@
 # A pass copies every generation that has manifest.json and no copied marker, writes the marker after each success,
 # then prunes the remote. The remote mirrors backup/: <remote>/<id>/ and the picture pool <remote>/files/, where
 # scripts/restore.sh looks for the pool.
+# One copier per remote prefix: the prune takes every object under it as this machine's, and the lock below serializes
+# passes inside one container only.
 set -u
 LOCAL=/data/backup
 REMOTE=${HAZELLE_BACKUP_REMOTE:?set HAZELLE_BACKUP_REMOTE to an rclone remote and path, e.g. r2:hazelle-backup}
-RETENTION_MS=$((30 * 24 * 60 * 60 * 1000))
+# Equals the app's retention (src/server/backup/snapshots.ts): the pool prune below counts on the machine keeping a
+# generation as long as the remote does.
+BACKUP_RETENTION_MS=$((7 * 24 * 60 * 60 * 1000))
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
@@ -26,8 +30,38 @@ copy_generation() {
     date -u +%Y-%m-%dT%H:%M:%SZ >"$LOCAL/$1/copied"
 }
 
-# Generations older than 30 days go, then every pooled picture no remaining remote manifest names. A listing or a
-# manifest that cannot be read stops the pool prune: a picture goes only when every manifest was read.
+# Prints the picture ids of manifest $1, which must be generation $2's and whole. The pattern follows the key order
+# captureGeneration writes (src/server/backup/generation.ts: one line, "pictures" once, "migrations" last), so no
+# cut-off prefix of a manifest matches it; a change of that order fails every prune here until this follows it.
+pictures() {
+  grep -Eq "^\{\"version\":1,\"id\":\"$2\",.*\"pictures\":\[(\"[0-9a-f]{64}\"(,\"[0-9a-f]{64}\")*)?\],\"migrations\":\[[^]]*\]\}\$" "$1" &&
+    sed -e 's/.*"pictures":\[\([^]]*\)\],"migrations".*/\1,/' -e 's/"//g' -e 's/,/\n/g' "$1"
+}
+
+# Every pooled picture that no remote manifest and no local generation names. Each step is checked: a failed listing,
+# read, sort or write, or a manifest that is not whole, returns before anything is deleted.
+prune_pool() {
+  work=$1
+  rclone lsf -R --files-only --include '/*/manifest.json' "$REMOTE" >"$work/manifests" || return 1
+  # The local pool holds the pictures of every generation this machine keeps, so a manifest that a lagging listing
+  # does not show yet cannot cost its pictures. Assumes no listing lags behind by the retention.
+  ls "$LOCAL/files" >"$work/named" || return 1
+  while IFS= read -r manifest; do
+    rclone cat "$REMOTE/$manifest" >"$work/manifest" || return 1
+    pictures "$work/manifest" "${manifest%/manifest.json}" >>"$work/named" || { log "$manifest is not whole"; return 1; }
+  done <"$work/manifests"
+  # From the root: the remote has no files/ until a generation names a picture, and listing it would fail.
+  rclone lsf -R --files-only --include '/files/*' "$REMOTE" >"$work/listed" || return 1
+  sed 's|^files/||' "$work/listed" >"$work/pool" || return 1
+  sort -u "$work/named" >"$work/named.sorted" || return 1
+  sort "$work/pool" >"$work/pool.sorted" || return 1
+  comm -23 "$work/pool.sorted" "$work/named.sorted" >"$work/unnamed" || return 1
+  [ -s "$work/unnamed" ] || return 0
+  rclone delete "$REMOTE/files" --files-from-raw "$work/unnamed" || return 1
+  log "pruned $(wc -l <"$work/unnamed") pictures"
+}
+
+# Generations past the retention go, then the pool.
 prune() {
   now_ms=$(($(date +%s) * 1000))
   dirs=$(rclone lsf --dirs-only "$REMOTE") || return 1
@@ -35,47 +69,31 @@ prune() {
     id=${entry%/}
     at=${id%%-*}
     case $at in '' | *[!0-9]*) continue ;; esac
-    if [ $((now_ms - at)) -ge "$RETENTION_MS" ]; then
+    if [ $((now_ms - at)) -ge "$BACKUP_RETENTION_MS" ]; then
       rclone purge "$REMOTE/$id" || return 1
       log "pruned $id"
     fi
   done
-  manifests=$(rclone lsf -R --files-only --include '/*/manifest.json' "$REMOTE") || return 1
-  work=$(mktemp -d)
-  touch "$work/named"
-  for manifest in $manifests; do
-    if ! rclone cat "$REMOTE/$manifest" >"$work/manifest" || ! grep -o '"pictures":\[[^]]*\]' "$work/manifest" >"$work/list"; then
-      rm -rf "$work"
-      return 1
-    fi
-    grep -o '[0-9a-f]\{64\}' "$work/list" >>"$work/named"
-  done
-  if ! rclone lsf --files-only "$REMOTE/files" >"$work/pool"; then
-    rm -rf "$work"
-    return 1
-  fi
-  sort "$work/pool" -o "$work/pool"
-  sort -u "$work/named" | comm -23 "$work/pool" - >"$work/unnamed"
-  if [ -s "$work/unnamed" ]; then
-    if ! rclone delete "$REMOTE/files" --files-from-raw "$work/unnamed"; then
-      rm -rf "$work"
-      return 1
-    fi
-    log "pruned $(wc -l <"$work/unnamed") pictures"
-  fi
+  work=$(mktemp -d) || return 1
+  prune_pool "$work"
+  status=$?
   rm -rf "$work"
+  return "$status"
 }
 
 pass() {
   ids=$(pending)
-  [ -n "$ids" ] || return 0
-  # The pool first, so no copied generation names a picture the remote lacks.
-  rclone copy "$LOCAL/files" "$REMOTE/files" || { log "pool copy failed; nothing marked"; return 1; }
-  failed=0
-  for id in $ids; do
-    if copy_generation "$id"; then log "copied $id"; else log "copy of $id failed; not marked"; failed=1; fi
-  done
-  [ "$failed" = 0 ] || return 1
+  if [ -n "$ids" ]; then
+    # The pool first, so no copied generation names a picture the remote lacks.
+    rclone copy "$LOCAL/files" "$REMOTE/files" || { log "pool copy failed; nothing marked"; return 1; }
+    failed=0
+    for id in $ids; do
+      if copy_generation "$id"; then log "copied $id"; else log "copy of $id failed; not marked"; failed=1; fi
+    done
+    [ "$failed" = 0 ] || return 1
+  fi
+  # No pool yet: the app has not begun its first generation, and the remote may not exist.
+  [ -d "$LOCAL/files" ] || return 0
   prune || { log "prune failed"; return 1; }
 }
 
