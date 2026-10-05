@@ -74,6 +74,56 @@ describe('the stream registry', () => {
     expect(streams.live()).toBe(0);
   });
 
+  // The start's key derivation waits until the returned open() is called.
+  const holdDerivation = () => {
+    const derive = crypto.subtle.deriveKey.bind(crypto.subtle);
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const spy = vi.spyOn(crypto.subtle, 'deriveKey').mockImplementationOnce(async (...args) => {
+      await gate;
+      return derive(...args);
+    });
+    return { open, restore: () => spy.mockRestore() };
+  };
+
+  it('keeps a starting stream through a read that found nothing yet, so its call stays counted and stoppable', async () => {
+    const { seen, upstream } = provider();
+    const streams = streamRegistry(store(), upstream);
+    const held = holdDerivation();
+    try {
+      const starting = streams.start('a', await body());
+      expect((await streams.read('a', 0)).status).toBe(404);
+      held.open();
+      const started = await starting;
+      expect(started.status).toBe(200);
+      await started.body?.cancel();
+      expect(streams.live()).toBe(1);
+      streams.stop('a');
+      await streams.settled();
+      expect([seen.calls, seen.aborted]).toEqual([1, 1]);
+    } finally {
+      held.restore();
+    }
+  });
+
+  it('refuses a start whose stream was deleted while its key was derived, before any row or call', async () => {
+    const { seen, upstream } = provider();
+    const held = store();
+    const streams = streamRegistry(held, upstream);
+    const derivation = holdDerivation();
+    try {
+      const starting = streams.start('a', await body());
+      await streams.drop('a');
+      derivation.open();
+      expect((await starting).status).toBe(404);
+      expect(seen.calls).toBe(0);
+      expect(streams.live()).toBe(0);
+      expect(held.due(Number.MAX_SAFE_INTEGER)).toEqual([]);
+    } finally {
+      derivation.restore();
+    }
+  });
+
   it('counts a call live from its start to its end, and settles once none runs', async () => {
     const { upstream } = provider();
     const streams = streamRegistry(store(), upstream);

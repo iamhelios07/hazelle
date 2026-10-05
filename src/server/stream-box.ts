@@ -77,8 +77,8 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> | null {
 const json = (status: number, error: string) => Response.json({ error }, { status });
 
 // Memory holds the frames not yet written (from persisted on, in seq order, no gap) and what each reader is sent;
-// storage holds every page before them, however long the answer. idle: the box has no call running and no reader, so
-// its registry may forget it.
+// storage holds every page before them, however long the answer. idle: the box has no start pending, no call running
+// and no reader, so its registry may forget it.
 export class StreamBox {
   private next = 0;
   private persisted = 0;
@@ -91,6 +91,7 @@ export class StreamBox {
   // A write failed: nothing more is written, END least of all, and every reader ends with an error.
   private broken = false;
   private readers = 0;
+  private starts = 0;
   private writes = Promise.resolve();
   running = false;
   // Settles when the call is over; already settled for a box that never ran one. Never rejects.
@@ -103,6 +104,7 @@ export class StreamBox {
   ) {}
 
   async start({ id, key, request }: { id: string; key: unknown; request: unknown }): Promise<Response> {
+    this.starts++;
     try {
       const theirs = typeof key === 'string' ? fromBase64(key) : null;
       const pair = (await crypto.subtle.generateKey(P256, false, ['deriveBits'])) as { publicKey: Key; privateKey: Key };
@@ -116,6 +118,9 @@ export class StreamBox {
         return json(400, 'bad-key');
       }
       const hello = frame(HELLO, 0, new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer));
+      // A DELETE while the key was derived took the name from the registry. Checked once, here: the store's reserve
+      // answers without I/O, so nothing can drop the box between it and the call.
+      if (this.dropped) return json(404, 'stream-gone');
       // Two starts of one name both get here; the reservation lets one through.
       if (!(await this.storage.reserve({ key: frameKey(0), value: hello }, Date.now() + KEEP_MS))) return json(409, 'stream-exists');
       this.next = this.persisted = 1;
@@ -124,6 +129,7 @@ export class StreamBox {
       this.ended = this.run(request, sealing, this.call.signal);
       return await this.read(0);
     } finally {
+      this.starts--;
       this.release();
     }
   }
@@ -143,7 +149,7 @@ export class StreamBox {
   }
 
   private release() {
-    if (!this.running && !this.readers) this.idle();
+    if (!this.starts && !this.running && !this.readers) this.idle();
   }
 
   private async run(envelope: unknown, sealing: Key, signal: AbortSignal) {
