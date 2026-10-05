@@ -49,7 +49,8 @@ export function describeFailure(failure: ApiFailure): string {
   if (failure.error === 'too-many-attempts' && failure.retryAfter !== undefined) {
     return `시도가 너무 많았어요. ${Math.ceil(failure.retryAfter / 60)}분 뒤에 다시 해 주세요.`;
   }
-  return MESSAGES[failure.error] ?? SERVER_TROUBLE;
+  // The code is what to tell the operator: without it a failure no screen expected cannot be told apart.
+  return MESSAGES[failure.error] ?? `${SERVER_TROUBLE} (${failure.error}${failure.status === undefined ? '' : ` ${failure.status}`})`;
 }
 
 const REFUSED: Record<string, string> = {

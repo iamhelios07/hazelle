@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Upstream } from './relay';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
+import app from './worker';
+
+// Before any request: the first one builds the matcher, and no route can be added after it.
+app.get('/broken', () => { throw new Error('boom'); });
 
 let t: Awaited<ReturnType<typeof testApp>>;
 const answer: Upstream = async () => Response.json({ data: [] });
@@ -245,6 +249,15 @@ describe('a suspended account', () => {
 });
 
 describe('guards', () => {
+  it('answers a route that threw with the JSON error shape and logs what broke', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const answer = await t.raw('broken', { method: 'GET' });
+    expect(answer.status).toBe(500);
+    expect(await answer.json()).toEqual({ error: 'server-error' });
+    expect(logged).toHaveBeenCalledWith('request failed', expect.objectContaining({ method: 'GET', path: '/api/broken', error: expect.stringContaining('boom') }));
+    logged.mockRestore();
+  });
+
   it('refuses a request that states another account than the one its session names, and writes nothing', async () => {
     const body = signupBody();
     const cookie = sessionCookie(await post('signup', body));

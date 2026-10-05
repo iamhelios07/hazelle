@@ -214,7 +214,7 @@ describe('purgeExpired', () => {
     const chat = await savedChat(store);
     await removeChat(store, chat);
     const real = globalThis.fetch;
-    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === '/api/objects/batch' && (JSON.parse(init?.body as string) as { writes: { id: string; body: string | null }[] }).writes.some((write) => write.id === chat && write.body === null) ? Promise.resolve(new Response(null, { status: 500 })) : real(url, init)));
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === '/api/objects/batch' && (JSON.parse(init?.body as string) as { writes: { id: string; body: string | null }[] }).writes.some((write) => write.id === chat && write.body === null) ? Promise.resolve(Response.json({ error: 'server-error' }, { status: 500 })) : real(url, init)));
     await purgeExpired(store, Date.now() + KEEP_DELETED, new AbortController().signal);
     expect([store.get('chat', chat)?.value.purging, store.children('entry', chat).length]).toEqual([true, 0]);
     expect(await restoreChat(store, chat)).toEqual({ ok: false, error: 'gone' });
@@ -262,7 +262,7 @@ describe('purgeNow', () => {
     await store.create('entry', { type: 'message', role: 'user', at: 1, text: '안녕', receipt: null }, { parent: chatId });
 
     const real = globalThis.fetch;
-    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === '/api/objects/batch' && (JSON.parse(init?.body as string) as { writes: { id: string; body: string | null }[] }).writes.some((write) => write.id === chatId && write.body === null) ? Promise.resolve(new Response(null, { status: 500 })) : real(url, init)));
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (url === '/api/objects/batch' && (JSON.parse(init?.body as string) as { writes: { id: string; body: string | null }[] }).writes.some((write) => write.id === chatId && write.body === null) ? Promise.resolve(Response.json({ error: 'server-error' }, { status: 500 })) : real(url, init)));
     expect(await purgeNow(store, 'character', id, () => {})).toEqual({ ok: false, error: 'server-error' });
     const other = await open();
     await other.pull();

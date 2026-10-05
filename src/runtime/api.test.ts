@@ -6,7 +6,7 @@ afterEach(() => {
   holdAccount(null);
 });
 
-it('reads a connection that drops inside the answer as offline, and a whole answer that is not JSON as a server error', async () => {
+it('reads a connection that drops inside the answer or a 5xx page the proxy wrote as offline, and another answer that is not JSON as a server error with its status', async () => {
   const dropped = new ReadableStream<Uint8Array>({
     pull: (controller) => {
       controller.enqueue(new TextEncoder().encode('{"revs":'));
@@ -17,7 +17,10 @@ it('reads a connection that drops inside the answer as offline, and a whole answ
   expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'offline' });
 
   vi.stubGlobal('fetch', async () => new Response('<html>502</html>', { status: 502 }));
-  expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'server-error' });
+  expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'offline' });
+
+  vi.stubGlobal('fetch', async () => new Response('<html>403</html>', { status: 403 }));
+  expect(await api('POST', 'objects/batch', {})).toEqual({ ok: false, error: 'server-error', status: 403 });
 });
 
 it('states the account the page holds with every request, and hears what answers say of the account', async () => {

@@ -1,6 +1,6 @@
 import { isRecord } from '../connectors/values';
 
-export type ApiFailure = { ok: false; error: string; retryAfter?: number };
+export type ApiFailure = { ok: false; error: string; retryAfter?: number; status?: number };
 export type ApiResult<T> = { ok: true; data: T } | ApiFailure;
 
 // What an answer says of the account the page holds rather than of the request. The header names are the server's
@@ -53,8 +53,9 @@ const SLOWEST_UPLOAD = 16_384;
 export const SLOW_ROUTE_WAIT = 5 * 60_000;
 
 // 'offline' means no whole answer came: the request never reached the server, its headers did not come in time, or the
-// connection dropped while its answer was being read. 'server-error' means it answered without the JSON error shape
-// every API route uses.
+// connection dropped while its answer was being read, or a 5xx without the JSON error shape every API route uses, which
+// the proxy in front wrote while the app was not answering (a container swap, Cloudflare's 52x). 'server-error' means
+// an answer that was neither, with its status.
 export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal, headersWait = HEADERS_WAIT): Promise<ApiResult<T>> {
   const bytes = body instanceof Uint8Array ? (body as Uint8Array<ArrayBuffer>) : null;
   const payload = body === undefined ? undefined : (bytes ?? JSON.stringify(body));
@@ -86,7 +87,8 @@ export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE'
     const retryAfter = typeof data.retryAfter === 'number' ? data.retryAfter : undefined;
     return { ok: false, error: data.error, retryAfter };
   }
-  return { ok: false, error: 'server-error' };
+  if (response.status >= 500) return { ok: false, error: 'offline' };
+  return { ok: false, error: 'server-error', status: response.status };
 }
 
 function parse(text: string): unknown {

@@ -27,6 +27,13 @@ app.use(async (c, next) => {
   }
 });
 
+// Hono's own handler would answer a route's exception with plain text, which the browser cannot tell from a page the
+// proxy wrote while the app was down (runtime/api): the JSON shape says it was the app, and the log says what broke.
+app.onError((error, c) => {
+  console.error('request failed', { method: c.req.method, path: c.req.path, error: String(error.stack ?? error) });
+  return fail(c, 500, 'server-error');
+});
+
 // Another site cannot send either content type here without a CORS preflight, which this API never
 // answers. That makes this a second CSRF guard beside SameSite=Strict.
 const BODY_TYPES = ['application/json', 'application/octet-stream'];

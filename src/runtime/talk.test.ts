@@ -47,7 +47,7 @@ describe('Talk', () => {
         return answers(sent);
       });
       const through = globalThis.fetch;
-      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (failing && url.startsWith('/api/objects/') ? Promise.resolve(new Response(null, { status: 500 })) : through(url, init)));
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => (failing && url.startsWith('/api/objects/') ? Promise.resolve(Response.json({ error: 'server-error' }, { status: 500 })) : through(url, init)));
 
       const first = await takeTurn(session, chats[0]!, { kind: 'answer' });
       const second = await takeTurn(session, chats[1]!, { kind: 'answer' });

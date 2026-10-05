@@ -7,4 +7,6 @@ it('has words of its own for each refusal the server answers about the account, 
   const words = codes.map((error) => describeFailure({ ok: false, error }));
   expect(words).not.toContain(generic);
   expect(new Set(words).size).toBe(codes.length);
+  expect(generic).toContain('(not-a-code)');
+  expect(describeFailure({ ok: false, error: 'server-error', status: 403 })).toContain('(server-error 403)');
 });
