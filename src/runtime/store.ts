@@ -508,7 +508,9 @@ export class ObjectStore {
   }
 
   // created: the caller is writing this chat's first objects under a new id, so the server has nothing to pull for it.
-  retainChat(chat: string, created = false): ChatLease {
+  // summarize: opening writes the chat's summary when it has outgrown it (the list shows that chat fresh); a pass that
+  // writes a window's summaries in one request (withChats for saveSummaries) opens without.
+  retainChat(chat: string, { created = false, summarize = true }: { created?: boolean; summarize?: boolean } = {}): ChatLease {
     if (this.closing.signal.aborted) return { ready: Promise.resolve({ ok: false, error: 'stopped' }), release: () => {} };
     let scope = this.scopes.get(chat);
     if (!scope) {
@@ -520,7 +522,7 @@ export class ObjectStore {
     const held = scope;
     if (held.state !== 'loaded' && !held.opening) {
       const epoch = this.epoch;
-      const opening = this.openChat(chat, held).catch((error: unknown) => this.failScope(chat, held, epoch, error)).finally(() => { if (held.opening === opening) held.opening = null; });
+      const opening = this.openChat(chat, held, summarize).catch((error: unknown) => this.failScope(chat, held, epoch, error)).finally(() => { if (held.opening === opening) held.opening = null; });
       held.opening = opening;
     }
     const epoch = this.epoch;
@@ -534,7 +536,7 @@ export class ObjectStore {
     } };
   }
 
-  private async openChat(chat: string, scope: Scope): Promise<ApiFailure | null> {
+  private async openChat(chat: string, scope: Scope, summarize: boolean): Promise<ApiFailure | null> {
     const epoch = this.epoch;
     const signal = AbortSignal.any([scope.abort.signal, this.closing.signal, this.ended.signal]);
     scope.state = 'loading';
@@ -565,12 +567,12 @@ export class ObjectStore {
         this.changes.push({ kind: 'scope', id: chat, parent: chat });
         this.changed();
         // Ready is cache-only; catch-up and summary writes must not hold the chat screen behind the network.
-        void this.refreshChat(chat).then((failure) => { if (!failure && scope.users) this.summarizeChat(chat); });
+        void this.refreshChat(chat).then((failure) => { if (!failure && scope.users && summarize) this.summarizeChat(chat); });
         return null;
       }
     }
     const failure = await this.refreshChat(chat);
-    return failure ?? await this.saveSummary(chat);
+    return failure ?? (summarize ? await this.saveSummary(chat) : null);
   }
 
   // What an operation begun in epoch answers when it is cut short: timeline-changed once a reset has ended that epoch,
@@ -600,14 +602,28 @@ export class ObjectStore {
 
   // signal: the caller's stop, which lets the chat go at once, ending its opening and a summary write waiting on the
   // connection; what run does with the chat after that ends as stopped (saveSummary).
-  async withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
+  withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
+    return this.withChats([chat], (readable) => (readable.length ? run() : Promise.resolve({ ok: false, error: 'unreadable' })), { signal });
+  }
+
+  // Several chats held together and opened at once, for run. One whose history cannot be read is left out of what run
+  // gets, since its screen says so and a pass over many (saveSummaries) passes it over; any other failure to open ends
+  // the whole. signal: as withChat, for every chat. summarize: as retainChat.
+  async withChats<T>(chats: string[], run: (readable: string[]) => Promise<ApiResult<T>>, { signal, summarize = true }: { signal?: AbortSignal; summarize?: boolean } = {}): Promise<ApiResult<T>> {
     if (signal?.aborted) return { ok: false, error: 'stopped' };
-    const lease = this.retainChat(chat);
-    signal?.addEventListener('abort', lease.release, { once: true });
+    const leases = chats.map((chat) => this.retainChat(chat, { summarize }));
+    const release = () => { for (const lease of leases) lease.release(); };
+    signal?.addEventListener('abort', release, { once: true });
     try {
-      const failure = await lease.ready;
-      return signal?.aborted ? { ok: false, error: 'stopped' } : failure ?? await run();
-    } finally { signal?.removeEventListener('abort', lease.release); lease.release(); }
+      const readable: string[] = [];
+      for (const [index, lease] of leases.entries()) {
+        const failure = await lease.ready;
+        if (signal?.aborted) return { ok: false, error: 'stopped' };
+        if (!failure) readable.push(chats[index]!);
+        else if (failure.error !== 'unreadable') return failure;
+      }
+      return await run(readable);
+    } finally { signal?.removeEventListener('abort', release); release(); }
   }
 
   refreshChat(chat: string): Promise<ApiFailure | null> {
@@ -678,25 +694,36 @@ export class ObjectStore {
     return saving;
   }
 
-  // chats: held by the caller, their entries written under those leases (a move's character), so every summary comes
-  // from memory and all go in one request. A pass runs until no chat has outgrown its summary, as saveSummary does:
-  // one that changed while the others were built would otherwise keep what was captured. One not held is a caller's
-  // error, as in refreshChat; one whose opening or evaluation failed answers with that failure.
+  // chats: held by the caller and loaded, their entries written under those leases (a move's character) or opened
+  // (withChats), so every summary comes from memory and all go in one request. A pass runs until no chat has outgrown
+  // its summary, as saveSummary does: one that changed while the others were built would otherwise keep what was
+  // captured. One not held is a caller's error, as in refreshChat; one whose opening or evaluation failed answers with
+  // that failure.
   async summarizeChats(chats: Iterable<string>, signal?: AbortSignal): Promise<ApiFailure | null> {
     const epoch = this.epoch;
+    let passes = 0;
     try {
       for (;;) {
         const writes: Write[] = [];
         for (const chat of chats) {
           const scope = this.scopes.get(chat);
-          if (!scope) throw new ScopeUnavailable(chat);
+          if (!scope || scope.abort.signal.aborted) {
+            // Let go after a pass: the caller's stop ended its leases (withChats). Never held: the caller's error.
+            if (passes) return this.halted(epoch);
+            throw new ScopeUnavailable(chat);
+          }
           if (scope.state !== 'loaded') return scope.error ?? this.halted(epoch);
+          if (this.loadedHead(chat) < this.entryHead(chat)) {
+            const failed = await this.refreshChat(chat);
+            if (failed) return failed;
+          }
           const write = await this.summaryWrite(chat);
           if (write) writes.push(write);
         }
         if (!writes.length) return null;
         const result = await this.commit(writes.map((write) => this.step(write)), undefined, signal);
         if (!result.ok) return result;
+        passes++;
       }
     } catch (error) {
       return this.codecFailure(error, epoch);
@@ -832,7 +859,7 @@ export class ObjectStore {
       } else if (SCOPED.has(write.kind) && write.parent) chats.add(write.parent);
     }
     // Every touched chat stays held until its summary is written; entries held without a scope would never be let go.
-    const leases = [...chats].map((chat) => this.retainChat(chat, created.has(chat)));
+    const leases = [...chats].map((chat) => this.retainChat(chat, { created: created.has(chat) }));
     try {
       for (const lease of leases) {
         const failure = await lease.ready;

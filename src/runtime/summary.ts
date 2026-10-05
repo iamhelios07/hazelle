@@ -44,15 +44,17 @@ export async function projectChat(store: ObjectStore, id: string, signal?: Abort
   return { summary, model: { ...summary, id, chat: stored.value, messages, display }, shown: marks };
 }
 
-// One chat held at a time, so a pass over a whole account never holds more than one history. A chat with a summary is
-// passed over: what rewrites a summary its chat outgrew is opening that chat (ObjectStore.retainChat), and a stopped
-// restore carries on from the first chat it did not reach. An unreadable chat is passed over too; its screen says so.
+// SUMMARY_WINDOW chats held at a time, opened together and summarized in one request (ObjectStore.summarizeChats), so
+// a pass over a whole account never holds more than that many histories. A chat with a summary is passed over: what
+// rewrites a summary its chat outgrew is opening that chat (ObjectStore.retainChat), and a stopped restore carries on
+// from the first window it did not finish. An unreadable chat is passed over too; its screen says so.
+export const SUMMARY_WINDOW = 16;
 export async function saveSummaries(store: ObjectStore, chats: Iterable<string>, signal = new AbortController().signal): Promise<ApiFailure | null> {
-  for (const id of chats) {
+  const due = [...chats].filter((id) => !store.get('summary', summaryId(id)));
+  for (let start = 0; start < due.length; start += SUMMARY_WINDOW) {
     if (signal.aborted) return { ok: false, error: 'stopped' };
-    if (store.get('summary', summaryId(id))) continue;
-    const result = await store.withChat(id, async () => await store.saveSummary(id) ?? { ok: true, data: null }, signal);
-    if (!result.ok && result.error !== 'unreadable') return result;
+    const result = await store.withChats(due.slice(start, start + SUMMARY_WINDOW), async (readable) => await store.summarizeChats(readable, signal) ?? { ok: true, data: null }, { signal, summarize: false });
+    if (!result.ok) return result;
     if (!await pause(0, signal)) return { ok: false, error: 'stopped' };
   }
   return null;

@@ -114,7 +114,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     // the published character and go in one request: the source holds the whole character already, so this holds no
     // more than it. Nothing is pulled: what the leases hold is what this device wrote.
     const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).map((chat) => chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, memory));
-    const leases = chats.map(({ root }) => store.retainChat(root.id, true));
+    const leases = chats.map(({ root }) => store.retainChat(root.id, { created: true }));
     try {
       for (const lease of leases) {
         const failure = await lease.ready;

@@ -13,7 +13,7 @@ import { addFirstPersona } from './personas';
 import { FIRST_PROFILE_ID, addFirstProfile, setProfileSettings } from './profiles';
 import { addDefaults, addPrompt, removePrompt } from './prompts';
 import type { ObjectStore, Write } from './store';
-import { summaryId, summaryStale } from './summary';
+import { SUMMARY_WINDOW, summaryId, summaryStale } from './summary';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -140,7 +140,7 @@ describe('backup', () => {
     expect(Object.keys(zipped).filter((name) => name.startsWith('files/'))).toHaveLength(2);
   });
 
-  it('restores root pages unheld and resumes a stopped one-chat summary pass without retaining histories', async () => {
+  it('restores root pages unheld and resumes a stopped windowed summary pass without retaining histories', async () => {
     const old = await open('old');
     const chats = Array.from({ length: 130 }, () => crypto.randomUUID());
     const writes = chats.flatMap((id): Write[] => [
@@ -155,9 +155,9 @@ describe('backup', () => {
     const retained: string[] = [];
     let peak = 0;
     const retain = store.retainChat.bind(store);
-    vi.spyOn(store, 'retainChat').mockImplementation((id, created) => {
+    vi.spyOn(store, 'retainChat').mockImplementation((id, options) => {
       retained.push(id);
-      const lease = retain(id, created);
+      const lease = retain(id, options);
       held.set(id, (held.get(id) ?? 0) + 1);
       peak = Math.max(peak, held.size);
       let released = false;
@@ -170,9 +170,9 @@ describe('backup', () => {
       } };
     });
     const stop = new AbortController();
-    const save = store.saveSummary.bind(store);
-    const summary = vi.spyOn(store, 'saveSummary').mockImplementation(async (id) => {
-      const result = await save(id);
+    const summarize = store.summarizeChats.bind(store);
+    const summary = vi.spyOn(store, 'summarizeChats').mockImplementation(async (ids, signal) => {
+      const result = await summarize(ids, signal);
       stop.abort();
       return result;
     });
@@ -183,7 +183,7 @@ describe('backup', () => {
     retained.length = 0;
     expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
     expect(retained.filter((id) => summarized.has(id))).toEqual([]);
-    expect(peak).toBe(1);
+    expect(peak).toBe(SUMMARY_WINDOW);
     expect(held.size).toBe(0);
     for (const id of chats) {
       expect(store.scopeState(id)).toBe('unloaded');

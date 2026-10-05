@@ -64,7 +64,7 @@ describe('object store', () => {
   it('summarizes chats a caller holds in one request from what it wrote, and an unheld batch summarizes nothing', async () => {
     const { store } = await server.account();
     const ids = [crypto.randomUUID(), crypto.randomUUID()];
-    const leases = ids.map((id) => store.retainChat(id, true));
+    const leases = ids.map((id) => store.retainChat(id, { created: true }));
     for (const lease of leases) expect(await lease.ready).toBeNull();
     const summarizing = vi.spyOn(store, 'saveSummary');
     const entries: Write[] = ids.map((parent) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'delete', message: 'm', at: 0 } }));
@@ -86,7 +86,7 @@ describe('object store', () => {
   it('answers a held chat whose evaluation failed with that failure instead of throwing', async () => {
     const { store } = await server.account();
     const id = crypto.randomUUID();
-    const lease = store.retainChat(id, true);
+    const lease = store.retainChat(id, { created: true });
     expect(await lease.ready).toBeNull();
     vi.spyOn(store.evaluation, 'display').mockRejectedValue(new EvaluationFailed('down'));
     expect(await store.batch([{ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } }], undefined, { unheld: true })).toEqual({ ok: true, data: null });
@@ -99,7 +99,7 @@ describe('object store', () => {
   it('rewrites a summary its chat outgrew while the others were built', async () => {
     const { store } = await server.account();
     const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
-    const leases = [a, b].map((id) => store.retainChat(id, true));
+    const leases = [a, b].map((id) => store.retainChat(id, { created: true }));
     for (const lease of leases) expect(await lease.ready).toBeNull();
     const message = (parent: string, at: number): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'message', role: 'user', at, text: `m${at}`, receipt: null } });
     const root = (id: string): Write => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } });

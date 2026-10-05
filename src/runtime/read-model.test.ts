@@ -303,7 +303,7 @@ describe('selective account reads', () => {
     store.close();
   });
 
-  it('backfills missing summaries one chat at a time and resumes without revisiting completed chats', async () => {
+  it('backfills missing summaries by windows of chats held together, in one request each, and does not revisit them', async () => {
     const { seed, open, paths } = await account();
     for (const id of ['a', 'b']) {
       await seed(id, 'chat', null, chat);
@@ -312,19 +312,14 @@ describe('selective account reads', () => {
     const store = await open();
     const read = new ReadModels(store);
     expect(read.chats.snapshot().every((chat) => chat.count === null)).toBe(true);
-    const stop = new AbortController();
-    const leave = store.subscribe((changes) => {
-      if (changes.some((change) => change.kind === 'summary')) stop.abort();
-    });
-    await backfillSummaries(store, stop.signal);
-    leave();
-    expect(store.list('summary')).toHaveLength(1);
-    expect(store.scopeState('a')).toBe('unloaded');
-    const before = paths.length;
+    let before = paths.length;
     await backfillSummaries(store, new AbortController().signal);
-    expect(paths.slice(before).some((path) => path.includes('parent=a'))).toBe(false);
+    expect(paths.slice(before).filter((path) => path === 'objects/batch')).toHaveLength(1);
     expect(store.list('summary')).toHaveLength(2);
-    expect(store.scopeState('b')).toBe('unloaded');
+    expect(['a', 'b'].map((id) => store.scopeState(id))).toEqual(['unloaded', 'unloaded']);
+    before = paths.length;
+    await backfillSummaries(store, new AbortController().signal);
+    expect(paths.slice(before).some((path) => path.includes('parent='))).toBe(false);
     read.close();
   });
 
