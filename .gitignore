@@ -19,3 +19,4 @@ docs/
 # The release workflow's source archive, and a self-hoster's rclone remote with its credentials.
 /release/
 /rclone/
+/.destroy.*/

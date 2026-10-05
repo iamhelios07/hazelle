@@ -32,7 +32,7 @@ variable "image_digest" {
   type = string
   validation {
     condition     = can(regex("^sha256:[0-9a-f]{64}$", var.image_digest))
-    error_message = "image_digest is sha256:<64 hex>, as the release notes record it."
+    error_message = "image_digest is sha256:<64 hex>, as the release's image-digest.txt asset records it."
   }
 }
 
