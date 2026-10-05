@@ -1,8 +1,9 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { accountPath } from '../db/account-db';
 import { sessionCookie, signupBody, testApp } from '../testing';
-import { COPIED, generationsDir, listGenerations } from './generation';
+import { COPIED, generationsDir, listGenerations, readManifest } from './generation';
 import { DAY_MS, dayStart } from './snapshots';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -77,4 +78,24 @@ it('captures a generation of its own for a fresh ask that comes while a daily jo
   await running;
   expect((await fresh).generation.outcome).toBe('ok');
   expect((await listGenerations(t.dir)).length).toBe(2);
+});
+
+it('names, for a fresh ask, a baseline of every account written since today’s, and publishes no generation when one of them cannot be taken', async () => {
+  const body = signupBody('operator');
+  const cookie = sessionCookie(await t.post('signup', body));
+  const incarnation = (await t.env.db.prepare('SELECT incarnation FROM accounts').first<string>('incarnation'))!;
+  await t.daily(Math.max(dayStart(Date.now()), Date.now() - 60_000));
+  t.clock.now = () => Date.now();
+  const write = { id: crypto.randomUUID(), kind: 'chat', parent: null, body: 'after the morning', baseRev: null };
+  expect((await t.batch([write], cookie)).status).toBe(200);
+  expect((await t.env.backups.fresh(t.env)).generation).toEqual({ outcome: 'ok', error: null });
+  const newest = (await listGenerations(t.dir)).toSorted((a, b) => b.capturedAt - a.capturedAt)[0]!;
+  const baseline = (await readManifest(join(generationsDir(t.dir), newest.id)))!.accounts[0]!.baseline;
+  const named = await t.env.db.prepare('SELECT rev FROM snapshots WHERE id = ?').bind(baseline).first<number>('rev');
+  expect(t.stores.inspect(incarnation).exec('SELECT rev FROM head')).toEqual([{ rev: named }]);
+
+  rmSync(accountPath(t.dir, incarnation));
+  t.restartProcess();
+  expect(await t.env.backups.fresh(t.env)).toEqual({ snapshots: { outcome: 'failed', error: 'baseline-failed' }, generation: { outcome: 'failed', error: 'baseline-failed' } });
+  expect(await listGenerations(t.dir)).toHaveLength(2);
 });

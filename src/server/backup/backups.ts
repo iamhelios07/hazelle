@@ -22,8 +22,9 @@ export type Backups = {
   tick(env: Services, now: number): Promise<void>;
   freshness(env: Services, now: number): Promise<Freshness>;
   daily(env: Services, now: number): Promise<{ snapshots: Outcome; generation: Outcome }>;
-  // A daily job that began after this was asked: one already running is waited out first, since its generation may
-  // predate what the asker wants covered.
+  // A job that began after this was asked (one already running is waited out first, since its generation may predate
+  // what the asker wants covered) and covers every live account as it is now, not as of today's baseline. A baseline it
+  // could not take fails its generation: published, it would name an older baseline for that account.
   fresh(env: Services): Promise<{ snapshots: Outcome; generation: Outcome }>;
 };
 
@@ -84,15 +85,16 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
     return { outcome, error: ended.error };
   };
 
-  const daily = (env: Services, now: number) => {
+  const job = (env: Services, now: number, fresh: boolean) => {
     running ??= (async () => {
       const started = Date.now();
       const snapshots = await recorded(env, 'daily', now, async () => {
-        const { taken, skipped, unchanged, failed } = await takeBaselines(env, await staleBaselines(env, now, dayStart(now)));
+        const { taken, skipped, unchanged, failed } = await takeBaselines(env, await staleBaselines(env, now, fresh ? now + 1 : dayStart(now)));
         const expired = await expireSnapshots(env, dataDir, now);
         return { error: failed.length ? 'baseline-failed' : null, detail: { taken, skipped, unchanged, failed: failed.length, expired } };
       });
       const generation = await recorded(env, 'generation', now, async () => {
+        if (fresh && snapshots.outcome === 'failed') return { error: 'baseline-failed', detail: {} };
         const { id, gateMs, manifest } = await captureGeneration(env, dataDir, now, () => now + Date.now() - started, exclusive);
         const expired = await expireGenerations(dataDir, now);
         return { error: null, generation: id, gateMs, detail: { accounts: manifest.accounts.length, pictures: manifest.pictures.length, expired } };
@@ -126,12 +128,14 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
     }
   };
 
+  const daily = (env: Services, now: number) => job(env, now, false);
+
   return {
     hold,
     daily,
     fresh: async (env) => {
       while (running) await running;
-      return daily(env, Date.now());
+      return job(env, Date.now(), true);
     },
     freshness: (env, now) => freshness(env, dataDir, now),
     // One tick at a time: a second that comes while one runs gets that one, so no alert goes out twice. Today is the

@@ -34,7 +34,8 @@ Snapshots (`src/server/backup/snapshots.ts`, run by the daily job at `HAZELLE_SN
 its newest one not taken before its last finished rewind; a checkpoint never counts as one, nor does a baseline stamped after now (a
 clock since put back). Every active account whose current baseline is from before today (UTC) or absent is selected; inside the
 account's queue the take compares the file's `head.rev` with the `snapshots.rev` its current baseline recorded and, when they are
-equal, copies nothing (`backup_runs.detail.unchanged`), since that baseline is still the account. A baseline is taken only of an
+equal, copies nothing (`backup_runs.detail.unchanged`), since that baseline is still the account. An asked-for job (`backups.fresh`, SIGUSR2 before an
+upgrade) selects every live account instead of those from before today, and a take that fails there fails its generation. A baseline is taken only of an
 account that is active or restoring before its operation's checkpoint (begun, fenced), read from the service inside the account's
 queue; any other is skipped.
 A snapshot goes at 30 days unless pinned. An operation pins its checkpoint and target (an undo's from its begin) until it ends and

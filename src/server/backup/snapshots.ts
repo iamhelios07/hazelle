@@ -18,9 +18,9 @@ export const PINNED = (s: string, now: string) =>
 export const dayStart = (now: number) => now - (now % DAY_MS);
 export const pass = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-// The accounts that take a baseline now (TAKES_BASELINE) whose current baseline (CURRENT_BASELINE) is absent, or older
-// than `before` when active and than today (UTC) when restoring: one restoring before its checkpoint is restored from
-// its baseline should the operation be cut off. Freshness is judged among baselines only: a young checkpoint holds an
+// The accounts that take a baseline now (TAKES_BASELINE) whose current baseline (CURRENT_BASELINE) is absent or older
+// than `before`, and when restoring older than today (UTC) at least: one restoring before its checkpoint is restored
+// from its baseline should the operation be cut off. A `before` past `now` selects every one. Freshness is judged among baselines only: a young checkpoint holds an
 // operation's undo, not the account as it is now. An account unchanged since an old current baseline stays selected
 // every day; its take finds it unchanged and copies nothing.
 export async function staleBaselines(env: Services, now: number, before: number): Promise<string[]> {
@@ -28,7 +28,7 @@ export async function staleBaselines(env: Services, now: number, before: number)
     .prepare(
       `SELECT incarnation FROM accounts a
        WHERE ${TAKES_BASELINE('a')}
-         AND COALESCE((${CURRENT_BASELINE('taken_at', 'a', '?1')}), -1) < CASE a.state WHEN 'active' THEN ?2 ELSE ?3 END
+         AND COALESCE((${CURRENT_BASELINE('taken_at', 'a', '?1')}), -1) < CASE a.state WHEN 'active' THEN ?2 ELSE MAX(?2, ?3) END
        ORDER BY incarnation`,
     )
     .bind(now, before, dayStart(now))
