@@ -54,6 +54,14 @@ describe('files on a bad link', () => {
     expect(dropped).toBe(2);
   });
 
+  it('ends a read that waits on a dead link when its signal aborts', async () => {
+    const { store } = await server.account();
+    const files = new Files(async <T,>(...args: Parameters<typeof api>) => (args[0] === 'GET' ? { ok: false as const, error: 'offline' } : api<T>(...args)), store);
+    const abort = new AbortController();
+    setTimeout(() => abort.abort(), 50);
+    expect(await files.read({ id: 'a'.repeat(64), key: 'b'.repeat(43) }, { signal: abort.signal })).toEqual({ ok: false, error: 'stopped' });
+  });
+
   it('never sends a body past the size the server names, and leaves it out of the result', async () => {
     const { store } = await server.account();
     const puts: string[] = [];
