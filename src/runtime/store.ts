@@ -65,7 +65,7 @@ const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable', 'busy']);
 const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
 export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
-type Scope = { fold: ChatFold; opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
+type Scope = { fold: ChatFold; opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null; summarize: boolean };
 export type ChatLease = { ready: Promise<ApiFailure | null>; release: () => void };
 
 export class ScopeUnavailable extends Error {
@@ -514,12 +514,18 @@ export class ObjectStore {
     if (this.closing.signal.aborted) return { ready: Promise.resolve({ ok: false, error: 'stopped' }), release: () => {} };
     let scope = this.scopes.get(chat);
     if (!scope) {
-      scope = { fold: this.chatFold(chat), opening: null, abort: new AbortController(), state: created ? 'loaded' : 'unloaded', users: 0, cursor: 0, head: 0, loading: null, error: null };
+      scope = { fold: this.chatFold(chat), opening: null, abort: new AbortController(), state: created ? 'loaded' : 'unloaded', users: 0, cursor: 0, head: 0, loading: null, error: null, summarize };
       this.scopes.set(chat, scope);
       if (created) this.cacheWrite([], chat, scope, true);
     }
     scope.users++;
     const held = scope;
+    // A chat opened for a pass that then writes no summary (stopped, or another of its window failed to open) still
+    // gets one when a later holder asked for it: that holder's screen shows the chat in the list.
+    if (summarize && !held.summarize) {
+      held.summarize = true;
+      void (held.opening ?? Promise.resolve(null)).then((failure) => { if (!failure && this.scopes.get(chat) === held) this.summarizeChat(chat); });
+    }
     if (held.state !== 'loaded' && !held.opening) {
       const epoch = this.epoch;
       const opening = this.openChat(chat, held, summarize).catch((error: unknown) => this.failScope(chat, held, epoch, error)).finally(() => { if (held.opening === opening) held.opening = null; });
@@ -708,15 +714,15 @@ export class ObjectStore {
         for (const chat of chats) {
           const scope = this.scopes.get(chat);
           if (!scope || scope.abort.signal.aborted) {
-            // Let go after a pass: the caller's stop ended its leases (withChats). Never held: the caller's error.
-            if (passes) return this.halted(epoch);
+            // Let go by the caller's stop or after a pass (withChats): halted. Never held: the caller's error.
+            if (passes || signal?.aborted || this.closing.signal.aborted) return this.halted(epoch);
             throw new ScopeUnavailable(chat);
           }
-          if (scope.state !== 'loaded') return scope.error ?? this.halted(epoch);
-          if (this.loadedHead(chat) < this.entryHead(chat)) {
-            const failed = await this.refreshChat(chat);
-            if (failed) return failed;
-          }
+          // A chat whose history cannot be read is passed over, as withChats passes over one that cannot open: its
+          // screen says so.
+          const failure = scope.state !== 'loaded' ? scope.error ?? this.halted(epoch) : this.loadedHead(chat) < this.entryHead(chat) ? await this.refreshChat(chat) : null;
+          if (failure?.error === 'unreadable') continue;
+          if (failure) return failure;
           const write = await this.summaryWrite(chat);
           if (write) writes.push(write);
         }

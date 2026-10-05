@@ -5,7 +5,7 @@ import { emptyMemory } from '../model/memory';
 import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
 import { EvaluationFailed } from './evaluation';
-import { ObjectStore, ScopeUnavailable, type Write } from './store';
+import { ObjectStore, ScopeUnavailable, type ChatLease, type Write } from './store';
 import { summaryId, summaryStale } from './summary';
 import { BATCH_LIMITS, testServer } from './testing';
 
@@ -13,6 +13,8 @@ const server = testServer();
 
 const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
 const renamed = (suffix: string) => (current: Connection) => ({ ...current, label: current.label + suffix });
+const message = (parent: string, at: number): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'message', role: 'user', at, text: `m${at}`, receipt: null } });
+const root = (id: string): Write => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } });
 
 describe('object store', () => {
   it('shares writes between devices and reapplies a change after a conflict', async () => {
@@ -101,8 +103,6 @@ describe('object store', () => {
     const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
     const leases = [a, b].map((id) => store.retainChat(id, { created: true }));
     for (const lease of leases) expect(await lease.ready).toBeNull();
-    const message = (parent: string, at: number): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'message', role: 'user', at, text: `m${at}`, receipt: null } });
-    const root = (id: string): Write => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } });
     expect(await store.batch([message(a, 1), message(b, 1)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
     expect(await store.batch([root(a), root(b)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
     await store.evaluated(a);
@@ -123,6 +123,54 @@ describe('object store', () => {
     expect(summary.count).toBe(2);
     expect(summaryStale(store, a, summary)).toBe(false);
     for (const lease of leases) lease.release();
+  });
+
+  it('passes over a held chat whose catch-up cannot be read and summarizes the rest of the window', async () => {
+    const { store, open } = await server.account();
+    const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
+    const phone = await open();
+    expect((await phone.batch([message(a, 1), message(b, 1), root(a), root(b)], undefined, { unheld: true })).ok).toBe(true);
+    await store.pull();
+    const leases = [a, b].map((id) => store.retainChat(id, { summarize: false }));
+    for (const lease of leases) expect(await lease.ready).toBeNull();
+    expect((await phone.batch([message(a, 2)], undefined, { unheld: true })).ok).toBe(true);
+    vi.spyOn(store, 'refreshChat').mockResolvedValue({ ok: false, error: 'unreadable' });
+    await store.pull();
+    expect(await store.summarizeChats([a, b])).toBeNull();
+    expect(store.get('summary', summaryId(a))).toBeNull();
+    expect(store.get('summary', summaryId(b))!.value.count).toBe(1);
+    for (const lease of leases) lease.release();
+  });
+
+  it('summarizes a chat opened for a pass that wrote nothing once a later holder asks for its summary', async () => {
+    const { store, open } = await server.account();
+    const a = crypto.randomUUID();
+    const phone = await open();
+    expect((await phone.batch([message(a, 1), root(a)], undefined, { unheld: true })).ok).toBe(true);
+    await store.pull();
+    let screen: ChatLease | null = null;
+    const pass = await store.withChats([a], async () => {
+      screen = store.retainChat(a);
+      return { ok: false, error: 'stopped' };
+    }, { summarize: false });
+    expect(pass).toEqual({ ok: false, error: 'stopped' });
+    expect(await screen!.ready).toBeNull();
+    await vi.waitFor(() => expect(store.get('summary', summaryId(a))).toBeDefined());
+    screen!.release();
+  });
+
+  it('answers stopped, not a thrown scope, when its caller lets the window go before the first write', async () => {
+    const { store, open } = await server.account();
+    const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
+    const phone = await open();
+    expect((await phone.batch([message(a, 1), message(b, 1), root(a), root(b)], undefined, { unheld: true })).ok).toBe(true);
+    await store.pull();
+    const stop = new AbortController();
+    const evaluated = store.evaluated.bind(store);
+    vi.spyOn(store, 'evaluated').mockImplementation(async (chat) => { stop.abort(); return evaluated(chat); });
+    const pass = await store.withChats([a, b], async (ids) => await store.summarizeChats(ids, stop.signal) ?? { ok: true, data: null }, { signal: stop.signal, summarize: false });
+    expect(pass).toEqual({ ok: false, error: 'stopped' });
+    expect([a, b].map((id) => store.scopeState(id))).toEqual(['unloaded', 'unloaded']);
   });
 
   it('answers a create tried again after it landed with the object it made', async () => {
