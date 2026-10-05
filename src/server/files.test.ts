@@ -28,8 +28,6 @@ const stored = async (incarnation: string, id: string) => {
   const body = await t.env.files.get(`files/${incarnation}/${id}`);
   return body ? new Response(body).arrayBuffer() : undefined;
 };
-// Past the hour in which the hourly job spares a prefix with no account: an upload may still be landing in it.
-const later = () => Date.now() + 2 * 3_600_000;
 const operator = new Hono<AppEnv>().route('/', fileBlocks);
 const block = (id: string, blocked: boolean) =>
   operator.request(`/files/${id}/blocked`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ blocked }) }, t.env);
@@ -209,34 +207,6 @@ describe('files', () => {
     ]);
   });
 
-  it('serves a signup that reuses a client id nothing of an old upload finishing late', async () => {
-    const body = signupBody();
-    const old = await signup(body);
-    const bytes = new Uint8Array([3, 1, 4]);
-    const id = await idOf(bytes);
-    const files = t.env.files;
-    let reused!: Awaited<ReturnType<typeof signup>>;
-    await withFilesPut(
-      async (key, value) => {
-        await t.env.db.prepare('DELETE FROM accounts WHERE id = ?').bind(old.id).run();
-        reused = await signup(body);
-        return files.put(key, value);
-      },
-      async () => expect((await put(id, bytes, old.cookie)).status).toBe(401),
-    );
-    expect(reused.incarnation).not.toBe(old.incarnation);
-    expect(await rows(old.incarnation)).toEqual([]);
-    expect(await stored(old.incarnation, id)).toBeDefined();
-
-    expect(await rows(reused.incarnation)).toEqual([]);
-    expect(await sum(reused.incarnation)).toBe(0);
-    expect(await missing([id], reused.cookie)).toEqual([id]);
-    expect((await t.get(`files/${id}`, reused.cookie)).status).toBe(404);
-
-    await t.reconcile(later());
-    expect(await stored(old.incarnation, id)).toBeUndefined();
-  });
-
   it('lets a taker past the slots wait its turn, and answers false once the wait runs out', async () => {
     const slots = uploadSlots(2, 20);
     expect(await Promise.all([slots.take(), slots.take()])).toEqual([true, true]);
@@ -283,18 +253,33 @@ describe('files', () => {
     expect((await Promise.all(replies)).map(({ status }) => status)).toEqual(Array(9).fill(204));
   });
 
-  it('sweeps a prefix with no account once it is an hour old, and spares a younger one and a live one', async () => {
-    const [live, gone] = [await signup(), await signup(signupBody('gone'))];
-    const bytes = new Uint8Array([5]);
+  it('serves a signup that reuses a client id nothing of an old upload finishing late, and the next sweep removes its bytes', async () => {
+    await signup(signupBody('operator'));
+    const body = signupBody();
+    const old = await signup(body);
+    const bytes = new Uint8Array([3, 1, 4]);
     const id = await idOf(bytes);
-    for (const { cookie } of [live, gone]) await put(id, bytes, cookie);
-    await t.env.db.prepare('DELETE FROM accounts WHERE id = ?').bind(gone.id).run();
-    expect(await rows(gone.incarnation)).toEqual([]);
+    const files = t.env.files;
+    let reused!: Awaited<ReturnType<typeof signup>>;
+    await withFilesPut(
+      async (key, value) => {
+        expect((await t.delete('account', { method: 'password', proof: proof('password') }, old.cookie)).status).toBe(204);
+        await t.settle();
+        reused = await signup(body);
+        return files.put(key, value);
+      },
+      async () => expect((await put(id, bytes, old.cookie)).status).toBe(401),
+    );
+    expect(reused.incarnation).not.toBe(old.incarnation);
+    expect(await rows(old.incarnation)).toEqual([]);
+    expect(await stored(old.incarnation, id)).toBeDefined();
 
-    await t.reconcile();
-    expect(await stored(gone.incarnation, id)).toBeDefined();
-    await t.reconcile(later());
-    expect(await stored(gone.incarnation, id)).toBeUndefined();
-    expect(await stored(live.incarnation, id)).toBeDefined();
+    expect(await rows(reused.incarnation)).toEqual([]);
+    expect(await sum(reused.incarnation)).toBe(0);
+    expect(await missing([id], reused.cookie)).toEqual([id]);
+    expect((await t.get(`files/${id}`, reused.cookie)).status).toBe(404);
+
+    expect((await t.reconcile()).removed).toEqual([`files/${old.incarnation}`]);
+    expect(await stored(old.incarnation, id)).toBeUndefined();
   });
 });

@@ -40,7 +40,7 @@ describe('reconcile', () => {
     expect(await reconcile(join(tmpdir(), 'hazelle-none'), setup(), NOW)).toEqual({ removed: [] });
   });
 
-  it("removes an old orphan's pictures and database, keeps a fresh orphan and a live account even when old", async () => {
+  it("removes an orphan's pictures at any age and an old orphan's database, keeps a fresh orphan's database and a live account even when old", async () => {
     const db = setup();
     place([
       [`files/${LIVE}/${ID}`, OLD],
@@ -62,7 +62,7 @@ describe('reconcile', () => {
     ]);
     const { removed } = await reconcile(dir, db, NOW);
     expect(removed.sort()).toEqual(
-      [`files/${LIVE}/.tmp-1`, `files/${GONE}`, `accounts/${GONE}.sqlite`, `accounts/${GONE}.sqlite-wal`, `accounts/${LIVE}.install-x.sqlite`].sort(),
+      [`files/${LIVE}/.tmp-1`, `files/${GONE}`, `files/${NEW}`, `accounts/${GONE}.sqlite`, `accounts/${GONE}.sqlite-wal`, `accounts/${LIVE}.install-x.sqlite`].sort(),
     );
   });
 
