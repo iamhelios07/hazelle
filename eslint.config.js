@@ -20,7 +20,7 @@ const STYLE_PROPS = {
 };
 
 export default defineConfig([
-  globalIgnores(['dist/', '.wrangler/', '.claude/', 'worker-configuration.d.ts', '**/*.module.d.css.ts', 'shots/**/*.mjs', 'docs/']),
+  globalIgnores(['dist/', '.wrangler/', '.claude/', '.data/', '**/*.module.d.css.ts', 'shots/**/*.mjs', 'docs/']),
   js.configs.recommended,
   tseslint.configs.recommended,
   {

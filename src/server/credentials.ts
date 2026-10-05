@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import type { Db } from './db/service-db';
 import { fail, sha256Hex, type AppEnv, type State } from './http';
 
 export type Method = 'password' | 'recovery';
@@ -6,6 +7,7 @@ export type StoredAccount = {
   id: string;
   username: string;
   login_hash: string;
+  admin: number;
   recovery_hash: string;
   locked_until: number | null;
   suspended_at: number | null;
@@ -29,10 +31,12 @@ export function readMethod(value: unknown): Method | null {
 // A plain hash is enough: guessing a password from a stolen hash still costs the client's Argon2id per guess.
 export const hashProof = sha256Hex;
 
-export function findAccount(db: D1Database, column: 'id' | 'username', value: string) {
+export function findAccount(db: Db, column: 'id' | 'username', value: string) {
   return db
     .prepare(
-      `SELECT a.id, a.username, a.login_hash, v.recovery_hash, a.locked_until, a.suspended_at, a.incarnation, a.state FROM accounts a JOIN vaults v ON v.account_id = a.id WHERE a.${column} = ?`,
+      `SELECT a.id, a.username, a.login_hash, v.recovery_hash, a.locked_until, a.suspended_at, a.incarnation, a.state,
+         a.id = (SELECT operator_account FROM installation) AS admin
+       FROM accounts a JOIN vaults v ON v.account_id = a.id WHERE a.${column} = ?`,
     )
     .bind(value)
     .first<StoredAccount>();
@@ -40,7 +44,7 @@ export function findAccount(db: D1Database, column: 'id' | 'username', value: st
 
 // The failed-login lock covers both methods and the password change.
 export async function checkProof(c: Context<AppEnv>, account: StoredAccount, method: Method, proof: string): Promise<Response | null> {
-  const db = c.env.DB;
+  const db = c.env.db;
   const now = Date.now();
   if (account.locked_until !== null && account.locked_until > now) {
     return fail(c, 429, 'too-many-attempts', { retryAfter: Math.ceil((account.locked_until - now) / 1000) });
@@ -59,7 +63,7 @@ export async function checkProof(c: Context<AppEnv>, account: StoredAccount, met
   return fail(c, 401, 'wrong-login');
 }
 
-export function clearFailures(db: D1Database, accountId: string) {
+export function clearFailures(db: Db, accountId: string) {
   return db.prepare('UPDATE accounts SET failed_logins = 0, locked_until = NULL WHERE id = ?').bind(accountId);
 }
 

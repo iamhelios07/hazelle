@@ -1,8 +1,9 @@
+import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
 import { VISIBLE } from './admin';
-import { fail, ID, isAdmin, readObject, refused, type Account, type AppEnv } from './http';
+import { fail, ID, readObject, refused, type Account, type AppEnv } from './http';
 import { leaveAccount, store } from './lifecycle';
 import { currentAccount, dropSessionCookie, endSession, requireOwnSession, setSessionCookie, startSession } from './session';
 import { insertVault, readVault, readWrap } from './vaults';
@@ -12,8 +13,10 @@ const ROOM = '(SELECT COUNT(*) FROM accounts) < (SELECT signup_cap FROM service)
 
 export const accounts = new Hono<AppEnv>();
 
-// Signup creates the account, its vault and a session in one batch, so an account never exists
-// without a vault. The client sends it only after the recovery key is saved.
+// Signup creates the account, its vault and a session in one batch, so an account never exists without a vault, and
+// claims the installation when no account has: the first signup is the operator. The client sends it only after the
+// recovery key is saved. The account's file is prepared before the batch: a crash between leaves a file with no row,
+// which the hourly reconciliation removes, never a row with no file.
 accounts.post('/signup', async (c) => {
   const body = await readObject(c);
   const accountId = typeof body?.accountId === 'string' && ID.test(body.accountId) ? body.accountId : null;
@@ -21,34 +24,35 @@ accounts.post('/signup', async (c) => {
   const recoveryProof = readProof(body?.recoveryProof);
   const passwordWrap = readWrap(body?.passwordWrap);
   const recoveryWrap = readWrap(body?.recoveryWrap);
-  // The operator is named by an account id, and ids are the client's to make: should that account ever be gone,
-  // nobody may sign up as it.
-  if (!accountId || isAdmin(c, accountId) || typeof body?.username !== 'string' || !passwordProof || !recoveryProof || !passwordWrap || !recoveryWrap) {
+  if (!accountId || typeof body?.username !== 'string' || !passwordProof || !recoveryProof || !passwordWrap || !recoveryWrap) {
     return fail(c, 400, 'bad-input');
   }
   // The password salt comes from the username as the client wrote it, so any other form is refused, not fixed.
   const username = body.username;
   if (!USERNAME.test(username) || username !== username.normalize('NFC').toLowerCase()) return fail(c, 400, 'bad-username');
-  const db = c.env.DB;
+  const db = c.env.db;
 
-  const [session, loginHash, recoveryHash] = await Promise.all([startSession(db, accountId, true), hashProof(passwordProof), hashProof(recoveryProof)]);
+  const incarnation = randomBytes(16).toString('hex');
+  const timeline = randomBytes(16).toString('hex');
+  const [session, loginHash, recoveryHash] = await Promise.all([startSession(db, accountId, true), hashProof(passwordProof), hashProof(recoveryProof), c.env.stores.prepare(incarnation, timeline)]);
   const now = Date.now();
   // The insert itself checks the cap and the username, so two signups at once cannot both take the last place or the
-  // same name: no read outside this batch decides. changes() carries its outcome to the vault and the session.
-  const [created, , , room] = await db.batch<{ incarnation?: string; open?: number }>([
+  // same name: no read outside this batch decides. changes() carries its outcome to the vault, the session and the claim.
+  const [created, , , claim, room] = await db.batch<{ incarnation?: string; open?: number }>([
     db
       .prepare(
-        `INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) SELECT ?1, ?2, ?3, ?4, lower(hex(randomblob(16))), lower(hex(randomblob(16)))
+        `INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) SELECT ?1, ?2, ?3, ?4, ?5, ?6
          WHERE ${ROOM} AND NOT EXISTS (SELECT 1 FROM accounts WHERE id = ?1 OR username = ?2) RETURNING incarnation`,
       )
-      .bind(accountId, username, loginHash, now),
+      .bind(accountId, username, loginHash, now, incarnation, timeline),
     insertVault(db, accountId, { passwordWrap, recoveryWrap, recoveryHash }, now),
     session.insert,
+    db.prepare('UPDATE installation SET operator_account = ? WHERE id = 1 AND operator_account IS NULL AND changes() = 1').bind(accountId),
     db.prepare(`SELECT ${ROOM} AS open`),
   ]);
   if (!created!.results.length) return room!.results[0]!.open ? fail(c, 409, 'username-taken') : fail(c, 403, 'signup-closed');
   setSessionCookie(c, session.token);
-  return c.json(await describe(c, { id: accountId, username, suspended: false, incarnation: created!.results[0]!.incarnation!, state: 'active' }), 201);
+  return c.json(await describe(c, { id: accountId, username, suspended: false, incarnation, state: 'active', admin: claim!.meta.changes === 1 }), 201);
 });
 
 // Answers like GET /session, so the client opens the vault without another request.
@@ -57,7 +61,7 @@ accounts.post('/login', async (c) => {
   const method = readMethod(body?.method);
   const proof = readProof(body?.proof);
   if (typeof body?.username !== 'string' || !method || !proof) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
+  const db = c.env.db;
   const account = await findAccount(db, 'username', body.username);
   if (!account) return fail(c, 401, 'wrong-login');
   const wrong = await checkProof(c, account, method, proof);
@@ -67,7 +71,7 @@ accounts.post('/login', async (c) => {
   const started = await startSession(db, account.id);
   await db.batch([clearFailures(db, account.id), started.insert]);
   setSessionCookie(c, started.token);
-  const [session, vault] = await Promise.all([describe(c, { ...account, suspended: account.suspended_at !== null }), readVault(db, account.id)]);
+  const [session, vault] = await Promise.all([describe(c, { ...account, suspended: account.suspended_at !== null, admin: account.admin === 1 }), readVault(db, account.id)]);
   return c.json({ session, vault });
 });
 
@@ -80,24 +84,25 @@ accounts.post('/logout', async (c) => {
 // signupOpen only tells the first screen which form to show. The signup insert decides.
 accounts.get('/session', async (c) => {
   const account = await currentAccount(c);
-  if (!account) return c.json({ session: null, signupOpen: Boolean(await c.env.DB.prepare(`SELECT ${ROOM} AS open`).first('open')) });
-  const [session, vault] = await Promise.all([describe(c, account), readVault(c.env.DB, account.id)]);
+  if (!account) return c.json({ session: null, signupOpen: Boolean(await c.env.db.prepare(`SELECT ${ROOM} AS open`).first('open')) });
+  const [session, vault] = await Promise.all([describe(c, account), readVault(c.env.db, account.id)]);
   return c.json({ session, vault });
 });
 
 // 탈퇴. The proof is asked again, as for a new password, so a stolen session alone cannot delete the account. An
 // account whose deletion was cut off is still admitted, to finish it. The reports it sent and the operator's log rows
-// about it stay.
+// about it stay. The only operator cannot leave: the installation would have no one to run it.
 accounts.delete('/account', requireOwnSession, async (c) => {
   const body = await readObject(c);
   const method = readMethod(body?.method);
   const proof = readProof(body?.proof);
   if (!method || !proof) return fail(c, 400, 'bad-input');
   const { id, incarnation } = c.get('account');
-  const wrong = await checkProof(c, (await findAccount(c.env.DB, 'id', id))!, method, proof);
+  const wrong = await checkProof(c, (await findAccount(c.env.db, 'id', id))!, method, proof);
   if (wrong) return wrong;
   const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, false);
   if (left === 'busy') return fail(c, 409, 'account-busy');
+  if (left === 'operator') return fail(c, 403, 'sole-operator');
   if (left === 'unavailable') return refused(c, { unavailable: true });
   dropSessionCookie(c);
   return c.body(null, 204);
@@ -106,11 +111,11 @@ accounts.delete('/account', requireOwnSession, async (c) => {
 // The client needs the account id: it is part of the AAD that binds the vault's wrapped keys to the account. storage:
 // what the account holds and the caps that apply to it, null for none. bytes: null while the store does not answer,
 // restoring among the reasons.
-async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended' | 'incarnation' | 'state'>) {
+async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'username' | 'suspended' | 'incarnation' | 'state' | 'admin'>) {
   const { incarnation } = account;
   const [usage, facts] = await Promise.all([
     store(c.env, incarnation).usage(incarnation),
-    c.env.DB.prepare(
+    c.env.db.prepare(
       `SELECT ${CAP.bytes} AS bytesCap, file_bytes AS fileBytes, ${CAP.fileBytes} AS fileBytesCap,
          (SELECT COUNT(*) FROM notices WHERE ${VISIBLE} AND notices.id > accounts.notices_seen) AS unreadNotices
        FROM accounts WHERE incarnation = ?`,
@@ -122,7 +127,7 @@ async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'usern
   return {
     accountId: account.id,
     username: account.username,
-    admin: isAdmin(c, account.id),
+    admin: account.admin,
     suspended: account.suspended,
     state: account.state,
     incarnation,

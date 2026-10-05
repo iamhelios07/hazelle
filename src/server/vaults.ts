@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { checkProof, findAccount, hashProof, readMethod, readProof } from './credentials';
+import type { Db } from './db/service-db';
 import { fail, readObject, type AppEnv } from './http';
 import { requireSession } from './session';
 
@@ -12,7 +13,7 @@ export const vaults = new Hono<AppEnv>();
 vaults.use(requireSession);
 
 // No GET route here: GET /api/session and POST /api/login carry the record.
-export async function readVault(db: D1Database, accountId: string) {
+export async function readVault(db: Db, accountId: string) {
   const row = await db
     .prepare('SELECT password_wrap, recovery_wrap FROM vaults WHERE account_id = ?')
     .bind(accountId)
@@ -21,7 +22,7 @@ export async function readVault(db: D1Database, accountId: string) {
 }
 
 // Written only if the statement before it in the batch wrote a row: signup's account.
-export function insertVault(db: D1Database, accountId: string, vault: { passwordWrap: string; recoveryWrap: string; recoveryHash: string }, now: number) {
+export function insertVault(db: Db, accountId: string, vault: { passwordWrap: string; recoveryWrap: string; recoveryHash: string }, now: number) {
   return db
     .prepare('INSERT INTO vaults (account_id, password_wrap, recovery_wrap, recovery_hash, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ? WHERE changes() = 1')
     .bind(accountId, vault.passwordWrap, vault.recoveryWrap, vault.recoveryHash, now, now);
@@ -40,7 +41,7 @@ vaults.put('/password', async (c) => {
   const passwordProof = readProof(body?.passwordProof);
   const passwordWrap = readWrap(body?.passwordWrap);
   if (!method || !proof || !passwordProof || !passwordWrap) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
+  const db = c.env.db;
   const id = c.get('account').id;
   const refused = await checkProof(c, (await findAccount(db, 'id', id))!, method, proof);
   if (refused) return refused;

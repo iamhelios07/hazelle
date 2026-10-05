@@ -14,3 +14,6 @@ test-results/
 # Design notes live in their own private repo (jiniill/risu-alpha-docs), cloned here.
 docs/
 /shots/
+
+# The local server's data directory (npm run server).
+.data/

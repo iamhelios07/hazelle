@@ -6,15 +6,15 @@ import { files, MAX_FILE_BYTES } from './files';
 import { fail, type AppEnv } from './http';
 import { BATCH_LIMITS, objects } from './objects';
 import { prices } from './prices';
-import { EXIT } from './relay';
+import { createRelay } from './relay';
 import { canCall, requireSession } from './session';
 import { streams } from './streams';
 import { vaults } from './vaults';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
-// Kept by Workers Logs. A request this slow is the account store waking (storeMs, set by the objects routes) or D1
-// answering the session row; a provider's own answer time and a picture's upload time are not news.
+// A request this slow is the account store waking (storeMs, set by the objects routes) or the service database answering
+// the session row; a provider's own answer time and a picture's upload time are not news.
 const SLOW_MS = 5_000;
 const OWN_TIME = [/^\/api\/(relay|streams)(\/|$)/, /^\/api\/files\/[^/]+$/];
 
@@ -62,7 +62,7 @@ app.route('/reports', reports);
 app.route('/notices', notices);
 app.route('/admin', admin);
 app.route('/prices', prices);
-app.post('/relay', requireSession, canCall, (c) => c.env.RELAY.get(c.env.RELAY.newUniqueId(), EXIT).fetch(c.req.raw));
+app.post('/relay', requireSession, canCall, (c) => createRelay(c.env.outbound)(c.req.raw));
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 

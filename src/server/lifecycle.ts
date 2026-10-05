@@ -1,32 +1,32 @@
-import type { Life, Phase, StoreRules, Unavailable } from './account-store';
-import { removeAccountFiles } from './files';
+import type { ExecutionContext } from 'hono';
+import type { Life, Phase, Unavailable } from './account-store';
+import type { Db } from './db/service-db';
+import type { Services } from './http';
 
-// An account's lifecycle lives on its D1 row, where a rewind of its store cannot touch it, and its store loads that row
-// when it starts (account-store.ts). Every change is: write D1, restart the store, read back what it loaded. A step
-// below may be cut off at any await and run again: each D1 write is a compare-and-set that only one runner wins, each
-// store call is safe to repeat, and every statement names the incarnation, so a runner of an account that is gone can
-// never touch a newer account holding the same id.
+// An account's lifecycle lives on its service row, where a rewind of its store cannot touch it, and its store loads that
+// row when it starts (account-store.ts). Every change is: write the service, restart the store, read back what it
+// loaded. A step below may be cut off at any await and run again: each service write is a compare-and-set that only one
+// runner wins, each store call is safe to repeat, and every statement names the incarnation, so a runner of an account
+// that is gone can never touch a newer account holding the same id.
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
-// A restore asks for a time at least this far back, so the store's bookmark for it lies before the restore's own mark.
+// A restore asks for a time at least this far back, so the snapshot chosen for it lies before the restore's own mark.
 const NEWEST_MS = 10 * MINUTE_MS;
-// Cloudflare keeps a store's bookmarks for 30 days. A day less leaves an operation time to reach its arming.
+// Snapshots are kept for 30 days (db/account-db.ts). A day less leaves an operation time to reach its arming.
 const OLDEST_MS = 29 * DAY_MS;
-const BOOKMARK_LIFE_MS = 30 * DAY_MS;
+const SNAPSHOT_LIFE_MS = 30 * DAY_MS;
 // Restarts that did not apply the armed rewind before the operation stops and waits for the operator.
 const ARM_TRIES = 3;
 // Steps one run takes before it stops: every phase once, the re-arms, and the compare-and-sets a parallel run won.
 const MAX_STEPS = 24;
 
-// Its answers are plain values, so RPC's wrapping of them changes nothing a caller reads. A fresh stub per call: a stub
-// got before a restart fails every later call.
-export const store = (env: Env, incarnation: string) =>
-  env.STORES.getByName(incarnation) as unknown as { [M in keyof StoreRules]: StoreRules[M] } & { restart(incarnation: string): Promise<never> };
+// A fresh stub per call: a stub got before a restart fails every later call.
+export const store = (env: Services, incarnation: string) => env.stores.getByName(incarnation);
 
 // The call that restarts the store ends in an exception by design, never an answer, so the store is asked again on a
 // fresh stub.
-async function reload(env: Env, incarnation: string): Promise<Life | Unavailable> {
+async function reload(env: Services, incarnation: string): Promise<Life | Unavailable> {
   await store(env, incarnation)
     .restart(incarnation)
     .catch(() => {});
@@ -34,17 +34,20 @@ async function reload(env: Env, incarnation: string): Promise<Life | Unavailable
 }
 
 // left: the account's row is deleted, by this run or an earlier one. Its pictures are removed after the answer.
+// operator: the account is the installation's only operator, which neither path may delete.
 export async function leaveAccount(
-  env: Env,
+  env: Services,
   ctx: Pick<ExecutionContext, 'waitUntil'>,
   accountId: string,
   incarnation: string,
   operator: boolean,
-): Promise<'left' | 'busy' | 'unavailable'> {
-  const db = env.DB;
+): Promise<'left' | 'busy' | 'unavailable' | 'operator'> {
+  const db = env.db;
   // The operator's log row is written with the intent, before anything is destroyed.
   const [intent] = await db.batch([
-    db.prepare("UPDATE accounts SET state = 'leaving' WHERE id = ? AND incarnation = ? AND state = 'active'").bind(accountId, incarnation),
+    db
+      .prepare("UPDATE accounts SET state = 'leaving' WHERE id = ? AND incarnation = ? AND state = 'active' AND id IS NOT (SELECT operator_account FROM installation)")
+      .bind(accountId, incarnation),
     ...(operator
       ? [
           db
@@ -54,9 +57,13 @@ export async function leaveAccount(
       : []),
   ]);
   if (!intent!.meta.changes) {
-    const state = await db.prepare('SELECT state FROM accounts WHERE id = ? AND incarnation = ?').bind(accountId, incarnation).first<string>('state');
-    if (state === null) return 'left';
-    if (state !== 'leaving') return 'busy';
+    const row = await db
+      .prepare('SELECT state, id = (SELECT operator_account FROM installation) AS operator FROM accounts WHERE id = ? AND incarnation = ?')
+      .bind(accountId, incarnation)
+      .first<{ state: string; operator: number }>();
+    if (row === null) return 'left';
+    if (row.operator) return 'operator';
+    if (row.state !== 'leaving') return 'busy';
   }
   const life = await reload(env, incarnation);
   // The row goes only after the store was seen fenced and emptied. A restart that never reached the store leaves it
@@ -66,13 +73,10 @@ export async function leaveAccount(
     const destroyed = await store(env, incarnation).destroy(incarnation);
     if ('unavailable' in destroyed) return 'unavailable';
   }
-  // The pictures follow the row, whose delete queues their prefix for the hourly sweep (files.ts): whatever a cut-off
-  // removal or an upload still in flight leaves is the sweep's next run, and no later run of this has to find it.
-  await db.batch([
-    db.prepare("DELETE FROM accounts WHERE id = ? AND incarnation = ? AND state = 'leaving'").bind(accountId, incarnation),
-    db.prepare('INSERT INTO file_cleanup (prefix) SELECT ? WHERE changes() = 1 ON CONFLICT DO NOTHING').bind(`files/${incarnation}/`),
-  ]);
-  ctx.waitUntil(removeAccountFiles(env, incarnation));
+  // The pictures follow the row: whatever a cut-off removal or an upload still in flight leaves under the incarnation
+  // is the hourly reconciliation's (reconcile.ts), and no later run of this has to find it.
+  await db.prepare("DELETE FROM accounts WHERE id = ? AND incarnation = ? AND state = 'leaving'").bind(accountId, incarnation).run();
+  ctx.waitUntil(env.files.deletePrefix(`files/${incarnation}/`));
   return 'left';
 }
 
@@ -99,7 +103,7 @@ const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 const FREE = "accounts.state = 'active' AND NOT EXISTS (SELECT 1 FROM restores WHERE incarnation = accounts.incarnation AND verified = 0)";
 const REPORTED = 'EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND resolved_at IS NULL AND created_at >= accounts.created_at)';
 const TIMELY = `?3 BETWEEN ?5 - ${OLDEST_MS} AND ?5 - ${NEWEST_MS}`;
-// An undo rewinds the account's latest finished restore to its checkpoint while the checkpoint's bookmark lasts.
+// An undo rewinds the account's latest finished restore to its checkpoint while the checkpoint's snapshot lasts.
 export const undoable = (operation: string, now: string) =>
   `${operation} = (SELECT id FROM restores WHERE incarnation = accounts.incarnation AND phase = 'done' AND verified = 1 ORDER BY id DESC LIMIT 1)
    AND (SELECT checkpoint_at FROM restores WHERE id = ${operation}) >= ${now} - ${OLDEST_MS}`;
@@ -108,8 +112,8 @@ export const UNDO_LIFE_MS = OLDEST_MS;
 export type Begun = { begun: number } | { refused: 'not-found' | 'account-busy' | 'bad-report' | 'bad-time' | 'cannot-undo' };
 
 // The operation's row and the account's hold on it commit together or not at all: the hold is gated on the insert.
-export async function beginRestore(env: Env, accountId: string, report: number, from: { at: number } | { undoes: number }): Promise<Begun> {
-  const db = env.DB;
+export async function beginRestore(env: Services, accountId: string, report: number, from: { at: number } | { undoes: number }): Promise<Begun> {
+  const db = env.db;
   const at = 'at' in from ? from.at : null;
   const undoes = 'undoes' in from ? from.undoes : null;
   const now = Date.now();
@@ -149,28 +153,28 @@ export async function beginRestore(env: Env, accountId: string, report: number, 
 
 // null: no such operation.
 // Every step re-reads the operation, so a run that lost a compare-and-set to a parallel run follows where it went.
-export async function runRestore(env: Env, id: number): Promise<Run | null> {
+export async function runRestore(env: Services, id: number): Promise<Run | null> {
   let arms = 0;
   for (let steps = 0; ; steps++) {
-    const operation = await readOperation(env.DB, id);
+    const operation = await readOperation(env.db, id);
     if (!operation) return null;
     const stop = steps === MAX_STEPS ? 'stuck' : await step(env, operation, () => ++arms > ARM_TRIES);
     if (stop === undefined) continue;
     if (stop !== null) {
-      await env.DB.prepare("UPDATE restores SET error = ?, updated_at = ? WHERE id = ? AND phase = ? AND phase != 'failed'").bind(stop, Date.now(), id, operation.phase).run();
+      await env.db.prepare("UPDATE restores SET error = ?, updated_at = ? WHERE id = ? AND phase = ? AND phase != 'failed'").bind(stop, Date.now(), id, operation.phase).run();
     }
-    const end = await readOperation(env.DB, id);
+    const end = await readOperation(env.db, id);
     return end && run(end);
   }
 }
 
 // Gives the account back with its timeline unchanged, possible only before the rewind is armed. too-late: armed or
 // later, from where an operation only goes forward.
-export async function cancelRestore(env: Env, id: number): Promise<Run | null | 'too-late'> {
-  const operation = await readOperation(env.DB, id);
+export async function cancelRestore(env: Services, id: number): Promise<Run | null | 'too-late'> {
+  const operation = await readOperation(env.db, id);
   if (!operation) return null;
   if (operation.phase !== 'cancelled' && !(await release(env, operation, 'cancelled', BEFORE_ARMED, null))) {
-    const now = await readOperation(env.DB, id);
+    const now = await readOperation(env.db, id);
     if (!now) return null;
     if (now.phase !== 'cancelled') return 'too-late';
   }
@@ -178,9 +182,9 @@ export async function cancelRestore(env: Env, id: number): Promise<Run | null | 
 }
 
 // undefined: go on from the re-read operation. null: stop, nothing to record. A string: stop with this error code.
-async function step(env: Env, operation: Operation, armedTooOften: () => boolean): Promise<string | null | undefined> {
+async function step(env: Services, operation: Operation, armedTooOften: () => boolean): Promise<string | null | undefined> {
   const { id, incarnation } = operation;
-  const db = env.DB;
+  const db = env.db;
   switch (operation.phase) {
     case 'begun': {
       // The fence: from the restart on, the store refuses every feed and batch.
@@ -198,7 +202,7 @@ async function step(env: Env, operation: Operation, armedTooOften: () => boolean
       return undefined;
     }
     case 'checkpointed': {
-      const answer = await store(env, incarnation).target(incarnation, id, operation.undoes === null ? { at: operation.at! } : { bookmark: operation.undone! });
+      const answer = await store(env, incarnation).target(incarnation, id, operation.undoes === null ? { at: operation.at! } : { snapshot: operation.undone! });
       if ('unavailable' in answer) return 'store-unavailable';
       if ('tooEarly' in answer) await release(env, operation, 'failed', ['checkpointed'], 'too-early');
       if (!('target' in answer)) return undefined;
@@ -210,15 +214,17 @@ async function step(env: Env, operation: Operation, armedTooOften: () => boolean
       return undefined;
     }
     case 'targeted':
-      // Past armed there is no way back, so a bookmark that may no longer exist fails the operation here.
-      if (operation.target_at < Date.now() - BOOKMARK_LIFE_MS) await release(env, operation, 'failed', ['targeted'], 'target-expired');
+      // Past armed there is no way back, so a snapshot that may no longer exist fails the operation here.
+      if (operation.target_at < Date.now() - SNAPSHOT_LIFE_MS) await release(env, operation, 'failed', ['targeted'], 'target-expired');
       else await advance(db, id, 'targeted', 'armed');
       return undefined;
     case 'armed': {
       const answer = await store(env, incarnation).marked(incarnation, id);
       if ('unavailable' in answer) return 'store-unavailable';
       if (!('marked' in answer)) return undefined;
-      if (!answer.marked) {
+      // The rewind applied only if the file came from the target and the mark written after it is gone; either alone
+      // proves nothing.
+      if (!answer.marked && answer.installedFrom === operation.target) {
         await advance(db, id, 'armed', 'rewound');
         return undefined;
       }
@@ -244,7 +250,7 @@ async function step(env: Env, operation: Operation, armedTooOften: () => boolean
       ]);
       return undefined;
     default: {
-      // done, cancelled or failed: the store must be seen loading the account as D1 left it, or it would keep refusing
+      // done, cancelled or failed: the store must be seen loading the account as the service left it, or it would keep refusing
       // as restoring for as long as clients keep it awake.
       if (operation.verified) return null;
       const life = await reload(env, incarnation);
@@ -263,7 +269,7 @@ async function step(env: Env, operation: Operation, armedTooOften: () => boolean
   }
 }
 
-function advance(db: D1Database, id: number, from: Phase, to: Phase, set?: string, ...binds: (string | number)[]) {
+function advance(db: Db, id: number, from: Phase, to: Phase, set?: string, ...binds: (string | number)[]) {
   return db
     .prepare(`UPDATE restores SET phase = ?, error = NULL, updated_at = ?${set ? `, ${set}` : ''} WHERE id = ? AND phase = ?`)
     .bind(to, Date.now(), ...binds, id, from)
@@ -271,8 +277,8 @@ function advance(db: D1Database, id: number, from: Phase, to: Phase, set?: strin
 }
 
 // true: this run ended it.
-async function release(env: Env, operation: Operation, to: 'cancelled' | 'failed', from: Phase[], error: string | null) {
-  const db = env.DB;
+async function release(env: Services, operation: Operation, to: 'cancelled' | 'failed', from: Phase[], error: string | null) {
+  const db = env.db;
   const [ended] = await db.batch([
     db
       .prepare(`UPDATE restores SET phase = ?, error = ?, updated_at = ? WHERE id = ? AND phase IN (${from.map(() => '?').join(', ')})`)
@@ -284,7 +290,7 @@ async function release(env: Env, operation: Operation, to: 'cancelled' | 'failed
 }
 
 // Written once per operation: gated on the account's release, which only the run that won the terminal phase makes.
-function terminalLog(db: D1Database, action: string, operation: Operation, error: string | null) {
+function terminalLog(db: Db, action: string, operation: Operation, error: string | null) {
   return db
     .prepare(
       `INSERT INTO admin_log (at, action, target, detail)
@@ -293,7 +299,7 @@ function terminalLog(db: D1Database, action: string, operation: Operation, error
     .bind(Date.now(), action, operation.id, operation.undoes, error, operation.incarnation);
 }
 
-function readOperation(db: D1Database, id: number) {
+function readOperation(db: Db, id: number) {
   return db
     .prepare(
       `SELECT r.id, r.incarnation, r.at, r.undoes, r.timeline, r.target, r.phase, r.verified, r.error, u.checkpoint AS undone,

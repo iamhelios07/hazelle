@@ -57,22 +57,6 @@ const DROPPED_RESPONSE_HEADERS = new Set([
   'alt-svc',
 ]);
 
-// Where every provider call leaves from: a Durable Object placed in western North America. A Worker runs wherever
-// Cloudflare routes the browser, and Korean traffic is often routed to HKG. Copilot writes the exchanging IP into its
-// token and drops every Claude model for a Hong Kong one. That shows up as '목록에 없음' and a 400 "The requested
-// model is not supported". Measured 2026-10-01 from home and work networks: apac landed in HKG (Claude 0, both
-// networks), wnam in SJC (Claude 10, both). Do not move this to apac for latency.
-export const EXIT = { locationHint: 'wnam' } as const;
-
-// The Durable Object a relayed request runs in, one per request so that EXIT places each one (worker.ts).
-export class Relay {
-  private readonly relay = createRelay(fetch);
-
-  fetch(request: Request) {
-    return this.relay(request);
-  }
-}
-
 export function createRelay(upstream: Upstream): (request: Request) => Promise<Response> {
   return async (request) => forward(upstream, await request.json().catch(() => null), request.signal);
 }

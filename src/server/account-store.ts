@@ -1,8 +1,9 @@
-// Nothing here may import cloudflare:workers: vitest loads this file in plain Node.
+// The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
 
 export type Life = { state: 'active' | 'restoring' | 'leaving' | 'gone'; timeline: string | null; operation: number | null };
 export type Unavailable = { unavailable: true };
-// unavailable: the wake's D1 read failed, threw, timed out or answered something that is neither a row nor no row.
+// unavailable: the wake's service read failed, timed out or answered something that is neither a row nor no row, or
+// the account's file is missing, corrupt or of a newer schema.
 export type Refused = { refused: 'restoring' | 'leaving' | 'gone' } | Unavailable;
 export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null };
 export type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
@@ -13,31 +14,33 @@ type WrongPhase = { wrongPhase: true };
 
 export type SqlValue = string | number | null;
 
-// workerd refuses BEGIN, SAVEPOINT and PRAGMA in exec; a transaction is only transaction(fn), which rolls back when fn
-// throws. wipe() drops every table and every kv key, as deleteAll() does; the bookmarks outlive it.
+import type { Db } from './db/service-db';
+
+// One account's database file. transaction(fn) rolls back when fn throws. wipe() deletes the file, kv included; the
+// snapshots outlive it. A snapshot is a point-in-time copy of the file, catalogued in the service database; an armed
+// restore installs one when the store next starts (db/account-db.ts).
 export type StoreDb = {
   exec<T>(sql: string, ...binds: SqlValue[]): T[];
   transaction<T>(fn: () => T): T;
   wipe(): Promise<void>;
   kv: { get(key: string): unknown; put(key: string, value: string): void; delete(key: string): boolean };
   size(): number;
-  bookmarks: {
-    current(): Promise<string>;
-    // null: the time is before this database existed.
+  snapshots: {
+    // Answers the snapshot's id once its file is durable and catalogued.
+    take(kind: 'baseline' | 'checkpoint', operation: number | null): Promise<string>;
+    // The newest snapshot taken at or before the time and still within retention; null when there is none.
     forTime(at: number): Promise<string | null>;
-    // Answers a bookmark of the state just before the restore, which applies when the object next starts.
-    restoreOnNextSession(bookmark: string): Promise<string>;
   };
 };
 
-// The account's lifecycle, which lives in D1 where a rewind of this store cannot touch it. Each answers the row as D1
-// gave it; the rules decide what a row means.
+// The account's lifecycle, which lives in the service database where a rewind of this store cannot touch it. Each
+// answers the row as read; the rules decide what a row means.
 export type StoreReads = {
   life(incarnation: string): Promise<unknown>;
   phase(incarnation: string, operation: number): Promise<unknown>;
 };
 
-export const d1Reads = (db: D1Database): StoreReads => ({
+export const serviceReads = (db: Db): StoreReads => ({
   life: (incarnation) => db.prepare('SELECT state, timeline, operation FROM accounts WHERE incarnation = ?').bind(incarnation).first(),
   phase: (incarnation, operation) => db.prepare('SELECT phase FROM restores WHERE id = ? AND incarnation = ?').bind(operation, incarnation).first('phase'),
 });
@@ -48,17 +51,8 @@ const PAGE_BODY_BYTES = 4_000_000;
 // (휴지통's mark: a body that grows a little), while nothing new is created. The account's bytes never
 // pass cap + this.
 const FULL_MARGIN = 1_000_000;
-// Under blockConcurrencyWhile's 30 s, past which workerd resets the object and the caller gets an exception instead
-// of { unavailable }.
+// A service read that has not settled by then answers unavailable instead of holding the account's queue.
 const READ_MS = 5_000;
-
-const SCHEMA = [
-  'CREATE TABLE IF NOT EXISTS head (id INTEGER PRIMARY KEY CHECK (id = 1), rev INTEGER NOT NULL, bytes INTEGER NOT NULL, timeline TEXT NOT NULL)',
-  'CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, kind TEXT NOT NULL, parent_id TEXT, rev INTEGER NOT NULL, body TEXT, deleted_at INTEGER)',
-  // The global cursor stays in revision order, including omitted bodies.
-  'CREATE INDEX IF NOT EXISTS objects_rev ON objects (rev, kind, parent_id, id, deleted_at)',
-  'CREATE INDEX IF NOT EXISTS objects_parent_rev ON objects (parent_id, rev)',
-];
 
 type Head = { rev: number; bytes: number; timeline: string };
 type Row = { id: string; kind: string; parent_id: string | null; rev: number; deleted: number; fits: number; omitted: number; body: string | null };
@@ -67,13 +61,13 @@ const unavailable = (): Unavailable => ({ unavailable: true });
 const markKey = (operation: number) => `restore:${operation}`;
 
 export class StoreRules {
-  // Kept until the object restarts; never an unavailable answer, so the next call reads D1 again.
+  // Kept until the object restarts; never an unavailable answer, so the next call reads the service again.
   private life: Life | null = null;
 
   constructor(
     private readonly db: StoreDb,
     private readonly reads: StoreReads,
-    // workerd: blockConcurrencyWhile, which holds every other event until the load settles.
+    // Holds every other call of this store until the load settles.
     private readonly exclusive: <T>(work: () => Promise<T>) => Promise<T>,
   ) {}
 
@@ -92,7 +86,7 @@ export class StoreRules {
       // An operator wipe/restore can move revisions backwards. Never merge that account with a newer device snapshot.
       if (Math.max(query.since, query.known, until ?? 0) > head.rev) return { reset: true };
       // A page stops at a row count or a body budget, whichever comes first, so a sync of many large
-      // objects never has to fit in the Worker's memory at once. The first row always fits. Rows past the
+      // objects never has to fit in the process's memory at once. The first row always fits. Rows past the
       // budget come back without their bodies, only to tell whether more is waiting.
       // Bound candidates before the window sum; an outer LIMIT still sums the rest of the account.
       // The budget is bytes: LENGTH(body) counts characters and stops at a NUL, so a page could pass the RPC limit.
@@ -190,14 +184,14 @@ export class StoreRules {
   }
 
   async checkpoint(incarnation: string, operation: number): Promise<Refused | WrongPhase | { checkpoint: string }> {
-    return (await this.restoring(incarnation, operation)) ?? { checkpoint: await this.db.bookmarks.current() };
+    return (await this.restoring(incarnation, operation)) ?? { checkpoint: await this.db.snapshots.take('checkpoint', operation) };
   }
 
-  async target(incarnation: string, operation: number, from: { at: number } | { bookmark: string }): Promise<Refused | WrongPhase | { target: string } | { tooEarly: true }> {
+  async target(incarnation: string, operation: number, from: { at: number } | { snapshot: string }): Promise<Refused | WrongPhase | { target: string } | { tooEarly: true }> {
     const refused = await this.restoring(incarnation, operation);
     if (refused) return refused;
-    if ('bookmark' in from) return { target: from.bookmark };
-    const target = await this.db.bookmarks.forTime(from.at);
+    if ('snapshot' in from) return { target: from.snapshot };
+    const target = await this.db.snapshots.forTime(from.at);
     return target === null ? { tooEarly: true } : { target };
   }
 
@@ -217,14 +211,18 @@ export class StoreRules {
     return { unmarked: true };
   }
 
-  async marked(incarnation: string, operation: number): Promise<Refused | { marked: boolean }> {
+  // installedFrom: the snapshot the file was installed from, which with the mark's absence proves the rewind applied;
+  // the mark alone proves nothing, since a file installed from before the mark never held it.
+  async marked(incarnation: string, operation: number): Promise<Refused | { marked: boolean; installedFrom: string | null }> {
     const refused = await this.stored(incarnation);
     if (refused) return refused;
-    return { marked: this.db.kv.get(markKey(operation)) !== undefined };
+    const [head] = this.db.exec<{ installed_from: string | null }>('SELECT installed_from FROM head');
+    return { marked: this.db.kv.get(markKey(operation)) !== undefined, installedFrom: head?.installed_from ?? null };
   }
 
-  // The phase is read from D1 inside the call: a runner that lost the arming compare-and-set, or one that arrives after
-  // a cancel, must not rewind.
+  // The phase is read from the service inside the call: a runner that lost the arming compare-and-set, or one that
+  // arrives after a cancel, must not rewind. The instruction itself is the operation's row at phase armed; the install
+  // happens when the store next starts (db/account-db.ts), so this only confirms it may.
   async arm(incarnation: string, operation: number, target: string): Promise<Refused | WrongPhase | { returned: string }> {
     const refused = await this.restoring(incarnation, operation);
     if (refused) return refused;
@@ -235,7 +233,7 @@ export class StoreRules {
       return unavailable();
     }
     if (phase !== 'armed') return { wrongPhase: true };
-    return { returned: await this.db.bookmarks.restoreOnNextSession(target) };
+    return { returned: target };
   }
 
   async destroy(incarnation: string): Promise<Refused | { destroyed: true }> {
@@ -255,8 +253,9 @@ export class StoreRules {
     return this.life ?? this.exclusive(async () => this.life ?? this.load(incarnation));
   }
 
-  // Fails closed: only a read that answers no row means gone. Tables are made only for an active account, and its
-  // timeline is in head before the first answer, so a fresh or just-rewound store never serves the old one.
+  // Fails closed: only a read that answers no row means gone. The file was made by the signup or installed by a
+  // rewind, never here: an active account whose file is missing or unreadable is unavailable, not empty. Its timeline
+  // is in head before the first answer, so a just-rewound store never serves the old one.
   private async load(incarnation: string): Promise<Life | Unavailable> {
     let row: unknown;
     try {
@@ -267,10 +266,11 @@ export class StoreRules {
     const life = row === null ? { state: 'gone' as const, timeline: null, operation: null } : readLife(row);
     if (!life) return unavailable();
     if (life.state === 'active') {
-      this.db.transaction(() => {
-        for (const statement of SCHEMA) this.db.exec(statement);
-        this.db.exec('INSERT INTO head (id, rev, bytes, timeline) VALUES (1, 0, 0, ?) ON CONFLICT (id) DO UPDATE SET timeline = excluded.timeline', life.timeline);
-      });
+      try {
+        if (this.db.exec<{ n: number }>('UPDATE head SET timeline = ? WHERE id = 1 RETURNING 1 AS n', life.timeline).length !== 1) return unavailable();
+      } catch {
+        return unavailable();
+      }
     }
     this.life = life;
     return life;
@@ -309,7 +309,7 @@ function readLife(row: unknown): Life | null {
 async function settles<T>(read: Promise<T>): Promise<T> {
   let timer!: ReturnType<typeof setTimeout>;
   const late = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error('The D1 read took too long.')), READ_MS);
+    timer = setTimeout(() => reject(new Error('The service read took too long.')), READ_MS);
   });
   try {
     return await Promise.race([read, late]);

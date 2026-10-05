@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { PRICE_LISTS, type PriceList, type PriceTier, type Rates } from '../connectors/price-list';
+import type { Db } from './db/service-db';
 import { fail, type AppEnv } from './http';
 import { requireSession } from './session';
 
@@ -49,7 +50,7 @@ export function priceRows(payload: unknown): PriceRow[] | null {
 }
 
 // One fetch at a time, claimed through tried_at. A failed fetch keeps the prices already stored.
-export async function refreshPrices(db: D1Database, now = Date.now()): Promise<void> {
+export async function refreshPrices(db: Db, now = Date.now()): Promise<void> {
   const claimed = await db
     .prepare('UPDATE price_fetch SET tried_at = ?1 WHERE id = 1 AND (fetched_at IS NULL OR fetched_at < ?2) AND (tried_at IS NULL OR tried_at < ?3) RETURNING id')
     .bind(now, now - STALE_MS, now - RETRY_MS)
@@ -84,7 +85,7 @@ type Row = { model: string; input: number; output: number; cache_read: number | 
 export const prices = new Hono<AppEnv>().use(requireSession).get('/', async (c) => {
   const list = c.req.query('provider');
   if (!list || !LISTS.has(list)) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
+  const db = c.env.db;
   const fetchedAt = await db.prepare('SELECT fetched_at FROM price_fetch WHERE id = 1').first<number | null>('fetched_at');
   if (fetchedAt === null) {
     c.executionCtx.waitUntil(refreshPrices(db));

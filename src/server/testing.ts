@@ -1,37 +1,39 @@
-import { getPlatformProxy } from 'wrangler';
-import { d1Reads } from './account-store';
-import { sha256Hex } from './http';
-import { createRelay, type Upstream } from './relay';
-import { nodeStores } from './store-db-node';
-import { StreamBox, type BoxStorage } from './stream-box';
-import { liveCall } from './streams';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { ExecutionContext } from 'hono';
+import { serviceReads } from './account-store';
+import { accountRegistry } from './db/account-db';
+import { migrate } from './db/migrate';
+import { openDatabase, serviceDb } from './db/service-db';
+import { diskBucket } from './files/disk-bucket';
+import { sha256Hex, type Services } from './http';
+import { tokenBucket } from './limits';
+import { reconcile } from './reconcile';
+import type { Upstream } from './relay';
+import { streamRegistry } from './stream-registry';
 import app from './worker';
 
-const migrations = import.meta.glob<string>('../../migrations/*.sql', { query: '?raw', import: 'default', eager: true });
-
-// upstream answers the calls Relay and ReplyStream make (tech-spec §6, Detached replies). placed holds the options each
-// Durable Object was got with. stores: the accounts' stores in process (store-db-node), whose bookmarks are stamped by
-// clock.
+// The server in process over the production adapters on a temp directory (node.ts builds the same Services on /data).
+// upstream answers the provider calls the relay and the streams make. clock stamps the stores' snapshots.
 export async function testApp(upstream: Upstream = () => Promise.reject(new TypeError('This test gave the streams no upstream.'))) {
-  const proxy = await getPlatformProxy<Env>({ configPath: 'wrangler.test.jsonc', persist: false, remoteBindings: false });
-  const placed: unknown[] = [];
+  const dir = mkdtempSync(join(tmpdir(), 'hazelle-test-'));
+  const raw = openDatabase(join(dir, 'service.sqlite'));
+  migrate(raw, 'migrations');
+  const db = serviceDb(raw);
   const clock = { now: () => Date.now() };
-  const stores = nodeStores(d1Reads(proxy.env.DB), () => clock.now());
-  // ADMIN_ACCOUNT: a test names its operator after signing it up, since nobody signs up as the operator's id.
-  const env = {
-    ...proxy.env,
-    STREAMS: streamObjects(upstream, placed, proxy.env.DB),
-    RELAY: relayObjects(upstream, placed),
-    STORES: stores as unknown as Env['STORES'],
-    ADMIN_ACCOUNT: '' as string,
+  const outbound: Upstream = (url, init) => upstream(url, init);
+  const env: Services = {
+    db,
+    files: diskBucket(dir),
+    stores: accountRegistry(dir, db, serviceReads(db), () => clock.now()),
+    streams: streamRegistry(outbound),
+    outbound,
+    limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
   };
-  for (const sql of Object.keys(migrations).sort().map((name) => migrations[name]!)) {
-    const statements = sql.split(';').filter((s) => s.trim());
-    await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
-  }
 
   const pending: Promise<unknown>[] = [];
-  const ctx = { waitUntil: (work: Promise<unknown>) => void pending.push(work), passThroughOnException: () => {}, props: {} } as unknown as ExecutionContext;
+  const ctx = { waitUntil: (work: Promise<unknown>) => void pending.push(work), passThroughOnException: () => {}, props: {} } as ExecutionContext;
   const settle = async () => {
     while (pending.length) await Promise.all(pending.splice(0));
   };
@@ -39,7 +41,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   // As a page holding the cookie's account sends it: stating that account (server/session). raw states only what it is
   // given. A Uint8Array body goes as bytes.
   const holding = async (cookie: string): Promise<Record<string, string>> => {
-    const account = await env.DB.prepare('SELECT account_id FROM sessions WHERE token_hash = ?').bind(await sha256Hex(cookie.split('=')[1]!)).first<string>('account_id');
+    const account = await env.db.prepare('SELECT account_id FROM sessions WHERE token_hash = ?').bind(await sha256Hex(cookie.split('=')[1]!)).first<string>('account_id');
     return account ? { cookie, 'x-account': account } : { cookie };
   };
   const send = async (method: string, path: string, body?: unknown, cookie?: string) => {
@@ -59,22 +61,29 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
 
   return {
     env,
-    placed,
-    stores,
+    dir,
     clock,
-    dispose: () => proxy.dispose(),
+    get stores() {
+      return env.stores;
+    },
+    dispose: () => {
+      env.stores.close();
+      raw.close();
+      rmSync(dir, { recursive: true, force: true });
+    },
+    // Every table empty, the installation unclaimed, the caps at the service defaults, every account file and picture
+    // gone, and a registry that remembers no incarnation.
     reset: async () => {
       await settle();
-      env.ADMIN_ACCOUNT = '';
       clock.now = () => Date.now();
-      await env.DB.batch([
-        ...['live_calls', 'file_cleanup', 'file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log'].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
-        env.DB.prepare("UPDATE file_sweep SET after_key = ''"),
-        env.DB.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
+      env.stores.close();
+      await env.db.batch([
+        ...['file_blocks', 'restores', 'account_files', 'notices', 'vaults', 'sessions', 'accounts', 'reports', 'admin_log', 'snapshots'].map((table) => env.db.prepare(`DELETE FROM ${table}`)),
+        env.db.prepare('UPDATE installation SET operator_account = NULL'),
+        env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
-      for (let listed = await env.BLOBS.list(); listed.objects.length; listed = await env.BLOBS.list()) {
-        await env.BLOBS.delete(listed.objects.map(({ key }) => key));
-      }
+      for (const sub of ['accounts', 'files', 'snapshots']) rmSync(join(dir, sub), { recursive: true, force: true });
+      env.stores = accountRegistry(dir, db, serviceReads(db), () => clock.now());
     },
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),
     post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),
@@ -83,47 +92,16 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env, ctx),
     settle,
     timeline,
-    // The account's row changed in D1, then its store restarted, as every lifecycle change is made (server/lifecycle).
+    // The hourly job, run now: what the scheduled sweep did on the old platform.
+    reconcile: (now = Date.now()) => reconcile(dir, env.db, now),
+    // The account's row changed in the service, then its store restarted, as every lifecycle change is made
+    // (server/lifecycle).
     lifecycle: async (accountId: string, set: string) => {
-      const incarnation = await env.DB.prepare(`UPDATE accounts SET ${set} WHERE id = ? RETURNING incarnation`).bind(accountId).first<string>('incarnation');
-      await stores.getByName(incarnation!).restart(incarnation!).catch(() => {});
+      const incarnation = await env.db.prepare(`UPDATE accounts SET ${set} WHERE id = ? RETURNING incarnation`).bind(accountId).first<string>('incarnation');
+      await env.stores.getByName(incarnation!).restart(incarnation!).catch(() => {});
     },
     batch: async (writes: unknown[], cookie: string) => send('POST', 'objects/batch', { timeline: await timeline(cookie), writes }, cookie),
   };
-}
-
-// ReplyStream's namespace, in process: one StreamBox per name over a map, which is all its Durable Object adds.
-function streamObjects(upstream: Upstream, placed: unknown[], db: D1Database) {
-  const boxes = new Map<string, StreamBox>();
-  const storage = (): BoxStorage => {
-    const held = new Map<string, unknown>();
-    return {
-      get: async (key) => held.get(key),
-      put: async (key, value) => void held.set(key, value),
-      list: async ({ start, end, limit }) => new Map([...held].filter(([key]) => key >= start && key < end).sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, limit)),
-      deleteAll: async () => held.clear(),
-      setAlarm: async () => {},
-    };
-  };
-  const box = (name: string) => boxes.get(name) ?? boxes.set(name, new StreamBox(storage(), upstream, liveCall(db, name))).get(name)!;
-  return {
-    idFromName: (name: string) => name,
-    get: (name: string, options: unknown) => {
-      placed.push(options);
-      return { fetch: (input: string, init?: RequestInit) => box(name).handle(new Request(input, init)) };
-    },
-  } as unknown as Env['STREAMS'];
-}
-
-function relayObjects(upstream: Upstream, placed: unknown[]) {
-  const relay = createRelay(upstream);
-  return {
-    newUniqueId: () => crypto.randomUUID(),
-    get: (_id: string, options: unknown) => {
-      placed.push(options);
-      return { fetch: (request: Request) => relay(request) };
-    },
-  } as unknown as Env['RELAY'];
 }
 
 export const sessionCookie = (response: Response) => response.headers.get('set-cookie')!.split(';')[0]!;

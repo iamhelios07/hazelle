@@ -1,18 +1,32 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Refused } from './account-store';
+import type { Stores } from './db/account-db';
+import type { Db } from './db/service-db';
+import type { Bucket } from './files/disk-bucket';
+import type { Limiter } from './limits';
+import type { Upstream } from './relay';
+import type { Streams } from './stream-registry';
 
 export type State = 'active' | 'restoring' | 'leaving';
-// incarnation: the server-made id of the account's data (migrations/0009). bytesCap: the cap as this request's session
-// read it, null for none.
-export type Account = { id: string; username: string; suspended: boolean; incarnation: string; state: State; bytesCap: number | null };
+// incarnation: the server-made id of the account's data (migrations/0001_baseline.sql). bytesCap: the cap as this
+// request's session read it, null for none. admin: the installation row names this account as the operator.
+export type Account = { id: string; username: string; suspended: boolean; incarnation: string; state: State; bytesCap: number | null; admin: boolean };
 // Account and object ids are UUIDs made by the client.
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export type AppEnv = { Bindings: Env; Variables: { account: Account; storeMs?: number } };
+// What the process gives every request (node.ts; testing.ts builds the same set over a temp directory). outbound: the
+// one way a provider is reached. limits: calls per account, botCalls per account and chat.
+export type Services = {
+  db: Db;
+  files: Bucket;
+  stores: Stores;
+  streams: Streams;
+  outbound: Upstream;
+  limits: { calls: Limiter; botCalls: Limiter };
+};
 
-// The operator is the one account this Worker var names, so no stored value can make another.
-export const isAdmin = (c: Context<AppEnv>, accountId: string) => accountId === c.env.ADMIN_ACCOUNT;
+export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number } };
 
 export function fail(c: Context, status: ContentfulStatusCode, error: string, detail: Record<string, unknown> = {}) {
   return c.json({ error, ...detail }, status);

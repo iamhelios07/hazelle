@@ -35,7 +35,7 @@ export function migrate(db: DatabaseSync, directory: string): { applied: string[
       db.exec('COMMIT');
     } catch (error) {
       db.exec('ROLLBACK');
-      throw new Error(`migrations: ${file.name} failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`migrations: ${file.name} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
     applied.push(file.name);
   }

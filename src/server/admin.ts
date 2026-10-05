@@ -2,7 +2,8 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { Phase } from './account-store';
 import { fileBlocks } from './files';
-import { fail, ID, isAdmin, readObject, refused, type AppEnv, type State } from './http';
+import type { Db, SqlValue, Statement } from './db/service-db';
+import { fail, ID, readObject, refused, type AppEnv, type Services, type State } from './http';
 import { beginRestore, cancelRestore, leaveAccount, restoreActions, runRestore, store, undoable, UNDO_LIFE_MS } from './lifecycle';
 import { requireSession } from './session';
 
@@ -14,7 +15,7 @@ const PAGE_ROWS = 100;
 // How long a resolved report and a log row are kept, as the privacy page says. An open report stays whatever its age.
 const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
-export async function forgetOldRecords(db: D1Database): Promise<void> {
+export async function forgetOldRecords(db: Db): Promise<void> {
   const before = Date.now() - KEEP_MS;
   await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before)]);
 }
@@ -26,7 +27,7 @@ export const reports = new Hono<AppEnv>().use(requireSession).post('/', async (c
   if (!text || text.length > MAX_REPORT_LENGTH) return fail(c, 400, 'bad-input');
   const { id, username, incarnation } = c.get('account');
   // Reports must not predate their account: restore and reply eligibility use that bound even if wall time regresses.
-  const sent = await c.env.DB.prepare(
+  const sent = await c.env.db.prepare(
     `INSERT INTO reports (account_id, username, text, created_at)
      SELECT ?1, ?2, ?3, MAX(?4, created_at) FROM accounts WHERE id = ?1 AND incarnation = ?6
      AND (SELECT COUNT(*) FROM reports WHERE account_id = ?1 AND resolved_at IS NULL) < ?5 RETURNING id`,
@@ -56,28 +57,28 @@ export const notices = new Hono<AppEnv>()
   .post('/seen', async (c) => {
     const id = (await readObject(c))?.id;
     if (!positive(id)) return fail(c, 400, 'bad-input');
-    await c.env.DB.prepare('UPDATE accounts SET notices_seen = MAX(notices_seen, ?) WHERE incarnation = ?').bind(id, c.get('account').incarnation).run();
+    await c.env.db.prepare('UPDATE accounts SET notices_seen = MAX(notices_seen, ?) WHERE incarnation = ?').bind(id, c.get('account').incarnation).run();
     return c.body(null, 204);
   });
 
 export const admin = new Hono<AppEnv>();
 
 admin.use(requireSession);
-admin.use(createMiddleware<AppEnv>(async (c, next) => (isAdmin(c, c.get('account').id) ? next() : fail(c, 403, 'not-admin'))));
+admin.use(createMiddleware<AppEnv>(async (c, next) => (c.get('account').admin ? next() : fail(c, 403, 'not-admin'))));
 
 // Every action below goes in one batch with its admin_log row, so the log never misses an action that happened and
 // never holds one that did not. The row comes first and is written only if the target is there: a delete could not
 // name its target afterwards.
 // values: what detail names from ?4 on.
-function logged(db: D1Database, action: string, id: string, detail = 'NULL', ...values: unknown[]) {
+function logged(db: Db, action: string, id: string, detail = 'NULL', ...values: SqlValue[]) {
   return db.prepare(`INSERT INTO admin_log (at, action, target, detail) SELECT ?1, ?2, id, ${detail} FROM accounts WHERE id = ?3`).bind(Date.now(), action, id, ...values);
 }
 
 const USERNAME = `json_object('username', username)`;
 
 // The last statement is the action, and answers the row it wrote.
-async function act(c: Context<AppEnv>, ...statements: D1PreparedStatement[]) {
-  const done = await c.env.DB.batch(statements);
+async function act(c: Context<AppEnv>, ...statements: Statement[]) {
+  const done = await c.env.db.batch(statements);
   return done.at(-1)!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
 }
 
@@ -95,7 +96,7 @@ const toSender = (report: number): Target => ({
 });
 
 // The only writer of notices: its log row, then the notice, each written only if its account is there.
-function noticed(db: D1Database, text: string, to: Target | null, report: number | null = null): D1PreparedStatement[] {
+function noticed(db: Db, text: string, to: Target | null, report: number | null = null): Statement[] {
   const now = Date.now();
   if (!to) {
     return [
@@ -136,12 +137,12 @@ type Usage = { bytes: number; disk: number } | null;
 // this order; the cursor includes both because accounts can share their creation millisecond.
 function accountPage(c: Context<AppEnv>, columns: string) {
   const after = c.req.query('after');
-  if (after === undefined) return c.env.DB.prepare(`SELECT ${columns} FROM accounts ORDER BY created_at, id LIMIT ?`).bind(PAGE_ROWS);
+  if (after === undefined) return c.env.db.prepare(`SELECT ${columns} FROM accounts ORDER BY created_at, id LIMIT ?`).bind(PAGE_ROWS);
   const split = after.indexOf(':');
   const at = Number(after.slice(0, split));
   const id = after.slice(split + 1);
   if (split < 1 || !count(at) || !ID.test(id)) return null;
-  return c.env.DB.prepare(`SELECT ${columns} FROM accounts WHERE (created_at, id) > (?, ?) ORDER BY created_at, id LIMIT ?`).bind(at, id, PAGE_ROWS);
+  return c.env.db.prepare(`SELECT ${columns} FROM accounts WHERE (created_at, id) > (?, ?) ORDER BY created_at, id LIMIT ?`).bind(at, id, PAGE_ROWS);
 }
 
 const afterAccounts = (rows: Pick<AccountRow, 'accountId' | 'createdAt'>[]) =>
@@ -179,12 +180,12 @@ admin.get('/usage', async (c) => {
 admin.get('/accounts/:id', async (c) => {
   const id = c.req.param('id');
   if (!ID.test(id)) return fail(c, 400, 'bad-input');
-  const row = await c.env.DB.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ?`).bind(id).first<AccountRow>();
+  const row = await c.env.db.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ?`).bind(id).first<AccountRow>();
   const usage = row ? (await accountUsage(c.env, [row]))[0]! : null;
   return c.json({ account: row ? shownAccount(row, usage) : null });
 });
 
-async function accountUsage(env: Env, rows: Pick<AccountRow, 'state' | 'incarnation'>[]): Promise<Usage[]> {
+async function accountUsage(env: Services, rows: Pick<AccountRow, 'state' | 'incarnation'>[]): Promise<Usage[]> {
   const answers = await readAll(
     rows.map(({ state, incarnation }) => (state === 'active' ? () => store(env, incarnation).usage(incarnation) : null)),
     USAGE_SLOTS,
@@ -241,7 +242,7 @@ admin.post('/notices', async (c) => {
   const to = body?.to;
   const text = noticeText(body?.text);
   if (!text || !(to === null || (typeof to === 'string' && ID.test(to)))) return fail(c, 400, 'bad-input');
-  return act(c, ...noticed(c.env.DB, text, to === null ? null : toAccount(to)));
+  return act(c, ...noticed(c.env.db, text, to === null ? null : toAccount(to)));
 });
 
 // reason: a notice to the account, sent with the change. A suspension cannot go without one: the terms promise every
@@ -252,7 +253,7 @@ admin.put('/accounts/:id/suspended', async (c) => {
   const suspended = body?.suspended;
   const reason = optionalText(body?.reason);
   if (!ID.test(id) || typeof suspended !== 'boolean' || reason === undefined || (suspended && reason === null)) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
+  const db = c.env.db;
   return act(
     c,
     logged(db, suspended ? 'suspend' : 'lift', id, USERNAME),
@@ -268,8 +269,8 @@ admin.put('/accounts/:id/caps', async (c) => {
   const bytesCap = body?.bytesCap;
   const fileBytesCap = body?.fileBytesCap;
   if (!ID.test(id) || !ownCap(bytesCap) || !ownCap(fileBytesCap)) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
-  const own = (cap: unknown) => [cap === 'default' ? 0 : 1, cap === 'default' ? null : cap];
+  const db = c.env.db;
+  const own = (cap: number | null | 'default') => [cap === 'default' ? 0 : 1, cap === 'default' ? null : cap];
   return act(
     c,
     logged(db, 'set-caps', id, `json_object('username', username, 'bytesCap', json(?4), 'fileBytesCap', json(?5))`, JSON.stringify(bytesCap), JSON.stringify(fileBytesCap)),
@@ -281,10 +282,11 @@ admin.put('/accounts/:id/caps', async (c) => {
 admin.delete('/accounts/:id', async (c) => {
   const id = c.req.param('id');
   if (!ID.test(id)) return fail(c, 400, 'bad-input');
-  const incarnation = await c.env.DB.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
+  const incarnation = await c.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
   if (incarnation === null) return fail(c, 404, 'not-found');
   const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, true);
   if (left === 'busy') return fail(c, 409, 'account-busy');
+  if (left === 'operator') return fail(c, 403, 'sole-operator');
   if (left === 'unavailable') return refused(c, { unavailable: true });
   return c.body(null, 204);
 });
@@ -307,7 +309,7 @@ const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 40
 
 // Newest first.
 admin.get('/accounts/:id/restores', async (c) => {
-  const { results } = await c.env.DB.prepare(
+  const { results } = await c.env.db.prepare(
     `SELECT r.id, r.report_id AS reportId, r.at, r.undoes, r.phase, r.verified, r.error, r.created_at AS createdAt, r.updated_at AS updatedAt,
        r.checkpoint_at, ${undoable('r.id', '?2')} AS canUndo
      FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
@@ -342,7 +344,7 @@ admin.post('/restores/:id/cancel', async (c) => {
 });
 
 admin.get('/service', async (c) => {
-  const row = await c.env.DB.prepare(
+  const row = await c.env.db.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,
        (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT COALESCE(SUM(file_bytes), 0) FROM accounts) AS fileBytes
      FROM service`,
@@ -361,7 +363,7 @@ admin.put('/service', async (c) => {
   const accountBytesCap = body?.accountBytesCap;
   const accountFileBytesCap = body?.accountFileBytesCap;
   if (!count(signupCap) || !cap(accountBytesCap) || !cap(accountFileBytesCap)) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
+  const db = c.env.db;
   await db.batch([
     db.prepare(`INSERT INTO admin_log (at, action, target, detail) VALUES (?, 'set-service', 'service', ?)`).bind(Date.now(), JSON.stringify({ signupCap, accountBytesCap, accountFileBytesCap })),
     db.prepare('UPDATE service SET signup_cap = ?, account_bytes_cap = ?, account_file_bytes_cap = ?').bind(signupCap, accountBytesCap, accountFileBytesCap),
@@ -371,10 +373,10 @@ admin.put('/service', async (c) => {
 
 // Newest first. before: the last id of the page before, for the next one. A page shorter than PAGE_ROWS is the last.
 // where: what else a row must meet, with its values from ?3 on.
-function page(c: Context<AppEnv>, select: string, where = 'TRUE', ...values: unknown[]) {
+function page(c: Context<AppEnv>, select: string, where = 'TRUE', ...values: SqlValue[]) {
   const before = c.req.query('before');
   if (before !== undefined && !/^[1-9]\d{0,15}$/.test(before)) return null;
-  return c.env.DB.prepare(`${select} WHERE (?1 IS NULL OR id < ?1) AND ${where} ORDER BY id DESC LIMIT ?2`).bind(before === undefined ? null : Number(before), PAGE_ROWS, ...values);
+  return c.env.db.prepare(`${select} WHERE (?1 IS NULL OR id < ?1) AND ${where} ORDER BY id DESC LIMIT ?2`).bind(before === undefined ? null : Number(before), PAGE_ROWS, ...values);
 }
 
 admin.get('/reports', async (c) => {
@@ -387,7 +389,7 @@ admin.post('/reports/:id/resolve', async (c) => {
   const id = Number(c.req.param('id'));
   const reply = optionalText((await readObject(c))?.reply);
   if (!Number.isSafeInteger(id) || reply === undefined) return fail(c, 400, 'bad-input');
-  const db = c.env.DB;
+  const db = c.env.db;
   const open = reply === null ? 'reports WHERE reports.id = ?1 AND reports.resolved_at IS NULL' : toSender(id).from;
   return act(
     c,
