@@ -79,13 +79,17 @@ pass() {
   prune || { log "prune failed"; return 1; }
 }
 
+# One pass at a time per container: deploy.sh runs a pass beside the loop's, and a prune that listed the manifests
+# before the other pass uploaded one would take that generation's new pictures.
+locked_pass() { (flock 9 && pass) 9>/tmp/rclone-backup.lock; }
+
 if [ "${1:-}" = once ]; then
-  pass
+  locked_pass
   exit
 fi
 trap 'exit 0' TERM INT
 while :; do
-  pass || log "pass failed; next try in an hour"
+  locked_pass || log "pass failed; next try in an hour"
   sleep 3600 &
   wait $!
 done

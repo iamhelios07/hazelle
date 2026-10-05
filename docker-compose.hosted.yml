@@ -1,5 +1,5 @@
 # The hosted machine (infra/): docker-compose.yml plus Caddy in front, /data on the instance disk, no local models.
-#   docker compose --env-file /etc/hazelle/env -f docker-compose.yml -f docker-compose.hosted.yml --profile backup up -d
+#   hazelle-compose up -d   (installed by infra/cloud-init.yaml.tftpl)
 # /etc/hazelle/env holds HAZELLE_IMAGE (written by scripts/deploy.sh), HAZELLE_BACKUP_REMOTE and HAZELLE_ALERT_WEBHOOK.
 services:
   app:
