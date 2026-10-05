@@ -16,6 +16,7 @@ import { tokenBucket } from './limits';
 import { refreshPrices } from './prices';
 import { reconcile } from './reconcile';
 import { streamRegistry } from './stream-registry';
+import { streamStore } from './db/streams-db';
 import app from './worker';
 
 // The process: one data directory, one owner, the services every request gets, the schedulers, and a shutdown that
@@ -52,7 +53,7 @@ const services: Services = {
   db,
   files: diskBucket(dataDir),
   stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
-  streams: streamRegistry(fetch),
+  streams: streamRegistry(streamStore(join(dataDir, 'streams.sqlite')), fetch),
   outbound: fetch,
   limits,
 };
@@ -92,12 +93,13 @@ const timers = [
     limits.botCalls.evict();
   }, 10 * MINUTE_MS),
   setTimeout(hourly, MINUTE_MS),
+  setInterval(() => ctx.waitUntil(services.streams.expire(Date.now())), MINUTE_MS),
 ];
 for (const timer of timers) timer.unref();
 
-// SIGTERM: stop taking requests, let requests in flight and background work finish within the drain, then close the
-// databases. server.close settles when the last active request ended. A detached reply still running at the deadline is
-// lost, as the client reads a lost stream; nothing waits on it yet.
+// SIGTERM: stop taking requests, let requests in flight, background work and detached replies finish within the drain,
+// then close the databases. server.close settles when the last active request ended. A detached reply still running at
+// the deadline is lost: its stored pages stay, and a reader after the restart reads them and then a lost stream.
 async function shutdown(signal: string) {
   if (draining) return;
   draining = true;
@@ -107,10 +109,11 @@ async function shutdown(signal: string) {
   // A keep-alive connection that keeps asking is never idle at one instant; it is closed between its requests.
   const sweeping = setInterval(() => server.closeIdleConnections(), 100);
   const deadline = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), drainMs).unref());
-  const outcome = await Promise.race([Promise.all([closed, Promise.allSettled([...background])]).then(() => 'drained' as const), deadline]);
+  const outcome = await Promise.race([Promise.all([closed, Promise.allSettled([...background]), services.streams.settled()]).then(() => 'drained' as const), deadline]);
   clearInterval(sweeping);
   server.closeAllConnections();
   services.stores.close();
+  services.streams.close();
   raw.close();
   lock.close();
   log('stopped', { outcome, left: background.size });

@@ -1,59 +1,53 @@
 import type { Upstream } from './relay';
-import { StreamBox, type BoxStorage, type Live } from './stream-box';
+import { StreamBox } from './stream-box';
+import type { StreamStore } from './db/streams-db';
 
-// ReplyStream's namespace in process: one StreamBox per name over a map. Replaced by a SQLite page store later; until
-// then a restart loses every reply in flight.
+// The reply streams of this process: at most one StreamBox per name, kept while its call runs or a reader reads it. A
+// name with no box is read from its stored pages; after a restart that is every name, and its reply ends as lost.
+export type Streams = {
+  start(name: string, body: { id: string; key: unknown; request: unknown }): Promise<Response>;
+  read(name: string, from: number): Promise<Response>;
+  stop(name: string): void;
+  // The call ends, its readers end, then its rows go.
+  drop(name: string): Promise<void>;
+  live(): number;
+  // Settles once no call runs.
+  settled(): Promise<void>;
+  // Drops every stream whose alarm is at or before now.
+  expire(now: number): Promise<void>;
+  close(): void;
+};
 
-export type Streams = { box(name: string): Pick<StreamBox, 'handle'>; live(): number };
-
-function memory(): Omit<BoxStorage, 'setAlarm'> {
-  const held = new Map<string, unknown>();
-  return {
-    get: async (key) => held.get(key),
-    put: async (key, value) => void held.set(key, value),
-    list: async ({ start, end, limit }) =>
-      new Map([...held].filter(([key]) => key >= start && key < end).sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, limit)),
-    deleteAll: async () => held.clear(),
-  };
-}
-
-export function streamRegistry(upstream: Upstream): Streams {
+export function streamRegistry(store: StreamStore, upstream: Upstream): Streams {
   const boxes = new Map<string, StreamBox>();
-  let calls = 0;
-  const create = (name: string) => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    // Per box, so a box that ends twice (its drop, then its alarm) cannot end another box's call.
-    let calling = false;
-    const live: Live = {
-      began: () => {
-        calling = true;
-        calls++;
-      },
-      ended: async () => {
-        if (calling) calls--;
-        calling = false;
-      },
-    };
-    const box: StreamBox = new StreamBox(
-      {
-        ...memory(),
-        setAlarm: async (at) => {
-          if (timer) clearTimeout(timer);
-          timer = setTimeout(() => {
-            boxes.delete(name);
-            void box.expire();
-          }, at - Date.now());
-          timer.unref();
-        },
-      },
-      upstream,
-      live,
-    );
-    boxes.set(name, box);
-    return box;
+  const box = (name: string) => {
+    const found = boxes.get(name);
+    if (found) return found;
+    const made: StreamBox = new StreamBox(store.storage(name), upstream, () => {
+      if (boxes.get(name) === made) boxes.delete(name);
+    });
+    boxes.set(name, made);
+    return made;
+  };
+  const running = () => [...boxes.values()].filter((each) => each.running);
+  const drop = async (name: string) => {
+    const found = boxes.get(name);
+    boxes.delete(name);
+    await found?.drop();
+    store.remove(name);
   };
   return {
-    box: (name) => boxes.get(name) ?? create(name),
-    live: () => calls,
+    start: (name, body) => box(name).start(body),
+    read: (name, from) => box(name).read(from),
+    stop: (name) => boxes.get(name)?.stop(),
+    drop,
+    live: () => running().length,
+    settled: async () => {
+      for (let calls = running(); calls.length; calls = running()) await Promise.all(calls.map((each) => each.ended));
+    },
+    expire: async (now) => {
+      for (const name of store.due(now)) await drop(name);
+    },
+    close: () => store.close(),
   };
 }

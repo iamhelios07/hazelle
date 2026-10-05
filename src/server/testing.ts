@@ -12,6 +12,7 @@ import { tokenBucket } from './limits';
 import { reconcile } from './reconcile';
 import type { Upstream } from './relay';
 import { streamRegistry } from './stream-registry';
+import { streamStore } from './db/streams-db';
 import app from './worker';
 
 // The server in process over the production adapters on a temp directory (node.ts builds the same Services on /data).
@@ -27,7 +28,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     db,
     files: diskBucket(dir),
     stores: accountRegistry(dir, db, serviceReads(db), () => clock.now()),
-    streams: streamRegistry(outbound),
+    streams: streamRegistry(streamStore(join(dir, 'streams.sqlite')), outbound),
     outbound,
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
   };
@@ -75,6 +76,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     // gone, and a registry that remembers no incarnation.
     reset: async () => {
       await settle();
+      await env.streams.expire(Number.MAX_SAFE_INTEGER);
       clock.now = () => Date.now();
       env.stores.close();
       await env.db.batch([
