@@ -46,4 +46,6 @@ services:
     logging: *logging
 
 volumes:
+  # Named through a variable so a restore can fill a new volume and the old one stays until the new one is seen to work.
   data:
+    name: ${HAZELLE_VOLUME:-hazelle_data}
