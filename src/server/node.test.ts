@@ -142,6 +142,8 @@ describe('the server process', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
     server.child.kill('SIGTERM');
+    // Until the signal is handled the server still answers 200; on a slow runner that takes longer than a fetch.
+    for (let attempt = 0; attempt < 100 && !server.log().includes('"event":"draining"'); attempt++) await new Promise((resolve) => setTimeout(resolve, 20));
     // server.close drops idle connections and refuses new ones at once, so health's 503 is for a request already on
     // the wire; a new connection during the drain is refused.
     let refused = false;
