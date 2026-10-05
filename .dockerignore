@@ -1,0 +1,15 @@
+.git
+.claude
+.data
+.wrangler
+.vitest
+.github
+node_modules
+dist
+docs
+e2e
+infra
+deploy
+shots
+test-results
+*.module.d.css.ts
