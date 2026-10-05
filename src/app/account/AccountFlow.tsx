@@ -183,6 +183,7 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
         accountId: state.session.accountId,
         username: state.session.username,
         admin: state.session.admin,
+        localProviders: state.session.localProviders,
         unreadNotices: state.session.unreadNotices,
         facts: state.facts,
         vaultKey: state.vaultKey,

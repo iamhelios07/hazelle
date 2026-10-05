@@ -137,5 +137,6 @@ async function describe(c: Context<AppEnv>, account: Pick<Account, 'id' | 'usern
     incarnation,
     storage: { bytes: 'bytes' in usage ? usage.bytes : null, ...storage },
     unreadNotices,
+    localProviders: [...c.env.localProviders],
   };
 }

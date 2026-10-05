@@ -130,6 +130,7 @@ it('restores a generation into an empty directory: logins, counts, pictures and 
     stores: accountRegistry(dir, db, serviceReads(db), Date.now),
     streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
+    localProviders: new Set(),
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
     backups: backups(dir, 3, null),
   };

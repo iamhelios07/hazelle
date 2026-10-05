@@ -17,13 +17,15 @@ export type Account = { id: string; username: string; suspended: boolean; incarn
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // What the process gives every request (node.ts; testing.ts builds the same set over a temp directory). outbound: the
-// one way a provider is reached. limits: calls per account, botCalls per account and chat. backups: the daily job.
+// one way a provider is reached; localProviders: the hosts it reaches outside the public internet (outbound.ts), which
+// the session tells the client. limits: calls per account, botCalls per account and chat. backups: the daily job.
 export type Services = {
   db: Db;
   files: Bucket;
   stores: Stores;
   streams: Streams;
   outbound: Upstream;
+  localProviders: ReadonlySet<string>;
   limits: { calls: Limiter; botCalls: Limiter };
   backups: Backups;
 };

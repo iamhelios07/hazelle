@@ -6,6 +6,7 @@ import { cerebras } from './cerebras';
 import { copilot } from './copilot';
 import { deepinfra } from './deepinfra';
 import { deepseek } from './deepseek';
+import { destination } from './destination';
 import { featherless } from './featherless';
 import { friendli } from './friendli';
 import { gemini } from './gemini';
@@ -150,7 +151,7 @@ export function withCredential({ type, codec }: Resolved, request: HttpRequest, 
 export type Detection =
   | { kind: 'key'; type: ConnectionType; secret: string }
   | { kind: 'url'; type: ConnectionType }
-  | { kind: 'generic-url'; baseUrl: string; problem: 'not-https' | 'local' | null }
+  | { kind: 'generic-url'; baseUrl: string }
   | { kind: 'unknown-key'; secret: string };
 
 export function detect(input: string): Detection | null {
@@ -161,7 +162,7 @@ export function detect(input: string): Detection | null {
     const url = new URL(baseUrl);
     const type = typeForHost(url.hostname);
     if (type) return { kind: 'url', type };
-    return { kind: 'generic-url', baseUrl, problem: url.protocol !== 'https:' ? 'not-https' : isLocal(url.hostname) ? 'local' : null };
+    return { kind: 'generic-url', baseUrl };
   }
   if (/\s/.test(text)) return null;
   const type = CONNECTION_TYPES.find((candidate) => candidate.detect?.key?.test(text));
@@ -200,7 +201,14 @@ export function normalizeBaseUrl(text: string): string | null {
   return `${url.origin}${path}`;
 }
 
-// The hosted relay can never reach these, so the form says so before the first try.
+// What keeps the relay from an address, said before the first try. local: the operator's HAZELLE_LOCAL_PROVIDERS as
+// the session states them, which the relay reaches over plain http and at a private address.
+export function addressProblem(baseUrl: string, local: readonly string[]): 'not-https' | 'local' | null {
+  const url = new URL(baseUrl);
+  if (local.includes(destination(url))) return null;
+  return url.protocol !== 'https:' ? 'not-https' : isLocal(url.hostname) ? 'local' : null;
+}
+
 // Other LAN names cannot be recognized in advance and fail on first use.
 // hostname is a URL's: an IPv6 address stands in brackets and an IPv4 one is four numbers, which is how the server
 // tells an address from a name (server/ssrf.ts). A name that only starts like an address is a name.

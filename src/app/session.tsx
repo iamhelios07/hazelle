@@ -15,8 +15,8 @@ import type { Talk, Turn } from '../runtime/talk';
 import type { Translating, Translator } from '../runtime/translate';
 import { Saves } from './common/saveQueue';
 
-// admin: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
-export type Account = { admin: boolean; facts: AccountFacts; onLock: () => void; onLogout: () => Promise<string | null> };
+// admin, localProviders: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
+export type Account = { admin: boolean; localProviders: readonly string[]; facts: AccountFacts; onLock: () => void; onLogout: () => Promise<string | null> };
 
 // A save in flight and one queued behind it are two round
 // trips, which from Korea can take seconds each; a store write waiting out a dropped connection never ends on its own.

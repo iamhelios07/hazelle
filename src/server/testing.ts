@@ -31,6 +31,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     stores: accountRegistry(dir, db, serviceReads(db), () => clock.now()),
     streams: streamRegistry(streamStore(join(dir, 'streams.sqlite')), outbound),
     outbound,
+    localProviders: new Set(),
     limits: { calls: tokenBucket(240), botCalls: tokenBucket(20) },
     backups: backups(dir, 3, 'https://alerts.test/hook'),
   };

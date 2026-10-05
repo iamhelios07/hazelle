@@ -88,6 +88,9 @@ files.put('/:id', canWrite, async (c) => {
   }
 });
 
+// What requireSession answers every request of a deleted account.
+const outlived = (c: Context<AppEnv>) => fail(c, 401, 'no-session');
+
 async function publish(c: Context<AppEnv>, id: string) {
   const db = c.env.db;
   const { incarnation } = c.get('account');
@@ -101,7 +104,7 @@ async function publish(c: Context<AppEnv>, id: string) {
   if (held!.blocked) return fail(c, 403, 'file-blocked');
   if (hex(new Uint8Array(await crypto.subtle.digest('SHA-256', body))) !== id) return fail(c, 400, 'bad-input');
   if (held!.stored) return c.body(null, 204);
-  const [, , reserved] = await db.batch([
+  const [, , reservation] = await db.batch<{ reserved: number; alive: number }>([
     db
       .prepare(
         `INSERT INTO account_files (incarnation, id, size, created_at)
@@ -112,16 +115,21 @@ async function publish(c: Context<AppEnv>, id: string) {
     // The batch is one transaction: only an actually inserted reservation charges bytes. Existing reservations
     // remain retryable even after the cap is lowered. Deletion removes both the account's counter and its file rows.
     db.prepare('UPDATE accounts SET file_bytes = file_bytes + ?2 WHERE incarnation = ?1 AND changes() = 1').bind(incarnation, body.byteLength),
-    db.prepare('SELECT 1 FROM account_files WHERE incarnation = ? AND id = ?').bind(incarnation, id),
+    db
+      .prepare('SELECT EXISTS (SELECT 1 FROM account_files WHERE incarnation = ?1 AND id = ?2) AS reserved, EXISTS (SELECT 1 FROM accounts WHERE incarnation = ?1) AS alive')
+      .bind(incarnation, id),
   ]);
-  if (!reserved!.results.length) return fail(c, 413, 'files-full');
+  const { reserved, alive } = reservation!.results[0]!;
+  // No account row is a body that finished after its account was deleted, not a full one.
+  if (!alive) return outlived(c);
+  if (!reserved) return fail(c, 413, 'files-full');
   await c.env.files.put(fileKey(incarnation, id), body);
   const fileBytes = await db
     .prepare(`UPDATE account_files SET stored = 1 WHERE incarnation = ?1 AND id = ?2 RETURNING (SELECT file_bytes FROM accounts WHERE incarnation = ?1) AS fileBytes`)
     .bind(incarnation, id)
     .first<number>('fileBytes');
   // Only the account's deletion removes its rows, so a finalize that matches none is a request outliving its account.
-  if (fileBytes === null) return fail(c, 401, 'no-session');
+  if (fileBytes === null) return outlived(c);
   c.header(USE_HEADERS.fileBytes, String(fileBytes));
   return c.body(null, 204);
 }

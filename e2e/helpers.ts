@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test';
 import { createServer } from 'node:http';
 import { unpack } from '../src/engine/import/risum';
 
@@ -94,12 +93,10 @@ export const SCRIPTED = {
   ),
 };
 
-// The provider behind FAKE_ADDRESS: an OpenAI-compatible server in this process. A connection takes only a public https
-// address, so the page's relay and stream requests for FAKE_ADDRESS are readdressed to it on their way out; the server
-// then reaches it as a listed local provider (FAKE_PROVIDER in HAZELLE_LOCAL_PROVIDERS) through its own relay, stream
-// registry and outbound. Every chat request body it hears is kept for the test to read.
-export const FAKE_ADDRESS = 'https://fake-provider.test/v1';
+// An OpenAI-compatible provider in this process, listed in the server's HAZELLE_LOCAL_PROVIDERS, so 직접 연결 takes its
+// plain http address as a self-hoster's own model server. Every chat request body it hears is kept for the test to read.
 export const FAKE_PROVIDER = '127.0.0.1:4419';
+export const FAKE_ADDRESS = `http://${FAKE_PROVIDER}/v1`;
 
 const REPLY = ['{{char}} smiles. ', '[[bow]]'];
 let heard: unknown[] = [];
@@ -124,20 +121,9 @@ function upstream(): Promise<void> {
   return listening;
 }
 
-export async function fakeProvider(page: Page): Promise<unknown[]> {
+export async function fakeProvider(): Promise<unknown[]> {
   await upstream();
   heard = [];
-  const readdress = (url: string) => (url.startsWith(FAKE_ADDRESS) ? `http://${FAKE_PROVIDER}/v1${url.slice(FAKE_ADDRESS.length)}` : url);
-  await page.route('**/api/relay', (route) => {
-    const envelope = route.request().postDataJSON() as { url: string };
-    return route.continue({ postData: JSON.stringify({ ...envelope, url: readdress(envelope.url) }) });
-  });
-  // One segment: a start. Its /stop goes to the server as sent, like every read and drop.
-  await page.route('**/api/streams/*', (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
-    const start = route.request().postDataJSON() as { request: { url: string } };
-    return route.continue({ postData: JSON.stringify({ ...start, request: { ...start.request, url: readdress(start.request.url) } }) });
-  });
   return heard;
 }
 

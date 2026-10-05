@@ -9,6 +9,7 @@ import { nanogpt } from './nanogpt';
 import { openRouter } from './openrouter';
 import { vercel } from './vercel';
 import {
+  addressProblem,
   cacheView,
   chatRequest,
   CONNECTION_TYPES,
@@ -69,19 +70,37 @@ describe('detection', () => {
     expect(detect(address)).toMatchObject({ kind: 'url', type: { id } });
   });
 
-  it('takes any other address as a generic connection and flags ones the relay cannot reach', () => {
-    expect(detect('https://llm.example.com/v1/')).toEqual({ kind: 'generic-url', baseUrl: 'https://llm.example.com/v1', problem: null });
-    expect(detect('http://example.com/v1')).toMatchObject({ problem: 'not-https' });
-    expect(detect('https://localhost:11434/v1')).toMatchObject({ problem: 'local' });
-    expect(detect('https://192.168.0.10/v1')).toMatchObject({ problem: 'local' });
-    expect(detect('https://my-nas.local/v1')).toMatchObject({ problem: 'local' });
+  it('takes any other address as a generic connection', () => {
+    expect(detect('https://llm.example.com/v1/')).toEqual({ kind: 'generic-url', baseUrl: 'https://llm.example.com/v1' });
+  });
+
+  it('flags an address the relay cannot reach when the operator lists no local provider', () => {
+    expect(addressProblem('https://llm.example.com/v1', [])).toBeNull();
+    expect(addressProblem('http://example.com/v1', [])).toBe('not-https');
+    expect(addressProblem('https://localhost:11434/v1', [])).toBe('local');
+    expect(addressProblem('https://192.168.0.10/v1', [])).toBe('local');
+    expect(addressProblem('https://my-nas.local/v1', [])).toBe('local');
   });
 
   it('reads a private address only from an address, never from a name that starts like one', () => {
-    expect(detect('https://[fd00::1]/v1')).toMatchObject({ problem: 'local' });
-    expect(detect('https://[::1]:8080/v1')).toMatchObject({ problem: 'local' });
-    expect(detect('https://fd-gateway.example.com/v1')).toMatchObject({ problem: null });
-    expect(detect('https://10.example.com/v1')).toMatchObject({ problem: null });
+    expect(addressProblem('https://[fd00::1]/v1', [])).toBe('local');
+    expect(addressProblem('https://[::1]:8080/v1', [])).toBe('local');
+    expect(addressProblem('https://fd-gateway.example.com/v1', [])).toBeNull();
+    expect(addressProblem('https://10.example.com/v1', [])).toBeNull();
+  });
+
+  it('accepts a listed local provider as the server keys it, default port included', () => {
+    const local = ['host.docker.internal:11434', 'ollama.lan:80'];
+    expect(addressProblem(normalizeBaseUrl('http://host.docker.internal:11434/v1')!, local)).toBeNull();
+    expect(addressProblem(normalizeBaseUrl('http://ollama.lan/v1')!, local)).toBeNull();
+    expect(addressProblem(normalizeBaseUrl('http://ollama.lan:80/v1')!, local)).toBeNull();
+  });
+
+  it('still refuses a local address the operator did not list, the same host on another port included', () => {
+    const local = ['host.docker.internal:11434'];
+    expect(addressProblem(normalizeBaseUrl('http://host.docker.internal:1234/v1')!, local)).toBe('not-https');
+    expect(addressProblem(normalizeBaseUrl('http://localhost:11434/v1')!, local)).toBe('not-https');
+    expect(addressProblem(normalizeBaseUrl('https://192.168.0.10:11434/v1')!, local)).toBe('local');
   });
 
   it('keeps an unrecognized key to ask for its address, and ignores prose', () => {

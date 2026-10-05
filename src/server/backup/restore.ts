@@ -95,6 +95,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
     stores: accountRegistry(dataDir, db, serviceReads(db), Date.now),
     streams: streamRegistry(streamStore(':memory:'), outbound),
     outbound,
+    localProviders: new Set(),
     limits: { calls: tokenBucket(1), botCalls: tokenBucket(1) },
     backups: backups(dataDir, 0, null),
   };

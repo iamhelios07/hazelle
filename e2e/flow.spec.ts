@@ -11,7 +11,7 @@ const NICKNAME = 'rich-steve';
 const GREETING = /Welcome to the inn\. Tonight's omen is (amber|birch)\./;
 
 test('a new account imports a card, chats through the fake provider and finds the chat after a reload', async ({ page }) => {
-  const sent = await fakeProvider(page);
+  const sent = await fakeProvider();
   const evaluations: number[] = [];
   page.on('response', (response) => { if (/evaluation-worker-[\w-]+\.js$/.test(response.url())) evaluations.push(response.status()); });
   const violations: string[] = [];
