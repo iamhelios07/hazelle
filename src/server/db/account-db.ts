@@ -315,8 +315,9 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
       (...args: unknown[]) =>
         enqueue(held, async () => {
           live();
-          const { rules } = await session(incarnation, held);
           try {
+            // Inside the try: opening the session installs an armed target, which can find its snapshot unusable.
+            const { rules } = await session(incarnation, held);
             return await (rules[method] as (...args: unknown[]) => Promise<unknown>).apply(rules, args);
           } catch (error) {
             if (error instanceof StoreUnavailable) return { unavailable: true } satisfies Unavailable;

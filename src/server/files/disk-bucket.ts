@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, open, readdir, rename, rm } from 'node:fs/promises';
+import { open, readdir, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
+import { makeDirs } from '../db/durable';
 
 // Pictures on disk, one directory per account incarnation. reconcile.ts reads the same layout and removes the
 // .tmp-* names put leaves behind a crash.
@@ -43,8 +44,7 @@ export function diskBucket(dataDir: string): Bucket {
     put: async (key, body) => {
       const target = path(key);
       const dir = dirname(target);
-      // The first directory this mkdir made; its name is durable only once its parent is synced too.
-      const created = await mkdir(dir, { recursive: true });
+      makeDirs(dir);
       const temp = join(dir, `.tmp-${randomBytes(8).toString('hex')}`);
       const file = await open(temp, 'w');
       try {
@@ -55,7 +55,6 @@ export function diskBucket(dataDir: string): Bucket {
       }
       await rename(temp, target);
       await syncDir(dir);
-      if (created !== undefined) await syncDir(dirname(created));
     },
     get: async (key) => {
       const target = path(key);

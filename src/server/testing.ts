@@ -111,8 +111,8 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       clock.now = () => now;
       return env.backups.daily(env, now);
     },
-    // A process that died and started again over the same directory: every open account file closed, a registry that
-    // remembers nothing.
+    // The registry as a new process would start it over the same directory: every open account file closed, nothing
+    // remembered. The service connection and the other services stay as they are.
     restartProcess: () => {
       env.stores.close();
       env.stores = accountRegistry(dir, db, serviceReads(db), () => clock.now());

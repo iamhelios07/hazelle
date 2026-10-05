@@ -32,7 +32,7 @@ const wordsOf = ({ phase, verified }: RestoreRun): Words => (phase === 'done' ? 
 // The server's error codes this page knows; another shows as the server wrote it.
 const ERRORS: Record<string, string> = {
   'too-early': '그 시각의 기록이 저장소에 없어요. 더 늦은 시각으로 새로 복원해 주세요.',
-  'store-unavailable': '그 계정의 저장소가 답하지 않았어요. 잠시 뒤 이어서 해 주세요.',
+  'store-unavailable': '그 계정의 저장소나 스냅샷을 읽지 못했어요. 잠시 뒤 이어서 하고, 계속 안 되면 취소해 주세요.',
   'not-rewound': '복원을 걸었지만 저장소가 아직 그 시점으로 돌아가지 않았어요. 잠시 뒤 이어서 해 주세요.',
   'not-verified': '저장소가 아직 계정을 다시 연 것으로 보지 않아요. 잠시 뒤 마무리 확인을 해 주세요.',
   stuck: '단계가 끝없이 되풀이되어 멈췄어요. 이어서 해도 같으면 기록을 살펴봐야 해요.',
