@@ -95,17 +95,20 @@ const timers = [
 ];
 for (const timer of timers) timer.unref();
 
-// SIGTERM: stop taking requests, let what is running finish within the drain, then close the databases. A reply still
-// running at the deadline is lost, as the client reads a lost stream.
+// SIGTERM: stop taking requests, let requests in flight and background work finish within the drain, then close the
+// databases. server.close settles when the last active request ended. A detached reply still running at the deadline is
+// lost, as the client reads a lost stream; nothing waits on it yet.
 async function shutdown(signal: string) {
   if (draining) return;
   draining = true;
   log('draining', { signal, drainMs });
   for (const timer of timers) clearTimeout(timer);
-  server.close();
-  server.closeIdleConnections();
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  // A keep-alive connection that keeps asking is never idle at one instant; it is closed between its requests.
+  const sweeping = setInterval(() => server.closeIdleConnections(), 100);
   const deadline = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), drainMs).unref());
-  const outcome = await Promise.race([Promise.allSettled([...background]).then(() => 'drained' as const), deadline]);
+  const outcome = await Promise.race([Promise.all([closed, Promise.allSettled([...background])]).then(() => 'drained' as const), deadline]);
+  clearInterval(sweeping);
   server.closeAllConnections();
   services.stores.close();
   raw.close();

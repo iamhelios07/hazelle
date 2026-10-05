@@ -84,6 +84,9 @@ describe('the server process', () => {
     const port = await freePort();
     const server = start(data, port);
     await server.listening;
+    // A request in flight when the signal comes: a slow upload body, answered after the drain began.
+    const slow = fetch(`http://127.0.0.1:${port}/api/session`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: new ReadableStream({ start: (body) => void setTimeout(() => body.close(), 300) }), duplex: 'half' } as RequestInit);
+    await new Promise((resolve) => setTimeout(resolve, 50));
     server.child.kill('SIGTERM');
     const codes: number[] = [];
     for (let attempt = 0; attempt < 20 && server.child.exitCode === null; attempt++) {
@@ -94,6 +97,7 @@ describe('the server process', () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
+    expect((await slow).status).toBe(404);
     expect(await server.exited).toBe(0);
     expect(codes.every((code) => code === 503)).toBe(true);
     expect(server.log()).toMatch(/"outcome":"drained"/);

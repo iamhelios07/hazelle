@@ -262,7 +262,7 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
   const bound = () => {
     const open = [...entries.values()].filter((held) => held.session);
     if (open.length < MAX_HANDLES) return;
-    const idle = open.filter((held) => held.pending <= 1).sort((a, b) => a.lastUsed - b.lastUsed)[0];
+    const idle = open.filter((held) => held.pending === 0).sort((a, b) => a.lastUsed - b.lastUsed)[0];
     if (idle) closeSession(idle);
   };
 
