@@ -8,7 +8,7 @@ service.sqlite                   accounts, sessions, vaults, service, installati
                                  account_files, file_blocks, notices, prices, price_fetch, snapshots, migrations
 accounts/<incarnation>.sqlite    one account's objects (head, objects, kv), WAL mode
 files/<incarnation>/<sha256>     sealed pictures; .tmp-* while being written
-streams.sqlite                   reply stream pages (frames and the numeric started) and their alarms; meta(version), a newer one is refused
+streams.sqlite                   reply stream pages and their alarms (the alarm row is a stream's reservation); meta(version), a newer one is refused
 snapshots/<incarnation>/<id>.sqlite.gz   point-in-time copies of an account file (baselines and operation checkpoints)
 ```
 
