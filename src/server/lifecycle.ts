@@ -14,9 +14,9 @@ const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 // A restore asks for a time at least this far back, so the snapshot chosen for it lies before the restore's own mark.
 const NEWEST_MS = 10 * MINUTE_MS;
-// Snapshots are kept for 30 days (db/account-db.ts). A day less leaves an operation time to choose its target, which is
-// pinned from then on (backup/snapshots.ts), so nothing expires between choosing it and installing it.
-const OLDEST_MS = 29 * DAY_MS;
+// Snapshots are kept for RETENTION_MS (db/account-db.ts). A day less leaves an operation time to choose its target, which
+// is pinned from then on (backup/snapshots.ts), so nothing expires between choosing it and installing it.
+const OLDEST_MS = RETENTION_MS - DAY_MS;
 // Restarts that did not apply the armed rewind before the operation stops and waits for the operator.
 const ARM_TRIES = 3;
 // Steps one run takes before it stops: every phase once, the re-arms, and the compare-and-sets a parallel run won.
@@ -114,7 +114,7 @@ const FREE = "accounts.state = 'active' AND NOT EXISTS (SELECT 1 FROM restores W
 const REPORTED = 'EXISTS (SELECT 1 FROM reports WHERE id = ?2 AND account_id = accounts.id AND resolved_at IS NULL AND created_at >= accounts.created_at)';
 const TIMELY = `?3 BETWEEN ?5 - ${OLDEST_MS} AND ?5 - ${NEWEST_MS}`;
 // An undo rewinds the account's latest finished restore to its checkpoint while the checkpoint is pinned
-// (backup/snapshots.ts): for 30 days after the restore ended.
+// (backup/snapshots.ts): for RETENTION_MS after the restore ended.
 export const undoable = (operation: string, now: string) =>
   `${operation} = (SELECT id FROM restores WHERE incarnation = accounts.incarnation AND phase = 'done' AND verified = 1 ORDER BY id DESC LIMIT 1)
    AND (SELECT ended_at FROM restores WHERE id = ${operation}) > ${now} - ${RETENTION_MS}`;

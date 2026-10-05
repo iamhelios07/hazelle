@@ -37,7 +37,7 @@ export const CURRENT_BASELINE = (column: 'taken_at' | 'rev', a: string, now: str
    ORDER BY taken_at DESC, id DESC LIMIT 1`;
 
 // How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
-export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_HANDLES = 256;
 const IDLE_MS = 10 * 60 * 1000;
 // node:sqlite error codes that mean the file itself is unreadable.

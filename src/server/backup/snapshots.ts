@@ -8,7 +8,7 @@ import type { Services } from '../http';
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 // The pin rule, over a snapshots row aliased `s` and the time `now` (a bind or literal): an operation pins its
-// checkpoint and target until it ends and for 30 days after, whichever way it ended: a finished rewind's undo lives
+// checkpoint and target until it ends and for RETENTION_MS after, whichever way it ended: a finished rewind's undo lives
 // that long, and a cancelled or failed one stays recoverable by hand. Retention and every backup generation read this
 // one rule.
 export const PINNED = (s: string, now: string) =>
@@ -57,12 +57,12 @@ export async function takeBaselines(env: Services, incarnations: string[]): Prom
   return { taken, skipped, unchanged, failed };
 }
 
-// A snapshot goes once it is 30 days old, unless it is pinned (PINNED) or it is a live account's floor: its newest
-// baseline 30 days old or older, the account as it was when the window began. Baselines are taken only on days the
+// A snapshot goes once it is RETENTION_MS old, unless it is pinned (PINNED) or it is a live account's floor: its newest
+// baseline RETENTION_MS old or older, the account as it was when the window began. Baselines are taken only on days the
 // account changed, so a time inside the window may land on one from before it; the floor is also an unchanged
 // account's only copy.
-// A deleted account has no restores and no row, so every snapshot of it goes at 30 days from its taking, which is
-// within 30 days of the deletion. The row goes before the file; a file left by a crash between has no row, and the
+// A deleted account has no restores and no row, so every snapshot of it goes at RETENTION_MS from its taking, which is
+// within RETENTION_MS of the deletion. The row goes before the file; a file left by a crash between has no row, and the
 // hourly reconciliation removes it.
 export async function expireSnapshots(env: Services, dataDir: string, now: number): Promise<number> {
   const { results } = await env.db

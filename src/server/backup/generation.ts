@@ -202,7 +202,7 @@ export async function listGenerations(dataDir: string): Promise<{ id: string; ca
   });
 }
 
-// A generation goes at 30 days, and one without a manifest (cut off before it was written) after a day; then every
+// A generation goes at RETENTION_MS, and one without a manifest (cut off before it was written) after a day; then every
 // picture in the pool that no remaining manifest names. Runs inside the daily job, so no capture is writing.
 export async function expireGenerations(dataDir: string, now: number): Promise<{ removed: number; pictures: number }> {
   let removed = 0;
