@@ -84,8 +84,13 @@ function inspect(account: Account): Inspection {
 
 // The account's pictures on disk, as files/<incarnation>/<id>.
 function prefix(account: Account): string[] {
-  const dir = join(DATA, 'files', account.incarnation);
-  return existsSync(dir) ? readdirSync(dir).map((name) => `files/${account.incarnation}/${name}`) : [];
+  // Read once: the server removes a leaving account's directory while this polls, so a check before the read races it.
+  try {
+    return readdirSync(join(DATA, 'files', account.incarnation)).map((name) => `files/${account.incarnation}/${name}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
 }
 
 async function signup(request: APIRequestContext, accountId: string = randomUUID()): Promise<Account> {
