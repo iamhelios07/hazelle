@@ -1,19 +1,24 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSync } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CSP } from './static';
 
-// The emitted server over real sockets: start, health, session, a second owner refused, a drain on SIGTERM.
+// The emitted server over real sockets: start, health, session, the page, a second owner refused, a drain on SIGTERM.
 let dir: string;
 let bundle: string;
+let client: string;
 const children: ChildProcess[] = [];
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-node-'));
   bundle = join(dir, 'node.js');
+  client = join(dir, 'client');
+  mkdirSync(client);
+  writeFileSync(join(client, 'index.html'), 'page');
   buildSync({ entryPoints: ['src/server/node.ts'], bundle: true, platform: 'node', format: 'esm', target: 'node24', outfile: bundle, external: ['undici'], logLevel: 'silent' });
 }, 60_000);
 afterAll(() => {
@@ -31,7 +36,7 @@ const freePort = () =>
 
 function start(dataDir: string, port: number) {
   const child = spawn(process.execPath, [bundle], {
-    env: { ...process.env, HAZELLE_DATA: dataDir, PORT: String(port), HAZELLE_DRAIN_SECONDS: '2', HAZELLE_MIGRATIONS: 'migrations' },
+    env: { ...process.env, HAZELLE_DATA: dataDir, PORT: String(port), HAZELLE_DRAIN_SECONDS: '2', HAZELLE_MIGRATIONS: 'migrations', HAZELLE_CLIENT: client },
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -67,7 +72,10 @@ describe('the server process', () => {
     await server.listening;
     expect(await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()).toEqual({ ok: true, liveCalls: 0 });
     expect(await (await fetch(`http://127.0.0.1:${port}/api/session`)).json()).toEqual({ session: null, signupOpen: true });
-    expect((await fetch(`http://127.0.0.1:${port}/api/nowhere`)).status).toBe(404);
+    const unknown = await fetch(`http://127.0.0.1:${port}/api/nowhere`, { headers: { accept: 'text/html' } });
+    expect([unknown.status, unknown.headers.get('content-security-policy')]).toEqual([404, null]);
+    const page = await fetch(`http://127.0.0.1:${port}/models/c1/vendor/model-4.5`, { headers: { accept: 'text/html' } });
+    expect([page.status, page.headers.get('content-security-policy'), await page.text()]).toEqual([200, CSP, 'page']);
     expect(server.log()).toContain('"migrationsApplied":["0001_baseline.sql"]');
 
     const second = start(data, await freePort());

@@ -3,9 +3,9 @@ import { strFromU8, unzipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
 import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
 import { featherless } from '../src/connectors/featherless';
+import { CSP } from '../src/server/static';
 import { CARD, DESCRIPTION, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, SCRIPTED } from './helpers';
 
-const CSP = /Content-Security-Policy: (.+)/.exec(readFileSync(new URL('../public/_headers', import.meta.url), 'utf8'))![1];
 const PASSWORD = 'e2e-password';
 const NICKNAME = 'rich-steve';
 const GREETING = /Welcome to the inn\. Tonight's omen is (amber|birch)\./;
