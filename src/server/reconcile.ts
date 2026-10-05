@@ -40,7 +40,9 @@ export async function reconcile(dataDir: string, db: Db, now = Date.now()): Prom
 
   for (const incarnation of await entries(join(dataDir, 'files'))) {
     const dir = `files/${incarnation}`;
-    if ((await mtime(join(dataDir, dir))) < settled && !(await account(incarnation))) {
+    // At any age: only a reservation, which needs the account's row, makes this directory, so what lands in it once
+    // the row is gone is an upload that outlived its account.
+    if (!(await account(incarnation))) {
       await remove(dir);
       continue;
     }

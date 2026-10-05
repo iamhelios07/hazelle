@@ -3,7 +3,6 @@ import type { Server } from 'node:http';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type ExecutionContext } from 'hono';
 import { serviceReads } from './account-store';
 import { forgetOldRecords } from './admin';
@@ -15,6 +14,7 @@ import type { Services } from './http';
 import { tokenBucket } from './limits';
 import { refreshPrices } from './prices';
 import { reconcile } from './reconcile';
+import { clientFiles } from './static';
 import { streamRegistry } from './stream-registry';
 import app from './worker';
 
@@ -25,7 +25,7 @@ const port = Number(process.env.PORT ?? 8080);
 const drainMs = Number(process.env.HAZELLE_DRAIN_SECONDS ?? 60) * 1000;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
-const clientDir = 'dist/client';
+const clientDir = process.env.HAZELLE_CLIENT ?? 'dist/client';
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
@@ -74,8 +74,7 @@ root.get('/api/health', (c) => (draining ? c.json({ ok: false, draining: true },
 root.route('/', app);
 // An unknown API path is a real 404, never the page.
 root.all('/api/*', (c) => c.json({ error: 'not-found' }, 404));
-root.use('*', serveStatic({ root: clientDir }));
-root.get('*', serveStatic({ root: clientDir, path: 'index.html' }));
+root.route('/', clientFiles(clientDir));
 
 const server = serve({ fetch: (request) => root.fetch(request, services, ctx), port }, () => log('listening', { port, dataDir, migrationsApplied: applied })) as Server;
 
