@@ -117,6 +117,8 @@ describe('the server process', () => {
     };
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(await captured()).toBe(true);
+    // The line follows the manifest by the listing the handler makes for the id.
+    for (let attempt = 0; attempt < 100 && !server.log().includes('backup finished'); attempt++) await new Promise((resolve) => setTimeout(resolve, 20));
     expect(server.log()).toMatch(/"event":"backup finished","snapshots":"ok","generation":"ok","id":"\d+-/);
     expect((await fetch(`http://127.0.0.1:${port}/api/health`)).status).toBe(200);
     server.child.kill('SIGTERM');
