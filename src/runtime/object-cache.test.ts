@@ -153,7 +153,7 @@ it('renders a saved bootstrap prefix and resumes its original until bound in the
   expect(opened.data.store.list('connection').map((row) => row.id)).toEqual(['first']);
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory&bootstrap=1&until=2&known=2&timeline=t0');
+  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory&bootstrap=1&until=2&count=1&known=2&timeline=t0');
   opened.data.close();
 });
 

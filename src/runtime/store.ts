@@ -1185,12 +1185,16 @@ export class ObjectStore {
     let objects = 0;
     let pages = 0;
     let total: number | undefined;
+    let counted = false;
     // The page after the one being applied, requested as soon as that one answered: the server's time and the codec's
     // overlap. It carries the epoch and timeline it was sent under, and is dropped when either moved.
     let next: { epoch: number; sent: string | null; answer: Promise<ApiResult<Page>> } | null = null;
     const page = (since: number, bootstrapped: boolean, known: number) => {
       const sent = this.timeline;
-      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${pages === 0 ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
+      // Only a bootstrap's first request asks for the count; the prefetched page after it is built before it answers.
+      const count = !bootstrapped && !counted;
+      counted ||= count;
+      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
       return { epoch: this.epoch, sent, answer };
     };
     while (more) {
