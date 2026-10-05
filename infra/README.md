@@ -38,6 +38,10 @@ to `user_data`, and `scripts/deploy.sh <tag>` is the only path that changes the 
 file or the copier reaches a running machine by copying it to `/etc/hazelle/` and `hazelle-compose up -d`, or by a
 rebuilt machine.
 
+The copier (`deploy/rclone-backup.sh`) must be the only writer under its remote prefix. It deletes a pooled picture
+only when no manifest in the remote's listing names it and the machine's own pool no longer holds it, which assumes a
+listing never lags behind by the 30 days the machine keeps a generation.
+
 `prevent_destroy` is set on the instance and the reserved IP, so a plain `terraform destroy` fails. `scripts/destroy.sh`
 removes them only after it has restored the newest off-site generation into a scratch directory; it lifts the guard
 by writing `destroy_override.tf` for the length of its run.
