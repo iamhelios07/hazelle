@@ -15,7 +15,7 @@
     "test": "vitest run",
     "check": "npm run -s css-types && tsc -b && eslint . && stylelint \"src/**/*.css\" && vitest run --reporter=dot",
     "brand": "node --experimental-strip-types brand/render.mjs",
-    "e2e": "npm run build && playwright test && playwright test -c playwright.store.config.ts"
+    "e2e": "npm run build && playwright test"
   },
   "dependencies": {
     "@fontsource/gowun-batang": "5.3.0",
