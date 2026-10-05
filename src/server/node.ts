@@ -7,6 +7,7 @@ import { Hono, type ExecutionContext } from 'hono';
 import { serviceReads } from './account-store';
 import { forgetOldRecords } from './admin';
 import { backups } from './backup/backups';
+import { listGenerations } from './backup/generation';
 import { accountRegistry } from './db/account-db';
 import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
@@ -24,21 +25,22 @@ import app from './worker';
 // The process: one data directory, one owner, the services every request gets, the schedulers, and a shutdown that
 // drains before it closes the databases. Configuration is the environment (docs/research/docker-port-plan.md §11).
 const dataDir = process.env.HAZELLE_DATA ?? '/data';
-// An unset or empty variable takes the default: compose passes "" for one the operator left out, and Number("") is 0,
-// which would read as a zero-second drain and a midnight snapshot. Anything else that is not a number refuses to start.
-function numberFrom(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return fallback;
+// An unset or blank variable takes the default: compose passes "" for one the operator left out, and Number("") is 0,
+// which would read as a zero-second drain and a midnight snapshot. Anything else must be a whole number in its range,
+// or the process refuses to start: an hour of 24 would silently never snapshot.
+function wholeFrom(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name]?.trim() ?? '';
+  if (raw === '') return fallback;
   const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) {
-    console.error(`hazelle: ${name} is not a number: ${raw}`);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    console.error(`hazelle: ${name} must be a whole number from ${min} to ${max}: ${raw}`);
     process.exit(1);
   }
   return value;
 }
-const port = numberFrom('PORT', 8080);
-const drainMs = numberFrom('HAZELLE_DRAIN_SECONDS', 60) * 1000;
-const snapshotHour = numberFrom('HAZELLE_SNAPSHOT_HOUR', 3);
+const port = wholeFrom('PORT', 8080, 1, 65535);
+const drainMs = wholeFrom('HAZELLE_DRAIN_SECONDS', 60, 0, 3600) * 1000;
+const snapshotHour = wholeFrom('HAZELLE_SNAPSHOT_HOUR', 3, 0, 23);
 const alertWebhook = process.env.HAZELLE_ALERT_WEBHOOK || null;
 // Two directories up from both src/server/node.ts and dist/server/node.js; a bundle placed elsewhere names them.
 const migrationsDir = process.env.HAZELLE_MIGRATIONS ?? join(import.meta.dirname, '..', '..', 'migrations');
@@ -155,6 +157,18 @@ async function shutdown(signal: string) {
 }
 // scripts/deploy.sh asks for a generation before it replaces the image. Without a handler Node's default for the signal
 // would end the process with no drain.
-process.on('SIGUSR2', () => ctx.waitUntil(services.backups.fresh(services)));
+// The two log lines are how the script knows its own request was taken and how it ended. Refused once draining: the
+// shutdown has stopped looking for new background work.
+process.on('SIGUSR2', () => {
+  if (draining) return log('backup refused', { reason: 'draining' });
+  log('backup requested');
+  ctx.waitUntil(
+    services.backups.fresh(services).then(async ({ snapshots, generation }) => {
+      // Jobs run one at a time, so the newest generation after an ok run is this run's.
+      const newest = generation.outcome === 'ok' ? (await listGenerations(dataDir)).sort((a, b) => a.capturedAt - b.capturedAt).at(-1) : undefined;
+      log('backup finished', { snapshots: snapshots.outcome, generation: generation.outcome, id: newest?.id ?? null });
+    }),
+  );
+});
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));

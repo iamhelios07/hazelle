@@ -13,3 +13,9 @@ deploy
 shots
 test-results
 *.module.d.css.ts
+.env
+.env.*
+.dev.vars
+rclone
+release/*
+!release/source.tar.gz

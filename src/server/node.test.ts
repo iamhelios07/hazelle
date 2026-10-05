@@ -97,9 +97,9 @@ describe('the server process', () => {
   }, 30_000);
 
   it('takes a variable left empty as its default, refuses one that is no number, and captures a generation on SIGUSR2 without stopping', async () => {
-    const refused = start(join(dir, 'data-bad-env'), await freePort(), { HAZELLE_SNAPSHOT_HOUR: 'three' });
+    const refused = start(join(dir, 'data-bad-env'), await freePort(), { HAZELLE_SNAPSHOT_HOUR: '24' });
     expect(await refused.exited).toBe(1);
-    expect(refused.log()).toContain('HAZELLE_SNAPSHOT_HOUR is not a number');
+    expect(refused.log()).toContain('HAZELLE_SNAPSHOT_HOUR must be a whole number from 0 to 23');
 
     const data = join(dir, 'data-signal');
     const port = await freePort();
@@ -117,6 +117,9 @@ describe('the server process', () => {
     };
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(await captured()).toBe(true);
+    // The line follows the manifest by the listing the handler makes for the id.
+    for (let attempt = 0; attempt < 100 && !server.log().includes('backup finished'); attempt++) await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(server.log()).toMatch(/"event":"backup finished","snapshots":"ok","generation":"ok","id":"\d+-/);
     expect((await fetch(`http://127.0.0.1:${port}/api/health`)).status).toBe(200);
     server.child.kill('SIGTERM');
     expect(await server.exited).toBe(0);

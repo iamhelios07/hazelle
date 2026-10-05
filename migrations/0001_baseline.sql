@@ -141,14 +141,15 @@ INSERT INTO price_fetch (id) VALUES (1);
 
 -- The catalog of an account's snapshot files, snapshots/<incarnation>/<id>.sqlite.gz: a row exists only once its file
 -- is durable (src/server/db/account-db.ts). kind: baseline (the daily copy) or checkpoint (an operation's exact undo,
--- operation set). No cascade: a deleted account's snapshots age out on their own, and what pins one is read from
--- restores, never stored here (src/server/backup/snapshots.ts).
+-- operation set). rev: the account file's head.rev the copy holds. No cascade: a deleted account's snapshots age out on
+-- their own, and what pins one is read from restores, never stored here (src/server/backup/snapshots.ts).
 CREATE TABLE snapshots (
   id TEXT PRIMARY KEY,
   incarnation TEXT NOT NULL,
   kind TEXT NOT NULL,
   operation INTEGER,
   taken_at INTEGER NOT NULL,
+  rev INTEGER NOT NULL,
   bytes INTEGER NOT NULL,
   sha256 TEXT NOT NULL
 );

@@ -38,7 +38,7 @@ async function signup(state = 'active', timeline = 't1') {
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline) VALUES (?, 'jin', 'h', 1, ?, ?, ?)").run(A, INC, state, timeline);
 }
 const store = () => stores.getByName(INC);
-const baseline = async () => (await stores.snapshot(INC, 'baseline'))!;
+const baseline = async () => ((await stores.snapshot(INC, 'baseline')) as { taken: string }).taken;
 const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
 const bodies = async () => {
   const page = (await store().feed(INC, { timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null })) as { changes: { id: string; body: string | null }[] };
@@ -228,12 +228,13 @@ describe('the account registry', () => {
     raw.prepare('UPDATE accounts SET operation = 3').run();
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (3, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
     expect(await store().status(INC)).toMatchObject({ state: 'restoring' });
-    expect(await stores.snapshot(INC, 'baseline')).toEqual(expect.any(String));
+    expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
     raw.prepare("UPDATE restores SET phase = 'checkpointed' WHERE id = 3").run();
-    expect(await stores.snapshot(INC, 'baseline')).toBeNull();
-    raw.prepare("UPDATE restores SET phase = 'done' WHERE id = 3").run();
+    expect(await stores.snapshot(INC, 'baseline')).toEqual({ refused: true });
+    now = 2_000_000;
+    raw.prepare("UPDATE restores SET phase = 'done', ended_at = ? WHERE id = 3").run(now);
     raw.prepare("UPDATE accounts SET state = 'active', operation = NULL").run();
-    expect(await stores.snapshot(INC, 'baseline')).toEqual(expect.any(String));
+    expect(await stores.snapshot(INC, 'baseline')).toEqual({ taken: expect.any(String) });
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 2 });
   });
 

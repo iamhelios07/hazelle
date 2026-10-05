@@ -28,7 +28,7 @@ export type StoreDb = {
   snapshots: {
     // Answers the snapshot's id once its file is durable and catalogued.
     take(kind: 'baseline' | 'checkpoint', operation: number | null): Promise<string>;
-    // The newest snapshot taken at or before the time and still within retention; null when there is none.
+    // The snapshot a rewind to the time lands on (db/account-db.ts snapshotFor); null when there is none.
     forTime(at: number): Promise<string | null>;
     // Throws when the snapshot's file is gone or no longer what its catalog row recorded.
     verify(id: string): Promise<void>;
