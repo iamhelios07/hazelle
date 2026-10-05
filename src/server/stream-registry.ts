@@ -5,8 +5,9 @@ import type { StreamStore } from './db/streams-db';
 // The reply streams of this process: at most one StreamBox per name, kept while its call runs or a reader reads it. A
 // name with no box is read from its stored pages; after a restart that is every name, and its reply ends as lost.
 export type Streams = {
-  start(name: string, body: { id: string; key: unknown; request: unknown }): Promise<Response>;
-  read(name: string, from: number): Promise<Response>;
+  // signal: the request's; its abort stops counting that request's reader, and the call runs on.
+  start(name: string, body: { id: string; key: unknown; request: unknown }, signal: AbortSignal): Promise<Response>;
+  read(name: string, from: number, signal: AbortSignal): Promise<Response>;
   stop(name: string): void;
   // The call ends, its readers end, then its rows go.
   drop(name: string): Promise<void>;
@@ -37,8 +38,8 @@ export function streamRegistry(store: StreamStore, upstream: Upstream): Streams 
     store.remove(name);
   };
   return {
-    start: (name, body) => box(name).start(body),
-    read: (name, from) => box(name).read(from),
+    start: (name, body, signal) => box(name).start(body, signal),
+    read: (name, from, signal) => box(name).read(from, signal),
     stop: (name) => boxes.get(name)?.stop(),
     drop,
     live: () => running().length,
