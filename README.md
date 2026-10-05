@@ -1,4 +1,4 @@
-# Hazelle (risu-alpha)
+# Hazelle
 
 A character chat app, written from scratch as an alternative to [RisuAI](https://github.com/kwaroran/RisuAI). It reads RisuAI's file formats and runs its bots, but shares none of its code.
 

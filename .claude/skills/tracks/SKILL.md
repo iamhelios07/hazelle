@@ -1,6 +1,6 @@
 ---
 name: tracks
-description: Split multi-part risu-alpha work into parallel agent tracks in worktrees. Use when a request has two or more independent parts that touch different files, or a change big enough that one agent would take long.
+description: Split multi-part Hazelle work into parallel agent tracks in worktrees. Use when a request has two or more independent parts that touch different files, or a change big enough that one agent would take long.
 ---
 
 # Parallel tracks

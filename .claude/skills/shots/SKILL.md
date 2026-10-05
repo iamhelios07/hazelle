@@ -1,6 +1,6 @@
 ---
 name: shots
-description: Take screenshots of risu-alpha screens and send them to the user. Use when a change alters how a screen looks or lays out (a new screen, panel, component or visual style), or when the user asks to see one. Skip it for a reorder, a copy or label change, or a fix a sentence can describe; offer it in one line instead.
+description: Take screenshots of Hazelle screens and send them to the user. Use when a change alters how a screen looks or lays out (a new screen, panel, component or visual style), or when the user asks to see one. Skip it for a reorder, a copy or label change, or a fix a sentence can describe; offer it in one line instead.
 ---
 
 # Screenshots

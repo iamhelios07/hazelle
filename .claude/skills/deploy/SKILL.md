@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: Deploy risu-alpha to the hosted machine (배포). Use when the user says 배포, deploy, or 올려 줘, after the work is committed and pushed.
+description: Deploy Hazelle to the hosted machine (배포). Use when the user says 배포, deploy, or 올려 줘, after the work is committed and pushed.
 ---
 
 # Deploy
