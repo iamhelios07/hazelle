@@ -39,7 +39,7 @@ export class Files {
       if (signal?.aborted) return { ok: false, error: 'stopped' };
       const puts = await Promise.all(
         missing.slice(start, start + UPLOADS).map(async (id) => {
-          const put = await this.store.reaching(() => this.request('PUT', `files/${id}`, bodies.get(id)!));
+          const put = await this.store.reaching(() => this.request('PUT', `files/${id}`, bodies.get(id)!), signal);
           if (!put.ok && REFUSED.has(put.error)) refused.add(id);
           return put;
         }),
@@ -64,9 +64,10 @@ export class Files {
     return { ok: true, data: { missing, maxBytes } };
   }
 
-  // A body that does not open answers 'unreadable', never empty bytes.
-  async read(ref: FileRef): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
-    const result = await this.store.reaching(() => this.request<Uint8Array<ArrayBuffer>>('GET', `files/${ref.id}`));
+  // A body that does not open answers 'unreadable', never empty bytes. The wait ends with signal (a backup's 중지), not
+  // only with the store.
+  async read(ref: FileRef, { signal }: { signal?: AbortSignal } = {}): Promise<ApiResult<Uint8Array<ArrayBuffer>>> {
+    const result = await this.store.reaching(() => this.request<Uint8Array<ArrayBuffer>>('GET', `files/${ref.id}`), signal);
     if (!result.ok) return result;
     const bytes = await openFile(ref, result.data);
     return bytes ? { ok: true, data: bytes } : { ok: false, error: 'unreadable' };
