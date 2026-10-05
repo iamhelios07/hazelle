@@ -11,7 +11,7 @@ Deploying is an external action. Run it only on the user's go-ahead for this bat
 
 1. Commit and push first. Then tag the release and push the tag: `/usr/bin/git tag vX.Y.Z`, `/usr/bin/git push origin vX.Y.Z`.
 2. The tag runs `.github/workflows/release.yml`: `npm run check`, the source archive of the tag's commit, the image for amd64 and arm64 on GHCR, and a release whose notes carry the image digest. Wait for it with `gh run watch`.
-3. Run `scripts/deploy.sh vX.Y.Z`. It needs a clean tree, `gh` logged in, docker, the Terraform state in `infra/` (for the machine's address) and ssh as root to the machine. It:
+3. Run `scripts/deploy.sh vX.Y.Z`. It needs a clean tree, `gh` logged in, docker, the Terraform state in `infra/` (for the machine's address) and ssh as root to the machine with no flags: `ssh root@<ip>` must sign in by itself, so the machine's key is named in `~/.ssh/config` (`Host <ip>`, `IdentityFile ~/.ssh/hazelle_vm`); without it the session ends with status 255 before the first line. It:
    - checks that the release's source archive and the one inside the image are the tag's commit;
    - from here on, in one ssh session, holds an flock on `/run/hazelle-deploy.lock` on the machine; a second deploy meanwhile exits 5 and changes nothing;
    - if that digest is already selected (a retry after exit 4 or a lost session), starts it if needed, checks health and stops;
