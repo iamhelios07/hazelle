@@ -13,9 +13,9 @@ const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 // A restore asks for a time at least this far back, so the snapshot chosen for it lies before the restore's own mark.
 const NEWEST_MS = 10 * MINUTE_MS;
-// Snapshots are kept for 30 days (db/account-db.ts). A day less leaves an operation time to reach its arming.
+// Snapshots are kept for 30 days (db/account-db.ts). A day less leaves an operation time to choose its target, which is
+// pinned from then on (backup/snapshots.ts), so nothing expires between choosing it and installing it.
 const OLDEST_MS = 29 * DAY_MS;
-const SNAPSHOT_LIFE_MS = 30 * DAY_MS;
 // Restarts that did not apply the armed rewind before the operation stops and waits for the operator.
 const ARM_TRIES = 3;
 // Steps one run takes before it stops: every phase once, the re-arms, and the compare-and-sets a parallel run won.
@@ -35,7 +35,18 @@ async function reload(env: Services, incarnation: string): Promise<Life | Unavai
 
 // left: the account's row is deleted, by this run or an earlier one. Its pictures are removed after the answer.
 // operator: the account is the installation's only operator, which neither path may delete.
-export async function leaveAccount(
+// Every change below runs inside a backup hold (backup/backups.ts), so a generation never captures one half done.
+export function leaveAccount(
+  env: Services,
+  ctx: Pick<ExecutionContext, 'waitUntil'>,
+  accountId: string,
+  incarnation: string,
+  operator: boolean,
+): Promise<'left' | 'busy' | 'unavailable' | 'operator'> {
+  return env.backups.hold(() => leave(env, ctx, accountId, incarnation, operator));
+}
+
+async function leave(
   env: Services,
   ctx: Pick<ExecutionContext, 'waitUntil'>,
   accountId: string,
@@ -93,7 +104,6 @@ type Operation = {
   verified: number;
   error: string | null;
   undone: string | null;
-  target_at: number;
 };
 
 const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
@@ -117,7 +127,7 @@ export async function beginRestore(env: Services, accountId: string, report: num
   const at = 'at' in from ? from.at : null;
   const undoes = 'undoes' in from ? from.undoes : null;
   const now = Date.now();
-  const [inserted] = await db.batch<{ id: number }>([
+  const [inserted] = await env.backups.hold(() => db.batch<{ id: number }>([
     db
       .prepare(
         `INSERT INTO restores (incarnation, report_id, at, undoes, timeline, phase, created_at, updated_at)
@@ -138,7 +148,7 @@ export async function beginRestore(env: Services, accountId: string, report: num
          FROM accounts WHERE id = ?5 AND state = 'restoring' AND changes() = 1`,
       )
       .bind(now, report, at, undoes, accountId),
-  ]);
+  ]));
   const id = inserted!.results[0]?.id;
   if (id !== undefined) return { begun: id };
   const why = await db
@@ -156,9 +166,12 @@ export async function beginRestore(env: Services, accountId: string, report: num
 export async function runRestore(env: Services, id: number): Promise<Run | null> {
   let arms = 0;
   for (let steps = 0; ; steps++) {
-    const operation = await readOperation(env.db, id);
-    if (!operation) return null;
-    const stop = steps === MAX_STEPS ? 'stuck' : await step(env, operation, () => ++arms > ARM_TRIES);
+    const stepped = await env.backups.hold(async () => {
+      const operation = await readOperation(env.db, id);
+      return operation && { operation, stop: steps === MAX_STEPS ? 'stuck' : await step(env, operation, () => ++arms > ARM_TRIES) };
+    });
+    if (!stepped) return null;
+    const { operation, stop } = stepped;
     if (stop === undefined) continue;
     if (stop !== null) {
       await env.db.prepare("UPDATE restores SET error = ?, updated_at = ? WHERE id = ? AND phase = ? AND phase != 'failed'").bind(stop, Date.now(), id, operation.phase).run();
@@ -171,14 +184,17 @@ export async function runRestore(env: Services, id: number): Promise<Run | null>
 // Gives the account back with its timeline unchanged, possible only before the rewind is armed. too-late: armed or
 // later, from where an operation only goes forward.
 export async function cancelRestore(env: Services, id: number): Promise<Run | null | 'too-late'> {
-  const operation = await readOperation(env.db, id);
-  if (!operation) return null;
-  if (operation.phase !== 'cancelled' && !(await release(env, operation, 'cancelled', BEFORE_ARMED, null))) {
-    const now = await readOperation(env.db, id);
-    if (!now) return null;
-    if (now.phase !== 'cancelled') return 'too-late';
-  }
-  return runRestore(env, id);
+  const cancelled = await env.backups.hold(async () => {
+    const operation = await readOperation(env.db, id);
+    if (!operation) return null;
+    if (operation.phase !== 'cancelled' && !(await release(env, operation, 'cancelled', BEFORE_ARMED, null))) {
+      const now = await readOperation(env.db, id);
+      if (!now) return null;
+      if (now.phase !== 'cancelled') return 'too-late' as const;
+    }
+    return 'cancelled' as const;
+  });
+  return cancelled === 'cancelled' ? runRestore(env, id) : cancelled;
 }
 
 // undefined: go on from the re-read operation. null: stop, nothing to record. A string: stop with this error code.
@@ -214,9 +230,7 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       return undefined;
     }
     case 'targeted':
-      // Past armed there is no way back, so a snapshot that may no longer exist fails the operation here.
-      if (operation.target_at < Date.now() - SNAPSHOT_LIFE_MS) await release(env, operation, 'failed', ['targeted'], 'target-expired');
-      else await advance(db, id, 'targeted', 'armed');
+      await advance(db, id, 'targeted', 'armed');
       return undefined;
     case 'armed': {
       const answer = await store(env, incarnation).marked(incarnation, id);
@@ -302,8 +316,7 @@ function terminalLog(db: Db, action: string, operation: Operation, error: string
 function readOperation(db: Db, id: number) {
   return db
     .prepare(
-      `SELECT r.id, r.incarnation, r.at, r.undoes, r.timeline, r.target, r.phase, r.verified, r.error, u.checkpoint AS undone,
-         COALESCE(r.at, u.checkpoint_at) AS target_at
+      `SELECT r.id, r.incarnation, r.at, r.undoes, r.timeline, r.target, r.phase, r.verified, r.error, u.checkpoint AS undone
        FROM restores r LEFT JOIN restores u ON u.id = r.undoes WHERE r.id = ?`,
     )
     .bind(id)

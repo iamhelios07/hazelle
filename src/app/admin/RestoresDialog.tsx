@@ -1,6 +1,6 @@
 import { History, MoreHorizontal, Play, Undo2, X } from 'lucide-react';
 import { useState } from 'react';
-import { beginRestore, continueRestore, readRestores, type Report, type Restore, type RestoreAction, type RestorePhase, type RestoreRun } from '../../runtime/admin';
+import { beginRestore, continueRestore, readRestores, readSnapshotTime, type Report, type Restore, type RestoreAction, type RestorePhase, type RestoreRun } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
 import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';
@@ -32,7 +32,6 @@ const wordsOf = ({ phase, verified }: RestoreRun): Words => (phase === 'done' ? 
 // The server's error codes this page knows; another shows as the server wrote it.
 const ERRORS: Record<string, string> = {
   'too-early': '그 시각의 기록이 저장소에 없어요. 더 늦은 시각으로 새로 복원해 주세요.',
-  'target-expired': '복원할 시점이 30일 보관 기간을 넘겼어요.',
   'store-unavailable': '그 계정의 저장소가 답하지 않았어요. 잠시 뒤 이어서 해 주세요.',
   'not-rewound': '복원을 걸었지만 저장소가 아직 그 시점으로 돌아가지 않았어요. 잠시 뒤 이어서 해 주세요.',
   'not-verified': '저장소가 아직 계정을 다시 연 것으로 보지 않아요. 잠시 뒤 마무리 확인을 해 주세요.',
@@ -62,7 +61,8 @@ function described(restore: Restore): string {
   return `${wordsOf(restore).says}${error}${undo}`;
 }
 
-type Asking = { kind: 'restore'; at: number } | { kind: 'undo'; restore: Restore } | { kind: 'resume'; restore: Restore };
+// takenAt: when the snapshot the restore lands on was taken, shown before it is confirmed.
+type Asking = { kind: 'restore'; at: number; takenAt: number } | { kind: 'undo'; restore: Restore } | { kind: 'resume'; restore: Restore };
 
 export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Restoring; onClose: () => void; onActed: () => void }) {
   const { accountId, username, report } = restoring;
@@ -70,7 +70,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
   const restores = useLoaded(() => readRestores(accountId));
   const [time, setTime] = useState('');
   const [asking, setAsking] = useState<Asking | null>(null);
-  const { busy, run } = useAttempt();
+  const { busy, failure, run } = useAttempt();
   const at = typedTime(time);
 
   // The server runs it in the request and the operation keeps its phase if the page goes, so the request is not stopped
@@ -92,13 +92,22 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
       return null;
     });
 
+  const ask = (at: number) =>
+    run(async () => {
+      const taken = await readSnapshotTime(accountId, at);
+      if (!taken.ok) return describeFailure(taken);
+      if (taken.data === null) return restoreError('too-early');
+      setAsking({ kind: 'restore', at, takenAt: taken.data });
+      return null;
+    });
+
   const act = (restore: Restore, action: RestoreAction) =>
     action === 'resume' && BEFORE_ARMED.includes(restore.phase) ? setAsking({ kind: 'resume', restore }) : void go(() => continueRestore(restore.id, action));
 
   if (asking?.kind === 'restore') {
     return (
-      <ConfirmDialog title={`${username} 계정을 ${moment(asking.at)} 시점으로 복원할까요?`} confirm="복원" icon={History} busy={busy} onConfirm={() => void go(() => beginRestore(accountId, { report: report!.id, at: asking.at }))} onClose={() => setAsking(null)}>
-        그 시각 뒤에 저장한 글, 캐릭터, 채팅, 설정은 사라지고 그림은 남아요. 복원하는 동안 그 계정은 저장하거나 불러올 수 없어요. 복원 바로 전 모습을 기록해 두어서, 29일 안에 그 계정이 다시 알리면 복원 전으로 되돌릴 수 있어요.
+      <ConfirmDialog title={`${username} 계정을 ${moment(asking.takenAt)} 기록으로 복원할까요?`} confirm="복원" icon={History} busy={busy} onConfirm={() => void go(() => beginRestore(accountId, { report: report!.id, at: asking.at }))} onClose={() => setAsking(null)}>
+        그 기록 뒤에 저장한 글, 캐릭터, 채팅, 설정은 사라지고 그림은 남아요. 복원하는 동안 그 계정은 저장하거나 불러올 수 없어요. 복원 바로 전 모습을 기록해 두어서, 29일 안에 그 계정이 다시 알리면 복원 전으로 되돌릴 수 있어요.
       </ConfirmDialog>
     );
   }
@@ -128,10 +137,11 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
               value={time}
               onChange={setTime}
               placeholder={TIME_FORMAT}
-              help="그 계정의 글, 캐릭터, 채팅, 설정을 이 시각의 모습으로 복원해요. 10분 전부터 29일 전까지 고를 수 있어요."
+              help="그 계정의 글, 캐릭터, 채팅, 설정을 이 시각이나 그 전의 가장 가까운 기록으로 복원해요. 10분 전부터 29일 전까지 고를 수 있어요."
               error={time.trim() !== '' && at === undefined ? `${TIME_FORMAT} 꼴로 넣어 주세요.` : undefined}
             />
-            <Button icon={History} busy={busy} disabled={at === undefined} onClick={() => setAsking({ kind: 'restore', at: at! })}>
+            {failure && <Callout tone="warn">{failure}</Callout>}
+            <Button icon={History} busy={busy} disabled={at === undefined} onClick={() => void ask(at!)}>
               이 시각으로 복원
             </Button>
           </Stack>
@@ -146,7 +156,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
                 return (
                   <ListItem
                     key={restore.id}
-                    title={restore.at === null ? '복원 전으로 되돌리기' : `${moment(restore.at)} 시점으로 복원`}
+                    title={restore.at === null ? '복원 전으로 되돌리기' : `${moment(restore.targetAt ?? restore.at)} ${restore.targetAt === null ? '시점' : '기록'}으로 복원`}
                     tags={[wordsOf(restore).tag]}
                     description={described(restore)}
                     aside={ago(restore.updatedAt)}

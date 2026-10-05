@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { serviceReads, type Write } from '../account-store';
-import { accountPath, accountRegistry, type Stores } from './account-db';
+import { reconcile } from '../reconcile';
+import { accountPath, accountRegistry, snapshotPath, type Stores } from './account-db';
 import { serviceDb, type Db } from './service-db';
 
 const INC = 'a'.repeat(32);
@@ -135,6 +136,49 @@ describe('the account registry', () => {
     raw.prepare("INSERT INTO snapshots (id, incarnation, kind, taken_at, bytes, sha256) VALUES ('lost', ?, 'baseline', 1500000, 1, 'x')").run(INC);
     expect(await store().target(INC, 3, { at: 1_600_000 })).toEqual({ unavailable: true });
     expect(await store().target(INC, 3, { at: 1_400_000 })).toEqual({ tooEarly: true });
+  });
+
+  it('publishes a snapshot only once its file is durable: a take killed before its row leaves an orphan the hourly sweep reclaims', async () => {
+    await signup();
+    await write(put(A, 'x'));
+    const killed: Db = { ...db, prepare: (sql) => (sql.startsWith('INSERT INTO snapshots') ? ({ bind: () => ({ run: () => Promise.reject(new Error('killed')) }) } as never) : db.prepare(sql)) };
+    const dying = accountRegistry(dir, killed, serviceReads(db), () => now);
+    await expect(dying.snapshot(INC, 'baseline')).rejects.toThrow('killed');
+    dying.close();
+    const [orphan, ...more] = readdirSync(join(dir, 'snapshots', INC));
+    expect(more).toEqual([]);
+    expect(orphan).toMatch(/^[^.].*\.sqlite\.gz$/);
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 0 });
+    expect((await reconcile(dir, db, Date.now())).removed).toEqual([]);
+    const id = await stores.snapshot(INC, 'baseline');
+    expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toEqual([`snapshots/${INC}/${orphan}`]);
+    expect(existsSync(snapshotPath(dir, INC, id))).toBe(true);
+  });
+
+  it('installs whole across a kill: before the rename the old file is intact and the next start installs, after it the next start installs nothing', async () => {
+    await signup();
+    await write(put(A, 'old'));
+    now = 2_000_000;
+    const target = await stores.snapshot(INC, 'baseline');
+    await write(put(A, 'new', 1));
+    raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7 WHERE incarnation = ?").run(INC);
+    raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 2500000, 't2', ?, 'armed', 1, 1)").run(INC, target);
+    const restart = () => {
+      stores.close();
+      stores = accountRegistry(dir, db, serviceReads(db), () => now);
+    };
+    // Killed between the prepared file's checkpoint and the rename: a prepared file beside the live one.
+    writeFileSync(join(dir, 'accounts', `${INC}.install-dead.sqlite`), 'prepared, never renamed');
+    restart();
+    expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'new' }]);
+    expect(stores.inspect(INC).exec('PRAGMA quick_check')).toEqual([{ quick_check: 'ok' }]);
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
+    // Killed after the rename: the marker says it is done, so even with its snapshot gone nothing is installed again.
+    restart();
+    rmSync(snapshotPath(dir, INC, target));
+    expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target });
+    expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
+    expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
   });
 
   it('closes an idle session after ten minutes and reopens it on the next call', async () => {

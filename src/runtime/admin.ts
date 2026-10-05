@@ -4,7 +4,19 @@ import { page } from './pages';
 // Only the account the Worker names passes; any other is answered not-admin.
 
 // The caps every account has unless given its own; null is no cap. fileBytes: every account's pictures together.
-export type Service = { signupCap: number; accountBytesCap: number | null; accountFileBytesCap: number | null; accounts: number; fileBytes: number };
+// backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says needs the
+// operator (server/backup/freshness).
+export type BackupWarning = 'backup-stale' | 'disk-full';
+export type Service = {
+  signupCap: number;
+  accountBytesCap: number | null;
+  accountFileBytesCap: number | null;
+  accounts: number;
+  fileBytes: number;
+  backupAgeHours: number | null;
+  diskFreePercent: number;
+  warnings: BackupWarning[];
+};
 // An account's own cap: bytes, null for none, or 'default' for the service's.
 export type OwnCap = number | null | 'default';
 // restoring: held by a restore until it ends. leaving: its deletion stopped before the end; removing it again finishes it.
@@ -75,13 +87,14 @@ export const removeAccount = (account: string) => api<undefined>('DELETE', `admi
 // on a report that account sent. The phases run in order; from armed on, a restore can only go forward.
 export type RestorePhase = 'begun' | 'fenced' | 'checkpointed' | 'targeted' | 'armed' | 'rewound' | 'done' | 'failed' | 'cancelled';
 export type RestoreAction = 'resume' | 'cancel' | 'finalize';
-// at: the time asked for, null for an undo. verified: the account was seen open again after done. actions: what the
-// server allows in this phase.
+// at: the time asked for, null for an undo. targetAt: when the snapshot it rewinds to was taken, null until chosen.
+// verified: the account was seen open again after done. actions: what the server allows in this phase.
 export type Restore = {
   id: number;
   reportId: number;
   at: number | null;
   undoes: number | null;
+  targetAt: number | null;
   phase: RestorePhase;
   verified: boolean;
   error: string | null;
@@ -97,6 +110,12 @@ export type RestoreAsk = { report: number; at: number } | { report: number; undo
 export async function readRestores(account: string): Promise<ApiResult<Restore[]>> {
   const answer = await api<{ restores: Restore[] }>('GET', `admin/accounts/${account}/restores`);
   return answer.ok ? { ok: true, data: answer.data.restores } : answer;
+}
+
+// When the snapshot a restore to `at` would land on was taken; null for none.
+export async function readSnapshotTime(account: string, at: number): Promise<ApiResult<number | null>> {
+  const answer = await api<{ takenAt: number | null }>('GET', `admin/accounts/${account}/snapshot?at=${at}`);
+  return answer.ok ? { ok: true, data: answer.data.takenAt } : answer;
 }
 
 // The server runs the restore in this request, so the answer comes when it is done or stopped.

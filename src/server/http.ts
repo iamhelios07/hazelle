@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Refused } from './account-store';
+import type { Backups } from './backup/backups';
 import type { Stores } from './db/account-db';
 import type { Db } from './db/service-db';
 import type { Bucket } from './files/disk-bucket';
@@ -16,7 +17,7 @@ export type Account = { id: string; username: string; suspended: boolean; incarn
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // What the process gives every request (node.ts; testing.ts builds the same set over a temp directory). outbound: the
-// one way a provider is reached. limits: calls per account, botCalls per account and chat.
+// one way a provider is reached. limits: calls per account, botCalls per account and chat. backups: the daily job.
 export type Services = {
   db: Db;
   files: Bucket;
@@ -24,6 +25,7 @@ export type Services = {
   streams: Streams;
   outbound: Upstream;
   limits: { calls: Limiter; botCalls: Limiter };
+  backups: Backups;
 };
 
 export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number } };
