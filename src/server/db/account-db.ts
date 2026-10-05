@@ -22,6 +22,12 @@ const SCHEMA = [
   'CREATE INDEX objects_parent_rev ON objects (parent_id, rev)',
   'CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
 ];
+// Over an accounts row aliased `a`: whether a baseline may be taken of the account's file now. Before an operation's
+// checkpoint the file is still the account's own; from the checkpoint until the operation ends it is about to be
+// replaced or already was, and a baseline taken then would read, once the rewind is done, as the account after it.
+export const TAKES_BASELINE = (a: string) =>
+  `(${a}.state = 'active' OR (${a}.state = 'restoring' AND (SELECT phase FROM restores WHERE id = ${a}.operation) IN ('begun', 'fenced')))`;
+
 // How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
 export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_HANDLES = 256;
@@ -242,9 +248,10 @@ export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.
   getByName(incarnation: string): StoreStub;
   prepare(incarnation: string, timeline: string): Promise<void>;
-  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles.
-  snapshot(incarnation: string, kind: 'baseline'): Promise<string>;
-  // What a rewind of the account to `at` would land on now; throws StoreUnavailable for a catalogued file that is gone.
+  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles. null: refused,
+  // since the account takes no baseline now (TAKES_BASELINE).
+  snapshot(incarnation: string, kind: 'baseline'): Promise<string | null>;
+  // What a rewind of the account to `at` would land on now; throws StoreUnavailable for a catalogued file gone or altered.
   snapshotAt(incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null>;
   evictIdle(now?: number): void;
   close(): void;
@@ -338,6 +345,10 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
     snapshot: (incarnation, kind) => {
       const held = entry(incarnation);
       return enqueue(held, async () => {
+        // Read here, not from the session's lifecycle: that is cached, and says restoring until the store next
+        // reloads after an operation is done. The checkpoint goes through this queue, so none comes in between.
+        const free = await service.prepare(`SELECT ${TAKES_BASELINE('a')} AS free FROM accounts a WHERE incarnation = ?`).bind(incarnation).first<number>('free');
+        if (!free) return null;
         const opened = !held.session;
         const { db } = await session(incarnation, held);
         try {

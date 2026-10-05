@@ -170,6 +170,21 @@ describe('a backup generation', () => {
     expect(sha(readFileSync(join(generationsDir(t.dir), POOL, id)))).toBe(id);
   });
 
+  it('names a baseline from today for an account whose rewind was cut off before its checkpoint', async () => {
+    await signedUp('operator');
+    const paused = await signedUp('paused');
+    const now = Date.now();
+    t.clock.now = () => now - 2 * DAY_MS;
+    const old = (await t.stores.snapshot(paused.incarnation, 'baseline'))!;
+    await t.env.db.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (9, ?, 1, 1, 't', 'fenced', 1, 1)").bind(paused.incarnation).run();
+    await t.lifecycle(paused.id, "state = 'restoring', operation = 9");
+    expect((await t.daily(now)).generation).toEqual({ outcome: 'ok', error: null });
+    const { accounts } = await newest();
+    const baseline = accounts.find(({ incarnation }) => incarnation === paused.incarnation)!.baseline;
+    expect(baseline).not.toBe(old);
+    expect(baseline).toMatch(new RegExp(`^${now}-`));
+  });
+
   it('collects a generation at 30 days and with it only the pictures no kept generation names', async () => {
     await signedUp('operator');
     const keeper = await signedUp('keeper');

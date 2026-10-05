@@ -1,7 +1,7 @@
 import type { Services } from '../http';
 import { freshness, type Freshness } from './freshness';
 import { captureGeneration, expireGenerations } from './generation';
-import { dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
+import { DAY_MS, dayStart, expireSnapshots, staleBaselines, takeBaselines } from './snapshots';
 
 // The daily job, the gate a backup generation holds, and their record in backup_runs (docs/research/docker-port-plan.md
 // §10). One job runs at a time.
@@ -36,6 +36,7 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
   let capturing: Promise<void> | null = null;
   let drained: (() => void) | null = null;
   let running: ReturnType<Backups['daily']> | null = null;
+  let ticking: Promise<void> | null = null;
 
   const hold = async <T>(work: () => Promise<T>): Promise<T> => {
     while (capturing) await capturing;
@@ -82,13 +83,14 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
 
   const daily = (env: Services, now: number) => {
     running ??= (async () => {
+      const started = Date.now();
       const snapshots = await recorded(env, 'daily', now, async () => {
-        const { taken, failed } = await takeBaselines(env, await staleBaselines(env, ['active'], dayStart(now)));
+        const { taken, skipped, failed } = await takeBaselines(env, await staleBaselines(env, now, dayStart(now)));
         const expired = await expireSnapshots(env, dataDir, now);
-        return { error: failed.length ? 'baseline-failed' : null, detail: { taken, failed: failed.length, expired } };
+        return { error: failed.length ? 'baseline-failed' : null, detail: { taken, skipped, failed: failed.length, expired } };
       });
       const generation = await recorded(env, 'generation', now, async () => {
-        const { id, gateMs, manifest } = await captureGeneration(env, dataDir, now, exclusive);
+        const { id, gateMs, manifest } = await captureGeneration(env, dataDir, now, () => now + Date.now() - started, exclusive);
         const expired = await expireGenerations(dataDir, now);
         return { error: null, generation: id, gateMs, detail: { accounts: manifest.accounts.length, pictures: manifest.pictures.length, expired } };
       });
@@ -103,7 +105,7 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
   const alert = async (env: Services, now: number) => {
     if (webhook === null) return;
     const day = dayStart(now);
-    const failed = await env.db.prepare("SELECT 1 FROM backup_runs WHERE outcome = 'failed' AND started_at >= ?").bind(day).first();
+    const failed = await env.db.prepare("SELECT 1 FROM backup_runs WHERE outcome = 'failed' AND started_at >= ?1 AND started_at < ?1 + ?2").bind(day, DAY_MS).first();
     const standing = [...(await freshness(env, dataDir, now)).warnings, ...(failed === null ? [] : ['job-failed'])];
     for (const condition of standing) {
       if ((await env.db.prepare('SELECT 1 FROM alerts_sent WHERE condition = ? AND day = ?').bind(condition, day).first()) !== null) continue;
@@ -125,16 +127,20 @@ export function backups(dataDir: string, hour: number, webhook: string | null): 
     hold,
     daily,
     freshness: (env, now) => freshness(env, dataDir, now),
-    tick: async (env, now) => {
-      if (running) return;
-      if (now - dayStart(now) >= hour * HOUR_MS) {
-        const done = await env.db
-          .prepare("SELECT 1 FROM backup_runs WHERE kind = 'generation' AND outcome = 'ok' AND started_at >= ?")
-          .bind(dayStart(now))
-          .first();
-        if (done === null) await daily(env, now);
-      }
-      await alert(env, now);
-    },
+    // One tick at a time: a second that comes while one runs gets that one, so no alert goes out twice. Today is the
+    // UTC day itself, not "from its start on": a run stamped by a clock since put back belongs to no day yet.
+    tick: (env, now) =>
+      (ticking ??= (async () => {
+        if (now - dayStart(now) >= hour * HOUR_MS) {
+          const done = await env.db
+            .prepare("SELECT 1 FROM backup_runs WHERE kind = 'generation' AND outcome = 'ok' AND started_at >= ?1 AND started_at < ?1 + ?2")
+            .bind(dayStart(now), DAY_MS)
+            .first();
+          if (done === null) await daily(env, now);
+        }
+        await alert(env, now);
+      })().finally(() => {
+        ticking = null;
+      })),
   };
 }

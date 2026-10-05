@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { accountPath, snapshotPath } from '../db/account-db';
 import { sessionCookie, signupBody, testApp } from '../testing';
+import { listGenerations, readManifest } from './generation';
 import { DAY_MS, dayStart, expireSnapshots } from './snapshots';
 
 let t: Awaited<ReturnType<typeof testApp>>;
@@ -49,6 +50,17 @@ describe('the daily job', () => {
     expect(await t.stores.snapshotAt(incarnation, first + 6 * DAY_MS)).toMatchObject({ takenAt: first + 4 * DAY_MS });
     // 30 real snapshots and generations: past 5 s when the whole suite runs beside it.
   }, 30_000);
+
+  it('captures the day again after the clock jumps back across midnight, past a run and a baseline stamped in the future', async () => {
+    const incarnation = await signedUp('jin');
+    const today = dayStart(Date.now()) + 4 * HOUR_MS;
+    await tickAt(today + 2 * DAY_MS);
+    await tickAt(today);
+    expect((await baselines(incarnation)).results.map(({ takenAt }) => takenAt)).toEqual([today, today + 2 * DAY_MS]);
+    const generation = (await listGenerations(t.dir)).find(({ capturedAt }) => capturedAt === today)!;
+    const { accounts } = (await readManifest(join(t.dir, 'backup', generation.id)))!;
+    expect(accounts[0]!.baseline).toMatch(new RegExp(`^${today}-`));
+  });
 
   it('takes a baseline beside a checkpoint younger than a day, and records a run that failed an account, then tries again', async () => {
     const live = await signedUp('jin');

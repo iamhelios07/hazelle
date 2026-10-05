@@ -35,6 +35,11 @@ const armed = (operation: number, target: string) => {
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline, operation) VALUES (?, 'jin', 'h', 1, ?, 'restoring', 't1', ?) ON CONFLICT (incarnation) DO UPDATE SET state = 'restoring', operation = excluded.operation").run(A, INC, operation);
   raw.prepare("INSERT INTO restores (id, incarnation, report_id, timeline, target, phase, created_at, updated_at) VALUES (?, ?, 1, 't2', ?, 'armed', 1, 1)").run(operation, INC, target);
 };
+// The service holds the account, active, as it does whenever the daily job takes a baseline of it.
+const baseline = async () => {
+  raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline) VALUES (?, 'jin', 'h', 1, ?, 'active', 't1') ON CONFLICT DO NOTHING").run(A, INC);
+  return (await stores.snapshot(INC, 'baseline'))!;
+};
 const untouched = () => expect(stores.inspect(INC).exec('SELECT rev, timeline FROM head')).toEqual([{ rev: 0, timeline: 't1' }]);
 
 beforeEach(async () => {
@@ -244,7 +249,7 @@ describe('timeline', () => {
 
   it('refuses old work after a rewind even when the head passes its cursor and the object regains its revision', async () => {
     await write(put(A, { body: 'checkpoint' }));
-    await stores.snapshot(INC, 'baseline');
+    await baseline();
     const at = now;
     now += 1000;
     await write(put(A, { body: 'old branch', baseRev: 1 }));
@@ -372,7 +377,7 @@ describe('restore', () => {
   it('rewinds to a time before the mark, which is then gone, and undoes to the checkpoint', async () => {
     await write(put(A, { body: 'kept' }));
     const at = (now += 1000);
-    await stores.snapshot(INC, 'baseline');
+    await baseline();
     now += 1000;
     await write(put(B, { body: 'later' }));
     row = restoring(7);
@@ -413,7 +418,7 @@ describe('restore', () => {
 
   it('keeps the original undo usable across a repeated arm and refuses arming once the phase advances', async () => {
     await write(put(A, { body: 'target' }));
-    await stores.snapshot(INC, 'baseline');
+    await baseline();
     const at = now;
     now += 1000;
     await write(put(B, { body: 'undo' }));

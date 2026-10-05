@@ -38,6 +38,7 @@ async function signup(state = 'active', timeline = 't1') {
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline) VALUES (?, 'jin', 'h', 1, ?, ?, ?)").run(A, INC, state, timeline);
 }
 const store = () => stores.getByName(INC);
+const baseline = async () => (await stores.snapshot(INC, 'baseline'))!;
 const write = (...writes: Write[]) => store().batch(INC, 't1', writes, null);
 const bodies = async () => {
   const page = (await store().feed(INC, { timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null })) as { changes: { id: string; body: string | null }[] };
@@ -92,7 +93,7 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
-    const id = await stores.snapshot(INC, 'baseline');
+    const id = await baseline();
     const row = raw.prepare('SELECT kind, taken_at, bytes, sha256 FROM snapshots WHERE id = ?').get(id) as { kind: string; taken_at: number; bytes: number; sha256: string };
     expect(row).toMatchObject({ kind: 'baseline', taken_at: 2_000_000 });
     expect(row.bytes).toBeGreaterThan(0);
@@ -108,7 +109,7 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
-    const target = await stores.snapshot(INC, 'baseline');
+    const target = await baseline();
     now = 3_000_000;
     await write(put(A, 'new', 1));
     raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7 WHERE incarnation = ?").run(INC);
@@ -133,7 +134,7 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'before the rewind'));
     now = 1_500_000;
-    const before = await stores.snapshot(INC, 'baseline');
+    const before = await baseline();
     raw.prepare("INSERT INTO restores (incarnation, report_id, at, timeline, checkpoint_at, phase, created_at, updated_at, ended_at) VALUES (?, 1, 1, 't2', 1900000, 'done', 1, 1, 4000000)").run(INC);
     now = 5_000_000;
     expect(await stores.snapshotAt(INC, 3_000_000)).toEqual({ id: before, takenAt: 1_500_000 });
@@ -143,8 +144,9 @@ describe('the account registry', () => {
   it('answers unavailable, not too early, when a catalogued snapshot has lost its file or no longer matches its row, for a time and for an explicit target', async () => {
     await signup('restoring');
     raw.prepare('UPDATE accounts SET operation = 3').run();
+    raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (3, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
     now = 1_500_000;
-    const altered = await stores.snapshot(INC, 'baseline');
+    const altered = await baseline();
     const path = snapshotPath(dir, INC, altered);
     const bytes = readFileSync(path);
     bytes[bytes.length - 1]! ^= 1;
@@ -162,7 +164,7 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
-    const target = await stores.snapshot(INC, 'baseline');
+    const target = await baseline();
     const rewind = async (operation: number) => {
       raw.prepare("UPDATE accounts SET state = 'restoring', operation = ? WHERE incarnation = ?").run(operation, INC);
       raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (?, ?, 1, 2500000, 't1', ?, 'armed', 1, 1)").run(operation, INC, target);
@@ -190,7 +192,7 @@ describe('the account registry', () => {
     expect(orphan).toMatch(/^[^.].*\.sqlite\.gz$/);
     expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 0 });
     expect((await reconcile(dir, db, Date.now())).removed).toEqual([]);
-    const id = await stores.snapshot(INC, 'baseline');
+    const id = await baseline();
     expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toEqual([`snapshots/${INC}/${orphan}`]);
     expect(existsSync(snapshotPath(dir, INC, id))).toBe(true);
   });
@@ -199,7 +201,7 @@ describe('the account registry', () => {
     await signup();
     await write(put(A, 'old'));
     now = 2_000_000;
-    const target = await stores.snapshot(INC, 'baseline');
+    const target = await baseline();
     await write(put(A, 'new', 1));
     raw.prepare("UPDATE accounts SET state = 'restoring', operation = 7 WHERE incarnation = ?").run(INC);
     raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, target, phase, created_at, updated_at) VALUES (7, ?, 1, 2500000, 't2', ?, 'armed', 1, 1)").run(INC, target);
@@ -219,6 +221,20 @@ describe('the account registry', () => {
     expect(await store().marked(INC, 7)).toEqual({ marked: false, installedFrom: target, installedOp: 7 });
     expect(stores.inspect(INC).exec('SELECT body FROM objects')).toEqual([{ body: 'old' }]);
     expect((await reconcile(dir, db, Date.now() + 61 * 60_000)).removed).toContain(`accounts/${INC}.install-dead.sqlite`);
+  });
+
+  it('takes a baseline before an operation’s checkpoint and after its end, read from the service, and refuses one between', async () => {
+    await signup('restoring');
+    raw.prepare('UPDATE accounts SET operation = 3').run();
+    raw.prepare("INSERT INTO restores (id, incarnation, report_id, at, timeline, phase, created_at, updated_at) VALUES (3, ?, 1, 1, 't2', 'fenced', 1, 1)").run(INC);
+    expect(await store().status(INC)).toMatchObject({ state: 'restoring' });
+    expect(await stores.snapshot(INC, 'baseline')).toEqual(expect.any(String));
+    raw.prepare("UPDATE restores SET phase = 'checkpointed' WHERE id = 3").run();
+    expect(await stores.snapshot(INC, 'baseline')).toBeNull();
+    raw.prepare("UPDATE restores SET phase = 'done' WHERE id = 3").run();
+    raw.prepare("UPDATE accounts SET state = 'active', operation = NULL").run();
+    expect(await stores.snapshot(INC, 'baseline')).toEqual(expect.any(String));
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM snapshots').get()).toEqual({ n: 2 });
   });
 
   it('closes an idle session after ten minutes and reopens it on the next call', async () => {

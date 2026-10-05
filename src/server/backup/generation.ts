@@ -68,8 +68,10 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
   try {
     const all = <T>(sql: string, ...binds: (string | number)[]) => db.prepare(sql).all(...binds) as T[];
     const accounts = all<{ incarnation: string; state: 'active' | 'restoring' | 'leaving'; baseline: string | null }>(
-      `SELECT incarnation, state, (SELECT id FROM snapshots s WHERE s.incarnation = a.incarnation AND kind = 'baseline' ORDER BY taken_at DESC, id DESC LIMIT 1) AS baseline
+      `SELECT incarnation, state,
+         (SELECT id FROM snapshots s WHERE s.incarnation = a.incarnation AND kind = 'baseline' AND taken_at <= ?1 ORDER BY taken_at DESC, id DESC LIMIT 1) AS baseline
        FROM accounts a ORDER BY incarnation`,
+      now,
     );
     const unbacked = accounts.filter(({ state, baseline }) => state !== 'leaving' && baseline === null);
     if (unbacked.length) throw new Error(`generation: ${unbacked.length} accounts have no baseline`);
@@ -102,13 +104,15 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
   }
 }
 
-// Holds the gate (exclusive) while it brings every account's baseline up to its last finished rewind, snapshots the
-// service, and links what that snapshot names; compresses and writes the manifest after. gateMs: how long lifecycle
-// operations waited on it.
+// Holds the gate (exclusive) while it brings every account's baseline up to its last finished rewind (and one restoring
+// before its checkpoint up to today), snapshots the service, and links what that snapshot names; compresses and writes
+// the manifest after. now: the job's time, which names the generation; clock: that time moved on by the job's run, so
+// the baselines the job itself took are never ahead of it. gateMs: how long lifecycle operations waited on it.
 export async function captureGeneration(
   env: Services,
   dataDir: string,
   now: number,
+  clock: () => number,
   exclusive: <T>(work: () => Promise<T>) => Promise<{ value: T; gateMs: number }>,
 ): Promise<{ id: string; gateMs: number; manifest: Manifest }> {
   const id = `${now}-${randomBytes(4).toString('hex')}`;
@@ -119,10 +123,10 @@ export async function captureGeneration(
   const plain = join(root, 'service.sqlite');
   const { value: named, gateMs } = await exclusive(async () => {
     // An older baseline would restore the account as it was before its last rewind.
-    const { failed } = await takeBaselines(env, await staleBaselines(env, ['active', 'restoring'], 0));
+    const { failed } = await takeBaselines(env, await staleBaselines(env, clock(), 0));
     if (failed.length) throw new Error(`generation: ${failed.length} accounts could not be brought up to their last rewind`);
     await env.db.prepare(`VACUUM INTO '${plain.replaceAll("'", "''")}'`).run();
-    const { named, sources } = readNamed(plain, now);
+    const { named, sources } = readNamed(plain, clock());
     const dirs = new Set<string>([pool]);
     for (const snapshot of named.snapshots) {
       const target = join(root, snapshot.path);
