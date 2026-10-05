@@ -27,6 +27,14 @@ const SCHEMA = [
 // replaced or already was, and a baseline taken then would read, once the rewind is done, as the account after it.
 export const TAKES_BASELINE = (a: string) =>
   `(${a}.state = 'active' OR (${a}.state = 'restoring' AND (SELECT phase FROM restores WHERE id = ${a}.operation) IN ('begun', 'fenced')))`;
+// Over an accounts row aliased `a` and a time `now` (a bind): `column` of the account's current baseline, its newest
+// taken by `now` and not before the last rewind finished on it, or null. A rewind replaces the file, and the installed
+// head.rev can equal the one an older baseline recorded, so only the current baseline's rev says the file is unchanged.
+// A baseline stamped after `now` is evidence of a clock since put back, not of the account's state.
+export const CURRENT_BASELINE = (column: 'taken_at' | 'rev', a: string, now: string) =>
+  `SELECT ${column} FROM snapshots WHERE incarnation = ${a}.incarnation AND kind = 'baseline' AND taken_at <= ${now}
+     AND taken_at >= COALESCE((SELECT MAX(ended_at) FROM restores WHERE incarnation = ${a}.incarnation AND phase = 'done'), -1)
+   ORDER BY taken_at DESC, id DESC LIMIT 1`;
 
 // How long a snapshot, a backup generation and an ended operation's pins last; a finished rewind's undo too.
 export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -96,18 +104,21 @@ function corruptOr(error: unknown): unknown {
   return code !== undefined && CORRUPT_CODES.has(code) ? new StoreUnavailable('corrupt') : error;
 }
 
-// The snapshot a rewind to `at` lands on: the newest taken at or before it, within retention, and taken after the
-// checkpoint of every rewind finished by then (ended_at, not the checkpoint's time: one that finished after `at` had
-// not replaced anything yet), since one taken before such a rewind holds the state it replaced.
+// The snapshot a rewind to `at` lands on: the newest taken at or before it, and taken after the checkpoint of every
+// rewind finished by then (ended_at, not the checkpoint's time: one that finished after `at` had not replaced anything
+// yet), since one taken before such a rewind holds the state it replaced.
+// No age cut here: an account unchanged for longer than retention has only an old baseline, and that baseline is its
+// state at `at`. How far back a rewind may ask is lifecycle's request window; retention keeps the baseline that window
+// needs (backup/snapshots.ts).
 // A catalogued snapshot whose file is gone or altered is a storage failure, not "too early".
-export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number, now: number): Promise<{ id: string; takenAt: number } | null> {
+export async function snapshotFor(dataDir: string, service: Db, incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null> {
   const row = await service
     .prepare(
-      `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2 AND taken_at > ?3
+      `SELECT id, taken_at AS takenAt FROM snapshots WHERE incarnation = ?1 AND taken_at <= ?2
          AND taken_at > COALESCE((SELECT MAX(checkpoint_at) FROM restores WHERE incarnation = ?1 AND phase = 'done' AND ended_at <= ?2), -1)
        ORDER BY taken_at DESC LIMIT 1`,
     )
-    .bind(incarnation, at, now - RETENTION_MS)
+    .bind(incarnation, at)
     .first<{ id: string; takenAt: number }>();
   if (row === null) return null;
   await verifySnapshot(dataDir, service, incarnation, row.id);
@@ -194,6 +205,7 @@ export class AccountDb implements StoreDb {
       makeDirs(dir);
       const plain = join(dir, `.tmp-${id}.sqlite`);
       const gz = join(dir, `.tmp-${id}.sqlite.gz`);
+      const rev = this.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev;
       // VACUUM INTO takes a literal path and runs outside any transaction; the registry's queue keeps writers out.
       this.db().exec(`VACUUM INTO '${plain.replaceAll("'", "''")}'`);
       try {
@@ -217,8 +229,8 @@ export class AccountDb implements StoreDb {
         renameSync(gz, snapshotPath(this.dataDir, this.incarnation, id));
         fsyncPath(dir);
         await this.service
-          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, bytes, sha256) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .bind(id, this.incarnation, kind, operation, takenAt, bytes, hash.digest('hex'))
+          .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, hash.digest('hex'))
           .run();
       } finally {
         rmSync(plain, { force: true });
@@ -226,7 +238,7 @@ export class AccountDb implements StoreDb {
       }
       return id;
     },
-    forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at, this.clock()))?.id ?? null,
+    forTime: async (at: number): Promise<string | null> => (await snapshotFor(this.dataDir, this.service, this.incarnation, at))?.id ?? null,
     verify: (id: string) => verifySnapshot(this.dataDir, this.service, this.incarnation, id),
   };
 
@@ -248,9 +260,10 @@ export type Stores = {
   // A fresh stub per call chain: one got before a restart fails every later call.
   getByName(incarnation: string): StoreStub;
   prepare(incarnation: string, timeline: string): Promise<void>;
-  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles. null: refused,
-  // since the account takes no baseline now (TAKES_BASELINE).
-  snapshot(incarnation: string, kind: 'baseline'): Promise<string | null>;
+  // A session the snapshot had to open is closed after it, so a pass over every account holds no handles. refused: the
+  // account takes no baseline now (TAKES_BASELINE). unchanged: its file still holds the revision its current baseline
+  // (CURRENT_BASELINE) recorded, so that baseline is its state and no copy is taken.
+  snapshot(incarnation: string, kind: 'baseline'): Promise<{ taken: string } | { refused: true } | { unchanged: true }>;
   // What a rewind of the account to `at` would land on now; throws StoreUnavailable for a catalogued file gone or altered.
   snapshotAt(incarnation: string, at: number): Promise<{ id: string; takenAt: number } | null>;
   evictIdle(now?: number): void;
@@ -348,18 +361,22 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
       return enqueue(held, async () => {
         // Read here, not from the session's lifecycle: that is cached, and says restoring until the store next
         // reloads after an operation is done. The checkpoint goes through this queue, so none comes in between.
-        const free = await service.prepare(`SELECT ${TAKES_BASELINE('a')} AS free FROM accounts a WHERE incarnation = ?`).bind(incarnation).first<number>('free');
-        if (!free) return null;
+        const row = await service
+          .prepare(`SELECT ${TAKES_BASELINE('a')} AS free, (${CURRENT_BASELINE('rev', 'a', '?2')}) AS rev FROM accounts a WHERE incarnation = ?1`)
+          .bind(incarnation, clock())
+          .first<{ free: number; rev: number | null }>();
+        if (!row?.free) return { refused: true };
         const opened = !held.session;
         const { db } = await session(incarnation, held);
         try {
-          return await db.snapshots.take(kind, null);
+          if (db.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev === row.rev) return { unchanged: true };
+          return { taken: await db.snapshots.take(kind, null) };
         } finally {
           if (opened) closeSession(held);
         }
       });
     },
-    snapshotAt: (incarnation, at) => snapshotFor(dataDir, service, incarnation, at, clock()),
+    snapshotAt: (incarnation, at) => snapshotFor(dataDir, service, incarnation, at),
     evictIdle: (now = clock()) => {
       for (const held of entries.values()) if (held.session && held.pending === 0 && now - held.lastUsed >= IDLE_MS) closeSession(held);
     },

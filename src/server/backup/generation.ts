@@ -105,7 +105,7 @@ function readNamed(path: string, now: number): { named: Named; sources: Map<stri
 }
 
 // Holds the gate (exclusive) while it brings every account's baseline up to its last finished rewind (and one restoring
-// before its checkpoint up to today), snapshots the service, and links what that snapshot names; compresses and writes
+// before its checkpoint current as of today), snapshots the service, and links what that snapshot names; compresses and writes
 // the manifest after. now: the job's time, which names the generation; clock: that time moved on by the job's run, so
 // the baselines the job itself took are never ahead of it. gateMs: how long lifecycle operations waited on it.
 export async function captureGeneration(

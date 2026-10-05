@@ -38,7 +38,7 @@ const armed = (operation: number, target: string) => {
 // The service holds the account, active, as it does whenever the daily job takes a baseline of it.
 const baseline = async () => {
   raw.prepare("INSERT INTO accounts (id, username, login_hash, created_at, incarnation, state, timeline) VALUES (?, 'jin', 'h', 1, ?, 'active', 't1') ON CONFLICT DO NOTHING").run(A, INC);
-  return (await stores.snapshot(INC, 'baseline'))!;
+  return ((await stores.snapshot(INC, 'baseline')) as { taken: string }).taken;
 };
 const untouched = () => expect(stores.inspect(INC).exec('SELECT rev, timeline FROM head')).toEqual([{ rev: 0, timeline: 't1' }]);
 

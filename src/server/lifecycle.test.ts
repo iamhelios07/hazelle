@@ -334,12 +334,14 @@ describe('a restore', () => {
     expect(await logged('restore-failed')).toBe(1);
   });
 
-  it('never lands a later restore on a snapshot taken before a finished one, until the daily job takes a baseline after it', async () => {
+  it('never lands a later restore on a snapshot taken before a finished one, until the daily job takes a baseline after it, though the file holds that baseline’s revision', async () => {
     const seed = await seeded();
     const id = await begin(seed);
     await runRestore(t.env, id);
     const later = Date.now() + 1;
     expect(await t.stores.snapshotAt(seed.incarnation, later)).toBeNull();
+    const recorded = await t.env.db.prepare("SELECT rev FROM snapshots WHERE incarnation = ? AND kind = 'baseline'").bind(seed.incarnation).first<number>('rev');
+    expect(t.stores.inspect(seed.incarnation).exec<{ rev: number }>('SELECT rev FROM head')).toEqual([{ rev: recorded }]);
     expect(await t.daily(later)).toMatchObject({ snapshots: { outcome: 'ok' } });
     expect(await t.stores.snapshotAt(seed.incarnation, later)).toEqual({ id: expect.any(String), takenAt: later });
   });
