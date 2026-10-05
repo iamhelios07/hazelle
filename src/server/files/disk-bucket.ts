@@ -19,6 +19,15 @@ const KEY = /^files\/[0-9a-f]{32}\/[0-9a-f]{64}$/;
 const PREFIX = /^files\/[0-9a-f]{32}\/$/;
 const ID = /^[0-9a-f]{64}$/;
 
+async function syncDir(dir: string): Promise<void> {
+  const folder = await open(dir, 'r');
+  try {
+    await folder.sync();
+  } finally {
+    await folder.close();
+  }
+}
+
 export function diskBucket(dataDir: string): Bucket {
   const path = (key: string) => {
     if (!KEY.test(key)) throw new Error(`Not a file key: ${key}`);
@@ -34,7 +43,8 @@ export function diskBucket(dataDir: string): Bucket {
     put: async (key, body) => {
       const target = path(key);
       const dir = dirname(target);
-      await mkdir(dir, { recursive: true });
+      // The first directory this mkdir made; its name is durable only once its parent is synced too.
+      const created = await mkdir(dir, { recursive: true });
       const temp = join(dir, `.tmp-${randomBytes(8).toString('hex')}`);
       const file = await open(temp, 'w');
       try {
@@ -44,12 +54,8 @@ export function diskBucket(dataDir: string): Bucket {
         await file.close();
       }
       await rename(temp, target);
-      const folder = await open(dir, 'r');
-      try {
-        await folder.sync();
-      } finally {
-        await folder.close();
-      }
+      await syncDir(dir);
+      if (created !== undefined) await syncDir(dirname(created));
     },
     get: async (key) => {
       const target = path(key);

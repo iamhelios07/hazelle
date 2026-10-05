@@ -78,6 +78,7 @@ const ctx: ExecutionContext = {
 let draining = false;
 const root = new Hono();
 root.get('/api/health', async (c) => {
+  // Seen only by a request already on an open connection: server.close refuses new connections at once.
   if (draining) return c.json({ ok: false, draining: true }, 503);
   const { backupAgeHours, diskFreePercent } = await services.backups.freshness(services, Date.now());
   return c.json({ ok: true, liveCalls: services.streams.live(), backupAgeHours, diskFreePercent });
@@ -120,13 +121,23 @@ async function shutdown(signal: string) {
   // A keep-alive connection that keeps asking is never idle at one instant; it is closed between its requests.
   const sweeping = setInterval(() => server.closeIdleConnections(), 100);
   const deadline = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), drainMs).unref());
-  const outcome = await Promise.race([Promise.all([closed, Promise.allSettled([...background]), services.streams.settled()]).then(() => 'drained' as const), deadline]);
+  const drained = (async () => {
+    await closed;
+    // A request answered during the wait may have registered more work, and finished work may have chained some.
+    while (background.size) await Promise.allSettled([...background]);
+    await services.streams.settled();
+  })();
+  const outcome = await Promise.race([drained.then(() => 'drained' as const), deadline]);
   clearInterval(sweeping);
   server.closeAllConnections();
-  services.stores.close();
-  services.streams.close();
-  raw.close();
-  lock.close();
+  try {
+    services.stores.close();
+    services.streams.close();
+    raw.close();
+    lock.close();
+  } catch (error) {
+    log('close failed', { error: String(error) });
+  }
   log('stopped', { outcome, left: background.size });
   process.exit(0);
 }

@@ -14,7 +14,8 @@ export function clientFiles(clientDir: string) {
   client.use(async (c, next) => {
     await next();
     for (const [name, value] of Object.entries(HEADERS)) c.res.headers.set(name, value);
-    if (c.res.status === 200) c.res.headers.set('Cache-Control', c.req.path.startsWith('/assets/') ? IMMUTABLE : 'no-cache');
+    // ok, not 200: a Range answer (206) of an asset is as immutable as the whole.
+    if (c.res.ok) c.res.headers.set('Cache-Control', c.req.path.startsWith('/assets/') ? IMMUTABLE : 'no-cache');
   });
   client.get('*', serveStatic({ root: clientDir }));
   // A path that is no file is a client route, whatever it looks like: model ids carry dots

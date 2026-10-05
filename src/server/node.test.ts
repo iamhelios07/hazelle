@@ -96,27 +96,35 @@ describe('the server process', () => {
     expect(server.log()).toContain('"event":"stopped"');
   }, 30_000);
 
-  it('answers 503 on health while draining and finishes background work before it stops', async () => {
+  it('answers the request in flight on SIGTERM, refuses new connections, and exits 0 once drained', async () => {
     const data = join(dir, 'data-drain');
     const port = await freePort();
     const server = start(data, port);
     await server.listening;
-    // A request in flight when the signal comes: a slow upload body, answered after the drain began.
-    const slow = fetch(`http://127.0.0.1:${port}/api/session`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: new ReadableStream({ start: (body) => void setTimeout(() => body.close(), 300) }), duplex: 'half' } as RequestInit);
+    // A request in flight when the signal comes: its body arrives after the drain began.
+    const slow = new Promise<number>((resolve, reject) => {
+      const sending = request({ host: '127.0.0.1', port, method: 'POST', path: '/api/session', headers: { 'content-type': 'application/json', 'content-length': 2 } }, (response) => {
+        response.resume();
+        response.on('end', () => resolve(response.statusCode!));
+      });
+      sending.on('error', reject);
+      setTimeout(() => sending.end('{}'), 300);
+    });
     await new Promise((resolve) => setTimeout(resolve, 50));
     server.child.kill('SIGTERM');
-    const codes: number[] = [];
-    for (let attempt = 0; attempt < 20 && server.child.exitCode === null; attempt++) {
-      try {
-        codes.push((await fetch(`http://127.0.0.1:${port}/api/health`)).status);
-      } catch {
-        break;
-      }
+    // server.close drops idle connections and refuses new ones at once, so health's 503 is for a request already on
+    // the wire; a new connection during the drain is refused.
+    let refused = false;
+    for (let attempt = 0; attempt < 20 && !refused && server.child.exitCode === null; attempt++) {
+      await fetch(`http://127.0.0.1:${port}/api/health`).then(
+        (response) => expect(response.status).toBe(503),
+        () => (refused = true),
+      );
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
-    expect((await slow).status).toBe(404);
+    expect(await slow).toBe(404);
     expect(await server.exited).toBe(0);
-    expect(codes.every((code) => code === 503)).toBe(true);
+    expect(refused).toBe(true);
     expect(server.log()).toMatch(/"outcome":"drained"/);
   }, 30_000);
 
