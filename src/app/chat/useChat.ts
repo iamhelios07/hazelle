@@ -6,7 +6,7 @@ import { shown, type Chat, type ChatItem, type ChatSummary, type TranslateSwitch
 import { greetingTranslation, type CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { resetToggles, setKeepStatus, setStatusScript, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
+import { resetToggles, setKeepStatus, setOwnTranslate, setStatusScript, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import {
   branchChat,
   editMessage,
@@ -289,6 +289,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void setTranslate(store, chat.character, change).then((saved) => saved.ok || toast.failed(saved));
   }
 
+  function setOwnSwitches(own: boolean) {
+    void setOwnTranslate(store, chat.character!, own).then((saved) => saved.ok || toast.failed(saved));
+  }
+
   function saveEdit(message: Shown, andReply: boolean) {
     if (!id || !editing) return;
     void editMessage(store, id, message, editing.text, editing.translation).then((saved) => saved.ok || toast.failed(saved));
@@ -492,6 +496,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       translate: translateMessage,
       flipTranslation,
       setTranslate: setSwitches,
+      setOwnTranslate: setOwnSwitches,
       remove,
       copy,
       press: (button: BotButton | null) => void press(button),

@@ -17,7 +17,8 @@ export type Character = Mark & {
   toggles?: ToggleValues;
   // 고정 페르소나: the persona its chats use in place of the default, unless a chat picks its own.
   persona?: string;
-  translate?: TranslateSwitches;
+  // 이 캐릭터만 따로: its chats' translation switches in place of the shared Settings.translate.
+  ownTranslate?: TranslateSwitches;
   // 번역가의 노트: added to the 전역 one (Settings.translatorNote), never replacing it as the switches do.
   translatorNote?: string;
   // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.

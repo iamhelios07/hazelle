@@ -8,7 +8,7 @@ import { useSession, useSettings, usePrompts } from '../session';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, Row, SettingRow, Stack, Switch, Tag, Text, TextField, ToolButton, useMenuClose } from '../ui';
 import type { OpenChat } from './useChat';
 
-const appliesTo = (card: OpenChat['card']) => (card ? `${card.name}의 모든 채팅에 적용돼요.` : '캐릭터 없이 하는 모든 채팅에 적용돼요.');
+const appliesTo = (card: OpenChat['card'], own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '따로 정한 캐릭터 말고 모든 채팅에 적용돼요.');
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
   const { translate, translation, card, actions } = chat;
@@ -54,8 +54,16 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
             </Text>
           }
         />
+        {card && (
+          <SettingRow
+            place="panel"
+            label="이 캐릭터만 따로"
+            help={`켜면 ${card.name}의 채팅은 지금 설정을 따로 갖고, 다른 채팅에서 바꿔도 그대로예요. 끄면 다시 모든 채팅과 같은 설정을 따라요.`}
+            control={<Switch label="이 캐릭터만 따로" checked={translate.own} onChange={actions.setOwnTranslate} />}
+          />
+        )}
         <Text variant="note">
-          {appliesTo(card)}
+          {appliesTo(card, translate.own)}
         </Text>
       </Stack>
     </Menu>
@@ -126,7 +134,7 @@ function LanguageChoices({ value, onPick }: { value: string; onPick: (name: stri
   );
 }
 
-// Without its own choice the character follows the default translation prompt live, and a deleted one shows as
+// Without its own choice the switches follow the default translation prompt live, and a deleted one shows as
 // missing, never as another prompt.
 function PromptMenu({ chat }: { chat: OpenChat }) {
   const { translate, card, actions } = chat;
@@ -144,7 +152,7 @@ function PromptMenu({ chat }: { chat: OpenChat }) {
       label="번역 프롬프트"
       trigger={(opener) => <ChipButton variant="field" opens="up" label={label} title="번역 프롬프트" tone={choice.kind === 'missing' ? 'warn' : 'default'} {...opener} />}
     >
-      <MenuHeading>{appliesTo(card)}</MenuHeading>
+      <MenuHeading>{appliesTo(card, translate.own)}</MenuHeading>
       <MenuItem label={follows('기본 번역 프롬프트')} sub={fallback?.value.name ?? '기본 번역 프롬프트가 없어요'} checked={translate.prompt === undefined} onClick={() => actions.setTranslate({ prompt: undefined })} />
       {prompts.map((item) => (
         <MenuItem

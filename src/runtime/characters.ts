@@ -191,21 +191,40 @@ export function setToggle(store: ObjectStore, character: string | null, key: str
 // hold none of those, and read as these.
 const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, replyLanguage: 'Korean', inputLanguage: 'English' };
 
-// The switches in effect. input is off under reverse, whatever is stored, since 반전 모드 sends what the user typed.
-// prompt absent follows the account's default translation prompt.
-export type TranslateSetup = typeof TRANSLATE_DEFAULTS & Pick<TranslateSwitches, 'prompt'>;
+// The switches in effect for a chat of character. input is off under reverse, whatever is stored, since 반전 모드 sends
+// what the user typed. prompt absent follows the account's default translation prompt. own: the character's own
+// switches (이 캐릭터만 따로) rather than the shared ones.
+export type TranslateSetup = typeof TRANSLATE_DEFAULTS & Pick<TranslateSwitches, 'prompt'> & { own: boolean };
 
 export function translateSwitches(store: ObjectStore, character: string | null): TranslateSetup {
-  const saved = character === null ? store.get('settings', SETTINGS_ID)?.value.translate : store.get('character', character)?.value.translate;
-  const switches = { ...TRANSLATE_DEFAULTS, ...saved };
-  return { ...switches, input: switches.input && !switches.reverse };
+  const own = character === null ? undefined : store.get('character', character)?.value.ownTranslate;
+  const switches = { ...TRANSLATE_DEFAULTS, ...(own ?? store.get('settings', SETTINGS_ID)?.value.translate) };
+  return { ...switches, input: switches.input && !switches.reverse, own: own !== undefined };
 }
 
-// Only the switches given, merged into the stored ones; prompt given as undefined goes back to the default.
+const stored = (saved: TranslateSwitches | undefined, change: Partial<TranslateSwitches> = {}): TranslateSwitches => ({ replies: TRANSLATE_DEFAULTS.replies, input: TRANSLATE_DEFAULTS.input, ...saved, ...change });
+
+// Only the switches given, merged into the ones a chat of character reads: its own, or else the shared ones. prompt
+// given as undefined goes back to the default.
 export function setTranslate(store: ObjectStore, character: string | null, change: Partial<TranslateSwitches>): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
-  const merged = (saved: TranslateSwitches | undefined): TranslateSwitches => ({ replies: TRANSLATE_DEFAULTS.replies, input: TRANSLATE_DEFAULTS.input, ...saved, ...change });
-  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, translate: merged(current?.translate) }));
-  return store.update('character', character, (current) => ({ ...current, translate: merged(current.translate) }));
+  if (character !== null && store.get('character', character)?.value.ownTranslate) {
+    return store.update('character', character, (current) => ({ ...current, ownTranslate: stored(current.ownTranslate, change) }));
+  }
+  return store.upsert('settings', (current) => ({ models: {}, ...current, translate: stored(current?.translate, change) }));
+}
+
+// 이 캐릭터만 따로: on starts from the shared switches as they are; off follows them again.
+export function setOwnTranslate(store: ObjectStore, character: string, own: boolean): Promise<ApiResult<Stored<'character'>>> {
+  const shared = store.get('settings', SETTINGS_ID)?.value.translate;
+  return store.update('character', character, (current) => (own ? { ...current, ownTranslate: stored(shared) } : without(current, 'ownTranslate')));
+}
+
+// Until 2026-10-06 every character kept its own switches in translate; the shared ones replaced them (design §6.3), and
+// each session drops any left, so a device still on the old code that writes one loses it at the next load. Delete
+// once every account has loaded since v0.1.10.
+export async function dropCharacterTranslate(store: ObjectStore): Promise<void> {
+  const old = store.list('character').filter(({ value }) => 'translate' in value);
+  await Promise.all(old.map(({ id }) => store.update('character', id, (current) => without(current as Character & { translate?: unknown }, 'translate'))));
 }
 
 // 번역가의 노트 add up: the 전역 one, then the character's. Stored as typed, since trimming an autosave eats the newline

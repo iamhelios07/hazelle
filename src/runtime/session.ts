@@ -2,7 +2,7 @@ import type { VaultKey } from '../vault/keys';
 import { api, type ApiResult } from './api';
 import { AssetUrls } from './assets';
 import { Catalogs } from './catalog';
-import { purgeExpired } from './characters';
+import { dropCharacterTranslate, purgeExpired } from './characters';
 import { Costs } from './cost';
 import { Credentials } from './credential';
 import { Files } from './files';
@@ -66,7 +66,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const files = new Files(api, store);
   const assets = new AssetUrls(store, files);
   // A new account sees its defaults on the first screen; a cached account fills missing defaults after catch-up.
-  const defaults = () => Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store)]);
+  const defaults = () => Promise.all([addDefaults(store), addFirstPersona(store, username), addFirstProfile(store), dropCharacterTranslate(store)]);
   if (!store.cached) await defaults();
   if (signal.aborted) {
     store.close();

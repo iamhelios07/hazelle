@@ -21,7 +21,7 @@ export const COMMANDS: readonly CommandGroup[] = [
     title: '번역',
     sorts: ['translate'],
     commands: [
-      { names: ['language'], form: '{{language}}', what: '번역할 언어의 영어 이름이에요.', example: ['Target: {{language}}', 'Target: Korean'], uses: { translate: '지시문에 번역할 언어를 적을 때 써요. 캐릭터의 번역 설정에서 고른 언어가 들어가요.' } },
+      { names: ['language'], form: '{{language}}', what: '번역할 언어의 영어 이름이에요.', example: ['Target: {{language}}', 'Target: Korean'], uses: { translate: '지시문에 번역할 언어를 적을 때 써요. 번역 설정에서 고른 언어가 들어가요.' } },
     ],
   },
   {
