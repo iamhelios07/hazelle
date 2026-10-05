@@ -21,7 +21,9 @@ const children: ChildProcess[] = [];
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-node-'));
-  bundle = join(dir, 'node.js');
+  // The bundle keeps undici external as build:server does, so it must sit where node_modules resolves.
+  mkdirSync('node_modules/.cache', { recursive: true });
+  bundle = join('node_modules', '.cache', `hazelle-node-${process.pid}.js`);
   client = join(dir, 'client');
   mkdirSync(client);
   writeFileSync(join(client, 'index.html'), 'page');
@@ -30,6 +32,7 @@ beforeAll(() => {
 afterAll(() => {
   for (const child of children) child.kill('SIGKILL');
   rmSync(dir, { recursive: true, force: true });
+  rmSync(bundle, { force: true });
 });
 
 const freePort = () =>

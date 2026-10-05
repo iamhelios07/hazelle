@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { PRICE_LISTS, type PriceList, type PriceTier, type Rates } from '../connectors/price-list';
 import type { Db } from './db/service-db';
 import { fail, type AppEnv } from './http';
+import type { Upstream } from './relay';
 import { requireSession } from './session';
 
 const SOURCE = 'https://models.dev/api.json';
@@ -9,6 +10,8 @@ const LISTS = new Set(Object.values(PRICE_LISTS).map((entry) => entry!.list));
 // The hourly cron asks every time; the prices are fetched again once they are this old, so about once a day.
 const STALE_MS = 23 * 60 * 60 * 1000;
 const RETRY_MS = 10 * 60 * 1000;
+// A fetch is background work the shutdown drain waits for, so it is bounded.
+const FETCH_MS = 60 * 1000;
 
 export type PriceRow = Rates & { list: string; model: string };
 
@@ -50,7 +53,7 @@ export function priceRows(payload: unknown): PriceRow[] | null {
 }
 
 // One fetch at a time, claimed through tried_at. A failed fetch keeps the prices already stored.
-export async function refreshPrices(db: Db, now = Date.now()): Promise<void> {
+export async function refreshPrices(db: Db, outbound: Upstream, now = Date.now()): Promise<void> {
   const claimed = await db
     .prepare('UPDATE price_fetch SET tried_at = ?1 WHERE id = 1 AND (fetched_at IS NULL OR fetched_at < ?2) AND (tried_at IS NULL OR tried_at < ?3) RETURNING id')
     .bind(now, now - STALE_MS, now - RETRY_MS)
@@ -58,7 +61,7 @@ export async function refreshPrices(db: Db, now = Date.now()): Promise<void> {
   if (!claimed) return;
   let rows: PriceRow[] | null;
   try {
-    const response = await fetch(SOURCE);
+    const response = await outbound(new URL(SOURCE), { method: 'GET', headers: new Headers(), body: null, redirect: 'manual', signal: AbortSignal.timeout(FETCH_MS) });
     rows = response.ok ? priceRows(await response.json()) : null;
     if (!rows) console.error(`models.dev price list unreadable (status ${response.status})`);
   } catch (error) {
@@ -88,7 +91,7 @@ export const prices = new Hono<AppEnv>().use(requireSession).get('/', async (c) 
   const db = c.env.db;
   const fetchedAt = await db.prepare('SELECT fetched_at FROM price_fetch WHERE id = 1').first<number | null>('fetched_at');
   if (fetchedAt === null) {
-    c.executionCtx.waitUntil(refreshPrices(db));
+    c.executionCtx.waitUntil(refreshPrices(db, c.env.outbound));
     return c.json({ fetchedAt: null, models: {} } satisfies PriceList);
   }
   const etag = `"${fetchedAt}"`;

@@ -1,5 +1,5 @@
-// A token bucket per key, in process: the stand-in for the CALLS (240 per account) and BOT_CALLS (20 per account:chat)
-// rate-limit bindings. The caller picks the key.
+// A token bucket per key, in process: calls (240 a minute per account) and bot calls (20 a minute per account:chat).
+// The caller picks the key.
 
 export type Limiter = { limit(key: string): { success: boolean } };
 

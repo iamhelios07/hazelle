@@ -186,8 +186,19 @@ describe('provider calls', () => {
     expect(await relayed.json()).toEqual({ data: [] });
   });
 
-  it('count a stream as a live call from its start until it ends', async () => {
-    upstream = async (_url, { signal }) => new Response(new ReadableStream({ start: (body) => signal.addEventListener('abort', () => body.error(signal.reason)) }));
+  it('keep a detached call running when its reader goes, give its frames to another reader, and end it on stop', async () => {
+    const seen = { aborted: false };
+    upstream = async (_url, { signal }) => {
+      signal.addEventListener('abort', () => (seen.aborted = true));
+      return new Response(
+        new ReadableStream({
+          start: (body) => {
+            body.enqueue(new TextEncoder().encode('data: one\n\n'));
+            signal.addEventListener('abort', () => body.error(signal.reason));
+          },
+        }),
+      );
+    };
     const cookie = sessionCookie(await post('signup', signupBody()));
     const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
     const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
@@ -196,9 +207,20 @@ describe('provider calls', () => {
     const started = await post(`streams/${id}`, { key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } }, cookie);
     expect(started.status).toBe(200);
     await started.body?.cancel();
-    await vi.waitFor(() => expect(live()).toBe(1));
+    expect(live()).toBe(1);
+    // Another tab resumes: hello, then the head and the data the call went on to write without a reader.
+    const resumed = (await get(`streams/${id}?from=1`, cookie)).body!.getReader();
+    const types: number[] = [];
+    while (types.length < 3) {
+      const { value } = await resumed.read();
+      for (let at = 0; at < value!.byteLength; at += 4 + new DataView(value!.buffer, value!.byteOffset + at).getUint32(0)) types.push(value![at + 4]!);
+    }
+    expect(types).toEqual([0, 1, 2]);
+    expect(seen.aborted).toBe(false);
     await post(`streams/${id}/stop`, undefined, cookie);
+    expect(seen.aborted).toBe(true);
     await vi.waitFor(() => expect(live()).toBe(0));
+    await resumed.cancel();
   });
 });
 

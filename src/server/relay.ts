@@ -1,4 +1,4 @@
-import { checkTarget } from './ssrf';
+import { PolicyRefusal } from './ssrf';
 
 export type UpstreamInit = {
   method: string;
@@ -8,6 +8,8 @@ export type UpstreamInit = {
   signal: AbortSignal;
 };
 
+// Rejects with PolicyRefusal for a destination the outbound policy refuses (outbound.ts), with anything else for a call
+// that failed on the way.
 export type Upstream = (url: URL, init: UpstreamInit) => Promise<Response>;
 
 export type RelayError = 'bad-envelope' | 'not-https' | 'not-public' | 'upstream-unreachable' | 'upstream-redirect';
@@ -66,9 +68,6 @@ export async function forward(upstream: Upstream, body: unknown, signal: AbortSi
   const envelope = parseEnvelope(body);
   if (!envelope) return refuse(400, 'bad-envelope');
 
-  const refusal = checkTarget(envelope.url);
-  if (refusal) return refuse(403, refusal);
-
   let response: Response;
   try {
     response = await upstream(envelope.url, {
@@ -78,8 +77,8 @@ export async function forward(upstream: Upstream, body: unknown, signal: AbortSi
       redirect: 'manual',
       signal,
     });
-  } catch {
-    return refuse(502, 'upstream-unreachable');
+  } catch (error) {
+    return error instanceof PolicyRefusal ? refuse(403, error.refusal) : refuse(502, 'upstream-unreachable');
   }
 
   // A browser fetch would follow a relayed 3xx on its own, so the redirect is reported instead.

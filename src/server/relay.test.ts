@@ -1,5 +1,10 @@
+import { request as httpRequest, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import { createRelay, type Upstream, type UpstreamInit } from './relay';
+import { PolicyRefusal } from './ssrf';
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
   url: 'https://api.example.com/v1/chat/completions',
@@ -114,13 +119,43 @@ describe('relay', () => {
     expect(upstream).not.toHaveBeenCalled();
   });
 
-  it('refuses a non-https or non-public target before any network call', async () => {
-    const upstream = vi.fn<Upstream>();
-    const relay = createRelay(upstream);
+  it('answers a destination the outbound refused with its reason', async () => {
+    const response = await createRelay(async () => {
+      throw new PolicyRefusal('not-https');
+    })(post(envelope()));
 
-    expect(await (await relay(post(envelope({ url: 'http://api.example.com/' })))).json()).toEqual({ error: 'not-https' });
-    expect(await (await relay(post(envelope({ url: 'https://10.0.0.1/' })))).json()).toEqual({ error: 'not-public' });
-    expect(upstream).not.toHaveBeenCalled();
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'not-https' });
+  });
+
+  it('aborts the upstream call when its client disconnects mid-reply', async () => {
+    let aborted = false;
+    let sent = 0;
+    // Bounded: it ends on its own after 100 chunks.
+    const upstream: Upstream = async (_url, { signal }) => {
+      signal.addEventListener('abort', () => (aborted = true));
+      return new Response(
+        new ReadableStream({
+          pull: async (body) => {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            if (++sent === 100) return body.close();
+            body.enqueue(new TextEncoder().encode('data: x\n\n'));
+          },
+        }),
+      );
+    };
+    const app = new Hono().post('/api/relay', (c) => createRelay(upstream)(c.req.raw));
+    const server = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' });
+    await new Promise((resolve) => server.once('listening', resolve));
+    const { port } = server.address() as AddressInfo;
+    const client = httpRequest({ host: '127.0.0.1', port, path: '/api/relay', method: 'POST', headers: { 'content-type': 'application/json' } });
+    client.end(JSON.stringify(envelope()));
+    const response = await new Promise<IncomingMessage>((resolve) => client.once('response', resolve));
+    await new Promise((resolve) => response.once('data', resolve));
+    client.destroy();
+    await vi.waitFor(() => expect(aborted).toBe(true));
+    expect(sent).toBeLessThan(100);
+    await new Promise((resolve) => server.close(resolve));
   });
 
   it('reports a failed upstream call as unreachable', async () => {

@@ -1,49 +1,170 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Upstream } from './relay';
 import { streamRegistry } from './stream-registry';
+import { streamStore, type StreamStore } from './db/streams-db';
 
-// A provider that answers only when the call is aborted.
-const hanging: Upstream = (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
+const CHUNK = 64 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-async function start(box: { handle(request: Request): Promise<Response> }) {
-  const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
-  const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
-  const request = { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' };
-  const response = await box.handle(new Request('https://stream/start', { method: 'POST', body: JSON.stringify({ id: crypto.randomUUID(), key, request }) }));
-  expect(response.status).toBe(200);
-  void response.body?.cancel();
+// A provider that gives chunks bytes at once and then answers only when the call is aborted. calls: how many calls
+// reached it; aborted: how many of them were aborted.
+function provider(chunks = 0) {
+  const seen = { calls: 0, aborted: 0 };
+  const upstream: Upstream = async (_url, { signal }) => {
+    seen.calls++;
+    signal.addEventListener('abort', () => seen.aborted++);
+    let given = 0;
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        pull: (body) => {
+          if (signal.aborted) return body.error(signal.reason);
+          if (given++ < chunks) return body.enqueue(new Uint8Array(CHUNK));
+          return new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(body.error(signal.reason))));
+        },
+      }),
+    );
+  };
+  return { seen, upstream };
 }
 
-afterEach(() => vi.useRealTimers());
+async function body() {
+  const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
+  const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+  return { id: crypto.randomUUID(), key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } };
+}
+
+// The frame types a body carries, in order.
+async function types(response: Response) {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const seen: number[] = [];
+  for (let at = 0; at < bytes.byteLength; at += 4 + new DataView(bytes.buffer, at).getUint32(0)) seen.push(bytes[at + 4]!);
+  return seen;
+}
+
+const opened: StreamStore[] = [];
+const dirs: string[] = [];
+const store = (path = ':memory:') => {
+  const made = streamStore(path);
+  opened.push(made);
+  return made;
+};
+const tempFile = () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hazelle-streams-'));
+  dirs.push(dir);
+  return join(dir, 'streams.sqlite');
+};
+
+afterEach(() => {
+  for (const each of opened.splice(0)) each.close();
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 describe('the stream registry', () => {
-  it('keeps one box per name', () => {
-    const streams = streamRegistry(hanging);
-    expect(streams.box('a')).toBe(streams.box('a'));
-    expect(streams.box('a')).not.toBe(streams.box('b'));
+  it('gives two starts of one name one call and one stream-exists', async () => {
+    const { seen, upstream } = provider();
+    const streams = streamRegistry(store(), upstream);
+    const [a, b] = await Promise.all([streams.start('a', await body()), streams.start('a', await body())]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    await vi.waitFor(() => expect(seen.calls).toBe(1));
+    expect(streams.live()).toBe(1);
+    await streams.drop('a');
+    expect(streams.live()).toBe(0);
   });
 
-  it('counts a call live from its start to its end, and a second end of the same box counts nothing', async () => {
-    const streams = streamRegistry(hanging);
-    await start(streams.box('a'));
-    await start(streams.box('b'));
+  it('counts a call live from its start to its end, and settles once none runs', async () => {
+    const { upstream } = provider();
+    const streams = streamRegistry(store(), upstream);
+    await (await streams.start('a', await body())).body?.cancel();
+    await (await streams.start('b', await body())).body?.cancel();
     expect(streams.live()).toBe(2);
-    await streams.box('a').handle(new Request('https://stream/stop', { method: 'POST' }));
+    let settled = false;
+    const settling = streams.settled().then(() => (settled = true));
+    streams.stop('a');
     await vi.waitFor(() => expect(streams.live()).toBe(1));
-    await streams.box('a').handle(new Request('https://stream/', { method: 'DELETE' }));
-    expect(streams.live()).toBe(1);
-    await streams.box('b').handle(new Request('https://stream/', { method: 'DELETE' }));
+    expect(settled).toBe(false);
+    streams.stop('b');
+    await settling;
     expect(streams.live()).toBe(0);
   });
 
-  it('expires a box at its alarm and forgets it', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-    const streams = streamRegistry(hanging);
-    const box = streams.box('a');
-    await start(box);
+  it('expires a stream at its alarm: the call ends and its rows go', async () => {
+    const { seen, upstream } = provider();
+    const streams = streamRegistry(store(), upstream);
+    await (await streams.start('a', await body())).body?.cancel();
+    await streams.expire(Date.now() + DAY_MS - 60_000);
     expect(streams.live()).toBe(1);
-    await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+    await streams.expire(Date.now() + DAY_MS);
     expect(streams.live()).toBe(0);
-    expect(streams.box('a')).not.toBe(box);
+    expect(seen.aborted).toBe(1);
+    expect((await streams.read('a', 0)).status).toBe(404);
+  });
+
+  it('writes no page after an expiry that came while a page was being written', async () => {
+    const held = store();
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let writing = false;
+    const storage = held.storage;
+    held.storage = (name) => {
+      const inner = storage(name);
+      return {
+        ...inner,
+        put: async (key, value) => {
+          writing = true;
+          await gate;
+          return inner.put(key, value);
+        },
+      };
+    };
+    const streams = streamRegistry(held, provider(5).upstream);
+    await (await streams.start('a', await body())).body?.cancel();
+    await vi.waitFor(() => expect(writing).toBe(true));
+    const expiring = streams.expire(Date.now() + DAY_MS);
+    open();
+    await expiring;
+    expect((await held.storage('a').list({ start: 'f:', end: 'f;', limit: 10 })).size).toBe(0);
+    expect(held.due(Number.MAX_SAFE_INTEGER)).toEqual([]);
+  });
+
+  it('ends its readers, clears the count and forgets the box when a write fails', async () => {
+    const held = store();
+    const storage = held.storage;
+    held.storage = (name) => ({
+      ...storage(name),
+      put: async () => {
+        throw new Error('disk full');
+      },
+    });
+    const { seen, upstream } = provider(5);
+    const streams = streamRegistry(held, upstream);
+    const reading = (await streams.start('a', await body())).arrayBuffer();
+    await expect(reading).rejects.toThrow('stream write failed');
+    await vi.waitFor(() => expect(streams.live()).toBe(0));
+    expect(seen.aborted).toBe(1);
+    // The box is gone: a new reader reads the stored hello and then a lost stream.
+    expect(await types(await streams.read('a', 0))).toEqual([0]);
+  });
+
+  it('serves a stream that a restart cut before its end from its pages, then as lost, without calling again', async () => {
+    const path = tempFile();
+    const { seen, upstream } = provider(5);
+    const before = streamRegistry(store(path), upstream);
+    const reading = (await before.start('a', await body())).body!.getReader();
+    // The fourth data frame would take the page past its bytes, so the head and three data frames are written at once.
+    const stored = store(path).storage('a');
+    await vi.waitFor(async () => expect((await stored.list({ start: 'f:0000000001', end: 'f;', limit: 1 })).size).toBe(1));
+
+    const after = streamRegistry(store(path), upstream);
+    const seenAfter = await types(await after.read('a', 2));
+    expect(seenAfter[0]).toBe(0);
+    expect(seenAfter.slice(1)).toEqual([1, 2, 2, 2]);
+    expect(seen.calls).toBe(1);
+
+    await reading.cancel();
+    before.stop('a');
+    await before.settled();
   });
 });

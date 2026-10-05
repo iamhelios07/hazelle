@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { unpack } from '../src/engine/import/risum';
-import { StreamBox, type BoxStorage } from '../src/server/stream-box';
+import { streamRegistry } from '../src/server/stream-registry';
+import { streamStore } from '../src/server/db/streams-db';
 
 export const FAKE_MODEL = 'fake-model';
 export const DESCRIPTION = 'Mira keeps the lantern inn at the edge of the marsh.';
@@ -97,9 +98,8 @@ export const SCRIPTED = {
 const REPLY = ['{{char}} smiles. ', '[[bow]]'];
 
 // route.fulfill hands the browser the whole stream in one body: this exercises SSE parsing and the call's sealed
-// frames, not text arriving piece by piece. A chat is answered by the server's own StreamBox, in this process, since
-// the Worker's Durable Object would call a provider it cannot reach here. Every chat request body is kept for the
-// test to read.
+// frames, not text arriving piece by piece. A chat is answered by the server's own stream registry, in this process,
+// since the server would call a provider it cannot reach here. Every chat request body is kept for the test to read.
 export async function fakeProvider(page: Page): Promise<unknown[]> {
   const sent: unknown[] = [];
   await page.route('**/api/relay', async (route) => {
@@ -111,23 +111,12 @@ export async function fakeProvider(page: Page): Promise<unknown[]> {
     sent.push(JSON.parse(request.body));
     const events = [...REPLY.map((content) => ({ choices: [{ delta: { content } }] })), { choices: [{ delta: {}, finish_reason: 'stop' }] }];
     const body = [...events.map((event) => JSON.stringify(event)), '[DONE]'].map((data) => `data: ${data}\n\n`).join('');
-    const box = new StreamBox(memory(), async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }), { began: () => {}, ended: async () => {} });
+    const streams = streamRegistry(streamStore(':memory:'), async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
     const id = route.request().url().split('/').at(-1)!;
-    const frames = await box.handle(new Request('https://stream/start', { method: 'POST', body: JSON.stringify({ id, key, request: { ...request, url: 'https://provider.example/chat' } }) }));
+    const frames = await streams.start(id, { id, key, request: { ...request, url: 'https://provider.example/chat' } });
     await route.fulfill({ headers: Object.fromEntries(frames.headers), body: Buffer.from(await frames.arrayBuffer()) });
   });
   return sent;
-}
-
-function memory(): BoxStorage {
-  const held = new Map<string, unknown>();
-  return {
-    get: async (key) => held.get(key),
-    put: async (key, value) => void held.set(key, value),
-    list: async ({ start, end, limit }) => new Map([...held].filter(([key]) => key >= start && key < end).sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, limit)),
-    deleteAll: async () => held.clear(),
-    setAlarm: async () => {},
-  };
 }
 
 // A module file as Risu writes one (src/engine/import/risum.ts), encoded with the inverse of the decode table.
