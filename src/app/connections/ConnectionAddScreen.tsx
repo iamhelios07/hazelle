@@ -77,7 +77,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
         <List label="직접 연결">
           <ListItem
             title="직접 연결"
-            description="OpenAI 호환이나 Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 알 수 없어요."
+            description="OpenAI 호환, OpenAI Responses, Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 알 수 없어요."
             trailing={<Icon icon={ChevronRight} />}
             current={route.kind === 'connect-direct'}
             onClick={() => navigate({ kind: 'connect-direct', address: search.kind === 'address' ? search.baseUrl : '' })}

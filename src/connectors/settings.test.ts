@@ -174,7 +174,7 @@ describe('cache points', () => {
     expect(JSON.stringify(sent(generic, { cache: '5m' }))).not.toMatch(/cache/);
   });
 
-  it('marks Copilot’s chat completions as its catalog’s vendor asks, and leaves an unnamed vendor unknown', () => {
+  it('marks Copilot’s chat completions as its catalog’s vendor asks, unconfirmed either way', () => {
     const copilot = connection('copilot');
     const request = (model: Model) => JSON.parse(chatRequest(resolveModel(resolveConnection(copilot)!, model), { model, messages: marked, settings: { cache: '5m' } }).body!) as Record<string, unknown>;
     const gemini = listed('copilot', copilotModels, 'gemini-3-pro');
@@ -184,7 +184,7 @@ describe('cache points', () => {
       { role: 'user', content: 'Hi.', copilot_cache_control: { type: 'ephemeral' } },
       { role: 'assistant', content: 'Hello.' },
     ]);
-    expect(modelSettings(copilot, gemini)!.cache).toBe(true);
+    expect(modelSettings(copilot, gemini)!.cache).toBeNull();
 
     const gpt = listed('copilot', copilotModels, 'gpt-4.1');
     const keyed = request(gpt);
@@ -197,7 +197,6 @@ describe('cache points', () => {
     expect(view.messages.some((message) => message.cache)).toBe(false);
 
     const unnamed: Model = { ...gemini, vendor: undefined };
-    expect(modelSettings(copilot, unnamed)!.cache).toBeNull();
     expect(request(unnamed).messages).toEqual(request(gemini).messages);
   });
 

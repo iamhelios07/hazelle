@@ -144,12 +144,10 @@ export const copilot: ConnectionType = {
   }],
   usagePage: 'https://github.com/settings/billing',
 
-  // Its chat completions read copilot_cache_control on a message, except for OpenAI's models, which cache a prefix
-  // by prompt_cache_key (provider-hub's split). A model whose list names no vendor gets the message mark, unconfirmed.
-  cachePoints(model) {
-    if (model.vendor === undefined) return { mark: MESSAGE_MARK, accepted: null };
-    return { mark: /openai/i.test(model.vendor) ? { kind: 'key' } : MESSAGE_MARK, accepted: true };
-  },
+  // provider-hub's split: OpenAI's models cache a prefix by prompt_cache_key, the others take copilot_cache_control on
+  // a message. Neither is confirmed: on 2026-10-06 gemini-3.7-flash answered 200 with the mark, ttl 1h included, and
+  // cached no more with it than without.
+  cachePoints: (model) => ({ mark: model.vendor !== undefined && /openai/i.test(model.vendor) ? { kind: 'key' } : MESSAGE_MARK, accepted: null }),
 
   // The list also holds embedding models, and models that VS Code's model picker does not offer.
   parseModels(payload) {

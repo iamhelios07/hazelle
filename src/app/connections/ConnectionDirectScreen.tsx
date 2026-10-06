@@ -57,7 +57,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
         </Button>
       }
     >
-      <Intro title="목록에 없는 곳 연결">OpenAI 호환이나 Anthropic 호환으로 말하는 곳이면 연결할 수 있어요. 잔액과 비용은 알 수 없어요.</Intro>
+      <Intro title="목록에 없는 곳 연결">OpenAI 호환, OpenAI Responses, Anthropic 호환 중 하나로 말하는 곳이면 연결할 수 있어요. 잔액과 비용은 알 수 없어요.</Intro>
       <Stack>
         <TextField label="주소" kind="key" value={address} onChange={setAddress} placeholder="https://…/v1" />
         {place?.kind === 'url' && <Callout tone="success">{place.type.label} 주소예요. {place.type.label} 연결로 만들어요.</Callout>}
