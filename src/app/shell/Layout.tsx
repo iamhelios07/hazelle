@@ -35,7 +35,7 @@ export function Layout() {
     </>
   );
 
-  if (settings !== null) return wide ? <Shell side={<SettingsSidebar current={settings} onClose={closeSettings} />}>{page}</Shell> : page;
+  if (settings !== null) return wide ? <Shell align="start" side={<SettingsSidebar current={settings} onClose={closeSettings} />}>{page}</Shell> : page;
   const sidebar = (asPage: boolean) => <LibrarySidebar page={asPage} collapsed={collapsed} onCollapse={setCollapsed} />;
   if (!wide) return sidebarPage(route) ? sidebar(true) : page;
   return <Shell side={sidebar(false)}>{page}</Shell>;

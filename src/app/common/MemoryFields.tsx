@@ -45,7 +45,7 @@ export function MemoryFields({ value, onChange }: { value: MemorySettings; onCha
     <>
       <SettingGroup label="장기 기억">
         <SettingRow
-          label="장기 기억"
+          label="사용"
           help="오래된 대화를 기록으로 정리해 두고 모델에게 함께 보내요. 끄면 모델이 한 번에 읽을 수 있는 양을 넘는 옛 대화는 빠져요."
           control={<Switch label="장기 기억" checked={value.on} onChange={(on) => onChange({ on })} />}
         />

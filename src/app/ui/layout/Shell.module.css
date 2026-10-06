@@ -7,3 +7,9 @@
   flex-grow: 1;
   min-width: 0;
 }
+
+/* Read by Screen.module.css. */
+.start {
+  --screen-margin-inline: 0;
+  --screen-offset-top: var(--space-32);
+}
