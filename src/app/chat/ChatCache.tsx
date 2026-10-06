@@ -11,6 +11,8 @@ function why(broken: Break): string {
   switch (broken.kind) {
     case 'model':
       return '모델이나 연결이 직전 요청과 달라요.';
+    case 'account':
+      return '직전 요청과 다른 계정으로 보내요. 캐시는 계정마다 따로예요.';
     case 'reasoning':
       return '생각 설정이 직전 요청과 달라요.';
     case 'off':

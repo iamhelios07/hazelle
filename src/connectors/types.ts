@@ -14,16 +14,25 @@ export type Endpoint = { baseUrl: string; protocol: Protocol };
 
 // A built-in connection type fixes the endpoint, so baseUrl and protocol are set only on a generic connection.
 // Starred models are kept as catalog snapshots, so pickers and requests need no catalog fetch first.
+// accounts holds exactly one account and turns is null, unless the type is a pool; a pool always has turns.
 export type Connection = {
   type: string;
   label: string;
-  // Shown only on 연결; the label stays the type's own.
-  account?: string;
   baseUrl: string | null;
   protocol: Protocol | null;
-  secret: string;
+  accounts: Account[];
+  turns: Turns | null;
   starred: Starred[];
 };
+
+// name: who signed in, shown only on 연결; the label stays the type's own. A pasted key names no one.
+export type Account = { id: string; secret: string; name?: string };
+
+// Groups take turns by the month, switching on day (1–28) in local time; their order is the turn order, and the
+// accounts in a group are in pick order. Every account is in exactly one group. anchor: the group whose turn cycle
+// (model/turns cycleOf) was.
+export type Turns = { day: number; groups: Group[]; anchor: { group: string; cycle: number } };
+export type Group = { id: string; name: string; accounts: string[] };
 
 export type HttpRequest = { url: string; method: 'GET' | 'POST'; headers: Record<string, string>; body: string | null };
 
@@ -155,8 +164,8 @@ export type ConnectionType = {
 
 export type Token = { value: string; expiresAt: number };
 
-// OAuth device authorization (RFC 8628): the token that comes back is the connection's secret. account names who
-// signed in, so two connections of one type can be told apart.
+// OAuth device authorization (RFC 8628): the token that comes back is an account's secret. account names who
+// signed in, so two accounts of one type can be told apart.
 export type SignIn = {
   site: string;
   codeUrl: string;

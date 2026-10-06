@@ -36,6 +36,9 @@ export type Receipt = {
   // copy and a continued reply keep the receipt whole, so usage counts the call once wherever it is held.
   id: string;
   connection: string;
+  // The id of the connection's account that served it; absent on a receipt older than accounts, and on a call picked
+  // up after a reload.
+  account?: string;
   // The connection's and the model's names when the reply was made; either may be renamed or deleted later.
   source: string;
   model: string;
@@ -70,7 +73,9 @@ export type ReceiptError =
   | { kind: 'bad-event'; detail: string }
   | { kind: 'network'; detail: string }
   | { kind: 'offline' }
-  | { kind: 'no-token' };
+  | { kind: 'no-token' }
+  | { kind: 'pool'; reason: 'empty' | 'spent'; group: string }
+  | { kind: 'pool'; reason: 'unknown'; group: string; accounts: string[] };
 
 // A version as the reader reads it, beside its text, which is what the model is sent and never this.
 // A reply's is translated from its displayed text; a message sent translated keeps here what the user typed, and its

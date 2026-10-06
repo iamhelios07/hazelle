@@ -1,10 +1,10 @@
 import { Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { modelSettings } from '../../connectors/registry';
+import { modelSettings, resolveConnection } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
-import { refreshStarredPrices, removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
+import { refreshStarred, removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { modelProfile } from '../../runtime/profiles';
 import { describeCatalogFailure } from '../common/failure';
 import { useSession } from '../session';
@@ -12,6 +12,7 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, NavBar, Row, Screen, SearchField, Stack, Text } from '../ui';
+import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
 
@@ -44,7 +45,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     let current = true;
     setCatalog(null);
     void catalogs.load(connection, { fresh: attempt > 0 }).then((result) => {
-      if (result.ok) void refreshStarredPrices(store, id, result.models);
+      if (result.ok) void refreshStarred(store, id, result.models);
       if (current) setCatalog(result);
     });
     return () => {
@@ -120,6 +121,10 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     toast.undoable(`${connection.label} 연결을 지웠어요.`, () => void restoreConnection(store, stored));
   }
 
+  const signIn = resolveConnection(connection)?.type?.signIn;
+  // Accounts join a pool by signing in, so a pool type always has a sign-in.
+  const pool = connection.turns && signIn ? { connection: { ...connection, turns: connection.turns }, signIn } : null;
+
   const subtitle = !catalog ? '모델 목록을 불러오는 중…' : catalog.ok ? `모델 ${catalog.models.length}개` : '모델 목록을 불러오지 못했어요';
 
   return (
@@ -127,7 +132,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       top={
         <NavBar
           title={connection.label}
-          subtitle={connection.account ? `${connection.account} · ${subtitle}` : subtitle}
+          subtitle={connection.turns ? `계정 ${connection.accounts.length}개 · ${subtitle}` : connection.accounts[0]!.name ? `${connection.accounts[0]!.name} · ${subtitle}` : subtitle}
           {...backBar(back)}
           actions={<IconButton icon={Trash2} label="연결 지우기" onClick={remove} />}
         />
@@ -143,7 +148,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       }
     >
       <ConnectionSent connection={id} />
-      <ConnectionMeters connection={connection} />
+      {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} /> : <ConnectionMeters connection={connection} />}
       <Stack gap="related">
         <SearchField label="모델 검색" value={query} onChange={setQuery} />
         <ChoiceGroup label="모델 거르기" options={filters} value={filter} onChange={setFilter} />

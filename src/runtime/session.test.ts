@@ -1,31 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { resolveConnection } from '../connectors/registry';
 import type { Connection } from '../connectors/types';
+import { firstTurns } from '../model/turns';
 import { appendUserMessage, startChat } from './chat-log';
 import { editPersona } from './personas';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
 
-const copilot: Connection = { type: 'copilot', label: 'Copilot · jin', baseUrl: null, protocol: null, secret: 'gho_x', starred: [] };
+const copilot: Connection = { type: 'copilot', label: 'Copilot', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'gho_x', name: 'jin' }], turns: firstTurns('group', 'key'), starred: [] };
+const USER = 'https://api.github.com/copilot_internal/user';
 const EXCHANGE = 'https://api.github.com/copilot_internal/v2/token';
 const MODELS = 'https://api.githubcopilot.com/models';
+const unlimited = { quota_snapshots: { premium_interactions: { unlimited: true } } };
 
 describe('session', () => {
   it('drops its tokens and model lists on close, and keeps none from a trade answered after it', () =>
     server.withSession(async (session) => {
-      const log = stubRelay(({ url }) => (url === EXCHANGE ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + 1800 }) : upstream(200, { data: [] })));
+      const log = stubRelay(({ url }) => (url === EXCHANGE ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + 1800 }) : upstream(200, url === USER ? unlimited : { data: [] })));
       const resolved = resolveConnection(copilot)!;
-      expect(await session.credentials.get(resolved, copilot.secret)).toEqual({ ok: true, credential: 'tid' });
+      expect(await session.credentials.get(resolved, copilot.accounts[0]!.secret)).toEqual({ ok: true, credential: 'tid' });
       expect(await session.catalogs.load(copilot)).toEqual({ ok: true, models: [] });
 
       const trading = session.credentials.get(resolved, 'gho_other');
       session.close();
       const stopped = { ok: false, failure: { kind: 'stopped' } };
       expect(await trading).toEqual(stopped);
-      expect(await session.credentials.get(resolved, copilot.secret)).toEqual(stopped);
+      expect(await session.credentials.get(resolved, copilot.accounts[0]!.secret)).toEqual(stopped);
       expect(await session.catalogs.load(copilot)).toEqual(stopped);
-      expect(log.map((call) => call.sent.url)).toEqual([EXCHANGE, MODELS, EXCHANGE]);
+      expect(log.map((call) => call.sent.url)).toEqual([EXCHANGE, USER, MODELS, EXCHANGE]);
     }));
 
   it('opens with the starter, translation and memory prompts as the defaults', () =>

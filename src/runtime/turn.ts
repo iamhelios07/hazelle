@@ -341,9 +341,10 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: 
   return null;
 }
 
-export function cacheSend({ turn, prompt }: Sending): CacheSend | null {
+// account: the account that would serve it (runtime/pool peek).
+export function cacheSend({ turn, prompt }: Sending, account: string | null): CacheSend | null {
   const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
-  return view && { connection: turn.route.connection.id, view, parts: prompt.parts };
+  return view && { connection: turn.route.connection.id, account, view, parts: prompt.parts };
 }
 
 function reversed(message: Message): Message {

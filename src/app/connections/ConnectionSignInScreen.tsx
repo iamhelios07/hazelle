@@ -1,54 +1,18 @@
 import { ExternalLink, RotateCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { DeviceCode } from '../../connectors/device-code';
+import { useState } from 'react';
 import type { ConnectionType, SignIn } from '../../connectors/types';
 import { providerConnection } from '../../runtime/connections';
-import { accountName, awaitApproval, requestCode } from '../../runtime/sign-in';
-import { describeSignInFailure } from '../common/failure';
 import { useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { useToast } from '../toast';
 import { Button, Callout, CodeCard, Intro, NavBar, Screen, Text } from '../ui';
 import { connect } from './connect';
-
-type Stage = { step: 'starting' } | { step: 'code'; code: DeviceCode } | { step: 'connecting' } | { step: 'failed'; message: string };
+import { useDeviceSignIn } from './useDeviceSignIn';
 
 export function ConnectionSignInScreen({ type, signIn, back }: { type: ConnectionType; signIn: SignIn; back: Back }) {
   const session = useSession();
-  const toast = useToast();
-  const [stage, setStage] = useState<Stage>({ step: 'starting' });
   const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    const abort = new AbortController();
-    const { signal } = abort;
-    const fail = (message: string) => signal.aborted || setStage({ step: 'failed', message });
-    setStage({ step: 'starting' });
-    void (async () => {
-      const started = await requestCode(signIn, signal);
-      if (!started.ok) return fail(describeSignInFailure(started.failure, signIn.site));
-      setStage({ step: 'code', code: started.code });
-      const approved = await awaitApproval(signIn, started.code, signal);
-      if (!approved.ok) return fail(describeSignInFailure(approved.failure, signIn.site));
-      setStage({ step: 'connecting' });
-      const account = await accountName(signIn, approved.secret, signal);
-      if (!account.ok) return fail(describeSignInFailure(account.failure, signIn.site));
-      const connection = providerConnection(type, approved.secret, account.name);
-      const failure = await connect(session, connection, signal);
-      if (failure) fail(failure);
-    })();
-    return () => abort.abort();
-  }, [type, signIn, session, attempt]);
-
-  // The copy starts before the new tab takes focus, which the clipboard needs.
-  function openSite(code: DeviceCode) {
-    navigator.clipboard.writeText(code.userCode).then(
-      () => toast.show('코드를 복사했어요.'),
-      () => {},
-    );
-    window.open(code.verificationUri, '_blank', 'noopener');
-  }
+  const { stage, openSite } = useDeviceSignIn(signIn, attempt, (secret, name, signal) => connect(session, providerConnection(type, secret, name), signal));
 
   const top = <NavBar title={`${type.label} 연결`} {...backBar(back)} />;
 

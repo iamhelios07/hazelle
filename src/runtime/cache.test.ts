@@ -4,10 +4,11 @@ import type { Role } from '../model/prompt';
 import { forecast, lastCache, type CacheSend } from './cache';
 
 // Each message counts 10 tokens and is named by its text; a trailing ✓ puts a cache point after it.
-const send = (texts: string[], over: { connection?: string; model?: string } = {}): CacheSend => {
+const send = (texts: string[], over: { connection?: string; account?: string | null; model?: string } = {}): CacheSend => {
   const messages = texts.map((text, index) => ({ role: (text.startsWith('sys') ? 'system' : 'user') as Role, content: text.replace(' ✓', ''), index, ...(text.endsWith('✓') && { cache: true as const }) }));
   return {
     connection: over.connection ?? 'c1',
+    account: over.account === undefined ? 'a1' : over.account,
     view: { model: over.model ?? 'm1', reasoning: undefined, cache: '5m', messages },
     parts: messages.map(({ content }) => ({ from: { kind: 'block', name: content, slot: null }, tokens: 10 })),
   };
@@ -18,6 +19,11 @@ describe('forecast', () => {
 
   it('reads all the last call cached when the next send only adds after it', () => {
     expect(forecast(last, send(['sys ✓', 'u1', 'a1 ✓', 'u2 ✓']))).toEqual({ read: 30, of: 30, broken: null });
+  });
+
+  it('reads nothing when another account of the connection would send it, and claims no change when the next is unknown', () => {
+    expect(forecast(last, send(['sys ✓', 'u1', 'a1 ✓', 'u2 ✓'], { account: 'a2' }))?.broken).toEqual({ kind: 'account' });
+    expect(forecast(last, send(['sys ✓', 'u1', 'a1 ✓', 'u2 ✓'], { account: null }))?.broken).toBeNull();
   });
 
   it('names a message put in before the cached chat, and reads up to the point before it', () => {
@@ -41,7 +47,7 @@ describe('lastCache', () => {
   const reply = (at: number, value: Receipt): Message => ({ id: `m${at}`, role: 'assistant', at, versions: [{ id: `v${at}`, seed: 's', text: 't', receipt: value, edited: false, at }], selected: 0 });
 
   it('keeps what the latest call cached for its TTL from the call’s start, and nothing when it cached none', () => {
-    expect(lastCache([reply(10_000, receipt({ cache: '1h' })), reply(20_000, receipt({}))])).toEqual({ version: 'v20000', connection: 'c1', until: 16_000 + 300_000 });
+    expect(lastCache([reply(10_000, receipt({ cache: '1h' })), reply(20_000, receipt({}))])).toEqual({ version: 'v20000', connection: 'c1', account: null, until: 16_000 + 300_000 });
     expect(lastCache([reply(10_000, receipt({})), reply(20_000, receipt({ usage: { inputTokens: 100, outputTokens: 1, reasoningTokens: null, cachedInputTokens: 0, cacheWriteInputTokens: 0 } }))])).toBeNull();
   });
 });

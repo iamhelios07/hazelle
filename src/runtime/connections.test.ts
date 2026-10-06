@@ -1,22 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { CONNECTION_TYPES } from '../connectors/registry';
-import type { Connection } from '../connectors/types';
+import type { Connection, Model } from '../connectors/types';
 import openRouterKey from '../connectors/fixtures/openrouter-key.json';
 import openRouterModels from '../connectors/fixtures/openrouter-models.json';
 import { SETTINGS_ID } from '../model/settings';
-import { addConnection, providerConnection, setStarred } from './connections';
+import { addConnection, providerConnection, refreshStarred, setStarred } from './connections';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
 
-const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-v1-x', starred: [] };
+const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-v1-x' }], turns: null, starred: [] };
 const KEY = 'https://openrouter.ai/api/v1/key';
 
 describe('providerConnection', () => {
-  it('initializes the provider-backed stored shape, with account metadata only for sign-in', () => {
+  it('holds one account, named only for a sign-in, and gives a pool type its first group', () => {
     const type = CONNECTION_TYPES.find((entry) => entry.id === 'openrouter')!;
-    expect(providerConnection(type, 'sk-or-v1-x')).toEqual(openRouter);
-    expect(providerConnection(type, 'signed-in', '사용자')).toEqual({ ...openRouter, secret: 'signed-in', account: '사용자' });
+    expect(providerConnection(type, 'sk-or-v1-x')).toEqual({ ...openRouter, accounts: [{ id: expect.any(String), secret: 'sk-or-v1-x' }] });
+    const copilot = providerConnection(CONNECTION_TYPES.find((entry) => entry.id === 'copilot')!, 'gho_x', 'jin');
+    expect(copilot).toMatchObject({ accounts: [{ secret: 'gho_x', name: 'jin' }], turns: { day: 16, groups: [{ name: '그룹 1', accounts: [copilot.accounts[0]!.id] }] } });
     const first = providerConnection(type, 'first');
     const second = providerConnection(type, 'second');
     expect(first.starred).not.toBe(second.starred);
@@ -47,5 +48,21 @@ describe('setStarred', () => {
       await setStarred(store, id, model('first'), true);
       await setStarred(store, id, model('second'), true);
       expect(store.get('settings', SETTINGS_ID)?.value.models.main).toEqual({ connection: id, model: 'first' });
+    }));
+});
+
+describe('refreshStarred', () => {
+  it('takes what the list says of each starred model now, keeping its 설정 묶음, a price the list leaves out, and a model it no longer lists', () =>
+    server.withSession(async ({ store }) => {
+      const base: Model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+      const price = { input: 1, output: 2, cacheRead: null, cacheWrite: null, tiers: [], asOf: null };
+      const saved = await store.create('connection', { ...openRouter, starred: [{ ...base, price, profile: 'p' }, { ...base, id: 'gone' }] });
+      const id = saved.ok ? saved.data.id : '';
+      const listed = { ...base, name: 'M 2', protocol: 'anthropic-messages' as const, later: 'a field a later version adds' };
+      await refreshStarred(store, id, [listed]);
+      expect(store.get('connection', id)?.value.starred).toEqual([{ ...listed, price, profile: 'p' }, { ...base, id: 'gone' }]);
+      const rev = store.get('connection', id)!.rev;
+      await refreshStarred(store, id, [{ ...listed }]);
+      expect(store.get('connection', id)!.rev).toBe(rev);
     }));
 });

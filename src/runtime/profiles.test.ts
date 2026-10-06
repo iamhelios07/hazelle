@@ -6,7 +6,7 @@ import { testServer } from './testing';
 const server = testServer();
 
 const model: Model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
-const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [model, { ...model, id: 'other' }] };
+const openRouter: Connection = { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [model, { ...model, id: 'other' }] };
 
 describe('설정 묶음', () => {
   it('gives a model the default 묶음 until it names its own, reads a deleted one as missing, and keeps the default', async () => {

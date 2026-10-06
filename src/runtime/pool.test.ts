@@ -1,0 +1,80 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CONNECTION_TYPES } from '../connectors/registry';
+import type { Connection, HttpRequest, Model } from '../connectors/types';
+import { cycleOf } from '../model/turns';
+import { streamKey } from '../vault/streams';
+import { Credentials } from './credential';
+import { generate } from './generate';
+import { Pool } from './pool';
+import { stubRelay, testServer, upstream } from './testing';
+
+const server = testServer();
+beforeEach(() => server.account());
+afterEach(() => vi.useRealTimers());
+
+const USER = 'https://api.github.com/copilot_internal/user';
+const EXCHANGE = 'https://api.github.com/copilot_internal/v2/token';
+const OCTOBER_10 = new Date(2026, 9, 10, 12).getTime();
+const OCTOBER_20 = new Date(2026, 9, 20, 12).getTime();
+
+const left = (remaining: number) => ({ quota_snapshots: { premium_interactions: { entitlement: 300, remaining } }, quota_reset_date_utc: '2026-11-01T00:00:00Z' });
+// By the account's secret: what its allowance answers, or a status it fails with.
+const allowances = (answers: Record<string, object | number>) =>
+  stubRelay(({ url, headers }: HttpRequest) => {
+    if (url !== USER) return url === EXCHANGE ? upstream(200, { token: 'tid', expires_at: Math.floor(Date.now() / 1000) + 1800 }) : upstream(500, { message: 'down' });
+    const answer = answers[headers.authorization!.replace('Bearer ', '')]!;
+    return typeof answer === 'number' ? upstream(answer, { message: 'no' }) : upstream(200, answer);
+  });
+
+// Group 1 (a, b) has the turn that started on 16 September; group 2 (c) takes it on 16 October.
+const pool = (two: string[] = ['c']): Connection => ({
+  type: 'copilot',
+  label: 'Copilot',
+  baseUrl: null,
+  protocol: null,
+  accounts: ['a', 'b', 'c'].map((id) => ({ id, secret: id, name: `user-${id}` })),
+  turns: { day: 16, groups: [{ id: 'g1', name: '그룹 1', accounts: ['a', 'b'] }, { id: 'g2', name: '그룹 2', accounts: two }], anchor: { group: 'g1', cycle: cycleOf(OCTOBER_10, 16) } },
+  starred: [],
+});
+
+const at = (now: number) => vi.useFakeTimers({ toFake: ['Date'], now });
+
+describe('Pool.pick', () => {
+  it('serves the group whose turn it is by the switch day, and in it the first account with allowance left', async () => {
+    allowances({ a: left(0), b: left(5), c: { quota_snapshots: { premium_interactions: { unlimited: true } } } });
+    at(OCTOBER_10);
+    expect(await new Pool().pick(pool())).toMatchObject({ ok: true, account: { id: 'b' } });
+    at(OCTOBER_20);
+    expect(await new Pool().pick(pool())).toMatchObject({ ok: true, account: { id: 'c' } });
+  });
+
+  it('says apart a group with no account, one spent, and allowances it could not read', async () => {
+    allowances({ a: left(0), b: 500 });
+    at(OCTOBER_20);
+    expect(await new Pool().pick(pool([]))).toEqual({ ok: false, failure: { kind: 'pool', reason: 'empty', group: '그룹 2' } });
+    at(OCTOBER_10);
+    expect(await new Pool().pick(pool())).toEqual({ ok: false, failure: { kind: 'pool', reason: 'unknown', group: '그룹 1', accounts: ['user-b'] } });
+    allowances({ a: left(0), b: left(0) });
+    expect(await new Pool().pick(pool())).toEqual({ ok: false, failure: { kind: 'pool', reason: 'spent', group: '그룹 1' } });
+  });
+});
+
+it('reads a failed reply’s account again before the next pick, and never sends that reply on another account', async () => {
+  const log = allowances({ a: left(5), b: left(5) });
+  at(OCTOBER_10);
+  const credentials = new Credentials();
+  const model: Model = { id: 'gpt-4.1', name: 'gpt', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+  const send = async () => {
+    const key = await streamKey();
+    return generate({ credentials, connection: pool(), model, settings: {}, messages: [{ role: 'user', content: '안녕' }], call: { id: crypto.randomUUID(), key: key.private, public: key.public }, signal: new AbortController().signal, onText: () => {} });
+  };
+  expect(await send()).toMatchObject({ state: 'failed', account: 'a' });
+  expect(await send()).toMatchObject({ state: 'failed', account: 'a' });
+  const urls = log.map(({ sent }) => sent.url);
+  expect(urls.filter((url) => url === USER)).toHaveLength(3);
+  expect(urls.filter((url) => url.endsWith('/chat/completions'))).toHaveLength(2);
+});
+
+it('has no pool type that books a cost after the reply, which settles on the connection’s one account', () => {
+  expect(CONNECTION_TYPES.filter((type) => type.pool && type.settle)).toEqual([]);
+});

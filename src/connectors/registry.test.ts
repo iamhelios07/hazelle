@@ -24,7 +24,7 @@ import {
 import { ConnectorError, type Connection, type Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}) =>
-  resolveConnection({ type, label: type, baseUrl: null, protocol: null, secret: 'key', starred: [], ...extra })!;
+  resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra })!;
 
 const model = (extra: Partial<Model> = {}): Model => ({
   id: 'm',
@@ -137,7 +137,7 @@ describe('the 연결 추가 list', () => {
   });
 
   it('keeps a generic connection’s explicit endpoint and protocol even on a known host', () => {
-    const saved: Connection = { type: 'generic', label: 'openrouter.ai', baseUrl: 'https://openrouter.ai/api/v1', protocol: 'anthropic-messages', secret: 'k', starred: [] };
+    const saved: Connection = { type: 'generic', label: 'openrouter.ai', baseUrl: 'https://openrouter.ai/api/v1', protocol: 'anthropic-messages', accounts: [{ id: 'key', secret: 'k' }], turns: null, starred: [] };
     expect(resolveConnection(saved)).toMatchObject({ type: null, endpoint: { baseUrl: saved.baseUrl, protocol: 'anthropic-messages' }, codec: anthropicMessages });
   });
 });
@@ -284,9 +284,9 @@ describe('catalogs', () => {
   });
 
   it('knows nothing of a type from a newer version, or a generic connection without its address', () => {
-    expect(resolveConnection({ type: 'someday', label: '', baseUrl: null, protocol: null, secret: '', starred: [] })).toBeNull();
-    expect(resolveConnection({ type: 'generic', label: '', baseUrl: null, protocol: 'chat-completions', secret: '', starred: [] })).toBeNull();
-    const newer = { type: 'generic', label: '', baseUrl: 'https://api.example.com/v1', protocol: 'responses', secret: '', starred: [] };
+    expect(resolveConnection({ type: 'someday', label: '', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: '' }], turns: null, starred: [] })).toBeNull();
+    expect(resolveConnection({ type: 'generic', label: '', baseUrl: null, protocol: 'chat-completions', accounts: [{ id: 'key', secret: '' }], turns: null, starred: [] })).toBeNull();
+    const newer = { type: 'generic', label: '', baseUrl: 'https://api.example.com/v1', protocol: 'responses', accounts: [{ id: 'key', secret: '' }], turns: null, starred: [] };
     expect(resolveConnection(newer as unknown as Connection)).toBeNull();
   });
 });
@@ -400,7 +400,7 @@ describe('chat requests', () => {
 // The fixture is assembled from the field shapes provider-hub and copilot-manager read, not captured
 // from a live account.
 describe('copilot', () => {
-  const resolved = connection('copilot', { secret: 'gho_x' });
+  const resolved = connection('copilot', { accounts: [{ id: 'key', secret: 'gho_x' }] });
   const models = parseCatalog(resolved, copilotModels)!;
   const find = (id: string) => models.find((entry) => entry.id === id)!;
   const messages = [{ role: 'user' as const, content: '안녕' }];

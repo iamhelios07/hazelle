@@ -99,7 +99,7 @@ async function oldAccount({ profile = true } = {}) {
   await startChat(store, gone, opened, null);
   await appendUserMessage(store, gone, { id: crypto.randomUUID(), text: '지울 채팅' });
   await removeChat(store, gone);
-  await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
+  await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
   return { store, files, image, smile, chat, gone };
 }
 
@@ -234,9 +234,26 @@ describe('backup', () => {
     expect(await held(store)).toEqual(expected);
   });
 
+  it('restores a connection a backup holds in its shape from before accounts, upgraded', async () => {
+    const old = await oldAccount();
+    const entries = unzipSync(new Uint8Array(await (await exported(old.store, old.files)).arrayBuffer()));
+    const lines = new TextDecoder().decode(entries['objects.jsonl']).split('\n');
+    entries['objects.jsonl'] = new TextEncoder().encode(lines.map((line) => {
+      const object = line && JSON.parse(line);
+      return object?.kind === 'connection' ? JSON.stringify({ ...object, value: { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] } }) : line;
+    }).join('\n'));
+    const backup = await read(new Blob([zipSync(entries)]));
+
+    await server.wipe();
+    const { store, files } = await open('someone');
+    expect(await restoreBackup(store, files, backup)).toEqual({ ok: true, data: { skipped: 0 } });
+    const restored = [...(await held(store)).values()].filter(({ kind }) => kind === 'connection');
+    expect(restored.map(({ value }) => value)).toEqual([{ type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'account-1', secret: 'sk-or-x' }], turns: null, starred: [] }]);
+  });
+
   it('writes an object edited on another device during the walk once, so its own importer reads the file', async () => {
     const { store, files, open } = await server.account();
-    const created = await store.create('connection', { type: 'openrouter', label: 'a', baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
+    const created = await store.create('connection', { type: 'openrouter', label: 'a', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
     if (!created.ok) throw new Error(created.error);
     // More than one feed page, so the walk asks again after the edit.
     await store.batch(Array.from({ length: 500 }, (_, index) => ({ type: 'create', kind: 'folder', id: crypto.randomUUID(), parent: null, value: { name: `${index}` } })));

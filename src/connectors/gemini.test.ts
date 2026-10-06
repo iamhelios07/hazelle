@@ -4,7 +4,7 @@ import { chatRequest, detect, parseCatalog, resolveConnection, withCredential, t
 import { decodeStream } from './stream';
 import type { Phase } from './types';
 
-const google: Resolved = resolveConnection({ type: 'google', label: 'Google', baseUrl: null, protocol: null, secret: 'key', starred: [] })!;
+const google: Resolved = resolveConnection({ type: 'google', label: 'Google', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] })!;
 const [flash, old] = parseCatalog(google, recorded.models)!;
 
 async function decode(text: string, media = 'text/event-stream') {

@@ -33,7 +33,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
             <ListItem
               key={connection.id}
               title={connection.value.label}
-              description={[connection.value.account, connection.value.starred.length ? `별표 ${connection.value.starred.length}개` : '별표 없음'].filter(Boolean).join(' · ')}
+              description={[connection.value.turns ? `계정 ${connection.value.accounts.length}개` : connection.value.accounts[0]!.name, connection.value.starred.length ? `별표 ${connection.value.starred.length}개` : '별표 없음'].filter(Boolean).join(' · ')}
               tags={resolveConnection(connection.value) ? [] : ['이 버전이 모르는 연결']}
               trailing={<Icon icon={ChevronRight} />}
               current={route.kind === 'connection' && route.id === connection.id}
