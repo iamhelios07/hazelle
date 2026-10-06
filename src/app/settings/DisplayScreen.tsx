@@ -11,9 +11,9 @@ export function DisplayScreen({ back }: { back: Back | null }) {
   const current = presetOf(presets, reading, display);
   return (
     <Screen width="form" top={<NavBar title={PAGES.display} {...backBar(back)} />}>
-      <Section title="테마">
-        <ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />
-      </Section>
+      <SettingGroup label="테마">
+        <SettingRow label="테마" control={<ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
+      </SettingGroup>
       <Section title="글">
         <SettingGroup label="글">
           <ReadingRows place="group" />

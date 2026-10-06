@@ -6,15 +6,14 @@ type Props = {
   value: string;
   placeholder: string;
   onChange: (value: string) => void;
-  size?: 'md' | 'lg';
   ref?: Ref<HTMLInputElement>;
 };
 
-export function TitleField({ label, value, placeholder, onChange, size = 'lg', ref }: Props) {
+export function TitleField({ label, value, placeholder, onChange, ref }: Props) {
   return (
     <input
       ref={ref}
-      className={`${styles.field} ${styles[size]}`}
+      className={styles.field}
       aria-label={label}
       value={value}
       placeholder={placeholder}

@@ -1,4 +1,7 @@
 .screen {
+  /* A box's edge hangs out so the words inside it start on the line of the page title and section titles. */
+  --box-hang: var(--space-16);
+
   min-height: 100dvh;
   max-width: var(--screen-narrow);
   margin: 0 auto;

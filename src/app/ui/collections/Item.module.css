@@ -34,10 +34,11 @@
   border-radius: var(--radius-md);
 }
 
+/* Inside a Screen, List hangs by --box-hang and this inset brings the title back onto the reading line. */
 .tall {
   gap: var(--space-8);
   min-height: var(--row-min-height);
-  padding: var(--space-8) var(--space-8);
+  padding: var(--space-8) max(var(--space-8), var(--box-hang));
   border-radius: var(--radius-md);
   transition: background-color var(--duration-fast);
 }
@@ -87,7 +88,7 @@
 }
 
 .tall .title {
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   font-weight: var(--weight-medium);
 }
 

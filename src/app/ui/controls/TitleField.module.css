@@ -7,19 +7,10 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);
-  transition: border-color var(--duration-fast);
-}
-
-.md {
-  height: var(--control-tool);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-}
-
-.lg {
   height: var(--control-md);
   font-size: var(--text-xl);
   font-weight: var(--weight-semibold);
+  transition: border-color var(--duration-fast);
 }
 
 .field:hover {
