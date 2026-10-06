@@ -3,35 +3,35 @@ import { KEEP_DAYS } from '../../model/library';
 
 // Sentences stay in their
 // screen and are built from these; the phrases these replaced are refused by lint (RETIRED_COPY in eslint.config.js).
-// Kept apart on purpose, not variants of one word: 빼기 takes out of a list, 지우기 deletes. 편집 opens an item's
-// editor, 수정 changes a message in place. 새 답장 받기 asks for another reply, 다시 시도 repeats a failed or stopped
+// Kept apart on purpose, not variants of one word: 빼기 takes out of a list, 삭제 deletes. 편집 opens an item's
+// editor, 수정 changes a message in place. 다시 생성 asks for another reply, 다시 시도 repeats a failed or stopped
 // one. 컨텍스트 길이 is the model's own, 컨텍스트 한도 the setting. 원문 is what a translation came from, 요청 원문
-// the request a reply was asked with. 사용 중 marks what is in use, 쓰는 중 a reply being written.
+// the request a reply was asked with. 사용 중 marks what is in use, 생성 중 a reply being written.
 
 export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '보조 모델' };
 
 // Where a translation's model comes from, said beside the model wherever it shows.
-export const TRANSLATION_MODEL_HELP = `번역 프롬프트에서 골라요. 고르지 않았으면 ${MODEL_ROLES.aux}을 따라요.`;
+export const TRANSLATION_MODEL_HELP = `번역 프롬프트에서 선택하지 않으면 ${MODEL_ROLES.aux}을 사용해요.`;
 
-export const AUX_HELP = '번역과 장기 기억 정리처럼 대화 밖에서 하는 일에 써요. 번역 프롬프트나 기억 프롬프트에서 모델을 고르면 그 일은 그 모델로 해요.';
+export const AUX_HELP = '번역, 장기 기억 정리처럼 대화 밖의 작업에 사용해요.';
 
 // 캐릭터 편집's switch for a bot whose script calls a model, and what the card that asks it in the chat says first.
-export const BOT_MODELS = '봇이 모델 부르기';
-export const BOT_MODELS_HELP = '봇의 스크립트가 답장과 별개로 모델에 요청을 보내요. 그만큼 요금이 더 들 수 있어요.';
+export const BOT_MODELS = '봇의 모델 호출';
+export const BOT_MODELS_HELP = '봇 스크립트가 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
 
 export const SETTINGS = '설정';
 
 // Where what is deleted waits KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
 export const BIN = '휴지통';
 // What the toast of a deletion that goes there adds.
-export const BIN_KEEPS = `${KEEP_DAYS}일 안에는 ‘${BIN}’에서 되살릴 수 있어요.`;
+export const BIN_KEEPS = `${KEEP_DAYS}일 안에 '${BIN}'에서 복원할 수 있어요.`;
 
 export const COMMAND = '명령어';
 
 export const TRANSLATOR_NOTE = '번역가의 노트';
 export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 둬 주세요';
 export const noteLines = (note: string | undefined) => (note ?? '').split('\n').filter((line) => line.trim()).length;
-export const NOTE_UNSENT = `번역 프롬프트에 ‘${TRANSLATOR_NOTE}’ 블록이 없어서 보내지 않아요. 프롬프트에서 넣어 주세요.`;
+export const NOTE_UNSENT = `번역 프롬프트에 '${TRANSLATOR_NOTE}' 블록을 추가해야 노트가 적용돼요.`;
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
 export const PAGES = { models: '모델', connections: 'API 연결', chat: '채팅 기본값', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', translator: '번역기', account: '계정', admin: '운영' };
@@ -59,8 +59,8 @@ export const moduleName = (name: string) => name.trim() || '이름 없는 모듈
 export const promptName = (name: string) => name || '이름 없는 프롬프트';
 export const loreName = (name: string) => name.trim() || '이름 없는 항목';
 
-export const NOT_STARRED = '별표한 모델에 없음';
+export const NOT_STARRED = '즐겨찾기에 없음';
 
-export const noStarred = (then: string) => `별표한 모델이 없어요. ${inSettings('connections')}에서 모델에 별표하면 여기서 ${then}.`;
+export const noStarred = (then: string) => `즐겨찾기한 모델이 없어요. ${inSettings('connections')}에서 모델을 즐겨찾기하면 여기서 ${then}.`;
 
 export const CAST = '등장인물';
