@@ -296,6 +296,9 @@
   --dialog-height-wide: 640px;
   --detail-pane-width: 400px;
   --composer-max-height: 240px;
+  /* 번역기: the two panes side by side, and each one stacked on a narrow page. */
+  --desk-min-height: 480px;
+  --desk-pane-min-height: 200px;
   /* One line of the element's own text: a custom property keeps 1lh as written, so it is read where used. */
   --one-line: 1lh;
   /* Prompt text in the editor (MarkupArea) and the outline beside it. */

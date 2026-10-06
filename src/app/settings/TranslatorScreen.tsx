@@ -1,97 +1,165 @@
-import { Copy } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, ChevronDown, ChevronUp, Copy, Eraser, Languages, Square } from 'lucide-react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { translateSwitches } from '../../runtime/characters';
 import { translationPrompt } from '../../runtime/prompts';
-import { translatorOf, type TranslatorFailure } from '../../runtime/translate';
+import { sendsNotes, translatorOf, type TranslatorFailure } from '../../runtime/translate';
 import { translateText, TRANSLATOR_CHAT } from '../../runtime/turn';
 import { describeTranslateFailure } from '../common/failure';
-import { IntoLanguage } from '../common/IntoLanguage';
+import { LanguageMenu } from '../common/IntoLanguage';
 import { useCopy } from '../common/useCopy';
 import { usePersisted } from '../common/usePersisted';
-import { PAGES, TRANSLATION_MODEL_HELP } from '../common/words';
+import { DEFAULT_MODELS, NOTE_UNSENT, noteLines, PAGES, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
 import { useConnections, usePrompts, useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, CodeBlock, IconButton, NavBar, Screen, Section, SettingGroup, SettingRow, Text, TextField } from '../ui';
+import { SHORTCUTS } from '../shortcuts';
+import { Button, Callout, ChipButton, formatKeys, Icon, Menu, MenuHeading, MenuItem, NavBar, pressed, Screen, TranslateDesk } from '../ui';
+import { GlobalNoteField } from './TranslationDefaults';
 
 const LANGUAGE = 'risu-alpha:translator-language';
 
-type Run = { kind: 'idle' } | { kind: 'running'; text: string } | { kind: 'done'; text: string } | { kind: 'failed'; failure: TranslatorFailure };
+// text: what came before a stop or a failure, kept in view.
+type Run =
+  | { kind: 'idle' }
+  | { kind: 'running'; text: string }
+  | { kind: 'done'; text: string; cut: boolean }
+  | { kind: 'stopped'; text: string }
+  | { kind: 'failed'; text: string; failure: TranslatorFailure };
+
+const count = (text: string) => (text ? `${text.length.toLocaleString('ko-KR')}자` : '');
 
 export function TranslatorScreen({ back }: { back: Back | null }) {
   const session = useSession();
   const { store } = session;
-  // translatorOf reads these.
-  useSettings();
+  const settings = useSettings();
+  // translatorOf reads these too.
   usePrompts();
   useConnections();
   const copy = useCopy();
   const [language, setLanguage] = usePersisted(LANGUAGE, (stored) => stored, 'Korean', (name) => name);
   const [source, setSource] = useState('');
   const [run, setRun] = useState<Run>({ kind: 'idle' });
+  const [noteOpen, setNoteOpen] = useState(false);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
   const prompt = translationPrompt(store, translateSwitches(store, null).prompt);
   const translator = translatorOf(store, TRANSLATOR_CHAT);
+  const running = run.kind === 'running';
+  const ready = translator.ok && source.trim() !== '' && !running;
+  const lines = noteLines(settings.translatorNote);
+  const unsent = lines > 0 && translator.ok && !sendsNotes(translator.prompt);
 
   async function start() {
+    if (!ready) return;
     const controller = new AbortController();
     abort.current = controller;
+    let last = '';
     setRun({ kind: 'running', text: '' });
-    const made = await translateText(session, source, language, controller.signal, (text) => setRun({ kind: 'running', text }));
+    const made = await translateText(session, source, language, controller.signal, (text) => {
+      last = text;
+      setRun({ kind: 'running', text });
+    });
     abort.current = null;
-    setRun(made.ok ? { kind: 'done', text: made.translation.text } : made.failure.kind === 'stopped' ? { kind: 'idle' } : { kind: 'failed', failure: made.failure });
+    if (made.ok) setRun({ kind: 'done', text: made.translation.text, cut: made.translation.receipt?.state === 'cut' });
+    else if (made.failure.kind === 'stopped') setRun(last ? { kind: 'stopped', text: last } : { kind: 'idle' });
+    else setRun({ kind: 'failed', text: last, failure: made.failure });
   }
 
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (!pressed(event, SHORTCUTS.translate.keys)) return;
+    event.preventDefault();
+    void start();
+  }
+
+  const text = run.kind === 'idle' ? '' : run.text;
+  const resultNote =
+    run.kind === 'running' ? '번역하는 중…' : run.kind === 'done' ? [count(run.text), run.cut && '길이 한도에서 잘렸어요'].filter(Boolean).join(' · ') : run.kind === 'stopped' ? `${count(run.text)} · 멈췄어요` : '';
+
   return (
-    <Screen width="form" top={<NavBar title={PAGES.translator} {...backBar(back)} />}>
-      <TextField label="원문" lines={8} value={source} onChange={setSource} placeholder="번역할 글을 붙여 넣어요." />
-      <SettingGroup label="번역">
-        <SettingRow
-          label="번역할 언어"
-          sentence={<IntoLanguage before="" after="" label="번역할 언어" value={language} opens="down" onPick={setLanguage} />}
-          control={
-            run.kind === 'running' ? (
-              <Button variant="secondary" size="sm" onClick={() => abort.current?.abort()}>
-                멈추기
+    <Screen width="wide" top={<NavBar title={PAGES.translator} {...backBar(back)} />}>
+      <TranslateDesk
+        tools={
+          <>
+            <Menu
+              label="번역 모델"
+              trigger={(opener) => (
+                <ChipButton
+                  label={translator.ok ? translator.route.model.name : '번역 모델 없음'}
+                  title="번역 모델"
+                  tone={translator.ok ? 'default' : 'warn'}
+                  leading={<Icon icon={Languages} size="xs" />}
+                  {...opener}
+                />
+              )}
+            >
+              <MenuHeading>{translator.ok ? TRANSLATION_MODEL_HELP : describeTranslateFailure(translator.failure)}</MenuHeading>
+              {prompt.kind === 'prompt' && <MenuItem label={`‘${prompt.prompt.value.name}’ 열기…`} onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: null })} />}
+              <MenuItem label={`${DEFAULT_MODELS} 열기…`} onClick={() => navigate({ kind: 'models' })} />
+              <MenuHeading>여기서 한 번역은 저장하지 않고, 사용량에도 들어가지 않아요.</MenuHeading>
+            </Menu>
+            <Icon icon={ArrowRight} size="xs" />
+            <LanguageMenu label="번역할 언어" value={language} opens="down" onPick={setLanguage} />
+          </>
+        }
+        aside={
+          <Button variant="ghost" size="sm" icon={noteOpen ? ChevronUp : ChevronDown} expanded={noteOpen} onClick={() => setNoteOpen(!noteOpen)}>
+            {lines > 0 ? `${TRANSLATOR_NOTE} · ${lines}줄` : TRANSLATOR_NOTE}
+          </Button>
+        }
+        below={noteOpen && <GlobalNoteField error={unsent ? NOTE_UNSENT : undefined} />}
+        source={{
+          label: '원문',
+          value: source,
+          placeholder: `번역할 글을 붙여 넣어요. ${formatKeys(SHORTCUTS.translate.keys)}로 번역해요.`,
+          readOnly: running,
+          onChange: setSource,
+          onKeyDown,
+          foot: {
+            note: count(source),
+            actions: (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Eraser}
+                  disabled={running || (!source && !text)}
+                  onClick={() => {
+                    setSource('');
+                    setRun({ kind: 'idle' });
+                  }}
+                >
+                  비우기
+                </Button>
+                {running ? (
+                  <Button variant="secondary" size="sm" icon={Square} onClick={() => abort.current?.abort()}>
+                    멈추기
+                  </Button>
+                ) : (
+                  <Button size="sm" icon={ArrowRight} disabled={!ready} onClick={() => void start()}>
+                    번역하기
+                  </Button>
+                )}
+              </>
+            ),
+          },
+        }}
+        result={{
+          label: '번역 결과',
+          text,
+          placeholder: running ? '답을 기다리는 중…' : '번역 결과가 여기 나와요.',
+          busy: running,
+          notice: run.kind === 'failed' && <Callout tone="warn">{`번역하지 못했어요. ${describeTranslateFailure(run.failure)}`}</Callout>,
+          foot: {
+            note: resultNote,
+            actions: (
+              <Button variant="ghost" size="sm" icon={Copy} disabled={!text || running} onClick={() => copy(text)}>
+                복사
               </Button>
-            ) : (
-              <Button size="sm" disabled={!source.trim() || !translator.ok} onClick={() => void start()}>
-                번역하기
-              </Button>
-            )
-          }
-        />
-        <SettingRow
-          label="번역 프롬프트"
-          help="모든 채팅의 번역과 같은 프롬프트와 전역 번역가의 노트를 써요. 프롬프트는 채팅의 번역 메뉴에서 바꿔요."
-          sub={prompt.kind === 'prompt' ? prompt.prompt.value.name : '없음'}
-          control={
-            prompt.kind === 'prompt' && (
-              <Button variant="ghost" size="sm" onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: null })}>
-                편집
-              </Button>
-            )
-          }
-        />
-        <SettingRow
-          label="번역 모델"
-          help={`${TRANSLATION_MODEL_HELP} 여기서 한 번역은 계정의 사용량에 들어가지 않아요.`}
-          control={<Text variant="note">{translator.ok ? translator.route.model.name : describeTranslateFailure(translator.failure)}</Text>}
-        />
-      </SettingGroup>
-      {run.kind !== 'idle' && (
-        <Section title="번역" action={run.kind === 'done' && <IconButton icon={Copy} size="sm" label="복사" onClick={() => copy(run.text)} />}>
-          {run.kind === 'failed' ? (
-            <Callout tone="warn">{`번역하지 못했어요. ${describeTranslateFailure(run.failure)}`}</Callout>
-          ) : run.text ? (
-            <CodeBlock variant="prose">{run.text}</CodeBlock>
-          ) : (
-            <Text variant="note">번역하는 중…</Text>
-          )}
-        </Section>
-      )}
+            ),
+          },
+        }}
+      />
     </Screen>
   );
 }

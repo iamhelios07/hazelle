@@ -18,6 +18,7 @@ export const SHORTCUTS = {
   editLast: { label: '내 마지막 메시지 수정', hint: '내 메시지 수정', keys: [{ key: 'ArrowUp' }] },
   swipe: { label: '답장 넘기기 · 끝에서 새 답장 받기', hint: '답장 넘기기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
   saveEdit: { label: '수정 저장', hint: '저장', keys: [{ key: 'Enter', mod: true }] },
+  translate: { label: '번역하기', hint: '번역', keys: [{ key: 'Enter', mod: true }] },
   cancelEdit: { label: '수정 취소', hint: '취소', keys: [{ key: 'Escape' }] },
   // Its handler stays mounted only with a chat open, so elsewhere the key is the browser's find.
   find: { label: '채팅 안 검색', hint: '검색', keys: [{ key: 'f', mod: true }] },
@@ -36,6 +37,7 @@ export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: re
   { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'undoToast'] },
   { title: '채팅', note: '입력창에서 동작해요. 화살표는 입력창이 비어 있을 때만 써요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit', 'find'] },
   { title: '채팅 검색창', names: ['findNext', 'findPrevious', 'closeFind'] },
+  { title: '번역기', note: '원문 칸에서 동작해요.', names: ['translate'] },
   { title: '프롬프트 편집', note: '블록과 토글을 고친 것을 되돌려요. 글 칸 안에서는 글자를 되돌려요.', names: ['undo', 'redo'] },
 ];
 

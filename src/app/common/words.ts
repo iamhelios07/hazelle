@@ -30,6 +30,8 @@ export const COMMAND = '명령어';
 
 export const TRANSLATOR_NOTE = '번역가의 노트';
 export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 둬 주세요';
+export const noteLines = (note: string | undefined) => (note ?? '').split('\n').filter((line) => line.trim()).length;
+export const NOTE_UNSENT = `번역 프롬프트에 ‘${TRANSLATOR_NOTE}’ 블록이 없어서 보내지 않아요. 프롬프트에서 넣어 주세요.`;
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
 export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', translator: '번역기', account: '계정', admin: '운영' };

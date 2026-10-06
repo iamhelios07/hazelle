@@ -105,6 +105,10 @@ export function translatorOf(store: ObjectStore, chat: Chat): { ok: true; prompt
   return 'kind' in route ? { ok: false, failure: route } : { ok: true, prompt: prompt.prompt.value, route };
 }
 
+// A prompt made before the 번역가의 노트 slot existed, the stored 기본 번역 among them, sends no note until the user adds
+// the block.
+export const sendsNotes = (prompt: TranslatePrompt) => prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'note');
+
 export type TranslatorFailure = Exclude<TranslateFailure, { kind: 'stopped' }>;
 
 // failed: why the last try at a version did not translate it, kept for the session.

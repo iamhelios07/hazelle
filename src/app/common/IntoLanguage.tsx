@@ -8,11 +8,17 @@ export function IntoLanguage({ before, after, label, value, opens, onPick }: { b
   return (
     <>
       {before}
-      <Menu kind="dialog" place={opens === 'up' ? 'above-start' : 'below-start'} label={label} trigger={(opener) => <ChipButton opens={opens} label={word} title={label} {...opener} />}>
-        <LanguageChoices value={value} onPick={onPick} />
-      </Menu>
+      <LanguageMenu label={label} value={value} opens={opens} onPick={onPick} />
       {`${withRo(word).slice(word.length)} ${after}`}
     </>
+  );
+}
+
+export function LanguageMenu({ label, value, opens, onPick }: { label: string; value: string; opens: 'up' | 'down'; onPick: (name: string) => void }) {
+  return (
+    <Menu kind="dialog" place={opens === 'up' ? 'above-start' : 'below-start'} label={label} trigger={(opener) => <ChipButton opens={opens} label={languageLabel(value)} title={label} {...opener} />}>
+      <LanguageChoices value={value} onPick={onPick} />
+    </Menu>
   );
 }
 

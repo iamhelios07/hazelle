@@ -1,0 +1,114 @@
+.desk {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.aside {
+  margin-left: auto;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: var(--desk-min-height);
+  border: var(--border-thin) solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-sidebar);
+  overflow: hidden;
+}
+
+.panes:has(.area:focus-visible) {
+  border-color: var(--color-focus);
+}
+
+.pane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.result {
+  border-left: var(--border-thin) solid var(--color-divider);
+  background: var(--color-bg);
+}
+
+.area,
+.text {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-16);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+}
+
+.area {
+  resize: none;
+}
+
+.area:focus-visible {
+  outline: none;
+}
+
+.empty {
+  color: var(--color-text-faint);
+}
+
+.notice {
+  padding: var(--space-12) var(--space-12) 0;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: var(--control-lg);
+  padding: var(--space-8) var(--space-12) var(--space-8) var(--space-16);
+  border-top: var(--border-thin) solid var(--color-divider);
+}
+
+.note {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@container (max-width: 640px) {
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .result {
+    border-left: 0;
+    border-top: var(--border-thin) solid var(--color-divider);
+  }
+
+  .area,
+  .text {
+    flex: none;
+    min-height: var(--desk-pane-min-height);
+  }
+
+  .area {
+    resize: vertical;
+  }
+}

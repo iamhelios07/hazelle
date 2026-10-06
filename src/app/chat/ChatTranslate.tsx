@@ -1,8 +1,9 @@
 import { Languages } from 'lucide-react';
 import { ofSort, translationPrompt } from '../../runtime/prompts';
+import { sendsNotes } from '../../runtime/translate';
 import { describeTranslateFailure } from '../common/failure';
 import { IntoLanguage } from '../common/IntoLanguage';
-import { follows, inSettings, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
+import { follows, inSettings, NOTE_UNSENT, noteLines, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Stack, Switch, Tag, Text, ToolButton } from '../ui';
 import type { OpenChat } from './useChat';
@@ -69,22 +70,19 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
   );
 }
 
-const lineCount = (note: string | undefined) => (note ?? '').split('\n').filter((line) => line.trim()).length;
-
 function NoteRow({ chat }: { chat: OpenChat }) {
   const { shelf, translation, actions } = chat;
-  const global = lineCount(useSettings().translatorNote);
-  const own = shelf && lineCount(shelf.character.translatorNote);
+  const global = noteLines(useSettings().translatorNote);
+  const own = shelf && noteLines(shelf.character.translatorNote);
   const counts = [global > 0 && `전역 ${global}줄`, own && `캐릭터 ${own}줄`].filter(Boolean).join(' · ');
-  // A prompt made before the slot existed, the stored 기본 번역 among them, sends no note until the user adds the block.
-  const unsent = counts !== '' && translation.ok && !translation.prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'note');
+  const unsent = counts !== '' && translation.ok && !sendsNotes(translation.prompt);
   return (
     <SettingRow
       place="panel"
       label={TRANSLATOR_NOTE}
       help={`번역할 때 이름과 용어를 늘 같게 옮기도록 적어 두는 메모예요. 전역 노트는 ${inSettings('chat')}, 캐릭터 노트는 캐릭터 편집에 있어요.`}
       sub={counts || '없음'}
-      error={unsent ? `번역 프롬프트에 ‘${TRANSLATOR_NOTE}’ 블록이 없어서 보내지 않아요. 프롬프트에서 넣어 주세요.` : undefined}
+      error={unsent ? NOTE_UNSENT : undefined}
       control={
         shelf && (
           <Button variant="ghost" size="sm" onClick={() => actions.side({ kind: 'character', id: shelf.id })}>
