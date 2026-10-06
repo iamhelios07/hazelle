@@ -35,7 +35,7 @@ import { enterReal, look, openChat, showHeader } from './real';
 test('topic', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await enterReal(page);
-  await openChat(page); // Max's latest chat; another character by its card name: openChat(page, 'Koyomi')
+  await openChat(page); // Koyomi's latest chat; another character by its card name, never Max (explicit pictures)
   await showHeader(page); // the header hides until the pointer is near the top
   await page.screenshot({ path: 'shots/out/topic-wide.png' });
   await look(page, 'topic-wide'); // the small copy to read, in shots/out/real/
