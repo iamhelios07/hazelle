@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, ChipButton, Divider, Menu, MenuItem, Row, TextField, useMenuClose } from '../ui';
 import { LANGUAGES, languageLabel, withRo } from './languages';
 
-// The language a translation goes into, picked inside its sentence: "답장을 [한국어]로 번역해서 보기".
+// The language a translation goes into, picked inside its sentence: "응답을 [한국어]로 번역해서 보기".
 export function IntoLanguage({ before, after, label, value, opens, onPick }: { before: string; after: string; label: string; value: string; opens: 'up' | 'down'; onPick: (name: string) => void }) {
   const word = languageLabel(value);
   return (
@@ -36,7 +36,7 @@ function LanguageChoices({ value, onPick }: { value: string; onPick: (name: stri
         <MenuItem key={language.name} label={language.label} checked={language.name === value} onClick={() => pick(language.name)} />
       ))}
       <Divider variant="menu" />
-      <TextField label="다른 언어" value={typed} onChange={setTyped} placeholder="예: Ukrainian" help={`목록에 없는 언어는 영어 이름으로 써요. 번역 프롬프트의 {{language}}에 그대로 들어가요.`} />
+      <TextField label="다른 언어" value={typed} onChange={setTyped} placeholder="예: Ukrainian" help="목록에 없는 언어는 영어 이름으로 입력해 주세요." />
       <Row kind="actions">
         <Button size="sm" disabled={!typed.trim()} onClick={() => pick(typed.trim())}>
           이 언어로 쓰기

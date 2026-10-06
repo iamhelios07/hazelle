@@ -1,4 +1,4 @@
-export const noResults = (words: string) => `“${words}” 검색 결과가 없어요.`;
+export const noResults = (words: string) => `'${words}' 검색 결과가 없어요.`;
 
 export const SEARCH_FROM = 8;
 

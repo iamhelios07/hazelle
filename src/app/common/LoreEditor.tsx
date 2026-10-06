@@ -15,11 +15,11 @@ import { loreName } from './words';
 
 type Position = Lore['position'];
 const POSITIONS: { value: NonNullable<Position> | 'lorebook'; label: string }[] = [
-  { value: 'lorebook', label: `${SLOT_NAMES.lorebook} 자리` },
+  { value: 'lorebook', label: `${SLOT_NAMES.lorebook} 블록` },
   { value: 'before_char', label: `${SLOT_NAMES.description} 앞` },
   { value: 'after_char', label: `${SLOT_NAMES.description} 뒤` },
 ];
-const NUMBER_ERROR = '숫자를 적어 주세요.';
+const NUMBER_ERROR = '숫자를 입력해 주세요.';
 const NO_FOLDER = '폴더 없음';
 const KEYS_SHOWN = 3;
 
@@ -53,7 +53,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
     const id = crypto.randomUUID();
     setAdded(id);
     const saved = await addLore(store, owner.id, folder, id);
-    if (!saved.ok) toast.failed(saved, '항목을 더하지 못했어요.');
+    if (!saved.ok) toast.failed(saved, '항목을 추가하지 못했어요.');
   }
 
   function saveFolder({ folder, name }: Naming) {
@@ -66,10 +66,10 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
   function removeFolder(folder: LoreFolder) {
     const removal = loreFolderRemoval(store, owner, folder.id);
     if (!removal) return;
-    void removeLoreFolder(store, owner, removal).then((removed) => removed.ok || toast.failed(removed, '폴더를 지우지 못했어요.'));
+    void removeLoreFolder(store, owner, removal).then((removed) => removed.ok || toast.failed(removed, '폴더를 삭제하지 못했어요.'));
     const held = removal.entries.length;
     toast.undoable(
-      `‘${folder.name}’ 폴더를 지웠어요.`,
+      `'${folder.name}' 폴더를 삭제했어요.`,
       () => void restoreLoreFolder(store, owner, removal).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')),
       held > 0 ? `항목 ${held}개는 폴더 밖으로 옮겼어요.` : undefined,
     );
@@ -80,7 +80,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
   return (
     <Section title="로어북" note={`${entries.length}개`} hint="대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.">
       <Stack gap="related">
-        {entries.length === 0 && folders.length === 0 && <Empty variant="section">아직 항목이 없어요.</Empty>}
+        {entries.length === 0 && folders.length === 0 && <Empty variant="section">항목이 없어요.</Empty>}
         {rows(loose!.entries)}
         {grouped.map(({ folder, entries: inside }) => (
           <Disclosure key={folder!.id} label={`${folder!.name} · ${inside.length}개`}>
@@ -93,7 +93,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
                 이름 바꾸기
               </Button>
               <Button variant="danger" size="sm" onClick={() => removeFolder(folder!)}>
-                폴더 지우기
+                폴더 삭제
               </Button>
             </Row>
           </Disclosure>
@@ -124,8 +124,8 @@ function EntryRow({ stored, folders, startOpen }: RowProps) {
   async function remove() {
     const done = await save.remove(() => removeLore(store, stored.id));
     if (!done) return;
-    if (!done.ok) return toast.failed(done, '지우지 못했어요.');
-    toast.undoable(`‘${loreName(shown.name)}’ 항목을 지웠어요.`, () => void restoreLore(store, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
+    if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
+    toast.undoable(`'${loreName(shown.name)}' 항목을 삭제했어요.`, () => void restoreLore(store, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
   }
 
   return (
@@ -172,33 +172,33 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
       <TextField label="이름" value={shown.name} onChange={(name) => change({ name })} />
       <SettingGroup label="키워드">
         <SettingRow label="키워드" help="최근 대화에 이 중 하나가 나오면 내용이 들어가요." wide control={<PhraseField label="키워드" phrases={shown.keys} onChange={(keys) => change({ keys })} />} />
-        {toggle('selective', '보조 키워드도 맞아야', '키워드 하나와 보조 키워드 하나가 함께 나와야 들어가요.')}
+        {toggle('selective', '보조 키워드 사용', '키워드 하나와 보조 키워드 하나가 함께 나와야 들어가요.')}
         {shown.selective && (
           <SettingRow label="보조 키워드" wide control={<PhraseField label="보조 키워드" phrases={shown.secondaryKeys} onChange={(secondaryKeys) => change({ secondaryKeys })} />} />
         )}
-        {toggle('useRegex', '정규식으로', '키워드를 /패턴/ 또는 /패턴/플래그 꼴의 정규식으로 읽어요.')}
+        {toggle('useRegex', '정규식 사용', '키워드를 /패턴/ 또는 /패턴/플래그 형식의 정규식으로 인식해요.')}
         {toggle('caseSensitive', '대소문자 구분')}
       </SettingGroup>
-      <TextField label="내용" lines={8} value={shown.content} onChange={(content) => change({ content })} help="맨 앞에 @@로 시작하는 줄은 넣는 방식을 정하는 명령으로 읽어요. 예: @@depth 0" />
-      <SettingGroup label="넣기">
+      <TextField label="내용" lines={8} value={shown.content} onChange={(content) => change({ content })} help="@@로 시작하는 줄은 삽입 방식을 정하는 명령이에요. 예: @@depth 0" />
+      <SettingGroup label="삽입">
         {toggle('enabled', '켬')}
-        {toggle('constant', '항상 넣기', '키워드와 상관없이 늘 들어가요. 로어북 예산을 넘으면 빠질 수 있어요.')}
+        {toggle('constant', '항상 삽입', '키워드와 상관없이 넣어요.')}
         <SettingRow
           label="순서"
-          help="함께 들어간 항목끼리는 이 값이 큰 것이 뒤에 놓여요."
+          help="값이 클수록 뒤에 들어가요."
           error={orderValid ? undefined : NUMBER_ERROR}
           control={<NumberInput label="순서" value={order} invalid={!orderValid} onChange={changeOrder} />}
         />
         <SettingRow
           label="우선순위"
-          help="로어북 예산이 모자라면 이 값이 큰 것부터 넣어요. 비우면 순서 값을 써요."
+          help="로어북 예산이 모자라면 값이 큰 항목부터 넣어요."
           changed={shown.priority !== null}
           error={priorityValid ? undefined : NUMBER_ERROR}
           control={<NumberInput label="우선순위" value={priority} placeholder="순서와 같음" invalid={!priorityValid} onChange={changePriority} />}
         />
         <SettingRow
           label="위치"
-          help={`${SLOT_NAMES.lorebook} 자리는 프롬프트에서 ${SLOT_NAMES.lorebook}를 넣는 곳이에요. ${SLOT_NAMES.description} 앞·뒤는 그 칸 안에 붙어요.`}
+          help={`${SLOT_NAMES.lorebook}을 프롬프트의 ${SLOT_NAMES.lorebook} 블록에 넣을지, ${SLOT_NAMES.description} 블록 안의 맨 앞이나 맨 뒤에 넣을지 정해요.`}
           control={<ChoiceGroup label="위치" options={POSITIONS} value={shown.position ?? 'lorebook'} onChange={(value) => change({ position: value === 'lorebook' ? null : value })} />}
         />
         {folders.length > 0 && (
@@ -218,7 +218,7 @@ function EntryFields({ shown, folders, change, status, remove }: FieldsProps) {
       <Row kind="spread">
         <Text variant="note">{status ? SAVE_STATUS[status] : ''}</Text>
         <Button variant="danger" size="sm" onClick={remove}>
-          이 항목 지우기
+          이 항목 삭제
         </Button>
       </Row>
     </Stack>

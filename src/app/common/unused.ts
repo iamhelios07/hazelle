@@ -14,5 +14,5 @@ const topic = (word: string) => {
 export function describeUnused(items: Unused[]): string | null {
   if (items.length === 0) return null;
   const list = items.map((item) => LABEL[item.kind](item.count)).join(' · ');
-  return `${list}${topic(list)} 아직 대화에 쓰이지 않아요.`;
+  return `${list}${topic(list)} 대화에 적용되지 않아요.`;
 }

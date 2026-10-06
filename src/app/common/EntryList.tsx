@@ -35,7 +35,7 @@ export function EntryList<T>({ entries, onChange, name, blank, addLabel, removed
             value,
             name: name(index),
             set: (next) => onChange(entries.map((old, at) => (at === index ? next : old))),
-            remove: <IconButton icon={Trash2} label={`${name(index)} 지우기`} size="sm" onClick={() => remove(index)} />,
+            remove: <IconButton icon={Trash2} label={`${name(index)} 삭제`} size="sm" onClick={() => remove(index)} />,
           })}
         </Fragment>
       ))}

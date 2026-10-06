@@ -2,11 +2,11 @@ import { setModuleAt, type ModulePlace } from '../../runtime/modules';
 import { useModules, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { Section, SettingGroup, SettingRow, Switch, Text } from '../ui';
-import { ALWAYS, inSettings, moduleName, PAGES } from './words';
+import { ALWAYS, moduleName, PAGES } from './words';
 
 type Owner = Exclude<ModulePlace, { kind: 'always' }>;
 
-const WORKS: Record<Owner['kind'], string> = { character: '켠 모듈은 이 캐릭터의 모든 채팅에서 일해요.', prompt: '켠 모듈은 이 프롬프트를 쓰는 채팅에서 일해요.' };
+const WORKS: Record<Owner['kind'], string> = { character: '켠 모듈은 이 캐릭터의 모든 채팅에 적용돼요.', prompt: '켠 모듈은 이 프롬프트를 쓰는 채팅에 적용돼요.' };
 
 // 캐릭터 편집's and a conversation prompt's 모듈 section. own: the owner's modules as stored.
 export function ModuleSwitches({ owner, own }: { owner: Owner; own: string[] }) {
@@ -22,7 +22,7 @@ export function ModuleSwitches({ owner, own }: { owner: Owner; own: string[] }) 
 
   if (modules.length === 0) return null;
   return (
-    <Section title={PAGES.modules} hint={`${WORKS[owner.kind]} ${inSettings('modules')}에서 ${ALWAYS} 켠 모듈은 여기서 끌 수 없어요.`}>
+    <Section title={PAGES.modules} hint={WORKS[owner.kind]}>
       <SettingGroup label={PAGES.modules}>
         {modules.map(({ id: module, value }) => (
           <SettingRow

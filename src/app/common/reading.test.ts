@@ -12,7 +12,7 @@ describe('stored reading settings', () => {
     expect(parseReading('null', FALLBACK)).toEqual(FALLBACK);
   });
 
-  it('reads reading settings stored before 답장이 올 때 as following the reply', () => {
+  it('reads reading settings stored before 응답이 올 때 as following the reply', () => {
     expect(parseReading(JSON.stringify({ font: 'sans', size: 17, leading: 'normal', width: 'normal' }), FALLBACK).reply).toBe('follow');
     expect(parseReading(JSON.stringify({ ...FALLBACK, reply: 'jump' }), FALLBACK).reply).toBe('follow');
   });
@@ -27,7 +27,7 @@ describe('stored display settings', () => {
 });
 
 describe('the current preset', () => {
-  it('is the one whose every look value matches, whatever 답장이 올 때 and the chrome switches say', () => {
+  it('is the one whose every look value matches, whatever 응답이 올 때 and the chrome switches say', () => {
     const list = presets(FALLBACK);
     expect(presetOf(list, { ...FALLBACK, reply: 'stay' }, { ...DISPLAY_DEFAULT, hideHeader: false })?.name).toBe('기본');
     expect(presetOf(list, FALLBACK, { ...DISPLAY_DEFAULT, theme: 'light' })?.name).toBe('밝은 서재');
