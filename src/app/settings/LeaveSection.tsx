@@ -14,8 +14,8 @@ export function LeaveSection() {
     <Section title="탈퇴">
       <SettingGroup label="탈퇴">
         <SettingRow
-          label="계정 지우기"
-          sub="되돌릴 수 없어요. 먼저 전체 백업을 받아 두세요."
+          label="계정 삭제"
+          sub="되돌릴 수 없어요. 전체 백업을 받아 두세요."
           control={
             <Button variant="danger" size="sm" icon={UserX} onClick={() => setAsking(true)}>
               탈퇴
@@ -61,8 +61,8 @@ function LeaveDialog({ onClose }: { onClose: () => void }) {
         </Stack>
       }
     >
-      이 계정과 캐릭터, 채팅, 프롬프트, 페르소나, 모듈, 그림, 연결과 그 키를 서버에서 지워요. 되돌릴 수 없어요. 운영자에게 보낸 알림과
-      운영자가 이 계정에 한 일의 기록은 남아요.
+      이 계정과 캐릭터, 채팅, 프롬프트, 페르소나, 모듈, 이미지, 연결과 API 키를 서버에서 삭제해요. 되돌릴 수 없어요. 운영자에게 보낸 알림과
+      운영자 조치 기록은 남아요.
     </ConfirmDialog>
   );
 }

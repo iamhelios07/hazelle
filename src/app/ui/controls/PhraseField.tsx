@@ -14,7 +14,7 @@ export function PhraseField({ label, phrases, onChange }: Props) {
       {phrases.map((phrase) => (
         <span key={phrase} className={styles.chip}>
           <span className={styles.text}>{phrase}</span>
-          <button type="button" className={styles.remove} aria-label={`‘${phrase}’ 빼기`} onClick={() => onChange(phrases.filter((kept) => kept !== phrase))}>
+          <button type="button" className={styles.remove} aria-label={`'${phrase}' 빼기`} onClick={() => onChange(phrases.filter((kept) => kept !== phrase))}>
             <Icon icon={X} size="xs" />
           </button>
         </span>
@@ -23,8 +23,8 @@ export function PhraseField({ label, phrases, onChange }: Props) {
         className={styles.input}
         type="text"
         autoComplete="off"
-        aria-label={`${label} 더하기`}
-        placeholder="적고 Enter"
+        aria-label={`${label} 추가`}
+        placeholder="입력 후 Enter"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {

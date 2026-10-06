@@ -36,7 +36,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   function remove() {
     mark(Date.now());
     navigate({ kind: 'modules' });
-    toast.undoable(`‘${moduleName(value.name)}’ 모듈을 지웠어요.`, () => mark(null), BIN_KEEPS);
+    toast.undoable(`'${moduleName(value.name)}' 모듈을 삭제했어요.`, () => mark(null), BIN_KEEPS);
   }
 
   return (
@@ -46,7 +46,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
       <SettingGroup label={ALWAYS_ON}>
         <SettingRow
           label={ALWAYS_ON}
-          help="켜면 모든 채팅에서 일해요. 꺼 두면 이 모듈을 켠 프롬프트나 캐릭터의 채팅에서만 일해요."
+          help="켜면 모든 채팅에 적용돼요."
           control={<Switch label={ALWAYS_ON} checked={always} onChange={(on) => void setAlways(on)} />}
         />
       </SettingGroup>
@@ -58,7 +58,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '따로 켠 프롬프트는 없어요.' : '아직 켠 프롬프트가 없어요. 프롬프트 편집의 ‘모듈’에서 켤 수 있어요.'}</Empty>
+          <Empty variant="section">{always ? '따로 켠 프롬프트 없음' : '켠 프롬프트 없음'}</Empty>
         )}
       </Section>
       <Section title={USED_BY}>
@@ -69,13 +69,13 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
             ))}
           </List>
         ) : (
-          <Empty variant="section">{always ? '따로 켠 캐릭터는 없어요.' : '아직 켠 캐릭터가 없어요. 캐릭터 편집의 ‘모듈’에서 켤 수 있어요.'}</Empty>
+          <Empty variant="section">{always ? '따로 켠 캐릭터 없음' : '켠 캐릭터 없음'}</Empty>
         )}
       </Section>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
       <Row kind="actions">
         <Button variant="danger" size="sm" onClick={remove}>
-          이 모듈 지우기
+          이 모듈 삭제
         </Button>
       </Row>
     </Screen>

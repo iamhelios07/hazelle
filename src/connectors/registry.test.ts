@@ -298,8 +298,8 @@ describe('meters', () => {
     expect(meters.request('sk-or-v1-x')).toMatchObject({ url: 'https://openrouter.ai/api/v1/key', method: 'GET', headers: { authorization: 'Bearer sk-or-v1-x' } });
     expect(meters.parse(openRouterKey)).toEqual([
       { kind: 'left', label: '이 키 한도', unit: 'usd', amount: 74.5, limit: 100, resets: 'monthly' },
-      { kind: 'spent', label: '이번 달 쓴 돈', unit: 'usd', amount: 25.5 },
-      { kind: 'spent', label: '지금까지 쓴 돈', unit: 'usd', amount: 25.5 },
+      { kind: 'spent', label: '이번 달 사용 금액', unit: 'usd', amount: 25.5 },
+      { kind: 'spent', label: '총 사용 금액', unit: 'usd', amount: 25.5 },
       { kind: 'left', label: '무료 모델 요청', unit: 'requests', amount: 38, limit: 50, resets: 'daily' },
     ]);
   });
@@ -307,7 +307,7 @@ describe('meters', () => {
   it('shows no cap for a key without one, and leaves out what the answer does not carry', () => {
     const data = { ...openRouterKey.data, limit: null, limit_remaining: null, limit_reset: null, usage_monthly: 'n/a', free_model_daily_requests: undefined };
     expect(meters.parse({ data })).toEqual([
-      { kind: 'spent', label: '지금까지 쓴 돈', unit: 'usd', amount: 25.5 },
+      { kind: 'spent', label: '총 사용 금액', unit: 'usd', amount: 25.5 },
     ]);
     expect(meters.parse({ error: { message: 'User not found.', code: 401 } })).toBeNull();
   });
@@ -342,7 +342,7 @@ describe('vercel', () => {
     expect(meters!.request('vck_x')).toMatchObject({ url: 'https://ai-gateway.vercel.sh/v1/credits', headers: { authorization: 'Bearer vck_x' } });
     expect(meters!.parse({ balance: '95.50', total_used: '4.50' })).toEqual([
       { kind: 'left', label: '잔액', unit: 'usd', amount: 95.5, limit: null, resets: null },
-      { kind: 'spent', label: '지금까지 쓴 돈', unit: 'usd', amount: 4.5 },
+      { kind: 'spent', label: '총 사용 금액', unit: 'usd', amount: 4.5 },
     ]);
     expect(meters!.parse({ balance: '', total_used: 'lots' })).toEqual([]);
     expect(settle!.request('vck_x', 'gen_01K').url).toBe('https://ai-gateway.vercel.sh/v1/generation?id=gen_01K');

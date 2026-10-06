@@ -24,18 +24,18 @@ export function leftOf(result: MetersResult): string | null {
   return meter ? `${amount(meter.unit, meter.amount)} 남음` : null;
 }
 
-const VERDICT = { fast: { status: '빠르게 쓰는 중', tone: 'accent' }, even: { status: '알맞음', tone: 'plain' }, slow: { status: '여유 있음', tone: 'plain' } } as const;
+const VERDICT = { fast: { status: '빠르게 쓰는 중', tone: 'accent' }, even: { status: '적정', tone: 'plain' }, slow: { status: '여유 있음', tone: 'plain' } } as const;
 
 // turn: the window its group serves, for an account in a pool. waiting: its group's turn has not come. labeled: false
 // where the place above names the allowance already.
 export function MeterGauge({ meter, turn = null, waiting = false, labeled = true }: { meter: Meter; turn?: { start: number; end: number } | null; waiting?: boolean; labeled?: boolean }) {
-  if (meter.kind === 'spent') return <Gauge label={meter.label} amount={amount(meter.unit, meter.amount)} of="씀" />;
+  if (meter.kind === 'spent') return <Gauge label={meter.label} amount={amount(meter.unit, meter.amount)} of="사용" />;
   const label = labeled ? (meter.resets ? `${meter.label} · ${reset(meter.resets)}` : meter.label) : undefined;
   if (meter.limit === null) return <Gauge label={label} amount={amount(meter.unit, meter.amount)} of="남음" />;
   const left = { amount: amount(meter.unit, meter.amount), of: `/ ${figure(meter.unit, meter.limit)} 남음`, share: (meter.limit - meter.amount) / meter.limit };
   if (meter.amount <= 0) {
-    const back = meter.resets === null ? undefined : typeof meter.resets === 'string' ? RESETS[meter.resets] : `${monthDay(meter.resets.at)}에 다시 채워져요`;
-    return <Gauge label={label} {...left} tone="warn" status="다 씀" note={back} />;
+    const back = meter.resets === null ? undefined : typeof meter.resets === 'string' ? RESETS[meter.resets] : `${monthDay(meter.resets.at)} 초기화`;
+    return <Gauge label={label} {...left} tone="warn" status="소진" note={back} />;
   }
   if (waiting) return <Gauge label={label} {...left} status="차례 전" />;
   const paced = pace(meter, Date.now(), turn);
@@ -80,7 +80,7 @@ function Figures({ connection, account }: { connection: Connection; account: Acc
   if (!result) return <Text variant="note">불러오는 중…</Text>;
   const [failure] = result.failures;
   if (!result.meters.length) {
-    return failure ? <Callout tone="warn" action={retry}>{describeMetersFailure(failure)}</Callout> : <Empty variant="section">이 연결은 사용량을 알려 주지 않았어요.</Empty>;
+    return failure ? <Callout tone="warn" action={retry}>{describeMetersFailure(failure)}</Callout> : <Empty variant="section">사용량 정보 없음</Empty>;
   }
   return (
     <>

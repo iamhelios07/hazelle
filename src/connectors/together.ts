@@ -6,7 +6,7 @@ export const together: ConnectionType = {
   id: 'together',
   label: 'Together AI',
   group: 'gateway',
-  description: '여러 회사의 공개 모델을 Together 서버에서 돌려요.',
+  description: '여러 회사의 공개 모델을 Together 서버에서 실행해요.',
   keyPage: 'https://api.together.ai/settings/projects/~current/api-keys',
   endpoint: { baseUrl: 'https://api.together.ai/v1', protocol: 'chat-completions' },
   detect: { key: null, host: 'api.together.ai' },

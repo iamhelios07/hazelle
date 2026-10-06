@@ -74,7 +74,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
 
   const text = run.kind === 'idle' ? '' : run.text;
   const resultNote =
-    run.kind === 'running' ? '번역하는 중…' : run.kind === 'done' ? [count(run.text), run.cut && '길이 한도에서 잘렸어요'].filter(Boolean).join(' · ') : run.kind === 'stopped' ? `${count(run.text)} · 멈췄어요` : '';
+    run.kind === 'running' ? '번역 중…' : run.kind === 'done' ? [count(run.text), run.cut && '길이 한도로 잘림'].filter(Boolean).join(' · ') : run.kind === 'stopped' ? `${count(run.text)} · 번역 중단됨` : '';
 
   return (
     <Screen width="wide" top={<NavBar title={PAGES.translator} {...backBar(back)} />}>
@@ -94,9 +94,9 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
               )}
             >
               <MenuHeading>{translator.ok ? TRANSLATION_MODEL_HELP : describeTranslateFailure(translator.failure)}</MenuHeading>
-              {prompt.kind === 'prompt' && <MenuItem label={`‘${prompt.prompt.value.name}’ 열기…`} onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: null })} />}
+              {prompt.kind === 'prompt' && <MenuItem label={`'${prompt.prompt.value.name}' 열기…`} onClick={() => navigate({ kind: 'prompt', id: prompt.prompt.id, pane: null })} />}
               <MenuItem label={`${DEFAULT_MODELS} 열기…`} onClick={() => navigate({ kind: 'models' })} />
-              <MenuHeading>여기서 한 번역은 저장하지 않고, 사용량에도 들어가지 않아요.</MenuHeading>
+              <MenuHeading>여기서 한 번역은 저장되지 않아요.</MenuHeading>
             </Menu>
             <Icon icon={ArrowRight} size="xs" />
             <LanguageMenu label="번역할 언어" value={language} opens="down" onPick={setLanguage} />
@@ -111,7 +111,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
         source={{
           label: '원문',
           value: source,
-          placeholder: `번역할 글을 붙여 넣어요. ${formatKeys(SHORTCUTS.translate.keys)}로 번역해요.`,
+          placeholder: `번역할 텍스트를 붙여 넣고 ${formatKeys(SHORTCUTS.translate.keys)}로 번역해요.`,
           readOnly: running,
           onChange: setSource,
           onKeyDown,
@@ -147,7 +147,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
         result={{
           label: '번역 결과',
           text,
-          placeholder: running ? '답을 기다리는 중…' : '번역 결과가 여기 나와요.',
+          placeholder: running ? '응답 기다리는 중…' : '',
           busy: running,
           notice: run.kind === 'failed' && <Callout tone="warn">{`번역하지 못했어요. ${describeTranslateFailure(run.failure)}`}</Callout>,
           foot: {

@@ -34,10 +34,10 @@ it('hero: fills the mark and says the floored percent of all counted work, check
 it('hero: says the exact percent, treats counted work of zero as whole, and names each stage state for a screen reader', () => {
   const exact = renderToStaticMarkup(<Progress hero steps={[{ label: '내용', done: 29, total: 100 }]} />);
   expect(exact).toContain('>29<span');
-  const nothing = renderToStaticMarkup(<Progress hero steps={[{ label: '그림', done: 0, total: 0 }, { label: '요약' }]} />);
+  const nothing = renderToStaticMarkup(<Progress hero steps={[{ label: '이미지', done: 0, total: 0 }, { label: '요약' }]} />);
   expect(nothing).toContain('>100<span');
   expect(nothing).toContain('aria-valuenow="100"');
-  expect(nothing).toContain('끝남');
+  expect(nothing).toContain('완료');
   expect(nothing).toContain('진행 중');
   expect(renderToStaticMarkup(<Progress hero steps={[{ label: '내용', done: 1, total: 2 }, { label: '요약' }]} />)).toContain('남음');
 });

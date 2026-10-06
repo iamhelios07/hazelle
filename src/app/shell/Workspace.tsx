@@ -14,18 +14,18 @@ import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 import { navigate } from './router';
 
-const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 닿으면 이어서 불러오고 저장해요.' };
+const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 연결되면 이어서 불러오고 저장해요.' };
 const SUSPENDED: Standing = {
   message: '운영자가 이 계정을 정지했어요',
-  detail: `읽기는 그대로 되지만 저장과 모델 부르기는 막혀 있어요. ${inSettings('account')}에서 ${NOTICES.from}을 보거나 백업을 받거나 운영자에게 알리거나 탈퇴할 수 있어요.`,
+  detail: `읽기만 할 수 있고 저장과 모델 호출은 막혀 있어요. ${inSettings('account')}에서 ${NOTICES.from}을 확인할 수 있어요.`,
 };
 // Said once, and standing until the account shrinks: each refused write saying it again would be a stream of toasts.
-const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: `새로 만든 것은 저장되지 않아요. 지운 것을 ${BIN}에서 완전히 지우면 자리가 생겨요.` };
+const FULL: Standing = { message: '저장 공간이 가득 찼어요', detail: `새로 만든 내용은 저장되지 않아요. ${BIN}에서 영구 삭제하면 공간이 생겨요.` };
 // Ahead of 연결이 불안정해요: calls wait out a restore as they wait out a dropped connection.
-const RESTORING: Standing = { message: '계정을 복원하는 중이에요', detail: '' };
+const RESTORING: Standing = { message: '계정 복원 중', detail: '' };
 const subscribeNothing = () => () => {};
 const NOT_PULLED: PullProgress = { objects: 0, pages: 0, waiting: false };
-const FIRST_LOAD = '처음 한 번만 전체를 받고, 다음부터는 바뀐 것만 받아요.';
+const FIRST_LOAD = '처음에만 오래 걸려요.';
 const notWaiting = () => false;
 
 // Said once each time the store hears the account was restored: what the tab shows was loaded again, and the writes
@@ -92,7 +92,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
   if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
   if (!session) return (
     <Screen top={<Brand />} align="center">
-      <Progress hero title="불러오는 중" note={FIRST_LOAD} steps={[{ label: '계정 확인', finished: true }, { label: '금고 열기', finished: true }, { label: '내용 받기', done: progress.objects, total: progress.total }, { label: '화면 준비' }]} />
+      <Progress hero title="불러오는 중" note={FIRST_LOAD} steps={[{ label: '계정 확인', finished: true }, { label: '잠금 해제', finished: true }, { label: '내용 받기', done: progress.objects, total: progress.total }, { label: '화면 준비' }]} />
       {progress.waiting && <Text variant="note" align="center">{RECONNECTING.message} · {RECONNECTING.detail}</Text>}
     </Screen>
   );

@@ -40,7 +40,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
 
   async function picture(file: File) {
     const made = await thumbnail({ bytes: new Uint8Array(await file.arrayBuffer()), type: file.type }).catch(() => null);
-    if (made === null) return toast.error('이 그림은 열 수 없어요.');
+    if (made === null) return toast.error('이 이미지는 열 수 없어요.');
     await autosave.save({ picture: made });
   }
 
@@ -48,16 +48,16 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     const removed = await autosave.remove(() => removePersona(store, id));
     if (!removed) return;
     if (!removed.ok) {
-      if (removed.error === 'current') return toast.error('현재 페르소나는 지울 수 없어요.', { detail: '채팅에서 다른 페르소나를 고른 뒤 지워 주세요.' });
-      return toast.failed(removed, '지우지 못했어요.');
+      if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요.', { detail: '채팅에서 다른 페르소나를 선택한 뒤 삭제해 주세요.' });
+      return toast.failed(removed, '삭제하지 못했어요.');
     }
     onRemoved();
-    toast.undoable(`${removed.data.value.name} 페르소나를 지웠어요.`, () => void restorePersona(store, id), BIN_KEEPS);
+    toast.undoable(`${removed.data.value.name} 페르소나를 삭제했어요.`, () => void restorePersona(store, id), BIN_KEEPS);
   }
 
   const pinnedBy = library.characters.filter(({ character }) => character.persona === id).map(({ character }) => character.card.name);
   const facts = [
-    ...(settings.persona === id ? [{ label: '쓰는 곳', value: '현재 페르소나' }] : []),
+    ...(settings.persona === id ? [{ label: '사용처', value: '현재 페르소나' }] : []),
     ...(pinnedBy.length ? [{ label: '고정', value: pinnedBy.join(', ') }] : []),
   ];
   const body = (
@@ -68,12 +68,12 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
         </FileButton>
       </FaceRow>
       {facts.length > 0 && <Facts items={facts} />}
-      <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 적어 주세요.'} />
-      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요. 모델에게는 보내지 않아요." />
-      <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} help="프롬프트의 ‘페르소나’ 자리에 이 설명이 들어가요." />
+      <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 입력해 주세요.'} />
+      <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요." />
+      <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} />
       <Row kind="actions">
         <Button variant="danger" size="sm" onClick={() => void remove()}>
-          이 페르소나 지우기
+          이 페르소나 삭제
         </Button>
       </Row>
     </>

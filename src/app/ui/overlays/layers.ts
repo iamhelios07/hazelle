@@ -18,7 +18,7 @@ function press(event: PointerEvent) {
   if (top?.outside(event.target as Node)) top.close(false);
 }
 
-// An Esc a focused field already took (답장 멈추기 in the composer, 수정 취소 in the edit box) closes nothing: one
+// An Esc a focused field already took (응답 멈추기 in the composer, 수정 취소 in the edit box) closes nothing: one
 // press does one thing.
 function key(event: KeyboardEvent) {
   const top = open.at(-1);

@@ -24,7 +24,7 @@ export function GlobalNoteField({ error }: { error?: string }) {
       value={save.unsaved.note ?? settings.translatorNote ?? ''}
       onChange={(note) => save.change({ note })}
       placeholder={NOTE_PLACEHOLDER}
-      help="모든 캐릭터의 번역 프롬프트에 들어가요. 캐릭터만의 것은 캐릭터 편집에서 적어요."
+      help="모든 캐릭터의 번역에 적용돼요."
       error={error}
     />
   );

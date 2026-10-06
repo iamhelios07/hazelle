@@ -11,7 +11,7 @@ export function MemoryDefaults() {
   useSettings();
   const save = useAutosave<MemorySettings>('memory-defaults', (patch) => setDefaultMemory(store, patch));
   return (
-    <Section title="장기 기억" hint="채팅마다 장기 기억 패널에서 따로 정할 수 있어요.">
+    <Section title="장기 기억" hint="채팅마다 장기 기억 패널에서 바꿀 수 있어요.">
       <MemoryFields value={{ ...defaultMemory(store), ...save.unsaved }} onChange={save.change} />
     </Section>
   );

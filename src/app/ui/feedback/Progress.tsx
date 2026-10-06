@@ -47,7 +47,7 @@ function Bar(step: ProgressStep) {
 }
 
 const ICON = { done: CircleCheck, active: CircleDot, pending: Circle } as const;
-const SAID: Record<State, string> = { done: '끝남', active: '진행 중', pending: '남음' };
+const SAID: Record<State, string> = { done: '완료', active: '진행 중', pending: '남음' };
 
 function Stage({ step, state }: { step: ProgressStep; state: State }) {
   const Icon = ICON[state];

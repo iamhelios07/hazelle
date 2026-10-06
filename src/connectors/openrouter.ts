@@ -29,7 +29,7 @@ function meters(payload: unknown): Meter[] | null {
     const resets = typeof data.limit_reset === 'string' ? (RESETS[data.limit_reset] ?? null) : null;
     found.push({ kind: 'left', label: '이 키 한도', unit: 'usd', amount: remaining, limit, resets });
   }
-  for (const [field, label] of [['usage_monthly', '이번 달 쓴 돈'], ['usage', '지금까지 쓴 돈']] as const) {
+  for (const [field, label] of [['usage_monthly', '이번 달 사용 금액'], ['usage', '총 사용 금액']] as const) {
     const spent = amount(data[field]);
     if (spent !== null) found.push({ kind: 'spent', label, unit: 'usd', amount: spent });
   }

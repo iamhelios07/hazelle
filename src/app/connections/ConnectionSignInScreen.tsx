@@ -42,7 +42,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
         actions={
           <>
             <Text variant="note">
-              승인을 기다리고 있어요. 코드는 {Math.round(code.expiresIn / 60)}분 동안 쓸 수 있어요.
+              승인 대기 중 · 코드 유효 시간 {Math.round(code.expiresIn / 60)}분
             </Text>
             <Button icon={ExternalLink} onClick={() => openSite(code)}>
               코드 복사하고 {signIn.site} 열기
@@ -50,9 +50,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
           </>
         }
       >
-        <Intro title={`${signIn.site}에서 이 코드를 넣어 주세요`}>
-          {signIn.site}에서 코드를 넣고 승인하면 여기서 저절로 이어져요.
-        </Intro>
+        <Intro title={`${signIn.site}에서 이 코드를 입력해 주세요`}>승인하면 자동으로 연결돼요.</Intro>
         <CodeCard label="코드" code={code.userCode} />
       </Screen>
     );
@@ -67,9 +65,7 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
         </Button>
       }
     >
-      <Intro title={stage.step === 'starting' ? `${signIn.site} 로그인 준비` : '연결하는 중'}>
-        {stage.step === 'starting' ? `${signIn.site}에서 넣을 코드를 받아 오고 있어요.` : `${signIn.site} 계정을 확인하고 모델 목록을 불러오고 있어요.`}
-      </Intro>
+      <Intro title={stage.step === 'starting' ? `${signIn.site} 로그인 준비` : '연결하는 중'} />
     </Screen>
   );
 }

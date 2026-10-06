@@ -7,7 +7,7 @@ export const deepseek: ConnectionType = {
   id: 'deepseek',
   label: 'DeepSeek',
   group: 'maker',
-  description: 'DeepSeek 모델을 만든 곳에 바로 연결해요.',
+  description: 'DeepSeek API에 연결해요.',
   keyPage: 'https://platform.deepseek.com/api_keys',
   endpoint: { baseUrl: 'https://api.deepseek.com', protocol: 'chat-completions' },
   detect: { key: null, host: 'api.deepseek.com' },

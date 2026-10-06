@@ -17,7 +17,7 @@ import { Button, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row,
 import { changeWords, defaultFirst, NOT_CALLABLE, valueWords } from './settingWords';
 import { count } from './typedNumber';
 
-const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '소리', video: '영상', file: '파일' };
+const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일' };
 
 // What the catalog said when the model was starred. null is unknown, never 안 됨.
 const can = (value: boolean | null) => (value === null ? UNKNOWN : value ? '됨' : '안 됨');
@@ -26,7 +26,7 @@ const tokens = (value: number | null) => (value === null ? UNKNOWN : `${count(va
 function spent({ costs, costUnknown }: ModelUsage): string {
   if (!costs.length) return UNKNOWN;
   const sums = costs.map(({ unit, amount, estimated }) => `${estimated ? '약 ' : ''}${money(unit, amount)}`).join(' + ');
-  return costUnknown ? `${sums} · ${costUnknown}번은 알 수 없음` : sums;
+  return costUnknown ? `${sums} · 알 수 없음 ${costUnknown}회` : sums;
 }
 
 export function ModelScreen({ connection, model, back }: { connection: Stored<'connection'>; model: Starred; back: Back }) {
@@ -80,21 +80,21 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
         <SettingRow
           label="쓰는 설정"
           help="같은 설정을 쓰는 모델은 함께 바뀌어요."
-          sub={current ? (words?.length ? words.join(' · ') : '정한 값이 없어요. 모두 모델 원래 값으로 보내요.') : undefined}
-          error={current ? undefined : '쓰던 설정이 지워졌어요. 다른 설정을 골라야 이 모델로 보낼 수 있어요.'}
+          sub={current ? (words?.length ? words.join(' · ') : '정한 값 없음') : undefined}
+          error={current ? undefined : '쓰던 설정이 삭제돼서 이 모델을 사용할 수 없어요.'}
           note={sent || undefined}
           control={
             <>
               <Menu
                 place="below-end"
-                label="쓸 설정 고르기"
+                label="쓸 설정 선택"
                 trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title="쓸 설정" {...opener} />}
               >
                 {sorted.map((profile) => (
                   <MenuItem key={profile.id} label={profile.value.name} tag={profile.id === settings.profile ? '기본' : undefined} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
                 ))}
                 <Divider variant="menu" />
-                <MenuItem label="이 모델만 따로 설정하기" onClick={own} />
+                <MenuItem label="이 모델 전용 설정 만들기" onClick={own} />
               </Menu>
               {current && (
                 <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'profile', id: current.id })}>
@@ -112,9 +112,9 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
             { label: '연결', value: connection.value.label },
             { label: '모델 ID', value: model.id },
             { label: '컨텍스트 길이', value: tokens(model.contextLength) },
-            { label: '답장 최대 길이', value: tokens(model.maxOutput) },
+            { label: '응답 최대 길이', value: tokens(model.maxOutput) },
             { label: '입력', value: model.input ? model.input.map((modality) => MODALITY[modality]).join(', ') : UNKNOWN },
-            { label: '생각', value: can(model.reasoning) },
+            { label: '추론', value: can(model.reasoning) },
             { label: '도구', value: can(model.tools) },
           ]}
         />
@@ -130,7 +130,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
           <Facts
             variant="tiles"
             items={[
-              { label: '답장', value: `${count(usage.calls)}번` },
+              { label: '응답', value: `${count(usage.calls)}번` },
               { label: '마지막', value: ago(usage.last) },
               { label: '입력 토큰', value: tally(usage.input, usage.calls) },
               { label: '출력 토큰', value: tally(usage.output, usage.calls) },
@@ -138,7 +138,7 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
             ]}
           />
         ) : (
-          <Empty variant="section">아직 이 모델로 받은 답장이 없어요.</Empty>
+          <Empty variant="section">이 모델로 받은 응답이 없어요.</Empty>
         )}
       </Section>
     </Screen>

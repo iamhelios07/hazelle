@@ -6,7 +6,7 @@ export const mistral: ConnectionType = {
   id: 'mistral',
   label: 'Mistral AI',
   group: 'maker',
-  description: 'Mistral 모델을 만든 곳에 바로 연결해요.',
+  description: 'Mistral AI API에 연결해요.',
   keyPage: 'https://console.mistral.ai',
   endpoint: { baseUrl: 'https://api.mistral.ai/v1', protocol: 'chat-completions' },
   detect: { key: null, host: 'api.mistral.ai' },

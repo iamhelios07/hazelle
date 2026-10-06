@@ -12,7 +12,7 @@ import { connect } from './connect';
 
 const GROUPS: Record<ConnectionType['group'], string> = {
   gateway: '여러 회사 모델을 한 키로',
-  maker: '만든 회사에 바로',
+  maker: '제작사 API로',
   subscription: '구독 계정으로',
 };
 
@@ -38,14 +38,14 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
       <SearchField label="이름 검색, 또는 키·주소 붙여 넣기" value={query} onChange={setQuery} />
       {search.kind === 'key' && (
         <Stack gap="related">
-          <Callout tone="success">{search.type.label} 키로 알아봤어요.</Callout>
+          <Callout tone="success">{search.type.label} 키예요.</Callout>
           <Button busy={busy} onClick={() => void connectKey(search.type, search.secret)}>
-            이 키로 연결하고 모델 고르기
+            이 키로 연결하고 모델 선택
           </Button>
         </Stack>
       )}
-      {search.kind === 'address' && <Empty>목록에 없는 주소예요. 아래 직접 연결로 이어서 연결할 수 있어요.</Empty>}
-      {search.kind === 'none' && <Empty>목록에 맞는 곳이 없어요. 직접 연결로 연결할 수 있어요.</Empty>}
+      {search.kind === 'address' && <Empty>목록에 없는 주소는 아래 직접 연결로 연결해요.</Empty>}
+      {search.kind === 'none' && <Empty>검색 결과가 없어요.</Empty>}
       {failure && (
         <Callout tone="warn" alert>
           {failure}
@@ -73,7 +73,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
           </Section>
         ) : null,
       )}
-      <Section title="목록에 없는 곳">
+      <Section title="목록에 없는 제공자">
         <List label="직접 연결">
           <ListItem
             title="직접 연결"

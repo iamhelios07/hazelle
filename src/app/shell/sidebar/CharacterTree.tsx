@@ -39,7 +39,7 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
         title={shelfName(shelf)}
         time={latest?.at ? ago(latest.at) : ''}
         typing={typing(shelf)}
-        preview={latest ? latest.preview || latest.title : shelf.character ? NO_CHATS : '모델과 바로 이야기해요'}
+        preview={latest ? latest.preview || latest.title : shelf.character ? NO_CHATS : '모델과 대화해요'}
         current={shelf === current}
         onClick={() => onEnter(shelf)}
       />
@@ -78,7 +78,7 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
       }
       footer={page && <SidebarFooter />}
     >
-      {empty && (page ? <Welcome /> : <Empty variant="side">아직 캐릭터가 없어요. 봇을 가져와 보세요.</Empty>)}
+      {empty && (page ? <Welcome /> : <Empty variant="side">캐릭터가 없어요.</Empty>)}
       {!empty && words && items.length === 0 && <Empty variant="side">{noResults(words)}</Empty>}
       {!empty && <Viewport keys={items.map(({ key }) => key)}>{(index) => {
         const item = items[index]!;

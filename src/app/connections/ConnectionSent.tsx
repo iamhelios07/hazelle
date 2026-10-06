@@ -7,7 +7,7 @@ import { Button, Empty, Facts, Section, Text } from '../ui';
 const WINDOWS: [UsageWindow, string][] = [['hour', '지난 1시간'], ['today', '오늘'], ['week', '이번 주']];
 
 const sent = (usage: ModelUsage) =>
-  usage.calls ? `답장 ${usage.calls.toLocaleString('ko-KR')}번 · 입력 ${tally(usage.input, usage.calls)} · 출력 ${tally(usage.output, usage.calls)}` : '없음';
+  usage.calls ? `응답 ${usage.calls.toLocaleString('ko-KR')}회 · 입력 ${tally(usage.input, usage.calls)} · 출력 ${tally(usage.output, usage.calls)}` : '없음';
 
 export function ConnectionSent({ connection }: { connection: string }) {
   const { usage: usageIndex } = useSession();
@@ -27,13 +27,13 @@ export function ConnectionSent({ connection }: { connection: string }) {
   }, [usageIndex, connection, attempt]);
 
   return (
-    <Section title="보낸 양" note="남아 있는 채팅 기준" action={<Button variant="secondary" size="sm" onClick={() => retry((count) => count + 1)}>다시 집계</Button>}>
+    <Section title="사용 내역" note="남아 있는 채팅 기준" action={<Button variant="secondary" size="sm" onClick={() => retry((count) => count + 1)}>다시 집계</Button>}>
       {usage === null ? (
-        <Text>{failed ? '보낸 양을 불러오지 못했어요.' : '보낸 양을 확인하는 중'}</Text>
+        <Text>{failed ? '사용 내역을 불러오지 못했어요.' : '사용 내역을 확인하는 중'}</Text>
       ) : WINDOWS.some(([window]) => usage[window].calls) ? (
         <Facts items={WINDOWS.map(([window, label]) => ({ label, value: sent(usage[window]) }))} />
       ) : (
-        <Empty variant="section">이번 주에 이 연결로 받은 답장이 없어요.</Empty>
+        <Empty variant="section">이번 주에 이 연결로 받은 응답이 없어요.</Empty>
       )}
     </Section>
   );

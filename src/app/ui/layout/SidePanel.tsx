@@ -9,7 +9,7 @@ import styles from './SidePanel.module.css';
 type Props = { title: string; subtitle?: string; top?: ReactNode; page?: string; actions?: ReactNode; footer?: ReactNode; onClose: () => void; children: ReactNode };
 
 // Where the page is too narrow for it, it covers the page, and there Esc or a press on the page closes it (user,
-// 2026-10-02). Beside the page it stays: the page is read with it open, and Esc is the page's own (답장 멈추기).
+// 2026-10-02). Beside the page it stays: the page is read with it open, and Esc is the page's own (응답 멈추기).
 export function SidePanel({ title, subtitle, top, page, actions, footer, onClose, children }: Props) {
   const body = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
