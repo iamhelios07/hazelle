@@ -24,6 +24,26 @@ The dev server's data directory `.data/` keeps an account, so a script signs in 
 2. Run `./node_modules/.bin/playwright test -c playwright.shots.config.ts shots/<topic>.spec.ts`. It starts the server (`npm run server`, on `.data/`, port 8080) and Vite on port 5180, or reuses ones already running.
 3. Look before sending, at the half-size copies: `snap` also writes `shots/out/look/<name>.png`, a quarter of the pixels, and an image costs context by its pixels. Read only the ones needed to judge the change; open a full-size one only for a detail too small at half size. Then send the full-size ones from `shots/out/` with SendUserFile (load it with ToolSearch `select:SendUserFile`), in the order a user would click, with a one-line caption.
 
+## A chat screen with real chats
+
+The `shots` account holds no chat with messages. For a shot of the chat screen (header, story, composer), use the real-scale account instead, about 12 s a run:
+
+```ts
+import { test } from '@playwright/test';
+import { enterReal, look, openChat, showHeader } from './real';
+
+test('topic', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await enterReal(page);
+  await openChat(page); // Max's latest chat; another character by its card name: openChat(page, 'Koyomi')
+  await showHeader(page); // the header hides until the pointer is near the top
+  await page.screenshot({ path: 'shots/out/topic-wide.png' });
+  await look(page, 'topic-wide'); // the small copy to read, in shots/out/real/
+});
+```
+
+Save it as `shots/real-<topic>.spec.ts` and run `./node_modules/.bin/playwright test -c shots/real.config.ts real-<topic>`. That server runs the build, so run `npm run build` after a code change first. `openChat` needs a wide window: resize after the chat opens. Do not explore the sidebar's folders or the character list for a chat. Their state changes between runs.
+
 Facts that cost reruns before:
 - Set the viewport before opening a menu or panel. Crossing 960px remounts the page and closes the panel. `SIZES` has wide (panel beside the page), medium (panel over the page) and phone.
 - A reply needs a model. `fakeProvider()` from `e2e/helpers.ts` runs a fake OpenAI-compatible provider at `FAKE_ADDRESS` (`http://127.0.0.1:4419/v1`), which the server reaches as a listed local provider. The account needs a connection to `FAKE_ADDRESS` first: see the connection step in `e2e/flow.spec.ts`.
