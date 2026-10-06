@@ -92,7 +92,7 @@ and only this folder styles elements.**
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: its leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), the sidebar's, lists' and menus', and tabs' colours, and the hover and current fills (`--color-item-hover`, `--color-item-current`) |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
-| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them, or, given keys, only the rows near the view; a model id; a figure at a row's end; a control beside a row and rows set in under it |
+| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them, or, given keys, only the rows near the view; a model id; a figure at a row's end; a control beside a row, something under a row's text such as a gauge, and rows set in under it |
 | collections | `NavGroup` | `NavGroup.module.css` | A set of places in the app, spaced apart from the next set, such as 설정's |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |
 | collections | `Outline` | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
@@ -114,6 +114,7 @@ and only this folder styles elements.**
 | feedback | `CodeBlock` | `CodeBlock.module.css` | Text as a program sent it, such as a request's address and body in 요청 원문; in body letters, what a prompt example gives |
 | feedback | `CodeCard` | `CodeCard.module.css` | A code to copy, such as the recovery key |
 | feedback | `Empty` | `Empty.module.css` | What stands where a list, grid, pane or panel has nothing to show, in the look of where it stands: a body, a section, the story, the pane beside a list, the sidebar or a menu |
+| feedback | `Gauge` | `Gauge.module.css` | How much of an allowance is used, with a mark where an even use would stand by now, a status word, a note and what is left; figures alone where there is nothing to measure against |
 | feedback | `Intro` | `Intro.module.css` | A screen's large title and lead |
 | feedback | `Outcome` | `Outcome.module.css` | What an import brought and did not, a line each with why under it |
 | feedback | `Progress` | `Progress.module.css` | Work under way. Plain: a row per step with its label, bar and count; a step without a total shows its count over a flowing bar; two or more counted steps get a 전체 row. `hero`: the mark filling with the whole and the floored percent, then the steps as stages in order (a check once over, the one under way with its count and bar, a hollow ring still to come), with `title` under the percent and `note` under the stages; a label-only step marked `finished` is a stage done before the counted ones began. Used by the first load, the Risu move and the backup dialog |

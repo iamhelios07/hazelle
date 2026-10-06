@@ -40,3 +40,10 @@ export function pace(meter: Meter, now: number, turn: { start: number; end: numb
     endsAtSwitch,
   };
 }
+
+// More than this many points from the even mark reads as fast or slow, not as on pace.
+const LEEWAY = 10;
+
+export function verdict({ used, even }: Pace): 'fast' | 'even' | 'slow' {
+  return used - even > LEEWAY ? 'fast' : even - used > LEEWAY ? 'slow' : 'even';
+}

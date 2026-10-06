@@ -265,6 +265,7 @@
   --icon-stroke: 1.8;
   --dot: 6px;
   --bar-height: 4px;
+  --gauge-height: 8px;
   --screen-narrow: 440px;
   --toast-width: 380px;
   --toast-peek: var(--space-8);

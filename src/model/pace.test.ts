@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import type { Meter } from '../connectors/types';
-import { pace } from './pace';
+import { pace, verdict } from './pace';
 
 const DAY = 24 * 60 * 60 * 1000;
 const credits = (amount: number, at: number): Extract<Meter, { kind: 'left' }> => ({ kind: 'left', label: 'AI 크레딧', unit: 'credit', amount, limit: 300, resets: { at } });
@@ -15,4 +15,9 @@ it('compares the spent share with an even spend over the month to the reset, cut
   expect(pace({ ...credits(120, november), resets: 'monthly' }, now, null)).toBeNull();
   expect(pace({ ...credits(120, november), limit: null }, now, null)).toBeNull();
   expect(pace(credits(120, november), now, { start: now + DAY, end: now + 30 * DAY })).toBeNull();
+});
+
+it('reads more than ten points off the even mark as fast or slow', () => {
+  const at = (used: number, even: number) => verdict({ used, even, perDay: 0, daysLeft: 1, endsAtSwitch: false });
+  expect([at(48, 37), at(46, 37), at(26, 37), at(27, 37)]).toEqual(['fast', 'even', 'slow', 'even']);
 });

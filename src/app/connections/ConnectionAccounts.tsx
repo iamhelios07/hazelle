@@ -2,7 +2,6 @@ import { ArrowDown, ArrowUp, ExternalLink, LogIn, MoreHorizontal, Pencil, Plus, 
 import { useState, type FormEvent } from 'react';
 import { resolveConnection } from '../../connectors/registry';
 import type { Account, Connection, Group, SignIn, Turns } from '../../connectors/types';
-import { pace } from '../../model/pace';
 import { addGroup, moveAccount, moveAccountOrder, moveGroup, removeGroup, renameGroup, schedule, setDay, takeTurn } from '../../model/turns';
 import type { MetersResult } from '../../runtime/meters';
 import { addAccount, changeTurns, newAccount, putAccountBack, removeAccount } from '../../runtime/connections';
@@ -12,13 +11,14 @@ import { monthDay } from '../common/time';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, CodeCard, IconButton, Link, List, ListItem, Menu, MenuItem, NumberInput, Row, Section, Stack, Text, TextField, useMenuClose } from '../ui';
-import { fact, figure, useMeters } from './ConnectionMeters';
+import { MeterGauge, useMeters } from './ConnectionMeters';
 import { useDeviceSignIn } from './useDeviceSignIn';
 
 // Who serves a reply: the current group's first account with allowance left (runtime/pool).
 const HELP =
-  '그룹은 매달 바꾸는 날에 차례를 넘겨요. 답장은 지금 차례인 그룹에서 위에서부터 한도가 남은 첫 계정으로 보내요. 한도를 다 쓴 계정만 건너뛰어요. ' +
-  '쓴 비율은 이번 주기 한도 가운데 쓴 몫이고, 균등은 주기 내내 고르게 썼다면 지금까지 썼을 몫이에요. 그룹이 여럿이면 주기는 초기화와 그 그룹 차례가 겹치는 기간이에요. 하루 얼마는 남은 한도를 주기 끝까지 고르게 쓰는 양이에요.';
+  '그룹은 매달 바꾸는 날에 차례를 넘겨요. 답장은 지금 차례인 그룹에서 위에서부터 한도가 남은 첫 계정으로 보내요. ' +
+  '막대는 쓴 만큼 차고, 눈금은 차례가 끝날 때까지 고르게 쓴다면 지금쯤 쓴 양이에요. 눈금보다 많이 썼으면 빠르게 쓰는 중, 적게 썼으면 여유 있음이에요. ' +
+  '한도가 남은 계정이 없으면 그룹의 첫 계정으로 보내고, 초과 사용은 GitHub 설정을 따라요.';
 
 export function ConnectionAccounts({ id, connection, signIn }: { id: string; connection: Connection & { turns: Turns }; signIn: SignIn }) {
   const { store } = useSession();
@@ -84,6 +84,7 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
                       at={at}
                       // One group's turn never ends, so only the reset bounds its pace.
                       turn={window ? { start: startsAt, end: endsAt } : null}
+                      waiting={index > 0}
                       change={turns}
                       onSignIn={() => setSigning({ for: account })}
                       onRemove={() => remove(account)}
@@ -108,16 +109,20 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
   );
 }
 
-function meterLine(result: MetersResult, turn: { start: number; end: number } | null): string {
+function MeterLines({ result, turn, waiting }: { result: MetersResult; turn: { start: number; end: number } | null; waiting: boolean }) {
+  return (
+    <Stack gap="related">
+      {result.meters.map((meter) => (
+        <MeterGauge key={`${meter.kind}:${meter.label}`} meter={meter} turn={turn} waiting={waiting} labeled={result.meters.length > 1} />
+      ))}
+    </Stack>
+  );
+}
+
+function meterProblem(result: MetersResult): string | undefined {
   const [failure] = result.failures;
   if (!result.meters.length) return failure ? describeMetersFailure(failure) : '한도 수치를 알려 주지 않았어요.';
-  return result.meters
-    .flatMap((meter) => {
-      const { label, value } = fact(meter);
-      const paced = pace(meter, Date.now(), turn);
-      return [`${label} ${value}`, ...(paced ? [`${paced.used}% 씀 · 지금쯤 균등 ${paced.even}% · 남은 ${paced.daysLeft}일 하루 ${figure(meter.unit, paced.perDay)}씩`] : [])];
-    })
-    .join(' · ');
+  return failure ? '사용량 일부를 불러오지 못했어요.' : undefined;
 }
 
 type RowProps = {
@@ -126,12 +131,13 @@ type RowProps = {
   group: Group;
   at: number;
   turn: { start: number; end: number } | null;
+  waiting: boolean;
   change: (change: (turns: Turns) => Turns | null) => void;
   onSignIn: () => void;
   onRemove: () => void;
 };
 
-function AccountRow({ connection, account, group, at, turn, change, onSignIn, onRemove }: RowProps) {
+function AccountRow({ connection, account, group, at, turn, waiting, change, onSignIn, onRemove }: RowProps) {
   const { result, retry } = useMeters(connection, account);
   const name = accountName(account);
   const others = connection.turns.groups.filter((entry) => entry.id !== group.id);
@@ -139,7 +145,8 @@ function AccountRow({ connection, account, group, at, turn, change, onSignIn, on
     <ListItem
       title={name}
       tags={result?.plan ? [result.plan] : []}
-      description={result ? meterLine(result, turn) : '사용량 불러오는 중…'}
+      description={result ? meterProblem(result) : '사용량 불러오는 중…'}
+      detail={result && result.meters.length > 0 && <MeterLines result={result} turn={turn} waiting={waiting} />}
       trailing={
         <Menu place="below-end" label={`${name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" {...opener} />}>
           <MenuItem icon={ArrowUp} label="위로" disabled={at === 0} onClick={() => change((turns) => moveAccountOrder(turns, account.id, -1))} />

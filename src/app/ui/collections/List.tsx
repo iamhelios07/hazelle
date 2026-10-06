@@ -36,13 +36,15 @@ type ItemProps = {
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
   control?: ReactNode;
+  // Under the row's text, such as a gauge.
+  detail?: ReactNode;
   children?: ReactNode;
   // pressed: one of a set of choices. current: the item open beside the list (ListDetail).
   selected?: boolean;
   current?: boolean;
 };
 
-export function ListItem({ leading, title, badge, code, description, tags = [], aside, trailing, onClick, control, children, selected, current }: ItemProps) {
+export function ListItem({ leading, title, badge, code, description, tags = [], aside, trailing, onClick, control, detail, children, selected, current }: ItemProps) {
   const windowed = useContext(Windowed);
   const meta =
     code || tags.length > 0 ? (
@@ -93,6 +95,7 @@ export function ListItem({ leading, title, badge, code, description, tags = [], 
       ) : (
         row
       )}
+      {detail && <div className={styles.detail}>{detail}</div>}
       {children && <ul className={styles.nested}>{children}</ul>}
     </>
   );

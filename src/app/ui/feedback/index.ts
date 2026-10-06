@@ -4,6 +4,7 @@ export { Callout } from './Callout';
 export { CodeBlock } from './CodeBlock';
 export { CodeCard } from './CodeCard';
 export { Empty } from './Empty';
+export { Gauge } from './Gauge';
 export { Intro } from './Intro';
 export { Outcome } from './Outcome';
 export { Progress, type ProgressStep } from './Progress';

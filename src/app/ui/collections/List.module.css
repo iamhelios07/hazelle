@@ -42,6 +42,10 @@
   flex-shrink: 0;
 }
 
+.detail {
+  padding: 0 max(var(--space-8), var(--box-hang)) var(--space-8);
+}
+
 .nested {
   margin: 0 0 var(--space-8) var(--space-24);
   padding: 0 0 0 var(--space-12);

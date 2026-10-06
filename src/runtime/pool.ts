@@ -79,6 +79,11 @@ export class Pool {
     return accounts[0] ?? null;
   }
 
+  // What its meters said when last read, with no network call; null where they were never read.
+  held(connection: Connection, account: Account): MetersResult | null {
+    return this.known.get(keyOf(connection, account))?.settled ?? null;
+  }
+
   // After a reply on it failed, so the next pick reads its meters again.
   stale(connection: Connection, account: Account) {
     this.known.delete(keyOf(connection, account));

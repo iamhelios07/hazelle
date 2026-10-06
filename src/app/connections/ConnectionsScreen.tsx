@@ -1,6 +1,9 @@
 import { ChevronRight, Plus } from 'lucide-react';
 import { resolveConnection } from '../../connectors/registry';
-import { useConnections, useUnreadable } from '../session';
+import type { Connection } from '../../connectors/types';
+import { accountName } from '../../runtime/pool';
+import { useConnections, useSession, useUnreadable } from '../session';
+import { leftOf } from './ConnectionMeters';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { PAGES } from '../common/words';
@@ -11,6 +14,17 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
   const connections = useConnections();
   const unreadable = useUnreadable();
   const route = useRoute();
+  const { credentials } = useSession();
+
+  // A pool names who would serve now and what it has left, from meters already read; nothing is fetched for the list.
+  function summary(connection: Connection): string {
+    const starred = connection.starred.length ? `별표 ${connection.starred.length}개` : '별표 없음';
+    if (!connection.turns) return [connection.accounts[0]!.name, starred].filter(Boolean).join(' · ');
+    const serving = credentials.pool.peek(connection);
+    const held = serving && credentials.pool.held(connection, serving);
+    const left = held && leftOf(held);
+    return [`계정 ${connection.accounts.length}개`, ...(serving && left ? [`지금 ${accountName(serving)}`, left] : [starred])].join(' · ');
+  }
 
   return (
     <Screen
@@ -33,7 +47,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
             <ListItem
               key={connection.id}
               title={connection.value.label}
-              description={[connection.value.turns ? `계정 ${connection.value.accounts.length}개` : connection.value.accounts[0]!.name, connection.value.starred.length ? `별표 ${connection.value.starred.length}개` : '별표 없음'].filter(Boolean).join(' · ')}
+              description={summary(connection.value)}
               tags={resolveConnection(connection.value) ? [] : ['이 버전이 모르는 연결']}
               trailing={<Icon icon={ChevronRight} />}
               current={route.kind === 'connection' && route.id === connection.id}
