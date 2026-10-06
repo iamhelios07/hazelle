@@ -1,15 +1,14 @@
-import { ChevronLeft, Pencil, Plus } from 'lucide-react';
+import { ChevronLeft, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
-import { openCharacterEditor } from '../../chat/editBeside';
+import { openCharacter } from '../../chat/editBeside';
 import { matches, noResults, SEARCH_FROM } from '../../common/search';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useWritingChats } from '../../session';
-import { Empty, IconButton, ItemRow, NavRow, SearchField, SideTitle, Sidebar, Viewport } from '../../ui';
+import { Empty, ItemRow, NavRow, SearchField, SideTitle, Sidebar, Viewport } from '../../ui';
 import { navigate, useRoute } from '../router';
-import { characterPage, type Route } from '../routes';
 import { SidebarFooter } from './SidebarFooter';
 
 type Props = {
@@ -25,9 +24,9 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
   const writing = useWritingChats();
   const route = useRoute();
   const openChat = route.kind === 'chat' ? route.id : undefined;
-  // 캐릭터 없이 has a page only beside its chats.
-  const about: Route | null = shelf.id !== null ? characterPage(shelf.id, !page) : page ? null : { kind: 'shelf', character: null };
   const id = shelf.id;
+  // 캐릭터 없이 has a page only beside its chats.
+  const open = id !== null ? () => openCharacter(id, !page) : page ? undefined : () => navigate({ kind: 'shelf', character: null });
   return (
     <Sidebar
       page={page}
@@ -37,8 +36,7 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
           <SideTitle
             avatar={<ShelfFace shelf={shelf} />}
             name={shelfName(shelf)}
-            onOpen={about === null ? undefined : () => navigate(about)}
-            action={id !== null && <IconButton icon={Pencil} label="캐릭터 편집" size="sm" onClick={() => openCharacterEditor(id)} />}
+            onOpen={open}
           />
           <NavRow icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf.id })} />
           {shelf.chats.length >= SEARCH_FROM && <SearchField size="sm" label="채팅 검색" value={query} onChange={setQuery} />}

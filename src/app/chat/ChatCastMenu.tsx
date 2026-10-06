@@ -9,14 +9,13 @@ import { useLibrary } from '../session';
 import { Avatar, Empty, Menu, MenuHeading, MenuItem, SearchField, ToolButton } from '../ui';
 import type { OpenChat } from './useChat';
 
-// button false: a phone's header has no room for it, so there the menu opens from the title menu (ChatHeading), whose
-// slot it sits in.
+// button false: a phone's header has no room for it, so there the menu opens from ⋯ (ChatHeaderActions).
 export function ChatCastMenu({ chat, button }: { chat: OpenChat; button: boolean }) {
   const { cast, castMenu } = chat;
   return (
     <Menu
       handle={castMenu}
-      place={button ? 'below-end' : 'below-start'}
+      place="below-end"
       size="lg"
       label={CAST}
       trigger={(opener) => button && <ToolButton icon={Users} label={CAST} detail={cast.length ? `${cast.length}명` : undefined} mark={{ kind: 'count', count: cast.length }} {...opener} />}

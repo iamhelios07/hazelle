@@ -11,7 +11,7 @@ type Props<K extends SideAt['open']['kind']> = Omit<SideAt, 'open'> & { open: Ex
 const panel =
   (title: string, onClose: () => void) =>
   ({ head, body, open: page }: { head: NavBarProps; body: ReactNode; open?: string }) => (
-    <SidePanel title={title} top={<NavBar {...head} />} page={page} onClose={onClose}>
+    <SidePanel title={title} top={<NavBar {...head} />} page={page} expandable onClose={onClose}>
       {body}
     </SidePanel>
   );
@@ -25,10 +25,9 @@ export function ChatSide(props: SideAt) {
 }
 
 function CharacterSide({ open, onClose }: Props<'character'>) {
-  const shelf = useCharacter(open.id);
   // The chat is gone from the page with its character, so the character is there while this is.
-  const { character } = shelf!;
-  return <CharacterEditor key={open.id} id={open.id} character={character} frame={panel('캐릭터', onClose)} />;
+  const shelf = useCharacter(open.id)!;
+  return <CharacterEditor key={open.id} shelf={shelf} frame={panel('캐릭터', onClose)} />;
 }
 
 function PromptSide({ open, inUse, onOpen, onClose }: Props<'prompts'>) {

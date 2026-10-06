@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { navigate } from '../shell/router';
+import { characterPage } from '../shell/routes';
 
-// The open chat's character, whose editor that chat shows in its side panel.
+// The open chat's character, which that chat shows in its side panel.
 let beside: { character: string; open: () => void } | null = null;
 
 export function useEditBeside(character: string | null, open: () => void) {
@@ -17,8 +18,8 @@ export function useEditBeside(character: string | null, open: () => void) {
   }, [character]);
 }
 
-// Beside the open chat when it is that character's chat, the editor's page otherwise.
-export function openCharacterEditor(character: string) {
+// Beside the open chat when it is that character's chat, the character's page otherwise.
+export function openCharacter(character: string, wide: boolean) {
   if (beside?.character === character) beside.open();
-  else navigate({ kind: 'edit', character });
+  else navigate(characterPage(character, wide));
 }

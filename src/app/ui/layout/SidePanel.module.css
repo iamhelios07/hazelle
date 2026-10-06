@@ -8,6 +8,13 @@
   background: var(--color-sidebar);
 }
 
+.expanded {
+  position: absolute;
+  inset: 0;
+  z-index: var(--layer-panel);
+  width: auto;
+}
+
 @media (max-width: 1279px) {
   .panel {
     position: fixed;

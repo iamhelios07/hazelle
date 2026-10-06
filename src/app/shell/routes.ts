@@ -9,7 +9,6 @@ export type Route =
   | { kind: 'gallery' }
   // character null is 캐릭터 없이.
   | { kind: 'shelf'; character: string | null }
-  | { kind: 'about'; character: string }
   | { kind: 'edit'; character: string }
   | { kind: 'new-chat'; character: string | null }
   | { kind: 'chat'; id: string }
@@ -65,8 +64,8 @@ export function parseRoute(at: string): Route {
     if (id === NONE) return sub === undefined ? { kind: 'shelf', character: null } : HOME;
     if (!ID.test(id)) return HOME;
     if (sub === undefined) return { kind: 'shelf', character: id };
-    if (sub === 'about') return { kind: 'about', character: id };
-    if (sub === 'edit') return { kind: 'edit', character: id };
+    // The character's page before its editor took that place.
+    if (sub === 'edit' || sub === 'about') return { kind: 'edit', character: id };
     if (sub === 'new') return { kind: 'new-chat', character: id };
     return HOME;
   }
@@ -130,8 +129,6 @@ export function href(route: Route): string {
       return '/characters';
     case 'shelf':
       return `/characters/${route.character ?? NONE}`;
-    case 'about':
-      return `/characters/${route.character}/about`;
     case 'edit':
       return `/characters/${route.character}/edit`;
     case 'new-chat':
@@ -246,7 +243,6 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
 export function shelfOf(route: Route, chatShelf?: string | null): string | null | undefined {
   switch (route.kind) {
     case 'shelf':
-    case 'about':
     case 'edit':
     case 'new-chat':
       return route.character;
@@ -257,7 +253,7 @@ export function shelfOf(route: Route, chatShelf?: string | null): string | null 
   }
 }
 
-export const characterPage = (character: string, wide: boolean): Route => (wide ? { kind: 'shelf', character } : { kind: 'about', character });
+export const characterPage = (character: string, wide: boolean): Route => (wide ? { kind: 'shelf', character } : { kind: 'edit', character });
 
 export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
   const latest = shelf.chats[0];
@@ -266,20 +262,18 @@ export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
 
 // On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is
 // the way back), so only phones use their answer.
-export function up(route: Below, wide: boolean, chatShelf?: string | null): Route {
+export function up(route: Below, chatShelf?: string | null): Route {
   switch (route.kind) {
     case 'gallery':
     case 'shelf':
       return HOME;
-    case 'about':
+    case 'edit':
     case 'new-chat':
       return { kind: 'shelf', character: route.character };
     case 'chat': {
       const shelf = shelfOf(route, chatShelf);
       return shelf === undefined ? HOME : { kind: 'shelf', character: shelf };
     }
-    case 'edit':
-      return characterPage(route.character, wide);
     case 'settings':
       return HOME;
     case 'connections':
@@ -315,16 +309,14 @@ export const upFromMissing = (route: Route): Route => (route.kind === 'prompt' ?
 
 export type Back = { to: Route; label: string };
 
-// 뒤로 is named for where it goes, as the layout shows that place: on phones home is the character list
-// and a shelf is a character's chats; on wide screens a shelf is the character's page.
+// 뒤로 is named for where it goes, as the layout shows that place: on phones home is the character list. Only phones
+// go back to a shelf, a character's chats.
 export function backTo(to: Route, wide: boolean): Back {
   switch (to.kind) {
     case 'home':
       return { to, label: wide ? '홈으로' : '목록으로' };
     case 'shelf':
-      return { to, label: wide ? '캐릭터' : '채팅 목록' };
-    case 'about':
-      return { to, label: '캐릭터' };
+      return { to, label: '채팅 목록' };
     default:
       return { to, label: '뒤로' };
   }

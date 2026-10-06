@@ -48,7 +48,6 @@ function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
     case 'shelf':
     case 'new-chat':
       return route.character === null ? null : { kind: 'character', id: route.character };
-    case 'about':
     case 'edit':
       return { kind: 'character', id: route.character };
     case 'chat': {

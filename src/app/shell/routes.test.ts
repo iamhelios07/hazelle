@@ -13,7 +13,6 @@ const EXAMPLES = {
     { kind: 'shelf', character: CHARACTER },
     { kind: 'shelf', character: null },
   ],
-  about: [{ kind: 'about', character: CHARACTER }],
   edit: [{ kind: 'edit', character: CHARACTER }],
   'new-chat': [
     { kind: 'new-chat', character: CHARACTER },
@@ -63,6 +62,7 @@ describe('routes', () => {
 
   it('keeps every address the app has had', () => {
     expect(href({ kind: 'shelf', character: null })).toBe('/characters/none');
+    expect(parseRoute(`/characters/${CHARACTER}/about`)).toEqual({ kind: 'edit', character: CHARACTER });
     expect(href({ kind: 'new-chat', character: null })).toBe('/chats/new');
     expect(href({ kind: 'new-chat', character: CHARACTER })).toBe(`/characters/${CHARACTER}/new`);
     expect(href({ kind: 'connect-direct', address: 'https://a.example/v1' })).toBe('/connections/new/direct?address=https%3A%2F%2Fa.example%2Fv1');
@@ -79,19 +79,17 @@ describe('routes', () => {
   );
 
   it('sends 뒤로 from a chat to its character’s chats, or home when the chat is not there', () => {
-    expect(backTo(up({ kind: 'chat', id: CHAT }, false, CHARACTER), false)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '채팅 목록' });
-    expect(up({ kind: 'chat', id: CHAT }, false, null)).toEqual({ kind: 'shelf', character: null });
-    expect(up({ kind: 'chat', id: CHARACTER }, false)).toEqual(HOME);
+    expect(backTo(up({ kind: 'chat', id: CHAT }, CHARACTER), false)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '채팅 목록' });
+    expect(up({ kind: 'chat', id: CHAT }, null)).toEqual({ kind: 'shelf', character: null });
+    expect(up({ kind: 'chat', id: CHARACTER })).toEqual(HOME);
     expect(shelfOf({ kind: 'chat', id: CHAT }, CHARACTER)).toBe(CHARACTER);
     expect(shelfOf({ kind: 'chat', id: CHAT }, null)).toBeNull();
     expect(shelfOf({ kind: 'chat', id: CHAT })).toBeUndefined();
-    expect(shelfOf({ kind: 'about', character: CHARACTER })).toBe(CHARACTER);
+    expect(shelfOf({ kind: 'edit', character: CHARACTER })).toBe(CHARACTER);
     expect(shelfOf(HOME, CHARACTER)).toBeUndefined();
   });
 
-  it('sends 뒤로 from the editor to the character’s page for the layout', () => {
-    const edit = { kind: 'edit', character: CHARACTER } as const;
-    expect(backTo(up(edit, true), true)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '캐릭터' });
-    expect(backTo(up(edit, false), false)).toEqual({ to: { kind: 'about', character: CHARACTER }, label: '캐릭터' });
+  it('sends 뒤로 from a phone’s character page to its chats', () => {
+    expect(backTo(up({ kind: 'edit', character: CHARACTER }), false)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '채팅 목록' });
   });
 });

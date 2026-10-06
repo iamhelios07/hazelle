@@ -1,9 +1,14 @@
+import { Copy, MessageSquarePlus, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { PICTURE_PERCENT, type Character, type Pictures } from '../../model/library';
+import { storyHtml } from '../../engine/display';
+import { unused } from '../../engine/pipeline';
+import type { ChatSummary } from '../../model/chat';
+import { PICTURE_PERCENT, type CharacterShelf, type Pictures } from '../../model/library';
 import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/turn';
 import { aliased } from '../common/alias';
+import { describeUnused } from '../common/unused';
 import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
 import { ModuleSwitches } from '../common/ModuleSwitches';
@@ -11,9 +16,12 @@ import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, TRANSLATOR_NOTE } from '../common/words';
-import { useStore } from '../session';
+import { useCharacter, useStore } from '../session';
+import { navigate } from '../shell/router';
+import { characterPage, HOME } from '../shell/routes';
 import { useToast } from '../toast';
-import { Disclosure, Jumps, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
+import { Button, Callout, Disclosure, IconButton, Jumps, Menu, MenuItem, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
+import { useCharacterActions } from './useCharacterActions';
 
 type Height = 'peek' | 'most';
 const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 입력해 주세요.`;
@@ -28,11 +36,17 @@ type Switched = keyof typeof SWITCHES;
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
   statuses.find((each) => each === 'failed') ?? statuses.find((each) => each === 'saving') ?? statuses.find((each) => each !== null) ?? null;
 
-// Only the fields changed here go to editCharacter. A caller leaves by unmounting it, which saves.
-// character: the stored character as it is now, on every render. The editor shows it, under what waits to be saved.
-export function CharacterEditor({ id, character, frame }: { id: string; character: Character; frame: Frame }) {
+// The character's one screen: beside its chat, or a page elsewhere. Only the fields changed here go to editCharacter.
+// A caller leaves by unmounting it, which saves.
+// shelf: the stored character as it is now, on every render. The editor shows it, under what waits to be saved.
+export function CharacterEditor({ shelf, frame }: { shelf: CharacterShelf<ChatSummary>; frame: Frame }) {
+  const { id, character, face } = shelf;
+  const { card, origin } = character;
   const store = useStore();
   const toast = useToast();
+  const wide = useWide();
+  const original = useCharacter(origin?.id ?? null);
+  const { busy, copy, remove } = useCharacterActions();
   const { status, unsaved, change: queue } = useAutosave<CharacterText>(`character:${id}`, (patch) => editCharacter(store, id, patch));
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
@@ -76,8 +90,38 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
     queue({ [field]: value }, field !== 'name' || !!(value as string).trim());
   }
 
+  const notUsed = describeUnused(unused(card));
   const body = (
     <Jumps label="캐릭터 편집 항목">
+      <Section title="소개">
+        <Portrait image={face} name={card.name} />
+        {origin && (
+          <Row kind="actions">
+            <Text variant="note">
+              '{origin.name}'에서 만든 사본{original ? '' : ' (원본 삭제됨)'}
+            </Text>
+            {original && (
+              <Button variant="ghost" size="sm" onClick={() => navigate(characterPage(origin.id, wide))}>
+                원본 보기
+              </Button>
+            )}
+          </Row>
+        )}
+        {card.tags.length > 0 && (
+          <Row kind="tags">
+            {card.tags.map((tag) => (
+              <Tag key={tag}>{tag}</Tag>
+            ))}
+          </Row>
+        )}
+        {notUsed && <Callout tone="warn">{notUsed}</Callout>}
+        <Row kind="actions">
+          <Button icon={MessageSquarePlus} onClick={() => navigate({ kind: 'new-chat', character: id })}>
+            새 채팅
+          </Button>
+        </Row>
+        {card.creatorNotes.trim() && <Story html={storyHtml(card.creatorNotes, true)} />}
+      </Section>
       <Text variant="note">정규식은 여기서 편집할 수 없어요.</Text>
       <Section title="기본 정보">
         <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 입력해 주세요.'} />
@@ -164,5 +208,27 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
     </Jumps>
   );
   const saved = merged(status, pictureSave.status, noteSave.status);
-  return frame({ head: { title: '캐릭터 편집', subtitle: aliased(text.name, text.alias), status: saved ? SAVE_STATUS[saved] : undefined }, body });
+  const copying = busy?.id === id ? busy.label : null;
+  const actions = (
+    <Menu place="below-end" label="캐릭터 메뉴" trigger={(opener) => <IconButton icon={MoreHorizontal} label="캐릭터 메뉴" size="sm" {...opener} />}>
+      <MenuItem icon={Copy} label="사본 만들기" disabled={busy !== null} onClick={() => void copy(shelf)} />
+      <MenuItem
+        icon={Trash2}
+        label="삭제"
+        tone="warn"
+        disabled={busy !== null}
+        onClick={() => {
+          remove(shelf);
+          navigate(HOME);
+        }}
+      />
+    </Menu>
+  );
+  const head = {
+    title: aliased(text.name, text.alias),
+    subtitle: card.creator ? `제작자 ${card.creator}` : undefined,
+    status: copying ?? (saved ? SAVE_STATUS[saved] : undefined),
+    actions,
+  };
+  return frame({ head, body });
 }

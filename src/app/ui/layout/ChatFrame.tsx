@@ -1,7 +1,6 @@
-import { ChevronDown, ChevronLeft } from 'lucide-react';
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref, type RefObject } from 'react';
+import { ChevronLeft } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
-import { Icon } from '../foundation/Icon';
 import styles from './ChatFrame.module.css';
 
 type Spacing = 'narrow' | 'normal' | 'wide';
@@ -129,28 +128,29 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
 }
 
 type TitleProps = {
-  avatar: ReactNode;
   name: string;
-  sub: string;
+  sub?: string;
   typing: boolean;
-  popup: 'menu' | 'dialog';
-  expanded: boolean;
-  ref: Ref<HTMLButtonElement>;
-  onClick: () => void;
+  onClick?: () => void;
 };
 
-export function ChatTitle({ avatar, name, sub, typing, popup, expanded, ref, onClick }: TitleProps) {
+export function ChatTitle({ name, sub, typing, onClick }: TitleProps) {
+  const lines = (
+    <span className={styles.lines}>
+      <span className={styles.name}>{name}</span>
+      {sub && <span className={styles.sub}>{sub}</span>}
+    </span>
+  );
   return (
     <span className={styles.chatTitle}>
-      {avatar}
       <h1 className={styles.heading}>
-        <button ref={ref} type="button" className={styles.switch} aria-haspopup={popup} aria-expanded={expanded} onClick={onClick}>
-          <span className={styles.lines}>
-            <span className={styles.name}>{name}</span>
-            <span className={styles.sub}>{sub}</span>
-          </span>
-          <Icon icon={ChevronDown} size="xs" />
-        </button>
+        {onClick ? (
+          <button type="button" className={`${styles.box} ${styles.press}`} onClick={onClick}>
+            {lines}
+          </button>
+        ) : (
+          <span className={styles.box}>{lines}</span>
+        )}
       </h1>
       {typing && (
         <span className={styles.typing}>

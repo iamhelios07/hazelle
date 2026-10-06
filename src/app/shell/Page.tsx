@@ -1,3 +1,4 @@
+import { MessageSquarePlus } from 'lucide-react';
 import { useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import { binsChat, isBinned, live } from '../../model/library';
@@ -13,7 +14,6 @@ import { ConnectionModelsScreen } from '../connections/ConnectionModelsScreen';
 import { ConnectionSignInScreen } from '../connections/ConnectionSignInScreen';
 import { ConnectionsScreen } from '../connections/ConnectionsScreen';
 import { CharacterEditScreen } from '../library/CharacterEditScreen';
-import { CharacterScreen } from '../library/CharacterScreen';
 import { GalleryScreen } from '../library/gallery/GalleryScreen';
 import { HomeScreen } from '../library/HomeScreen';
 import { useImport } from '../library/ImportFlow';
@@ -31,7 +31,7 @@ import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { DisplayScreen } from '../settings/DisplayScreen';
 import { TranslatorScreen } from '../settings/TranslatorScreen';
-import { Button, Empty, ListDetail, NavBar, Progress, Screen, Text, useSplit, useWide } from '../ui';
+import { Button, Empty, Intro, ListDetail, NavBar, Progress, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
 import { backBar, navigate } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
@@ -57,7 +57,7 @@ const EMPTY = {
 export function Page({ route, closeSettings }: { route: Route; closeSettings: () => void }) {
   const wide = useWide();
   const split = useSplit();
-  const back = (at: Below) => backTo(up(at, wide), wide);
+  const back = (at: Below) => backTo(up(at), wide);
   // On wide screens the sidebar beside the library's pages, or 설정's, is their way back.
   const sideBack = (at: Below) => (wide ? null : back(at));
 
@@ -68,7 +68,6 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
       case 'gallery':
         return <GalleryScreen back={sideBack(at)} />;
       case 'shelf':
-      case 'about':
       case 'edit':
         return <CharacterPage at={at} wide={wide} />;
       case 'new-chat':
@@ -147,14 +146,17 @@ function HomePage() {
   return populated ? <GalleryScreen back={null} /> : <HomeScreen />;
 }
 
-function CharacterPage({ at, wide }: { at: At<'shelf' | 'about' | 'edit'>; wide: boolean }) {
+function CharacterPage({ at, wide }: { at: At<'shelf' | 'edit'>; wide: boolean }) {
   const shelf = useCharacter(at.character);
   const stored = useStored('character', at.character);
-  if (at.character !== null && !shelf) return missing(at, absentItem('character', stored), wide);
-  const back = backTo(up(at, wide), wide);
-  return at.kind === 'edit'
-    ? <CharacterEditScreen key={shelf!.id} id={shelf!.id} character={shelf!.character} back={back} />
-    : <CharacterScreen key={shelf?.id ?? 'none'} shelf={shelf} back={wide ? null : back} />;
+  if (at.character === null) return (
+    <Screen align="center">
+      <Intro title="캐릭터 없이" />
+      <Button icon={MessageSquarePlus} onClick={() => navigate({ kind: 'new-chat', character: null })}>새 채팅</Button>
+    </Screen>
+  );
+  if (!shelf) return missing(at, absentItem('character', stored), wide);
+  return <CharacterEditScreen key={shelf.id} shelf={shelf} back={wide ? null : backTo(up(at), wide)} />;
 }
 
 function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) {
@@ -174,7 +176,7 @@ function ChatPage({ at, wide }: { at: At<'new-chat' | 'chat'>; wide: boolean }) 
     newChat = at.kind === 'new-chat' ? { character: at.character, id: crypto.randomUUID() } : null;
     setFresh(newChat);
   }
-  const back = backTo(up(at, wide, summary?.chat.character), wide);
+  const back = backTo(up(at, summary?.chat.character), wide);
   if (at.kind === 'new-chat') {
     if (at.character !== null && !shelf) return missing(at, absentItem('character', characterStored), wide);
     return <ChatScreen key={newChat!.id} id={newChat!.id} item={null} shelf={shelf} back={wide ? null : back} side={side} />;
