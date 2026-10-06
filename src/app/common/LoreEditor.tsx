@@ -1,13 +1,14 @@
 import { FolderPlus, Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import type { Lore, LoreFolder } from '../../model/library';
 import { loreGroups } from '../../model/lore';
 import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, type LoreOwner } from '../../runtime/lore';
 import { useChildren, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, ChipButton, ChoiceGroup, Disclosure, Empty, Menu, MenuItem, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Text, TextField } from '../ui';
+import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, NumberInput, PhraseField, Row, SearchField, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
 import { NameDialog } from './NameDialog';
+import { matches, noResults, SEARCH_FROM } from './search';
 import { SLOT_NAMES } from './prompt-words';
 import { typedText } from './typed';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
@@ -30,11 +31,10 @@ const readNumber = (draft: string) => {
   return Number.isFinite(value) ? value : null;
 };
 
-function summary({ name, enabled, constant, keys }: Lore) {
+function when({ enabled, constant, keys }: Lore) {
   const named = keys.filter((key) => key.trim());
   const more = named.length > KEYS_SHOWN ? ` 외 ${named.length - KEYS_SHOWN}개` : '';
-  const when = !enabled ? '꺼짐' : constant ? '항상' : named.length ? named.slice(0, KEYS_SHOWN).join(', ') + more : '키워드 없음';
-  return `${loreName(name)} · ${when}`;
+  return !enabled ? '꺼짐' : constant ? '항상' : named.length ? named.slice(0, KEYS_SHOWN).join(', ') + more : '키워드 없음';
 }
 
 type Naming = { folder: LoreFolder | null; name: string };
@@ -47,6 +47,7 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
   const groups = useMemo(() => loreGroups(entries, folders), [entries, folders]);
   const [added, setAdded] = useState<string | null>(null);
   const [naming, setNaming] = useState<Naming | null>(null);
+  const [words, setWords] = useState('');
 
   // The entry's row mounts as the store takes it, so it is named as added before then.
   async function add(folder: string | null) {
@@ -77,27 +78,43 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
 
   const rows = (list: Stored<'lore'>[]) => list.map((entry) => <EntryRow key={entry.id} stored={entry} folders={folders} startOpen={entry.id === added} />);
   const [loose, ...grouped] = groups;
+  const found = words.trim() ? entries.filter(({ value }) => matches(words, loreName(value.name), ...value.keys)) : null;
+  const listed = found ? (
+    found.length > 0 ? (
+      <List box label="찾은 로어북 항목">
+        {rows(found)}
+      </List>
+    ) : (
+      <Empty variant="section">{noResults(words)}</Empty>
+    )
+  ) : entries.length === 0 && folders.length === 0 ? (
+    <Empty variant="section">항목이 없어요.</Empty>
+  ) : (
+    <List box label="로어북 항목">
+      {rows(loose!.entries)}
+      {grouped.map(({ folder, entries: inside }) => (
+        <FolderRow key={folder!.id} name={folder!.name} count={inside.length}>
+          {inside.length > 0 && <List label={`${folder!.name} 항목`}>{rows(inside)}</List>}
+          <Row kind="actions">
+            <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add(folder!.id)}>
+              새 항목
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setNaming({ folder, name: folder!.name })}>
+              이름 바꾸기
+            </Button>
+            <Button variant="danger" size="sm" onClick={() => removeFolder(folder!)}>
+              폴더 삭제
+            </Button>
+          </Row>
+        </FolderRow>
+      ))}
+    </List>
+  );
   return (
     <Section title="로어북" note={`${entries.length}개`} hint="대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.">
       <Stack gap="related">
-        {entries.length === 0 && folders.length === 0 && <Empty variant="section">항목이 없어요.</Empty>}
-        {rows(loose!.entries)}
-        {grouped.map(({ folder, entries: inside }) => (
-          <Disclosure key={folder!.id} label={`${folder!.name} · ${inside.length}개`}>
-            {rows(inside)}
-            <Row kind="actions">
-              <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add(folder!.id)}>
-                새 항목
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => setNaming({ folder, name: folder!.name })}>
-                이름 바꾸기
-              </Button>
-              <Button variant="danger" size="sm" onClick={() => removeFolder(folder!)}>
-                폴더 삭제
-              </Button>
-            </Row>
-          </Disclosure>
-        ))}
+        {entries.length >= SEARCH_FROM && <SearchField size="sm" label="로어북 검색" value={words} onChange={setWords} />}
+        {listed}
         <Row kind="actions">
           <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add(null)}>
             새 항목
@@ -112,6 +129,11 @@ export function LoreEditor({ owner, folders }: { owner: LoreOwner; folders: Lore
   );
 }
 
+function FolderRow({ name, count, children }: { name: string; count: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <ListItem title={name} aside={`${count}개`} expanded={open} onClick={() => setOpen(!open)} detail={open && <Stack gap="related">{children}</Stack>} />;
+}
+
 type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; startOpen: boolean };
 
 // Its edits wait in its own save queue, so the line shows them before they are stored.
@@ -120,6 +142,7 @@ function EntryRow({ stored, folders, startOpen }: RowProps) {
   const toast = useToast();
   const save = useAutosave<Lore>(`lore:${stored.id}`, (patch) => editLore(store, stored.id, patch));
   const shown: Lore = { ...stored.value, ...save.unsaved };
+  const [open, setOpen] = useState(startOpen);
 
   async function remove() {
     const done = await save.remove(() => removeLore(store, stored.id));
@@ -129,9 +152,13 @@ function EntryRow({ stored, folders, startOpen }: RowProps) {
   }
 
   return (
-    <Disclosure label={summary(shown)} startOpen={startOpen}>
-      <EntryFields shown={shown} folders={folders} change={save.change} status={save.status} remove={() => void remove()} />
-    </Disclosure>
+    <ListItem
+      title={loreName(shown.name)}
+      trailing={<Tag>{when(shown)}</Tag>}
+      expanded={open}
+      onClick={() => setOpen(!open)}
+      detail={open && <EntryFields shown={shown} folders={folders} change={save.change} status={save.status} remove={() => void remove()} />}
+    />
   );
 }
 

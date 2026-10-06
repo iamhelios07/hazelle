@@ -7,7 +7,7 @@ import { matches, noResults, SEARCH_FROM } from '../../common/search';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useWritingChats } from '../../session';
-import { Empty, ItemRow, NavRow, SearchField, SideTitle, Sidebar, Viewport } from '../../ui';
+import { Button, Empty, ItemRow, NavRow, SearchField, SideTitle, Sidebar, Viewport } from '../../ui';
 import { navigate, useRoute } from '../router';
 import { SidebarFooter } from './SidebarFooter';
 
@@ -38,7 +38,9 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
             name={shelfName(shelf)}
             onOpen={open}
           />
-          <NavRow icon={Plus} label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf.id })} />
+          <Button variant="secondary" size="md" icon={Plus} onClick={() => navigate({ kind: 'new-chat', character: shelf.id })}>
+            새 채팅
+          </Button>
           {shelf.chats.length >= SEARCH_FROM && <SearchField size="sm" label="채팅 검색" value={query} onChange={setQuery} />}
         </>
       }

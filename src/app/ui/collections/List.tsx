@@ -7,7 +7,8 @@ import styles from './List.module.css';
 // In the windowed form the Viewport's rows are the li, so an item renders none of its own.
 const Windowed = createContext(false);
 
-export function List(props: { label: string; children: ReactNode } | { label: string; keys: readonly string[]; children: (index: number) => ReactNode }) {
+// box: the rows in one box, as SettingGroup's are, for a short list a screen leads with.
+export function List(props: { label: string; box?: boolean; children: ReactNode } | { label: string; keys: readonly string[]; children: (index: number) => ReactNode }) {
   if ('keys' in props) {
     return (
       <Windowed value>
@@ -18,7 +19,7 @@ export function List(props: { label: string; children: ReactNode } | { label: st
     );
   }
   return (
-    <ul className={styles.list} aria-label={props.label}>
+    <ul className={props.box ? `${styles.list} ${styles.box}` : styles.list} aria-label={props.label}>
       {props.children}
     </ul>
   );
@@ -39,12 +40,14 @@ type ItemProps = {
   // Under the row's text, such as a gauge.
   detail?: ReactNode;
   children?: ReactNode;
-  // pressed: one of a set of choices. current: the item open beside the list (ListDetail).
+  // pressed: one of a set of choices. current: the item open beside the list (ListDetail). expanded: the row opens
+  // its detail in place.
   selected?: boolean;
   current?: boolean;
+  expanded?: boolean;
 };
 
-export function ListItem({ leading, title, badge, code, description, tags = [], aside, trailing, onClick, control, detail, children, selected, current }: ItemProps) {
+export function ListItem({ leading, title, badge, code, description, tags = [], aside, trailing, onClick, control, detail, children, selected, current, expanded }: ItemProps) {
   const windowed = useContext(Windowed);
   const meta =
     code || tags.length > 0 ? (
@@ -82,6 +85,7 @@ export function ListItem({ leading, title, badge, code, description, tags = [], 
       }
       pressed={selected}
       current={current && 'page'}
+      expanded={expanded}
       onClick={onClick}
     />
   );

@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, Copy, Eye, IdCard, MessageSquarePlus, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, ChevronRight, Copy, Eye, IdCard, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -144,11 +144,6 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         </Row>
       )}
       {notUsed && <Callout tone="warn">{notUsed}</Callout>}
-      <Row kind="actions">
-        <Button icon={MessageSquarePlus} onClick={() => navigate({ kind: 'new-chat', character: id })}>
-          새 채팅
-        </Button>
-      </Row>
     </>
   );
   const pages: Record<CharacterPart, ReactNode> = {
@@ -297,7 +292,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       {lead}
       {groups.map((group) => (
         <NavGroup key={group[0]}>
-          <List label={group.map((each) => PARTS[each].label).join(', ')}>
+          <List box label={group.map((each) => PARTS[each].label).join(', ')}>
             {group.map((each) => (
               <ListItem key={each} title={PARTS[each].label} aside={holds[each]} trailing={<Icon icon={ChevronRight} />} onClick={() => onPart(each)} />
             ))}
