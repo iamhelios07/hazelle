@@ -8,40 +8,40 @@ import { toggleUses } from './rekey';
 
 export const SLOT = {
   description: { name: SLOT_NAMES.description, hint: '카드의 설명 · 성격 · 상황 · 예시 대화', line: '캐릭터 카드의 설명, 성격, 상황, 예시 대화가 여기에 들어가요.', kind: 'char', icon: IdCard },
-  persona: { name: SLOT_NAMES.persona, hint: '이 채팅에서 내가 맡은 사람의 설명', line: '이 채팅의 페르소나 설명이 여기에 들어가요.', kind: 'char', icon: UserRound },
+  persona: { name: SLOT_NAMES.persona, hint: '이 채팅에서 쓰는 페르소나의 설명', line: '이 채팅의 페르소나 설명이 여기에 들어가요.', kind: 'char', icon: UserRound },
   lorebook: {
     name: SLOT_NAMES.lorebook,
-    hint: '이번 대화에서 떠오른 로어북 항목',
-    line: '이번 대화에서 떠오른 로어북 항목이 여기에 들어가요. 항목마다 역할이 따로 있어서 이 자리에는 역할이 없어요.',
+    hint: '이번 대화에서 활성화된 로어북 항목',
+    line: '이번 대화에서 활성화된 로어북 항목이 여기에 들어가요.',
     kind: 'lore',
     icon: BookOpen,
   },
-  authorNote: { name: SLOT_NAMES.authorNote, hint: '채팅마다 따로 쓰는 노트', line: '채팅마다 따로 쓰는 작가의 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
-  postEverything: { name: SLOT_NAMES.postEverything, hint: '맨 끝으로 정한 로어북 항목이 여기 붙어요', line: '로어북에서 맨 끝으로 정한 항목이 여기 붙어요.', kind: 'lore', icon: ArrowDownToLine },
+  authorNote: { name: SLOT_NAMES.authorNote, hint: '채팅별 노트', line: '채팅별 작가의 노트가 여기에 들어가요.', kind: 'note', icon: PenLine },
+  postEverything: { name: SLOT_NAMES.postEverything, hint: '맨 끝에 넣도록 설정한 로어북 항목', line: '로어북에서 맨 끝에 넣도록 설정한 항목이 여기에 들어가요.', kind: 'lore', icon: ArrowDownToLine },
   chat: { name: SLOT_NAMES.chat, hint: '지금까지 주고받은 메시지', line: '지금까지 주고받은 메시지 가운데 아래 범위가 여기에 들어가요.', kind: 'chat', icon: MessageSquare },
   note: {
     name: SLOT_NAMES.note,
-    hint: '이름과 용어를 늘 같게 옮기는 메모',
-    line: `${inSettings('chat')}의 전역 노트와 캐릭터 편집의 캐릭터 노트가 함께 여기에 들어가요. 둘 다 비었으면 아무것도 보내지 않아요.`,
+    hint: '이름과 용어의 번역을 맞추는 메모',
+    line: `${inSettings('chat')}의 전역 노트와 캐릭터 편집의 캐릭터 노트가 여기에 들어가요.`,
     kind: 'note',
     icon: NotebookPen,
   },
   recent: {
     name: SLOT_NAMES.recent,
     hint: '번역할 메시지 바로 앞의 메시지와 그 번역',
-    line: '번역할 메시지 바로 앞의 메시지들이 이미 만든 번역과 함께 여기에 들어가요. 이름과 말투가 앞 번역과 이어져요.',
+    line: '번역할 메시지 바로 앞의 메시지와 그 번역이 여기에 들어가요.',
     kind: 'chat',
     icon: MessagesSquare,
   },
   memory: {
     name: SLOT_NAMES.memory,
     hint: '이 채팅이 기억하는 지난 이야기',
-    line: '이 채팅의 장기 기억(상태, 열린 이야기, 기록)이 여기에 들어가요. 대화 프롬프트에서는 기억한 메시지가 채팅 자리에서 빠지고, 기억이 아직 없으면 아무것도 보내지 않아요.',
+    line: '이 채팅의 장기 기억(상태, 열린 이야기, 기록)이 여기에 들어가요.',
     kind: 'note',
     icon: History,
   },
   span: { name: SLOT_NAMES.span, hint: '기억으로 정리할 메시지', line: '이번에 기억으로 정리할 메시지가 여기에 들어가요.', kind: 'chat', icon: ScrollText },
-  source: { name: SLOT_NAMES.source, hint: '번역할 글', line: '번역할 글이 여기에 들어가요. 답장은 화면에 보이는 글, 보낼 말은 내가 쓴 글이에요.', kind: 'chat', icon: Languages },
+  source: { name: SLOT_NAMES.source, hint: '번역할 텍스트', line: '번역할 텍스트가 여기에 들어가요.', kind: 'chat', icon: Languages },
 } satisfies Record<SlotKind, { name: string; hint: string; line: string; kind: OutlineKind; icon: LucideIcon }>;
 
 export const ROLES: { value: Role; label: string }[] = (['system', 'user', 'assistant'] as const).map((value) => ({ value, label: MESSAGE_ROLES[value] }));
@@ -49,12 +49,12 @@ export const ROLES: { value: Role; label: string }[] = (['system', 'user', 'assi
 export const TEXTS: { role: Role; name: string; hint: string }[] = [
   { role: 'system', name: textName('system'), hint: '규칙과 지시를 적어요' },
   { role: 'user', name: textName('user'), hint: '내가 한 말처럼 보내요' },
-  { role: 'assistant', name: textName('assistant'), hint: '모델이 한 말처럼 보내요. 답장 첫머리를 정할 때 써요' },
+  { role: 'assistant', name: textName('assistant'), hint: '모델 응답의 시작을 미리 정할 때 써요' },
 ];
 
 export const MARKS = {
-  main: { label: '본문', hint: '카드의 ‘시스템 프롬프트’가 대신해요', card: '시스템 프롬프트' },
-  globalNote: { label: '글로벌 노트', hint: '카드의 ‘대화 뒤 지시문’이 대신해요', card: '대화 뒤 지시문' },
+  main: { label: '본문', hint: `카드의 '시스템 프롬프트'로 대체돼요`, card: '시스템 프롬프트' },
+  globalNote: { label: '글로벌 노트', hint: `카드의 '대화 뒤 지시문'으로 대체돼요`, card: '대화 뒤 지시문' },
 } as const;
 
 const TEXT_ICONS: Record<Role, LucideIcon> = { system: Text, user: User, assistant: Sparkle };

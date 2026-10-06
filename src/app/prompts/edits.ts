@@ -81,9 +81,9 @@ export const keyInUse = (toggles: readonly Toggle[], key: string) => toggles.som
 
 // A key stands inside {{#when::toggle::KEY}}, so it holds none of CBS's own marks.
 export function keyProblem(key: string, toggles: readonly Toggle[], own: string | null): string | null {
-  if (!key) return '조건에서 부르는 이름을 적어 주세요.';
-  if (/[\s:{}]/.test(key)) return '빈칸과 :, {, }는 쓸 수 없어요.';
-  if (key !== own && keyInUse(toggles, key)) return '이미 쓰는 이름이에요.';
+  if (!key) return '키를 적어 주세요.';
+  if (/[\s:{}]/.test(key)) return '공백과 :, {, }는 쓸 수 없어요.';
+  if (key !== own && keyInUse(toggles, key)) return '다른 토글이 쓰고 있는 키예요.';
   return null;
 }
 
@@ -95,10 +95,10 @@ export function conditionSnippet(toggle: Toggle, selected: string): Snippet {
   const branches =
     toggle.kind === 'check'
       ? [
-          { open: `{{#when::toggle::${toggle.key}}}`, body: '켰을 때 글', close: '' },
-          { open: '{{:else}}', body: '껐을 때 글', close: '{{/when}}' },
+          { open: `{{#when::toggle::${toggle.key}}}`, body: '켰을 때 내용', close: '' },
+          { open: '{{:else}}', body: '껐을 때 내용', close: '{{/when}}' },
         ]
-      : toggle.options.map((option, index) => ({ open: `{{#when::${toggle.key}::tis::${index}}}`, body: `${option}일 때 글`, close: '{{/when}}' }));
+      : toggle.options.map((option, index) => ({ open: `{{#when::${toggle.key}::tis::${index}}}`, body: `${option}일 때 내용`, close: '{{/when}}' }));
   const target = selected ? 1 : 0;
   let text = '';
   let select: [number, number] | null = null;

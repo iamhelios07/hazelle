@@ -38,7 +38,7 @@ describe('the prompt editor history', () => {
     const history: History = { done: [removal, addition], undone: [] };
 
     const refused = undoing(history, draft, removal);
-    expect(refused).toMatchObject({ refused: expect.stringContaining('이미 있어요'), history: { done: [addition], undone: [] } });
+    expect(refused).toMatchObject({ refused: expect.stringContaining('하나만 둘 수 있어요'), history: { done: [addition], undone: [] } });
     expect(after(draft, refused)).toBe(draft);
   });
 });

@@ -11,7 +11,7 @@ function span({ from, to }: ChatRange, length: number): [number, number] {
 // for every longer chat.
 export function chatWarning(blocks: readonly Block[]): string | null {
   const ranges = blocks.filter((block): block is ChatSlot => block.kind === 'slot' && block.slot === 'chat').map((block) => block.range);
-  if (ranges.length === 0) return '‘채팅’ 자리가 없어서 주고받은 메시지가 하나도 들어가지 않아요.';
+  if (ranges.length === 0) return `'채팅' 블록이 없어서 메시지가 하나도 들어가지 않아요.`;
   const reach = Math.max(...ranges.flatMap(({ from, to }) => [Math.abs(from), Math.abs(to ?? 0)]));
   const length = 2 * reach + 2;
   // Read span by span, never message by message: a range's ends are any integers, so the chat it is read on has no
@@ -23,12 +23,12 @@ export function chatWarning(blocks: readonly Block[]): string | null {
   const missed: string[] = [];
   let next = 0;
   for (const [start, end] of spans) {
-    if (start < next) return '같은 메시지가 두 번 들어가요. ‘채팅’ 자리들의 범위가 겹쳐요.';
+    if (start < next) return `'채팅' 블록들의 범위가 겹쳐서 같은 메시지가 두 번 들어가요.`;
     if (start > next) missed.push(describeRun(next, start - 1, length, reach));
     next = end;
   }
   if (next < length) missed.push(describeRun(next, length - 1, length, reach));
-  return missed.length ? `${missed.join(', ')}이(가) 어느 ‘채팅’ 자리에도 들어가지 않아요.` : null;
+  return missed.length ? `'채팅' 블록의 범위에서 ${missed.join(', ')}이(가) 빠져요.` : null;
 }
 
 function describeRun(first: number, last: number, length: number, reach: number): string {

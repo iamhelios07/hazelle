@@ -45,25 +45,25 @@ import { EMPTY_USE, usePromptUse } from './usePromptUse';
 const MODEL = 'model';
 const TOGGLES = 'toggles';
 const SORT_WORDS = {
-  conversation: { default: '새 채팅의 기본', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: ['기본 프롬프트는 지울 수 없어요.', '다른 프롬프트를 기본으로 정한 뒤 지워 주세요.'] },
+  conversation: { default: '기본 프롬프트', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: ['기본 프롬프트는 삭제할 수 없어요.', '다른 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'] },
   translate: {
     default: '기본 번역 프롬프트',
-    makeDefault: '번역 프롬프트를 따로 고르지 않은 채팅이 이 프롬프트로 번역해요',
-    refused: ['기본 번역 프롬프트는 지울 수 없어요.', '다른 번역 프롬프트를 기본으로 정한 뒤 지워 주세요.'],
+    makeDefault: '번역 프롬프트를 선택하지 않은 채팅에 사용해요',
+    refused: ['기본 번역 프롬프트는 삭제할 수 없어요.', '다른 번역 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'],
   },
   memory: {
     default: '기본 기억 프롬프트',
     makeDefault: '장기 기억을 이 프롬프트로 정리해요',
-    refused: ['기본 기억 프롬프트는 지울 수 없어요.', '다른 기억 프롬프트를 기본으로 정한 뒤 지워 주세요.'],
+    refused: ['기본 기억 프롬프트는 삭제할 수 없어요.', '다른 기억 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'],
   },
 } satisfies Record<PromptSort, { default: string; makeDefault: string; refused: [string, string] }>;
-const HELP = '위아래 화살표로 블록 사이를 오가고, Alt와 함께 누르면 순서를 바꿔요. Enter로 글을 고치고, Delete로 빼요. 맨 위가 맨 처음 보내는 블록, 맨 아래가 답장 직전이에요.';
+const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
 
 type Pane = 'toggles' | null;
 
 const CACHE_WORDS = { set: '여기까지 캐시', auto: '자동 캐시' } as const;
 const UNDO = { did: '되돌렸어요', failed: '되돌리지 못했어요' };
-const REDO = { did: '다시 했어요', failed: '다시 하지 못했어요' };
+const REDO = { did: '다시 실행했어요', failed: '다시 실행하지 못했어요' };
 
 // side: the outline, beside the open part, in the split layout only. open: the part open, which a frame scrolls back
 // to the top of when it changes.
@@ -119,7 +119,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
 
   const textRef = useRef<HTMLTextAreaElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  // A selection to set once the text it falls in is on the page: after 조건 넣기 or 명령어 넣기, or Enter from the outline.
+  // A selection to set once the text it falls in is on the page: after 조건 삽입 or 명령어 삽입, or Enter from the outline.
   const select = useRef<[number, number] | 'name' | 'text' | null>(null);
   const applySelect = () => {
     const want = select.current;
@@ -192,17 +192,17 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const step = perform(removeBlock(gone, at));
     if (!step) return;
     if (open === id) setPicked(next?.id ?? MODEL);
-    undoable(`‘${blockTitle(gone).title}’ 블록을 뺐어요.`, () => undo(step));
+    undoable(`'${blockTitle(gone).title}' 블록을 뺐어요.`, () => undo(step));
   };
   const mark = (target: TextBlock, value: TextBlock['mark']) => {
     if (value === target.mark) return;
     const { taken } = withMark(latest.current.blocks, target.id, value);
     perform(setMark(target, value, taken));
-    if (value && taken) toast.show(`‘${MARKS[value].label}’ 표시를 이 글로 옮겼어요.`);
+    if (value && taken) toast.show(`'${MARKS[value].label}' 표시를 이 블록으로 옮겼어요.`);
   };
   const wrap = (target: WrappedSlot, wrapper: string | null) => {
     const step = perform(setWrapper(target, wrapper));
-    if (step && wrapper === null) undoable('감싸는 글을 뺐어요.', () => undo(step));
+    if (step && wrapper === null) undoable('감싸는 텍스트를 뺐어요.', () => undo(step));
   };
   const typeSnippet = (snippet: (selected: string) => Snippet) => {
     const area = textRef.current!;
@@ -217,12 +217,12 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (!gone) return;
     const step = perform(removeToggle(gone, at));
     if (!step) return;
-    undoable(`‘${gone.label}’ 토글을 지웠어요.`, () => undo(step), '글 속 조건은 그대로예요.');
+    undoable(`'${gone.label}' 토글을 삭제했어요.`, () => undo(step));
   };
   const changeKey = (toggle: Toggle, to: string) => {
     const count = countUses(latest.current, toggle.key);
     if (!perform(renameKey(toggle, to))) return;
-    toast.show('이름을 바꿨어요.', count ? { detail: `글 속 조건 ${count}곳도 함께 바꿨어요.` } : undefined);
+    toast.show('키를 바꿨어요.', count ? { detail: `조건 ${count}곳도 바꿨어요.` } : undefined);
   };
   const pickModel = async (role: Role, ref: ModelRef | null) => {
     const saved = await setPromptModel(store, stored.id, role, ref);
@@ -239,7 +239,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     const made = crypto.randomUUID();
     void copyPrompt(store, stored.id, `${promptName(latest.current.name)} (사본)`, made).then((copied) => copied.ok || toast.failed(copied, '사본을 만들지 못했어요.'));
     onCopied(made);
-    toast.show('사본을 만들었어요.', { detail: '이름부터 바꿔 보세요.' });
+    toast.show('사본을 만들었어요.');
   };
   const makeDefault = async () => {
     const saved = await setDefaultPrompt(store, stored.id);
@@ -248,9 +248,9 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const erase = async () => {
     const removed = await save.remove(() => removePrompt(store, stored.id));
     if (!removed) return;
-    if (!removed.ok) return removed.error === 'default' ? toast.error(words.refused[0], { detail: words.refused[1] }) : toast.failed(removed, '지우지 못했어요.');
+    if (!removed.ok) return removed.error === 'default' ? toast.error(words.refused[0], { detail: words.refused[1] }) : toast.failed(removed, '삭제하지 못했어요.');
     onErased();
-    toast.undoable(`‘${promptName(removed.data.value.name)}’을(를) 지웠어요.`, () => {
+    toast.undoable(`'${promptName(removed.data.value.name)}'을(를) 삭제했어요.`, () => {
       void restorePrompt(store, stored.id).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
     }, BIN_KEEPS);
   };
@@ -272,16 +272,16 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   });
   const addMenu = (at: number) => (
     <>
-      <MenuHeading>직접 쓰는 글</MenuHeading>
+      <MenuHeading>직접 입력</MenuHeading>
       {TEXTS.map((text) => (
         <MenuItem key={text.role} label={text.name} sub={text.hint} onClick={() => insert(at, { text: text.role })} />
       ))}
       <Divider variant="menu" />
-      <MenuHeading>앱이 채우는 자리</MenuHeading>
+      <MenuHeading>자동 입력</MenuHeading>
       {slotsOf(sort).map((slot) => {
         const there = placedOnce(draft.blocks, slot);
         return there ? (
-          <MenuItem key={slot} tone="muted" label={SLOT[slot].name} sub="이미 있어요 · 눌러서 그 자리로" onClick={() => pick(there.id)} />
+          <MenuItem key={slot} tone="muted" label={SLOT[slot].name} sub="추가된 블록으로 이동" onClick={() => pick(there.id)} />
         ) : (
           <MenuItem key={slot} label={SLOT[slot].name} sub={SLOT[slot].hint} onClick={() => insert(at, { slot })} />
         );
@@ -319,7 +319,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           label="보내는 순서"
           help={HELP}
           start="맨 처음"
-          end="답장 직전"
+          end="응답 직전"
           stops={stops}
           current={split ? open : null}
           onPick={pick}
@@ -398,7 +398,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_STATUS[save.status ?? 'saved'] }, body: page, open });
   }
 
-  const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `‘${promptName(stored.value.origin.name)}’의 사본` : null;
+  const origin = stored.value.task === undefined && stored.value.imported === 'risu-preset' ? 'Risu 프리셋에서 가져옴' : stored.value.origin ? `'${promptName(stored.value.origin.name)}'의 사본` : null;
   const subtitle = (
     <>
       {isDefault && <Tag tone="accent">{words.default}</Tag>}
@@ -409,7 +409,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     <Menu label="프롬프트 더 보기" place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} label="프롬프트 더 보기" title="더 보기" {...opener} />}>
       {!split && <MenuItem icon={Copy} label="사본 만들기" onClick={() => void copy()} />}
       {!isDefault && <MenuItem label="기본으로 정하기" sub={words.makeDefault} onClick={() => void makeDefault()} />}
-      <MenuItem label="지우기" tone="warn" onClick={() => void erase()} />
+      <MenuItem label="삭제" tone="warn" onClick={() => void erase()} />
     </Menu>
   );
   const head: NavBarProps = {

@@ -13,12 +13,12 @@ type Props = {
   onEdit: (before: Toggle, after: Toggle, what: 'label' | 'default') => void;
   onRekey: (toggle: Toggle, to: string) => void;
   onRemove: (key: string) => void;
-  // The new-toggle form is open; 조건 넣기's 새 토글 만들기 opens it too.
+  // The new-toggle form is open; 조건 삽입's 새 토글 만들기 opens it too.
   adding: boolean;
   onAdding: (adding: boolean) => void;
 };
 
-const KIND_WORDS = { check: '켜고 끄기', choice: '고르기' } as const;
+const KIND_WORDS = { check: '켜고 끄기', choice: '선택' } as const;
 
 export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, adding, onAdding }: Props) {
   const [renaming, setRenaming] = useState<{ key: string; field: 'label' | 'key' } | null>(null);
@@ -28,7 +28,7 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
     <Section
       title="토글"
       note={`${toggles.length}개`}
-      hint="채팅에서 켜고 끄면 글 속 조건에 따라 보내는 글이 바뀌어요. 값은 캐릭터마다 따로 기억하고, 여기서 정한 값이 처음 값이에요."
+      hint="채팅에서 켜고 끄면 조건에 따라 보내는 내용이 바뀌어요."
       action={
         <Button variant="ghost" size="sm" icon={Plus} onClick={() => onAdding(true)}>
           새 토글
@@ -36,7 +36,7 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
       }
     >
       {toggles.length === 0 ? (
-        <Empty variant="section">아직 토글이 없어요.</Empty>
+        <Empty variant="section">토글이 없어요.</Empty>
       ) : (
         <SettingGroup label="토글">
           {toggles.map((toggle) => (
@@ -47,14 +47,14 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
               control={
                 <Row kind="toolbar">
                   {toggle.kind === 'check' ? (
-                    <Switch label={`${toggle.label} 처음 값`} checked={toggle.default === '1'} onChange={(on) => onEdit(toggle, { ...toggle, default: on ? '1' : '0' }, 'default')} />
+                    <Switch label={`${toggle.label} 기본값`} checked={toggle.default === '1'} onChange={(on) => onEdit(toggle, { ...toggle, default: on ? '1' : '0' }, 'default')} />
                   ) : (
-                    <ToggleChoice label={`${toggle.label} 처음 값`} options={toggle.options} value={toggle.default} onChange={(value) => onEdit(toggle, { ...toggle, default: value }, 'default')} />
+                    <ToggleChoice label={`${toggle.label} 기본값`} options={toggle.options} value={toggle.default} onChange={(value) => onEdit(toggle, { ...toggle, default: value }, 'default')} />
                   )}
-                  <Menu label={toggle.label} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`‘${toggle.label}’ 더 보기`} title="더 보기" {...opener} />}>
+                  <Menu label={toggle.label} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`'${toggle.label}' 더 보기`} title="더 보기" {...opener} />}>
                     <MenuItem label="이름 바꾸기" onClick={() => setRenaming({ key: toggle.key, field: 'label' })} />
-                    <MenuItem label="조건에서 부르는 이름 바꾸기" sub="글 속 조건도 함께 바뀌어요" onClick={() => setRenaming({ key: toggle.key, field: 'key' })} />
-                    <MenuItem label="지우기" tone="warn" onClick={() => onRemove(toggle.key)} />
+                    <MenuItem label="키 바꾸기" sub="조건에 쓴 키도 바뀌어요" onClick={() => setRenaming({ key: toggle.key, field: 'key' })} />
+                    <MenuItem label="삭제" tone="warn" onClick={() => onRemove(toggle.key)} />
                   </Menu>
                 </Row>
               }
@@ -66,7 +66,6 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
         <NameDialog
           title="이름 바꾸기"
           value={target.label}
-          hint="글 속 조건은 그대로예요."
           onClose={() => setRenaming(null)}
           onSave={(label) => {
             setRenaming(null);
@@ -105,7 +104,7 @@ function KeyDialog({ toggle, toggles, uses, onClose, onSave }: { toggle: Toggle;
   const [error, setError] = useState<string | null>(null);
   return (
     <Dialog
-      title="조건에서 부르는 이름 바꾸기"
+      title="키 바꾸기"
       onClose={onClose}
       onSubmit={() => {
         const problem = keyProblem(key.trim(), toggles, toggle.key);
@@ -120,12 +119,12 @@ function KeyDialog({ toggle, toggles, uses, onClose, onSave }: { toggle: Toggle;
       }
     >
       <TextField
-        label="조건에서 부르는 이름"
+        label="키"
         kind="key"
         value={key}
         onChange={setKey}
         error={error ?? undefined}
-        hint={uses ? `글 속 조건 ${uses}곳도 함께 바뀌어요.` : '이 이름을 부르는 조건은 아직 없어요.'}
+        hint={uses ? `조건 ${uses}곳도 바뀌어요.` : '이 키를 쓰는 조건이 없어요.'}
       />
     </Dialog>
   );
@@ -167,12 +166,12 @@ function NewToggleDialog({ toggles, onClose, onSave }: { toggles: readonly Toggl
     >
       <TextField label="이름" value={label} onChange={setLabel} placeholder="예: 시뮬레이터 모드" error={error.label} />
       <TextField
-        label="조건에서 부르는 이름"
+        label="키"
         kind="key"
         value={key}
         onChange={setKey}
         placeholder="예: sims"
-        hint="글 속 조건이 이 이름으로 토글을 불러요. 나중에 바꾸면 조건도 함께 바뀌어요."
+        hint="조건에서 이 토글을 가리키는 이름이에요."
         error={error.key}
       />
       <ChoiceGroup<Toggle['kind']>
@@ -185,7 +184,7 @@ function NewToggleDialog({ toggles, onClose, onSave }: { toggles: readonly Toggl
         value={kind}
         onChange={setKind}
       />
-      {kind === 'choice' && <TextField label="선택지 · 쉼표로 나눠요" value={options} onChange={setOptions} placeholder="예: 간결, 보통, 풍부" error={error.options} />}
+      {kind === 'choice' && <TextField label="선택지" hint="쉼표로 구분해요." value={options} onChange={setOptions} placeholder="예: 간결, 보통, 풍부" error={error.options} />}
     </Dialog>
   );
 }
