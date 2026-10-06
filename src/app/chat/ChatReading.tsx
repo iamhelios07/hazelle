@@ -26,7 +26,7 @@ function ReadingForm() {
       <ReplyRow place="panel" />
       <Row kind="actions">
         <Button variant="ghost" size="sm" onClick={reset}>
-          처음 값으로 되돌리기
+          기본값으로 되돌리기
         </Button>
       </Row>
     </Stack>

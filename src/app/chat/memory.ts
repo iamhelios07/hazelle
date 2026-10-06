@@ -1,7 +1,7 @@
 import type { Fact, MemoryRecord, Source } from '../../model/memory';
 import type { RecordStatus } from '../../runtime/memory';
 
-export const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '예산 넘음', forgotten: '지움' };
+export const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '예산 넘음', forgotten: '삭제됨' };
 
 export const recordTitle = (record: MemoryRecord) => record.what.trim() || '내용 없는 기록';
 
@@ -36,9 +36,9 @@ export function spanOf(sources: readonly Source[], positions: ReadonlyMap<string
     to = Math.max(to, at + 1);
   }
   const gone = sources.length - there.length;
-  if (there.length === 0) return { words: `지운 메시지 ${gone}개`, there };
-  const span = from === to ? `${from}번째 메시지` : `메시지 ${from}–${to}`;
-  return { words: gone ? `${span} · 지운 메시지 ${gone}개` : span, there };
+  if (there.length === 0) return { words: `삭제된 메시지 ${gone}개`, there };
+  const span = from === to ? `${from}번째 메시지` : `메시지 ${from}~${to}`;
+  return { words: gone ? `${span} · 삭제된 메시지 ${gone}개` : span, there };
 }
 
 export function factGroups(state: readonly Fact[]): { about: string; facts: Fact[] }[] {

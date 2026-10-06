@@ -53,15 +53,15 @@ function NoteEditor({ chat }: { chat: OpenChat }) {
   }
 
   const own = 'note' in autosave.unsaved ? autosave.unsaved.note !== null : note !== undefined;
-  const status = !id ? (own ? '첫 메시지와 함께 저장돼요' : '') : own || autosave.status === 'failed' ? SAVE_STATUS[autosave.status ?? 'saved'] : '';
+  const status = !id ? (own ? '첫 메시지를 보내면 저장돼요' : '') : own || autosave.status === 'failed' ? SAVE_STATUS[autosave.status ?? 'saved'] : '';
   const state = own
     ? text
-      ? '이 채팅만의 노트예요'
-      : '이 채팅은 노트 없이 보내요'
+      ? '이 채팅 전용 노트'
+      : '노트 없음'
     : fallback === null
-      ? '프롬프트가 없어서 기본 노트를 알 수 없어요'
+      ? '프롬프트가 없어 기본 노트를 알 수 없음'
       : fallback
-        ? '프롬프트의 기본 노트를 따르고 있어요'
+        ? '기본 노트 사용 중'
         : '프롬프트의 기본 노트: 비어 있음';
 
   return (
@@ -72,7 +72,7 @@ function NoteEditor({ chat }: { chat: OpenChat }) {
         value={text}
         onChange={change}
         placeholder="예: 이번 장면은 짧게 끝내요."
-        help="이 채팅에만 들어가요. 프롬프트의 ‘작가의 노트’ 자리에 놓여요."
+        help="이 채팅에만 적용돼요."
         action={
           <Text variant="note">
             {status}

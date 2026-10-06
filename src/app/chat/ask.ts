@@ -14,8 +14,8 @@ export function asking(question: ScriptQuestion['question']): { text?: string; h
       return { answer: { kind: 'choices', choices: question.options.map((label, index) => ({ label, value: String(index) })) } };
     case 'model':
       return {
-        text: '이 봇이 모델을 따로 부르려고 해요',
-        help: `${BOT_MODELS_HELP} 캐릭터 편집에서 언제든 바꿀 수 있어요.`,
+        text: '이 봇이 모델을 추가로 호출하려고 해요',
+        help: BOT_MODELS_HELP,
         answer: { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] },
       };
   }

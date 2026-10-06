@@ -41,7 +41,7 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
             { label: '보낸 토큰', value: tokens(receipt.usage?.inputTokens ?? null) },
           ]}
         />
-        <Empty variant="section">이 답장의 요청 원문이 이 페이지에 없어요. 요청 원문은 이 채팅을 벗어나면 사라져요.</Empty>
+        <Empty variant="section">이 응답의 요청 원문이 없어요.</Empty>
       </>
     );
   }
@@ -53,14 +53,14 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
         label="요청 원문 보기"
         layout="segmented"
         options={[
-          { value: 'parts', label: '자리별' },
+          { value: 'parts', label: '블록별' },
           { value: 'body', label: '본문' },
         ]}
         value={view}
         onChange={setView}
       />
       {view === 'parts' ? (
-        <Section level={3} title="보낸 순서대로" note={`약 ${tokens(total)} 토큰 · 추정`} hint="토큰 수는 o200k 기준으로 센 추정이에요. 모델에 맞춰 바꾼 모양은 ‘본문’에 있어요.">
+        <Section level={3} title="보낸 순서대로" note={`약 ${tokens(total)} 토큰 · 추정`}>
           <Stack gap="related">
             {prompt.messages.map((message, index) => {
               const part = prompt.parts[index]!;
@@ -77,12 +77,12 @@ export function SentRequest({ sent, receipt }: { sent: Sent | null; receipt: Rec
           <Section level={3} title="주소">
             <CodeBlock>{request.url}</CodeBlock>
           </Section>
-          <Section level={3} title="본문" hint="인증 정보는 헤더에 실려 가서 여기에 담지 않아요.">
+          <Section level={3} title="본문">
             {request.body && <CodeBlock>{JSON.stringify(JSON.parse(request.body), null, 2)}</CodeBlock>}
           </Section>
         </>
       ) : (
-        <Empty variant="section">요청을 만들기 전에 멈춰서 보낸 본문이 없어요.</Empty>
+        <Empty variant="section">요청 전에 중단돼서 본문이 없어요.</Empty>
       )}
     </>
   );
@@ -95,10 +95,10 @@ function why({ why }: Lore, names: Map<string, string>): string {
     case 'constant':
       return '항상 켜 둔 항목';
     case 'decorator':
-      return why.name === 'activate' ? '@@activate로 켜짐' : '앞선 답장에 들어가서 계속 켜짐 · @@keep_activate_after_match';
+      return why.name === 'activate' ? '@@activate로 켜짐' : '이전 응답에서 활성화돼 유지됨 (@@keep_activate_after_match)';
     case 'keys':
       return why.matched
-        .map(({ query, key, source }) => `${QUERY[query]} ‘${key}’ · ${source.kind === 'message' ? '메시지에서' : `‘${loreName(names.get(source.id)!)}’ 항목에서 (재귀)`}`)
+        .map(({ query, key, source }) => `${QUERY[query]} '${key}' · ${source.kind === 'message' ? '메시지에서' : `'${loreName(names.get(source.id)!)}' 항목에서 (재귀)`}`)
         .join(', ');
   }
 }
@@ -110,7 +110,7 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
     case 'placed':
       return '들어감';
     case 'merged':
-      return `‘${loreName(names.get(fate.into)!)}’에 합쳐 들어감`;
+      return `'${loreName(names.get(fate.into)!)}'에 합쳐 들어감`;
     case 'dropped':
       return DROPPED[fate.cause];
   }
@@ -118,13 +118,13 @@ function fate({ fate }: Lore, names: Map<string, string>): string {
 
 // The records are named as they are now; one deleted since reads as gone.
 export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memory: Memory | null; onRecord: (record: string) => void }) {
-  if (!sent) return <Empty variant="section">이 답장의 기억 기록이 이 페이지에 없어요. 기억 기록도 요청 원문처럼 이 채팅을 벗어나면 사라져요.</Empty>;
+  if (!sent) return <Empty variant="section">이 응답의 기억 기록이 없어요.</Empty>;
   const { memory: used, dropped } = sent.prompt;
   const cut = { label: '컨텍스트 한도로 빠진 메시지', value: `${dropped}개`, tone: dropped ? ('warn' as const) : undefined };
   if (!used) {
     return (
       <>
-        <Text variant="note">이 답장을 보낼 때 장기 기억이 꺼져 있었어요.</Text>
+        <Text variant="note">이 응답을 요청할 때 장기 기억이 꺼져 있었어요.</Text>
         <Facts variant="tiles" items={[cut]} />
       </>
     );
@@ -132,18 +132,18 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
   const records = new Map((memory?.records ?? []).map((record) => [record.id, record]));
   return (
     <>
-      {!used.slot && <Text variant="note">프롬프트에 장기 기억 자리가 없거나 토글로 빠져서 기억을 보내지 않았어요.</Text>}
+      {!used.slot && <Text variant="note">프롬프트에 장기 기억 블록이 없거나 꺼져 있어서 기억을 보내지 않았어요.</Text>}
       <Facts
         variant="tiles"
         items={[
           { label: '보낸 기록', value: `${used.sent.length}개` },
-          { label: '기억이 맡은 메시지', value: `${used.covered}개` },
-          { label: '기억 없이 빠진 메시지', value: `${used.missing}개`, tone: used.missing ? 'warn' : undefined },
+          { label: '기억에 담긴 메시지', value: `${used.covered}개` },
+          { label: '기억에 없는 메시지', value: `${used.missing}개`, tone: used.missing ? 'warn' : undefined },
           cut,
         ]}
       />
       {used.sent.length > 0 && (
-        <Section level={3} title="보낸 기록" note={`${used.sent.length}개`} hint="답장이 여기 있는 기록의 일을 잊었다면 모델이 쓰지 않은 거예요. 여기 없는 일은 기억에서 빠진 거예요.">
+        <Section level={3} title="보낸 기록" note={`${used.sent.length}개`}>
           <List label="보낸 기록">
             {used.sent.map((id) => {
               const record = records.get(id);
@@ -161,15 +161,15 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
 }
 
 export function SentLore({ sent }: { sent: Sent | null }) {
-  if (!sent) return <Empty variant="section">이 답장의 로어북 기록이 이 페이지에 없어요. 로어북 기록도 요청 원문처럼 이 채팅을 벗어나면 사라져요.</Empty>;
+  if (!sent) return <Empty variant="section">이 응답의 로어북 기록이 없어요.</Empty>;
   const lore = sent.prompt.lore;
   if (!lore) return <Empty variant="section">캐릭터가 없는 채팅이라 로어북이 없어요.</Empty>;
-  if (lore.length === 0) return <Empty variant="section">이 답장에는 떠오른 로어북 항목이 없어요.</Empty>;
+  if (lore.length === 0) return <Empty variant="section">이 응답에는 활성화된 로어북 항목이 없어요.</Empty>;
   const names = new Map(lore.map(({ id, name }) => [id, name]));
   const went = lore.filter((entry) => entry.fate.kind !== 'dropped').length;
   return (
-    <Section level={3} title="떠오른 항목" note={`${lore.length}개 중 ${went}개 들어감`}>
-      <List label="떠오른 로어북 항목">
+    <Section level={3} title="활성화된 항목" note={`${lore.length}개 중 ${went}개 들어감`}>
+      <List label="활성화된 로어북 항목">
         {lore.map((entry) => (
           <ListItem key={entry.id} title={loreName(entry.name)} description={`${why(entry, names)} → ${fate(entry, names)}`} />
         ))}

@@ -4,7 +4,7 @@ import { infoReply, pickStarted } from './infoReply';
 
 const message = (id: string, role: 'user' | 'assistant'): Shown => ({ id, role, at: 0, versions: [], selected: 0, live: null });
 
-describe('the reply 답장 정보 shows', () => {
+describe('the reply 응답 정보 shows', () => {
   it('follows the latest unless a reply was picked, and a reply started while held is picked only when it is not the latest', () => {
     const messages = [message('a', 'assistant'), message('u', 'user'), message('b', 'assistant')];
     const replies = messages.filter((each) => each.role === 'assistant');

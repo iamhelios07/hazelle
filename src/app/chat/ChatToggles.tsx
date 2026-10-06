@@ -7,7 +7,7 @@ import { Button, ChoiceGroup, Empty, Row, SearchField, Section, SettingRow, Side
 import { shownRows, splitByCard, type ToggleRow } from './toggles';
 import type { OpenChat } from './useChat';
 
-const defaultOf = (toggle: Toggle) => `처음 값: ${toggle.kind === 'check' ? (toggle.default === '1' ? '켬' : '끔') : (toggle.options[Number(toggle.default)] ?? toggle.default)}`;
+const defaultOf = (toggle: Toggle) => `기본값: ${toggle.kind === 'check' ? (toggle.default === '1' ? '켬' : '끔') : (toggle.options[Number(toggle.default)] ?? toggle.default)}`;
 
 export function ChatToggles({ chat }: { chat: OpenChat }) {
   const { prompt, card, toggles, actions } = chat;
@@ -17,7 +17,6 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
   const [first, setFirst] = useState(changedKeys);
   const total = toggles.prompt.length + toggles.card.length;
   const packs = splitByCard(toggles.card, card?.toggles ?? '');
-  const modules = packs.modules.length > 0;
 
   const groups = [
     { title: prompt.kind === 'prompt' ? `프롬프트 · ${prompt.prompt.value.name}` : '프롬프트', rows: toggles.prompt },
@@ -51,9 +50,9 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       onClose={actions.closePanel}
       footer={
         <>
-          {toggles.changed ? `처음 값과 다른 것 ${toggles.changed}개` : '모두 처음 값이에요'}
+          {toggles.changed ? `변경 ${toggles.changed}개` : '모두 기본값'}
           <Button variant="secondary" size="sm" disabled={toggles.changed === 0} onClick={actions.resetToggles}>
-            처음 값으로 되돌리기
+            기본값으로 되돌리기
           </Button>
         </>
       }
@@ -61,13 +60,13 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       <Stack gap="related">
         <Text variant="note">
           {card
-            ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요. 처음 값은 ${modules ? '프롬프트, 캐릭터 카드와 모듈이' : '프롬프트와 캐릭터 카드가'} 정해요.`
-            : `여기서 바꾼 값은 캐릭터 없이 하는 모든 채팅에 적용돼요. 처음 값은 ${modules ? '프롬프트와 모듈이' : '프롬프트가'} 정해요.`}
+            ? `여기서 바꾼 값은 ${card.name}의 모든 채팅에 적용돼요.`
+            : '여기서 바꾼 값은 캐릭터 없는 모든 채팅에 적용돼요.'}
         </Text>
         {prompt.kind === 'prompt' && toggles.prompt.length > 0 && (
           <Row kind="actions">
             <Button variant="link" size="xs" onClick={() => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: 'toggles' })}>
-              프롬프트 토글의 처음 값 바꾸기
+              프롬프트 토글의 기본값 바꾸기
             </Button>
           </Row>
         )}
@@ -79,7 +78,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
             label="보기"
             options={[
               { value: 'all', label: `전체 ${total}` },
-              { value: 'changed', label: `바꾼 것 ${toggles.changed}` },
+              { value: 'changed', label: `변경 ${toggles.changed}` },
             ]}
             value={filter}
             onChange={(next) => {
@@ -97,7 +96,7 @@ export function ChatToggles({ chat }: { chat: OpenChat }) {
       {total === 0 ? (
         <Empty variant="section">{card ? '이 채팅의 프롬프트와 캐릭터 카드에는 토글이 없어요.' : '이 채팅의 프롬프트에는 토글이 없어요.'}</Empty>
       ) : (
-        visible.length === 0 && <Empty variant="section">{query.trim() ? noResults(query.trim()) : '처음 값과 다른 토글이 없어요.'}</Empty>
+        visible.length === 0 && <Empty variant="section">{query.trim() ? noResults(query.trim()) : '변경한 토글이 없어요.'}</Empty>
       )}
     </SidePanel>
   );

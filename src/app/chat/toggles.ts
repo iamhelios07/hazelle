@@ -20,7 +20,7 @@ export function splitByCard(rows: readonly ToggleRow[], card: string): { card: T
   return { card: rows.filter(({ toggle }) => own.has(toggle.key)), modules: rows.filter(({ toggle }) => !own.has(toggle.key)) };
 }
 
-// What the panel shows of a group: the rows the search and the 바꾼 것 filter keep, those that differed when the
+// What the panel shows of a group: the rows the search and the 변경 filter keep, those that differed when the
 // panel opened or the filter changed first, so a row does not jump away under the pointer as it changes.
 export function shownRows(rows: readonly ToggleRow[], query: string, onlyChanged: boolean, first: ReadonlySet<string>): ToggleRow[] {
   const words = query.trim().toLowerCase();
