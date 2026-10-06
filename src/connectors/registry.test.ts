@@ -469,6 +469,12 @@ describe('copilot', () => {
     expect(meters!.parse({ message: 'Not Found' })).toBeNull();
   });
 
+  it('names the plan the allowance answer states, and passes an unknown one through', () => {
+    const [meters] = copilot.meters!;
+    expect(['copilot_pro', 'copilot_pro_plus', 'copilot_business', 'copilot_free'].map((sku) => meters!.plan!({ copilot_plan: sku }))).toEqual(['Copilot Pro', 'Copilot Pro+', '조직 관리형', 'copilot_free']);
+    expect(meters!.plan!({})).toBeNull();
+  });
+
   it('trades the GitHub token for a Copilot token and names the account', () => {
     expect(copilot.exchange!.request('gho_x')).toMatchObject({
       url: 'https://api.github.com/copilot_internal/v2/token',

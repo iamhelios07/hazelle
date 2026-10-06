@@ -82,7 +82,8 @@ export type Meter =
 export type MeterUnit = 'usd' | 'credit' | 'requests' | 'tokens' | 'concurrency';
 export type MeterReset = 'daily' | 'weekly' | 'monthly' | { at: number };
 
-export type MeterRequest = { request(secret: string): HttpRequest; parse(payload: unknown): Meter[] | null };
+// plan: the subscription the same answer names, shown beside the account; null where it names none.
+export type MeterRequest = { request(secret: string): HttpRequest; parse(payload: unknown): Meter[] | null; plan?(payload: unknown): string | null };
 
 export type Phase = 'text' | 'reasoning';
 
@@ -126,6 +127,9 @@ export type ConnectionType = {
   // Absent for a type the user connects by signing in: there is no key to paste.
   detect?: { key: RegExp | null; host: string };
   signIn?: SignIn;
+  // One connection may hold several signed-in accounts; the core picks one per reply, by its group's turn and by the
+  // allowance its meters leave.
+  pool?: true;
   exchange?: { request(secret: string): HttpRequest; parse(payload: unknown): Token | null };
   headers?: (credential: string) => Record<string, string>;
   parseModels?: (payload: unknown) => Model[] | null;

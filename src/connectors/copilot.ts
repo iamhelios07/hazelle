@@ -82,6 +82,17 @@ function quota(payload: unknown): Meter[] | null {
   ];
 }
 
+// copilot_plan as GitHub's own clients read it; a value none of these match is shown as it came.
+function plan(payload: unknown): string | null {
+  if (!isRecord(payload) || typeof payload.copilot_plan !== 'string' || !payload.copilot_plan) return null;
+  const sku = payload.copilot_plan.toLowerCase().replace(/[- ]/g, '_');
+  if (/business|enterprise/.test(sku)) return '조직 관리형';
+  if (sku.includes('max')) return 'Copilot Max';
+  if (/pro_?plus|pro\+/.test(sku)) return 'Copilot Pro+';
+  if (sku.includes('pro')) return 'Copilot Pro';
+  return payload.copilot_plan;
+}
+
 export const copilot: ConnectionType = {
   id: 'copilot',
   label: 'Copilot',
@@ -123,9 +134,11 @@ export const copilot: ConnectionType = {
     ...USER_AGENT,
   }),
 
+  pool: true,
   meters: [{
     request: (secret) => github('https://api.github.com/copilot_internal/user', secret),
     parse: quota,
+    plan,
   }],
   usagePage: 'https://github.com/settings/billing',
 
