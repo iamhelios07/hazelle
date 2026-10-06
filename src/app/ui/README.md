@@ -99,7 +99,6 @@ and only this folder styles elements.**
 | collections | `SettingGroup` (`SettingRow`) | `SettingGroup.module.css` | Settings in one box: each a name, its ⓘ explanation and a line of facts beside its control, which goes under them on phones; a row alone in a side panel's list, marked when it differs from its default |
 | collections | `SideTitle` | `SideTitle.module.css` | The character whose chats the sidebar lists |
 | collections | `Tabs` (`Tab`) | `Tabs.module.css` | Filters over one list |
-| collections | `Tiles` (`Tile`) | `Tiles.module.css` | A few items to pick again, two to a row |
 | overlays | `layers.ts` (`useLayer`, `useFocusTrap`) | — | The layer stack for Esc and presses outside; a dialog's focus trap |
 | overlays | `ConfirmDialog` | — | A `Dialog` asking before something that cannot be undone |
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |

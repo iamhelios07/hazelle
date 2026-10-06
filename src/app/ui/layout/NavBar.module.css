@@ -1,6 +1,7 @@
 .bar {
   flex-grow: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4);
 }
@@ -18,7 +19,9 @@
   min-width: 0;
 }
 
+/* Hangul may break between any two letters; in a narrow panel the actions wrap under the title instead. */
 .title {
+  word-break: keep-all;
   font-size: var(--text-xl);
   font-weight: var(--weight-semibold);
 }

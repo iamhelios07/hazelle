@@ -27,7 +27,8 @@ type Props = {
 // what a screen reader is told.
 export function Item({ density, scheme, leading, title, meta, preview, trailing, current, pressed, expanded, role, checked, tone = 'default', disabled, onClick }: Props) {
   const branch = expanded !== undefined;
-  const classes = [styles.item, styles[density], styles[scheme], onClick && styles.pressable, branch && styles.branch, tone !== 'default' && styles[tone]].filter(Boolean).join(' ');
+  const line = density === 'tall' && meta === undefined && preview === undefined;
+  const classes = [styles.item, styles[density], styles[scheme], line && styles.line, onClick && styles.pressable, branch && styles.branch, tone !== 'default' && styles[tone]].filter(Boolean).join(' ');
   const clip = density === 'regular';
   // meta and preview are drawn even when empty: an empty time still keeps its gap beside the title.
   const content = (

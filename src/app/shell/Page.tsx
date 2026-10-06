@@ -1,10 +1,11 @@
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import { binsChat, isBinned, live } from '../../model/library';
 import { AdminScreen } from '../admin/AdminScreen';
 import { ChatScreen, type SideAt } from '../chat/ChatScreen';
 import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
+import { findStarred } from '../common/RolePicker';
 import { ConnectionAddScreen } from '../connections/ConnectionAddScreen';
 import { ConnectionDirectScreen } from '../connections/ConnectionDirectScreen';
 import { ConnectionKeyScreen } from '../connections/ConnectionKeyScreen';
@@ -25,14 +26,14 @@ import { PersonaScreen } from '../personas/PersonaScreen';
 import { PersonasScreen } from '../personas/PersonasScreen';
 import { PromptScreen } from '../prompts/PromptScreen';
 import { PromptsScreen } from '../prompts/PromptsScreen';
-import { useAccount, useCharacter, useChatModel, useChatSummary, useSession, useStored } from '../session';
+import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { DisplayScreen } from '../settings/DisplayScreen';
 import { TranslatorScreen } from '../settings/TranslatorScreen';
 import { Button, Empty, ListDetail, NavBar, Progress, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
-import { backBar } from './router';
+import { backBar, navigate } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
 
@@ -123,8 +124,21 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const list = listOf(route);
   if (!list) return screen(route);
   const detail = route.kind === list.kind ? null : screen(route);
-  if (split) return <ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={screen(list)} detail={detail ?? <Empty variant="pane">{EMPTY[list.kind]}</Empty>} />;
+  const empty = list.kind === 'models' ? <ModelsLanding /> : <Empty variant="pane">{EMPTY[list.kind]}</Empty>;
+  if (split) return <ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={screen(list)} detail={detail ?? empty} />;
   return detail ?? screen(list);
+}
+
+// Beside its list, 모델 opens on the 대화 모델: the pane stays empty only while none is set. Replaced before paint, so the
+// empty pane never shows and 뒤로 does not land on it again. Its own component, so only this route reads the settings.
+function ModelsLanding() {
+  const main = useSettings().models.main;
+  const connections = useConnections();
+  const landing = main && findStarred(main, connections) ? main : null;
+  useLayoutEffect(() => {
+    if (landing) navigate({ kind: 'model', connection: landing.connection, model: landing.model }, { replace: true });
+  }, [landing]);
+  return <Empty variant="pane">{EMPTY.models}</Empty>;
 }
 
 function HomePage() {

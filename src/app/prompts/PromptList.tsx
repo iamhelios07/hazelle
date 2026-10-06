@@ -10,13 +10,18 @@ import { ago } from '../common/time';
 import { usePrompts, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { PAGES, promptName } from '../common/words';
-import { Button, Empty, FileButton, List, ListItem, Row, SearchField, Section, Stack, Tile, Tiles } from '../ui';
+import { Button, ChoiceGroup, Empty, FileButton, Hint, List, ListItem, Row, SearchField, Stack, Tab, Tabs } from '../ui';
 import { usePresetImport } from './PresetImport';
 import { EMPTY_USE, usePromptUse, type PromptUse } from './usePromptUse';
 import { byPromptName, groupPrompts } from './copies';
 
-const RECENT = 4;
 const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트' } satisfies Record<PromptSort, string>;
+const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] = [
+  { sort: 'conversation', label: '대화', none: '아직 대화 프롬프트가 없어요. 새로 만들거나 Risu 프리셋을 가져와 보세요.' },
+  { sort: 'translate', label: '번역', hint: '답장 번역과 보낼 말 번역이 쓰는 프롬프트예요. 글 속 {{language}}에는 번역할 언어가 들어가요.', none: '번역 프롬프트가 없어요. 새로 만들어 보세요.' },
+  { sort: 'memory', label: '기억', hint: '지난 메시지를 장기 기억으로 정리할 때 쓰는 프롬프트예요. 모든 채팅이 기본으로 정한 하나로 정리해요.', none: '기억 프롬프트가 없어요. 새로 만들어 보세요.' },
+];
+type Order = 'name' | 'recent';
 
 const useWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '쓰는 채팅 없음');
 const used = (use: PromptUse) => (use.at === null ? useWords(use) : `${useWords(use)} · ${ago(use.at)} 씀`);
@@ -36,13 +41,19 @@ export function PromptList({ onPick, inUse, frame }: Props) {
   const uses = usePromptUse();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const [shown, setShown] = useState<PromptSort>('conversation');
+  const [order, setOrder] = useState<Order>('name');
   const preset = usePresetImport(onPick);
 
   const use = (id: string) => uses.get(id) ?? EMPTY_USE;
   const badge = (prompt: Stored<'prompt'>) => (isDefaultPrompt(settings, prompt) ? '기본' : undefined);
   const tags = (id: string) => (id === inUse ? ['사용 중'] : []);
-  // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역.
-  const description = (prompt: Stored<'prompt'>) => (ofSort(prompt, 'conversation') ? used(use(prompt.id)) : undefined);
+  // Only conversation prompts are used by chats; a translation prompt is chosen by a character's 번역. An unused one
+  // says nothing, so the few in use stand out in a long list.
+  const usage = (prompt: Stored<'prompt'>) => {
+    const of = use(prompt.id);
+    return ofSort(prompt, 'conversation') && (of.chats > 0 || of.at !== null) ? used(of) : undefined;
+  };
 
   function add(sort: PromptSort) {
     const id = crypto.randomUUID();
@@ -50,17 +61,11 @@ export function PromptList({ onPick, inUse, frame }: Props) {
     onPick(id);
   }
 
-  const topOf = (sort: PromptSort) =>
-    grouped.top
-      .filter((prompt) => ofSort(prompt, sort))
-      .sort((a, b) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byPromptName(a, b));
-  const conversations = prompts.filter((prompt) => ofSort(prompt, 'conversation'));
-  const translators = prompts.filter((prompt) => ofSort(prompt, 'translate'));
-  const memorizers = prompts.filter((prompt) => ofSort(prompt, 'memory'));
-  const recent = conversations
-    .filter((prompt) => use(prompt.id).at !== null)
-    .sort((a, b) => use(b.id).at! - use(a.id).at!)
-    .slice(0, RECENT);
+  const byName = (a: Stored<'prompt'>, b: Stored<'prompt'>) => Number(isDefaultPrompt(settings, b)) - Number(isDefaultPrompt(settings, a)) || byPromptName(a, b);
+  const byRecent = (a: Stored<'prompt'>, b: Stored<'prompt'>) => (use(b.id).at ?? -1) - (use(a.id).at ?? -1) || byPromptName(a, b);
+  const recentFirst = shown === 'conversation' && order === 'recent';
+  const top = grouped.top.filter((prompt) => ofSort(prompt, shown)).sort(recentFirst ? byRecent : byName);
+  const current = SORTS.find(({ sort }) => sort === shown)!;
 
   const row = (prompt: Stored<'prompt'>) => {
     const copies = grouped.copies.get(prompt.id) ?? [];
@@ -72,7 +77,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
         title={promptName(prompt.value.name)}
         badge={badge(prompt)}
         tags={tags(prompt.id)}
-        description={description(prompt)}
+        aside={usage(prompt)}
         onClick={() => onPick(prompt.id)}
         control={
           copies.length > 0 && (
@@ -95,8 +100,8 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       <FileButton accept=".risup,.risupreset" size="sm" icon={Import} onFile={(file) => preset.take([file])}>
         Risu 프리셋 가져오기
       </FileButton>
-      <Button size="sm" icon={Plus} onClick={() => add('conversation')}>
-        새 프롬프트
+      <Button size="sm" icon={Plus} onClick={() => add(shown)}>
+        {NEW_NAME[shown]}
       </Button>
     </Row>
   );
@@ -114,7 +119,7 @@ export function PromptList({ onPick, inUse, frame }: Props) {
                 title={promptName(prompt.value.name)}
                 badge={badge(prompt)}
                 tags={[...(prompt.value.task ? [TASK_NAMES[prompt.value.task]] : []), ...tags(prompt.id)]}
-                description={description(prompt)}
+                aside={usage(prompt)}
                 onClick={() => onPick(prompt.id)}
               />
             ))}
@@ -124,44 +129,29 @@ export function PromptList({ onPick, inUse, frame }: Props) {
         )
       ) : (
         <>
-          {recent.length > 0 && (
-            <Section title="최근 사용">
-              <Tiles label="최근 사용">
-                {recent.map((prompt) => (
-                  <Tile key={prompt.id} title={promptName(prompt.value.name)} badge={badge(prompt)} meta={used(use(prompt.id))} onClick={() => onPick(prompt.id)} />
+          <Row kind="spread">
+            <Row kind="toolbar">
+              <Tabs label="프롬프트 종류">
+                {SORTS.map(({ sort, label }) => (
+                  <Tab key={sort} label={label} count={prompts.filter((prompt) => ofSort(prompt, sort)).length} current={sort === shown} onClick={() => setShown(sort)} />
                 ))}
-              </Tiles>
-            </Section>
-          )}
-          <Section title={`대화 프롬프트 ${conversations.length}개`}>
-            {conversations.length ? (
-              <List label="대화 프롬프트">{topOf('conversation').map(row)}</List>
-            ) : (
-              <Empty variant="section">아직 대화 프롬프트가 없어요. 새로 만들거나 Risu 프리셋을 가져와 보세요.</Empty>
+              </Tabs>
+              {current.hint && <Hint label={`${current.label} 프롬프트`}>{current.hint}</Hint>}
+            </Row>
+            {shown === 'conversation' && (
+              <ChoiceGroup
+                layout="segmented"
+                label="정렬"
+                options={[
+                  { value: 'name', label: '이름' },
+                  { value: 'recent', label: '최근 사용' },
+                ]}
+                value={order}
+                onChange={setOrder}
+              />
             )}
-          </Section>
-          <Section
-            title={`번역 프롬프트 ${translators.length}개`}
-            hint="답장 번역과 보낼 말 번역이 쓰는 프롬프트예요. 글 속 {{language}}에는 번역할 언어가 들어가요."
-            action={
-              <Button variant="ghost" size="xs" icon={Plus} onClick={() => add('translate')}>
-                새 번역 프롬프트
-              </Button>
-            }
-          >
-            {translators.length ? <List label="번역 프롬프트">{topOf('translate').map(row)}</List> : <Empty variant="section">번역 프롬프트가 없어요. 새로 만들어 보세요.</Empty>}
-          </Section>
-          <Section
-            title={`기억 프롬프트 ${memorizers.length}개`}
-            hint="지난 메시지를 장기 기억으로 정리할 때 쓰는 프롬프트예요. 모든 채팅이 기본으로 정한 하나로 정리해요."
-            action={
-              <Button variant="ghost" size="xs" icon={Plus} onClick={() => add('memory')}>
-                새 기억 프롬프트
-              </Button>
-            }
-          >
-            {memorizers.length ? <List label="기억 프롬프트">{topOf('memory').map(row)}</List> : <Empty variant="section">기억 프롬프트가 없어요. 새로 만들어 보세요.</Empty>}
-          </Section>
+          </Row>
+          {top.length ? <List label={`${current.label} 프롬프트`}>{top.map(row)}</List> : <Empty variant="section">{current.none}</Empty>}
         </>
       )}
       {preset.view}

@@ -43,6 +43,11 @@
   transition: background-color var(--duration-fast);
 }
 
+/* A tall row with nothing under its title keeps a tap's height, not two lines' worth of empty space. */
+.tall.line {
+  min-height: var(--control-md);
+}
+
 .branch {
   gap: var(--space-8);
   font-weight: var(--weight-medium);

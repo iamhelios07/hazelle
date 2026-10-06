@@ -13,7 +13,7 @@ import { useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChipButton, Divider, Empty, Facts, List, ListItem, Menu, MenuItem, NavBar, Row, Screen, Section, Text } from '../ui';
+import { Button, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
 import { changeWords, defaultFirst, NOT_CALLABLE, valueWords } from './settingWords';
 import { count } from './typedNumber';
 
@@ -76,42 +76,35 @@ export function ModelScreen({ connection, model, back }: { connection: Stored<'c
 
   return (
     <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}>
-      <Section
-        title="쓰는 설정"
-        hint="같은 설정을 쓰는 모델은 함께 바뀌어요."
-        action={
-          <Menu
-            place="below-end"
-            label="쓸 설정 고르기"
-            trigger={(opener) => <ChipButton tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title="쓸 설정" {...opener} />}
-          >
-            {sorted.map((profile) => (
-              <MenuItem key={profile.id} label={profile.value.name} tag={profile.id === settings.profile ? '기본' : undefined} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
-            ))}
-            <Divider variant="menu" />
-            <MenuItem label="이 모델만 따로 설정하기" onClick={own} />
-          </Menu>
-        }
-      >
-        {current ? (
-          <List label="쓰는 설정">
-            <ListItem
-              title={current.value.name}
-              badge={current.id === settings.profile ? '기본' : undefined}
-              description={words?.length ? words.join(' · ') : '정한 값이 없어요. 모두 모델 원래 값으로 보내요.'}
-              aside="열기"
-              onClick={() => navigate({ kind: 'profile', id: current.id })}
-            />
-          </List>
-        ) : (
-          <Callout tone="warn">쓰던 설정이 지워졌어요. 다른 설정을 골라야 이 모델로 보낼 수 있어요.</Callout>
-        )}
-        {sent && (
-          <Text variant="note">
-            {sent}
-          </Text>
-        )}
-      </Section>
+      <SettingGroup label="쓰는 설정">
+        <SettingRow
+          label="쓰는 설정"
+          help="같은 설정을 쓰는 모델은 함께 바뀌어요."
+          sub={current ? (words?.length ? words.join(' · ') : '정한 값이 없어요. 모두 모델 원래 값으로 보내요.') : undefined}
+          error={current ? undefined : '쓰던 설정이 지워졌어요. 다른 설정을 골라야 이 모델로 보낼 수 있어요.'}
+          note={sent || undefined}
+          control={
+            <>
+              <Menu
+                place="below-end"
+                label="쓸 설정 고르기"
+                trigger={(opener) => <ChipButton variant="field" tone={current ? 'default' : 'warn'} label={current ? current.value.name : '없음'} title="쓸 설정" {...opener} />}
+              >
+                {sorted.map((profile) => (
+                  <MenuItem key={profile.id} label={profile.value.name} tag={profile.id === settings.profile ? '기본' : undefined} checked={profile.id === current?.id} onClick={() => void choose(profile.id)} />
+                ))}
+                <Divider variant="menu" />
+                <MenuItem label="이 모델만 따로 설정하기" onClick={own} />
+              </Menu>
+              {current && (
+                <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'profile', id: current.id })}>
+                  열기
+                </Button>
+              )}
+            </>
+          }
+        />
+      </SettingGroup>
 
       <Section title="모델">
         <Facts
