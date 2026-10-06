@@ -31,7 +31,7 @@
 }
 
 .title {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: var(--weight-bold);
 }
 

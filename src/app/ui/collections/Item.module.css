@@ -145,8 +145,13 @@
   color: var(--color-text-muted);
 }
 
-.side:hover {
+.side:hover,
+.side[aria-current] {
   color: var(--color-text);
+}
+
+.compact.side {
+  font-size: var(--text-md);
 }
 
 .list {
