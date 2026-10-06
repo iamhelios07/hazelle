@@ -52,6 +52,7 @@ const EXAMPLES = {
   admin: [{ kind: 'admin' }],
   'chat-settings': [{ kind: 'chat-settings' }],
   display: [{ kind: 'display' }],
+  translator: [{ kind: 'translator' }],
   settings: [{ kind: 'settings' }],
 } satisfies { [K in Route['kind']]: Extract<Route, { kind: K }>[] };
 

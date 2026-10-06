@@ -33,6 +33,7 @@ import { blocked, packsOf, takeTurn, togglesOf, statusBoxes, translationInput, t
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
+import { useCopy } from '../common/useCopy';
 import { BIN_KEEPS } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
@@ -65,6 +66,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const turn = useTurn(chatId);
   const translating = useTranslating();
   const toast = useToast();
+  const copy = useCopy();
   const id = item ? chatId : null;
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
   const chat: Chat = useMemo(() => item ? item.chat : { title: null, character: shelf?.id ?? null, ...unsaved }, [item?.chat, shelf?.id, unsaved]);
@@ -326,13 +328,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       void restoreChat(store, dropped).then((saved) => saved.ok || toast.failed(saved));
       navigate({ kind: 'chat', id: dropped });
     }, BIN_KEEPS);
-  }
-
-  function copy(text: string) {
-    navigator.clipboard.writeText(text).then(
-      () => toast.show('복사했어요'),
-      () => toast.error('복사하지 못했어요.', { detail: '브라우저가 클립보드를 막았어요.' }),
-    );
   }
 
   function pickModel(ref: ModelRef) {

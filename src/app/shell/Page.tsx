@@ -29,6 +29,7 @@ import { useAccount, useCharacter, useChatModel, useChatSummary, useSession, use
 import { AccountScreen } from '../settings/AccountScreen';
 import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
 import { DisplayScreen } from '../settings/DisplayScreen';
+import { TranslatorScreen } from '../settings/TranslatorScreen';
 import { Button, Empty, ListDetail, NavBar, Progress, Screen, Text, useSplit, useWide } from '../ui';
 import { ChatSide } from './ChatSide';
 import { backBar } from './router';
@@ -111,6 +112,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <ChatSettingsScreen back={sideBack(at)} />;
       case 'display':
         return <DisplayScreen back={sideBack(at)} />;
+      case 'translator':
+        return <TranslatorScreen back={sideBack(at)} />;
       // Its path can be typed by anyone; the server refuses every call but the operator's.
       case 'admin':
         return <AdminPage back={sideBack(at)} closeSettings={closeSettings} />;

@@ -10,6 +10,9 @@ import { KEEP_DAYS } from '../../model/library';
 
 export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '보조 모델' };
 
+// Where a translation's model comes from, said beside the model wherever it shows.
+export const TRANSLATION_MODEL_HELP = `번역 프롬프트에서 골라요. 고르지 않았으면 ${MODEL_ROLES.aux}을 따라요.`;
+
 export const AUX_HELP = '번역과 장기 기억 정리처럼 대화 밖에서 하는 일에 써요. 번역 프롬프트나 기억 프롬프트에서 모델을 고르면 그 일은 그 모델로 해요.';
 
 // 캐릭터 편집's switch for a bot whose script calls a model, and what the card that asks it in the chat says first.
@@ -29,7 +32,7 @@ export const TRANSLATOR_NOTE = '번역가의 노트';
 export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 둬 주세요';
 
 // 설정's pages, which SettingsNav lists and a sentence points to.
-export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', account: '계정', admin: '운영' };
+export const PAGES = { models: '모델', connections: '연결', chat: '채팅', prompts: '프롬프트', personas: '페르소나', modules: '모듈', display: '디스플레이', translator: '번역기', account: '계정', admin: '운영' };
 
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집's and a prompt's 모듈 section (항상 켜짐).

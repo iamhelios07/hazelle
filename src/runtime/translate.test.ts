@@ -3,11 +3,11 @@ import { fold, shown, type Message } from '../model/chat';
 import { greetingTranslation } from '../model/library';
 import { appendUserMessage, startChat } from './chat-log';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
-import { setTranslate } from './characters';
+import { setTranslate, setTranslatorNote } from './characters';
 import { SETTINGS_ID } from '../model/settings';
 import { setDefaultModel, setTaskModel } from './assignment';
 import { translate, translatorOf } from './translate';
-import { takeTurn, translationInput } from './turn';
+import { takeTurn, translateText, translationInput } from './turn';
 
 const server = testServer();
 
@@ -178,5 +178,19 @@ describe('Translator', () => {
       expect(model()).toBe('aux');
       await setTaskModel(session.store, session.store.get('settings', SETTINGS_ID)!.value.translatePrompt!, { connection: connection!.id, model: 'tr' });
       expect(model()).toBe('tr');
+    }));
+
+  it('translates a text of no chat into the language it is given, with the 전역 note and no persona', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      await setTranslatorNote(session.store, null, 'Master -> 주인님');
+      const log = stubRelay(inTurn([saying('はい、ご主人様。')]));
+      const made = await translateText(session, 'Yes, Master.', 'Japanese', new AbortController().signal, () => {});
+      expect(made).toMatchObject({ ok: true, translation: { text: 'はい、ご主人様。' } });
+      const sent: { role: string; content: string }[] = JSON.parse(log[0]!.sent.body!).messages;
+      expect(sent.map(({ role }) => role)).toEqual(['system', 'system', 'user']);
+      expect(sent[0]!.content).toContain('Target language: Japanese.');
+      expect(sent[1]!.content).toContain('Master -> 주인님');
+      expect(sent[2]!.content).toBe('Yes, Master.');
     }));
 });

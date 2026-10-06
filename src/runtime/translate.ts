@@ -21,7 +21,8 @@ import { receiptOf } from './talk';
 import { evaluationFailure } from './evaluation';
 
 // take: the display scripts that draw the status window (상태창 지정), whose boxes the source leaves out.
-export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest };
+// language: what the text is translated into.
+export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest; language: string };
 
 // failed: the call's receipt says why, and a cut one that wrote nothing is failed too.
 export type TranslateFailure =
@@ -36,22 +37,19 @@ export type TranslateFailure =
 
 type Deps = { store: ObjectStore; credentials: Credentials };
 
-// A reply goes into its replyLanguage and the user's message into its inputLanguage. A translation cut at its length
-// keeps what it wrote, and its receipt says it was cut.
+// A translation cut at its length keeps what it wrote, and its receipt says it was cut.
 export async function translate(
   { store, credentials }: Deps,
-  { chat, scope, take, translations, request }: TranslateInput,
+  { chat, scope, take, translations, request, language }: TranslateInput,
   target: CallTarget,
   signal: AbortSignal,
   onText: (text: string) => void,
 ): Promise<Translated> {
-  const switches = translateSwitches(store, chat.character);
   const translator = translatorOf(store, chat);
   if (!translator.ok) return translator;
   const { prompt, route } = translator;
   const profile = modelProfile(store, route.model);
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
-  const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
   const assembled = await store.evaluation.translation({ scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
     const failure = evaluationFailure(error);
     return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };

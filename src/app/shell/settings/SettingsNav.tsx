@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Layers, Lock, MessageSquare, Package, Plug, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
+import { ChevronRight, FileText, Languages, Layers, Lock, MessageSquare, Package, Plug, ShieldCheck, SunMoon, User, type LucideIcon } from 'lucide-react';
 import { PAGES, SETTINGS } from '../../common/words';
 import { presetOf } from '../../common/reading';
 import { useDisplay } from '../../display';
@@ -17,6 +17,7 @@ const GROUPS: Place[][] = [
   ],
   [
     { page: 'chat', label: PAGES.chat, icon: MessageSquare, route: { kind: 'chat-settings' } },
+    { page: 'translator', label: PAGES.translator, icon: Languages, route: { kind: 'translator' } },
     { page: 'prompts', label: PAGES.prompts, icon: FileText, route: { kind: 'prompts' } },
     { page: 'personas', label: PAGES.personas, icon: User, route: { kind: 'personas' } },
     { page: 'modules', label: PAGES.modules, icon: Package, route: { kind: 'modules' } },
@@ -65,6 +66,7 @@ export function SettingsList({ onClose }: { onClose: () => void }) {
     personas: `${personas.length}개`,
     modules: `${modules.length}개`,
     display: presetOf(presets, reading, display)?.name,
+    translator: undefined,
     account: username,
     admin: undefined,
   };

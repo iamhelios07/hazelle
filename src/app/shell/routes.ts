@@ -35,6 +35,7 @@ export type Route =
   | { kind: 'account'; section: 'notices' | null }
   | { kind: 'chat-settings' }
   | { kind: 'display' }
+  | { kind: 'translator' }
   | { kind: 'admin' }
   | { kind: 'settings' };
 
@@ -107,6 +108,7 @@ export function parseRoute(at: string): Route {
   }
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
   if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };
+  if (top === 'settings' && id === 'translator' && sub === undefined) return { kind: 'translator' };
   if (top === 'settings' && id === 'admin' && sub === undefined) return { kind: 'admin' };
   return HOME;
 }
@@ -170,6 +172,8 @@ export function href(route: Route): string {
       return '/settings/chat';
     case 'display':
       return '/settings/display';
+    case 'translator':
+      return '/settings/translator';
     case 'admin':
       return '/settings/admin';
     case 'settings':
@@ -204,7 +208,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
   }
 }
 
-export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'account' | 'admin';
+export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'translator' | 'account' | 'admin';
 
 // 'list' for 설정's own list, or null outside 설정. While it is not null, the
 // settings layer stands in for the library.
@@ -225,6 +229,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return 'models';
     case 'account':
     case 'display':
+    case 'translator':
     case 'admin':
       return route.kind;
     case 'chat-settings':
@@ -285,6 +290,7 @@ export function up(route: Below, wide: boolean, chatShelf?: string | null): Rout
     case 'account':
     case 'chat-settings':
     case 'display':
+    case 'translator':
     case 'admin':
       return { kind: 'settings' };
     case 'add-connection':

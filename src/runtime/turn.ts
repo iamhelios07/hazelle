@@ -185,8 +185,20 @@ export function statusBoxes(shown: Display, messages: Shown[], scripts: readonly
   });
 }
 
+// A reply goes into the switches' replyLanguage and the user's message into their inputLanguage.
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
-  return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request };
+  const switches = translateSwitches(reader.store, chat.character);
+  const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
+  return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request, language };
+}
+
+// 설정 › 번역기 translates as a new 캐릭터 없이 chat would: the shared switches' prompt, that chat's 보조 모델 and the
+// 전역 번역가의 노트, but no persona, since the text belongs to no story. Nothing is saved, so no marker is written.
+export const TRANSLATOR_CHAT: Chat = { title: null, character: null, models: {} };
+
+export function translateText(session: Pick<Session, 'store' | 'credentials'>, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
+  const input: TranslateInput = { chat: TRANSLATOR_CHAT, scope: { ...scopeOf(session, null, TRANSLATOR_CHAT, []), persona: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language };
+  return translate(session, input, { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } }, signal, onText);
 }
 
 // Automatic 답장 번역 is for replies received here, never for what a chat already holds: opening a chat, a greeting, a
@@ -431,10 +443,11 @@ export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, st
 async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
   const typed = turn.said!;
   const messages = session.read.chat(chat).snapshot()!.messages;
-  const language = translateSwitches(session.store, turn.chat.character).inputLanguage;
+  const input = translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text });
+  const { language } = input;
   const target: CallTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language } };
   session.streams.reading.add(target.id);
-  const made = await translate(session, translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text }), target, signal, () => {}).finally(() =>
+  const made = await translate(session, input, target, signal, () => {}).finally(() =>
     session.streams.reading.delete(target.id),
   );
   endCall(session.store, target.id);
