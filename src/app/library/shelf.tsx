@@ -7,9 +7,9 @@ import { Avatar } from '../ui';
 
 export const shelfName = ({ character }: Shelf<ChatSummary>) => (character ? aliased(character.card.name, character.alias) : '캐릭터 없이');
 
-export const NO_CHATS = '아직 채팅이 없어요';
+export const NO_CHATS = '채팅이 없어요';
 
-// What removing a character takes with it, as the object of 지웠어요 or 지워요.
+// What removing a character takes with it, as the object of 삭제했어요 or 삭제해요.
 export const withChats = (shelf: CharacterShelf<ChatSummary>) => (shelf.chats.length ? `캐릭터와 채팅 ${shelf.chats.length}개를` : '캐릭터를');
 
 export function ShelfFace({ shelf, size }: { shelf: Shelf<ChatSummary>; size?: 'sm' | 'md' | 'lg' }) {
@@ -24,7 +24,7 @@ export function cardNote(shelf: CharacterShelf<ChatSummary>): string {
 // Past its time it goes when the app next opens.
 export function timeLeft(deleted: { deleted?: number }): string {
   const days = daysLeft(deleted, Date.now());
-  return days > 0 ? `${days}일 남음` : '곧 지워져요';
+  return days > 0 ? `${days}일 남음` : '곧 삭제';
 }
 
 export function binCardNote(shelf: CharacterShelf<ChatSummary>): string {

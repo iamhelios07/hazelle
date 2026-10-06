@@ -55,15 +55,15 @@ export function PasswordScreen({ mode, username: initialUsername, onSignIn, onDo
       }
     >
       {signup && <Steps current={1} total={2} />}
-      <Intro title={signup ? '계정 만들기' : '새 비밀번호 정하기'}>
+      <Intro title={signup ? '계정 만들기' : '새 비밀번호 설정'}>
         {signup
-          ? '비밀번호 하나로 로그인하고 금고도 열어요. 서버는 이 비밀번호를 받지 않아서 채팅, 캐릭터, API 키를 열어 볼 수 없어요.'
-          : '복구 키로 열었어요. 앞으로 쓸 비밀번호를 새로 정해 주세요.'}
+          ? '서버는 비밀번호를 받지 않아서 채팅, 캐릭터, API 키를 볼 수 없어요.'
+          : '앞으로 쓸 새 비밀번호를 설정해 주세요.'}
       </Intro>
       <Stack>
         {signup && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         <TextField label="비밀번호" kind="new-password" value={password} onChange={setPassword} placeholder="8자 이상" />
-        <TextField label="한 번 더" kind="new-password" value={again} onChange={setAgain} placeholder="같은 비밀번호" />
+        <TextField label="비밀번호 확인" kind="new-password" value={again} onChange={setAgain} placeholder="같은 비밀번호" />
       </Stack>
       {failure && (
         <Callout tone="warn" alert>

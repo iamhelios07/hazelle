@@ -68,10 +68,10 @@ function ReportDialog({ report, onClose, onRestore, onResolved }: { report: Repo
     <NoticeDialog
       title={title}
       note={ago(report.createdAt)}
-      label="답장"
+      label="답변"
       optional
-      placeholder="비워 두면 답장 없이 확인함으로 둬요."
-      confirm={{ label: '확인함으로 두기', icon: Check }}
+      placeholder="비워 두면 답변 없이 확인 처리해요."
+      confirm={{ label: '확인 처리', icon: Check }}
       about={text}
       also={
         <Button variant="secondary" icon={History} onClick={onRestore}>

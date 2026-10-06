@@ -28,7 +28,7 @@ type State =
 // unreadNotices: the server's count when the account was opened.
 export type Unlocked = Account & { accountId: string; username: string; vaultKey: VaultKey; unreadNotices: number };
 
-const ELSEWHERE = '다른 탭에서 다른 계정으로 로그인해서 이 탭에 열려 있던 계정을 닫았어요.';
+const ELSEWHERE = '다른 탭에서 다른 계정으로 로그인해서 로그아웃했어요.';
 
 // Signed out, the page opens on signup while there is room, unless it came from leaving an account.
 async function loadState(notice: string | null = null, prefer: 'signup' | 'login' = 'signup'): Promise<State> {

@@ -107,12 +107,12 @@ export function GalleryScreen({ back }: { back: Back | null }) {
         </Button>
         {!binned && (
           <Button variant="secondary" size="sm" icon={FolderInput} onClick={() => setPicked(picked ? null : new Set())}>
-            {picked ? '완료' : '골라서 옮기기'}
+            {picked ? '완료' : '선택해서 옮기기'}
           </Button>
         )}
       </Row>
       <FolderTabs filter={filter} onFilter={choose} folder={folder} onName={setNaming} />
-      {binned && <Text variant="note">{`${BIN}에 든 것은 ${KEEP_DAYS}일이 지나면 완전히 지워져요. 그 전에는 되살릴 수 있어요.`}</Text>}
+      {binned && <Text variant="note">{`${BIN}에 있는 항목은 ${KEEP_DAYS}일이 지나면 영구 삭제돼요.`}</Text>}
       {shown.length > 0 && (
         <CardGrid label="캐릭터" keys={shown.map(({ id }) => id)}>
           {(index) => { const shelf = shown[index]!; return (
@@ -135,7 +135,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
         </Section>
       ))}
       {shown.length === 0 && listed.length === 0 && (
-        <Empty>{words ? noResults(words) : binned ? `${BIN}이 비어 있어요.` : '이 폴더는 비어 있어요. ‘골라서 옮기기’로 캐릭터를 넣어 보세요.'}</Empty>
+        <Empty>{words ? noResults(words) : binned ? `${BIN}이 비어 있어요.` : '이 폴더는 비어 있어요.'}</Empty>
       )}
       {picked && <MoveBar count={picked.size} onCancel={() => setPicked(null)} onMove={movePicked} />}
       {purging && (
@@ -149,7 +149,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
         />
       )}
       {naming && (
-        <NameDialog title={naming.id ? '폴더 이름 바꾸기' : naming.parent ? `‘${naming.parent.value.name}’ 안에 새 폴더` : '새 폴더'} value={naming.name} onSave={(name) => saveFolder({ ...naming, name })} onClose={() => setNaming(null)} />
+        <NameDialog title={naming.id ? '폴더 이름 바꾸기' : naming.parent ? `'${naming.parent.value.name}' 안에 새 폴더` : '새 폴더'} value={naming.name} onSave={(name) => saveFolder({ ...naming, name })} onClose={() => setNaming(null)} />
       )}
     </Screen>
   );

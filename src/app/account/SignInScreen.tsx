@@ -22,7 +22,7 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
   const { busy, failure, run, setFailure } = useAttempt();
   const credential = useCredential(setFailure);
   const { method, secret, recovery } = credential;
-  const verb = account ? '열기' : '로그인';
+  const verb = account ? '잠금 해제' : '로그인';
 
   const attempt = (text: string) => run(() => onSubmit(account ?? username, method, text));
 
@@ -54,13 +54,13 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
         </>
       }
     >
-      <Intro title={recovery ? `복구 키로 ${verb}` : account ? '잠금 풀기' : '로그인'}>
+      <Intro title={recovery ? `복구 키로 ${verb}` : account ? '잠금 해제' : '로그인'}>
         {recovery
-          ? '내려받아 둔 복구 키 파일을 고르거나, 키를 직접 넣어 주세요. 열리면 새 비밀번호를 정해요.'
-          : account && `${account} 계정이 이 기기에서 잠겨 있어요. 비밀번호를 넣어 주세요.`}
+          ? '복구 키 파일을 선택하거나 키를 입력해 주세요.'
+          : account && `${account} 계정이 이 기기에서 잠겨 있어요.`}
       </Intro>
       {notice && <Text variant="note">{notice}</Text>}
-      {signup === 'full' && <Text variant="note">지금은 자리가 다 차서 새 계정을 만들 수 없어요. 자리가 늘면 다시 열려요.</Text>}
+      {signup === 'full' && <Text variant="note">가입 정원이 다 차서 새 계정을 만들 수 없어요.</Text>}
       <Stack>
         {!account && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         {recovery && (
