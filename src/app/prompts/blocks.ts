@@ -2,6 +2,7 @@ import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, Mess
 import { autoCachePoints } from '../../engine/pipeline';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
+import { inSettings } from '../common/words';
 import type { OutlineKind } from '../ui';
 import { toggleUses } from './rekey';
 
@@ -21,7 +22,7 @@ export const SLOT = {
   note: {
     name: SLOT_NAMES.note,
     hint: '이름과 용어를 늘 같게 옮기는 메모',
-    line: '설정 › 채팅의 전역 노트와 캐릭터 편집의 캐릭터 노트가 함께 여기에 들어가요. 둘 다 비었으면 아무것도 보내지 않아요.',
+    line: `${inSettings('chat')}의 전역 노트와 캐릭터 편집의 캐릭터 노트가 함께 여기에 들어가요. 둘 다 비었으면 아무것도 보내지 않아요.`,
     kind: 'note',
     icon: NotebookPen,
   },

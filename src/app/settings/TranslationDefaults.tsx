@@ -12,7 +12,7 @@ export function TranslationDefaults() {
   );
 }
 
-// 설정 › 채팅 and 번역기 edit the one 전역 note, through one autosave queue.
+// 설정 › 채팅 기본값 and 번역기 edit the one 전역 note, through one autosave queue.
 export function GlobalNoteField({ error }: { error?: string }) {
   const store = useStore();
   const settings = useSettings();

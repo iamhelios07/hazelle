@@ -62,7 +62,7 @@ export function GalleryScreen({ back }: { back: Back | null }) {
       return [{ key: item.id, render: () => <BinnedRow key={item.id} item={item} face={face?.(stored)} description={describe(stored)} mark={stored.value} busy={busy(item.id)} actions={characterActions} onPurge={() => setPurging(item)} /> }];
     });
   const sections: [string, { key: string; render: () => ReactNode }[]][] = [
-    [PAGES.chat, shownChats.map((item) => ({ key: item.id, render: () => <BinnedRow key={item.id} item={binnedChat(item)} face={<ShelfFace shelf={shelfOf(item)} />} description={shelfName(shelfOf(item))} mark={item.chat} busy={busy(item.id)} actions={characterActions} onPurge={() => setPurging(binnedChat(item))} /> }))],
+    ['채팅', shownChats.map((item) => ({ key: item.id, render: () => <BinnedRow key={item.id} item={binnedChat(item)} face={<ShelfFace shelf={shelfOf(item)} />} description={shelfName(shelfOf(item))} mark={item.chat} busy={busy(item.id)} actions={characterActions} onPurge={() => setPurging(binnedChat(item))} /> }))],
     [PAGES.modules, rows(bin.modules, binnedModule, ({ value }) => value.description.trim() || undefined)],
     [PAGES.prompts, rows(bin.prompts, binnedPrompt, ({ value }) => value.task && `${TASK_NAMES[value.task]} ${PAGES.prompts}`)],
     [PAGES.personas, rows(bin.personas, binnedPersona, () => undefined, ({ value }) => <Avatar face={value.name} image={value.picture} tone="you" />)],
