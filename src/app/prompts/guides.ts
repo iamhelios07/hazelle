@@ -45,7 +45,7 @@ const SAMPLE: CbsContext = {
   variables: new Map([
     ['호감도', '30'],
     ['날씨', '비'],
-    ['가방', '["열쇠","지도"]'],
+    ['가방', '["나침반","지도"]'],
   ]),
   toggle: (key) => (key === '존댓말' ? '1' : null),
   model: null,
@@ -58,7 +58,7 @@ const SAMPLE: CbsContext = {
   pickSeed: 'sample',
 };
 
-export const SAMPLE_NOTE = '예시 채팅: 캐릭터 미라, 페르소나 나, 채팅 변수 호감도=30 · 날씨=비 · 가방=["열쇠","지도"], 토글 존댓말 켬';
+export const SAMPLE_NOTE = '예시 채팅: 캐릭터 미라, 페르소나 나, 채팅 변수 호감도=30 · 날씨=비 · 가방=["나침반","지도"], 토글 존댓말 켬';
 
 // null: the example's commands ran away and were stopped.
 export function tryExample(written: string, inMessage = false): string | null {
@@ -128,13 +128,13 @@ export const GUIDES: Record<GuideId, Guide> = {
       { text: '배열은 값 여러 개를 ["가","나"]처럼 JSON으로 적은 거예요. makearray로도 만들 수 있어요.', example: { written: '{{makearray::사과::배}}', result: '["사과","배"]' } },
       {
         text: '#each는 배열의 항목마다 안의 텍스트를 한 번씩 넣어요. as 뒤에 붙인 이름을 {{slot::이름}}으로 읽어요.',
-        example: { written: '{{#each {{getvar::가방}} as 물건}}- {{slot::물건}}{{br}}{{/each}}', result: '- 열쇠\n- 지도\n' },
+        example: { written: '{{#each {{getvar::가방}} as 물건}}- {{slot::물건}}{{br}}{{/each}}', result: '- 나침반\n- 지도\n' },
       },
-      { text: '항목 수는 arraylength, n번째 항목은 arrayelement로 읽어요. 번호는 0부터 세요.', example: { written: '{{arraylength::{{getvar::가방}}}}개 중 첫째: {{arrayelement::{{getvar::가방}}::0}}', result: '2개 중 첫째: 열쇠' } },
+      { text: '항목 수는 arraylength, n번째 항목은 arrayelement로 읽어요. 번호는 0부터 세요.', example: { written: '{{arraylength::{{getvar::가방}}}}개 중 첫째: {{arrayelement::{{getvar::가방}}::0}}', result: '2개 중 첫째: 나침반' } },
       { text: '사전은 키마다 값을 둔 JSON이에요. dictelement로 키의 값을 읽어요.', example: { written: '{{dictelement::{{makedict::이름=미라::나이=20}}::나이}}', result: '20' } },
       {
         text: '배열을 바꾸는 명령어는 바뀐 배열을 내요. 저장하려면 메시지 안에서 setvar로 변수에 다시 넣어요.',
-        example: { written: '{{setvar::가방::{{arraypush::{{getvar::가방}}::칼}}}}{{getvar::가방}}', result: '["열쇠","지도","칼"]', inMessage: true },
+        example: { written: '{{setvar::가방::{{arraypush::{{getvar::가방}}::칼}}}}{{getvar::가방}}', result: '["나침반","지도","칼"]', inMessage: true },
       },
     ],
   },

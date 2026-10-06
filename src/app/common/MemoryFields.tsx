@@ -5,11 +5,11 @@ import { Disclosure, NumberInput, SettingGroup, SettingRow, Switch } from '../ui
 
 type Count = 'budget' | 'window' | 'batch';
 
-const COUNTS = {
+const COUNTS: Record<Count, { label: string; unit: string; help?: string }> = {
   budget: { label: '기록 최대 분량', unit: '토큰', help: '정리한 기록을 요청마다 이만큼까지 넣어요.' },
-  window: { label: '원문으로 보낼 최근 대화', unit: '토큰', help: undefined },
+  window: { label: '원문으로 보낼 최근 대화', unit: '토큰' },
   batch: { label: '한 번에 정리할 분량', unit: '토큰', help: '오래된 대화가 이만큼 쌓이면 기록으로 정리해요.' },
-} satisfies Record<Count, { label: string; unit: string; help: string | undefined }>;
+};
 
 export const settingsOf = ({ on, budget, window, batch }: MemorySettings): MemorySettings => ({ on, budget, window, batch });
 

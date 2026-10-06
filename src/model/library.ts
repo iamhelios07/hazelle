@@ -21,7 +21,7 @@ export type Character = Mark & {
   ownTranslate?: TranslateSwitches;
   // 번역가의 노트: added to the 전역 one (Settings.translatorNote), never replacing it as the switches do.
   translatorNote?: string;
-  // 봇 꾸밈: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
+  // 봇 스타일: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
   decor?: boolean;
   // Whether the bot's Lua may call models, which costs the user. Absent: not asked yet, and the first call asks.
   botModels?: boolean;
@@ -34,13 +34,13 @@ export type Character = Mark & {
   // 옆에 두기: 상태 rests in the panel beside the story whenever a chat of it opens with room for one, instead of
   // peeking from the story's edge.
   keepStatus?: true;
-  // 생각을 본문에 둠: its replies keep the thinking blocks they write inside the text (connectors/thoughts) where they
+  // 추론을 본문에 표시: its replies keep the thinking blocks they write inside the text (connectors/thoughts) where they
   // are, for a bot that draws them itself. Absent: they move to the reply's reasoning.
   keepThoughts?: true;
   // Keyed by the greeting as the card holds it and the language, so an edited greeting or a changed language
   // translates anew.
   greetingTranslations?: GreetingTranslation[];
-  // The Risu chaId of a character brought from Risu: a move skips it, and 그림 채우기 finds it.
+  // The Risu chaId of a character brought from Risu: a move skips it, and 이미지만 가져오기 finds it.
   risu?: string;
   // The modules on in its chats, in the order they were turned on (design §6.5). One that is gone reads as off.
   modules?: string[];

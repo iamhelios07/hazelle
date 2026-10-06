@@ -5,7 +5,7 @@ export type Role = 'system' | 'user' | 'assistant';
 
 export type PromptSort = 'conversation' | 'translate' | 'memory';
 
-// A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 글 with
+// A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 텍스트 with
 // {{slot}} where its content goes.
 export const SLOTS = {
   description: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory'] },

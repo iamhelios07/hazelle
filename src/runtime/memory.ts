@@ -81,7 +81,7 @@ export type RecordPatch = Partial<Pick<MemoryRecord, 'when' | 'where' | 'who' | 
 export const editRecord = (store: ObjectStore, chat: string, record: string, patch: RecordPatch): Write =>
   withRecord(store, chat, record, (current) => ({ ...current, ...patch, edited: true, at: Date.now() }));
 
-// 항상 넣기. A pinned record is sent even when stale, which is how the user keeps one as canon (그래도 넣기).
+// 고정. A pinned record is sent even when stale, which is how the user keeps one as canon.
 export const pinRecord = (store: ObjectStore, chat: string, record: string, pinned: boolean): Write =>
   withRecord(store, chat, record, (current) => (pinned ? { ...current, pinned: true } : without(current, 'pinned')));
 

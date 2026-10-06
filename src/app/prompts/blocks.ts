@@ -36,7 +36,7 @@ export const SLOT = {
   memory: {
     name: SLOT_NAMES.memory,
     hint: '이 채팅이 기억하는 지난 이야기',
-    line: '이 채팅의 장기 기억(상태, 열린 이야기, 기록)이 여기에 들어가요.',
+    line: '이 채팅의 장기 기억(상태, 미해결 사건, 기록)이 여기에 들어가요.',
     kind: 'note',
     icon: History,
   },

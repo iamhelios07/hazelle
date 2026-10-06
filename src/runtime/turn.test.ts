@@ -217,7 +217,7 @@ describe('반전 모드', () => {
     }));
 });
 
-describe('보낼 말 번역', () => {
+describe('내 메시지 번역', () => {
   it('translates the message first, sends the translation and saves it, with what the user typed as its translation and the language it went out in', () =>
     server.withSession(async (session) => {
       await answerable(session);

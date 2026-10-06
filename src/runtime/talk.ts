@@ -276,7 +276,7 @@ export class Talk {
     return (phase: Phase, chunk: string) => this.change(held, { ...held.turn, [phase]: held.turn[phase] + chunk });
   }
 
-  // A chat without a character has no 생각을 본문에 둠, and strips.
+  // A chat without a character has no 추론을 본문에 표시, and strips.
   private inline(held: Held): InlineThoughts {
     const character = this.store.get('chat', held.turn.chat)?.value.character;
     const keep = character ? this.store.get('character', character)?.value.keepThoughts === true : false;

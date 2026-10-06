@@ -63,7 +63,7 @@
     visibility var(--duration-instant) linear calc(var(--duration-slow) + var(--duration-fast));
 }
 
-/* The panel 답장 정보 was beside the story (user, 2026-10-04: keep that design, "옛날의 그 전체 크기"): the page's full
+/* The panel 응답 정보 was beside the story (user, 2026-10-04: keep that design, "옛날의 그 전체 크기"): the page's full
    height at its edge, over the header and the composer too, sliding in from the edge. */
 .panel {
   --peek-hidden: translateX(100%);

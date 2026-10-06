@@ -164,7 +164,7 @@ export const evaluateChat = async (reader: Reader, id: string | null, chat: Chat
   (await reader.store.evaluation.display(`headless:${id}`, { ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat), signal)).display;
 
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
-// 봇 꾸밈 is off; the chat draws the latest box itself.
+// 봇 스타일 is off; the chat draws the latest box itself.
 export function pinned({ store }: Reader, chat: Chat): ReadonlySet<number> {
   const character = chat.character === null ? null : store.get('character', chat.character)?.value;
   return new Set(character?.decor === false ? [] : (character?.statusScripts ?? []));
@@ -203,7 +203,7 @@ export function translateText(session: Pick<Session, 'store' | 'credentials'>, t
   return translate(session, input, target, signal, onText).finally(() => endCall(session.store, target.id));
 }
 
-// Automatic 답장 번역 is for replies received here, never for what a chat already holds: opening a chat, a greeting, a
+// Automatic 응답 번역 is for replies received here, never for what a chat already holds: opening a chat, a greeting, a
 // version switched to and the switch turned on leave it to 번역 (user ruling, 2026-10-04). The reply is as saved; the
 // bot's onOutput may have edited or removed its message since, so the message is read again. Its chat must stay
 // loaded until this returns (session).
@@ -420,7 +420,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
 }
 
 // A message being translated for sending when this page came, which Streams hands over. It is saved translated, or
-// as typed when the translation failed, so what the user wrote is never lost; its reply waits for 답장 받기, since
+// as typed when the translation failed, so what the user wrote is never lost; its reply waits for 응답 받기, since
 // another device may be reading the same call.
 export async function resumeSend(session: Pick<Session, 'store' | 'streams'>, stream: Stored<'stream'>, signal: AbortSignal) {
   const purpose = stream.value.for;

@@ -98,7 +98,7 @@ export type TranslateSwitches = { replies: boolean; input: boolean; reverse?: bo
 // was made), which the chat's replay sets before the version's own text is read. An edit keeps those of the version
 // it changes and adds its own.
 // reasoning: what the model thought before it wrote the version, as its provider sent it or as Risu kept it. It is
-// never part of text, so it is neither drawn in the story nor sent again; 답장 정보 is its one reader.
+// never part of text, so it is neither drawn in the story nor sent again; 응답 정보 is its one reader.
 // greeting: the original card index, not a version's position or a text match. Edits and branches keep it.
 export type Entry =
   // A new message with its first version, which has the entry's id.

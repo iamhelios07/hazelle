@@ -150,10 +150,10 @@ async function signUp(page: Page) {
   await page.goto('/');
   await page.getByLabel('아이디', { exact: true }).fill('e2e');
   await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
-  await page.getByLabel('한 번 더', { exact: true }).fill(PASSWORD);
+  await page.getByLabel('비밀번호 확인', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: '다음', exact: true }).click();
   await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
-  await page.getByLabel('안전한 곳에 따로 저장했어요', { exact: true }).check();
+  await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
   await expect(empty(page)).toBeVisible();
 }

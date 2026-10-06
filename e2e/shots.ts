@@ -27,7 +27,7 @@ export async function snap(page: Page, name: string) {
 
 export async function enterShots(page: Page) {
   await page.goto('/');
-  const signup = page.getByLabel('한 번 더', { exact: true });
+  const signup = page.getByLabel('비밀번호 확인', { exact: true });
   const signin = page.getByRole('button', { name: '로그인', exact: true });
   await expect(signup.or(signin)).toBeVisible();
   // The landing is the signup form only while signup is open, which with the default cap of one is until the first
@@ -38,7 +38,7 @@ export async function enterShots(page: Page) {
   await signup.fill(SHOTS.password);
   await page.getByRole('button', { name: '다음', exact: true }).click();
   await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
-  await page.getByLabel('안전한 곳에 따로 저장했어요', { exact: true }).check();
+  await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '봇 가져오기', exact: true }).click();

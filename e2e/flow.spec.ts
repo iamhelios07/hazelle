@@ -25,10 +25,10 @@ test('a new account imports a card, chats through the fake provider and finds th
     expect(response?.headers()['content-security-policy']).toBe(CSP);
     await page.getByLabel('아이디', { exact: true }).fill('e2e');
     await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
-    await page.getByLabel('한 번 더', { exact: true }).fill(PASSWORD);
+    await page.getByLabel('비밀번호 확인', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: '다음', exact: true }).click();
     await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
-    await page.getByLabel('안전한 곳에 따로 저장했어요', { exact: true }).check();
+    await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
     await page.getByRole('button', { name: '시작하기', exact: true }).click();
     await expect(page.getByRole('heading', { name: '아직 비어 있어요', exact: true })).toBeVisible();
   });
@@ -38,8 +38,8 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: /^직접 연결/ }).click();
     await page.getByLabel('주소', { exact: true }).fill(FAKE_ADDRESS);
     await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();
-    await page.getByRole('button', { name: '모델 고르기', exact: true }).click();
-    await page.getByRole('button', { name: `${FAKE_MODEL} 별표하기` }).click();
+    await page.getByRole('button', { name: '모델 선택', exact: true }).click();
+    await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기` }).click();
     await page.getByRole('button', { name: '완료', exact: true }).click();
     await page.getByRole('button', { name: '모델', exact: true }).click();
     const main = page.getByRole('button', { name: /^대화 모델 · / });
@@ -73,7 +73,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     expect(evaluations).toContain(200);
     await expect(messages.nth(2)).toHaveText(/Mira smiles\. \(bows\)/);
     // Shown once the reply is saved and the turn is over.
-    await expect(page.getByRole('button', { name: '새 답장 받기', exact: true })).toBeAttached();
+    await expect(page.getByRole('button', { name: '다시 생성', exact: true })).toBeAttached();
     expect(violations).toEqual([]);
   });
 
@@ -164,7 +164,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(greeting.locator('em')).toHaveText('nods');
     await expect(greeting.locator('mark')).toHaveText('"hello"');
     await greeting.getByRole('button', { name: '누르기', exact: true }).click();
-    await expect(page.getByText('이 버튼에는 이어진 동작이 없어요.', { exact: true })).toBeVisible();
+    await expect(page.getByText('동작이 연결되지 않은 버튼이에요.', { exact: true })).toBeVisible();
     expect(await page.evaluate('window.ran')).toBeUndefined();
     expect(violations).toEqual([]);
   });
@@ -237,7 +237,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.goto('/connections/new');
     await page.getByRole('button', { name: /^Featherless/ }).click();
     await page.getByLabel('API 키', { exact: true }).fill('catalog-fixture-key');
-    await page.getByRole('button', { name: '모델 고르기', exact: true }).click();
+    await page.getByRole('button', { name: '모델 선택', exact: true }).click();
     await expect(page.getByText(`모델 ${models.length}개`, { exact: true })).toBeVisible();
     const list = page.getByRole('list', { name: '모델', exact: true });
     const rows = list.locator(':scope > li');
@@ -248,19 +248,19 @@ test('a new account imports a card, chats through the fake provider and finds th
       while (frame && !/auto|scroll/.test(getComputedStyle(frame).overflowY)) frame = frame.parentElement;
       (frame ?? document.scrollingElement).scrollTop = (frame ?? document.scrollingElement).scrollHeight;
     })()`);
-    await expect(page.getByRole('button', { name: `${last.name} 별표하기`, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: `${last.name} 즐겨찾기`, exact: true })).toBeVisible();
     expect(await rows.count()).toBeLessThan(100);
     const search = page.getByRole('searchbox', { name: '모델 검색' });
     await search.fill(last.id);
-    await page.getByRole('button', { name: `${last.name} 별표하기`, exact: true }).click();
-    const starred = page.getByRole('list', { name: '별표한 모델', exact: true });
+    await page.getByRole('button', { name: `${last.name} 즐겨찾기`, exact: true }).click();
+    const starred = page.getByRole('list', { name: '즐겨찾기한 모델', exact: true });
     await expect(starred).toContainText(last.name);
     await search.fill('');
     await page.getByRole('button', { name: '비전', exact: true }).click();
     await expect(rows.first()).toBeVisible();
     expect(await rows.count()).toBeLessThan(100);
     await expect(rows.first()).toContainText('비전');
-    await page.getByRole('button', { name: '별표', exact: true }).click();
+    await page.getByRole('button', { name: '즐겨찾기', exact: true }).click();
     await expect(starred).toContainText(last.name);
     await expect(list).toHaveCount(0);
     expect(bodies).toHaveLength(2);
@@ -269,7 +269,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.reload();
     await expect(page.getByText(`모델 ${models.length - 1}개`, { exact: true })).toBeVisible();
     await expect(starred).toContainText('목록에 없음');
-    await starred.getByRole('button', { name: `${last.name} 별표 빼기`, exact: true }).click();
+    await starred.getByRole('button', { name: `${last.name} 즐겨찾기 해제`, exact: true }).click();
     await expect(starred).toHaveCount(0);
   });
 });

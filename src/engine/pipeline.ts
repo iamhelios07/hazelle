@@ -166,17 +166,17 @@ const throughSlot = (laid: Laid, entries: Lore[], slot: 'lorebook' | 'postEveryt
 const filled = (parts: Sent[]) => parts.filter(({ message }) => message.content !== '');
 
 // A prompt's blocks in order, with its chat slots left open and every other block rendered once. memory: whether a
-// 장기 기억 slot reaches the request, its 감싸는 글 keeping {{slot}} once rendered, whether or not memory holds anything.
+// 장기 기억 slot reaches the request, its 감싸는 텍스트 keeping {{slot}} once rendered, whether or not memory holds anything.
 function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], filling: Filling): { parts: Part[]; memory: boolean } {
   const { card, cast, render, sides, injections } = laid;
   const parts: Part[] = [];
   let memory = false;
   const out = (...sent: Sent[]) => parts.push(...filled(sent));
-  // What a persona or a note holds is CBS of its own, evaluated inside its 감싸는 글.
+  // What a persona or a note holds is CBS of its own, evaluated inside its 감싸는 텍스트.
   const wrapped = (block: WrappedSlot, content: string) => {
     if (content.trim()) out({ message: { role: block.role, content: render(block.wrapper === null ? content : block.wrapper.replace('{{slot}}', () => content), block.id) }, from: blockFrom(block) });
   };
-  // Text already rendered, or the user's own, is never evaluated again: only its 감싸는 글 is. {{slot}} survives that
+  // Text already rendered, or the user's own, is never evaluated again: only its 감싸는 텍스트 is. {{slot}} survives that
   // evaluation because the slot tag takes an argument (cbs/tags.ts), and one without it stays as written.
   const verbatim = (block: WrappedSlot, content: string) => {
     const frame = block.wrapper === null ? '{{slot}}' : render(block.wrapper, block.id);
