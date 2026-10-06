@@ -29,14 +29,14 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
     <Menu handle={handle} place="below-end" label={`${name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" {...opener} />}>
       {binned ? (
         <>
-          <MenuItem icon={RotateCcw} label="되살리기" onClick={() => actions.restore(binnedCharacter(shelf))} />
-          <MenuItem icon={Trash2} label="지금 지우기" tone="warn" onClick={onPurge} />
+          <MenuItem icon={RotateCcw} label="복원" onClick={() => actions.restore(binnedCharacter(shelf))} />
+          <MenuItem icon={Trash2} label="영구 삭제" tone="warn" onClick={onPurge} />
         </>
       ) : (
         <>
           <MenuItem icon={Pencil} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
           <MenuItem icon={Copy} label="사본 만들기" onClick={() => void actions.copy(shelf)} />
-          <MenuItem icon={Trash2} label="지우기" tone="warn" onClick={() => actions.remove(shelf)} />
+          <MenuItem icon={Trash2} label="삭제" tone="warn" onClick={() => actions.remove(shelf)} />
         </>
       )}
     </Menu>

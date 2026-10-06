@@ -48,27 +48,27 @@ export function ServiceSection({ service, onSaved, onNoticed }: { service: Servi
       <SettingGroup label="서비스">
         <SettingRow
           label="가입 정원"
-          help="계정 수가 이보다 적은 동안 새 계정을 만들 수 있어요."
+          help="계정 수가 정원보다 적을 때만 가입할 수 있어요."
           sub={`지금 ${service.accounts.toLocaleString('ko-KR')}명`}
-          error={signupCap === undefined ? '0 이상의 정수로 넣어 주세요.' : undefined}
+          error={signupCap === undefined ? '0 이상의 정수를 입력해 주세요.' : undefined}
           control={<NumberInput label="가입 정원" unit="명" value={seats ?? String(service.signupCap)} invalid={signupCap === undefined} onChange={setSeats} />}
         />
         <SettingRow
-          label="계정당 글 한도"
-          help="그림을 뺀, 한 계정이 저장한 내용의 크기예요. 비우면 한도가 없어요. 계정 목록에서 계정마다 따로 정할 수 있어요."
+          label="계정당 텍스트 한도"
+          help="이미지를 제외한 계정별 저장 용량이에요."
           error={accountBytesCap === undefined ? CAP_ERROR : undefined}
-          control={<NumberInput label="계정당 글 한도" unit="MB" placeholder="없음" value={cap ?? capText(service.accountBytesCap)} invalid={accountBytesCap === undefined} onChange={setCap} />}
+          control={<NumberInput label="계정당 텍스트 한도" unit="MB" placeholder="없음" value={cap ?? capText(service.accountBytesCap)} invalid={accountBytesCap === undefined} onChange={setCap} />}
         />
         <SettingRow
-          label="계정당 그림 한도"
-          help="한 계정이 올린 그림의 크기예요. 그림은 지워도 줄지 않아요. 비우면 한도가 없어요. 계정 목록에서 계정마다 따로 정할 수 있어요."
-          sub={`저장된 그림 합계 ${sizeText(service.fileBytes)}`}
+          label="계정당 이미지 한도"
+          help="계정별로 올린 이미지의 총 크기예요. 이미지를 삭제해도 줄지 않아요."
+          sub={`저장된 이미지 합계 ${sizeText(service.fileBytes)}`}
           error={accountFileBytesCap === undefined ? CAP_ERROR : undefined}
-          control={<NumberInput label="계정당 그림 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}
+          control={<NumberInput label="계정당 이미지 한도" unit="MB" placeholder="없음" value={fileCap ?? capText(service.accountFileBytesCap)} invalid={accountFileBytesCap === undefined} onChange={setFileCap} />}
         />
         <SettingRow
           label={`모두에게 ${NOTICES.send}`}
-          help="지금 있는 계정이 모두 받아요. 나중에 가입한 계정에는 보이지 않아요."
+          help="지금 있는 계정이 모두 받아요."
           control={
             <Button variant="secondary" size="sm" icon={Send} onClick={() => setWriting(true)}>
               보내기

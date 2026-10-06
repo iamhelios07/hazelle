@@ -17,14 +17,14 @@ export function FileSection({ onActed }: { onActed: () => void }) {
     run(async () => {
       const done = await setFileBlocked(typed, blocked);
       if (!done.ok) return done.error === 'not-found' ? '서버에 없는 파일이에요.' : describeFailure(done);
-      toast.show(blocked ? '파일을 막았어요.' : '파일 차단을 풀었어요.', { detail: typed });
+      toast.show(blocked ? '파일을 차단했어요.' : '파일 차단을 해제했어요.', { detail: typed });
       setId('');
       onActed();
       return null;
     });
 
   return (
-    <Section title="파일 차단" hint="막은 파일은 어느 계정에서도 올리거나 열 수 없어요. 내용은 서버에 남아서 차단을 풀면 다시 열려요.">
+    <Section title="파일 차단" hint="차단한 파일은 어느 계정에서도 올리거나 열 수 없어요.">
       <Stack gap="related">
         <TextField label="파일 id" kind="key" value={id} onChange={setId} placeholder="64자리 16진수" error={typed && !valid ? '파일 id는 64자리 16진수예요.' : undefined} />
         <Row kind="actions">
@@ -32,7 +32,7 @@ export function FileSection({ onActed }: { onActed: () => void }) {
             차단
           </Button>
           <Button variant="secondary" size="sm" busy={busy} disabled={!valid} onClick={() => void block(false)}>
-            차단 풀기
+            차단 해제
           </Button>
         </Row>
         {failure && (

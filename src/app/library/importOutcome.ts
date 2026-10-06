@@ -32,7 +32,7 @@ export function moduleOutcome(file: string, module: ImportedModule, id: string, 
     kind: 'module', file, id, title: `모듈 · ${module.name}`,
     holds: packHolds(module.pack, module.lore.length, module.assets.length - skipped),
     placed: at === null
-      ? { text: `켜진 곳은 아직 없어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
+      ? { text: `어디에도 켜지 않았어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
       : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true },
     missed: moduleMissed(module.unsupported, skipped), unused: null,
   };

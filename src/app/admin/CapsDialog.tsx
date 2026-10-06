@@ -11,7 +11,7 @@ type Draft = { choice: Choice; text: string };
 const CHOICES: { value: Choice; label: string }[] = [
   { value: 'default', label: '기본값' },
   { value: 'none', label: '없음' },
-  { value: 'own', label: '따로 정함' },
+  { value: 'own', label: '직접 설정' },
 ];
 
 const draftOf = (cap: OwnCap): Draft => (cap === 'default' ? { choice: 'default', text: '' } : cap === null ? { choice: 'none', text: '' } : { choice: 'own', text: capText(cap) });
@@ -63,8 +63,8 @@ export function CapsDialog({ account, onClose, onSaved }: { account: AdminAccoun
         </Button>
       }
     >
-      <CapField label="글 한도" draft={bytes} onChange={setBytes} />
-      <CapField label="그림 한도" draft={files} onChange={setFiles} />
+      <CapField label="텍스트 한도" draft={bytes} onChange={setBytes} />
+      <CapField label="이미지 한도" draft={files} onChange={setFiles} />
       {failure && (
         <Callout tone="warn" alert>
           {failure}

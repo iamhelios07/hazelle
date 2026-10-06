@@ -16,7 +16,7 @@ import { useToast } from '../toast';
 import { Disclosure, Jumps, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
 
 type Height = 'peek' | 'most';
-const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 적어 주세요.`;
+const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 입력해 주세요.`;
 // undefined: left empty, which is the app's own height. null: not a height.
 const readHeight = (draft: string) => {
   if (draft.trim() === '') return undefined;
@@ -77,16 +77,16 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
   }
 
   const body = (
-    <Jumps label="캐릭터 편집 칸">
-      <Text variant="note">정규식은 아직 여기서 고칠 수 없어요.</Text>
+    <Jumps label="캐릭터 편집 항목">
+      <Text variant="note">정규식은 여기서 편집할 수 없어요.</Text>
       <Section title="기본 정보">
-        <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 적어 주세요.'} />
-        <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 보는 이름이에요. 모델에게는 보내지 않아요." />
+        <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 입력해 주세요.'} />
+        <TextField label="별명" value={text.alias} onChange={(value) => change('alias', value)} placeholder="예: 겨울 버전" help="나만 보는 이름이에요." />
         <TextField
           label="부르는 이름"
           value={text.nickname ?? ''}
           onChange={(value) => change('nickname', value === '' ? null : value)}
-          help="채팅에서 {{char}} 자리에 이름 대신 들어가요. 비우면 이름을 써요."
+          help="채팅에서 {{char}} 자리에 이름 대신 들어가요."
         />
       </Section>
       <Section title="캐릭터">
@@ -95,14 +95,14 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
         <TextField label="상황" lines={4} value={text.scenario} onChange={(value) => change('scenario', value)} />
         <TextField label="예시 대화" lines={6} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
       </Section>
-      <Section title="첫인사" hint="새 채팅을 열면 이 중에서 고를 수 있어요. 이미 시작한 채팅의 첫인사는 바뀌지 않아요.">
+      <Section title="첫인사" hint="새 채팅을 열 때 이 중에서 선택할 수 있어요.">
         <EntryList
           entries={text.greetings}
           onChange={(greetings) => change('greetings', greetings)}
           name={(index) => `첫인사 ${index + 1}`}
           blank=""
           addLabel="첫인사 추가"
-          removed={(index) => `${index + 1}번째 첫인사를 지웠어요.`}
+          removed={(index) => `${index + 1}번째 첫인사를 삭제했어요.`}
         >
           {({ value, name, set, remove }) => <TextField label={name} lines={6} value={value} onChange={set} action={remove} />}
         </EntryList>
@@ -136,26 +136,26 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
       <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />
       <Section title="표시">
         <SettingGroup label="표시">
-          <SettingRow label="봇 꾸밈" help="봇이 만든 상태창, 꾸밈과 버튼을 그려요. 끄면 글만 보여요." control={<Switch label="봇 꾸밈" checked={decor} onChange={(on) => flip('decor', on)} />} />
+          <SettingRow label="봇 스타일" help="봇이 만든 상태창, 스타일, 버튼을 표시해요." control={<Switch label="봇 스타일" checked={decor} onChange={(on) => flip('decor', on)} />} />
           {decor && (
             <SettingRow
-              label="긴 그림 접기"
-              help="그림만 있는 줄은 윗부분만 보여요. 마우스를 올려 두거나 누르면 펼쳐져요."
-              control={<Switch label="긴 그림 접기" checked={fold} onChange={(on) => pictureSave.change({ fold: on ? undefined : false })} />}
+              label="긴 이미지 접기"
+              help="이미지만 있는 줄은 윗부분만 보여요."
+              control={<Switch label="긴 이미지 접기" checked={fold} onChange={(on) => pictureSave.change({ fold: on ? undefined : false })} />}
             />
           )}
           <SettingRow
-            label="생각을 본문에 둠"
-            help="일부 봇은 <Thoughts> 같은 생각 글을 직접 꾸며서 보여 줘요. 켜면 떼어 내지 않고 본문에 그대로 둬요."
-            control={<Switch label="생각을 본문에 둠" checked={keepThoughts} onChange={(on) => flip('keepThoughts', on)} />}
+            label="추론을 본문에 표시"
+            help="<Thoughts> 같은 추론 블록을 숨기지 않고 본문에 보여 줘요."
+            control={<Switch label="추론을 본문에 표시" checked={keepThoughts} onChange={(on) => flip('keepThoughts', on)} />}
           />
           {scriptsOf(packsOf(store, { character: id }).map(({ pack }) => pack)).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}
         </SettingGroup>
         {decor && (
-          <Disclosure label="그림 크기">
-            <SettingGroup label="그림 크기">
-              {fold && heightRow('peek', '접힌 높이', '화면 높이에 대한 비율이에요.', '40')}
-              {heightRow('most', '최대 높이', '화면 높이에 대한 비율이에요. 이보다 큰 그림은 줄여서 다 보여 줘요.', '원래 크기')}
+          <Disclosure label="이미지 크기">
+            <SettingGroup label="이미지 크기">
+              {fold && heightRow('peek', '접힌 높이', '화면 높이 대비 비율이에요.', '40')}
+              {heightRow('most', '최대 높이', '화면 높이 대비 비율이에요.', '원래 크기')}
             </SettingGroup>
           </Disclosure>
         )}

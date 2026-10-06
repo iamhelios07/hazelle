@@ -41,11 +41,11 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatSum
   return (
     <Screen top={back && <NavBar title={title} {...backBar(back)} />}>
       <Portrait image={shelf.face} name={card.name} />
-      <Intro title={title}>{card.creator ? `만든 사람 ${card.creator}` : undefined}</Intro>
+      <Intro title={title}>{card.creator ? `제작자 ${card.creator}` : undefined}</Intro>
       {origin && (
         <Row kind="actions">
           <Text variant="note">
-            ‘{origin.name}’에서 만든 사본{originHere ? '' : ' · 원본은 지워졌어요'}
+            '{origin.name}'에서 만든 사본{originHere ? '' : ' (원본 삭제됨)'}
           </Text>
           {originHere && (
             <Button variant="ghost" size="sm" onClick={() => navigate(characterPage(origin.id, wide))}>
@@ -74,11 +74,11 @@ export function CharacterScreen({ shelf, back }: { shelf: CharacterShelf<ChatSum
           remove(shelf);
           navigate(HOME);
         }}>
-          지우기
+          삭제
         </Button>
       </Row>
       {card.creatorNotes.trim() && (
-        <Section title="만든 사람의 말">
+        <Section title="제작자 노트">
           <Story html={storyHtml(card.creatorNotes, true)} />
         </Section>
       )}

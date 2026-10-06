@@ -3,7 +3,7 @@ import type { ProgressStep } from '../ui';
 
 // One reading of a character import's step, for a Progress row (ImportFlow) and for a card's busy words (a copy).
 export function stepOf(step: Parameters<Progress>[0]): ProgressStep {
-  if (step.kind === 'picture') return { label: '그림 올리는 중' };
+  if (step.kind === 'picture') return { label: '이미지 올리는 중' };
   return { label: step.kind === 'assets' ? '에셋 올리는 중' : '저장 중', done: step.done, total: step.total };
 }
 

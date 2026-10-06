@@ -36,9 +36,9 @@ export function useImport() {
 }
 
 const FAILURE: Record<ImportFailure['kind'], string> = {
-  'unknown-format': '이 형식은 가져올 수 없어요. PNG · charx · JSON 캐릭터 카드, 모듈(.risum)과 Risu 백업(.bin)만 돼요.',
+  'unknown-format': '가져올 수 없는 형식이에요.',
   encrypted: '암호화된 카드라 열 수 없어요.',
-  unreadable: '파일을 읽지 못했어요. 깨졌거나 캐릭터 카드나 모듈이 아니에요.',
+  unreadable: '파일을 읽지 못했어요.',
 };
 
 // Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,
@@ -143,7 +143,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const done = state?.results.flatMap((result) => result.kind === 'character' ? [result.id] : []) ?? [];
   const modules = state?.results.flatMap((result) => result.kind === 'module' ? [result.id] : []) ?? [];
   const came = state?.results.some((result) => result.kind !== 'failed') ?? false;
-  const title = state?.ask ? '그림만 채울까요?' : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
+  const title = state?.ask ? '이미지만 가져올까요?' : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
   return (
     <ImportContext.Provider value={{ pick: () => input.current?.click(), move: () => setAsking(true) }}>
       {children}
@@ -224,7 +224,7 @@ function FillChoice({ ask, onAnswer }: { ask: Ask; onAnswer: () => void }) {
     ask.answer(fill);
   };
   return (
-    <Section title={ask.name} hint="그림만 채우면 그 캐릭터의 대화와 설정은 그대로 두고, 봇 그림만 이 카드에서 채워요.">
+    <Section title={ask.name} hint="기존 캐릭터의 대화와 설정은 두고 이미지만 이 카드에서 가져와요.">
       <Stack gap="related">
         <Text>Risu에서 가져온 같은 이름의 캐릭터가 있어요.</Text>
         <Row kind="actions">
@@ -232,7 +232,7 @@ function FillChoice({ ask, onAnswer }: { ask: Ask; onAnswer: () => void }) {
             새 캐릭터로 가져오기
           </Button>
           <Button size="md" onClick={() => answer(true)}>
-            그림만 채우기
+            이미지만 가져오기
           </Button>
         </Row>
       </Stack>
@@ -243,7 +243,7 @@ function FillChoice({ ask, onAnswer }: { ask: Ask; onAnswer: () => void }) {
 function FilledSummary({ result }: { result: Filled }) {
   return (
     <Section title={result.name}>
-      <Text>{`그림 ${result.kept}개를 채웠어요`}</Text>
+      <Text>{`이미지 ${result.kept}개를 가져왔어요`}</Text>
       {result.missed.length > 0 && <Callout tone="warn">못 가져온 것: {result.missed.join(' · ')}</Callout>}
     </Section>
   );

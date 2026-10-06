@@ -15,20 +15,20 @@ import { cardMissed, moduleMissed, moveMissed } from './missed';
 import { hasModule, stepsOf, tickable, tickCount, toPick, type Have, type Ticks } from './movePick';
 
 const FAILURE: Record<BackupFailure['kind'], string> = {
-  encrypted: 'Risu 계정의 전체 백업은 글이 Risu 서버의 키로 잠겨 있어요. 그림은 읽을 수 있으니, Risu에서 ‘부분 로컬 백업 저장’으로 받은 파일을 이 파일과 함께 넣어 주세요. 글은 그 파일에서, 그림은 이 파일에서 가져와요.',
+  encrypted: 'Risu 계정의 전체 백업만으로는 가져올 수 없어요. Risu에서 \'부분 로컬 백업 저장\'으로 받은 파일을 함께 넣어 주세요.',
   'no-database': 'Risu 백업이 아니거나 깨진 파일이에요.',
   unreadable: 'Risu 백업이 아니거나 깨진 파일이에요.',
 };
 
 const PRESET_FAILURE: Record<PresetFailure['kind'], string> = {
-  'no-template': '템플릿 없는 옛 프리셋',
+  'no-template': '템플릿 없는 이전 버전 프리셋',
   'decrypt-failed': '열지 못함',
   unreadable: '읽지 못함',
   'not-preset': '프리셋 아님',
 };
 
 // In the move's order (runtime/move). The character steps interleave, so each kind reached keeps its own line.
-const STEP: Record<MoveStep['kind'], string> = { personas: '페르소나', modules: '모듈', prompts: '프롬프트', characters: '캐릭터', chats: '대화', pictures: '그림' };
+const STEP: Record<MoveStep['kind'], string> = { personas: '페르소나', modules: '모듈', prompts: '프롬프트', characters: '캐릭터', chats: '대화', pictures: '이미지' };
 const READING = '백업 읽기';
 type Steps = Partial<Record<MoveStep['kind'], MoveStep>>;
 
@@ -103,12 +103,12 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       if (reader.current !== source) return;
       if (!(error instanceof ImportReadError)) throw error;
       source.close();
-      setPhase({ kind: 'failed', message: '백업을 읽지 못했어요. 이미 저장한 것은 그대로 있어요.', again: null });
+      setPhase({ kind: 'failed', message: '백업을 읽지 못했어요. 그 전까지 가져온 것은 저장됐어요.', again: null });
     }
   }
 
   const names = dropped.map((file) => file.name).join(' + ');
-  const note = aside > 0 ? `${names} · 함께 넣은 파일 ${aside}개는 가져오지 않았어요` : names;
+  const note = aside > 0 ? `${names} (파일 ${aside}개 제외)` : names;
   const close = (
     <Button variant="secondary" size="md" onClick={onClose}>
       닫기
@@ -146,7 +146,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         }
       >
         <Callout tone="warn">{phase.message}</Callout>
-        {phase.again && <Text variant="note">저장한 것은 그대로 있어요. 다시 하면 이어서 가져와요.</Text>}
+        {phase.again && <Text variant="note">다시 하면 이어서 가져와요.</Text>}
       </Dialog>
     );
   }
@@ -174,7 +174,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       }
     >
       <Stack gap="section">
-        <Text variant="note">{catalog.pictures > 0 ? `그림 ${catalog.pictures}개가 들어 있어요.` : '그림이 들어 있지 않아요. 그림을 뺀 백업이면, 그림이 든 전체 백업을 함께 넣어 주세요.'}</Text>
+        <Text variant="note">{catalog.pictures > 0 ? `이미지 ${catalog.pictures}개가 들어 있어요.` : '이미지가 들어 있지 않아요. 이미지를 뺀 백업이라면 전체 백업을 함께 넣어 주세요.'}</Text>
         <Picks
           title="캐릭터"
           rows={catalog.characters.map((character) => ({ label: character.name, note: have.characters.has(character.id) ? '이미 있음' : `대화 ${character.chatCount}개` }))}
