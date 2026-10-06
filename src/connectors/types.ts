@@ -1,7 +1,7 @@
 import type { Rates } from './price-list';
-import type { Carries, ModelSettings, Takes } from './settings';
+import type { Accepts, Carries, ModelSettings, Takes } from './settings';
 
-export type Protocol = 'chat-completions' | 'anthropic-messages' | 'gemini';
+export type Protocol = 'chat-completions' | 'anthropic-messages' | 'gemini' | 'responses';
 
 // Refused before any network call. The code names the reason; the UI words it.
 export class ConnectorError extends Error {
@@ -55,6 +55,8 @@ export type Model = {
   takes: Takes;
   // Absent when neither the model list nor models.dev prices it.
   price?: Price;
+  // The maker as the provider's model list names it (Copilot's vendor); absent where the list names none.
+  vendor?: string;
 };
 
 // asOf: when the server fetched the models.dev list it came from; null for a price the provider's own model list
@@ -100,6 +102,13 @@ export type StreamFacts = { rawUsage: Record<string, unknown>; finishReason: str
 
 export type Terminal = { state: 'completed' } | { state: 'failed'; error: string };
 
+// How a cache point reaches the wire: cache_control on the message's text (Anthropic's shape, which OpenRouter also
+// reads in chat completions), a field of the provider's own on the message, or one prompt_cache_key for the cached
+// prefix, which marks no point at all (OpenAI's prefix caching).
+export type CacheMark = { kind: 'part' } | { kind: 'message'; field: string } | { kind: 'key' };
+// accepted null: whether the model reads it is not known; it is sent all the same.
+export type CacheWay = { mark: CacheMark; accepted: Accepts };
+
 // A connection type never re-implements a wire format; it adds to one through its own hooks.
 export type Codec = {
   authHeaders(secret: string): Record<string, string>;
@@ -108,12 +117,14 @@ export type Codec = {
   listModels(endpoint: Endpoint): HttpRequest;
   // null when the payload is not a model list at all, which is not the same as an empty one.
   parseModels(payload: unknown): Model[] | null;
-  carries: Carries;
+  carries: Omit<Carries, 'cache'>;
+  // null for a format with no cache mark of its own; a connection type may state one (ConnectionType cachePoints).
+  cache: CacheWay | null;
   // The wire sends every system message ahead of the others (Messages' system field), so a provider's cache reads them
   // first, whatever their place in the prompt.
   systemFirst: boolean;
-  // fields are the connection type's own, laid over the format's body.
-  chat(endpoint: Endpoint, request: ChatRequest, fields: Record<string, unknown>): HttpRequest;
+  // fields are the connection type's own, laid over the format's body. mark: how the route writes a cache point.
+  chat(endpoint: Endpoint, request: ChatRequest, fields: Record<string, unknown>, mark: CacheMark | null): HttpRequest;
   read(event: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): void;
   terminal(event: unknown): Terminal | null;
   // null when the payload is not this format's reply at all.
@@ -148,9 +159,8 @@ export type ConnectionType = {
   // The output limit in a field of the provider's own, sent in place of the codec's (OpenAI's reasoning models refuse
   // max_tokens).
   outputLimit?: (tokens: number) => Record<string, unknown>;
-  // Its chat-completions endpoint reads cache_control on a message's content (OpenRouter). Models that cache by
-  // cache points use it; the provider is left to say whether the others ignore it, so it stays unknown per model.
-  cacheControl?: true;
+  // How its endpoint takes a cache point, per model, where the format has no mark of its own (chat completions).
+  cachePoints?: (model: Model) => CacheWay;
   cost?: (reply: { facts: StreamFacts; usage: Usage | null; model: Model }) => Cost | null;
   // Asked with the stored credential, all at once. They are also the check that a pasted key works, where the model
   // list is public (OpenRouter's is): a key every one of them refuses is not saved.

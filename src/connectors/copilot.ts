@@ -1,5 +1,5 @@
 import { effortLevels, type ReasoningTakes } from './settings';
-import type { ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
+import type { CacheMark, ConnectionType, HttpRequest, Meter, Modality, Model, Protocol } from './types';
 import { count, isRecord, modelEntries, nameOf } from './values';
 
 // Copilot serves only clients it knows, so every request names VS Code's Copilot Chat, as provider-hub
@@ -12,12 +12,14 @@ const USER_AGENT = { 'user-agent': `GitHubCopilotChat/${CHAT_VERSION}` };
 
 const API = 'https://api.githubcopilot.com';
 
-// The endpoints a model may declare, in order of preference. A model that declares only /responses
-// has no codec yet.
+// The endpoints a model may declare, in order of preference (provider-hub's).
 const ENDPOINTS: [string, Protocol][] = [
   ['/v1/messages', 'anthropic-messages'],
+  ['/responses', 'responses'],
   ['/chat/completions', 'chat-completions'],
 ];
+
+const MESSAGE_MARK: CacheMark = { kind: 'message', field: 'copilot_cache_control' };
 
 const github = (url: string, secret: string, accept = 'application/json'): HttpRequest => ({
   url,
@@ -100,7 +102,7 @@ export const copilot: ConnectionType = {
   major: true,
   description: 'GitHub Copilot 구독으로 Claude, GPT 같은 모델을 써요.',
   endpoint: { baseUrl: API, protocol: 'chat-completions' },
-  routes: { 'anthropic-messages': `${API}/v1` },
+  routes: { 'anthropic-messages': `${API}/v1`, responses: API },
 
   signIn: {
     site: 'GitHub',
@@ -142,6 +144,13 @@ export const copilot: ConnectionType = {
   }],
   usagePage: 'https://github.com/settings/billing',
 
+  // Its chat completions read copilot_cache_control on a message, except for OpenAI's models, which cache a prefix
+  // by prompt_cache_key (provider-hub's split). A model whose list names no vendor gets the message mark, unconfirmed.
+  cachePoints(model) {
+    if (model.vendor === undefined) return { mark: MESSAGE_MARK, accepted: null };
+    return { mark: /openai/i.test(model.vendor) ? { kind: 'key' } : MESSAGE_MARK, accepted: true };
+  },
+
   // The list also holds embedding models, and models that VS Code's model picker does not offer.
   parseModels(payload) {
     const entries = modelEntries(payload);
@@ -165,6 +174,7 @@ export const copilot: ConnectionType = {
           tools: flag(supports.tool_calls),
           protocol: protocol(raw),
           takes: { settings: null, reasoning: reasoningTakes(supports) },
+          ...(typeof raw.vendor === 'string' && raw.vendor ? { vendor: raw.vendor } : {}),
         };
       });
   },

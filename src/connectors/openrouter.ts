@@ -81,7 +81,8 @@ export const openRouter: ConnectionType = {
 
   reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 
-  cacheControl: true,
+  // Models that cache by cache points read it; the provider is left to say whether the others ignore it.
+  cachePoints: () => ({ mark: { kind: 'part' }, accepted: null }),
 
   // OpenRouter reports what the call cost, in US dollars, with the final usage.
   cost: ({ facts }) => (typeof facts.rawUsage.cost === 'number' && Number.isFinite(facts.rawUsage.cost) ? { unit: 'usd', amount: facts.rawUsage.cost, source: 'reported' } : null),

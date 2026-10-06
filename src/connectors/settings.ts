@@ -2,7 +2,7 @@ import type { Model } from './types';
 
 export const NUMBERS = ['maxOutput', 'temperature', 'topP', 'topK', 'frequencyPenalty', 'presencePenalty', 'repetitionPenalty', 'minP', 'seed'] as const;
 export type NumberSetting = (typeof NUMBERS)[number];
-export type Setting = NumberSetting | 'stop' | 'reasoning';
+export type Setting = NumberSetting | 'stop' | 'reasoning' | 'verbosity' | 'serviceTier';
 
 export const WHOLE = new Set<NumberSetting>(['maxOutput', 'topK', 'seed']);
 
@@ -22,8 +22,15 @@ export type ModelSettings = { [S in NumberSetting]?: number } & {
   // Every model takes it, so fit() never leaves it out.
   streaming?: false;
   cache?: Cache;
+  verbosity?: Verbosity;
+  serviceTier?: ServiceTier;
 };
 export type Cache = '5m' | '1h';
+export const VERBOSITY = ['low', 'medium', 'high'] as const;
+export type Verbosity = (typeof VERBOSITY)[number];
+// Anthropic's service_tier: auto may use the account's Priority Tier capacity; standard_only never does.
+export const SERVICE_TIERS = ['auto', 'standard_only'] as const;
+export type ServiceTier = (typeof SERVICE_TIERS)[number];
 
 export type Bounds = { min: number | null; max: number | null };
 
@@ -37,7 +44,10 @@ export type ReasoningTakes = { off: boolean | null; levels: string[] | null; bud
 export type Carries = {
   numbers: { [S in NumberSetting]?: Bounds & { always?: true } };
   reasoning: { off: boolean; levels: string[]; budget: Bounds | null; adaptive: boolean };
-  // Whether the format can mark cache points: true where every model on it takes them, null where some may not.
+  stop: boolean;
+  verbosity: boolean;
+  serviceTier: boolean;
+  // Whether the route can mark cache points: true where every model on it takes them, null where some may not.
   cache: Accepts;
 };
 
@@ -54,6 +64,8 @@ export type SettingsSchema = {
   reasoning: { off: Accepts; level: Accepts; levels: string[]; budget: Rule; adaptive: Accepts };
   prefill: Accepts;
   cache: Accepts;
+  verbosity: Accepts;
+  serviceTier: Accepts;
 };
 
 // left-out: the model does not take it, or not the level named. capped: brought within the model's bounds, to that value.
@@ -93,7 +105,7 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
   return {
     numbers,
     context: { accepted: true, min: 1, max: model.contextLength, whole: true },
-    stop: takes('stop'),
+    stop: carries.stop ? takes('stop') : false,
     reasoning: {
       off: control(carries.reasoning.off, facts?.off),
       level: control(true, levels && levels.length > 0),
@@ -113,6 +125,8 @@ export function settingsSchema(carries: Carries, model: Model): SettingsSchema {
     prefill: null,
     // No catalog lists it, so it is the format's word, or the connection type's.
     cache: carries.cache,
+    verbosity: carries.verbosity ? takes('verbosity') : false,
+    serviceTier: carries.serviceTier ? takes('serviceTier') : false,
   };
 }
 
@@ -141,6 +155,8 @@ export function fit(schema: SettingsSchema, settings: ModelSettings): Fitted {
   if (settings.context !== undefined) cap('context', settings.context, schema.context);
   if (settings.stop && schema.stop === false) leave('stop');
   if (settings.cache && schema.cache === false) leave('cache');
+  if (settings.verbosity && schema.verbosity === false) leave('verbosity');
+  if (settings.serviceTier && schema.serviceTier === false) leave('serviceTier');
   const { reasoning } = settings;
   if (reasoning?.kind === 'budget' && schema.reasoning.budget.accepted !== false) {
     const tokens = within(reasoning.tokens, schema.reasoning.budget);

@@ -13,6 +13,7 @@ import { connect } from './connect';
 const PROTOCOLS: { value: Protocol; label: string }[] = [
   { value: 'chat-completions', label: 'OpenAI 호환' },
   { value: 'anthropic-messages', label: 'Anthropic 호환' },
+  { value: 'responses', label: 'OpenAI Responses' },
 ];
 
 const PROBLEMS = {
