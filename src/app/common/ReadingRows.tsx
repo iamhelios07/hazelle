@@ -37,9 +37,9 @@ export function ReplyRow({ place }: Place) {
   return (
     <SettingRow
       place={place}
-      label="답장이 올 때"
+      label="응답이 올 때"
       wide
-      control={<ChoiceGroup layout="segmented" label="답장이 올 때" options={choices(REPLY)} value={reading.reply} onChange={(reply) => changeReading({ reply })} />}
+      control={<ChoiceGroup layout="segmented" label="응답이 올 때" options={choices(REPLY)} value={reading.reply} onChange={(reply) => changeReading({ reply })} />}
     />
   );
 }

@@ -4,7 +4,7 @@ export const SIZE = { min: 14, max: 21 };
 
 export const FONT: Record<Reading['font'], string> = { serif: '명조', sans: '고딕' };
 export const SPACING: Record<Reading['leading'], string> = { narrow: '좁게', normal: '보통', wide: '넓게' };
-export const REPLY: Record<Reading['reply'], string> = { follow: '따라 내려가기', stay: '보낸 자리에 멈추기' };
+export const REPLY: Record<Reading['reply'], string> = { follow: '자동 스크롤', stay: '스크롤 고정' };
 
 export const choices = <T extends string>(labels: Record<T, string>) => (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }));
 
@@ -43,12 +43,12 @@ export function parseDisplay(stored: string, fallback: Display): Display {
   };
 }
 
-// A preset sets the look only, never 답장이 올 때 or the reading chrome. No preset id is stored: the current preset is
+// A preset sets the look only, never 응답이 올 때 or the reading chrome. No preset id is stored: the current preset is
 // the one whose every value matches.
 export type Look = Pick<Reading, 'font' | 'size' | 'leading' | 'width'> & Pick<Display, 'theme'>;
 export type Preset = { name: string; look: Look };
 
-// 기본 takes initial's values, so --prose-size in tokens.css stays the one default size. It stays first: 처음 값으로
+// 기본 takes initial's values, so --prose-size in tokens.css stays the one default size. It stays first: 기본값으로
 // 되돌리기 picks the first.
 export function presets(initial: Reading): Preset[] {
   const { font, size, leading, width } = initial;

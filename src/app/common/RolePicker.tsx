@@ -46,7 +46,7 @@ export function RolePicker({ role, label = MODEL_ROLES[role], help, own, follow,
           {follow && <MenuItem label={follow} checked={!own} onClick={() => onPick(null)} />}
           {own && !findStarred(own, connections) && <MenuItem label={NOT_STARRED} sub={own.model} checked onClick={() => undefined} />}
           {starred.length === 0 ? (
-            <Empty variant="menu">{noStarred('고를 수 있어요')}</Empty>
+            <Empty variant="menu">{noStarred('선택할 수 있어요')}</Empty>
           ) : (
             starred.map((choice) => (
               <MenuItem
