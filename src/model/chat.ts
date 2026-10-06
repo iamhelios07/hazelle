@@ -382,7 +382,7 @@ export function previewLine(text: string): string {
 // texts: each message's text as it is displayed (engine/render, which the model cannot call).
 export function chatTitle(chat: Chat, messages: Message[], texts: string[]): string {
   if (chat.title) return chat.title;
-  if (chat.origin) return `${chat.origin.name} · 갈래`;
+  if (chat.origin) return `${chat.origin.name} · 분기`;
   const first = messages.findIndex((message) => message.role === 'user');
   return (first !== -1 && firstLine(texts[first]!)) || '새 채팅';
 }

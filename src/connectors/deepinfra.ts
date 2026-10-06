@@ -9,7 +9,7 @@ export const deepinfra: ConnectionType = {
   id: 'deepinfra',
   label: 'DeepInfra',
   group: 'gateway',
-  description: '여러 회사의 공개 모델을 DeepInfra 서버에서 돌려요.',
+  description: '여러 회사의 공개 모델을 DeepInfra 서버에서 실행해요.',
   keyPage: 'https://deepinfra.com/dash/api_keys',
   endpoint: { baseUrl: 'https://api.deepinfra.com/v1/openai', protocol: 'chat-completions' },
   detect: { key: null, host: 'api.deepinfra.com' },

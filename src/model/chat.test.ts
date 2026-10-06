@@ -185,7 +185,7 @@ describe('chatTitle', () => {
     const messages = fold([user('u1', '  기숙사 첫날\n둘째 줄')]);
     expect(chatTitle({ title: null, character: null, models: {} }, messages, asStored(messages))).toBe('기숙사 첫날');
     expect(chatTitle({ title: '이름', character: null, models: {} }, messages, asStored(messages))).toBe('이름');
-    expect(chatTitle({ title: null, character: null, models: {}, origin: { id: 'a', name: '기숙사의 밤', after: 'u1' } }, messages, asStored(messages))).toBe('기숙사의 밤 · 갈래');
+    expect(chatTitle({ title: null, character: null, models: {}, origin: { id: 'a', name: '기숙사의 밤', after: 'u1' } }, messages, asStored(messages))).toBe('기숙사의 밤 · 분기');
     expect(chatTitle({ title: null, character: null, models: {} }, [], [])).toBe('새 채팅');
   });
 });

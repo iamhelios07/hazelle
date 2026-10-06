@@ -30,10 +30,10 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
       actions={
         <>
           <Text variant="note">
-            키는 금고 안에 암호화해서 저장해요. 모델을 부를 때만 중계 서버를 지나가고, 서버에 남지 않아요.
+            키는 암호화해서 저장하고, 서버에 남기지 않아요.
           </Text>
           <Button type="submit" busy={busy} disabled={!secret}>
-            모델 고르기
+            모델 선택
           </Button>
         </>
       }
@@ -42,7 +42,7 @@ export function ConnectionKeyScreen({ type, back }: { type: ConnectionType; back
       <Stack>
         <TextField label="API 키" kind="key" value={key} onChange={setKey} />
         {type.keyPage && <Link href={type.keyPage}>{new URL(type.keyPage).host}에서 키 만들기</Link>}
-        {elsewhere && <Callout tone="warn">{elsewhere.label} 키 같아요. 연결 추가 목록에서 다시 골라 주세요.</Callout>}
+        {elsewhere && <Callout tone="warn">{elsewhere.label} 키 같아요. 연결 추가에서 다시 선택해 주세요.</Callout>}
       </Stack>
       {failure && (
         <Callout tone="warn" alert>

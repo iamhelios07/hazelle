@@ -21,7 +21,7 @@ export function StatusBox({ name, actions, html, css, buttons, onPress }: Props)
           {actions}
         </div>
       )}
-      {html === null ? <p className={styles.none}>이 채팅에서 아직 그린 적이 없어요.</p> : <Story html={html} css={css} buttons={buttons} onPress={onPress} />}
+      {html === null ? <p className={styles.none}>표시할 상태 없음</p> : <Story html={html} css={css} buttons={buttons} onPress={onPress} />}
     </section>
   );
 }

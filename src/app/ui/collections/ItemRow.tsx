@@ -19,7 +19,7 @@ export function ItemRow({ avatar, title, time, typing, preview, current, onClick
       scheme="side"
       leading={avatar}
       title={title}
-      meta={typing ? <span className={styles.typing}>쓰는 중</span> : time}
+      meta={typing ? <span className={styles.typing}>생성 중</span> : time}
       preview={preview}
       current={current}
       onClick={onClick}

@@ -168,7 +168,7 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
                   <span className={styles.number}>{index + 1}</span>
                   <span className={`${styles.node} ${styles[stop.kind]}`}>
                     <stop.icon className={styles.glyph} aria-hidden />
-                    {stop.flagged && <span className={styles.dot} title="토글 조건이 들어 있어요" />}
+                    {stop.flagged && <span className={styles.dot} title="토글 조건 있음" />}
                   </span>
                   <span className={styles.title}>
                     <span className={stop.dim ? `${styles.name} ${styles.dim}` : styles.name}>{stop.title}</span>
@@ -183,18 +183,18 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
                       <IconButton
                         icon={Bookmark}
                         size="xs"
-                        label={`‘${stop.title}’까지 캐시`}
-                        title={stop.cache ? '캐시 지점 빼기' : '여기까지 캐시'}
+                        label={`'${stop.title}'까지 캐시`}
+                        title={stop.cache ? '캐시 지점 해제' : '여기까지 캐시'}
                         pressed={stop.cache === 'set'}
                         onClick={() => onCache(stop.id)}
                       />
                     )}
-                    <IconButton icon={X} size="xs" label={`‘${stop.title}’ 빼기`} title="빼기" onClick={() => onRemove(stop.id)} />
+                    <IconButton icon={X} size="xs" label={`'${stop.title}' 빼기`} title="빼기" onClick={() => onRemove(stop.id)} />
                   </span>
                 ) : (
                   <span className={styles.arrows}>
-                    <IconButton icon={ArrowUp} size="xs" label={`‘${stop.title}’ 위로`} disabled={index === 0} onClick={() => move(index, index - 1)} />
-                    <IconButton icon={ArrowDown} size="xs" label={`‘${stop.title}’ 아래로`} disabled={index === stops.length - 1} onClick={() => move(index, index + 1)} />
+                    <IconButton icon={ArrowUp} size="xs" label={`'${stop.title}' 위로`} disabled={index === 0} onClick={() => move(index, index - 1)} />
+                    <IconButton icon={ArrowDown} size="xs" label={`'${stop.title}' 아래로`} disabled={index === stops.length - 1} onClick={() => move(index, index + 1)} />
                   </span>
                 )}
               </div>

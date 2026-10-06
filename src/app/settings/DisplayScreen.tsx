@@ -14,22 +14,22 @@ export function DisplayScreen({ back }: { back: Back | null }) {
       <SettingGroup label="테마">
         <SettingRow label="테마" control={<ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
       </SettingGroup>
-      <Section title="글">
-        <SettingGroup label="글">
+      <Section title="텍스트">
+        <SettingGroup label="텍스트">
           <ReadingRows place="group" />
         </SettingGroup>
       </Section>
-      <Section title="읽는 동안">
-        <SettingGroup label="읽는 동안">
+      <Section title="스크롤할 때">
+        <SettingGroup label="스크롤할 때">
           <ReplyRow place="group" />
           <SettingRow
             label="헤더 숨기기"
-            help="내려 읽는 동안 숨기고, 위로 올리거나 화면 위쪽을 가리키면 다시 보여요."
+            help="아래로 스크롤하면 숨기고, 위로 스크롤하면 다시 보여요."
             control={<Switch label="헤더 숨기기" checked={display.hideHeader} onChange={(hideHeader) => changeDisplay({ hideHeader })} />}
           />
           <SettingRow
             label="입력창 접기"
-            help="끝에서 위로 올려 읽는 동안 한 줄로 접고, 끝에 닿으면 다시 펼쳐요."
+            help="위로 스크롤하면 한 줄로 접고, 맨 아래에서 다시 펼쳐요."
             control={<Switch label="입력창 접기" checked={display.foldComposer} onChange={(foldComposer) => changeDisplay({ foldComposer })} />}
           />
         </SettingGroup>

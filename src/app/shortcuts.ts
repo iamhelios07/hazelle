@@ -14,9 +14,9 @@ export const SHORTCUTS = {
   status: { label: '상태 보기 · 닫기 (상태창을 지정한 채팅)', keys: [{ key: '.', mod: true }] },
   send: { label: '보내기', keys: [{ key: 'Enter', shift: false }] },
   newline: { label: '줄바꿈', keys: [{ key: 'Enter', shift: true }] },
-  stop: { label: '답장 멈추기', keys: [{ key: 'Escape' }] },
+  stop: { label: '응답 멈추기', keys: [{ key: 'Escape' }] },
   editLast: { label: '내 마지막 메시지 수정', keys: [{ key: 'ArrowUp' }] },
-  swipe: { label: '답장 넘기기 · 끝에서 새 답장 받기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
+  swipe: { label: '응답 넘기기, 마지막에서 다시 생성', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
   saveEdit: { label: '수정 저장', keys: [{ key: 'Enter', mod: true }] },
   translate: { label: '번역하기', keys: [{ key: 'Enter', mod: true }] },
   cancelEdit: { label: '수정 취소', keys: [{ key: 'Escape' }] },
@@ -25,7 +25,7 @@ export const SHORTCUTS = {
   findNext: { label: '다음 결과', keys: [{ key: 'Enter', shift: false }] },
   findPrevious: { label: '이전 결과', keys: [{ key: 'Enter', shift: true }] },
   closeFind: { label: '검색 닫기', keys: [{ key: 'Escape' }] },
-  undoToast: { label: '알림의 되돌리기 누르기', keys: [{ key: 'z', mod: true, shift: false }] },
+  undoToast: { label: '알림에서 되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
   undo: { label: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
   redo: { label: '다시 하기', keys: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
 } as const satisfies Record<string, Shortcut>;
@@ -35,10 +35,10 @@ type Name = keyof typeof SHORTCUTS;
 // Where each shortcut works, in the order 단축키 lists them.
 export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: readonly Name[] }[] = [
   { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'undoToast'] },
-  { title: '채팅', note: '입력창에서 동작해요. 화살표는 입력창이 비어 있을 때만 써요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit', 'find'] },
+  { title: '채팅', note: '입력창에서 동작하고, 화살표는 입력창이 비어 있을 때만 동작해요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit', 'find'] },
   { title: '채팅 검색창', names: ['findNext', 'findPrevious', 'closeFind'] },
   { title: '번역기', note: '원문 칸에서 동작해요.', names: ['translate'] },
-  { title: '프롬프트 편집', note: '블록과 토글을 고친 것을 되돌려요. 글 칸 안에서는 글자를 되돌려요.', names: ['undo', 'redo'] },
+  { title: '프롬프트 편집', note: '블록과 토글 변경을 되돌리고, 텍스트 칸 안에서는 입력을 되돌려요.', names: ['undo', 'redo'] },
 ];
 
 const TEXT_INPUTS = new Set(['text', 'search', 'password']);

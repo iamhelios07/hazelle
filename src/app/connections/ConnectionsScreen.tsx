@@ -18,7 +18,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
 
   // A pool names who would serve now and what it has left, from meters already read; nothing is fetched for the list.
   function summary(connection: Connection): string {
-    const starred = connection.starred.length ? `별표 ${connection.starred.length}개` : '별표 없음';
+    const starred = connection.starred.length ? `즐겨찾기 ${connection.starred.length}개` : '즐겨찾기 없음';
     if (!connection.turns) return [connection.accounts[0]!.name, starred].filter(Boolean).join(' · ');
     const serving = credentials.pool.peek(connection);
     const held = serving && credentials.pool.held(connection, serving);
@@ -40,7 +40,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
         />
       }
     >
-      {unreadable > 0 && <Callout tone="warn">불러온 항목 중 금고 열쇠로 열리지 않는 항목이 {unreadable}개 있어요. 목록에서 빠져 있어요.</Callout>}
+      {unreadable > 0 && <Callout tone="warn">암호화 키로 열리지 않는 항목 {unreadable}개는 목록에서 제외했어요.</Callout>}
       {connections.length > 0 ? (
         <List label="연결">
           {connections.map((connection) => (
@@ -48,7 +48,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
               key={connection.id}
               title={connection.value.label}
               description={summary(connection.value)}
-              tags={resolveConnection(connection.value) ? [] : ['이 버전이 모르는 연결']}
+              tags={resolveConnection(connection.value) ? [] : ['지원하지 않는 연결']}
               trailing={<Icon icon={ChevronRight} />}
               current={route.kind === 'connection' && route.id === connection.id}
               onClick={() => navigate({ kind: 'connection', id: connection.id })}
@@ -56,7 +56,7 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
           ))}
         </List>
       ) : (
-        <Empty variant="section">아직 연결한 곳이 없어요. 연결 추가에서 쓰는 곳을 골라 보세요.</Empty>
+        <Empty variant="section">연결한 제공자가 없어요.</Empty>
       )}
     </Screen>
   );

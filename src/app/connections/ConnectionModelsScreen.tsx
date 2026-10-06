@@ -66,7 +66,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const known = models.some((model) => tags(model).length > 0);
   const filters = [
     { value: 'all' as const, label: '전체' },
-    { value: 'starred' as const, label: '별표' },
+    { value: 'starred' as const, label: '즐겨찾기' },
     ...(known ? (Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label })) : []),
   ];
   const needle = query.trim().toLowerCase();
@@ -104,11 +104,11 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
         key={model.id}
         title={model.name}
         code={model.id}
-        tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['아직 못 씀', ...tags(model)] : tags(model)}
+        tags={!listed ? ['목록에 없음'] : model.protocol === 'unsupported' ? ['지원 안 됨', ...tags(model)] : tags(model)}
         trailing={
           <Row kind="actions">
             {settings}
-            <IconButton icon={Star} label={on ? `${model.name} 별표 빼기` : `${model.name} 별표하기`} pressed={on} onClick={() => toggle(model)} />
+            <IconButton icon={Star} label={on ? `${model.name} 즐겨찾기 해제` : `${model.name} 즐겨찾기`} pressed={on} onClick={() => toggle(model)} />
           </Row>
         }
       />
@@ -118,7 +118,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   function remove() {
     void removeConnection(store, id).then((result) => result.ok || toast.failed(result));
     navigate({ kind: 'connections' });
-    toast.undoable(`${connection.label} 연결을 지웠어요.`, () => void restoreConnection(store, stored));
+    toast.undoable(`${connection.label} 연결을 삭제했어요.`, () => void restoreConnection(store, stored));
   }
 
   const signIn = resolveConnection(connection)?.type?.signIn;
@@ -134,14 +134,14 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           title={connection.label}
           subtitle={connection.turns ? `계정 ${connection.accounts.length}개 · ${subtitle}` : connection.accounts[0]!.name ? `${connection.accounts[0]!.name} · ${subtitle}` : subtitle}
           {...backBar(back)}
-          actions={<IconButton icon={Trash2} label="연결 지우기" onClick={remove} />}
+          actions={<IconButton icon={Trash2} label="연결 삭제" onClick={remove} />}
         />
       }
       stickyActions
       actions={
         <Stack gap="related">
           <Text variant="note">
-            별표 {starred.length}개
+            즐겨찾기 {starred.length}개
           </Text>
           <Button onClick={() => navigate({ kind: 'connections' })}>완료</Button>
         </Stack>
@@ -151,7 +151,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} /> : <ConnectionMeters connection={connection} />}
       <Stack gap="related">
         <SearchField label="모델 검색" value={query} onChange={setQuery} />
-        <ChoiceGroup label="모델 거르기" options={filters} value={filter} onChange={setFilter} />
+        <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
       </Stack>
       {catalog && !catalog.ok && (
         <Callout tone="warn" action={{ label: '다시 불러오기', onClick: () => setAttempt((count) => count + 1) }}>
@@ -160,11 +160,11 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
       )}
       {shown.length > 0 ? (
         <Stack gap="group">
-          {starredShown.length > 0 && <List label="별표한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
+          {starredShown.length > 0 && <List label="즐겨찾기한 모델" keys={starredShown.map((model) => model.id)}>{(index) => row(starredShown[index]!)}</List>}
           {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
         </Stack>
       ) : (
-        catalog?.ok && <Empty>{needle || filter !== 'all' ? '맞는 모델이 없어요.' : '이 연결은 모델을 하나도 알려 주지 않았어요.'}</Empty>
+        catalog?.ok && <Empty>{needle || filter !== 'all' ? '맞는 모델이 없어요.' : '모델 목록이 비어 있어요.'}</Empty>
       )}
     </Screen>
   );

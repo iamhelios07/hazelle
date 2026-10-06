@@ -6,7 +6,7 @@ export const ollama: ConnectionType = {
   id: 'ollama',
   label: 'Ollama Cloud',
   group: 'gateway',
-  description: '여러 회사의 공개 모델을 Ollama 서버에서 돌려요.',
+  description: '여러 회사의 공개 모델을 Ollama 서버에서 실행해요.',
   keyPage: 'https://ollama.com/settings/keys',
   endpoint: { baseUrl: 'https://ollama.com/v1', protocol: 'chat-completions' },
   detect: { key: null, host: 'ollama.com' },

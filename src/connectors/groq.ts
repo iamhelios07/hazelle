@@ -6,7 +6,7 @@ export const groq: ConnectionType = {
   id: 'groq',
   label: 'Groq',
   group: 'gateway',
-  description: '여러 회사의 공개 모델을 Groq 서버에서 돌려요.',
+  description: '여러 회사의 공개 모델을 Groq 서버에서 실행해요.',
   keyPage: 'https://console.groq.com/keys',
   endpoint: { baseUrl: 'https://api.groq.com/openai/v1', protocol: 'chat-completions' },
   detect: { key: /^gsk_/, host: 'api.groq.com' },

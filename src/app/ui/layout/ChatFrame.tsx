@@ -155,7 +155,7 @@ export function ChatTitle({ avatar, name, sub, typing, popup, expanded, ref, onC
       {typing && (
         <span className={styles.typing}>
           <span className={styles.pulse} />
-          쓰는 중
+          생성 중
         </span>
       )}
     </span>

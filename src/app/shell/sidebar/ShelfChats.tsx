@@ -54,7 +54,7 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
           title={item.title}
           time={item.at === null ? '' : ago(item.at)}
           typing={writing.has(item.id)}
-          preview={item.preview ?? '아직 불러오지 않은 채팅'}
+          preview={item.preview ?? '미리보기 없음'}
           current={item.id === openChat}
           onClick={() => navigate({ kind: 'chat', id: item.id })}
         />

@@ -89,8 +89,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
 
   function noteFor(setting: Change['setting']): string | undefined {
     const left = users.filter((user) => user.changes.some((change) => change.setting === setting && change.change === 'left-out')).map((user) => user.model.name);
-    const capped = users.flatMap((user) => user.changes.flatMap((change) => (change.setting === setting && change.change === 'capped' ? [`${user.model.name}에는 ${count(change.to)}`] : [])));
-    const parts = [...(left.length ? [`${left.join(', ')}에는 빼고 보내요`] : []), ...(capped.length ? [`${capped.join(', ')}(으)로 맞춰 보내요`] : [])];
+    const capped = users.flatMap((user) => user.changes.flatMap((change) => (change.setting === setting && change.change === 'capped' ? [`${user.model.name} ${count(change.to)}`] : [])));
+    const parts = [...(left.length ? [`제외: ${left.join(', ')}`] : []), ...(capped.length ? [`조정: ${capped.join(', ')}`] : [])];
     return parts.length ? parts.join(' · ') : undefined;
   }
 
@@ -142,16 +142,16 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     return (
       <SettingRow
         key="reasoning"
-        label="생각"
+        label="추론"
         changed={reasoning !== undefined}
         error={typed && !typed.ok ? typed.error : undefined}
         note={noteFor('reasoning')}
         wide
         control={
           <Stack gap="related">
-            <ChoiceGroup layout="chips" label="생각" options={options} value={current} onChange={pick} />
+            <ChoiceGroup layout="chips" label="추론" options={options} value={current} onChange={pick} />
             {reasoning?.kind === 'budget' && (
-              <NumberInput label="생각 예산" unit="토큰" value={draft} invalid={!typed?.ok} onChange={(next) => type('budget', next, (tokens) => ({ reasoning: { kind: 'budget', tokens } }))} />
+              <NumberInput label="추론 예산" unit="토큰" value={draft} invalid={!typed?.ok} onChange={(next) => type('budget', next, (tokens) => ({ reasoning: { kind: 'budget', tokens } }))} />
             )}
           </Stack>
         }
@@ -186,7 +186,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     <SettingRow
       key="cache"
       label="캐시"
-      help="보낸 앞부분을 저장해 두었다 다음 요청에서 싸게 다시 읽어요. Claude는 저장할 때 입력값의 1.25배(1시간은 2배), 다시 읽을 때 0.1배예요"
+      help="보낸 앞부분을 저장해 다음 요청에서 저렴하게 읽어요. 저장할 때는 요금이 더 들어요"
       changed={shown.cache !== undefined}
       note={noteFor('cache')}
       control={
@@ -205,7 +205,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     <SettingRow
       key="stop"
       label="멈춤 문구"
-      help="이 글이 나오면 답장을 거기서 끝내요"
+      help="이 문구가 나오면 응답을 끝내요"
       changed={shown.stop !== undefined}
       note={noteFor('stop')}
       control={<PhraseField label="멈춤 문구" phrases={shown.stop ?? []} onChange={(next) => set({ stop: next.length ? next : undefined })} />}
@@ -216,14 +216,14 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     <SettingRow
       key="system"
       label="시스템 메시지 보내는 방식"
-      help="시스템 메시지를 따로 받지 않는 모델이면 사용자 메시지로 바꿔 보내요"
+      help="시스템 메시지를 지원하지 않는 모델이면 사용자 메시지로 보내요"
       changed={shown.systemAsUser !== undefined}
       control={
         <ChoiceGroup
           layout="segmented"
           label="시스템 메시지 보내는 방식"
           options={[
-            { value: 'as-is', label: '그대로' },
+            { value: 'as-is', label: '시스템 메시지로' },
             { value: 'user', label: '사용자 메시지로' },
           ]}
           value={shown.systemAsUser ? 'user' : 'as-is'}
@@ -237,7 +237,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     <SettingRow
       key="streaming"
       label="스트리밍"
-      help="프록시가 답장을 중간에 끊을 때나 답장을 통째로 받고 싶을 때 꺼요"
+      help="프록시가 응답을 중간에 끊으면 꺼 주세요"
       changed={shown.streaming !== undefined}
       control={
         <ChoiceGroup
@@ -277,19 +277,19 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     const cleared: ModelSettings = {};
     for (const key of Object.keys(shown) as (keyof ModelSettings)[]) cleared[key] = undefined;
     setDrafts({});
-    if (await save(cleared)) toast.undoable(`${stored.value.name}의 값을 모두 비웠어요.`, () => void setProfileSettings(store, id, previous));
+    if (await save(cleared)) toast.undoable(`${stored.value.name} 설정을 초기화했어요.`, () => void setProfileSettings(store, id, previous));
   }
 
   async function remove() {
     const removed = await removing(() => removeProfile(store, id));
     if (!removed) return;
     if (!removed.ok) {
-      if (removed.error === 'default') return toast.error('기본 설정은 지울 수 없어요.', { detail: '다른 설정을 기본으로 정한 뒤 지워 주세요.' });
-      return toast.failed(removed, '지우지 못했어요.');
+      if (removed.error === 'default') return toast.error('기본 설정은 삭제할 수 없어요.', { detail: '다른 설정을 기본으로 지정한 뒤 삭제해 주세요.' });
+      return toast.failed(removed, '삭제하지 못했어요.');
     }
     navigate({ kind: 'models' });
-    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 골라야 보낼 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
-    toast.undoable(`${removed.data.value.name} 설정을 지웠어요.`, () => void restoreProfile(store, id), note);
+    const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 선택해야 사용할 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
+    toast.undoable(`${removed.data.value.name} 설정을 삭제했어요.`, () => void restoreProfile(store, id), note);
   }
 
   const detailSet =
@@ -310,12 +310,12 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       <Stack gap="related">
         {isDefault ? (
           <Text variant="highlight">
-            기본 설정이에요. 새로 별표한 모델과 설정을 따로 고르지 않은 모델이 이 설정을 써요.
+            설정을 선택하지 않은 모델이 사용하는 기본 설정이에요.
           </Text>
         ) : (
           <Row kind="actions">
             <Button variant="link" size="xs" onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}>
-              기본 설정으로 정하기
+              기본 설정으로 지정
             </Button>
           </Row>
         )}
@@ -358,12 +358,12 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           </List>
         ) : (
           <Text variant="note">
-            아직 이 설정을 쓰는 모델이 없어요. 모델 추가로 골라 주세요.
+            이 설정을 쓰는 모델이 없어요.
           </Text>
         )}
       </Section>
 
-      <Section title="자주 쓰는 설정" hint="비워 둔 값은 보내지 않아요. 모델이 받지 않는 값은 그 모델에만 빼거나 맞춰서 보내요.">
+      <Section title="자주 쓰는 설정">
         <SettingGroup label="자주 쓰는 설정">
           {MAIN.map(numberRow)}
           {reasoningRow()}
@@ -375,8 +375,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <SettingGroup label="세부 설정">
           {DETAIL.map(numberRow)}
           {stopRow}
-          {choiceRow('verbosity', VERBOSITY_LABEL, '간단히 고를수록 같은 내용을 더 적은 말로 써요. 생각의 양은 바꾸지 않아요', VERBOSITY, VERBOSITY_WORDS, shown.verbosity, (verbosity) => ({ verbosity }))}
-          {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동은 계정에 Anthropic 우선 처리 용량이 있으면 그 용량을 먼저 써요. 표준만은 늘 표준 용량으로 보내요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
+          {choiceRow('verbosity', VERBOSITY_LABEL, '간단히를 선택하면 같은 내용을 더 짧게 써요', VERBOSITY, VERBOSITY_WORDS, shown.verbosity, (verbosity) => ({ verbosity }))}
+          {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동은 Anthropic 계정에 우선 처리 용량이 있으면 그 용량부터 사용해요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
           {systemRow}
           {streamingRow}
         </SettingGroup>
@@ -387,11 +387,11 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           사본 만들기
         </Button>
         <Button variant="secondary" size="sm" disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()}>
-          모두 비우기
+          초기화
         </Button>
         {!isDefault && (
           <Button variant="danger" size="sm" onClick={() => void remove()}>
-            이 설정 지우기
+            이 설정 삭제
           </Button>
         )}
       </Row>

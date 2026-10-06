@@ -36,7 +36,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
         <SettingGroup label={DEFAULT_MODELS}>
           <RolePicker
             role="main"
-            help="프롬프트나 채팅에서 따로 정하지 않았을 때 쓰는 모델이에요."
+            help="프롬프트나 채팅에서 정하지 않았을 때 쓰는 모델이에요."
             own={main}
             follow={null}
             connections={connections}
@@ -51,10 +51,10 @@ export function ModelsScreen({ back }: { back: Back | null }) {
             onPick={(ref) => pickModel('aux', ref)}
           />
         </SettingGroup>
-        {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정했던 모델이 별표한 모델에 없어요. 다시 골라 주세요.`}</Callout>}
+        {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정한 모델이 즐겨찾기에 없어요.`}</Callout>}
       </Section>
       {ownModels.length > 0 && (
-        <Section title="프롬프트에서 정한 모델" hint="이 프롬프트로 하는 일은 보조 모델 대신 이 모델을 써요. 눌러서 프롬프트에서 바꿔요.">
+        <Section title="프롬프트에서 정한 모델" hint="이 프롬프트의 작업에는 보조 모델 대신 이 모델을 사용해요.">
           <List label="프롬프트에서 정한 모델">
             {ownModels.map(({ prompt, task, model }) => (
               <ListItem
@@ -68,9 +68,9 @@ export function ModelsScreen({ back }: { back: Back | null }) {
           </List>
         </Section>
       )}
-      <Section title="별표한 모델" hint="새로 별표한 모델은 기본 설정을 써요.">
+      <Section title="즐겨찾기한 모델" hint="새로 즐겨찾기한 모델은 기본 설정을 사용해요.">
         {models.length > 0 ? (
-          <List label="별표한 모델">
+          <List label="즐겨찾기한 모델">
             {models.map(({ connection, model, choice }) => (
               <ListItem
                 key={`${connection.id}/${model.id}`}

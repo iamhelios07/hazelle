@@ -65,7 +65,7 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
 
 export function Waiting() {
   return (
-    <span className={styles.waiting} aria-label="답장을 기다리는 중">
+    <span className={styles.waiting} aria-label="응답 기다리는 중">
       <span className={styles.dot} />
       <span className={styles.dot} />
       <span className={styles.dot} />
@@ -93,10 +93,10 @@ export function Switcher({ label, onPrev, onNext, prevDisabled, nextDisabled, ne
     <div className={styles.switcher}>
       <IconButton icon={ChevronLeft} label="이전" title={prevTitle} size="xs" disabled={prevDisabled} onClick={onPrev} />
       <Menu
-        label="바로 고르기"
+        label="버전 선택"
         place="above-start"
         trigger={(opener) => (
-          <button type="button" className={styles.count} title="바로 고르기" disabled={pickDisabled} ref={opener.ref} aria-haspopup={opener.popup} aria-expanded={opener.expanded} onClick={opener.onClick}>
+          <button type="button" className={styles.count} title="버전 선택" disabled={pickDisabled} ref={opener.ref} aria-haspopup={opener.popup} aria-expanded={opener.expanded} onClick={opener.onClick}>
             {label}
           </button>
         )}

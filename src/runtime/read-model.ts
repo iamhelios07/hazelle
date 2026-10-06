@@ -207,7 +207,7 @@ export class ReadModels {
     const saved = this.store.get('summary', summaryId(id))?.value;
     return {
       id, chat, count: saved?.count ?? null,
-      title: chat.title ?? (chat.origin ? `${chat.origin.name} · 갈래` : saved?.title ?? chatTitle(chat, [], [])),
+      title: chat.title ?? (chat.origin ? `${chat.origin.name} · 분기` : saved?.title ?? chatTitle(chat, [], [])),
       preview: saved?.preview ?? null, at: saved?.at ?? null, order: saved?.order ?? rev,
     };
   }

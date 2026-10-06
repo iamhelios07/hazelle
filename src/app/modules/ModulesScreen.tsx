@@ -24,7 +24,7 @@ export function ModulesScreen({ back, onImport }: { back: Back | null; onImport:
   const always = useSettings().modules ?? [];
   const where = (id: string) => {
     const places = [...counted('프롬프트', prompts, id), ...counted('캐릭터', characters, id)];
-    return places.length > 0 ? places.join(' · ') : always.includes(id) ? undefined : '켜진 곳 없음';
+    return places.length > 0 ? places.join(' · ') : always.includes(id) ? undefined : '사용처 없음';
   };
   return (
     <Screen
@@ -47,7 +47,7 @@ export function ModulesScreen({ back, onImport }: { back: Back | null; onImport:
           ))}
         </List>
       ) : (
-        <Empty variant="section">아직 모듈이 없어요. 모듈 파일(.risum)을 화면에 끌어다 놓거나 모듈 가져오기로 골라 주세요.</Empty>
+        <Empty variant="section">모듈이 없어요.</Empty>
       )}
     </Screen>
   );

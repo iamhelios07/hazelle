@@ -16,9 +16,7 @@ import { useDeviceSignIn } from './useDeviceSignIn';
 
 // Who serves a reply: the current group's first account with allowance left (runtime/pool).
 const HELP =
-  '그룹은 매달 바꾸는 날에 차례를 넘겨요. 답장은 지금 차례인 그룹에서 위에서부터 한도가 남은 첫 계정으로 보내요. ' +
-  '막대는 쓴 만큼 차고, 눈금은 차례가 끝날 때까지 고르게 쓴다면 지금쯤 쓴 양이에요. 눈금보다 많이 썼으면 빠르게 쓰는 중, 적게 썼으면 여유 있음이에요. ' +
-  '한도가 남은 계정이 없으면 그룹의 첫 계정으로 보내고, 초과 사용은 GitHub 설정을 따라요.';
+  '응답은 지금 차례인 그룹에서 한도가 남은 첫 계정으로 보내요. 남은 계정이 없으면 그룹의 첫 계정으로 보내고, 초과 사용은 GitHub 설정을 따라요.';
 
 export function ConnectionAccounts({ id, connection, signIn }: { id: string; connection: Connection & { turns: Turns }; signIn: SignIn }) {
   const { store } = useSession();
@@ -92,7 +90,7 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
                   ) : null;
                 })
               ) : (
-                <ListItem title="계정 없음" description={index === 0 ? '지금 차례인데 계정이 없어서 답장을 보낼 수 없어요.' : undefined} />
+                <ListItem title="계정 없음" description={index === 0 ? '계정이 없어서 응답을 받을 수 없어요.' : undefined} />
               )}
             </ListItem>
           </List>
@@ -121,7 +119,7 @@ function MeterLines({ result, turn, waiting }: { result: MetersResult; turn: { s
 
 function meterProblem(result: MetersResult): string | undefined {
   const [failure] = result.failures;
-  if (!result.meters.length) return failure ? describeMetersFailure(failure) : '한도 수치를 알려 주지 않았어요.';
+  if (!result.meters.length) return failure ? describeMetersFailure(failure) : '한도 정보 없음';
   return failure ? '사용량 일부를 불러오지 못했어요.' : undefined;
 }
 
@@ -174,7 +172,7 @@ function GroupMenu({ turns, group, current, change }: { turns: Turns; group: Gro
         <MenuItem label="지금 차례로" disabled={current} onClick={() => change((current) => takeTurn(current, group.id, Date.now()))} />
         <MenuItem icon={ArrowUp} label="앞 차례로" disabled={position < 2} onClick={() => change((current) => moveGroup(current, group.id, -1, Date.now()))} />
         <MenuItem icon={ArrowDown} label="뒤 차례로" disabled={position < 1 || position === turns.groups.length - 1} onClick={() => change((current) => moveGroup(current, group.id, 1, Date.now()))} />
-        <MenuItem icon={Trash2} label="그룹 지우기" tone="warn" disabled={group.accounts.length > 0 || turns.groups.length === 1} onClick={() => change((current) => removeGroup(current, group.id, Date.now()))} />
+        <MenuItem icon={Trash2} label="그룹 삭제" tone="warn" disabled={group.accounts.length > 0 || turns.groups.length === 1} onClick={() => change((current) => removeGroup(current, group.id, Date.now()))} />
       </Menu>
     </Row>
   );
@@ -193,7 +191,7 @@ function RenameForm({ name, onSave }: { name: string; onSave: (name: string) => 
   return (
     <form onSubmit={submit}>
       <Stack gap="related">
-        <TextField label="그룹 이름" value={value} onChange={setValue} error={trimmed ? undefined : '이름을 적어 주세요.'} />
+        <TextField label="그룹 이름" value={value} onChange={setValue} error={trimmed ? undefined : '이름을 입력해 주세요.'} />
         <Button type="submit" size="sm" disabled={!trimmed}>
           저장
         </Button>
@@ -204,7 +202,7 @@ function RenameForm({ name, onSave }: { name: string; onSave: (name: string) => 
 
 function DayMenu({ day, change }: { day: number; change: (change: (turns: Turns) => Turns | null) => void }) {
   return (
-    <Menu kind="dialog" label="바꾸는 날" trigger={(opener) => <Button variant="secondary" size="sm" {...opener}>{`매달 ${day}일에 바꿈`}</Button>}>
+    <Menu kind="dialog" label="전환일" trigger={(opener) => <Button variant="secondary" size="sm" {...opener}>{`매달 ${day}일 전환`}</Button>}>
       <DayForm day={day} onSave={(next) => change((turns) => setDay(turns, next, Date.now()))} />
     </Menu>
   );
@@ -224,7 +222,7 @@ function DayForm({ day, onSave }: { day: number; onSave: (day: number) => void }
   return (
     <form onSubmit={submit}>
       <Stack gap="related">
-        <NumberInput label="바꾸는 날 (1–28일)" value={value} onChange={setValue} invalid={!valid} unit="일" />
+        <NumberInput label="전환일 (1~28일)" value={value} onChange={setValue} invalid={!valid} unit="일" />
         <Button type="submit" size="sm" disabled={!valid}>
           저장
         </Button>
