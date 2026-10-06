@@ -1,4 +1,4 @@
-import { Copy, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
+import { Copy, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
 import { aliased } from '../../common/alias';
@@ -34,6 +34,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
         </>
       ) : (
         <>
+          <MenuItem icon={Pencil} label="편집" onClick={() => navigate({ kind: 'edit', character: shelf.id })} />
           <MenuItem icon={Copy} label="사본 만들기" onClick={() => void actions.copy(shelf)} />
           <MenuItem icon={Trash2} label="지우기" tone="warn" onClick={() => actions.remove(shelf)} />
         </>

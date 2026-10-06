@@ -14,6 +14,7 @@ import { ChatMemory } from './ChatMemory';
 import { ChatSearch } from './ChatSearch';
 import { ChatStatusAside, ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
+import { useEditBeside } from './editBeside';
 import { useChat, type Side } from './useChat';
 
 // What the shell draws for a Side: the persona, prompt and character screens are other features, which only the shell composes.
@@ -37,6 +38,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
   const folded = display.foldComposer && scroll.away;
   useShortcut('personas', () => actions.openDialog('persona'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));
+  useEditBeside(shelf?.id ?? null, () => shelf && actions.side({ kind: 'character', id: shelf.id }));
   useShortcut('status', () => {
     if (!chat.status.length) return false;
     actions.toggleStatus();

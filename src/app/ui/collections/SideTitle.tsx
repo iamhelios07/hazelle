@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import styles from './SideTitle.module.css';
 
-export function SideTitle({ avatar, name, onOpen }: { avatar: ReactNode; name: string; onOpen?: () => void }) {
+export function SideTitle({ avatar, name, onOpen, action }: { avatar: ReactNode; name: string; onOpen?: () => void; action?: ReactNode }) {
   const title = (
     <>
       {avatar}
@@ -17,6 +17,7 @@ export function SideTitle({ avatar, name, onOpen }: { avatar: ReactNode; name: s
       ) : (
         <span className={styles.titleBox}>{title}</span>
       )}
+      {action}
     </div>
   );
 }

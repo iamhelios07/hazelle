@@ -13,7 +13,7 @@ import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, TRANSLATOR_NOTE } from '../common/words';
 import { useStore } from '../session';
 import { useToast } from '../toast';
-import { Disclosure, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
+import { Disclosure, Jumps, NumberInput, Section, SettingGroup, SettingRow, Switch, Text, TextField } from '../ui';
 
 type Height = 'peek' | 'most';
 const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 적어 주세요.`;
@@ -77,7 +77,7 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
   }
 
   const body = (
-    <>
+    <Jumps label="캐릭터 편집 칸">
       <Text variant="note">정규식은 아직 여기서 고칠 수 없어요.</Text>
       <Section title="기본 정보">
         <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 적어 주세요.'} />
@@ -161,7 +161,7 @@ export function CharacterEditor({ id, character, frame }: { id: string; characte
         )}
       </Section>
       <ModuleSwitches owner={{ kind: 'character', id }} own={character.modules ?? []} />
-    </>
+    </Jumps>
   );
   const saved = merged(status, pictureSave.status, noteSave.status);
   return frame({ head: { title: '캐릭터 편집', subtitle: aliased(text.name, text.alias), status: saved ? SAVE_STATUS[saved] : undefined }, body });
