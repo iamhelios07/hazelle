@@ -17,9 +17,9 @@ import { byPromptName, groupPrompts } from './copies';
 
 const NEW_NAME = { conversation: '새 프롬프트', translate: '새 번역 프롬프트', memory: '새 기억 프롬프트' } satisfies Record<PromptSort, string>;
 const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] = [
-  { sort: 'conversation', label: '대화', none: '아직 대화 프롬프트가 없어요. 새로 만들거나 Risu 프리셋을 가져와 보세요.' },
-  { sort: 'translate', label: '번역', hint: '답장 번역과 보낼 말 번역이 쓰는 프롬프트예요. 글 속 {{language}}에는 번역할 언어가 들어가요.', none: '번역 프롬프트가 없어요. 새로 만들어 보세요.' },
-  { sort: 'memory', label: '기억', hint: '지난 메시지를 장기 기억으로 정리할 때 쓰는 프롬프트예요. 모든 채팅이 기본으로 정한 하나로 정리해요.', none: '기억 프롬프트가 없어요. 새로 만들어 보세요.' },
+  { sort: 'conversation', label: '대화', none: '대화 프롬프트가 없어요. 새로 만들거나 Risu 프리셋을 가져와 보세요.' },
+  { sort: 'translate', label: '번역', hint: '응답과 보낼 메시지를 번역할 때 쓰는 프롬프트예요.', none: '번역 프롬프트가 없어요. 새로 만들어 보세요.' },
+  { sort: 'memory', label: '기억', hint: '지난 메시지를 장기 기억으로 정리할 때 쓰는 프롬프트예요.', none: '기억 프롬프트가 없어요. 새로 만들어 보세요.' },
 ];
 type Order = 'name' | 'recent';
 

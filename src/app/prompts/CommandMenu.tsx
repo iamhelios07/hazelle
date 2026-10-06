@@ -10,7 +10,7 @@ import { GUIDES, SAMPLE_NOTE, tryExample, type Example, type GuideId } from './g
 
 type Props = { sort: PromptSort; onInsert: (snippet: Snippet) => void };
 
-const LABEL = `${COMMAND} 넣기`;
+const LABEL = `${COMMAND} 삽입`;
 
 export function CommandMenu({ sort, onInsert }: Props) {
   const [guide, setGuide] = useState<GuideId | null>(null);
@@ -61,8 +61,8 @@ function Commands({ sort, onInsert, onGuide }: { sort: PromptSort; onInsert: (co
         )
       ) : (
         <>
-          {guideItem('basics', '{{ }}가 언제 어떻게 바뀌는지 예시로 봐요.')}
-          <MenuHeading>여기서 자주 쓰는</MenuHeading>
+          {guideItem('basics')}
+          <MenuHeading>자주 쓰는 명령어</MenuHeading>
           {often.map((command) => item(command, command.uses![sort], `often:${command.form}`))}
           {groups.map((group) => (
             <Fragment key={group.title}>
@@ -104,11 +104,11 @@ function Tryout({ example, onInsert }: { example: Example; onInsert: (text: stri
   return (
     <Stack gap="related">
       <MarkupArea label="예시" variant="field" value={written} onChange={setWritten} />
-      <Text variant="note">{result === null ? '결과: 글을 너무 많이 만들어서 멈췄어요' : result ? '결과' : '결과: 빈 글'}</Text>
+      <Text variant="note">{result === null ? '결과: 출력이 너무 길어서 중단됨' : result ? '결과' : '결과: 빈 텍스트'}</Text>
       {result && <CodeBlock variant="prose">{result}</CodeBlock>}
       <Row kind="actions">
         <Button variant="ghost" size="xs" onClick={() => onInsert(written)}>
-          이 예시 넣기
+          이 예시 삽입
         </Button>
       </Row>
     </Stack>

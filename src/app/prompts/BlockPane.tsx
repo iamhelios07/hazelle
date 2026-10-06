@@ -35,14 +35,11 @@ type Props = {
   nameRef: Ref<HTMLInputElement>;
 };
 
-const CACHE_HELP = {
-  own: '이 블록까지 보낸 내용을 캐시해 두고 다음 요청에서 싸게 다시 읽어요. 모델 설정에서 캐시를 켠 모델에만 보내요. 앱이 채팅 앞과 끝에 지점을 알아서 두니, 그 밖에 더 두고 싶을 때만 켜요. 한 요청에 지점은 4개까지라, 넘으면 맨 뒤 지점과 앞쪽 지점 셋만 남겨요.',
-  auto: '앱이 여기에 캐시 지점을 알아서 둬요. 모델 설정에서 캐시를 켠 모델에만 보내요.',
-};
+const CACHE_HELP = '이 블록까지 캐시해서 다음 요청 비용을 줄여요.';
 
 export function BlockPane({ block, sort, index, count, toggles, authorNote, onChange, onRole, onRange, onCount, onTranslations, onWrapper, onAuthorNote, onMark, cache, onCache, onMove, onRemove, onCondition, onInsert, onNewToggle, textRef, nameRef }: Props) {
   const { title } = blockTitle(block);
-  const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 쓴 글' : `앱이 채우는 자리 · ${SLOT[block.slot].name}`}`;
+  const where = `${index + 1}번째 · ${block.kind === 'text' ? '직접 입력' : `자동 입력 · ${SLOT[block.slot].name}`}`;
   const placeholder = block.kind === 'slot' ? SLOT[block.slot].name : firstLine(block.text) || '이름 붙이기';
 
   return (
@@ -57,21 +54,21 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
           {block.kind === 'text' && block.mark && <Tag tone="accent">{MARKS[block.mark].label}</Tag>}
           {block.kind === 'text' && (
             <Menu
-              label="조건 넣기"
+              label="조건 삽입"
               place="below-end"
               trigger={(opener) => (
                 <Button variant="ghost" size="sm" icon={GitBranch} {...opener}>
-                  조건 넣기
+                  조건 삽입
                 </Button>
               )}
             >
-              <MenuHeading>어떤 토글에 따라 바뀔까요? 커서 자리에 조건이 들어가고, 선택해 둔 글은 첫 칸에 담겨요. 그 뒤 각 칸의 글만 고쳐 쓰면 돼요.</MenuHeading>
-              {toggles.length === 0 && <Empty variant="menu">아직 이 프롬프트에 토글이 없어요.</Empty>}
+              <MenuHeading>토글 선택</MenuHeading>
+              {toggles.length === 0 && <Empty variant="menu">토글이 없어요.</Empty>}
               {toggles.map((toggle) => (
                 <MenuItem
                   key={toggle.key}
                   label={toggle.label}
-                  sub={`${toggle.key} · ${toggle.kind === 'check' ? '켰을 때 · 껐을 때 두 칸' : `선택지마다 한 칸: ${toggle.options.join(' · ')}`}`}
+                  sub={`${toggle.key} · ${toggle.kind === 'check' ? '켬 · 끔' : toggle.options.join(' · ')}`}
                   onClick={() => onCondition(toggle)}
                 />
               ))}
@@ -80,11 +77,11 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
             </Menu>
           )}
           {block.kind === 'text' && <CommandMenu sort={sort} onInsert={onInsert} />}
-          <Menu label={`‘${title}’ 더 보기`} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`‘${title}’ 더 보기`} title="더 보기" {...opener} />}>
+          <Menu label={`'${title}' 더 보기`} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`'${title}' 더 보기`} title="더 보기" {...opener} />}>
             {block.kind === 'text' && sort === 'conversation' && (
               <>
-                <MenuHeading>캐릭터 카드가 이 글을 대신할 때</MenuHeading>
-                <MenuItem label="대신하지 않음" sub="카드와 상관없이 늘 이 글을 보내요" checked={block.mark === null} onClick={() => onMark(block, null)} />
+                <MenuHeading>카드 내용으로 대체</MenuHeading>
+                <MenuItem label="대체하지 않음" sub="카드와 상관없이 이 텍스트를 보내요" checked={block.mark === null} onClick={() => onMark(block, null)} />
                 {(['main', 'globalNote'] as const).map((mark) => (
                   <MenuItem key={mark} label={MARKS[mark].label} sub={MARKS[mark].hint} checked={block.mark === mark} onClick={() => onMark(block, mark)} />
                 ))}
@@ -99,16 +96,16 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
       </Stack>
       {block.kind === 'text' && block.mark && (
         <Text variant="note">
-          {`캐릭터 카드에 ‘${MARKS[block.mark].card}’가 있으면 이 글 대신 그 글이 들어가요. 카드 글 속 {{original}}에는 이 글이 들어가요.`}
+          {`캐릭터 카드에 '${MARKS[block.mark].card}'가 있으면 그 내용으로 대체되고, 이 텍스트는 카드의 {{original}} 자리에 들어가요.`}
         </Text>
       )}
       {block.kind === 'slot' && <Text>{SLOT[block.slot].line}</Text>}
       {block.kind === 'text' && (
         <MarkupArea
           ref={textRef}
-          label="글"
+          label="내용"
           value={block.text}
-          placeholder={block.mark === 'globalNote' ? '비워 두면, 카드에 대화 뒤 지시문이 없을 때 여기서는 아무것도 보내지 않아요.' : '모델에게 보낼 글을 써요.'}
+          placeholder={block.mark === 'globalNote' ? `비워 두면 카드에 '대화 뒤 지시문'이 있을 때만 보내요.` : '모델에게 보낼 내용'}
           onChange={(text) => onChange({ ...block, text })}
         />
       )}
@@ -122,9 +119,9 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
           />
           <SettingRow
             place="panel"
-            label="지금까지 된 번역도 함께"
-            help="끄면 앞 메시지의 원문만 보여 줘요."
-            control={<Switch label="지금까지 된 번역도 함께" checked={block.translations !== false} onChange={(on) => onTranslations(block, on)} />}
+            label="번역 포함"
+            help="끄면 원문만 보내요."
+            control={<Switch label="번역 포함" checked={block.translations !== false} onChange={(on) => onTranslations(block, on)} />}
           />
         </>
       )}
@@ -137,12 +134,12 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
         (block.wrapper === null ? (
           <Row kind="actions">
             <Button variant="ghost" size="sm" icon={Plus} onClick={() => onWrapper(block, '{{slot}}')}>
-              감싸는 글 넣기
+              감싸는 텍스트 추가
             </Button>
           </Row>
         ) : (
           <Section
-            title="감싸는 글"
+            title="감싸는 텍스트"
             level={3}
             note={`{{slot}} 자리에 ${SLOT[block.slot].name}이(가) 들어가요.`}
             action={
@@ -151,13 +148,13 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
               </Button>
             }
           >
-            <MarkupArea label="감싸는 글" variant="field" value={block.wrapper} onChange={(wrapper) => onChange({ ...block, wrapper })} />
+            <MarkupArea label="감싸는 텍스트" variant="field" value={block.wrapper} onChange={(wrapper) => onChange({ ...block, wrapper })} />
           </Section>
         ))}
       <SettingRow
         place="panel"
         label="여기까지 캐시"
-        help={cache === 'auto' ? CACHE_HELP.auto : CACHE_HELP.own}
+        help={cache === 'auto' ? undefined : CACHE_HELP}
         control={cache === 'auto' ? <Text variant="note">자동</Text> : <Switch label="여기까지 캐시" checked={cache === 'set'} onChange={onCache} />}
       />
     </Stack>

@@ -10,20 +10,20 @@ import { Button, Callout, Dialog, DropOverlay, Outcome, Section, Stack, Text, us
 
 const FAILURE: Record<PresetFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요. 깨졌거나 Risu 프리셋(.risup, .risupreset)이 아니에요.',
-  'not-preset': 'Risu 파일이지만 프리셋이 아니에요. 캐릭터와 모듈은 여기서 가져올 수 없어요.',
+  'not-preset': 'Risu 파일이지만 프리셋이 아니에요.',
   'decrypt-failed': '프리셋을 열지 못했어요. 파일이 깨졌을 수 있어요.',
-  'no-template': '프롬프트 템플릿을 쓰지 않는 옛 프리셋이라 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
+  'no-template': '프롬프트 템플릿을 쓰지 않는 프리셋은 가져올 수 없어요. Risu에서 템플릿을 켜고 다시 내보내 주세요.',
 };
 
 const UNSUPPORTED: Record<PresetUnsupportedKind, (count: number) => { title: string; note?: string }> = {
   jailbreak: (count) => ({ title: `탈옥 블록 ${count}개` }),
-  cot: (count) => ({ title: `생각 유도(CoT) 블록 ${count}개` }),
+  cot: (count) => ({ title: `추론 유도(CoT) 블록 ${count}개` }),
   chatml: (count) => ({ title: `ChatML 블록 ${count}개` }),
-  'cache-narrowed': (count) => ({ title: `바꿔 가져온 캐시 지점 ${count}개`, note: '메시지 여러 개나 한 역할에만 두던 지점을, 바로 앞 메시지 하나에 두는 지점으로 가져왔어요.' }),
+  'cache-narrowed': (count) => ({ title: `바꿔서 가져온 캐시 지점 ${count}개`, note: '메시지 하나에 두는 지점으로 바꿨어요.' }),
   'unread-item': (count) => ({ title: `읽지 못한 블록 ${count}개` }),
-  'repeated-slot': (count) => ({ title: `두 번 놓인 자리 ${count}개`, note: '한 번만 놓는 자리라 처음 것만 가져왔어요.' }),
+  'repeated-slot': (count) => ({ title: `중복된 블록 ${count}개`, note: '처음 것만 가져왔어요.' }),
   'toggle-line': (count) => ({ title: `읽지 못한 토글 줄 ${count}개` }),
-  'preset-text': (count) => ({ title: `템플릿 밖의 옛 글 ${count}개`, note: '템플릿을 쓰는 프리셋이라 Risu에서도 보내지 않던 글이에요.' }),
+  'preset-text': (count) => ({ title: `템플릿 밖의 텍스트 ${count}개`, note: 'Risu에서도 보내지 않던 텍스트예요.' }),
   regex: (count) => ({ title: `정규식 ${count}개` }),
   variables: (count) => ({ title: `기본 변수 ${count}개` }),
   settings: () => ({ title: '모델과 생성 설정', note: `모델 설정은 ${inSettings('models')}에서 해요.` }),
@@ -42,7 +42,7 @@ export async function readPreset(store: ObjectStore, file: File): Promise<Result
     return { file: file.name, failure: failure.kind === 'save' ? `저장하지 못했어요. ${describeFailure(failure.failure)}` : FAILURE[failure.kind] };
   }
   const prompt = store.get('prompt', imported.id);
-  return prompt && ofSort(prompt, 'conversation') ? { file: file.name, id: imported.id, prompt: prompt.value, unsupported: imported.unsupported } : { file: file.name, failure: '다른 곳에서 지워졌어요.' };
+  return prompt && ofSort(prompt, 'conversation') ? { file: file.name, id: imported.id, prompt: prompt.value, unsupported: imported.unsupported } : { file: file.name, failure: '다른 곳에서 삭제됐어요.' };
 }
 
 // While the list is open, its drop takes files from the app's character import.
@@ -119,7 +119,7 @@ function Summary({ result }: { result: Result }) {
   const { blocks, toggles, authorNote, name } = result.prompt;
   const texts = blocks.filter((block) => block.kind === 'text').length;
   const came = [
-    { tone: 'done' as const, title: `블록 ${blocks.length}개 · 직접 쓴 글 ${texts}개, 앱이 채우는 자리 ${blocks.length - texts}개` },
+    { tone: 'done' as const, title: `블록 ${blocks.length}개 · 직접 입력 ${texts}개, 자동 입력 ${blocks.length - texts}개` },
     ...(toggles.length ? [{ tone: 'done' as const, title: `토글 ${toggles.length}개 · ${toggles.map((toggle) => toggle.label).join(', ')}` }] : []),
     ...(authorNote.trim() ? [{ tone: 'done' as const, title: '기본 노트' }] : []),
   ];

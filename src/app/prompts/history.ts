@@ -62,21 +62,21 @@ const sameBlock = (a: Block, b: Block) => a.id === b.id;
 const sameToggle = (a: Toggle, b: Toggle) => a.key === b.key;
 // A text comes back without a mark another text has taken since: its words matter more than the mark.
 const joiningBlock = (blocks: readonly Block[], block: Block): Block | Refused => {
-  if (block.kind === 'slot') return placedOnce(blocks, block.slot) ? { refused: `‘${SLOT[block.slot].name}’ 자리가 이미 있어요.` } : block;
+  if (block.kind === 'slot') return placedOnce(blocks, block.slot) ? { refused: `'${SLOT[block.slot].name}' 블록은 하나만 둘 수 있어요.` } : block;
   return block.mark && blocks.some((each) => each.kind === 'text' && each.mark === block.mark) ? { ...block, mark: null } : block;
 };
-const keyTaken = (key: string): Refused => ({ refused: `조건에서 부르는 이름 ‘${key}’을(를) 다른 토글이 쓰고 있어요.` });
+const keyTaken = (key: string): Refused => ({ refused: `'${key}' 키를 다른 토글이 쓰고 있어요.` });
 const joiningToggle = (toggles: readonly Toggle[], toggle: Toggle): Toggle | Refused => (keyInUse(toggles, toggle.key) ? keyTaken(toggle.key) : toggle);
 const blocksOr = (blocks: Block[] | Refused): PromptPatch | Refused => ('refused' in blocks ? blocks : { blocks });
 const togglesOr = (toggles: Toggle[] | Refused): PromptPatch | Refused => ('refused' in toggles ? toggles : { toggles });
-const titled = (block: Block, what: string) => `‘${blockTitle(block).title}’ ${what}`;
+const titled = (block: Block, what: string) => `'${blockTitle(block).title}' ${what}`;
 const onBlock = (id: string, change: (block: Block) => Block) => (draft: Draft): PromptPatch => ({
   blocks: draft.blocks.map((each) => (each.id === id ? change(each) : each)),
 });
 
 export function addBlock(block: Block, at: number): Step {
   const { put, take } = presence(block, at, sameBlock, joiningBlock);
-  return { label: titled(block, '블록 넣기'), block: block.id, undo: (draft) => ({ blocks: take(draft.blocks) }), redo: (draft) => blocksOr(put(draft.blocks)) };
+  return { label: titled(block, '블록 추가'), block: block.id, undo: (draft) => ({ blocks: take(draft.blocks) }), redo: (draft) => blocksOr(put(draft.blocks)) };
 }
 
 export function removeBlock(block: Block, at: number): Step {
@@ -116,7 +116,7 @@ export function setTranslations(block: RecentSlot, on: boolean): Step {
       else next.translations = false;
       return next;
     });
-  return { label: titled(block, on ? '번역도 함께 넣기' : '원문만 넣기'), block: block.id, undo: to(!on), redo: to(on) };
+  return { label: titled(block, on ? '번역 포함' : '번역 빼기'), block: block.id, undo: to(!on), redo: to(on) };
 }
 
 export function setCache(block: Block, on: boolean): Step {
@@ -130,7 +130,7 @@ export function setCache(block: Block, on: boolean): Step {
   return { label: titled(block, on ? '여기까지 캐시' : '캐시 지점 빼기'), block: block.id, undo: to(!on), redo: to(on) };
 }
 
-// Trades the 감싸는 글 there for the one the step holds, so one function is both ways: each apply puts back what the one
+// Trades the 감싸는 텍스트 there for the one the step holds, so one function is both ways: each apply puts back what the one
 // before took out, text typed into it since included.
 export function setWrapper(block: WrappedSlot, wrapper: string | null): Step {
   let held = wrapper;
@@ -141,7 +141,7 @@ export function setWrapper(block: WrappedSlot, wrapper: string | null): Step {
     held = now.wrapper;
     return onBlock(block.id, (each) => ('wrapper' in each ? { ...each, wrapper: next } : each))(draft);
   };
-  return { label: titled(block, wrapper === null ? '감싸는 글 빼기' : '감싸는 글 넣기'), block: block.id, undo: trade, redo: trade };
+  return { label: titled(block, wrapper === null ? '감싸는 텍스트 빼기' : '감싸는 텍스트 추가'), block: block.id, undo: trade, redo: trade };
 }
 
 // taken: the text withMark took the mark from, which undoing gives it back to.
@@ -155,21 +155,21 @@ export function setMark(block: TextBlock, mark: TextBlock['mark'], taken: string
 
 export function addToggle(toggle: Toggle, at: number): Step {
   const { put, take } = presence(toggle, at, sameToggle, joiningToggle);
-  return { label: `‘${toggle.label}’ 토글 만들기`, block: null, undo: (draft) => ({ toggles: take(draft.toggles) }), redo: (draft) => togglesOr(put(draft.toggles)) };
+  return { label: `'${toggle.label}' 토글 만들기`, block: null, undo: (draft) => ({ toggles: take(draft.toggles) }), redo: (draft) => togglesOr(put(draft.toggles)) };
 }
 
 export function removeToggle(toggle: Toggle, at: number): Step {
   const { put, take } = presence(toggle, at, sameToggle, joiningToggle);
-  return { label: `‘${toggle.label}’ 토글 지우기`, block: null, undo: (draft) => togglesOr(put(draft.toggles)), redo: (draft) => ({ toggles: take(draft.toggles) }) };
+  return { label: `'${toggle.label}' 토글 삭제`, block: null, undo: (draft) => togglesOr(put(draft.toggles)), redo: (draft) => ({ toggles: take(draft.toggles) }) };
 }
 
 // The whole toggle swaps, since nothing is typed into one in place.
 export function editToggle(before: Toggle, after: Toggle, what: 'label' | 'default'): Step {
   const to = (toggle: Toggle) => (draft: Draft): PromptPatch => ({ toggles: draft.toggles.map((each) => (each.key === before.key ? toggle : each)) });
-  return { label: what === 'label' ? `‘${before.label}’ 토글 이름 바꾸기` : `‘${before.label}’ 처음 값 바꾸기`, block: null, undo: to(before), redo: to(after) };
+  return { label: what === 'label' ? `'${before.label}' 토글 이름 바꾸기` : `'${before.label}' 기본값 바꾸기`, block: null, undo: to(before), redo: to(after) };
 }
 
 export function renameKey(toggle: Toggle, to: string): Step {
   const renamed = (from: string, next: string) => (draft: Draft) => (keyInUse(draft.toggles, next) ? keyTaken(next) : rekey(draft, from, next));
-  return { label: `‘${toggle.label}’ 조건에서 부르는 이름 바꾸기`, block: null, undo: renamed(to, toggle.key), redo: renamed(toggle.key, to) };
+  return { label: `'${toggle.label}' 키 바꾸기`, block: null, undo: renamed(to, toggle.key), redo: renamed(toggle.key, to) };
 }
