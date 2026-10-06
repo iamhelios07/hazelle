@@ -24,13 +24,13 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const modelName = 'kind' in route ? null : route.model.name;
   const term = search ? foldTerm(search.term) : '';
   if (chat.displayPending) return chat.displayError === undefined ? <Progress steps={[{ label: '채팅을 불러오는 중' }]} /> : <>
-    <Text>채팅 표시를 계산하지 못했어요.</Text>
+    <Text>채팅을 표시하지 못했어요.</Text>
     <Button variant="secondary" size="sm" onClick={chat.retryDisplay}>다시 시도</Button>
   </>;
   return <>
     {notUsed && <Text variant="note" align="center">{notUsed}</Text>}
     {messages.length === 0 ? <Empty variant="story">
-      {card ? '첫인사가 없는 캐릭터예요. 먼저 말을 걸어 보세요.' : '캐릭터 없이 모델과 바로 이야기하는 채팅이에요. 모델은 오른쪽 위 버튼에서 이 채팅만 바꿀 수 있어요.'}
+      {card ? '첫인사가 없는 캐릭터예요.' : '캐릭터 없이 모델과 대화하는 채팅이에요.'}
     </Empty> : <Viewport keys={messages.map((message) => message.id)} variant="story" keep={editing ? [editing.id] : []} seek={chat.scroll.seek}
       // Story bodies are shadow roots, whose controls a row's light-DOM query cannot see: Tab stays the browser's.
       traverse={false}>{(index) => {
@@ -69,7 +69,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         {/* Deleting the message the split comes after takes its divider with it, until 되돌리기. */}
         {origin?.after === message.id && <Divider
           icon={GitBranch}
-          label={originModel !== null ? `‘${origin.name}’에서 갈라졌어요` : `‘${origin.name}’에서 갈라졌어요 · 원래 채팅은 지워졌어요`}
+          label={originModel !== null ? `'${origin.name}'에서 분기됨` : `삭제된 채팅 '${origin.name}'에서 분기됨`}
           action={originModel !== null ? { label: '원래 채팅 보기', onClick: () => navigate({ kind: 'chat', id: origin.id }) } : undefined}
         />}
       </Fragment>;

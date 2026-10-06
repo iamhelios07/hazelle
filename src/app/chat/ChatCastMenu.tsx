@@ -40,7 +40,7 @@ function CastChoices({ chat }: { chat: OpenChat }) {
     <>
       {offered.length >= SEARCH_FROM && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />}
       {full && <MenuHeading>{`최대 ${CAST_MAX}명`}</MenuHeading>}
-      {found.length === 0 && <Empty variant="menu">{query.trim() ? noResults(query.trim()) : '고를 수 있는 다른 캐릭터가 없어요.'}</Empty>}
+      {found.length === 0 && <Empty variant="menu">{query.trim() ? noResults(query.trim()) : '선택할 수 있는 다른 캐릭터가 없어요.'}</Empty>}
       {found.map(({ id, character, face }) => (
         <MenuItem
           key={id}
@@ -53,7 +53,7 @@ function CastChoices({ chat }: { chat: OpenChat }) {
         />
       ))}
       {gone.map((id) => (
-        <MenuItem key={id} label="지워진 캐릭터" tone="muted" checked multiple onClick={() => flip(id)} />
+        <MenuItem key={id} label="삭제된 캐릭터" tone="muted" checked multiple onClick={() => flip(id)} />
       ))}
     </>
   );

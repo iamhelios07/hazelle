@@ -8,7 +8,7 @@ import { useToast } from '../toast';
 import { Avatar, Button, CardGrid, Checkbox, ChipButton, Dialog, Empty, FaceCard, hasFinePointer, Hint, Row, SearchField } from '../ui';
 import type { OpenChat } from './useChat';
 
-const MISSING = { chat: '페르소나가 지워졌어요', character: '고정한 페르소나가 지워졌어요', current: '현재 페르소나가 지워졌어요' };
+const MISSING = { chat: '페르소나 삭제됨', character: '고정한 페르소나 삭제됨', current: '현재 페르소나 삭제됨' };
 
 export function ChatPersonaPicker({ chat }: { chat: OpenChat }) {
   const { persona, dialog, actions } = chat;
@@ -17,7 +17,7 @@ export function ChatPersonaPicker({ chat }: { chat: OpenChat }) {
     <>
       <ChipButton
         label={shown ? aliased(shown.name, shown.alias) : MISSING[persona.from]}
-        title="이 채팅에서 나는"
+        title="이 채팅의 페르소나"
         variant="ghost"
         opens="up"
         popup="dialog"
@@ -77,7 +77,7 @@ function PersonaDialog({ chat }: { chat: OpenChat }) {
             disabled={using === null}
             onChange={(checked) => void actions.pinPersona(checked ? using : null).then((saved) => saved.ok || toast.failed(saved))}
           />
-          <Hint label="고정">이 캐릭터와 새로 여는 채팅이 이 페르소나로 시작해요. 이미 대화한 채팅은 그때 쓴 페르소나를 그대로 지켜요.</Hint>
+          <Hint label="고정">이 캐릭터와 새로 시작하는 채팅에 이 페르소나를 사용해요.</Hint>
         </Row>
       )}
       <Button variant="link" size="sm" onClick={() => navigate(using ? { kind: 'persona', id: using } : { kind: 'personas' })}>
@@ -86,7 +86,7 @@ function PersonaDialog({ chat }: { chat: OpenChat }) {
     </>
   );
   return (
-    <Dialog title="이 채팅에서 나는" size="wide" onClose={actions.closeDialog} toolbar={toolbar} footer={footer}>
+    <Dialog title="이 채팅의 페르소나" size="wide" onClose={actions.closeDialog} toolbar={toolbar} footer={footer}>
       {found.length === 0 && <Empty>{noResults(query.trim())}</Empty>}
       <CardGrid label="페르소나" variant="face" current={using ?? undefined} keys={found.map(({ persona: { id } }) => id)}>
         {(index) => {

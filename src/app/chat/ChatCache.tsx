@@ -12,21 +12,21 @@ function why(broken: Break): string {
     case 'model':
       return '모델이나 연결이 직전 요청과 달라요.';
     case 'account':
-      return '직전 요청과 다른 계정으로 보내요. 캐시는 계정마다 따로예요.';
+      return '직전 요청과 다른 계정으로 보내요.';
     case 'reasoning':
-      return '생각 설정이 직전 요청과 달라요.';
+      return '추론 설정이 직전 요청과 달라요.';
     case 'off':
       return '이 모델 설정은 캐시를 꺼 두었어요.';
     case 'differs':
       return broken.from.kind === 'block' && broken.from.slot === 'chat'
-        ? '직전에 보낸 대화 메시지가 빠졌거나 고쳐졌어요. 컨텍스트 한도로 앞쪽 대화가 잘려도 그래요.'
+        ? '직전에 보낸 메시지가 빠졌거나 수정됐어요.'
         : `'${partName(broken.from, broken.role)}' 부분이 직전 요청과 달라요.`;
     case 'added':
-      return `'${partName(broken.from, broken.role)}' 부분이 새로 들어가요.`;
+      return `'${partName(broken.from, broken.role)}' 부분이 추가돼요.`;
   }
 }
 
-const reads = ({ read, of }: Forecast) => (read > 0 ? `캐시에서 약 ${tokens(read)} 토큰만 읽어요. 직전에는 ${tokens(of)} 토큰이 캐시됐어요.` : '캐시를 읽지 못하고 처음부터 다시 써요.');
+const reads = ({ read, of }: Forecast) => (read > 0 ? `캐시된 ${tokens(of)} 토큰 중 약 ${tokens(read)} 토큰만 읽어요.` : '캐시를 읽지 못해요.');
 
 const clock = (ms: number) => {
   const seconds = Math.ceil(ms / 1000);

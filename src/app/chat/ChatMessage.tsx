@@ -56,7 +56,7 @@ const NO_GREETING = '첫 메시지 없이';
 
 const NO_PERSONA = '페르소나 없음';
 
-const CUT = { length: '여기서 잘렸어요', 'no-terminal': '여기서 끊겼어요', stopped: '여기서 멈췄어요' } as const;
+const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
   const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, infoDrawer, actions } = props;
@@ -97,7 +97,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           editing.translation === null
             ? undefined
             : mine
-              ? { firstLabel: '모델에게 보낸 말', label: '내가 쓴 말', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
+              ? { firstLabel: '보낸 메시지', label: '원문', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
               : { firstLabel: '원문', label: '번역', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
         }
         onKeyDown={editKeys}
@@ -108,7 +108,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             </Button>
             {beforeLastReply && (
               <Button variant="secondary" size="sm" disabled={busy} onClick={() => actions.saveEdit(message, true)}>
-                저장하고 새 답장 받기
+                저장하고 다시 생성
               </Button>
             )}
             <Button size="sm" onClick={() => actions.saveEdit(message, false)}>
@@ -126,7 +126,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         {/* A continuation that failed still holds the text it continued, and 다시 시도 continues it again. */}
         {receipt.continues && <Story html={shownHtml(original, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />}
         <Failure
-          title="답장을 받지 못했어요"
+          title="응답 실패"
           actions={
             <>
               <Button size="sm" disabled={busy} onClick={() => actions.retry(message)}>
@@ -167,7 +167,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     ) : untranslated ? (
       <Marker reason="translation" label={`번역하지 못했어요. ${describeTranslateFailure(untranslated)}`} action={again} />
     ) : translatingText === null && !flipped && translation?.receipt?.state === 'cut' ? (
-      <Marker reason="translation" label="번역이 여기서 잘렸어요" action={again} />
+      <Marker reason="translation" label="번역 잘림" action={again} />
     ) : null;
   const translateTool = !mine && !empty && !failed && (
     <IconButton icon={Languages} size="xs" label={translation ? '다시 번역' : '번역'} disabled={translatingText !== null} onClick={() => actions.translate(message)} />
@@ -178,11 +178,11 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     !translation || editing !== null
       ? undefined
       : mine
-        ? { label: translation.sentIn ? `${withRo(languageLabel(translation.sentIn))} 보냄` : '옮겨 보냄', action: flipped ? '내가 쓴 말 보기' : '보낸 말 보기', onClick: flip }
+        ? { label: translation.sentIn ? `${withRo(languageLabel(translation.sentIn))} 보냄` : '번역해 보냄', action: flipped ? '원문 보기' : '보낸 메시지 보기', onClick: flip }
         : { label: flipped ? '원문' : '번역', action: flipped ? '번역 보기' : '원문 보기', onClick: flip };
 
   const count = message.versions.length;
-  const nextLabel = message.selected === count - 1 && !opening ? '새 답장 받기' : '다음';
+  const nextLabel = message.selected === count - 1 && !opening ? '다시 생성' : '다음';
   const [back, forward] = SHORTCUTS.swipe.keys;
   const after = (
     <>
@@ -190,7 +190,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {cut && (
         <Marker
           reason={cut === 'stopped' ? 'stopped' : 'length'}
-          label={cut === 'stopped' && empty ? '답장을 받기 전에 멈췄어요' : CUT[cut]}
+          label={cut === 'stopped' && empty ? '응답 전 중단됨' : CUT[cut]}
           action={
             !empty
               ? { label: '이어 쓰기', disabled: busy, onClick: () => actions.continue(message) }
@@ -230,7 +230,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       />
     ) : offered.length > 1 ? (
       <Menu place="below-end" label="상태창으로 지정" trigger={(opener) => <IconButton icon={Pin} size="xs" label="상태창으로 지정" {...opener} />}>
-        <MenuHeading>상태창으로 지정할 상자</MenuHeading>
+        <MenuHeading>상태창으로 지정할 블록</MenuHeading>
         {offered.map(({ script, name, marked }) => (
           <MenuItem key={script} label={name} checked={marked} onClick={() => actions.markStatus(script, !marked)} />
         ))}
@@ -245,16 +245,16 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     </>
   ) : (
     <>
-      {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="새 답장 받기" onClick={() => actions.regenerate(message)} />}
+      {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 생성" onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 시도" onClick={() => actions.retry(message)} />}
       {translateTool}
       {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message)} />}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
-      {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 갈라지기" disabled={branching} onClick={() => void actions.branch(message)} />}
-      {!mine && <IconButton icon={Info} size="xs" label="답장 정보" controls={infoDrawer} onClick={() => actions.info(message.id)} />}
+      {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />}
+      {!mine && <IconButton icon={Info} size="xs" label="응답 정보" controls={infoDrawer} onClick={() => actions.info(message.id)} />}
       {statusTool}
       <Divider variant="tools" />
-      <IconButton icon={Trash2} size="xs" label="지우기 · 되돌릴 수 있어요" onClick={() => actions.remove(message)} />
+      <IconButton icon={Trash2} size="xs" label="삭제" onClick={() => actions.remove(message)} />
     </>
   );
 

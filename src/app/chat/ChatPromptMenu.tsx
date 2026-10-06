@@ -12,7 +12,7 @@ import type { OpenChat } from './useChat';
 // Without its own choice it follows the default live, and a deleted one shows as missing, never as another prompt.
 export function ChatPromptMenu({ chat }: { chat: OpenChat }) {
   const { prompt, promptMenu } = chat;
-  const label = prompt.kind === 'prompt' ? prompt.prompt.value.name : prompt.own ? '프롬프트가 지워졌어요' : '기본 프롬프트가 없어요';
+  const label = prompt.kind === 'prompt' ? prompt.prompt.value.name : prompt.own ? '삭제된 프롬프트' : '기본 프롬프트 없음';
   return (
     <Menu
       handle={promptMenu}
@@ -55,8 +55,8 @@ function PromptChoices({ chat }: { chat: OpenChat }) {
   return (
     <>
       {prompts.length >= SEARCH_FROM && <SearchField size="sm" label="프롬프트 검색" value={query} onChange={setQuery} />}
-      <MenuHeading>이 채팅만 바뀌어요 · 최근 사용</MenuHeading>
-      {!query.trim() && <MenuItem label={follows('기본 프롬프트')} sub={fallback?.value.name ?? '기본 프롬프트가 없어요'} checked={!prompt.own} onClick={() => choose(null)} />}
+      <MenuHeading>최근 사용</MenuHeading>
+      {!query.trim() && <MenuItem label={follows('기본 프롬프트')} sub={fallback?.value.name ?? '기본 프롬프트 없음'} checked={!prompt.own} onClick={() => choose(null)} />}
       {found.length === 0 && <Empty variant="menu">{noResults(query.trim())}</Empty>}
       {found.map((item) => (
         <MenuItem

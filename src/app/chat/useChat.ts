@@ -100,7 +100,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // A display that fails after one was shown leaves that one up; one that never showed says so in the log (ChatLog).
   useEffect(() => {
     if (displayError === undefined || displayPending) return;
-    toast.error('채팅 표시를 계산하지 못했어요.', { detail: displayError instanceof Error ? displayError.message : undefined, action: { label: '다시 시도', onClick: retryDisplay } });
+    toast.error('채팅을 표시하지 못했어요.', { detail: displayError instanceof Error ? displayError.message : undefined, action: { label: '다시 시도', onClick: retryDisplay } });
   }, [displayError]);
   const { texts, css } = view;
   const bot = shelf?.character.decor !== false;
@@ -145,7 +145,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [hidden, setHidden] = useState(false);
   const hosted = (index: number) => beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []));
   const { seen, watch } = useSeen();
-  // 상태 or 답장 정보 shown over the story by a key or a tap, rather than by pointing at its tab. Their drawers slide
+  // 상태 or 응답 정보 shown over the story by a key or a tap, rather than by pointing at its tab. Their drawers slide
   // over the same place, so holding one lets go of the other.
   const [held, setHeld] = useState<'status' | 'info' | null>(null);
   const hold = (which: 'status' | 'info', open: boolean) => setHeld((current) => (open ? which : current === which ? null : current));
@@ -174,7 +174,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (id) session.memory.check(id);
   }, [id]);
 
-  // 답장 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
+  // 응답 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
 
   useEffect(() => {
@@ -228,7 +228,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // save would be refused.
   const saving = useRef<Promise<ApiFailure | null> | null>(null);
   async function press(button: BotButton | null) {
-    const unanswered = () => toast.show('이 버튼에는 이어진 동작이 없어요.');
+    const unanswered = () => toast.show('동작이 연결되지 않은 버튼이에요.');
     if (!scripted) return unanswered();
     if (button === null) return;
     // A script runs over a saved chat only, so a press on a new chat's greeting saves it first.
@@ -304,18 +304,18 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   function remove(message: Shown) {
     if (!id) return;
     void removeMessage(store, id, message.id).then((saved) => saved.ok || toast.failed(saved));
-    toast.undoable('메시지를 지웠어요', () => void restoreMessage(store, id, message.id));
+    toast.undoable('메시지를 삭제했어요', () => void restoreMessage(store, id, message.id));
   }
 
   async function branch(message: Shown) {
     if (!item || branching) return;
     setBranching(true);
-    toast.show('갈라진 채팅을 만드는 중이에요…');
+    toast.show('채팅 분기 중…');
     const made = await branchChat(store, item, message.id);
     setBranching(false);
-    if (!made.ok) return toast.failed(made, '갈라진 채팅을 만들지 못했어요.');
+    if (!made.ok) return toast.failed(made, '채팅을 분기하지 못했어요.');
     navigate({ kind: 'chat', id: made.data });
-    toast.show('여기서 갈라진 새 채팅을 만들었어요');
+    toast.show('새 채팅으로 분기했어요');
   }
 
   function drop() {
@@ -324,7 +324,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     talk.stop(dropped);
     void removeChat(store, dropped).then((removed) => removed.ok || toast.failed(removed));
     navigate({ kind: 'shelf', character: chat.character });
-    toast.undoable(`‘${title}’ 채팅을 지웠어요.`, () => {
+    toast.undoable(`'${title}' 채팅을 삭제했어요.`, () => {
       void restoreChat(store, dropped).then((saved) => saved.ok || toast.failed(saved));
       navigate({ kind: 'chat', id: dropped });
     }, BIN_KEEPS);
@@ -373,7 +373,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function reset() {
     void resetToggles(store, chat.character).then((saved) => saved.ok || toast.failed(saved));
-    toast.show(`토글 ${toggles.changed}개를 처음 값으로 되돌렸어요`);
+    toast.show(`토글 ${toggles.changed}개를 기본값으로 되돌렸어요`);
   }
 
   function markStatus(script: number, on: boolean) {

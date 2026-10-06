@@ -26,7 +26,7 @@ export function ChatModelMenu({ current, label, onPick, handle }: Props) {
       <ModelChoices current={current} onPick={onPick} />
       <Divider variant="menu" />
       {current && <ProfileItem current={current} />}
-      <MenuItem tone="muted" label="연결에서 모델 더 별표하기" onClick={() => navigate({ kind: 'connections' })} />
+      <MenuItem tone="muted" label="모델 즐겨찾기 관리" onClick={() => navigate({ kind: 'connections' })} />
     </Menu>
   );
 }
@@ -60,10 +60,10 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
     <MenuItem key={`${choice.ref.connection}/${choice.ref.model}`} label={choice.name} sub={choice.source} checked={!!current && sameModelRef(choice.ref, current)} onClick={() => onPick(choice.ref)} />
   );
 
-  if (starred.length === 0) return <Empty variant="menu">{noStarred('고를 수 있어요')}</Empty>;
+  if (starred.length === 0) return <Empty variant="menu">{noStarred('선택할 수 있어요')}</Empty>;
   return (
     <>
-      <SearchField size="sm" label="별표한 모델 검색" value={query} onChange={setQuery} />
+      <SearchField size="sm" label="즐겨찾기한 모델 검색" value={query} onChange={setQuery} />
       {words ? (
         found.length ? (
           <>
@@ -71,7 +71,7 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
             {found.map(item)}
           </>
         ) : (
-          <Empty variant="menu">{`${noResults(query.trim())} 별표한 모델만 찾아요.`}</Empty>
+          <Empty variant="menu">{noResults(query.trim())}</Empty>
         )
       ) : (
         <>
@@ -83,7 +83,7 @@ function ModelChoices({ current, onPick }: Pick<Props, 'current' | 'onPick'>) {
           )}
           {rest.length > 0 && (
             <>
-              <MenuHeading>별표</MenuHeading>
+              <MenuHeading>즐겨찾기</MenuHeading>
               {rest.map(item)}
             </>
           )}

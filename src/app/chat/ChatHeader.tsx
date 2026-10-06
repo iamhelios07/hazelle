@@ -68,7 +68,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const failed = id !== null && remembering.failed.has(id);
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
   const wide = useWide();
-  const label = 'kind' in route ? '모델 고르기' : route.model.name;
+  const label = 'kind' in route ? '모델 선택' : route.model.name;
   const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
   return (
     <>
@@ -78,7 +78,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
       <ToolButton
         icon={SlidersHorizontal}
         label="토글"
-        detail={toggles.changed ? `처음 값과 다른 것 ${toggles.changed}개` : undefined}
+        detail={toggles.changed ? `변경 ${toggles.changed}개` : undefined}
         mark={{ kind: 'count', count: toggles.changed }}
         phone="icon"
         expanded={panel?.kind === 'toggles'}
@@ -89,7 +89,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <ToolButton
           icon={History}
           label="장기 기억"
-          detail={failed ? '마지막 정리가 실패했어요' : undefined}
+          detail={failed ? '정리 실패' : undefined}
           mark={failed ? { kind: 'dot' } : undefined}
           expanded={panel?.kind === 'memory'}
           onClick={toggleMemory}
@@ -98,14 +98,14 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
       {wide && <ReadingMenu />}
       <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
-        {!wide && item && <MenuItem label="장기 기억" sub={failed ? '마지막 정리가 실패했어요' : undefined} onClick={toggleMemory} />}
+        {!wide && item && <MenuItem label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
         {!wide && <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />}
         {!wide && <MenuItem label="검색" onClick={actions.openSearch} />}
         <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>
             <Divider variant="menu" />
-            <MenuItem label="이 채팅 지우기" tone="warn" onClick={actions.drop} />
+            <MenuItem label="이 채팅 삭제" tone="warn" onClick={actions.drop} />
           </>
         )}
       </Menu>
@@ -117,7 +117,7 @@ export function ChatDialogs({ chat }: { chat: OpenChat }) {
   const { dialog, item, actions } = chat;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
   if (dialog === 'rename' && item) {
-    return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 불러요." onSave={actions.rename} onClose={actions.closeDialog} />;
+    return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 표시돼요." onSave={actions.rename} onClose={actions.closeDialog} />;
   }
   return null;
 }

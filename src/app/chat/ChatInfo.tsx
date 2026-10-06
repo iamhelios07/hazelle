@@ -10,28 +10,28 @@ import { cost, seconds, speed, tokens, UNKNOWN } from '../common/receipt';
 import { infoReply } from './infoReply';
 import type { OpenChat } from './useChat';
 
-const CUT = { length: '길이 한도', stopped: '직접 멈춤', 'no-terminal': '끝 표시 없이 끊김' } as const;
+const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김' } as const;
 
 const TABS = [
-  { value: 'reply', label: '답장' },
+  { value: 'reply', label: '응답' },
   { value: 'lore', label: '로어북' },
   { value: 'memory', label: '기억' },
   { value: 'request', label: '요청 원문' },
 ] as const;
 
 function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
-  if (receipt.state === 'failed') return { label: '끝난 이유', value: '실패', tone: 'warn' };
-  if (receipt.cut) return { label: '끝난 이유', value: CUT[receipt.cut], tone: receipt.cut === 'stopped' ? undefined : 'warn' };
-  return { label: '끝난 이유', value: '정상 종료' };
+  if (receipt.state === 'failed') return { label: '종료 사유', value: '실패', tone: 'warn' };
+  if (receipt.cut) return { label: '종료 사유', value: CUT[receipt.cut], tone: receipt.cut === 'stopped' ? undefined : 'warn' };
+  return { label: '종료 사유', value: '정상 종료' };
 }
 
 const tokenFacts = (receipt: Receipt) => [
-  { label: '보냄', value: tokens(receipt.usage?.inputTokens ?? null) },
-  { label: '답장', value: tokens(receipt.usage?.outputTokens ?? null) },
+  { label: '입력', value: tokens(receipt.usage?.inputTokens ?? null) },
+  { label: '출력', value: tokens(receipt.usage?.outputTokens ?? null) },
 ];
 const costFact = (receipt: Receipt) => ({ label: '비용', value: cost(receipt.cost), tone: receipt.cost === null ? ('muted' as const) : undefined });
 const timeFacts = (receipt: Receipt) => [
-  { label: '첫 글자까지', value: seconds(receipt.firstTextMs) },
+  { label: '첫 토큰까지', value: seconds(receipt.firstTextMs) },
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
 ];
 
@@ -62,22 +62,22 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
 
   const stepper = (
     <>
-      <IconButton icon={ChevronLeft} label="이전 답장 정보" size="sm" disabled={at <= 0} onClick={() => actions.pickInfo(replies[at - 1]!.id)} />
-      <IconButton icon={ChevronRight} label="다음 답장 정보" size="sm" disabled={at >= replies.length - 1} onClick={() => actions.pickInfo(replies[at + 1]!.id)} />
+      <IconButton icon={ChevronLeft} label="이전 응답 정보" size="sm" disabled={at <= 0} onClick={() => actions.pickInfo(replies[at - 1]!.id)} />
+      <IconButton icon={ChevronRight} label="다음 응답 정보" size="sm" disabled={at >= replies.length - 1} onClick={() => actions.pickInfo(replies[at + 1]!.id)} />
     </>
   );
 
   let body;
   const thought = version?.reasoning && (
-    <Section level={3} title="생각" hint="모델이 답장을 쓰기 전에 한 생각이에요. 채팅에는 보이지 않고, 모델에게 다시 보내지도 않아요.">
+    <Section level={3} title="추론">
       <Text variant="prose">{version.reasoning}</Text>
     </Section>
   );
-  if (!version) body = <Empty>이 채팅에는 아직 답장이 없어요.</Empty>;
+  if (!version) body = <Empty>응답이 없어요.</Empty>;
   else if (live) {
     body = (
       <>
-        <Text variant="note">답장을 쓰는 중이에요. 끝나면 토큰과 비용이 채워져요.</Text>
+        <Text variant="note">생성 중…</Text>
         {thought}
       </>
     );
@@ -85,7 +85,7 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
   else if (!receipt) {
     body = (
       <>
-        <Empty>{version.reasoning ? '옮겨 온 답장이라 토큰이나 비용 정보가 없어요.' : '모델이 만든 답장이 아니라서 토큰이나 비용 정보가 없어요.'}</Empty>
+        <Empty>{version.reasoning ? '가져온 응답이라 토큰과 비용 정보가 없어요.' : '모델이 생성한 응답이 아니라서 토큰과 비용 정보가 없어요.'}</Empty>
         {translated && <TranslationCall receipt={translated} />}
         {thought}
       </>
@@ -96,26 +96,26 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
     const sent = talk.sent(version.id);
     body = (
       <>
-        <Tabs label="답장 정보">
+        <Tabs label="응답 정보">
           {TABS.map((each) => (
             <Tab key={each.value} label={each.label} current={tab === each.value} onClick={() => setTab(each.value)} />
           ))}
         </Tabs>
-        {earlier.length > 0 && tab !== 'reply' && <Text variant="note">이어 쓴 답장이에요. 아래는 마지막 이어 쓰기가 보낸 요청이에요.</Text>}
+        {earlier.length > 0 && tab !== 'reply' && <Text variant="note">마지막 이어 쓰기의 요청이에요.</Text>}
         {tab === 'reply' && (
           <>
-            {version.edited && <Text variant="note">직접 수정한 답장이에요. 아래는 수정하기 전 답장을 받았을 때의 정보예요.</Text>}
+            {version.edited && <Text variant="note">수정하기 전 응답의 정보예요.</Text>}
             {earlier.length > 0 && (
-              <Text variant="note">{`이어 쓴 답장이에요. 호출 ${earlier.length + 1}번으로 만들었고, 비용은 호출마다 따로 들어요. 아래는 마지막 호출이고, 앞선 호출은 맨 아래에 있어요.`}</Text>
+              <Text variant="note">{`호출 ${earlier.length + 1}번으로 이어 쓴 응답이에요. 비용은 호출마다 들어요.`}</Text>
             )}
             <Call receipt={receipt} />
             {translated && <TranslationCall receipt={translated} />}
             {thought}
             {earlier.length > 0 && (
-              <Section level={3} title="앞선 호출">
+              <Section level={3} title="이전 호출">
                 {earlier.map((call, index) => (
                   <Stack key={index} gap="related">
-                    <Text variant="note">{`${index === 0 ? '처음 답장' : `이어 쓰기 ${index}`} · ${call.modelName} · ${call.source}`}</Text>
+                    <Text variant="note">{`${index === 0 ? '첫 응답' : `이어 쓰기 ${index}`} · ${call.modelName} · ${call.source}`}</Text>
                     <Facts
                       variant="tiles"
                       items={[...tokenFacts(call), costFact(call), finish(call), ...timeFacts(call)]}
@@ -134,7 +134,7 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
   }
 
   return (
-    <SidePeek label="답장 정보" tab="정보" id={infoDrawer} open={held === 'info'} onOpenChange={(on) => actions.hold('info', on)} variant="panel" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper}>
+    <SidePeek label="응답 정보" tab="정보" id={infoDrawer} open={held === 'info'} onOpenChange={(on) => actions.hold('info', on)} variant="panel" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper}>
       {body}
     </SidePeek>
   );
@@ -170,7 +170,7 @@ function Call({ receipt }: { receipt: Receipt }) {
       {receipt.state === 'failed' && (
         <Section level={3} title="결과">
           <Callout tone="warn">
-            {receipt.error ? describeReplyError(receipt.error) : UNKNOWN} 보낸 뒤 {seconds(receipt.totalMs)} 만에 돌아왔어요.
+            {receipt.error && `${describeReplyError(receipt.error)} `}{seconds(receipt.totalMs)} 만에 실패했어요.
           </Callout>
         </Section>
       )}
@@ -181,19 +181,19 @@ function Call({ receipt }: { receipt: Receipt }) {
             parts={
               cached === null
                 ? [
-                    { label: '보냄', value: tokens(input), mark: 'plain' },
-                    { label: '답장', value: tokens(usage.outputTokens), mark: 'outline' },
+                    { label: '입력', value: tokens(input), mark: 'plain' },
+                    { label: '출력', value: tokens(usage.outputTokens), mark: 'outline' },
                   ]
                 : [
                     { label: '캐시에서 읽음', value: tokens(cached), mark: 'accent' },
-                    { label: '새로 보냄', value: tokens(fresh), mark: 'plain' },
-                    { label: '답장', value: tokens(usage.outputTokens), mark: 'outline' },
+                    { label: '새 입력', value: tokens(fresh), mark: 'plain' },
+                    { label: '출력', value: tokens(usage.outputTokens), mark: 'outline' },
                   ]
             }
           />
         </Section>
       ) : (
-        <Empty variant="section">제공자가 사용량을 알려 주지 않았어요. 모르는 값은 0으로 적지 않아요.</Empty>
+        <Empty variant="section">제공자가 사용량을 알려 주지 않았어요.</Empty>
       )}
       <Facts variant="tiles" items={[...(usage ? [] : [{ label: '토큰', value: UNKNOWN, tone: 'muted' as const }]), costFact(receipt), finish(receipt), ...timeFacts(receipt)]} />
     </>

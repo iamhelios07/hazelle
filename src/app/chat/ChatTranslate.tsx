@@ -8,11 +8,11 @@ import { useSession, useSettings, usePrompts } from '../session';
 import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Stack, Switch, Tag, Text, ToolButton } from '../ui';
 import type { OpenChat } from './useChat';
 
-const appliesTo = (card: OpenChat['card'], own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '따로 정한 캐릭터 말고 모든 채팅에 적용돼요.');
+const appliesTo = (card: OpenChat['card'], own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '캐릭터별 설정이 없는 모든 채팅에 적용돼요.');
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
   const { translate, translation, card, actions } = chat;
-  const on = [translate.replies && '답장 번역', translate.input && '보낼 말 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
+  const on = [translate.replies && '응답 번역', translate.input && '내 메시지 번역', translate.reverse && '반전 모드'].filter(Boolean).join(', ');
   return (
     <Menu
       kind="dialog"
@@ -24,21 +24,21 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
       <Stack gap="related">
         <SettingRow
           place="panel"
-          label="답장 번역"
-          sentence={<IntoLanguage before="답장을" after="번역해서 보기" label="답장 번역 언어" value={translate.replyLanguage} opens="up" onPick={(replyLanguage) => actions.setTranslate({ replyLanguage })} />}
-          control={<Switch label="답장 번역" checked={translate.replies} onChange={(replies) => actions.setTranslate({ replies })} />}
+          label="응답 번역"
+          sentence={<IntoLanguage before="응답을" after="번역해서 보기" label="응답 번역 언어" value={translate.replyLanguage} opens="up" onPick={(replyLanguage) => actions.setTranslate({ replyLanguage })} />}
+          control={<Switch label="응답 번역" checked={translate.replies} onChange={(replies) => actions.setTranslate({ replies })} />}
         />
         <SettingRow
           place="panel"
-          label="보낼 말 번역"
-          sentence={<IntoLanguage before="내 말을" after="번역해서 보내기" label="보낼 말 번역 언어" value={translate.inputLanguage} opens="up" onPick={(inputLanguage) => actions.setTranslate({ inputLanguage })} />}
-          sub={translate.reverse ? '반전 모드에서는 쓴 말 그대로 보내요' : undefined}
-          control={<Switch label="보낼 말 번역" checked={translate.input} disabled={translate.reverse} onChange={(input) => actions.setTranslate({ input })} />}
+          label="내 메시지 번역"
+          sentence={<IntoLanguage before="내 메시지를" after="번역해서 보내기" label="내 메시지 번역 언어" value={translate.inputLanguage} opens="up" onPick={(inputLanguage) => actions.setTranslate({ inputLanguage })} />}
+          sub={translate.reverse ? '반전 모드에서는 원문으로 보내요' : undefined}
+          control={<Switch label="내 메시지 번역" checked={translate.input} disabled={translate.reverse} onChange={(input) => actions.setTranslate({ input })} />}
         />
         <SettingRow
           place="panel"
           label="반전 모드"
-          help="모델에게도 화면에 보이는 글을 보내요. 답장은 번역으로, 내 말은 내가 쓴 그대로 가요."
+          help="모델에게도 화면에 보이는 내용을 보내요."
           control={<Switch label="반전 모드" checked={translate.reverse} onChange={(reverse) => actions.setTranslate({ reverse })} />}
         />
         <Divider variant="menu" />
@@ -57,9 +57,9 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
         {card && (
           <SettingRow
             place="panel"
-            label="이 캐릭터만 따로"
-            help={`켜면 ${card.name}의 채팅은 지금 설정을 따로 갖고, 다른 채팅에서 바꿔도 그대로예요. 끄면 다시 모든 채팅과 같은 설정을 따라요.`}
-            control={<Switch label="이 캐릭터만 따로" checked={translate.own} onChange={actions.setOwnTranslate} />}
+            label="캐릭터별 설정"
+            help={`켜면 ${card.name}의 채팅에만 이 설정을 적용해요.`}
+            control={<Switch label="캐릭터별 설정" checked={translate.own} onChange={actions.setOwnTranslate} />}
           />
         )}
         <Text variant="note">
@@ -80,7 +80,7 @@ function NoteRow({ chat }: { chat: OpenChat }) {
     <SettingRow
       place="panel"
       label={TRANSLATOR_NOTE}
-      help={`번역할 때 이름과 용어를 늘 같게 옮기도록 적어 두는 메모예요. 전역 노트는 ${inSettings('chat')}, 캐릭터 노트는 캐릭터 편집에 있어요.`}
+      help={`전역 노트는 ${inSettings('chat')}, 캐릭터 노트는 캐릭터 편집에서 수정해요.`}
       sub={counts || '없음'}
       error={unsent ? NOTE_UNSENT : undefined}
       control={
@@ -105,7 +105,7 @@ function PromptMenu({ chat }: { chat: OpenChat }) {
     .sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
   const choice = translationPrompt(store, translate.prompt);
   const fallback = prompts.find(({ id }) => id === settings.translatePrompt);
-  const label = choice.kind === 'prompt' ? choice.prompt.value.name : choice.own ? '프롬프트가 지워졌어요' : '기본 번역 프롬프트가 없어요';
+  const label = choice.kind === 'prompt' ? choice.prompt.value.name : choice.own ? '삭제된 프롬프트' : '기본 번역 프롬프트 없음';
   return (
     <Menu
       place="above-end"
@@ -113,7 +113,7 @@ function PromptMenu({ chat }: { chat: OpenChat }) {
       trigger={(opener) => <ChipButton variant="field" opens="up" label={label} title="번역 프롬프트" tone={choice.kind === 'missing' ? 'warn' : 'default'} {...opener} />}
     >
       <MenuHeading>{appliesTo(card, translate.own)}</MenuHeading>
-      <MenuItem label={follows('기본 번역 프롬프트')} sub={fallback?.value.name ?? '기본 번역 프롬프트가 없어요'} checked={translate.prompt === undefined} onClick={() => actions.setTranslate({ prompt: undefined })} />
+      <MenuItem label={follows('기본 번역 프롬프트')} sub={fallback?.value.name ?? '기본 번역 프롬프트 없음'} checked={translate.prompt === undefined} onClick={() => actions.setTranslate({ prompt: undefined })} />
       {prompts.map((item) => (
         <MenuItem
           key={item.id}

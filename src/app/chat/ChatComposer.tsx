@@ -11,15 +11,15 @@ import { ChatPersonaPicker } from './ChatPersonaPicker';
 import { ChatTranslate } from './ChatTranslate';
 import type { OpenChat } from './useChat';
 
-const LEAVING = '가장 오래된 메시지가 이번 요청에서 빠지는데, 장기 기억이 아직 정리하지 못했거나 보내지 않는 부분이라 모델이 그 내용을 몰라요. 장기 기억 패널에서 무엇이 빠지는지 볼 수 있어요.';
+const LEAVING = '가장 오래된 메시지가 요청에서 빠지는데, 장기 기억에 없어서 모델이 그 내용을 몰라요.';
 
 type Chip = 'model' | 'prompt' | 'persona';
 const FIX = {
-  'no-model': { label: '모델 고르기', chip: 'model' },
-  'model-gone': { label: '모델 고르기', chip: 'model' },
-  'prompt-missing': { label: '프롬프트 고르기', chip: 'prompt' },
-  'persona-missing': { label: '페르소나 고르기', chip: 'persona' },
-  'profile-missing': { label: '모델 설정 고르기', chip: 'model' },
+  'no-model': { label: '모델 선택', chip: 'model' },
+  'model-gone': { label: '모델 선택', chip: 'model' },
+  'prompt-missing': { label: '프롬프트 선택', chip: 'prompt' },
+  'persona-missing': { label: '페르소나 선택', chip: 'persona' },
+  'profile-missing': { label: '모델 설정 선택', chip: 'model' },
 } as const satisfies Record<Blocked['kind'], { label: string; chip: Chip }>;
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
@@ -67,7 +67,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         value={draft.text}
         onChange={draft.set}
         onKeyDown={onKey}
-        placeholder={translate.input ? `${withRo(sendLanguage)} 옮겨 보내요` : '메시지'}
+        placeholder={translate.input ? `${withRo(sendLanguage)} 번역해서 보내요` : '메시지'}
         tools={
           <>
             <ChatPersonaPicker chat={chat} />
@@ -79,10 +79,10 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
           <>
             {!busy && !draft.text.trim() && last?.role === 'user' && (
               <Button variant="ghost" size="sm" onClick={actions.answer}>
-                답장 받기
+                응답 받기
               </Button>
             )}
-            {!busy && chat.leaving ? <SendNote label={`메시지 ${chat.leaving}개`} title="기억 없이 빠질 메시지" warning={{ words: '기억 없이 빠짐', why: LEAVING }} /> : null}
+            {!busy && chat.leaving ? <SendNote label={`메시지 ${chat.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
             {!busy && <ChatCache cache={chat.cache} />}
             <SendButton
               streaming={busy}

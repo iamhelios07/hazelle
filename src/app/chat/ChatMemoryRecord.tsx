@@ -40,7 +40,7 @@ export function ChatMemoryRecord({ chat, record, status, stale, positions, actio
 
   function rebuild() {
     session.memory.rebuild(chat, record.id);
-    toast.show('원문에서 이 기록을 다시 만들어요');
+    toast.show('기록 다시 만드는 중…');
   }
 
   function pin(on: boolean) {
@@ -50,9 +50,9 @@ export function ChatMemoryRecord({ chat, record, status, stale, positions, actio
   async function forget() {
     const done = await save.remove(() => forgetRecord(store, chat, record.id));
     if (!done) return;
-    if (!done.ok) return toast.failed(done, '지우지 못했어요.');
+    if (!done.ok) return toast.failed(done, '삭제하지 못했어요.');
     back();
-    toast.undoable('기록을 지웠어요', () => void restoreRecord(store, chat, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
+    toast.undoable('기록을 삭제했어요', () => void restoreRecord(store, chat, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
   }
 
   const text = (field: 'when' | 'where', label: string) => (
@@ -68,13 +68,13 @@ export function ChatMemoryRecord({ chat, record, status, stale, positions, actio
     >
       {stale && !record.forgotten && (
         <Callout tone="warn" action={stale === 'changed' ? { label: '원문에서 다시 만들기', onClick: rebuild } : undefined}>
-          {`${stale === 'changed' ? '원문이 바뀌었어요.' : '원문 메시지가 지워졌어요.'} ${status === 'stale' ? '그래서 이 기록은 보내지 않아요. 항상 넣기를 켜면 그대로 보내요.' : '직접 고치거나 항상 넣기를 켠 기록이라 그대로 보내요.'}`}
+          {`${stale === 'changed' ? '원문이 바뀌었어요.' : '원문 메시지가 삭제됐어요.'} ${status === 'stale' ? '이 기록은 보내지 않아요.' : '수정했거나 고정한 기록이라 계속 보내요.'}`}
         </Callout>
       )}
-      {status === 'over' && <Text variant="note">기록에 쓸 양을 넘어서 지금은 보내지 않아요.</Text>}
+      {status === 'over' && <Text variant="note">한도를 넘어 보내지 않아요.</Text>}
       {record.forgotten && (
         <Callout tone="warn" action={{ label: '원문에서 다시 만들기', onClick: rebuild }}>
-          지운 기록이에요. 이 메시지들은 다시 정리하지 않아요.
+          삭제한 기록이에요.
         </Callout>
       )}
       <Row kind="actions">
@@ -93,12 +93,12 @@ export function ChatMemoryRecord({ chat, record, status, stale, positions, actio
       <SettingGroup label="기록">
         <SettingRow label="누가" wide control={<PhraseField label="누가" phrases={shown.who} onChange={(who) => change({ who })} />} />
         <SettingRow
-          label="항상 넣기"
-          help="예산 안에서 다른 기록보다 먼저 넣고, 원문이 바뀌어도 그대로 보내요. 자동 정리는 이 기록을 다시 쓰지 않아요."
-          control={<Switch label="항상 넣기" checked={record.pinned === true} onChange={pin} />}
+          label="고정"
+          help="원문이 바뀌어도 다른 기록보다 먼저 보내요."
+          control={<Switch label="고정" checked={record.pinned === true} onChange={pin} />}
         />
       </SettingGroup>
-      <Section level={3} title="대사" note={`${shown.lines.length}개`} hint="원문에 있는 말 그대로예요. 기억과 함께 모델에 보내요.">
+      <Section level={3} title="대사" note={`${shown.lines.length}개`}>
         <Stack gap="related">
           <EntryList
             entries={shown.lines}
@@ -106,7 +106,7 @@ export function ChatMemoryRecord({ chat, record, status, stale, positions, actio
             name={(index) => `대사 ${index + 1}`}
             blank={{ speaker: '', text: '' }}
             addLabel="대사 추가"
-            removed={(index) => `${index + 1}번째 대사를 지웠어요.`}
+            removed={(index) => `${index + 1}번째 대사를 삭제했어요.`}
           >
             {({ value, name, set, remove }) => (
               <Stack gap="related">
@@ -122,7 +122,7 @@ export function ChatMemoryRecord({ chat, record, status, stale, positions, actio
       {!record.forgotten && (
         <Row kind="actions">
           <Button variant="danger" size="sm" onClick={() => void forget()}>
-            이 기록 지우기
+            이 기록 삭제
           </Button>
         </Row>
       )}
