@@ -6,6 +6,7 @@ import { slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Togg
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
 import { copyPrompt, editPrompt, isDefaultPrompt, ofSort, removePrompt, restorePrompt, setDefaultPrompt, type PromptPatch } from '../../runtime/prompts';
 import { ModuleSwitches } from '../common/ModuleSwitches';
+import type { Frame } from '../common/frame';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS, promptName } from '../common/words';
 import { useConnections, useSettings, useStore } from '../session';
@@ -65,10 +66,6 @@ const CACHE_WORDS = { set: '여기까지 캐시', auto: '자동 캐시' } as con
 const UNDO = { did: '되돌렸어요', failed: '되돌리지 못했어요' };
 const REDO = { did: '다시 실행했어요', failed: '다시 실행하지 못했어요' };
 
-// side: the outline, beside the open part, in the split layout only. open: the part open, which a frame scrolls back
-// to the top of when it changes.
-type Parts = { head: NavBarProps; body: ReactNode; side?: ReactNode; open: string };
-
 type Props = {
   stored: Stored<'prompt'>;
   // The caller
@@ -81,8 +78,7 @@ type Props = {
   onBack: () => void;
   onCopied: (id: string) => void;
   onErased: () => void;
-  // The editor says what its head holds, the caller how it looks.
-  frame: (parts: Parts) => ReactNode;
+  frame: Frame;
 };
 
 // Its state is one prompt's, so a caller keys it by id; unmounting it saves.

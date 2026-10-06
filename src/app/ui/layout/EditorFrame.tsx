@@ -5,7 +5,7 @@ type Props = {
   top: ReactNode;
   side: ReactNode;
   // The page scrolls back to its top when this changes, such as when another part is opened.
-  page: string;
+  page?: string;
   children: ReactNode;
 };
 

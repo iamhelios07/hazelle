@@ -24,10 +24,10 @@ export function ChatSide(props: SideAt) {
   return <PromptSide {...props} open={open} />;
 }
 
-function CharacterSide({ open, onClose }: Props<'character'>) {
+function CharacterSide({ open, onOpen, onClose }: Props<'character'>) {
   // The chat is gone from the page with its character, so the character is there while this is.
   const shelf = useCharacter(open.id)!;
-  return <CharacterEditor key={open.id} shelf={shelf} frame={panel('캐릭터', onClose)} />;
+  return <CharacterEditor key={open.id} shelf={shelf} layout="drill" part={open.part} onPart={(part) => onOpen({ ...open, part })} frame={panel('캐릭터', onClose)} />;
 }
 
 function PromptSide({ open, inUse, onOpen, onClose }: Props<'prompts'>) {

@@ -30,6 +30,7 @@ import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { translatorOf } from '../../runtime/translate';
 import { blocked, packsOf, takeTurn, togglesOf, statusBoxes, translationInput, type Blocked, type Target, type TurnFailure } from '../../runtime/turn';
+import type { CharacterPart } from '../common/characterPart';
 import { describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
@@ -55,7 +56,7 @@ const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failur
 
 export type OpenChat = ReturnType<typeof useChat>;
 
-export type Side = { kind: 'prompts'; id: string | null; pane: 'toggles' | null } | { kind: 'character'; id: string };
+export type Side = { kind: 'prompts'; id: string | null; pane: 'toggles' | null } | { kind: 'character'; id: string; part: CharacterPart | null };
 // Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
 export type ChatActions = OpenChat['actions'];
 

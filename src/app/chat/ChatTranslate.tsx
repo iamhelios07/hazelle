@@ -85,7 +85,7 @@ function NoteRow({ chat }: { chat: OpenChat }) {
       error={unsent ? NOTE_UNSENT : undefined}
       control={
         shelf && (
-          <Button variant="ghost" size="sm" onClick={() => actions.side({ kind: 'character', id: shelf.id })}>
+          <Button variant="ghost" size="sm" onClick={() => actions.side({ kind: 'character', id: shelf.id, part: 'instructions' })}>
             캐릭터 편집
           </Button>
         )

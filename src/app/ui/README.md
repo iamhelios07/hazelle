@@ -52,7 +52,6 @@ and only this folder styles elements.**
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take or a lorebook entry; what is folded is made only while open, and it can start open |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
-| layout | `Jumps` | `Jumps.module.css` | Chips at the top of a long form, one per `Section` inside it, each scrolling to its section |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |

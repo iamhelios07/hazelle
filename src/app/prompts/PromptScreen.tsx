@@ -1,7 +1,8 @@
 import type { Stored } from '../../model/kinds';
+import { framePage } from '../common/frame';
 import { navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { EditorFrame, NavBar, Screen, useWide } from '../ui';
+import { useWide } from '../ui';
 import { PromptEditor } from './PromptEditor';
 
 export function PromptScreen({ stored, pane, back }: { stored: Stored<'prompt'>; pane: 'toggles' | null; back: Back }) {
@@ -16,15 +17,7 @@ export function PromptScreen({ stored, pane, back }: { stored: Stored<'prompt'>;
       onBack={() => navigate(back.to)}
       onCopied={(id) => navigate({ kind: 'prompt', id, pane: null })}
       onErased={() => navigate(back.to, { replace: true })}
-      frame={({ head, body, side, open }) =>
-        side === undefined ? (
-          <Screen top={<NavBar {...head} />}>{body}</Screen>
-        ) : (
-          <EditorFrame top={<NavBar {...head} />} side={side} page={open}>
-            {body}
-          </EditorFrame>
-        )
-      }
+      frame={framePage}
     />
   );
 }

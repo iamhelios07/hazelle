@@ -1,6 +1,5 @@
-import { use, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Hint } from '../overlays/Hint';
-import { JumpContext } from './Jumps';
 import styles from './Section.module.css';
 
 type Props = {
@@ -18,12 +17,6 @@ export function Section({ title, level = 2, note, hint, action, seek = false, ch
   useLayoutEffect(() => {
     if (seek) self.current?.scrollIntoView({ block: 'start' });
   }, [seek]);
-  const mark = use(JumpContext);
-  useLayoutEffect(() => {
-    if (!mark) return;
-    mark(title, self.current);
-    return () => mark(title, null);
-  }, [mark, title]);
   const Heading = level === 2 ? 'h2' : 'h3';
   const noted = note && <span className={styles.note}>{note}</span>;
   return (
@@ -42,7 +35,7 @@ export function Section({ title, level = 2, note, hint, action, seek = false, ch
           noted
         )}
       </div>
-      <JumpContext value={null}>{children}</JumpContext>
+      {children}
     </section>
   );
 }

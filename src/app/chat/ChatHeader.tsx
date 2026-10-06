@@ -17,7 +17,7 @@ export function ChatHeading({ chat }: { chat: OpenChat }) {
   const wide = useWide();
   const name = item?.title ?? '새 채팅';
   if (wide) return <ChatTitle name={name} typing={busy} />;
-  return <ChatTitle name={card?.name ?? '캐릭터 없이'} sub={name} typing={busy} onClick={shelf ? () => actions.side({ kind: 'character', id: shelf.id }) : undefined} />;
+  return <ChatTitle name={card?.name ?? '캐릭터 없이'} sub={name} typing={busy} onClick={shelf ? () => actions.side({ kind: 'character', id: shelf.id, part: null }) : undefined} />;
 }
 
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
