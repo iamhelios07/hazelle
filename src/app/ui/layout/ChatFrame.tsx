@@ -130,7 +130,8 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
 
 type TitleProps = {
   avatar: ReactNode;
-  title: string;
+  name: string;
+  sub: string;
   typing: boolean;
   popup: 'menu' | 'dialog';
   expanded: boolean;
@@ -138,13 +139,16 @@ type TitleProps = {
   onClick: () => void;
 };
 
-export function ChatTitle({ avatar, title, typing, popup, expanded, ref, onClick }: TitleProps) {
+export function ChatTitle({ avatar, name, sub, typing, popup, expanded, ref, onClick }: TitleProps) {
   return (
     <span className={styles.chatTitle}>
       {avatar}
       <h1 className={styles.heading}>
         <button ref={ref} type="button" className={styles.switch} aria-haspopup={popup} aria-expanded={expanded} onClick={onClick}>
-          <span className={styles.name}>{title}</span>
+          <span className={styles.lines}>
+            <span className={styles.name}>{name}</span>
+            <span className={styles.sub}>{sub}</span>
+          </span>
           <Icon icon={ChevronDown} size="xs" />
         </button>
       </h1>

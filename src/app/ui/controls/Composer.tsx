@@ -6,17 +6,14 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
-  onFocus: () => void;
-  onBlur: () => void;
   placeholder: string;
-  hint: string;
   tools?: ReactNode;
   actions: ReactNode;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   compact: boolean;
 };
 
-export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placeholder, hint, tools, actions, inputRef, compact }: Props) {
+export function Composer({ value, onChange, onKeyDown, placeholder, tools, actions, inputRef, compact }: Props) {
   const id = useId();
   useAutosize(inputRef, value);
   return (
@@ -33,14 +30,12 @@ export function Composer({ value, onChange, onKeyDown, onFocus, onBlur, placehol
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}
-        onFocus={onFocus}
-        onBlur={onBlur}
       />
       <div className={styles.fold}>
         <div className={styles.tools}>
           <div className={styles.bar}>
             {tools}
-            <span className={styles.hint}>{hint}</span>
+            <span className={styles.spacer} />
             {actions}
           </div>
         </div>

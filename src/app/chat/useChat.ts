@@ -501,7 +501,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
         setHeld('info');
       },
       pickInfo: setInfoPick,
-      toggleInfo: () => hold('info', held !== 'info'),
       showToggles: () => setPanel({ kind: 'toggles' }),
       memory: (record: string | null) => setPanel({ kind: 'memory', record }),
       // ids in chat order; the view goes to the first.

@@ -1,33 +1,33 @@
 import { useEffect, useRef } from 'react';
 import { formatKeys, pressed, type Chord } from './ui';
 
-type Shortcut = { label: string; hint: string; keys: readonly Chord[] };
+type Shortcut = { label: string; keys: readonly Chord[] };
 
 // A modifier a chord leaves out is not checked, so Ctrl+Enter still sends and Ctrl+Shift+Enter still saves an edit.
 export const SHORTCUTS = {
   // Its handler must never pass Ctrl+S on, or the browser's save-page dialog opens.
-  settings: { label: '설정 열기 · 닫기', hint: '설정', keys: [{ key: ',', mod: true }, { key: 's', mod: true }] },
-  personas: { label: '페르소나 (채팅에서는 바꾸기)', hint: '페르소나', keys: [{ key: 'e', mod: true }] },
-  prompts: { label: '프롬프트 (채팅에서는 옆 패널)', hint: '프롬프트', keys: [{ key: 'p', mod: true }] },
-  shortcutList: { label: '단축키 보기', hint: '단축키', keys: [{ key: '/', mod: true }] },
-  sidebar: { label: '사이드바 접기 · 펴기', hint: '사이드바', keys: [{ key: 'b', mod: true }] },
-  status: { label: '상태 보기 · 닫기 (상태창을 지정한 채팅)', hint: '상태', keys: [{ key: '.', mod: true }] },
-  send: { label: '보내기', hint: '보내기', keys: [{ key: 'Enter', shift: false }] },
-  newline: { label: '줄바꿈', hint: '줄바꿈', keys: [{ key: 'Enter', shift: true }] },
-  stop: { label: '답장 멈추기', hint: '멈추기', keys: [{ key: 'Escape' }] },
-  editLast: { label: '내 마지막 메시지 수정', hint: '내 메시지 수정', keys: [{ key: 'ArrowUp' }] },
-  swipe: { label: '답장 넘기기 · 끝에서 새 답장 받기', hint: '답장 넘기기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
-  saveEdit: { label: '수정 저장', hint: '저장', keys: [{ key: 'Enter', mod: true }] },
-  translate: { label: '번역하기', hint: '번역', keys: [{ key: 'Enter', mod: true }] },
-  cancelEdit: { label: '수정 취소', hint: '취소', keys: [{ key: 'Escape' }] },
+  settings: { label: '설정 열기 · 닫기', keys: [{ key: ',', mod: true }, { key: 's', mod: true }] },
+  personas: { label: '페르소나 (채팅에서는 바꾸기)', keys: [{ key: 'e', mod: true }] },
+  prompts: { label: '프롬프트 (채팅에서는 옆 패널)', keys: [{ key: 'p', mod: true }] },
+  shortcutList: { label: '단축키 보기', keys: [{ key: '/', mod: true }] },
+  sidebar: { label: '사이드바 접기 · 펴기', keys: [{ key: 'b', mod: true }] },
+  status: { label: '상태 보기 · 닫기 (상태창을 지정한 채팅)', keys: [{ key: '.', mod: true }] },
+  send: { label: '보내기', keys: [{ key: 'Enter', shift: false }] },
+  newline: { label: '줄바꿈', keys: [{ key: 'Enter', shift: true }] },
+  stop: { label: '답장 멈추기', keys: [{ key: 'Escape' }] },
+  editLast: { label: '내 마지막 메시지 수정', keys: [{ key: 'ArrowUp' }] },
+  swipe: { label: '답장 넘기기 · 끝에서 새 답장 받기', keys: [{ key: 'ArrowLeft' }, { key: 'ArrowRight' }] },
+  saveEdit: { label: '수정 저장', keys: [{ key: 'Enter', mod: true }] },
+  translate: { label: '번역하기', keys: [{ key: 'Enter', mod: true }] },
+  cancelEdit: { label: '수정 취소', keys: [{ key: 'Escape' }] },
   // Its handler stays mounted only with a chat open, so elsewhere the key is the browser's find.
-  find: { label: '채팅 안 검색', hint: '검색', keys: [{ key: 'f', mod: true }] },
-  findNext: { label: '다음 결과', hint: '다음', keys: [{ key: 'Enter', shift: false }] },
-  findPrevious: { label: '이전 결과', hint: '이전', keys: [{ key: 'Enter', shift: true }] },
-  closeFind: { label: '검색 닫기', hint: '닫기', keys: [{ key: 'Escape' }] },
-  undoToast: { label: '알림의 되돌리기 누르기', hint: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
-  undo: { label: '되돌리기', hint: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
-  redo: { label: '다시 하기', hint: '다시 하기', keys: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
+  find: { label: '채팅 안 검색', keys: [{ key: 'f', mod: true }] },
+  findNext: { label: '다음 결과', keys: [{ key: 'Enter', shift: false }] },
+  findPrevious: { label: '이전 결과', keys: [{ key: 'Enter', shift: true }] },
+  closeFind: { label: '검색 닫기', keys: [{ key: 'Escape' }] },
+  undoToast: { label: '알림의 되돌리기 누르기', keys: [{ key: 'z', mod: true, shift: false }] },
+  undo: { label: '되돌리기', keys: [{ key: 'z', mod: true, shift: false }] },
+  redo: { label: '다시 하기', keys: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
 } as const satisfies Record<string, Shortcut>;
 
 type Name = keyof typeof SHORTCUTS;
@@ -87,7 +87,5 @@ export function useShortcut(name: Name, handler: Handler, { fallback = false } =
 export function runShortcut(name: Name) {
   for (const entry of inTurn()) if (entry.name === name && entry.run() !== false) return;
 }
-
-export const hints = (...shortcuts: Shortcut[]) => shortcuts.map((shortcut) => `${formatKeys(shortcut.keys)} ${shortcut.hint}`).join(' · ');
 
 export const titled = (label: string, keys: readonly Chord[]) => `${label} · ${formatKeys(keys)}`;

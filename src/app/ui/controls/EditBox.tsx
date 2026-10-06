@@ -7,18 +7,16 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
-  hint: string;
   actions: ReactNode;
   second?: Field & { firstLabel: string };
 };
 
-export function EditBox({ value, onChange, onKeyDown, hint, actions, second }: Props) {
+export function EditBox({ value, onChange, onKeyDown, actions, second }: Props) {
   return (
     <div className={styles.box}>
       <Area label={second?.firstLabel ?? '메시지 수정'} shown={second !== undefined} value={value} onChange={onChange} onKeyDown={onKeyDown} focus />
       {second && <Area label={second.label} shown value={second.value} onChange={second.onChange} onKeyDown={onKeyDown} focus={false} />}
       <div className={styles.bar}>
-        <span className={styles.hint}>{hint}</span>
         {actions}
       </div>
     </div>

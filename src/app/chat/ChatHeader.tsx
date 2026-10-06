@@ -1,4 +1,4 @@
-import { GitBranch, History, List, MessageSquare, MoreHorizontal, PanelRight, Pencil, Plus, SlidersHorizontal, Users } from 'lucide-react';
+import { GitBranch, History, List, MessageSquare, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Users } from 'lucide-react';
 import { branchTree } from '../../model/chat';
 import { NameDialog } from '../common/NameDialog';
 import { ago } from '../common/time';
@@ -15,12 +15,11 @@ import type { OpenChat } from './useChat';
 
 export function ChatHeading({ chat }: { chat: OpenChat }) {
   const { item, card, shelf, busy } = chat;
-  const title = card ? `${card.name} · ${item?.title ?? '새 채팅'}` : (item?.title ?? '새 채팅');
   const face = card ? <Avatar face={card.name} image={shelf!.face} /> : <Avatar face={MessageSquare} />;
   const wide = useWide();
   return (
     <>
-      <Menu label={card ? `${card.name}의 채팅` : '캐릭터 없이'} size="lg" trigger={(opener) => <ChatTitle avatar={face} title={title} typing={busy} {...opener} />}>
+      <Menu label={card ? `${card.name}의 채팅` : '캐릭터 없이'} size="lg" trigger={(opener) => <ChatTitle avatar={face} name={card?.name ?? '캐릭터 없이'} sub={item?.title ?? '새 채팅'} typing={busy} {...opener} />}>
         <ChatChoices chat={chat} />
       </Menu>
       {!wide && <ChatCastMenu chat={chat} button={false} />}
@@ -64,7 +63,7 @@ function ChatChoices({ chat }: { chat: OpenChat }) {
 }
 
 export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
-  const { id, item, route, toggles, panel, held, infoDrawer, modelMenu, actions } = chat;
+  const { id, item, route, toggles, panel, modelMenu, actions } = chat;
   const remembering = useRemembering();
   const failed = id !== null && remembering.failed.has(id);
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
@@ -97,8 +96,6 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         />
       )}
       {wide && <ReadingMenu />}
-      {/* A phone's header has no room for it: there 정보 opens from its tab and a tapped message's tools. */}
-      {wide && <IconButton icon={PanelRight} label="답장 정보" size="sm" expanded={held === 'info'} controls={infoDrawer} onClick={actions.toggleInfo} />}
       <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
         {!wide && item && <MenuItem label="장기 기억" sub={failed ? '마지막 정리가 실패했어요' : undefined} onClick={toggleMemory} />}

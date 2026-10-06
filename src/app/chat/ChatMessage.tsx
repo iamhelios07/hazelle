@@ -9,7 +9,7 @@ import type { Translating } from '../../runtime/translate';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
 import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
-import { hints, SHORTCUTS, titled } from '../shortcuts';
+import { SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import type { ChatActions } from './useChat';
 import { seenText } from './search';
@@ -101,7 +101,6 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
               : { firstLabel: '원문', label: '번역', value: editing.translation, onChange: (translation) => actions.changeEdit({ translation }) }
         }
         onKeyDown={editKeys}
-        hint={hints(SHORTCUTS.cancelEdit, SHORTCUTS.saveEdit)}
         actions={
           <>
             <Button variant="ghost" size="sm" onClick={actions.cancelEdit}>

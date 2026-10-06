@@ -37,11 +37,6 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-8);
-}
-
-.hint {
-  flex-grow: 1;
-  color: var(--color-text-faint);
-  font-size: var(--text-xs);
 }

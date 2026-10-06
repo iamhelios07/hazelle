@@ -1,9 +1,9 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, type KeyboardEvent } from 'react';
 import type { Blocked } from '../../runtime/turn';
 import { describeTurnFailure } from '../common/failure';
 import { withRo } from '../common/languages';
-import { hints, SHORTCUTS, titled } from '../shortcuts';
-import { Button, Callout, Composer, pressed, pressedKey, SendButton, SendNote, useMenuOpener, useWide } from '../ui';
+import { SHORTCUTS, titled } from '../shortcuts';
+import { Button, Callout, Composer, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
 import { ChatNote } from './ChatNote';
@@ -26,8 +26,6 @@ const FIX = {
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
   const { draft, messages, last, busy, problem, translate, sendLanguage, modelMenu, promptMenu, actions } = chat;
   const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: { onClick: () => actions.openDialog('persona') } };
-  const wide = useWide();
-  const [focused, setFocused] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -55,8 +53,6 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
     }
   }
 
-  const hint = !focused || !wide ? '' : busy ? hints(SHORTCUTS.stop) : draft.text ? hints(SHORTCUTS.send, SHORTCUTS.newline) : hints(SHORTCUTS.send, SHORTCUTS.editLast, SHORTCUTS.swipe);
-
   return (
     <>
       {problem && (
@@ -71,10 +67,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         value={draft.text}
         onChange={draft.set}
         onKeyDown={onKey}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
         placeholder={translate.input ? `${withRo(sendLanguage)} 옮겨 보내요` : '메시지'}
-        hint={hint}
         tools={
           <>
             <ChatPersonaPicker chat={chat} />
@@ -94,7 +87,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
             <SendButton
               streaming={busy}
               disabled={!busy && !draft.text.trim()}
-              title={busy ? titled(SHORTCUTS.stop.hint, SHORTCUTS.stop.keys) : titled(SHORTCUTS.send.hint, SHORTCUTS.send.keys)}
+              title={busy ? titled(SHORTCUTS.stop.label, SHORTCUTS.stop.keys) : titled(SHORTCUTS.send.label, SHORTCUTS.send.keys)}
               onClick={() => (busy ? actions.stop() : void actions.send())}
             />
           </>

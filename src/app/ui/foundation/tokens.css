@@ -292,6 +292,7 @@
   --avatar-md: 32px;
   --avatar-lg: 72px;
   --menu-width: 300px;
+  --chat-title-max-width: 320px;
   --hint-width: 280px;
   --dialog-width: 440px;
   --dialog-width-wide: 780px;

@@ -94,10 +94,6 @@
   padding-top: var(--space-8);
 }
 
-.hint {
-  composes: ellipsis from '../foundation/a11y.module.css';
+.spacer {
   flex-grow: 1;
-  min-width: 0;
-  color: var(--color-text-faint);
-  font-size: var(--text-xs);
 }
