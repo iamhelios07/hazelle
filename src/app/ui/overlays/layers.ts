@@ -77,7 +77,8 @@ const TAB_STOPS = 'a[href], button:not(:disabled), input:not(:disabled), textare
 export function useFocusTrap(box: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    box.current?.querySelector<HTMLElement>('input, textarea, button')?.focus();
+    // A part that focused itself as it mounted keeps it: children's effects run before this one.
+    if (!box.current?.contains(opener)) box.current?.querySelector<HTMLElement>('input, textarea, button')?.focus();
     return () => opener?.focus();
   }, [box]);
   return (event: ReactKeyboardEvent) => {

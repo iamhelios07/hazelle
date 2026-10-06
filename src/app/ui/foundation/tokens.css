@@ -27,6 +27,8 @@
   --palette-gold-400: #e6b35c;
   --palette-gold-300: #f2c97e;
   --palette-gold-950: #1b1407;
+  --palette-gold-900: #33281a;
+  --palette-gold-150: #f6ead2;
   --palette-coral-400: #f0a07a;
   --palette-mint-400: #8fd1b0;
   --palette-mint-800: #2b3a33;
@@ -135,6 +137,18 @@
   --color-kind-chat-bg: var(--palette-jade-900);
   --color-kind-note: var(--palette-rose-400);
   --color-kind-note-bg: var(--palette-rose-900);
+
+  /* A face without a picture (collections/CardGrid): its letter and fill, picked by its name, so one name reads alike. */
+  --color-face-1: var(--palette-violet-300);
+  --color-face-1-bg: var(--palette-violet-900);
+  --color-face-2: var(--palette-sky-400);
+  --color-face-2-bg: var(--palette-sky-900);
+  --color-face-3: var(--palette-jade-400);
+  --color-face-3-bg: var(--palette-jade-900);
+  --color-face-4: var(--palette-rose-400);
+  --color-face-4-bg: var(--palette-rose-900);
+  --color-face-5: var(--palette-gold-500);
+  --color-face-5-bg: var(--palette-gold-900);
 
   /* Prompt text (the editor's highlight layer): the body, heading lines, CBS tags and <tags>. */
   --color-markup-body: var(--palette-sand-100);
@@ -264,6 +278,8 @@
   --form-max-width: 688px;
   /* 캐릭터 둘러보기: the narrowest face card, the space between cards, and the widest the grid grows. */
   --card-min-width: 152px;
+  --face-min-width: 104px;
+  --face-min-width-phone: 68px;
   --card-gap: var(--space-16);
   --gallery-max-width: 1120px;
   --portrait-width: 200px;
@@ -276,6 +292,9 @@
   --menu-width: 300px;
   --hint-width: 280px;
   --dialog-width: 440px;
+  --dialog-width-wide: 780px;
+  --dialog-height-wide: 640px;
+  --detail-pane-width: 400px;
   --composer-max-height: 240px;
   /* One line of the element's own text: a custom property keeps 1lh as written, so it is read where used. */
   --one-line: 1lh;
@@ -396,6 +415,16 @@
   --color-kind-chat-bg: var(--palette-jade-100);
   --color-kind-note: var(--palette-rose-700);
   --color-kind-note-bg: var(--palette-rose-100);
+  --color-face-1: var(--palette-violet-700);
+  --color-face-1-bg: var(--palette-violet-100);
+  --color-face-2: var(--palette-sky-700);
+  --color-face-2-bg: var(--palette-sky-100);
+  --color-face-3: var(--palette-jade-700);
+  --color-face-3-bg: var(--palette-jade-100);
+  --color-face-4: var(--palette-rose-700);
+  --color-face-4-bg: var(--palette-rose-100);
+  --color-face-5: var(--palette-gold-650);
+  --color-face-5-bg: var(--palette-gold-150);
 
   --color-markup-body: var(--palette-ink-700);
   --color-markup-heading: var(--palette-ink-900);

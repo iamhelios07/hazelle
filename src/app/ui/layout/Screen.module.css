@@ -86,3 +86,7 @@
 .screen.pane.form {
   max-width: var(--form-max-width);
 }
+
+.screen.pane.wide {
+  max-width: var(--gallery-max-width);
+}

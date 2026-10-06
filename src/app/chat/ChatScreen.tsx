@@ -33,16 +33,16 @@ type Props = {
 export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
   const { reading, display } = useDisplay();
   const chat = useChat(chatId, item, shelf, reading.reply);
-  const { id, busy, panel, scroll, prompt, persona, actions } = chat;
+  const { id, busy, panel, scroll, prompt, actions } = chat;
   const folded = display.foldComposer && scroll.away;
-  useShortcut('personas', () => actions.toggleSide('personas'));
+  useShortcut('personas', () => actions.openDialog('persona'));
   useShortcut('prompts', () => actions.toggleSide('prompts'));
   useShortcut('status', () => {
     if (!chat.status.length) return false;
     actions.toggleStatus();
   });
   useShortcut('find', () => actions.openSearch());
-  const inUse = { personas: persona.kind === 'persona' ? persona.persona.id : null, prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
+  const inUse = { prompts: prompt.kind === 'prompt' ? prompt.prompt.id : null, character: null };
   return (
     <>
       <ChatFrame

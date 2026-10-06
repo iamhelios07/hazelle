@@ -120,7 +120,7 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   const list = listOf(route);
   if (!list) return screen(route);
   const detail = route.kind === list.kind ? null : screen(route);
-  if (split) return <ListDetail list={screen(list)} detail={detail ?? <Empty variant="pane">{EMPTY[list.kind]}</Empty>} />;
+  if (split) return <ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={screen(list)} detail={detail ?? <Empty variant="pane">{EMPTY[list.kind]}</Empty>} />;
   return detail ?? screen(list);
 }
 

@@ -7,6 +7,7 @@ import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
 import { markDeleted } from './characters';
 import type { Greetings } from './greetings';
+import { withPersona } from './personas';
 import { without, type ObjectStore, type Write } from './store';
 
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
@@ -20,7 +21,7 @@ import { without, type ObjectStore, type Write } from './store';
 // chat is never there without them: its screen would show it greeting-less until they landed.
 // id is the one the chat was shown under before it was saved, which seeds its greeting's pick and rollp tags.
 export async function startChat(store: ObjectStore, id: string, chat: Chat, greetings: Greetings | null): Promise<ApiFailure | null> {
-  const { entries, root } = chatWrites(id, chat, greetings, []);
+  const { entries, root } = chatWrites(id, withPersona(store, chat), greetings, []);
   const saved = await store.batch([...entries, root]);
   return saved.ok ? null : saved;
 }

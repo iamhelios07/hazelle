@@ -7,6 +7,7 @@ import { importCharacter } from './characters';
 import { MEMORY_DEFAULTS } from './memory';
 import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch, type MoveStep } from './move';
 import { setModuleAlways } from './modules';
+import { addPersona, setCurrentPersona } from './personas';
 import { testCard, testServer } from './testing';
 import { summaryId, summaryStale } from './summary';
 
@@ -103,6 +104,15 @@ describe('moveFromRisu', () => {
     expect(backup.character).toHaveBeenCalledExactlyOnceWith(0);
     expect(store.list('character')).toHaveLength(1);
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
+  });
+
+  it('gives a chat Risu bound to no persona the current one', async () => {
+    const { store, files } = await server.account();
+    const current = await addPersona(store, { name: '진', description: '', picture: null });
+    await setCurrentPersona(store, current.ok ? current.data.id : '');
+    const backup = source({ characters: [{ ...luna, chats: [{ ...luna.chats[0]!, persona: null }] }] });
+    await moveFromRisu(store, files, backup, backup.catalog, () => {});
+    expect(store.list('chat')[0]!.value.persona).toBe(current.ok && current.data.id);
   });
 
   it.each(['entry', 'character'] as const)('stages every chat of a character in one batch, publishes the roots with their character, summarizes them in one request from what it wrote, and retries a cut at the %s write leaving no chat without its character', async (cut) => {

@@ -30,6 +30,43 @@
   scrollbar-width: thin;
 }
 
+.wide {
+  width: var(--dialog-width-wide);
+  height: min(var(--dialog-height-wide), 100%);
+}
+
+.wide .body {
+  flex-grow: 1;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-16);
+  padding-top: var(--space-12);
+  border-top: var(--border-thin) solid var(--color-divider);
+}
+
+/* Its last item, a way out such as a link to manage what is picked, stands at the far end. */
+.footer > :last-child {
+  margin-inline-start: auto;
+}
+
+@media (max-width: 599px) {
+  .sheet {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .wide {
+    width: 100%;
+    height: 92%;
+    padding: var(--space-16);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+}
+
 .head {
   display: flex;
   align-items: center;

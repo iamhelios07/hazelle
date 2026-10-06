@@ -8,7 +8,11 @@ export const MEDIA = {
   narrow: '(max-width: 959px)',
   split: '(min-width: 1200px)',
   panelCovers: '(max-width: 1279px)',
+  // A phone's width. phone is its complement: change the two together.
   roomy: '(min-width: 600px)',
+  phone: '(max-width: 599px)',
+  // A mouse or trackpad, where a focused search raises no on-screen keyboard.
+  finePointer: '(pointer: fine)',
   // A touch screen keeps :hover on whatever was tapped last.
   hover: '(hover: hover)',
   reducedMotion: '(prefers-reduced-motion: reduce)',
@@ -57,3 +61,5 @@ const subscribeResize = (listener: () => void) => {
   return () => window.removeEventListener('resize', listener);
 };
 export const useViewport = () => useSyncExternalStore(subscribeResize, () => `${innerWidth}x${innerHeight}`);
+
+export const hasFinePointer = () => mediaQuery(MEDIA.finePointer).read();

@@ -69,10 +69,56 @@
 }
 
 .letter {
-  color: var(--color-text-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   font-family: var(--font-serif);
   font-size: var(--text-display);
   font-weight: var(--weight-bold);
+}
+
+.tint1 { color: var(--color-face-1); background: var(--color-face-1-bg); }
+.tint2 { color: var(--color-face-2); background: var(--color-face-2-bg); }
+.tint3 { color: var(--color-face-3); background: var(--color-face-3-bg); }
+.tint4 { color: var(--color-face-4); background: var(--color-face-4-bg); }
+.tint5 { color: var(--color-face-5); background: var(--color-face-5-bg); }
+
+.face {
+  grid-template-columns: repeat(auto-fill, minmax(var(--face-min-width), 1fr));
+}
+
+.face .picture {
+  aspect-ratio: 1;
+}
+
+.current .picture,
+.current:hover .picture {
+  outline: var(--focus-ring-width) solid var(--color-accent);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.tag {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+}
+
+.faint {
+  color: var(--color-text-faint);
+  font-style: italic;
+}
+
+/* A card with no note keeps the note's line, so the names of a row stand on one line. */
+.note:empty::before {
+  content: '\00a0';
+}
+
+@media (max-width: 599px) {
+  .face {
+    --face-min-width: var(--face-min-width-phone);
+  }
 }
 
 .check {

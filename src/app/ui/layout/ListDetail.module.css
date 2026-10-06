@@ -17,3 +17,15 @@
   overflow-y: auto;
   scrollbar-width: thin;
 }
+
+.grid .list {
+  flex-grow: 1;
+  width: auto;
+  min-width: 0;
+}
+
+.grid .detail {
+  flex-grow: 0;
+  flex-shrink: 0;
+  width: var(--detail-pane-width);
+}

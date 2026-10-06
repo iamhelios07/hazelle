@@ -2,6 +2,7 @@ import type { BackupCatalog, Card, Imported, ImportReport, MoveUnsupported, Risu
 import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';
 import type { MemorySettings } from '../model/memory';
+import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { createFolder, importCharacter, saveAssets, type Progress } from './characters';
 import { chatWrites } from './chat-log';
@@ -103,6 +104,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   // Chats and characters are listed by the server's rev, the latest first, and a batch takes its revs in the order
   // written. So what was talked in last is written last, whatever order Risu kept it in (due).
   const chatTotal = due.reduce((sum, { chatCount }) => sum + chatCount, 0);
+  const current = store.get('settings', SETTINGS_ID)?.value.persona;
   let chatsDone = 0;
   const moved: MovedCharacter[] = [];
   for (const [done, { key }] of due.entries()) {
@@ -118,7 +120,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     // A character's chats are held together from their entries, which go in one batch, to their summaries, which read
     // the published character and go in one request: the source holds the whole character already, so this holds no
     // more than it. Nothing is pulled: what the leases hold is what this device wrote.
-    const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).map((chat) => chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, memory));
+    const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).map((chat) => chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, current, memory));
     const leases = chats.map(({ root }) => store.retainChat(root.id, { created: true }));
     try {
       for (const lease of leases) {
@@ -154,10 +156,11 @@ async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<
   return made.ok ? { ok: true, data: made.data.id } : made;
 }
 
-function chatOf(id: string, character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, memory: MemorySettings): ReturnType<typeof chatWrites> {
+// A chat Risu bound to no persona, or to one not brought, holds the current persona, as a chat saved here would.
+function chatOf(id: string, character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, current: string | undefined, memory: MemorySettings): ReturnType<typeof chatWrites> {
   // The chat opens on the greeting Risu showed; a blank one shown leaves the chat without one, as Risu showed none.
   const greetings = startingGreetings(projectGreetings(card.greetings, card.greetings.map(() => crypto.randomUUID()), greeting));
-  const own = persona === null ? undefined : personaIds.get(persona);
+  const own = (persona === null ? undefined : personaIds.get(persona)) ?? current;
   const chat: Chat = { title: title.trim() || null, character, models: {}, memory, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }) };
   return chatWrites(id, chat, greetings, messages);
 }

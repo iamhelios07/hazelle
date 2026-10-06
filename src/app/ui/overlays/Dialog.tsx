@@ -15,10 +15,15 @@ type Props = {
   onSubmit?: () => void;
   actions?: ReactNode;
   actionsLayout?: 'full' | 'row';
+  // wide: a picker of many, at a fixed height so a search does not resize it, and a sheet from the bottom on a phone.
+  size?: 'normal' | 'wide';
+  // Above and below the scrolling body, always in view.
+  toolbar?: ReactNode;
+  footer?: ReactNode;
   children: ReactNode;
 };
 
-export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout = 'row', children }: Props) {
+export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout = 'row', size = 'normal', toolbar, footer, children }: Props) {
   const scrim = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   // Only the scrim itself is outside: the toast sits above the dialog and stays pressable while it is open.
@@ -33,13 +38,14 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
     children
   );
   return (
-    <div ref={scrim} className={styles.scrim}>
-      <div ref={box} className={styles.dialog} role="dialog" aria-modal="true" aria-label={title} onKeyDown={trap}>
+    <div ref={scrim} className={size === 'wide' ? `${styles.scrim} ${styles.sheet}` : styles.scrim}>
+      <div ref={box} className={size === 'wide' ? `${styles.dialog} ${styles.wide}` : styles.dialog} role="dialog" aria-modal="true" aria-label={title} onKeyDown={trap}>
         <div className={styles.head}>
           <h2 className={styles.title}>{title}</h2>
           <IconButton icon={X} label="닫기" size="sm" onClick={onClose} />
         </div>
         {note && <p className={styles.note}>{note}</p>}
+        {toolbar}
         <div className={styles.body}>
           {onSubmit ? (
             <form
@@ -54,6 +60,7 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
             body
           )}
         </div>
+        {footer && <div className={styles.footer}>{footer}</div>}
       </div>
     </div>
   );

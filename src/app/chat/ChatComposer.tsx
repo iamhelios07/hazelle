@@ -7,7 +7,7 @@ import { Button, Callout, Composer, pressed, pressedKey, SendButton, SendNote, u
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
 import { ChatNote } from './ChatNote';
-import { ChatPersonaMenu } from './ChatPersonaMenu';
+import { ChatPersonaPicker } from './ChatPersonaPicker';
 import { ChatTranslate } from './ChatTranslate';
 import type { OpenChat } from './useChat';
 
@@ -24,8 +24,8 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, busy, problem, translate, sendLanguage, modelMenu, promptMenu, personaMenu, actions } = chat;
-  const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: useMenuOpener(personaMenu) };
+  const { draft, messages, last, busy, problem, translate, sendLanguage, modelMenu, promptMenu, actions } = chat;
+  const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: { onClick: () => actions.openDialog('persona') } };
   const wide = useWide();
   const [focused, setFocused] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -77,7 +77,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         hint={hint}
         tools={
           <>
-            <ChatPersonaMenu chat={chat} />
+            <ChatPersonaPicker chat={chat} />
             <ChatNote chat={chat} />
             <ChatTranslate chat={chat} />
           </>

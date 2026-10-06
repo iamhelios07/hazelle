@@ -52,7 +52,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: '페르소나', exact: true }).click();
     await page.getByRole('button', { name: /^e2e/ }).click();
     await page.getByLabel('별명', { exact: true }).fill(NICKNAME);
-    await expect(page.getByRole('button', { name: new RegExp(`^e2e · ${NICKNAME}`) })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(`^e2e ${NICKNAME}`) })).toBeVisible();
     await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   });
 

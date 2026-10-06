@@ -7,7 +7,7 @@ type Shortcut = { label: string; hint: string; keys: readonly Chord[] };
 export const SHORTCUTS = {
   // Its handler must never pass Ctrl+S on, or the browser's save-page dialog opens.
   settings: { label: '설정 열기 · 닫기', hint: '설정', keys: [{ key: ',', mod: true }, { key: 's', mod: true }] },
-  personas: { label: '페르소나 (채팅에서는 옆 패널)', hint: '페르소나', keys: [{ key: 'e', mod: true }] },
+  personas: { label: '페르소나 (채팅에서는 바꾸기)', hint: '페르소나', keys: [{ key: 'e', mod: true }] },
   prompts: { label: '프롬프트 (채팅에서는 옆 패널)', hint: '프롬프트', keys: [{ key: 'p', mod: true }] },
   shortcutList: { label: '단축키 보기', hint: '단축키', keys: [{ key: '/', mod: true }] },
   sidebar: { label: '사이드바 접기 · 펴기', hint: '사이드바', keys: [{ key: 'b', mod: true }] },

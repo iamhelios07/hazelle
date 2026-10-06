@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveConnection } from '../connectors/registry';
 import type { Connection } from '../connectors/types';
 import { appendUserMessage, startChat } from './chat-log';
-import { addPersona, setDefaultPersona } from './personas';
+import { editPersona } from './personas';
 import { stubRelay, testServer, upstream } from './testing';
 
 const server = testServer();
@@ -47,7 +47,7 @@ describe('session', () => {
       expect(session.read.chats.snapshot()).toBe(next);
     }));
 
-  it("updates a chat's preview when its messages or its default persona dependency change", () =>
+  it("updates a chat's preview when its messages or its persona dependency change", () =>
     server.withSession(async (session) => {
       const { store } = session;
       const chat = crypto.randomUUID();
@@ -55,8 +55,7 @@ describe('session', () => {
       await startChat(store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '{{user}}, hello' });
       expect(session.read.chat(chat).snapshot()?.preview).toBe('jin, hello');
-      const persona = await addPersona(store, { name: 'Mina', description: '', picture: null });
-      await setDefaultPersona(store, persona.ok ? persona.data.id : '');
+      await editPersona(store, store.get('chat', chat)!.value.persona!, { name: 'Mina' });
       expect(session.read.chat(chat).snapshot()?.preview).toBe('Mina, hello');
       await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: 'bye, {{user}}' });
       expect(session.read.chat(chat).snapshot()?.preview).toBe('bye, Mina');

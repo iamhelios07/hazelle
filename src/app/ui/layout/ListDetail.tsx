@@ -7,9 +7,10 @@ const PaneContext = createContext<'list' | 'detail' | null>(null);
 export const usePane = () => useContext(PaneContext);
 
 // Each pane scrolls on its own, and the screens inside take a pane's shape instead of a page's (Screen, NavBar).
-export function ListDetail({ list, detail }: { list: ReactNode; detail: ReactNode }) {
+// grid: a list of faces takes the width, beside a detail of a fixed width.
+export function ListDetail({ list, detail, variant = 'list' }: { list: ReactNode; detail: ReactNode; variant?: 'list' | 'grid' }) {
   return (
-    <div className={styles.split}>
+    <div className={variant === 'grid' ? `${styles.split} ${styles.grid}` : styles.split}>
       <div className={styles.list}>
         <PaneContext.Provider value="list">{list}</PaneContext.Provider>
       </div>

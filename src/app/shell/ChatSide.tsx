@@ -2,8 +2,6 @@ import type { ReactNode } from 'react';
 import { live } from '../../model/library';
 import type { SideAt } from '../chat/ChatScreen';
 import { CharacterEditor } from '../library/CharacterEditor';
-import { PersonaEditor } from '../personas/PersonaEditor';
-import { PersonaList } from '../personas/PersonaList';
 import { PromptEditor } from '../prompts/PromptEditor';
 import { PromptList } from '../prompts/PromptList';
 import { useCharacter, useStored } from '../session';
@@ -23,7 +21,6 @@ const panel =
 export function ChatSide(props: SideAt) {
   const { open } = props;
   if (open.kind === 'character') return <CharacterSide {...props} open={open} />;
-  if (open.kind === 'personas') return <PersonaSide {...props} open={open} />;
   return <PromptSide {...props} open={open} />;
 }
 
@@ -32,13 +29,6 @@ function CharacterSide({ open, onClose }: Props<'character'>) {
   // The chat is gone from the page with its character, so the character is there while this is.
   const { character } = shelf!;
   return <CharacterEditor key={open.id} id={open.id} character={character} frame={panel('캐릭터', onClose)} />;
-}
-
-function PersonaSide({ open, inUse, onOpen, onClose }: Props<'personas'>) {
-  const stored = live(useStored('persona', open.id));
-  const toList = () => onOpen({ kind: 'personas', id: null });
-  if (!stored) return <PersonaList onPick={(id) => onOpen({ kind: 'personas', id })} inUse={inUse ?? undefined} frame={panel('페르소나', onClose)} />;
-  return <PersonaEditor key={stored.id} stored={stored} backLabel="페르소나 목록" onBack={toList} onRemoved={toList} frame={panel('페르소나', onClose)} />;
 }
 
 function PromptSide({ open, inUse, onOpen, onClose }: Props<'prompts'>) {

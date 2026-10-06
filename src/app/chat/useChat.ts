@@ -24,7 +24,7 @@ import {
   withCast,
 } from '../../runtime/chat-log';
 import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
-import { chatPersona, pinPersona } from '../../runtime/personas';
+import { chatPersona, pinPersona, setCurrentPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
@@ -54,7 +54,7 @@ const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failur
 
 export type OpenChat = ReturnType<typeof useChat>;
 
-export type Side = { kind: 'personas'; id: string | null } | { kind: 'prompts'; id: string | null; pane: 'toggles' | null } | { kind: 'character'; id: string };
+export type Side = { kind: 'prompts'; id: string | null; pane: 'toggles' | null } | { kind: 'character'; id: string };
 // Every part of the chat screen acts through this one object, so a new action is an entry here, not a prop per part.
 export type ChatActions = OpenChat['actions'];
 
@@ -124,12 +124,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, answered, reply === 'stay');
   const memory = useChatMemory(id);
   const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy);
-  const [dialog, setDialog] = useState<'rename' | 'reading' | null>(null);
+  const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | null>(null);
   const modelMenu = useMenuHandle();
   const promptMenu = useMenuHandle();
-  const personaMenu = useMenuHandle();
   const castMenu = useMenuHandle();
-  // 토글, 장기 기억 and the persona and prompt lists take the same place beside the story, so one closes another.
+  // 토글, 장기 기억 and the prompt list take the same place beside the story, so one closes another.
   const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
   const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
   // The search bar's term and current hit, by message id so rows coming and going keep it. focus asks the field to take
@@ -358,10 +357,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     return WRITE_OWN[field](store, id, value);
   }
 
-  // Pinned from a chat, the persona is that chat's through the 고정, so the chat's own pick goes.
-  async function pin(persona: string | null): Promise<{ ok: true } | ApiFailure> {
-    const pinned = await pinPersona(store, chat.character!, persona);
-    return !pinned.ok || persona === null ? pinned : setOwn('persona', null);
+  // A pick is this chat's persona and the current one, which a chat not saved yet follows.
+  async function choosePersona(persona: string): Promise<{ ok: true } | ApiFailure> {
+    const own = await setOwn('persona', persona);
+    return own.ok ? setCurrentPersona(store, persona) : own;
   }
 
   function changeCast(ids: string[]) {
@@ -473,7 +472,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     dialog,
     modelMenu,
     promptMenu,
-    personaMenu,
     castMenu,
     draft,
     scroll,
@@ -523,7 +521,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       closeSearch: () => setSearch(null),
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.
-      toggleSide: (kind: 'personas' | 'prompts') => setPanel((current) => (current?.kind === kind ? null : kind === 'personas' ? { kind, id: null } : { kind, id: null, pane: null })),
+      toggleSide: (kind: 'prompts') => setPanel((current) => (current?.kind === kind ? null : { kind, id: null, pane: null })),
       closePanel: () => setPanel(null),
       hold,
       keepStatus: () => keepStatus(true),
@@ -532,11 +530,12 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       fitStatus: (script: number, fits: boolean) => setFitting((current) => (current.get(script) === fits ? current : new Map(current).set(script, fits))),
       markStatus,
       watch,
-      openDialog: (which: 'rename' | 'reading') => setDialog(which),
+      openDialog: (which: 'rename' | 'reading' | 'persona') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
       setOwn,
-      pinPersona: pin,
+      choosePersona,
+      pinPersona: (persona: string | null) => pinPersona(store, chat.character!, persona),
       setCast: changeCast,
       flip,
       resetToggles: reset,
