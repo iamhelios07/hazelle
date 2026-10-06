@@ -323,6 +323,6 @@ function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
     case 'no-token':
       return { kind: error.kind };
     case 'pool':
-      return error.reason === 'unknown' ? { kind: 'pool', reason: error.reason, group: error.group, accounts: [...error.accounts] } : { kind: 'pool', reason: error.reason, group: error.group };
+      return { kind: 'pool', group: error.group };
   }
 }

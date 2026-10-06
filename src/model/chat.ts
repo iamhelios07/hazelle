@@ -74,8 +74,7 @@ export type ReceiptError =
   | { kind: 'network'; detail: string }
   | { kind: 'offline' }
   | { kind: 'no-token' }
-  | { kind: 'pool'; reason: 'empty' | 'spent'; group: string }
-  | { kind: 'pool'; reason: 'unknown'; group: string; accounts: string[] };
+  | { kind: 'pool'; group: string };
 
 // A version as the reader reads it, beside its text, which is what the model is sent and never this.
 // A reply's is translated from its displayed text; a message sent translated keeps here what the user typed, and its

@@ -108,10 +108,7 @@ export function describeReplyError(error: ReplyError): string {
     case 'no-token':
       return '로그인한 계정으로 쓸 토큰을 받지 못했어요. 연결을 지우고 다시 로그인해 주세요.';
     case 'pool':
-      if (error.reason === 'unknown') return `${error.accounts.join(', ')} 계정의 남은 한도를 확인하지 못해서 고르지 못했어요. 잠시 뒤 다시 해 주세요.`;
-      return error.reason === 'empty'
-        ? `지금 차례인 ${error.group}에 계정이 없어요. 연결에서 계정을 옮기거나 추가해 주세요.`
-        : `지금 차례인 ${error.group}의 계정이 한도를 다 썼어요. 초기화나 다음 차례를 기다려 주세요.`;
+      return `지금 차례인 ${error.group}에 계정이 없어요. 연결에서 계정을 옮기거나 추가해 주세요.`;
   }
 }
 

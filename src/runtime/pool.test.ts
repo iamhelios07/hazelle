@@ -48,14 +48,14 @@ describe('Pool.pick', () => {
     expect(await new Pool().pick(pool())).toMatchObject({ ok: true, account: { id: 'c' } });
   });
 
-  it('says apart a group with no account, one spent, and allowances it could not read', async () => {
+  it('refuses only a group with no account; with no allowance left it leaves the provider to decide', async () => {
     allowances({ a: left(0), b: 500 });
     at(OCTOBER_20);
-    expect(await new Pool().pick(pool([]))).toEqual({ ok: false, failure: { kind: 'pool', reason: 'empty', group: '그룹 2' } });
+    expect(await new Pool().pick(pool([]))).toEqual({ ok: false, failure: { kind: 'pool', group: '그룹 2' } });
     at(OCTOBER_10);
-    expect(await new Pool().pick(pool())).toEqual({ ok: false, failure: { kind: 'pool', reason: 'unknown', group: '그룹 1', accounts: ['user-b'] } });
+    expect(await new Pool().pick(pool())).toMatchObject({ ok: true, account: { id: 'b' } });
     allowances({ a: left(0), b: left(0) });
-    expect(await new Pool().pick(pool())).toEqual({ ok: false, failure: { kind: 'pool', reason: 'spent', group: '그룹 1' } });
+    expect(await new Pool().pick(pool())).toMatchObject({ ok: true, account: { id: 'a' } });
   });
 });
 
