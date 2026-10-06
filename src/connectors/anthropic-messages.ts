@@ -27,7 +27,8 @@ function reasoningFields(reasoning: Reasoning | undefined) {
 }
 
 // Five minutes is the default and goes unnamed.
-const cacheControl = (cache: Cache) => ({ cache_control: { type: 'ephemeral', ...(cache === '1h' ? { ttl: '1h' } : {}) } });
+export const ephemeral = (cache: Cache) => ({ type: 'ephemeral', ...(cache === '1h' ? { ttl: '1h' } : {}) });
+const cacheControl = (cache: Cache) => ({ cache_control: ephemeral(cache) });
 
 // Never the cache mark itself; a cache point is a text block that carries it. OpenRouter reads the same shape in chat completions.
 export const wireMessage = (message: ChatMessage, cache: Cache | undefined) =>
@@ -97,8 +98,12 @@ export const anthropicMessages: Codec = {
   carries: {
     numbers: { maxOutput: { min: 1, max: null, always: true }, temperature: { min: 0, max: 1 }, topP: { min: 0, max: 1 }, topK: { min: 0, max: null } },
     reasoning: { off: true, levels: LEVELS, budget: { min: 1024, max: null }, adaptive: true },
-    cache: true,
+    stop: true,
+    verbosity: false,
+    serviceTier: true,
   },
+
+  cache: { mark: { kind: 'part' }, accepted: true },
 
   // The Messages API requires max_tokens. With no setting and no catalog limit there is no truthful
   // number to send, so the request is refused instead of guessed.
@@ -122,6 +127,7 @@ export const anthropicMessages: Codec = {
         ...(settings.topK === undefined ? {} : { top_k: settings.topK }),
         ...(settings.stop === undefined ? {} : { stop_sequences: settings.stop }),
         ...reasoningFields(settings.reasoning),
+        ...(settings.serviceTier === undefined ? {} : { service_tier: settings.serviceTier }),
         ...fields,
         stream: settings.streaming !== false,
       }),

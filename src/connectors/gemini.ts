@@ -113,9 +113,13 @@ export const gemini: Codec = {
       seed: { min: null, max: null },
     },
     reasoning: { off: true, levels: LEVELS, budget: { min: null, max: null }, adaptive: true },
-    // Gemini caches on its own (implicit caching) or by a separately created cachedContent; it has no cache points.
-    cache: false,
+    stop: true,
+    verbosity: false,
+    serviceTier: false,
   },
+
+  // Gemini caches on its own (implicit caching) or by a separately created cachedContent; it has no cache points.
+  cache: null,
 
   chat(endpoint, { model, messages, settings }, fields) {
     const system = messages.filter((message) => message.role === 'system');

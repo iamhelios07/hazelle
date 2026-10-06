@@ -19,13 +19,14 @@ import { ollama } from './ollama';
 import { openai } from './openai';
 import { openRouter } from './openrouter';
 import { perplexity } from './perplexity';
+import { responses } from './responses';
 import { surplus } from './surplus';
 import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type SettingsSchema } from './settings';
 import { together } from './together';
 import { upstage } from './upstage';
 import { vercel } from './vercel';
 import { xai } from './xai';
-import { ConnectorError, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
+import { ConnectorError, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
 
 // Adding a provider means adding its connection type here. Nothing else names one. The order is the screen's, 주요 too.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [
@@ -57,7 +58,7 @@ export const GENERIC = 'generic';
 
 // Keyed by any string: a stored connection or model snapshot may name a protocol that only a newer
 // version of the app speaks.
-const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatCompletions, 'anthropic-messages': anthropicMessages, gemini };
+const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatCompletions, 'anthropic-messages': anthropicMessages, gemini, responses };
 
 export type Resolved = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
 
@@ -87,12 +88,16 @@ export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
 
-function carries({ type, codec }: Resolved): Carries {
-  const { reasoning, cache } = codec.carries;
+const cacheWay = ({ type, codec }: Resolved, model: Model): CacheWay | null => codec.cache ?? type?.cachePoints?.(model) ?? null;
+
+function carries(route: Resolved, model: Model): Carries {
+  const { reasoning } = route.codec.carries;
+  const way = cacheWay(route, model);
   return {
-    ...codec.carries,
-    reasoning: reasoning.budget || !type?.reasoningBudget ? reasoning : { ...reasoning, budget: { min: null, max: null } },
-    cache: cache === false && type?.cacheControl ? null : cache,
+    ...route.codec.carries,
+    reasoning: reasoning.budget || !route.type?.reasoningBudget ? reasoning : { ...reasoning, budget: { min: null, max: null } },
+    // accepted null is unknown, not refused.
+    cache: way ? way.accepted : false,
   };
 }
 
@@ -101,7 +106,7 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
   const resolved = resolveConnection(connection);
   if (!resolved) return null;
   try {
-    return settingsSchema(carries(resolveModel(resolved, model)), model);
+    return settingsSchema(carries(resolveModel(resolved, model), model), model);
   } catch (error) {
     if (error instanceof ConnectorError) return null;
     throw error;
@@ -111,7 +116,7 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
 // settings is the 묶음's as stored; the 모델 설정 screen names each change with the same fit().
 // chatRequest writes it and cacheView reads it, so a forecast compares what is sent.
 function sending(route: Resolved, { model, messages, settings: stored }: ChatRequest): ChatRequest {
-  const { settings } = fit(settingsSchema(carries(route), model), stored);
+  const { settings } = fit(settingsSchema(carries(route, model), model), stored);
   const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
   return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
 }
@@ -120,16 +125,20 @@ export function chatRequest(route: Resolved, request: ChatRequest): HttpRequest 
   const sent = sending(route, request);
   const { reasoning, maxOutput } = sent.settings;
   const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
-  if (maxOutput === undefined || !route.type?.outputLimit) return route.codec.chat(route.endpoint, sent, fields);
-  return route.codec.chat(route.endpoint, { ...sent, settings: { ...sent.settings, maxOutput: undefined } }, { ...fields, ...route.type.outputLimit(maxOutput) });
+  const mark = cacheWay(route, sent.model)?.mark ?? null;
+  if (maxOutput === undefined || !route.type?.outputLimit) return route.codec.chat(route.endpoint, sent, fields, mark);
+  return route.codec.chat(route.endpoint, { ...sent, settings: { ...sent.settings, maxOutput: undefined } }, { ...fields, ...route.type.outputLimit(maxOutput) }, mark);
 }
 
 // cache is how long the points keep it, null when none is sent. Reasoning is there because changing it drops the cached
 // messages.
 export type CacheView = { model: string; reasoning: ModelSettings['reasoning']; cache: Cache | null; messages: (ChatMessage & { index: number })[] };
 
+// A prompt_cache_key marks no point: the provider caches what prefix it finds, so the view holds none and nothing is
+// forecast.
 export function cacheView(route: Resolved, request: ChatRequest): CacheView {
-  const { settings, messages } = sending(route, request);
+  const { settings, messages: sent } = sending(route, request);
+  const messages = cacheWay(route, request.model)?.mark.kind === 'key' ? sent.map(({ role, content }): ChatMessage => ({ role, content })) : sent;
   const placed = messages.map((message, index) => ({ ...message, index }));
   const ordered = route.codec.systemFirst ? [...placed.filter(({ role }) => role === 'system'), ...placed.filter(({ role }) => role !== 'system')] : placed;
   return { model: request.model.id, reasoning: settings.reasoning, cache: messages.some((message) => message.cache) ? settings.cache! : null, messages: ordered };

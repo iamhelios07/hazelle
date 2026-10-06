@@ -64,6 +64,24 @@
       }
     },
     {
+      "id": "gemini-3-pro",
+      "name": "Gemini 3 Pro",
+      "vendor": "Google",
+      "object": "model",
+      "model_picker_enabled": true,
+      "capabilities": { "family": "gemini-3-pro", "type": "chat", "limits": { "max_context_window_tokens": 1000000, "max_output_tokens": 64000 }, "supports": { "streaming": true } },
+      "supported_endpoints": ["/chat/completions"]
+    },
+    {
+      "id": "realtime-only",
+      "name": "Realtime only",
+      "vendor": "OpenAI",
+      "object": "model",
+      "model_picker_enabled": true,
+      "capabilities": { "family": "realtime-only", "type": "chat", "supports": { "streaming": true } },
+      "supported_endpoints": ["/realtime"]
+    },
+    {
       "id": "gpt-4o-mini-2024-07-18",
       "name": "GPT-4o mini",
       "vendor": "Azure OpenAI",

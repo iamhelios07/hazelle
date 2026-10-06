@@ -1,4 +1,4 @@
-import type { Cache, Change, ModelSettings, NumberSetting } from '../../connectors/settings';
+import type { Cache, Change, ModelSettings, NumberSetting, ServiceTier, Verbosity } from '../../connectors/settings';
 import type { Stored } from '../../model/kinds';
 import { count } from './typedNumber';
 
@@ -28,11 +28,18 @@ export const levelName = (level: string) => LEVELS[level] ?? level;
 
 export const CACHE: Record<Cache, string> = { '5m': '5분', '1h': '1시간' };
 
-export const settingLabel = (setting: Change['setting']) => (setting === 'stop' ? '멈춤 문구' : setting === 'reasoning' ? '생각' : setting === 'cache' ? '캐시' : NUMBER[setting].label);
+export const VERBOSITY_LABEL = '답장 상세도';
+export const VERBOSITY_WORDS: Record<Verbosity, string> = { low: '간단히', medium: '보통', high: '자세히' };
+export const SERVICE_TIER_LABEL = '처리 등급';
+export const SERVICE_TIER_WORDS: Record<ServiceTier, string> = { auto: '자동', standard_only: '표준만' };
+
+const NAMED: Record<Exclude<Change['setting'], Field>, string> = { stop: '멈춤 문구', reasoning: '생각', cache: '캐시', verbosity: VERBOSITY_LABEL, serviceTier: SERVICE_TIER_LABEL };
+const isField = (setting: Change['setting']): setting is Field => setting in NUMBER;
+export const settingLabel = (setting: Change['setting']) => (isField(setting) ? NUMBER[setting].label : NAMED[setting]);
 
 // In the order the editor shows them; empty when none is.
 export function valueWords(settings: ModelSettings): string[] {
-  const { reasoning, stop, systemAsUser, streaming, cache } = settings;
+  const { reasoning, stop, systemAsUser, streaming, cache, verbosity, serviceTier } = settings;
   const number = (field: Field) => {
     const value = settings[field];
     return value === undefined ? [] : [`${NUMBER[field].label} ${count(value)}`];
@@ -40,7 +47,7 @@ export function valueWords(settings: ModelSettings): string[] {
   const thinking = !reasoning
     ? []
     : [`생각 ${reasoning.kind === 'off' ? '끔' : reasoning.kind === 'budget' ? `예산 ${count(reasoning.tokens)}` : reasoning.kind === 'adaptive' ? (reasoning.level === null ? '적응형' : `적응형 · ${levelName(reasoning.level)}`) : levelName(reasoning.level)}`];
-  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : [])];
+  return [...MAIN.flatMap(number), ...thinking, ...(cache ? [`캐시 ${CACHE[cache]}`] : []), ...DETAIL.flatMap(number), ...(stop ? [`멈춤 문구 ${stop.length}개`] : []), ...(verbosity ? [`${VERBOSITY_LABEL} ${VERBOSITY_WORDS[verbosity]}`] : []), ...(serviceTier ? [`${SERVICE_TIER_LABEL} ${SERVICE_TIER_WORDS[serviceTier]}`] : []), ...(systemAsUser ? ['시스템 메시지를 사용자 메시지로'] : []), ...(streaming === false ? ['스트리밍 끔'] : [])];
 }
 
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').

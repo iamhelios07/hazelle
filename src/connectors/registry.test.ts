@@ -156,7 +156,7 @@ describe('catalogs', () => {
         tools: true,
         protocol: null,
         takes: {
-          settings: ['maxOutput', 'temperature', 'stop', 'reasoning'],
+          settings: ['maxOutput', 'temperature', 'stop', 'verbosity', 'reasoning'],
           reasoning: { off: false, levels: ['max', 'xhigh', 'high', 'medium', 'low'], budget: null, adaptive: null },
         },
         price: { input: 4, output: 20, cacheRead: expect.closeTo(0.2, 9), cacheWrite: 5, tiers: [], asOf: null },
@@ -286,7 +286,7 @@ describe('catalogs', () => {
   it('knows nothing of a type from a newer version, or a generic connection without its address', () => {
     expect(resolveConnection({ type: 'someday', label: '', baseUrl: null, protocol: null, secret: '', starred: [] })).toBeNull();
     expect(resolveConnection({ type: 'generic', label: '', baseUrl: null, protocol: 'chat-completions', secret: '', starred: [] })).toBeNull();
-    const newer = { type: 'generic', label: '', baseUrl: 'https://api.example.com/v1', protocol: 'responses', secret: '', starred: [] };
+    const newer = { type: 'generic', label: '', baseUrl: 'https://api.example.com/v1', protocol: 'realtime', secret: '', starred: [] };
     expect(resolveConnection(newer as unknown as Connection)).toBeNull();
   });
 });
@@ -427,10 +427,13 @@ describe('copilot', () => {
         tools: true,
         protocol: 'anthropic-messages',
         takes: takes({ budget: { min: 1024, max: 32000 }, adaptive: true }),
+        vendor: 'Anthropic',
       },
-      { id: 'gpt-5-mini', name: 'GPT-5 mini', input: ['text', 'image'], output: ['text'], contextLength: 264000, maxOutput: 64000, reasoning: true, tools: true, protocol: 'chat-completions', takes: efforts },
-      { id: 'gpt-5.1-codex', name: 'GPT-5.1-Codex', input: ['text', 'image'], output: ['text'], contextLength: 400000, maxOutput: 128000, reasoning: true, tools: true, protocol: 'unsupported', takes: efforts },
-      { id: 'gpt-4.1', name: 'GPT-4.1', input: ['text'], output: ['text'], contextLength: 128000, maxOutput: 16384, reasoning: null, tools: true, protocol: null, takes: takes({}) },
+      { id: 'gpt-5-mini', name: 'GPT-5 mini', input: ['text', 'image'], output: ['text'], contextLength: 264000, maxOutput: 64000, reasoning: true, tools: true, protocol: 'responses', takes: efforts, vendor: 'Azure OpenAI' },
+      { id: 'gpt-5.1-codex', name: 'GPT-5.1-Codex', input: ['text', 'image'], output: ['text'], contextLength: 400000, maxOutput: 128000, reasoning: true, tools: true, protocol: 'responses', takes: efforts, vendor: 'OpenAI' },
+      { id: 'gpt-4.1', name: 'GPT-4.1', input: ['text'], output: ['text'], contextLength: 128000, maxOutput: 16384, reasoning: null, tools: true, protocol: null, takes: takes({}), vendor: 'Azure OpenAI' },
+      { id: 'gemini-3-pro', name: 'Gemini 3 Pro', input: null, output: ['text'], contextLength: 1000000, maxOutput: 64000, reasoning: null, tools: null, protocol: 'chat-completions', takes: takes({}), vendor: 'Google' },
+      { id: 'realtime-only', name: 'Realtime only', input: null, output: ['text'], contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: 'unsupported', takes: takes({}), vendor: 'OpenAI' },
     ]);
   });
 
@@ -443,15 +446,15 @@ describe('copilot', () => {
     expect(request.headers).toEqual({ ...identity, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
     expect(JSON.parse(request.body!)).toMatchObject({ model: 'claude-opus-4.6', max_tokens: 64000 });
 
-    for (const id of ['gpt-5-mini', 'gpt-4.1']) {
-      const route = resolveModel(resolved, find(id));
-      expect(chatRequest(route, { model: find(id), messages, settings: {} }).url).toBe('https://api.githubcopilot.com/chat/completions');
+    for (const [id, path] of [['gpt-5-mini', 'responses'], ['gpt-5.1-codex', 'responses'], ['gpt-4.1', 'chat/completions']]) {
+      const route = resolveModel(resolved, find(id!));
+      expect(chatRequest(route, { model: find(id!), messages, settings: {} }).url).toBe(`https://api.githubcopilot.com/${path}`);
     }
   });
 
   it('refuses a model it has no codec for, including a protocol a newer version stored', () => {
-    expect(() => resolveModel(resolved, find('gpt-5.1-codex'))).toThrow(new ConnectorError('unsupported-protocol'));
-    const newer = { ...find('gpt-4.1'), protocol: 'responses' } as unknown as Model;
+    expect(() => resolveModel(resolved, find('realtime-only'))).toThrow(new ConnectorError('unsupported-protocol'));
+    const newer = { ...find('gpt-4.1'), protocol: 'realtime' } as unknown as Model;
     expect(() => resolveModel(resolved, newer)).toThrow(new ConnectorError('unsupported-protocol'));
   });
 

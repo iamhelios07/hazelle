@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterModels from './fixtures/openrouter-models.json';
 import vercelModels from './fixtures/vercel-models.json';
-import { chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel } from './registry';
+import { cacheView, chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel } from './registry';
 import { fit, type ModelSettings } from './settings';
 import type { ChatMessage, Connection, Model } from './types';
 
@@ -56,7 +56,7 @@ describe('what a model takes', () => {
     expect(claude.reasoning).toMatchObject({ level: null, levels: ['low', 'medium', 'high', 'xhigh', 'max'], budget: { accepted: true, min: 1024, max: 32000 }, adaptive: true });
     const mini = modelSettings(connection('copilot'), listed('copilot', copilotModels, 'gpt-5-mini'))!;
     expect(mini.reasoning).toMatchObject({ level: true, levels: ['low', 'medium', 'high'], budget: { accepted: false }, adaptive: false });
-    expect(modelSettings(connection('copilot'), listed('copilot', copilotModels, 'gpt-5.1-codex'))).toBeNull();
+    expect(modelSettings(connection('copilot'), listed('copilot', copilotModels, 'realtime-only'))).toBeNull();
   });
 
   it('knows nothing of a model on a connection the user described, beyond what its protocol cannot carry', () => {
@@ -110,6 +110,17 @@ describe('what a request carries', () => {
     expect(body(connection('copilot'), claude, { reasoning: { kind: 'budget', tokens: 4096 } })).toMatchObject({ max_tokens: 64000, thinking: { type: 'enabled', budget_tokens: 4096 } });
   });
 
+  it('sends verbosity and the service tier only in the formats that carry them', () => {
+    const claude = listed('copilot', copilotModels, 'claude-opus-4.6');
+    const chosen: ModelSettings = { verbosity: 'low', serviceTier: 'standard_only' };
+    expect(body(generic, bare, chosen)).toMatchObject({ verbosity: 'low' });
+    expect(body(generic, bare, chosen)).not.toHaveProperty('service_tier');
+    expect(fit(modelSettings(generic, bare)!, chosen).changes).toEqual([{ setting: 'serviceTier', change: 'left-out' }]);
+    expect(body(connection('copilot'), claude, chosen)).toMatchObject({ service_tier: 'standard_only' });
+    expect(body(connection('copilot'), claude, chosen)).not.toHaveProperty('verbosity');
+    expect(modelSettings(connection('copilot'), claude)).toMatchObject({ verbosity: false, serviceTier: null });
+  });
+
   it('leaves out what the model does not take and brings a value past its bounds within them, and names each', () => {
     const claude = listed('copilot', copilotModels, 'claude-opus-4.6');
     const fitted: ModelSettings = { frequencyPenalty: 0.5, temperature: 1.5, context: 10_000_000, reasoning: { kind: 'budget', tokens: 50_000 } };
@@ -161,6 +172,33 @@ describe('cache points', () => {
     ]);
     expect(fit(modelSettings(generic, claude)!, { cache: '5m' }).changes).toEqual([{ setting: 'cache', change: 'left-out' }]);
     expect(JSON.stringify(sent(generic, { cache: '5m' }))).not.toMatch(/cache/);
+  });
+
+  it('marks Copilot’s chat completions as its catalog’s vendor asks, and leaves an unnamed vendor unknown', () => {
+    const copilot = connection('copilot');
+    const request = (model: Model) => JSON.parse(chatRequest(resolveModel(resolveConnection(copilot)!, model), { model, messages: marked, settings: { cache: '5m' } }).body!) as Record<string, unknown>;
+    const gemini = listed('copilot', copilotModels, 'gemini-3-pro');
+    expect(request(gemini).messages).toEqual([
+      { role: 'system', content: 'Rules.', copilot_cache_control: { type: 'ephemeral' } },
+      { role: 'system', content: 'Lore.' },
+      { role: 'user', content: 'Hi.', copilot_cache_control: { type: 'ephemeral' } },
+      { role: 'assistant', content: 'Hello.' },
+    ]);
+    expect(modelSettings(copilot, gemini)!.cache).toBe(true);
+
+    const gpt = listed('copilot', copilotModels, 'gpt-4.1');
+    const keyed = request(gpt);
+    expect(keyed).toMatchObject({ prompt_cache_key: expect.stringMatching(/^hazelle-/) });
+    expect(JSON.stringify(keyed.messages)).not.toMatch(/cache/);
+    // A key marks no point, so the view forecasts nothing.
+    const route = resolveModel(resolveConnection(copilot)!, gpt);
+    const view = cacheView(route, { model: gpt, messages: marked, settings: { cache: '5m' } });
+    expect(view.cache).toBeNull();
+    expect(view.messages.some((message) => message.cache)).toBe(false);
+
+    const unnamed: Model = { ...gemini, vendor: undefined };
+    expect(modelSettings(copilot, unnamed)!.cache).toBeNull();
+    expect(request(unnamed).messages).toEqual(request(gemini).messages);
   });
 
   it('keeps the first three points and the last when there are more than four', () => {

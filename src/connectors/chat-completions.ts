@@ -1,7 +1,7 @@
 import { streamError } from './errors';
-import type { NumberSetting, Reasoning, Setting } from './settings';
-import { wireMessage } from './anthropic-messages';
-import type { Codec, Model } from './types';
+import type { Cache, NumberSetting, Reasoning, Setting } from './settings';
+import { ephemeral, wireMessage } from './anthropic-messages';
+import type { CacheMark, ChatMessage, Codec, Model } from './types';
 import { count, isRecord, list, modelEntries } from './values';
 
 // OpenRouter's and Vercel's catalogs name the same fields in supported_parameters. max_tokens rather than
@@ -36,7 +36,29 @@ export const bareModel = (id: string): Model => ({
 
 export function listedSettings(names: unknown[]): Setting[] {
   const settings: Setting[] = CARRIED.filter((setting) => names.includes(FIELDS[setting]));
+  if (names.includes('verbosity')) settings.push('verbosity');
   return names.includes('reasoning') || names.includes('reasoning_effort') ? [...settings, 'reasoning'] : settings;
+}
+
+// One key per model and cached prefix, so requests that share it meet the same cache. The prefix runs to the first
+// point, the one that changes least: the last point moves with every turn.
+export function promptCacheKey(model: Model, messages: ChatMessage[]): { prompt_cache_key?: string } {
+  const first = messages.findIndex((message) => message.cache);
+  if (first === -1) return {};
+  let hash = 2166136261;
+  for (const character of JSON.stringify([model.id, messages.slice(0, first + 1).map(({ role, content }) => [role, content])])) {
+    hash ^= character.codePointAt(0)!;
+    hash = Math.imul(hash, 16777619);
+  }
+  return { prompt_cache_key: `hazelle-${(hash >>> 0).toString(16)}` };
+}
+
+const plain = ({ role, content }: ChatMessage) => ({ role, content });
+
+function wireMessages(messages: ChatMessage[], cache: Cache | undefined, mark: CacheMark | null) {
+  if (!cache || !mark || mark.kind === 'key') return messages.map(plain);
+  if (mark.kind === 'part') return messages.map((message) => wireMessage(message, cache));
+  return messages.map((message) => (message.cache ? { ...plain(message), [mark.field]: ephemeral(cache) } : plain(message)));
 }
 
 // OpenAI's reasoning_effort, which OpenRouter and Vercel take too; 'none' turns reasoning off.
@@ -77,21 +99,27 @@ export const chatCompletions: Codec = {
       seed: { min: null, max: null },
     },
     reasoning: { off: true, levels: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'], budget: null, adaptive: false },
-    // The standard has no cache points; a connection type whose provider reads cache_control says so.
-    cache: false,
+    stop: true,
+    verbosity: true,
+    serviceTier: false,
   },
 
-  chat: (endpoint, { model, messages, settings }, fields) => ({
+  // The standard has no cache points; a connection type whose provider takes them says how (cachePoints).
+  cache: null,
+
+  chat: (endpoint, { model, messages, settings }, fields, mark) => ({
     url: `${endpoint.baseUrl}/chat/completions`,
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       model: model.id,
-      messages: messages.map((message) => wireMessage(message, settings.cache)),
+      messages: wireMessages(messages, settings.cache, mark),
       // OpenAI refuses stream_options on a request that does not stream.
       ...(settings.streaming === false ? { stream: false } : { stream: true, stream_options: { include_usage: true } }),
       ...Object.fromEntries(CARRIED.filter((setting) => settings[setting] !== undefined).map((setting) => [FIELDS[setting], settings[setting]])),
       ...effort(settings.reasoning),
+      ...(settings.verbosity === undefined ? {} : { verbosity: settings.verbosity }),
+      ...(mark?.kind === 'key' && settings.cache ? promptCacheKey(model, messages) : {}),
       ...fields,
     }),
   }),

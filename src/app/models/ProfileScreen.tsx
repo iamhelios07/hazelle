@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
-import { fit, WHOLE, type Cache, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
+import { fit, SERVICE_TIERS, VERBOSITY, WHOLE, type Cache, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
 import type { Stored } from '../../model/kinds';
 import {
   addProfile,
@@ -23,7 +23,7 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Row, Screen, Section, SettingGroup, SettingRow, Stack, Text } from '../ui';
-import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, UNSET, type Field } from './settingWords';
+import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, UNSET, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
 import { count, readTyped } from './typedNumber';
 
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
@@ -159,6 +159,29 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     );
   }
 
+  // Shown where a model on this 설정 can be sent it, or while a value is set, so a stored one is never hidden.
+  function choiceRow<V extends string>(setting: 'verbosity' | 'serviceTier', label: string, help: string, values: readonly V[], words: Record<V, string>, value: V | undefined, pick: (value: V | undefined) => ModelSettings): ReactNode {
+    if (value === undefined && callable.length > 0 && callable.every((user) => user.schema[setting] === false)) return null;
+    return (
+      <SettingRow
+        key={setting}
+        label={label}
+        help={help}
+        changed={value !== undefined}
+        note={noteFor(setting)}
+        control={
+          <ChoiceGroup<V | 'unset'>
+            layout="segmented"
+            label={label}
+            options={[{ value: 'unset', label: UNSET }, ...values.map((choice) => ({ value: choice, label: words[choice] }))]}
+            value={value ?? 'unset'}
+            onChange={(next) => set(pick(next === 'unset' ? undefined : next))}
+          />
+        }
+      />
+    );
+  }
+
   const cacheRow = (
     <SettingRow
       key="cache"
@@ -269,7 +292,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     toast.undoable(`${removed.data.value.name} 설정을 지웠어요.`, () => void restoreProfile(store, id), note);
   }
 
-  const detailSet = DETAIL.filter((field) => shown[field] !== undefined).length + (shown.stop ? 1 : 0) + (shown.systemAsUser ? 1 : 0) + (shown.streaming === false ? 1 : 0);
+  const detailSet =
+    DETAIL.filter((field) => shown[field] !== undefined).length + [shown.stop, shown.verbosity, shown.serviceTier, shown.systemAsUser, shown.streaming === false].filter(Boolean).length;
 
   return (
     <Screen
@@ -351,6 +375,8 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <SettingGroup label="세부 설정">
           {DETAIL.map(numberRow)}
           {stopRow}
+          {choiceRow('verbosity', VERBOSITY_LABEL, '간단히 고를수록 같은 내용을 더 적은 말로 써요. 생각의 양은 바꾸지 않아요', VERBOSITY, VERBOSITY_WORDS, shown.verbosity, (verbosity) => ({ verbosity }))}
+          {choiceRow('serviceTier', SERVICE_TIER_LABEL, '자동은 계정에 Anthropic 우선 처리 용량이 있으면 그 용량을 먼저 써요. 표준만은 늘 표준 용량으로 보내요', SERVICE_TIERS, SERVICE_TIER_WORDS, shown.serviceTier, (serviceTier) => ({ serviceTier }))}
           {systemRow}
           {streamingRow}
         </SettingGroup>
