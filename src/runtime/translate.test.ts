@@ -185,6 +185,7 @@ describe('Translator', () => {
       await answerable(session);
       await setTranslatorNote(session.store, null, 'Master -> 주인님');
       const log = stubRelay(inTurn([saying('はい、ご主人様。')]));
+      const fetched = vi.spyOn(globalThis, 'fetch');
       const made = await translateText(session, 'Yes, Master.', 'Japanese', new AbortController().signal, () => {});
       expect(made).toMatchObject({ ok: true, translation: { text: 'はい、ご主人様。' } });
       const sent: { role: string; content: string }[] = JSON.parse(log[0]!.sent.body!).messages;
@@ -192,5 +193,6 @@ describe('Translator', () => {
       expect(sent[0]!.content).toContain('Target language: Japanese.');
       expect(sent[1]!.content).toContain('Master -> 주인님');
       expect(sent[2]!.content).toBe('Yes, Master.');
+      expect(fetched.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => String(url))).toEqual([expect.stringMatching(/^\/api\/streams\//)]);
     }));
 });
