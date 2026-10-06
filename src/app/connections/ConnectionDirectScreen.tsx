@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { addressProblem, detect, GENERIC } from '../../connectors/registry';
 import type { Connection, Protocol } from '../../connectors/types';
-import { providerConnection } from '../../runtime/connections';
+import { newAccount, providerConnection } from '../../runtime/connections';
 import { HTTPS_ONLY } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
 import { useAccount, useSession } from '../session';
@@ -37,7 +37,7 @@ export function ConnectionDirectScreen({ address: pasted, back }: { address: str
   if (place?.kind === 'url' && secret) {
     draft = providerConnection(place.type, secret);
   } else if (place?.kind === 'generic-url' && !problem && protocol) {
-    draft = { type: GENERIC, label: new URL(place.baseUrl).host, baseUrl: place.baseUrl, protocol, secret, starred: [] };
+    draft = { type: GENERIC, label: new URL(place.baseUrl).host, baseUrl: place.baseUrl, protocol, accounts: [newAccount(secret)], turns: null, starred: [] };
   }
 
   async function submit(event: FormEvent) {

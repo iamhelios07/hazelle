@@ -13,11 +13,13 @@ export type SettleResult = { ok: true; cost: Cost } | { ok: false; failure: Sett
 // seconds too short, so the waits grow to about a minute in all.
 const WAITS_MS = [1000, 2000, 4000, 8000, 15000, 30000];
 
+// No pool type books a cost afterwards (pool.test), so the reply's account is the connection's one account.
 export async function settleCost(connection: Connection, replyId: string, signal: AbortSignal): Promise<SettleResult> {
   const settle = resolveConnection(connection)?.type?.settle;
   if (!settle) return { ok: false, failure: { kind: 'not-a-cost' } };
+  const [account] = connection.accounts;
   for (let attempt = 0; ; attempt++) {
-    const answer = await relayJson(settle.request(connection.secret, replyId), signal);
+    const answer = await relayJson(settle.request(account!.secret, replyId), signal);
     if (answer.ok) {
       const cost = settle.parse(answer.data);
       return cost ? { ok: true, cost } : { ok: false, failure: { kind: 'not-a-cost' } };

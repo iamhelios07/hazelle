@@ -3,7 +3,7 @@ import type { Connection } from '../connectors/types';
 import { settleCost } from './cost';
 import { inTurn, stubRelay, upstream } from './testing';
 
-const connection: Connection = { type: 'vercel', label: 'Vercel', baseUrl: null, protocol: null, secret: 'vck_x', starred: [] };
+const connection: Connection = { type: 'vercel', label: 'Vercel', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'vck_x' }], turns: null, starred: [] };
 
 const vercel = (answers: [number, unknown][]) => stubRelay(inTurn(answers.map(([status, body]) => upstream(status, body))));
 

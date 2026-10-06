@@ -18,7 +18,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
   const [left, setLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    const cached = id !== null && !busy && last && last.until > Date.now() && sent?.cache ? { connection: last.connection, view: sent.cache, parts: sent.prompt.parts } : null;
+    const cached = id !== null && !busy && last && last.until > Date.now() && sent?.cache ? { connection: last.connection, account: last.account, view: sent.cache, parts: sent.prompt.parts } : null;
     if (!cached) setRead(null);
     if (id === null || busy) return setLeft(null);
     const controller = new AbortController();
@@ -27,7 +27,7 @@ export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], m
       void wouldSend(session, id, { kind: 'send', text }, controller.signal).then((next) => {
         if (controller.signal.aborted) return;
         setLeft(next && leaving(next.prompt));
-        const send = cached && next && cacheSend(next);
+        const send = cached && next && cacheSend(next, session.credentials.pool.peek(next.turn.route.connection.value)?.id ?? null);
         setRead(send ? forecast(cached, send) : null);
       }, () => {
         if (controller.signal.aborted) return;

@@ -6,7 +6,8 @@ import type { Role } from '../model/prompt';
 
 const TTL: Record<Cache, number> = { '5m': 5 * 60_000, '1h': 60 * 60_000 };
 
-export type LastCache = { version: string; connection: string; until: number };
+// account: the connection's account that wrote the cache, which a provider holds the cache for; null where unknown.
+export type LastCache = { version: string; connection: string; account: string | null; until: number };
 
 // A provider keeps a cache for the call's TTL from the call's start, and a read renews it as a write does. null when the
 // chat's latest call that reported its counts sent no cache point, or reported reading and writing none (a prompt
@@ -17,16 +18,17 @@ export function lastCache(messages: Message[]): LastCache | null {
     for (const { id, at, receipt } of message.versions) if (receipt?.usage && (!latest || at > latest.at)) latest = { id, at, receipt };
   }
   if (!latest) return null;
-  const { cache, usage, totalMs, connection } = latest.receipt;
+  const { cache, usage, totalMs, connection, account } = latest.receipt;
   if (!cache || !((usage!.cachedInputTokens ?? 0) > 0 || (usage!.cacheWriteInputTokens ?? 0) > 0)) return null;
-  return { version: latest.id, connection, until: latest.at - totalMs + TTL[cache] };
+  return { version: latest.id, connection, account: account ?? null, until: latest.at - totalMs + TTL[cache] };
 }
 
-export type CacheSend = { connection: string; view: CacheView; parts: Assembled['parts'] };
+// account: the account it was, or would be, sent with; null where unknown, which claims no change of account.
+export type CacheSend = { connection: string; account: string | null; view: CacheView; parts: Assembled['parts'] };
 
 // differs: the last call's message is not sent as it was (an edit, a change, or a message the budget or a delete
 // dropped); added: a message the last call did not send comes before it.
-export type Break = { kind: 'model' | 'reasoning' | 'off' } | { kind: 'differs' | 'added'; from: From; role: Role };
+export type Break = { kind: 'model' | 'account' | 'reasoning' | 'off' } | { kind: 'differs' | 'added'; from: From; role: Role };
 
 // read: the tokens the next send would read from the cache, of all the last call cached up to its last point.
 export type Forecast = { read: number; of: number; broken: Break | null };
@@ -41,6 +43,7 @@ export function forecast(last: CacheSend, next: CacheSend): Forecast | null {
   const of = upTo(last, points.at(-1)!);
   const none = (broken: Break): Forecast => ({ read: 0, of, broken });
   if (next.connection !== last.connection || next.view.model !== last.view.model) return none({ kind: 'model' });
+  if (last.account !== null && next.account !== null && next.account !== last.account) return none({ kind: 'account' });
   if (JSON.stringify(next.view.reasoning) !== JSON.stringify(last.view.reasoning)) return none({ kind: 'reasoning' });
   const after = next.view.messages;
   if (!after.some((message) => message.cache)) return none({ kind: 'off' });

@@ -1,5 +1,6 @@
 import type { Resolved } from '../connectors/registry';
 import type { Token } from '../connectors/types';
+import { Pool } from './pool';
 import { relayJson, type RelayFailure } from './relay';
 
 export type CredentialFailure = RelayFailure | { kind: 'no-token' };
@@ -8,8 +9,10 @@ export type CredentialResult = { ok: true; credential: string } | { ok: false; f
 // A token is traded again a minute before it runs out, so a reply never starts on a dying one.
 const MARGIN_MS = 60 * 1000;
 
-// The tokens are secrets, so close() drops them and stops every trade still under way.
+// The tokens are secrets, so close() drops them and stops every trade still under way. pool picks the account whose
+// secret is traded.
 export class Credentials {
+  readonly pool = new Pool();
   private readonly tokens = new Map<string, Token>();
   private readonly closing = new AbortController();
 
@@ -29,6 +32,7 @@ export class Credentials {
   }
 
   close() {
+    this.pool.close();
     this.closing.abort();
     this.tokens.clear();
   }

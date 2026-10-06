@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Connection } from '../connectors/types';
 import { randomBytes } from '../vault/aead';
 import { objectKey, openObject } from '../vault/objects';
 import type { api, ApiResult } from './api';
@@ -200,7 +201,7 @@ describe('object codec store boundaries', () => {
     });
     const { request, writes } = feed([], { items: 200, bytes: 250, body: 1000 });
     const store = await ObjectStore.open('account', randomBytes(32), request);
-    const value = { type: 'openrouter', label: 'a', baseUrl: null, protocol: null, secret: 'key', starred: [] } as const;
+    const value: Connection = { type: 'openrouter', label: 'a', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] };
     const first = await store.create('connection', { ...value, starred: [] }, { id: 'one' });
     expect(first.ok).toBe(true);
     writes.length = 0;

@@ -45,7 +45,7 @@ it('sends notices with a reply, a reason and to everyone, which the account read
 
 it('restores an account to a time on its report: its open device drops to the objects of that time, and the restore reads back with its undo', async () => {
   const { accountId, store } = await server.operator();
-  const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
+  const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
   const now = Date.now();
   server.at(() => now - 3_600_000);
   const kept = await store.create('connection', connection('kept'));

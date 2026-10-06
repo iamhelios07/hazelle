@@ -24,6 +24,7 @@ import { Scripts } from './scripts';
 import { Streams } from './streams';
 import { backfillSummaries } from './summary';
 import { receiveReply, resumeSend } from './turn';
+import { saveUpgraded } from './upgrade';
 
 export type Session = {
   username: string;
@@ -66,7 +67,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const files = new Files(api, store);
   const assets = new AssetUrls(store, files);
   // A new account sees its defaults on the first screen; a cached account fills missing defaults after catch-up.
-  const defaults = () => Promise.all([addDefaults(store), addFirstPersona(store, username).then(() => recordChatPersonas(store)), addFirstProfile(store), dropCharacterTranslate(store)]);
+  const defaults = () => Promise.all([addDefaults(store), addFirstPersona(store, username).then(() => recordChatPersonas(store)), addFirstProfile(store), dropCharacterTranslate(store), saveUpgraded(store)]);
   if (!store.cached) await defaults();
   if (signal.aborted) {
     store.close();

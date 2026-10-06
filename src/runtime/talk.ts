@@ -293,6 +293,7 @@ export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
   return {
     id: answer.call,
     ...call,
+    ...(answer.account !== null && { account: answer.account }),
     state: answer.state,
     cut: answer.cut,
     error: answer.error && receiptError(answer.error),
@@ -321,5 +322,7 @@ function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
     case 'offline':
     case 'no-token':
       return { kind: error.kind };
+    case 'pool':
+      return error.reason === 'unknown' ? { kind: 'pool', reason: error.reason, group: error.group, accounts: [...error.accounts] } : { kind: 'pool', reason: error.reason, group: error.group };
   }
 }

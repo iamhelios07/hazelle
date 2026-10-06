@@ -1,23 +1,27 @@
 import { cacheView, chatRequest, resolveConnection, resolveModel, withCredential, type CacheView, type Resolved } from '../connectors/registry';
 import { decodeStream, type InlineThoughts, type Outcome } from '../connectors/stream';
 import type { ModelSettings } from '../connectors/settings';
-import { ConnectorError, type ChatMessage, type Connection, type HttpRequest, type Phase, type Starred } from '../connectors/types';
+import { ConnectorError, type Account, type ChatMessage, type Connection, type HttpRequest, type Phase, type Starred } from '../connectors/types';
 import type { Stored } from '../model/kinds';
 import { routeOf } from './assignment';
 import type { CredentialFailure, Credentials } from './credential';
+import type { PoolFailure } from './pool';
 import type { ObjectStore } from './store';
 import { stream, type StreamCall } from './relay';
 
 export type ReplyError =
   | { kind: 'refused'; code: string }
+  | PoolFailure
   | CredentialFailure
   | NonNullable<Outcome['error']>;
 
 // A stop is a cut, never an error. request is the address and body the request was built with, for 요청 원문, and
 // cache what its cache read and wrote; both null when it was refused before it could be built, or picked up after a reload.
 // call: the call's id, which its receipt keeps (model/chat Receipt id); a call picked up after a reload has the same.
+// account: the id of the account it was sent with; null when none was picked, or it was picked up after a reload.
 export type Reply = Omit<Outcome, 'error'> & {
   call: string;
+  account: string | null;
   error: Exclude<ReplyError, { kind: 'stopped' }> | null;
   firstTextMs: number | null;
   totalMs: number;
@@ -43,9 +47,11 @@ export async function generate({ credentials, connection, model, settings, messa
   // Never the headers: the credential travels there, and leaving them out is the redaction that cannot leak.
   let built: Reply['request'] = null;
   let cached: CacheView | null = null;
+  let account: Account | null = null;
   const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({
     ...outcome,
     call: call.id,
+    account: account?.id ?? null,
     error,
     firstTextMs: firstText === null ? null : Math.round(firstText - started),
     totalMs: Math.round(performance.now() - started),
@@ -69,9 +75,18 @@ export async function generate({ credentials, connection, model, settings, messa
     throw error;
   }
 
-  const failed = (failure: CredentialFailure) =>
-    failure.kind === 'stopped' ? reply({ state: 'cut', cut: 'stopped', ...empty }, null) : reply({ state: 'failed', cut: null, ...empty }, failure);
-  const credential = await credentials.get(resolved, connection.secret, signal);
+  const picked = await credentials.pool.pick(connection);
+  if (!picked.ok) return reply({ state: 'failed', cut: null, ...empty }, picked.failure);
+  const serving = picked.account;
+  account = serving;
+  // A reply that failed leaves the account's meters to be read again before the next pick; it is never sent again on
+  // another account.
+  const failed = (failure: CredentialFailure) => {
+    if (failure.kind === 'stopped') return reply({ state: 'cut', cut: 'stopped', ...empty }, null);
+    credentials.pool.stale(connection, serving);
+    return reply({ state: 'failed', cut: null, ...empty }, failure);
+  };
+  const credential = await credentials.get(resolved, serving.secret, signal);
   if (!credential.ok) return failed(credential.failure);
   const response = await stream(call, withCredential(route, request, credential.credential), signal);
   if (!(response instanceof Response)) return failed(response);
@@ -79,6 +94,7 @@ export async function generate({ credentials, connection, model, settings, messa
     firstText ??= performance.now();
     onText(phase, text);
   }, inline);
+  if (outcome.error) credentials.pool.stale(connection, serving);
   return reply(outcome, outcome.error);
 }
 
@@ -99,7 +115,7 @@ export function cacheViewOf(connection: Connection, model: Starred, settings: Mo
 export async function resume(store: ObjectStore, { id, value }: Stored<'stream'>, signal: AbortSignal, onText: GenerateInput['onText'], inline?: InlineThoughts): Promise<Reply> {
   const call: StreamCall = { id, key: value.key };
   const empty = { finishReason: null, usage: null, cost: null, replyId: null };
-  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({ ...outcome, call: id, error, firstTextMs: null, totalMs: call.took ?? 0, request: null, cache: null });
+  const reply = (outcome: Omit<Outcome, 'error'>, error: Reply['error']): Reply => ({ ...outcome, call: id, account: null, error, firstTextMs: null, totalMs: call.took ?? 0, request: null, cache: null });
   const route = routeOf(store, value.call);
   const resolved = 'kind' in route ? null : resolveConnection(route.connection.value);
   if ('kind' in route || !resolved) return reply({ state: 'failed', cut: null, ...empty }, { kind: 'refused', code: 'model-gone' });

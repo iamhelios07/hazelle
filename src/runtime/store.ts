@@ -10,6 +10,7 @@ import { orderOwned } from './removal';
 import { GenerationChanged, SCOPED, type CachedScope, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
 import { Evaluation, EvaluationFailed, EvaluationStopped } from './evaluation';
 import { projectChat, summaryId, summaryStale, type Projection } from './summary';
+import { upgradeValue } from './upgrade';
 
 type Api = typeof realApi;
 export type ObjectRow = { id: string; kind: string; parent: string | null; rev: number };
@@ -88,6 +89,7 @@ export class ObjectStore {
   private readonly byKind = new Map<string, Set<string>>();
   private readonly byParent = new Map<string, Map<string, Set<string>>>();
   private unreadableCount = 0;
+  private readonly upgraded = new Set<string>();
   private readonly listeners = new Set<(changes: readonly StoreChange[]) => void>();
   private readonly waitListeners = new Set<() => void>();
   private waitingCalls = 0;
@@ -777,6 +779,7 @@ export class ObjectStore {
         } catch (error) {
           return this.codecFailure(error, pin.epoch);
         }
+        value = upgradeValue(row.kind, value) ?? value;
         if (stop.aborted) return this.halted(pin.epoch);
         // Awaited, so a slow visitor holds the walk; no next codec window starts ahead of its demand.
         await visit(row, value);
@@ -794,6 +797,13 @@ export class ObjectStore {
       return { ok: true, data: { pending: { ...row, value: undefined, baseRev: held?.rev ?? row.rev }, held: null } };
     } })));
     return removed.ok ? { ok: true, data: null } : removed;
+  }
+
+  // The ids of objects held in a shape upgraded as they were read (runtime/upgrade), each handed out once.
+  takeUpgraded(): string[] {
+    const ids = [...this.upgraded];
+    this.upgraded.clear();
+    return ids;
   }
 
   unreadable(): number {
@@ -1349,7 +1359,10 @@ export class ObjectStore {
     if (body === null) return this.drop(id, rev, { kind, id, parent });
     const epoch = this.epoch;
     const value = await opened();
-    if (!signal?.aborted && epoch === this.epoch) this.hold({ id, kind, parent, rev, value });
+    const upgraded = upgradeValue(kind, value);
+    if (signal?.aborted || epoch !== this.epoch) return;
+    if (upgraded) this.upgraded.add(id);
+    this.hold({ id, kind, parent, rev, value: upgraded ?? value });
   }
 
   private hold(object: Held) {

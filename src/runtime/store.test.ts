@@ -11,7 +11,7 @@ import { BATCH_LIMITS, testServer } from './testing';
 
 const server = testServer();
 
-const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, secret: 'sk-or-x', starred: [] });
+const connection = (label: string): Connection => ({ type: 'openrouter', label, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
 const renamed = (suffix: string) => (current: Connection) => ({ ...current, label: current.label + suffix });
 const message = (parent: string, at: number): Write => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'message', role: 'user', at, text: `m${at}`, receipt: null } });
 const root = (id: string): Write => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } });

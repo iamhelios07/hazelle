@@ -6,7 +6,7 @@ import { decodeStream, type InlineThoughts } from './stream';
 import type { Connection, Model, Phase } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}): Resolved =>
-  resolveConnection({ type, label: type, baseUrl: null, protocol: null, secret: 'key', starred: [], ...extra })!;
+  resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra })!;
 
 const openRouter = connection('openrouter');
 const anthropic = connection('anthropic');
