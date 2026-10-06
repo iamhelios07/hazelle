@@ -55,9 +55,7 @@
 }
 
 .segmented .choice[aria-pressed='true'] {
-  border-color: transparent;
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  border-color: var(--color-accent-border);
 }
 
 .list {
