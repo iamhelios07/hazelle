@@ -15,8 +15,8 @@
 :root {
   --palette-ink-900: #131216;
   --palette-ink-850: #17161b;
-  --palette-ink-820: #211f27;
   --palette-ink-800: #1d1b22;
+  --palette-ink-780: #211f27;
   --palette-ink-750: #26232d;
   --palette-ink-700: #2a2731;
   --palette-ink-600: #34303d;
@@ -57,11 +57,11 @@
   --palette-ink-line: rgb(29 27 34 / 16%);
   --palette-ink-trace: rgb(29 27 34 / 22%);
   --palette-scrim: rgb(8 8 10 / 55%);
+  --palette-paper-10: #fefcf9;
   --palette-paper-50: #faf7f2;
   --palette-paper-100: #f6f2ec;
   --palette-paper-150: #f3efe8;
   --palette-paper-200: #ece7df;
-  --palette-paper-250: #e9e4db;
   --palette-paper-300: #e7e1d7;
   --palette-paper-400: #d9d2c7;
   --palette-paper-500: #bab1a4;
@@ -100,6 +100,7 @@
   --color-surface: var(--palette-ink-800);
   --color-surface-hover: var(--palette-ink-750);
   --color-surface-raised: var(--palette-ink-700);
+  --color-box: var(--palette-ink-780);
   --color-border: var(--palette-ink-600);
   --color-border-strong: var(--palette-ink-500);
   --color-text: var(--palette-cream-100);
@@ -112,7 +113,7 @@
   --color-success: var(--palette-mint-400);
   --color-focus: var(--color-accent);
   --color-sidebar: var(--palette-ink-850);
-  --color-divider: var(--palette-ink-820);
+  --color-divider: var(--palette-ink-780);
   --color-scrim: var(--palette-scrim);
   --color-you-bg: var(--palette-mint-800);
   --color-you-text: var(--palette-mint-100);
@@ -386,15 +387,16 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --color-bg: var(--palette-paper-50);
-  --color-surface: var(--palette-paper-150);
+  --color-bg: var(--palette-paper-150);
+  --color-surface: var(--palette-paper-50);
   --color-surface-hover: var(--palette-paper-200);
   --color-surface-raised: var(--palette-paper-300);
+  --color-box: var(--palette-paper-10);
   --color-border: var(--palette-paper-400);
   --color-border-strong: var(--palette-paper-500);
   --color-text: var(--palette-ink-800);
   --color-text-muted: var(--palette-lilac-700);
-  --color-text-faint: var(--palette-lilac-550);
+  --color-text-faint: var(--palette-lilac-650);
   --color-text-soft: var(--palette-lilac-800);
   --color-accent: var(--palette-gold-700);
   --color-accent-hover: var(--palette-gold-800);
@@ -402,7 +404,7 @@
   --color-warn: var(--palette-coral-700);
   --color-success: var(--palette-mint-700);
   --color-sidebar: var(--palette-paper-100);
-  --color-divider: var(--palette-paper-250);
+  --color-divider: var(--palette-paper-300);
   --color-scrim: var(--palette-scrim-soft);
   --color-you-bg: var(--palette-mint-150);
   --color-you-text: var(--palette-mint-900);

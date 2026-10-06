@@ -3,9 +3,9 @@
   display: flex;
   flex-direction: column;
   margin-inline: calc(var(--box-hang) * -1);
-  border: var(--border-thin) solid var(--color-divider);
+  border: var(--border-thin) solid var(--color-surface-raised);
   border-radius: var(--radius-lg);
-  background: var(--color-sidebar);
+  background: var(--color-box);
 }
 
 .row {
@@ -23,7 +23,7 @@
 }
 
 .row + .row {
-  border-top: var(--border-thin) solid var(--color-divider);
+  border-top: var(--border-thin) solid var(--color-surface-raised);
 }
 
 .row.panel {
