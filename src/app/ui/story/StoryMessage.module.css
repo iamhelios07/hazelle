@@ -107,30 +107,16 @@
   border: var(--border-thin) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--color-surface-raised);
-  opacity: 0;
-  transition: opacity var(--duration-fast);
-  pointer-events: none;
 }
 
 .tools button:not(:disabled) {
   color: var(--color-text);
 }
 
-.message:focus-within .tools,
-.pinned .tools {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 /* A touch screen keeps :hover on whatever was tapped last, so only a pointer reveals on hover. */
 @media (hover: hover) {
   .message:hover .time {
     opacity: 1;
-  }
-
-  .message:hover .tools {
-    opacity: 1;
-    pointer-events: auto;
   }
 
   .mark:hover {

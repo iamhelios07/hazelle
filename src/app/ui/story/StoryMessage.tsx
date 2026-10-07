@@ -31,7 +31,7 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
   const foundDelay = useMemo(() => `-${Math.max(0, Date.now() - found)}ms`, [found]);
   const memory = useContext(RowMemoryContext);
   const revisited = useRef(memory?.visited ?? false);
-  // Phones have no hover, so a tap on the message itself shows its tools; not one the story took, such as on a picture.
+  // Phones have no hover, so a tap on the message itself shows its time; not one the story took, such as on a picture.
   const tap = (event: MouseEvent) => {
     if (hover || event.defaultPrevented || (event.target as HTMLElement).closest('button, a, textarea')) return;
     onTap();
