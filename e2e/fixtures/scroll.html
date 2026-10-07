@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Chat scroll regression</title></head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { createElement as h, useState } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { useFollow } from '../../src/app/chat/useFollow';
+      import { ChatFrame } from '../../src/app/ui/layout/ChatFrame';
+      import { Viewport } from '../../src/app/ui/collections/Viewport';
+      import '../../src/app/ui/foundation/global.css';
+
+      const stay = new URLSearchParams(location.search).get('reply') !== 'follow';
+      function Chat() {
+        const [rows, setRows] = useState(() => Array.from({ length: 10 }, (_, i) => ({ id: `m${i}`, height: 150 })));
+        const [streaming, setStreaming] = useState(false);
+        const scroll = useFollow(rows.length, streaming, streaming ? 'user' : null, stay);
+        const button = (label, onClick) => h('button', { onClick }, label);
+        return h(ChatFrame, {
+          title: 'Chat scroll regression', actions: null, above: null,
+          reading: { font: 'sans', size: 16, leading: 'normal', width: 'normal', reply: stay ? 'stay' : 'follow' },
+          hideHeader: false, compact: false, scrollRef: scroll.scrollRef, onScroll: scroll.onScroll,
+          footer: h('div', { style: { height: 90 } },
+            button('Reply', () => {
+              scroll.beforeTurn();
+              setStreaming(true);
+              setRows((rows) => [...rows, { id: 'user', height: 100 }, { id: 'reply', height: 50 }]);
+            }),
+            button('Grow', () => setRows((rows) => rows.map((row) => row.id === 'reply' ? { ...row, height: row.height + 100 } : row))),
+            button('Finish', () => setStreaming(false)),
+            button('Follow', scroll.follow),
+          ),
+        }, h(Viewport, { variant: 'story', keys: rows.map((row) => row.id), seek: scroll.seek },
+          (index) => h('div', { style: { height: rows[index].height } }, rows[index].id),
+        ));
+      }
+      createRoot(document.getElementById('root')).render(h(Chat));
+    </script>
+  </body>
+</html>

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { READER_RESIZED, ROWS_RESIZED, traceScroll, traceScroller, type Seek } from '../ui';
+import { READER_RESIZED, ROWS_RESIZED, type Seek } from '../ui';
 
 // It stays
 // there until it is well above, and comes back only at the very end, so scrolling into the band does not snap it down.
@@ -24,7 +24,6 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
   const toBottom = () => {
     const element = scrollRef.current;
     if (!element || !stick.current || held.current) return;
-    traceScroll('follow: to bottom');
     element.scrollTop = element.scrollHeight;
     placed.current = element.scrollTop;
   };
@@ -40,7 +39,6 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
     toBottom();
     const ended = seen.current.streaming && !streaming;
     if ((count > seen.current.count || ended) && !stick.current) setUnread(true);
-    if (streaming !== seen.current.streaming || answered !== seen.current.answered) traceScroll('follow: turn', { stay, streaming, answered, held: held.current, stick: stick.current });
     seen.current = { count, streaming, answered };
   });
 
@@ -51,7 +49,6 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
     const element = scrollRef.current;
     const content = element?.firstElementChild;
     if (!element || !content) return;
-    const untrace = traceScroller(element);
     let kept = false;
     const keep = () => (kept = true);
     const grown = () => {
@@ -67,7 +64,6 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
     element.addEventListener(ROWS_RESIZED, grown);
     return () => {
       observer.disconnect();
-      untrace();
       element.removeEventListener(READER_RESIZED, keep);
       element.removeEventListener(ROWS_RESIZED, grown);
     };
@@ -78,14 +74,12 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
     if (element.scrollTop === placed.current) return;
     placed.current = null;
     const bottom = atEnd(element.scrollHeight - element.scrollTop - element.clientHeight, stick.current);
-    if (bottom !== stick.current) traceScroll('follow: stick', { stick: bottom, held: held.current, top: element.scrollTop, height: element.scrollHeight });
     stick.current = bottom;
     setAway(!bottom);
     if (bottom) setUnread(false);
   }
 
   function follow() {
-    traceScroll('follow: released');
     stick.current = true;
     held.current = false;
     setAway(false);
@@ -99,7 +93,6 @@ export function useFollow(count: number, streaming: boolean, answered: string | 
 
   // Not following, which would take the view back down in the same render.
   function seekTo(key: string, align: Seek['align']) {
-    traceScroll('follow: seek', { key, align });
     stick.current = false;
     setSeek({ key, revision: Date.now(), align });
   }

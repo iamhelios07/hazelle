@@ -1,7 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { RowMemoryContext, type RowMemory } from './row-memory';
 import { RowSizes } from './viewport-size';
-import { traceScroll } from './scroll-trace';
 import styles from './Viewport.module.css';
 
 type Props = {
@@ -79,10 +78,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
     element.style.height = `${rootHeight()}px`;
     // After the seek, only up to the line: a scroll past it is the view sent down from outside, such as to follow the reply.
     const at = offset + sizes.offset(index) - line;
-    if (seek || (held.current === room.current!.key && frame.scrollTop < at)) {
-      traceScroll('viewport: fit', { seek, key: room.current!.key, held: held.current, at, below: room.current!.below });
-      frame.scrollTop = at;
-    }
+    if (seek || (held.current === room.current!.key && frame.scrollTop < at)) frame.scrollTop = at;
   };
   const reading = useRef<Reading | null>(null);
   const update = useRef<() => void>(() => {});
@@ -122,11 +118,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
     if (element.parentElement !== frame) observer.observe(element.parentElement!, { box: 'border-box' });
     events.addEventListener('scroll', read, { passive: true });
     window.addEventListener('resize', read);
-    const moved = (event: Event) => {
-      if (held.current !== null) traceScroll('viewport: let go', { held: held.current, by: event.type });
-      held.current = null;
-      opened.current = true;
-    };
+    const moved = () => { held.current = null; opened.current = true; };
     for (const type of MOVES) events.addEventListener(type, moved, { passive: true });
     read();
     return () => {
@@ -153,7 +145,6 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
     if (!frame || !element || estimate === 1) return;
     if (anchor.current) {
       const { index, inside } = anchor.current;
-      traceScroll('viewport: width anchor', { index, inside });
       const offset = offsetIn(element, frame);
       frame.scrollTop = offset + sizes.offset(Math.min(index, keys.length)) + inside;
       anchor.current = null;
@@ -166,14 +157,13 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
         const bottom = offset + sizes.offset(index + 1);
         if (seek || top < frame.scrollTop || bottom > frame.scrollTop + frameHeight(frame)) {
           held.current = target.key;
-          traceScroll('viewport: seek', { key: target.key, align: target.align, index, rows: keys.length });
           if (target.align === 'top') {
             room.current = { key: target.key, below: 0 };
             fit.current(true);
           } else frame.scrollTop = (top + bottom) / 2 - frameHeight(frame) / 2;
           opened.current = true;
         }
-      } else traceScroll('viewport: seek missed', { key: target.key, rows: keys.length });
+      }
     }
     jump.current = target;
     update.current();
@@ -222,10 +212,7 @@ export function Viewport({ keys: given, children, variant = 'list', list, keep =
       // The root takes its height before the render that sets it, so the correction is not clamped to the old one; and
       // from the position read before, so a clamp to the new one is not counted twice.
       root.current!.style.height = `${rootHeight()}px`;
-      if (correction) {
-        traceScroll('viewport: correct', { row: key, index, anchor, delta, correction, held: held.current, top });
-        frame.scrollTop = scrolled + correction;
-      }
+      if (correction) frame.scrollTop = scrolled + correction;
       reading.current = across(root.current!, frame);
       root.current!.dispatchEvent(new Event(ROWS_RESIZED, { bubbles: true }));
     }

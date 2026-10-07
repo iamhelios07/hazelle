@@ -113,6 +113,8 @@
   flex-grow: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Viewport owns anchoring; excluding only its rows still lets the browser anchor to the surrounding content. */
+  overflow-anchor: none;
   scroll-padding-top: var(--header-height);
   scrollbar-width: thin;
   scrollbar-color: var(--color-surface-raised) transparent;
