@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { transaction } from './transaction';
 
 // The service database (accounts, sessions, vaults, restores, snapshots, ...) behind the statement surface the route
 // modules were written against: prepare(sql).bind(...).first | all | run, and batch, one transaction. The SQL in the
@@ -64,17 +65,7 @@ export function serviceDb(db: DatabaseSync): Db {
   };
   return {
     prepare: (sql) => statement(sql, []),
-    batch: async <T>(statements: Statement[]) => {
-      db.exec('BEGIN IMMEDIATE');
-      try {
-        const out = statements.map((s) => (s as Internal)[EXECUTE]<T>());
-        db.exec('COMMIT');
-        return out;
-      } catch (error) {
-        db.exec('ROLLBACK');
-        throw error;
-      }
-    },
+    batch: async <T>(statements: Statement[]) => transaction(db, () => statements.map((s) => (s as Internal)[EXECUTE]<T>())),
   };
 }
 
@@ -83,12 +74,10 @@ export function bare(sql: string): string {
   return sql.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"|--[^\n]*|\/\*[\s\S]*?\*\//g, (match) => ' '.repeat(match.length));
 }
 
-// numbered: ?N placeholders; anonymous: bare ?. A statement uses one style. reads: it begins with SELECT, so it changes
-// nothing; returning: a DML that answers rows.
-export function placeholders(sql: string): { numbered: boolean; anonymous: boolean; mixed: boolean; reads: boolean; returning: boolean } {
+export function placeholders(sql: string): { mixed: boolean; reads: boolean } {
   const text = bare(sql);
   const numbered = /\?\d/.test(text);
   const anonymous = /\?(?!\d)/.test(text);
   const reads = /^\s*(SELECT|WITH)\b/i.test(text);
-  return { numbered, anonymous, mixed: numbered && anonymous, reads, returning: !reads && /\bRETURNING\b/i.test(text) };
+  return { mixed: numbered && anonymous, reads };
 }

@@ -13,10 +13,6 @@ export type Resolve = (hostname: string, options: LookupOptions) => Promise<Look
 // Above stream-box's 14.5-minute call limit: undici's 5-minute defaults would cut a quiet provider before that limit.
 const TIMEOUT_MS = 15 * 60 * 1000;
 
-// Copilot's hosts as connectors/copilot.ts names them. Whether they leave through a US-west hop is decided by a probe
-// from the hosted address (docker-port-plan §7); until then no hop exists and they leave locally like every host.
-export const COPILOT_HOSTS = new Set(['github.com', 'api.github.com', 'api.githubcopilot.com']);
-
 // Resolves every address itself and refuses the connection on the first one allowed refuses, so the socket and its
 // family fallback dial only what was validated; the host name stays the TLS server name. net asks for one address or,
 // with all, for the list.

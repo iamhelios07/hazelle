@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
@@ -7,6 +7,7 @@ import { createGunzip, createGzip } from 'node:zlib';
 import { StoreRules, type SqlValue, type StoreDb, type StoreReads, type Unavailable } from '../account-store';
 import { digest, fsyncPath, makeDirs } from './durable';
 import { openDatabase, type Db } from './service-db';
+import { transaction } from './transaction';
 
 // One account's database file, accounts/<incarnation>.sqlite, behind StoreRules (account-store.ts), and the registry
 // that owns every open file: one serial queue per incarnation, a replaceable session, the install of an armed restore
@@ -165,16 +166,7 @@ export class AccountDb implements StoreDb {
   }
 
   transaction<T>(fn: () => T): T {
-    const db = this.db();
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const result = fn();
-      db.exec('COMMIT');
-      return result;
-    } catch (error) {
-      db.exec('ROLLBACK');
-      throw error;
-    }
+    return transaction(this.db(), fn);
   }
 
   async wipe() {
@@ -464,16 +456,5 @@ export async function installSnapshot(dataDir: string, service: Db, incarnation:
     fsyncPath(join(dataDir, 'accounts'));
   } finally {
     for (const suffix of ['', '-wal', '-shm']) rmSync(staged + suffix, { force: true });
-  }
-}
-
-// What prepareAccountFile's schema promises every reader; exported for the signup's one-off checks in tests.
-export const ACCOUNT_TABLES = ['head', 'kv', 'objects'];
-
-export function listAccountFiles(dataDir: string): string[] {
-  try {
-    return readdirSync(join(dataDir, 'accounts'));
-  } catch {
-    return [];
   }
 }

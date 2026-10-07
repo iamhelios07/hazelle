@@ -1,4 +1,5 @@
 import { openDatabase } from './service-db';
+import { transaction } from './transaction';
 import type { BoxStorage } from '../stream-box';
 
 // Reply stream pages and their alarms, in $HAZELLE_DATA/streams.sqlite. A stream's alarm row is its reservation.
@@ -15,19 +16,8 @@ export type StreamStore = {
 
 export function streamStore(path: string): StreamStore {
   const db = openDatabase(path);
-  const transaction = <T>(work: () => T): T => {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const out = work();
-      db.exec('COMMIT');
-      return out;
-    } catch (error) {
-      db.exec('ROLLBACK');
-      throw error;
-    }
-  };
   try {
-    transaction(() => {
+    transaction(db, () => {
       db.exec('CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL)');
       const row = db.prepare('SELECT version FROM meta').get() as { version: number } | undefined;
       if (row && row.version > VERSION) throw new Error(`${path} is at version ${row.version}; this build knows ${VERSION} and never downgrades`);
@@ -52,7 +42,7 @@ export function streamStore(path: string): StreamStore {
   return {
     storage: (stream) => ({
       reserve: async (hello, expiresAt) =>
-        transaction(() => {
+        transaction(db, () => {
           if (!reserve.run(stream, expiresAt).changes) return false;
           insert.run(stream, hello.key, hello.value);
           return true;
@@ -64,7 +54,7 @@ export function streamStore(path: string): StreamStore {
     }),
     due: (now) => (due.all(now) as { stream: string }[]).map(({ stream }) => stream),
     remove: (stream) =>
-      transaction(() => {
+      transaction(db, () => {
         removePages.run(stream);
         removeAlarm.run(stream);
       }),

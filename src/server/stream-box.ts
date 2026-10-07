@@ -10,9 +10,8 @@ const DATA = 2;
 const END = 3;
 const PING = 4;
 
-// A stream that closes with no end frame was lost: the process restarted with the call gone. ms: how long the call ran.
+// A stream that closes with no end frame was lost: the process restarted with the call gone.
 type Reason = { reason: 'done' | 'stopped' | 'limit' } | { reason: 'network'; detail: string };
-export type End = Reason & { ms: number };
 
 // One stream's rows in streams.sqlite (streams-db.ts).
 export type BoxStorage = {
