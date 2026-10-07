@@ -22,3 +22,6 @@ docs/
 /release/
 /rclone/
 /.destroy.*/
+
+# A self-hoster's install on this machine: docker-compose.yml and deploy/ copied per the README, run from there.
+/selfhost/

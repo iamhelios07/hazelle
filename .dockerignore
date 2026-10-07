@@ -19,3 +19,4 @@ test-results
 rclone
 release/*
 !release/source.tar.gz
+selfhost
