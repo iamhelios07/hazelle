@@ -6,15 +6,12 @@ import { shown, type Chat, type ChatItem, type ChatSummary, type TranslateSwitch
 import { textTranslation, type CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { resetToggles, setKeepStatus, setOwnTranslate, setStatusScript, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
+import { resetToggles, setOwnTranslate, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import {
   branchChat,
-  editMessage,
   removeChat,
-  removeMessage,
   renameChat,
   restoreChat,
-  restoreMessage,
   selectVersion,
   setCast,
   setChatNote,
@@ -30,7 +27,7 @@ import { triggersOf } from '../../runtime/scripts';
 import type { Shown } from '../../runtime/talk';
 import { translatorOf } from '../../runtime/translate';
 import { blocked, type Blocked, type Target } from '../../runtime/turn-context';
-import { packsOf, togglesOf, statusBoxes, translationInput } from '../../runtime/chat-context';
+import { packsOf, togglesOf, translationInput } from '../../runtime/chat-context';
 import { takeTurn, type TurnFailure } from '../../runtime/turn';
 import type { CharacterPart } from '../common/characterPart';
 import { describeTurnFailure } from '../common/failure';
@@ -45,10 +42,11 @@ import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui'
 import { useSendNotes } from './useSendNotes';
 import { useDraft } from './useDraft';
 import { pickStarted } from './infoReply';
-import { finder, seenText } from './search';
 import { toggleRows } from './toggles';
 import { useFollow } from './useFollow';
-import { useSeen } from './useSeen';
+import { useChatSearch } from './useChatSearch';
+import { useChatStatus } from './useChatStatus';
+import { useMessageEdit } from './useMessageEdit';
 
 type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
@@ -107,13 +105,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }, [displayError]);
   const { texts, css } = view;
   const bot = shelf?.character.decor !== false;
-  // 상태창 지정 (design §6.4).
-  const statusScripts = bot ? (shelf?.character.statusScripts ?? []) : [];
-  const scriptName = (script: number) => card?.regex[script]?.name.trim() || `표시 스크립트 ${script + 1}`;
-  const status = statusBoxes(view, messages, statusScripts).map((box) => ({ ...box, name: scriptName(box.script) }));
-  // Only the card's own scripts, which come first among the packs': a module's place moves as modules go on and off.
-  const own = card?.regex.length ?? 0;
-  const offered = (index: number) => bot ? view.drawn[index]!.filter((script) => script < own).map((script) => ({ script, name: scriptName(script), marked: statusScripts.includes(script) })) : [];
   const url = useAssetUrl();
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);
@@ -135,36 +126,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const castMenu = useMenuHandle();
   // 토글, 장기 기억 and the prompt list take the same place beside the story, so one closes another.
   const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | Side | null>(null);
-  const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
-  // The search bar's term and current hit, by message id so rows coming and going keep it. focus asks the field to take
-  // the focus again, as Ctrl+F does while the bar is open.
-  const [search, setSearch] = useState<{ term: string; at: string | null; focus: number } | null>(null);
-  const [find] = useState(finder);
-  // Where the status window stands: in its latest message, or with 옆에 두기 in the story's margin, while each box
-  // fits there (fitting, which the margin reports whether it is shown or not). The key hides it there for now.
-  const [fitting, setFitting] = useState<ReadonlyMap<number, boolean>>(() => new Map());
-  const fits = status.length > 0 && status.every(({ script, drawn }) => drawn === null || fitting.get(script) === true);
-  const beside = bot && shelf?.character.keepStatus === true && fits;
-  const [hidden, setHidden] = useState(false);
-  const hosted = (index: number) => beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []));
-  const { seen, watch } = useSeen();
-  // 상태 shown over the story by a key or a tap, rather than by pointing at its tab.
-  const [held, hold] = useState(false);
-  const peeking = status.length > 0 && !(beside && !hidden) && (held || status.some(({ script }) => !seen.has(script)));
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
-  const readAs = (message: Shown, index: number) => {
-    const version = shown(message);
-    return seenText(texts[index]!, version.translation?.text ?? null, translating.live.get(version.id) ?? null, flipped.has(version.id));
-  };
-  const hitsFor = (term: string) => find(messages.map(readAs), term).map((index) => messages[index]!.id);
-  const hits = useMemo(() => (search ? hitsFor(search.term) : []), [search?.term, messages, texts, translating, flipped]);
-  // null with no current hit, or when its message was deleted.
-  const searchAt = search?.at != null && hits.includes(search.at) ? search.at : null;
+  const { found, search, actions: searchActions } = useChatSearch(messages, texts, translating, flipped, seekTo);
+  const { actions: statusActions, ...status } = useChatStatus(chat.character, shelf?.character ?? null, view, messages);
+  const { editing, actions: editActions } = useMessageEdit(id, last, (message) => ask({ kind: 'regenerate', message: message.id }));
   // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
@@ -294,19 +263,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void setOwnTranslate(store, chat.character!, own).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  function saveEdit(message: Shown, andReply: boolean) {
-    if (!id || !editing) return;
-    void editMessage(store, id, message, editing.text, editing.translation).then((saved) => saved.ok || toast.failed(saved));
-    setEditing(null);
-    if (andReply && last && last.role === 'assistant') ask({ kind: 'regenerate', message: last.id });
-  }
-
-  function remove(message: Shown) {
-    if (!id) return;
-    void removeMessage(store, id, message.id).then((saved) => saved.ok || toast.failed(saved));
-    toast.undoable('메시지를 삭제했어요', () => void restoreMessage(store, id, message.id));
-  }
-
   async function branch(message: Shown) {
     if (!item || branching) return;
     setBranching(true);
@@ -376,44 +332,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toast.show(`토글 ${toggles.changed}개를 기본값으로 되돌렸어요`);
   }
 
-  function markStatus(script: number, on: boolean) {
-    const character = chat.character;
-    if (!character) return;
-    void setStatusScript(store, character, script, on).then((saved) => saved.ok || toast.failed(saved));
-    if (!on && statusScripts.length === 1) hold(false);
-    toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, script, !on), [scriptName(script), card?.name].filter(Boolean).join(' · '));
-  }
-
-  // 옆에 두기, or on false 탭으로 접기, for every chat of the character.
-  function keepStatus(keep: boolean) {
-    if (!chat.character) return;
-    hold(false);
-    setHidden(false);
-    void setKeepStatus(store, chat.character, keep).then((saved) => saved.ok || toast.failed(saved));
-  }
-
-  // The key shows or hides 상태 for now, storing nothing: in the margin while it stands there, or else the drawer
-  // over the story.
-  function toggleStatus() {
-    hold(!beside && !held);
-    if (beside) setHidden(!hidden);
-  }
-
-  // A new term starts at the newest hit, nearest where a chat is read.
-  function searchFor(term: string) {
-    const at = hitsFor(term).at(-1) ?? null;
-    setSearch((current) => current && { ...current, term, at });
-    if (at) seekTo(at, 'center');
-  }
-
-  function stepSearch(step: -1 | 1) {
-    if (!hits.length) return;
-    const index = searchAt === null ? (step > 0 ? -1 : hits.length) : hits.indexOf(searchAt);
-    const at = hits[(index + step + hits.length) % hits.length]!;
-    setSearch((current) => current && { ...current, at });
-    seekTo(at, 'center');
-  }
-
   function rename(name: string) {
     if (!id) return;
     void renameChat(store, id, name).then((saved) => saved.ok || toast.failed(saved));
@@ -436,14 +354,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     messages,
     texts,
     decor: { bot, css: bot ? resolveAssets(css, url) : '', url, buttons: scripted ? ('live' as const) : ('inert' as const) },
-    status,
-    hosted,
-    offered,
-    held,
-    peeking,
+    ...status,
     infoPick,
-    aside: beside && !hidden,
-    canKeep: fits,
     translate,
     sendLanguage,
     translation,
@@ -456,8 +368,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     cache,
     leaving,
     found,
-    // place: the current hit's 1-based place among hits, null when there is none.
-    search: search && { term: search.term, focus: search.focus, hits: hits.length, place: searchAt === null ? null : hits.indexOf(searchAt) + 1, at: searchAt },
+    search,
     problem,
     editing,
     pinned,
@@ -470,6 +381,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     draft,
     scroll,
     actions: {
+      ...searchActions,
+      ...statusActions,
+      ...editActions,
       send,
       answer: () => ask({ kind: 'answer' }),
       stop: () => talk.stop(chatId),
@@ -478,18 +392,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       continue: (message: Shown) => ask({ kind: 'continue', message: message.id, version: shown(message).id }),
       swipe,
       pick,
-      edit: (message: Shown) => {
-        const version = shown(message);
-        setEditing({ id: message.id, text: version.text, translation: version.translation?.text ?? null });
-      },
-      changeEdit: (change: { text: string } | { translation: string }) => setEditing((current) => current && { ...current, ...change }),
-      cancelEdit: () => setEditing(null),
-      saveEdit,
       translate: translateMessage,
       flipTranslation,
       setTranslate: setSwitches,
       setOwnTranslate: setOwnSwitches,
-      remove,
       copy,
       press: (button: BotButton | null) => void press(button),
       branch,
@@ -502,27 +408,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       pickInfo: setInfoPick,
       showToggles: () => setPanel({ kind: 'toggles' }),
       memory: (record: string | null) => setPanel({ kind: 'memory', record }),
-      // ids in chat order; the view goes to the first.
-      find: (ids: string[]) => {
-        if (!ids.length) return;
-        seekTo(ids[0]!, 'center');
-        setFound({ ids: new Set(ids), at: Date.now() });
-      },
-      openSearch: () => setSearch((current) => ({ term: current?.term ?? '', at: current?.at ?? null, focus: (current?.focus ?? 0) + 1 })),
-      searchFor,
-      stepSearch,
-      closeSearch: () => setSearch(null),
       side: (open: Side) => setPanel(open),
       // The keys open the list, and close it again while that list or one of its items is open.
       toggleSide: (kind: 'prompts') => setPanel((current) => (current?.kind === kind ? null : { kind, id: null, pane: null })),
       closePanel: () => setPanel(null),
-      hold,
-      keepStatus: () => keepStatus(true),
-      foldStatus: () => keepStatus(false),
-      toggleStatus,
-      fitStatus: (script: number, fits: boolean) => setFitting((current) => (current.get(script) === fits ? current : new Map(current).set(script, fits))),
-      markStatus,
-      watch,
       openDialog: (which: 'rename' | 'reading' | 'persona') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
