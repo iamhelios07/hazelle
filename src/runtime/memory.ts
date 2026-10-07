@@ -1,14 +1,14 @@
+import { chatMemory, memorySetup, sourcesOf } from './memory-read';
+import { chatSent, type ChatSent } from './memory-view';
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
-import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type MemoryInput, type RecordStatus, type Staleness, type Standing } from '../engine/memory';
-import type { Assembled, RanAway } from '../engine/pipeline';
-import type { ChatScope } from '../engine/render';
-import { fold, shown, type Chat, type Message, type Receipt } from '../model/chat';
+import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted } from '../engine/memory';
+import type { RanAway } from '../engine/pipeline';
+import { fold, shown, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import { emptyMemory, memoryId, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
-import { SETTINGS_ID } from '../model/settings';
 import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
 import { evaluationFailure } from './evaluation';
@@ -17,23 +17,16 @@ import { generate, resume, type Reply } from './generate';
 import { modelProfile } from './profiles';
 import { memoryPrompt } from './prompts';
 import type { Session } from './session';
-import { without, type ObjectStore } from './store';
+import { without } from '../model/fields';
+import type { ObjectStore } from './store';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { receiptOf } from './talk';
-import { asSent, promptBudget, scopeOf, wouldSend } from './turn';
+import { promptBudget } from './chat-context';
+import { wouldSend } from './turn-context';
 
 export type { RecordStatus } from '../engine/memory';
 
 // The only writer of `memory` objects and of the memory settings (design §6.2).
-
-// budget, window and batch count tokens (model/memory MemorySettings).
-export const MEMORY_DEFAULTS: MemorySettings = { on: true, budget: 25_000, window: 24_000, batch: 12_000 };
-
-export type MemorySetup = MemorySettings & { own: boolean };
-
-export const defaultMemory = (store: ObjectStore): MemorySettings => ({ ...MEMORY_DEFAULTS, ...store.get('settings', SETTINGS_ID)?.value.memory });
-
-export const memorySetup = (store: ObjectStore, chat: Chat): MemorySetup => (chat.memory ? { ...chat.memory, own: true } : { ...defaultMemory(store), own: false });
 
 // null: 기본값으로 되돌리기.
 export const setChatMemory = (store: ObjectStore, chat: string, settings: MemorySettings | null) =>
@@ -41,16 +34,6 @@ export const setChatMemory = (store: ObjectStore, chat: string, settings: Memory
 
 export const setDefaultMemory = (store: ObjectStore, change: Partial<MemorySettings>) =>
   store.upsert('settings', (current) => ({ models: {}, ...current, memory: { ...current?.memory, ...change } }));
-
-export const chatMemory = (store: ObjectStore, chat: string): Memory => store.children('memory', chat).find((entry) => entry.id === memoryId(chat))?.value ?? emptyMemory();
-
-const sourcesOf = (messages: Message[]): Source[] => messages.map((message) => ({ message: message.id, version: shown(message).id }));
-
-// null while memory is off.
-export function memoryInput(store: ObjectStore, id: string, chat: Chat, messages: Message[]): MemoryInput | null {
-  const setup = memorySetup(store, chat);
-  return setup.on ? { memory: chatMemory(store, id), budget: setup.budget, shown: sourcesOf(messages) } : null;
-}
 
 type Write<T = Stored<'memory'>> = Promise<ApiResult<T>>;
 
@@ -147,58 +130,6 @@ export const removeThread = (store: ObjectStore, chat: string, thread: string): 
     (memory) => memory.threads.find(({ id }) => id === thread),
     (memory, found) => ({ ...memory, threads: memory.threads.filter((each) => each !== found) }),
   );
-
-// asker: background memory's lane or the memory panel's (turn wouldSend).
-type ChatSent = { chat: Chat; scope: ChatScope; read: ChatRead; tokens: number[]; standing: Standing | null };
-
-async function chatSent(session: Pick<Session, 'store' | 'read'>, id: string, asker: 'memory' | 'view', memory: Memory | null): Promise<ChatSent | { kind: 'tokenizer' } | null> {
-  if (!(await session.store.evaluated(id))) return null;
-  const stored = session.store.get('chat', id);
-  const model = session.read.chat(id).snapshot();
-  if (!stored || !model) return null;
-  const messages = asSent(session.store, stored.value, model.messages);
-  const scope = scopeOf(session, id, stored.value, messages);
-  const shown = sourcesOf(messages);
-  const budget = memoryBudget(memorySetup(session.store, stored.value).budget, promptBudget(session.store, stored.value));
-  const texts = await session.store.evaluation.read(`${asker}:${id}`, scope, memory && { memory, shown, budget });
-  if ('kind' in texts) return texts;
-  return { chat: stored.value, scope, read: { shown, roles: messages.map(({ role }) => role), texts: texts.texts }, tokens: texts.tokens, standing: texts.standing };
-}
-
-// slot: whether the chat's prompt holds 장기 기억 where a request reaches it, false while the chat cannot send. stale: why
-// each stale record is, a record the user edited or pinned included, which stays sent. waiting: messages past the window
-// not summarized yet. tokens: what the slot sends against its budget (shrunk to what the model can take), and the
-// state's share against its limit.
-export type MemoryView = {
-  memory: Memory;
-  setup: MemorySetup;
-  slot: boolean;
-  records: ReadonlyMap<string, RecordStatus>;
-  stale: ReadonlyMap<string, Staleness>;
-  covered: number;
-  waiting: number;
-  tokens: { used: number; budget: number; state: number; stateLimit: number };
-};
-
-export async function memoryView(session: Pick<Session, 'store' | 'read'>, chat: string): Promise<MemoryView | null> {
-  const memory = chatMemory(session.store, chat);
-  const sent = await chatSent(session, chat, 'view', memory);
-  if (!sent || 'kind' in sent) return null;
-  const setup = memorySetup(session.store, sent.chat);
-  const held = sent.standing!;
-  return {
-    memory,
-    setup,
-    slot: (await wouldSend(session, chat, { kind: 'answer' }, undefined, 'view'))?.prompt.memory?.slot ?? false,
-    records: held.status,
-    stale: held.stale,
-    covered: held.covered,
-    waiting: Math.max(windowStart(sent.tokens, setup.window) - held.covered, 0),
-    tokens: held.tokens,
-  };
-}
-
-export const leaving = (prompt: Assembled): number => (prompt.memory?.missing ?? 0) + prompt.dropped;
 
 // One summary: the message versions it reads, in chat order, and the record it summarizes again as it was when the job
 // started (at), null for the messages after memory's end. user: the user asked, and may have a record they edited or

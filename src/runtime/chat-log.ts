@@ -5,10 +5,11 @@ import { CAST_MAX, shown, type Chat, type ChatItem, type Entry, type Message, ty
 import type { Stored } from '../model/kinds';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
-import { markDeleted } from './characters';
+import { markDeleted } from './removal';
 import type { Greetings } from './greetings';
 import { withPersona } from './personas';
-import { without, type ObjectStore, type Write } from './store';
+import { without } from '../model/fields';
+import type { ObjectStore, Write } from './store';
 
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
 // the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with

@@ -1,7 +1,9 @@
 import { MoreHorizontal, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
-import { memorySetup, memoryView, removeFact, removeThread, setChatMemory, setFact, setThread, type MemoryView } from '../../runtime/memory';
+import { memorySetup } from '../../runtime/memory-read';
+import { memoryView, type MemoryView } from '../../runtime/memory-view';
+import { removeFact, removeThread, setChatMemory, setFact, setThread } from '../../runtime/memory';
 import { describeMemoryFailure } from '../common/failure';
 import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';

@@ -5,7 +5,8 @@ import type { Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { chatPrompt } from './prompts';
-import { without, type ObjectStore } from './store';
+import { without } from '../model/fields';
+import type { ObjectStore } from './store';
 
 // The chat layer lives in the chat object and the prompt layer in the prompt, which runtime/chat-log and runtime/prompts
 // write otherwise; their `models` fields are written only here.
@@ -14,17 +15,17 @@ export type Route = { connection: Stored<'connection'>; model: Model };
 export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' };
 
 // A missing prompt has no layer; the turn stops on it before the model matters.
-export function chatModel(store: ObjectStore, chat: Chat, role: Role): Route | RouteFailure {
+export function chatModel(store: Pick<ObjectStore, 'get'>, chat: Chat, role: Role): Route | RouteFailure {
   const prompt = chatPrompt(store, chat);
   const ref = resolveRole(role, [chat.models, ...(prompt.kind === 'prompt' ? [prompt.prompt.value.models] : []), store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
   return ref ? routeOf(store, ref) : { kind: 'no-model' };
 }
 
-export function taskModel(store: ObjectStore, chat: Chat, own: ModelRef | undefined): Route | RouteFailure {
+export function taskModel(store: Pick<ObjectStore, 'get'>, chat: Chat, own: ModelRef | undefined): Route | RouteFailure {
   return own ? routeOf(store, own) : chatModel(store, chat, 'aux');
 }
 
-export function routeOf(store: ObjectStore, ref: ModelRef): Route | RouteFailure {
+export function routeOf(store: Pick<ObjectStore, 'get'>, ref: ModelRef): Route | RouteFailure {
   const connection = store.get('connection', ref.connection);
   const model = connection?.value.starred.find((starred) => starred.id === ref.model);
   return connection && model ? { connection, model } : { kind: 'model-gone' };

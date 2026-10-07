@@ -6,7 +6,7 @@ import type { ChatSummary } from '../../model/chat';
 import { PICTURE_PERCENT, type CharacterShelf, type Pictures } from '../../model/library';
 import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
-import { packsOf } from '../../runtime/turn';
+import { packsOf } from '../../runtime/chat-context';
 import { aliased } from '../common/alias';
 import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';

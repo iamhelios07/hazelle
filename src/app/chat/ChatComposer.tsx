@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react';
-import type { Blocked } from '../../runtime/turn';
+import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { withRo } from '../common/languages';
 import { SHORTCUTS, titled } from '../shortcuts';

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Chat } from '../../model/chat';
 import type { Memory } from '../../model/memory';
 import { forecast, lastCache, type Forecast } from '../../runtime/cache';
-import { leaving } from '../../runtime/memory';
+import { leaving } from '../../runtime/memory-view';
 import type { Shown } from '../../runtime/talk';
-import { cacheSend, wouldSend } from '../../runtime/turn';
+import { cacheSend, wouldSend } from '../../runtime/turn-context';
 import { useSession } from '../session';
 
 const SETTLE_MS = 400;

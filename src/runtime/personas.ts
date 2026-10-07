@@ -4,8 +4,9 @@ import { live } from '../model/library';
 import type { Persona } from '../model/persona';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
-import { markDeleted } from './characters';
-import { without, type ObjectStore, type Write } from './store';
+import { markDeleted } from './removal';
+import { without } from '../model/fields';
+import type { ObjectStore, Write } from './store';
 
 // Fixed, so two devices adding the first persona at once meet in a version conflict instead of making two.
 export const FIRST_ID = '00000000-0000-4000-8000-000000000002';
@@ -18,19 +19,19 @@ export type PersonaSource = 'chat' | 'character' | 'current';
 // another persona, and a turn stops on it.
 export type PersonaChoice = { kind: 'persona'; persona: Stored<'persona'>; from: PersonaSource } | { kind: 'missing'; from: PersonaSource };
 
-function followed(store: ObjectStore, chat: Chat): [PersonaSource, string | undefined] {
+function followed(store: Pick<ObjectStore, 'get'>, chat: Chat): [PersonaSource, string | undefined] {
   const pinned = chat.character === null ? undefined : store.get('character', chat.character)?.value.persona;
   return chat.persona !== undefined ? ['chat', chat.persona] : pinned !== undefined ? ['character', pinned] : ['current', store.get('settings', SETTINGS_ID)?.value.persona];
 }
 
-export function chatPersona(store: ObjectStore, chat: Chat): PersonaChoice {
+export function chatPersona(store: Pick<ObjectStore, 'get'>, chat: Chat): PersonaChoice {
   const [from, id] = followed(store, chat);
   const persona = id === undefined ? null : live(store.get('persona', id));
   return persona ? { kind: 'persona', persona, from } : { kind: 'missing', from };
 }
 
 // The chat as saved: with the persona it reads now, a missing 고정 included, so it reads the same after a pick elsewhere.
-export function withPersona(store: ObjectStore, chat: Chat): Chat {
+export function withPersona(store: Pick<ObjectStore, 'get'>, chat: Chat): Chat {
   const [, id] = followed(store, chat);
   return id === undefined ? chat : { ...chat, persona: id };
 }

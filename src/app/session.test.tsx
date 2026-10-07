@@ -8,7 +8,7 @@ import { ReadModels, type Opening, type ScreenChat } from '../runtime/read-model
 import type { Session } from '../runtime/session';
 import { ObjectStore } from '../runtime/store';
 import type { Turn } from '../runtime/talk';
-import * as display from '../runtime/turn';
+import * as display from '../runtime/chat-context';
 import { randomBytes } from '../vault/aead';
 import { SessionProvider, useChatDisplay } from './session';
 import { probeRoot } from './common/probe';

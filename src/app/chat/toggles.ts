@@ -1,6 +1,6 @@
 import { readToggles } from '../../engine/import/toggles';
 import type { Toggle } from '../../model/prompt';
-import type { ChatToggleSet } from '../../runtime/turn';
+import type { ChatToggleSet } from '../../runtime/chat-context';
 
 export type ToggleRow = { toggle: Toggle; value: string; changed: boolean };
 export type ToggleRows = { prompt: ToggleRow[]; card: ToggleRow[]; changed: number };

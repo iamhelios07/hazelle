@@ -4,7 +4,7 @@ import { memoryId, type MemoryRecord } from '../model/memory';
 import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, setCast, startChat } from './chat-log';
 import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
-import { evaluateChat } from './turn';
+import { evaluateChat } from './chat-context';
 
 const server = testServer();
 

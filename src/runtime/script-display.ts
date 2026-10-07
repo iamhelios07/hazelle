@@ -8,7 +8,7 @@ import type { Runner } from './lua/client';
 import { luaSnapshot, luaStanding } from './lua/snapshot';
 import { scriptsOf } from './scripts';
 import type { ObjectStore } from './store';
-import { pinned, scopeOf } from './turn';
+import { pinned, scopeOf } from './chat-context';
 
 type Pass = { revision: number; generation: number; scripts: Script[]; snapshot: Snapshot; items: Missed[]; remaining: number; installed: boolean; view: Display; signal?: AbortSignal };
 // generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks, and never used

@@ -1,3 +1,6 @@
+import { without } from '../model/fields';
+import type { Stored, Values } from '../model/kinds';
+import { daysLeft, REMOVABLE, type Mark, type Removable } from '../model/library';
 import { KINDS, parentKinds, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
 import type { ObjectRow, ObjectStore, Pin } from './store';
@@ -75,4 +78,33 @@ async function removeOn(store: ObjectStore, root: { kind: Kind; id: string }, pr
     if (!conflict) return { ok: true, data: null };
   }
   return { ok: false, error: 'conflict' };
+}
+
+// at is when it was deleted; null brings it back, unless its removal has begun ('gone').
+export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id: string, at: number | null): Promise<ApiResult<Stored<K>>> {
+  return store.update(kind, id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }) as Values[K] | null);
+}
+
+// Removal for good is decided once, by the purging claim, at the rev the claim is written on (store.update): a restore
+// landing first leaves the root not due ('gone'), and one after it is refused (markDeleted). Nothing
+// the root owns goes before the claim lands. A claimed root is always due, so the next purge finishes one cut short.
+async function purge(store: ObjectStore, kind: Removable, id: string, due: (value: Mark) => boolean, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
+  const claimed = await store.update(kind, id, (current) => (current.purging || due(current) ? { ...current, purging: true } : null));
+  if (!claimed.ok) return claimed;
+  return removeOwned(store, { kind, id }, progress);
+}
+
+export const purgeNow = (store: ObjectStore, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
+  purge(store, kind, id, (value) => value.deleted !== undefined, progress);
+
+// The session runs it when it opens, on whichever device opens first. One that fails is tried again next time. A stop
+// (the vault closing) lets the one under way finish and leaves the rest for next time.
+export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
+  const due = (value: Mark) => value.deleted !== undefined && daysLeft(value, now) <= 0;
+  for (const kind of REMOVABLE) {
+    for (const { id, value } of store.list(kind)) {
+      if (signal.aborted) return;
+      if (value.purging || due(value)) await purge(store, kind, id, due, () => {});
+    }
+  }
 }

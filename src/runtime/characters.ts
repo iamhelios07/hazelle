@@ -2,13 +2,15 @@ import { imageType } from '../engine/import/card';
 import type { Card, Imported, Picture } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { Stored, Values } from '../model/kinds';
-import { daysLeft, holds, nest, readableTexts, REMOVABLE, type Asset, type Avatar, type Character, type Lore, type Mark, type Pictures, type Removable } from '../model/library';
+import { holds, nest, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
 import { thumbnail } from './picture';
-import { removeOwned } from './removal';
-import { allWritten, without, type ObjectStore, type Write } from './store';
+import { markDeleted } from './removal';
+import { allWritten } from './api';
+import { without } from '../model/fields';
+import type { ObjectStore, Write } from './store';
 
 export type Progress = (step: { kind: 'picture' } | { kind: 'assets' | 'saving'; done: number; total: number }) => void;
 
@@ -111,36 +113,7 @@ export async function copyCharacter(store: ObjectStore, id: string, name: string
   return addCharacter(store, { ...without(original, 'alias'), card: { ...original.card, name }, origin: { id, name: original.card.name } }, owned, progress);
 }
 
-// at is when it was deleted; null brings it back, unless its removal has begun ('gone').
-export function markDeleted<K extends Removable>(store: ObjectStore, kind: K, id: string, at: number | null): Promise<ApiResult<Stored<K>>> {
-  return store.update(kind, id, (current) => (at === null ? (current.purging ? null : without(current, 'deleted')) : { ...current, deleted: at }) as Values[K] | null);
-}
-
 export const setDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'character', id, at);
-
-// Removal for good is decided once, by the purging claim, at the rev the claim is written on (store.update): a restore
-// landing first leaves the root not due ('gone'), and one after it is refused (markDeleted). Nothing
-// the root owns goes before the claim lands. A claimed root is always due, so the next purge finishes one cut short.
-async function purge(store: ObjectStore, kind: Removable, id: string, due: (value: Mark) => boolean, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> {
-  const claimed = await store.update(kind, id, (current) => (current.purging || due(current) ? { ...current, purging: true } : null));
-  if (!claimed.ok) return claimed;
-  return removeOwned(store, { kind, id }, progress);
-}
-
-export const purgeNow = (store: ObjectStore, kind: Removable, id: string, progress: (removed: number, total: number) => void): Promise<ApiResult<null>> =>
-  purge(store, kind, id, (value) => value.deleted !== undefined, progress);
-
-// The session runs it when it opens, on whichever device opens first. One that fails is tried again next time. A stop
-// (the vault closing) lets the one under way finish and leaves the rest for next time.
-export async function purgeExpired(store: ObjectStore, now: number, signal: AbortSignal): Promise<void> {
-  const due = (value: Mark) => value.deleted !== undefined && daysLeft(value, now) <= 0;
-  for (const kind of REMOVABLE) {
-    for (const { id, value } of store.list(kind)) {
-      if (signal.aborted) return;
-      if (value.purging || due(value)) await purge(store, kind, id, due, () => {});
-    }
-  }
-}
 
 export type CharacterText = Card & { alias: string };
 
@@ -196,7 +169,7 @@ const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, reply
 // switches (이 캐릭터만 따로) rather than the shared ones.
 export type TranslateSetup = typeof TRANSLATE_DEFAULTS & Pick<TranslateSwitches, 'prompt'> & { own: boolean };
 
-export function translateSwitches(store: ObjectStore, character: string | null): TranslateSetup {
+export function translateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): TranslateSetup {
   const own = character === null ? undefined : store.get('character', character)?.value.ownTranslate;
   const switches = { ...TRANSLATE_DEFAULTS, ...(own ?? store.get('settings', SETTINGS_ID)?.value.translate) };
   return { ...switches, input: switches.input && !switches.reverse, own: own !== undefined };

@@ -5,7 +5,8 @@ import { setTranslate } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
-import { takeTurn, translationInput } from './turn';
+import { takeTurn } from './turn';
+import { translationInput } from './chat-context';
 
 const server = testServer();
 const encode = (text: string) => new TextEncoder().encode(text);

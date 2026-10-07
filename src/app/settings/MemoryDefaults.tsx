@@ -1,5 +1,6 @@
 import type { MemorySettings } from '../../model/memory';
-import { defaultMemory, setDefaultMemory } from '../../runtime/memory';
+import { defaultMemory } from '../../runtime/memory-read';
+import { setDefaultMemory } from '../../runtime/memory';
 import { MemoryFields } from '../common/MemoryFields';
 import { useAutosave } from '../common/useAutosave';
 import { useSettings, useStore } from '../session';

@@ -8,7 +8,9 @@ import type { EvaluationDown } from './evaluation-core';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
-import { autoContinue, statusBoxes, takeTurn, wouldSend } from './turn';
+import { autoContinue, takeTurn } from './turn';
+import { statusBoxes } from './chat-context';
+import { wouldSend } from './turn-context';
 
 const server = testServer();
 

@@ -8,7 +8,7 @@ import { EvaluationStopped } from './evaluation';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
 import { withTurn, type Shown, type Talk, type Turn } from './talk';
-import { evaluateChat } from './turn';
+import { evaluateChat } from './chat-context';
 import { summaryId, type ChatModel } from './summary';
 
 class Snapshot<T> {

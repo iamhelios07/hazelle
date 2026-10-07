@@ -23,7 +23,8 @@ import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
 import { botCall, callOf, endCall } from './streams';
 import { receiptOf } from './talk';
-import { packsOf, scopeOf, type Blocked, type TurnContext } from './turn';
+import { packsOf, scopeOf } from './chat-context';
+import type { Blocked, TurnContext } from './turn-context';
 
 // said: the bot's own words (alertNormal, alertError, showAlert). The others are the app's about the bot.
 // no-model: the bot called a model of a role the chat has none for. no-character: a module called one in a chat with

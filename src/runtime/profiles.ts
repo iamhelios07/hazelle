@@ -5,8 +5,9 @@ import { live } from '../model/library';
 import type { Profile } from '../model/profile';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
-import { markDeleted } from './characters';
-import { without, type ObjectStore } from './store';
+import { markDeleted } from './removal';
+import { without } from '../model/fields';
+import type { ObjectStore } from './store';
 
 // Every write of `profile` objects, of the default 묶음, and of the 묶음 a starred model uses.
 
@@ -19,7 +20,7 @@ export type ProfileChoice = { kind: 'profile'; profile: Stored<'profile'>; own: 
 
 const profileId = (model: Starred, defaultProfile: string | undefined) => model.profile ?? defaultProfile;
 
-export function modelProfile(store: ObjectStore, model: Starred): ProfileChoice {
+export function modelProfile(store: Pick<ObjectStore, 'get'>, model: Starred): ProfileChoice {
   const own = model.profile !== undefined;
   const id = profileId(model, store.get('settings', SETTINGS_ID)?.value.profile);
   const profile = id === undefined ? null : live(store.get('profile', id));

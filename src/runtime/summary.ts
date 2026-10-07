@@ -3,7 +3,7 @@ import { chatTitle, previewLine, recentIn, shown, type ChatItem, type Summary } 
 import { live } from '../model/library';
 import type { ApiFailure } from './api';
 import type { ObjectStore } from './store';
-import { pinned, scopeOf } from './turn';
+import { pinned, scopeOf } from './chat-context';
 import { pause } from './pause';
 
 const VERSION = 1;

@@ -7,7 +7,8 @@ import { setTranslate, setTranslatorNote } from './characters';
 import { SETTINGS_ID } from '../model/settings';
 import { setDefaultModel, setTaskModel } from './assignment';
 import { translate, translatorOf } from './translate';
-import { takeTurn, translateText, translationInput, TRANSLATOR_CHAT } from './turn';
+import { takeTurn, translateText, TRANSLATOR_CHAT } from './turn';
+import { translationInput } from './chat-context';
 
 const server = testServer();
 

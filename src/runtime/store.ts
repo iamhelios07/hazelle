@@ -1449,18 +1449,6 @@ export class ObjectStore {
   }
 }
 
-// Writes sent together, each shown at once: the first failure among them, or ok once all landed.
-export async function allWritten(writes: Promise<ApiResult<unknown>>[]): Promise<ApiResult<null>> {
-  const results = await Promise.all(writes);
-  return results.find((result): result is ApiFailure => !result.ok) ?? { ok: true, data: null };
-}
-
-export function without<T extends object>(from: T, key: keyof T): T {
-  const rest = { ...from };
-  delete rest[key];
-  return rest;
-}
-
 export function keepSynced(store: ObjectStore, synced: () => void): () => void {
   const pull = () => {
     if (document.visibilityState === 'visible') void store.pull().then((failure) => { if (!failure) synced(); });

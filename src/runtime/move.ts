@@ -8,7 +8,7 @@ import { createFolder, importCharacter, saveAssets, type Progress } from './char
 import { chatWrites } from './chat-log';
 import type { Files } from './files';
 import { projectGreetings, startingGreetings } from './greetings';
-import { defaultMemory } from './memory';
+import { defaultMemory } from './memory-read';
 import { importModule, setModuleAlways } from './modules';
 import { addPersona } from './personas';
 import { thumbnail } from './picture';

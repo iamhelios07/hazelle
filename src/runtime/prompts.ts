@@ -8,8 +8,9 @@ import { sortOf, type Block, type ConversationPrompt, type Prompt, type PromptOf
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiFailure, ApiResult } from './api';
-import { markDeleted } from './characters';
-import { without, type ObjectStore } from './store';
+import { markDeleted } from './removal';
+import { without } from '../model/fields';
+import type { ObjectStore } from './store';
 
 // Every write of `prompt` objects and of the default prompts, except a conversation prompt's `models` layer, which
 // runtime/assignment writes with the other layers, and a backup's restore.
@@ -35,18 +36,18 @@ export const ofSort = <S extends PromptSort>(prompt: Stored<'prompt'>, sort: S):
 // stops on it ("기본 프롬프트가 없어요").
 export type PromptChoice<S extends PromptSort = 'conversation'> = { kind: 'prompt'; prompt: StoredPrompt<S>; own: boolean } | { kind: 'missing'; own: boolean };
 
-function choose<S extends PromptSort>(store: ObjectStore, sort: S, chosen: string | undefined): PromptChoice<S> {
+function choose<S extends PromptSort>(store: Pick<ObjectStore, 'get'>, sort: S, chosen: string | undefined): PromptChoice<S> {
   const own = chosen !== undefined;
   const id = chosen ?? store.get('settings', SETTINGS_ID)?.value[DEFAULTS[sort].setting];
   const prompt = id === undefined ? null : live(store.get('prompt', id));
   return prompt && ofSort(prompt, sort) ? { kind: 'prompt', prompt, own } : { kind: 'missing', own };
 }
 
-export const chatPrompt = (store: ObjectStore, chat: Pick<Chat, 'prompt'>) => choose(store, 'conversation', chat.prompt);
+export const chatPrompt = (store: Pick<ObjectStore, 'get'>, chat: Pick<Chat, 'prompt'>) => choose(store, 'conversation', chat.prompt);
 
-export const translationPrompt = (store: ObjectStore, chosen: string | undefined) => choose(store, 'translate', chosen);
+export const translationPrompt = (store: Pick<ObjectStore, 'get'>, chosen: string | undefined) => choose(store, 'translate', chosen);
 
-export const memoryPrompt = (store: ObjectStore) => choose(store, 'memory', undefined);
+export const memoryPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, 'memory', undefined);
 
 // A new conversation prompt holds every slot once, the context before the chat with 장기 기억 last, where memory changing
 // at a boundary leaves the rest of the fixed part cached (design §6.2, Cache), and the notes after it, and the two

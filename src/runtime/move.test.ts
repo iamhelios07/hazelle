@@ -4,7 +4,7 @@ import type { Card, ImportedModule, RisuBackup, RisuCharacter, RisuPersona, Risu
 import { fold, shown } from '../model/chat';
 import { randomBytes } from '../vault/aead';
 import { importCharacter } from './characters';
-import { MEMORY_DEFAULTS } from './memory';
+import { MEMORY_DEFAULTS } from './memory-read';
 import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch, type MoveStep } from './move';
 import { setModuleAlways } from './modules';
 import { addPersona, setCurrentPersona } from './personas';

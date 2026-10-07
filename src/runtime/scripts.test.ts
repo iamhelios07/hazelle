@@ -10,7 +10,8 @@ import { projectGreetings } from './greetings';
 import type { Runner } from './lua/client';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
-import { evaluateChat, takeTurn } from './turn';
+import { evaluateChat } from './chat-context';
+import { takeTurn } from './turn';
 
 const server = testServer();
 

@@ -5,7 +5,8 @@ import { projectGreetings } from './greetings';
 import { importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleDeleted, setPromptModule } from './modules';
 import { addPrompt, chatPrompt, ofSort } from './prompts';
 import { answerable, saying, stubRelay, testCard, testServer } from './testing';
-import { evaluateChat, packsOf, takeTurn, togglesOf } from './turn';
+import { evaluateChat, packsOf, togglesOf } from './chat-context';
+import { takeTurn } from './turn';
 
 const server = testServer();
 

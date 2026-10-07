@@ -98,3 +98,9 @@ function parse(text: string): unknown {
     return null;
   }
 }
+
+// Writes sent together, each shown at once: the first failure among them, or ok once all landed.
+export async function allWritten(writes: Promise<ApiResult<unknown>>[]): Promise<ApiResult<null>> {
+  const results = await Promise.all(writes);
+  return results.find((result): result is ApiFailure => !result.ok) ?? { ok: true, data: null };
+}

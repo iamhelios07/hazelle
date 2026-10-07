@@ -2,7 +2,8 @@ import { DEFAULT_ORDER } from '../engine/import/convert';
 import type { Stored } from '../model/kinds';
 import type { Lore, LoreFolder } from '../model/library';
 import type { ApiResult } from './api';
-import { allWritten, type ObjectStore } from './store';
+import { allWritten } from './api';
+import type { ObjectStore } from './store';
 
 export type LoreOwner = { kind: 'character' | 'module'; id: string };
 
