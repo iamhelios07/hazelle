@@ -104,12 +104,16 @@
   display: flex;
   align-items: center;
   padding: var(--space-2);
-  border: var(--border-thin) solid var(--color-border);
+  border: var(--border-thin) solid var(--color-border-strong);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   opacity: 0;
   transition: opacity var(--duration-fast);
   pointer-events: none;
+}
+
+.tools button:not(:disabled) {
+  color: var(--color-text);
 }
 
 .message:focus-within .tools,
