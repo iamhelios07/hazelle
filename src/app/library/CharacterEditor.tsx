@@ -84,6 +84,8 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const [typedHeights, setTypedHeights] = useState<Partial<Record<Height, string>>>({});
   const held: CharacterText = { ...character.card, alias: character.alias ?? '', ...unsaved };
   const text = { ...held, name: typedText(typedName, filled, held.name, String) };
+  // Most cards leave these two empty. Fixed at mount, so clearing one while typing does not hide it.
+  const [legacy] = useState(() => ({ personality: !!held.personality, scenario: !!held.scenario }));
   const pictures: Pictures = { ...character.pictures, ...pictureSave.unsaved };
   const fold = pictures.fold !== false;
   const decor = character.decor !== false;
@@ -170,9 +172,9 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     ),
     character: (
       <Section title={PARTS.character.label}>
-        <TextField label="설명" lines={10} value={text.description} onChange={(value) => change('description', value)} />
-        <TextField label="성격" lines={4} value={text.personality} onChange={(value) => change('personality', value)} />
-        <TextField label="상황" lines={4} value={text.scenario} onChange={(value) => change('scenario', value)} />
+        <TextField label="설명" lines={20} value={text.description} onChange={(value) => change('description', value)} />
+        {legacy.personality && <TextField label="성격" lines={4} value={text.personality} onChange={(value) => change('personality', value)} />}
+        {legacy.scenario && <TextField label="상황" lines={4} value={text.scenario} onChange={(value) => change('scenario', value)} />}
         <TextField label="예시 대화" lines={6} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
       </Section>
     ),
