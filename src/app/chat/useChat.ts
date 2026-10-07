@@ -47,7 +47,6 @@ import { useFollow } from './useFollow';
 import { useChatSearch } from './useChatSearch';
 import { useChatStatus } from './useChatStatus';
 import { useMessageEdit } from './useMessageEdit';
-import { useChatPanel } from './useChatPanel';
 
 type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
@@ -124,7 +123,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | null>(null);
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
-  const { panel, visit, flipToggles, closePanel } = useChatPanel();
+  // 토글, 장기 기억 and the prompt list take the same place beside the story, so one closes another.
+  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | Side | null>(null);
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -401,13 +401,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       follow,
       info: (reply: string) => {
         setInfoPick(reply);
-        visit({ kind: 'info' });
+        setPanel({ kind: 'info' });
       },
       pickInfo: setInfoPick,
-      flipToggles,
-      memory: (record: string | null) => visit({ kind: 'memory', record }),
-      side: (open: Side) => visit(open),
-      closePanel,
+      flipToggles: () => setPanel((current) => (current?.kind === 'toggles' ? null : { kind: 'toggles' })),
+      memory: (record: string | null) => setPanel({ kind: 'memory', record }),
+      side: (open: Side) => setPanel(open),
+      closePanel: () => setPanel(null),
       openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
