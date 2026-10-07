@@ -9,16 +9,31 @@ const ACCOUNT = 'account-1';
 const GROUP = 'group-1';
 
 // Every decrypted value and every backup line passes here before anything reads it. null for a value already current.
-// A connection saved before pools held one secret, and the name of who signed in.
 export function upgradeValue(kind: string, value: unknown): Record<string, unknown> | null {
-  if (kind !== 'connection' || !isRecord(value) || typeof value.secret !== 'string' || 'accounts' in value) return null;
+  if (!isRecord(value)) return null;
+  if (kind === 'connection') return upgradeConnection(value);
+  if (kind === 'character') return upgradeCharacter(value);
+  return null;
+}
+
+// A connection saved before pools held one secret, and the name of who signed in.
+function upgradeConnection(value: Record<string, unknown>) {
+  if (typeof value.secret !== 'string' || 'accounts' in value) return null;
   const { secret, account, ...rest } = value;
   const pool = CONNECTION_TYPES.some((type) => type.id === rest.type && type.pool);
   return { ...rest, accounts: [{ id: ACCOUNT, secret, ...(typeof account === 'string' && { name: account }) }], turns: pool ? firstTurns(GROUP, ACCOUNT) : null };
 }
 
+// Until 2026-10-07 only greetings were translated on the character, in greetingTranslations by greeting.
+function upgradeCharacter(value: Record<string, unknown>) {
+  if (!Array.isArray(value.greetingTranslations)) return null;
+  const { greetingTranslations, ...rest } = value;
+  return { ...rest, translations: greetingTranslations.map(({ greeting, ...each }: { greeting: string }) => ({ source: greeting, ...each })) };
+}
+
 // The stored copies of what the store upgraded as it read them, written back once, so the old shape leaves the
 // account. Each is written as it is held then, so a change another device made meanwhile is kept.
 export async function saveUpgraded(store: ObjectStore): Promise<void> {
-  await Promise.all(store.takeUpgraded().map((id) => store.update('connection', id, (current) => current)));
+  // upgradeValue upgrades these two kinds only.
+  await Promise.all(store.takeUpgraded().map(({ id, kind }) => (kind === 'character' ? store.update('character', id, (current) => current) : store.update('connection', id, (current) => current))));
 }

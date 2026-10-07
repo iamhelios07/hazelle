@@ -37,9 +37,9 @@ export type Character = Mark & {
   // 추론을 본문에 표시: its replies keep the thinking blocks they write inside the text (connectors/thoughts) where they
   // are, for a bot that draws them itself. Absent: they move to the reply's reasoning.
   keepThoughts?: true;
-  // Keyed by the greeting as the card holds it and the language, so an edited greeting or a changed language
-  // translates anew.
-  greetingTranslations?: GreetingTranslation[];
+  // Translations of the card's readable texts (readableTexts), keyed by the text as the card holds it and the
+  // language, so an edited text or a changed language translates anew. A chat not begun shows its greetings' here.
+  translations?: TextTranslation[];
   // The Risu chaId of a character brought from Risu: a move skips it, and 이미지만 가져오기 finds it.
   risu?: string;
   // The modules on in its chats, in the order they were turned on (design §6.5). One that is gone reads as off.
@@ -60,7 +60,7 @@ export type Module = Pack & Mark & {
 // height no such picture is drawn taller than (shrunk to fit), each in percent of the screen's height.
 export type Pictures = { fold?: false; peek?: number; most?: number };
 export const PICTURE_PERCENT = { min: 10, max: 100 };
-export type GreetingTranslation = { greeting: string; language: string; translation: Translation };
+export type TextTranslation = { source: string; language: string; translation: Translation };
 export type LoreFolder = { id: string; name: string };
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -89,8 +89,12 @@ export const binsChat = (chat: { character: string | null } & Mark, characterLiv
 export const KEEP_DELETED = 7 * DAY;
 export const KEEP_DAYS = KEEP_DELETED / DAY;
 
-export const greetingTranslation = ({ greetingTranslations }: Character, greeting: string, language: string) =>
-  greetingTranslations?.find((each) => each.greeting === greeting && each.language === language)?.translation;
+export const textTranslation = ({ translations }: Character, source: string, language: string) =>
+  translations?.find((each) => each.source === source && each.language === language)?.translation;
+
+// What the user reads to know the character, which 번역 on the character screen translates; empty ones left out.
+export const readableTexts = (card: Card) =>
+  [card.creatorNotes, card.description, card.personality, card.scenario, card.exampleDialogue, ...card.greetings].filter((text) => text.trim());
 
 // At 0 or less it is due, and purgeExpired removes it.
 export const daysLeft = ({ deleted }: Mark, now: number) => Math.ceil((deleted! + KEEP_DELETED - now) / DAY);

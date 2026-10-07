@@ -89,7 +89,7 @@ export class ObjectStore {
   private readonly byKind = new Map<string, Set<string>>();
   private readonly byParent = new Map<string, Map<string, Set<string>>>();
   private unreadableCount = 0;
-  private readonly upgraded = new Set<string>();
+  private readonly upgraded = new Map<string, string>();
   private readonly listeners = new Set<(changes: readonly StoreChange[]) => void>();
   private readonly waitListeners = new Set<() => void>();
   private waitingCalls = 0;
@@ -799,11 +799,11 @@ export class ObjectStore {
     return removed.ok ? { ok: true, data: null } : removed;
   }
 
-  // The ids of objects held in a shape upgraded as they were read (runtime/upgrade), each handed out once.
-  takeUpgraded(): string[] {
-    const ids = [...this.upgraded];
+  // The objects held in a shape upgraded as they were read (runtime/upgrade), each handed out once.
+  takeUpgraded(): { id: string; kind: string }[] {
+    const taken = [...this.upgraded].map(([id, kind]) => ({ id, kind }));
     this.upgraded.clear();
-    return ids;
+    return taken;
   }
 
   unreadable(): number {
@@ -1361,7 +1361,7 @@ export class ObjectStore {
     const value = await opened();
     const upgraded = upgradeValue(kind, value);
     if (signal?.aborted || epoch !== this.epoch) return;
-    if (upgraded) this.upgraded.add(id);
+    if (upgraded) this.upgraded.set(id, kind);
     this.hold({ id, kind, parent, rev, value: upgraded ?? value });
   }
 

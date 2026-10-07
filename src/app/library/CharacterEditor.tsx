@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, Copy, Eye, IdCard, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, ChevronRight, Copy, Eye, IdCard, Languages, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Square, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -8,6 +8,7 @@ import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, se
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/turn';
 import { aliased } from '../common/alias';
+import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
@@ -21,7 +22,8 @@ import { useCharacter, useChildren, useModules, useSettings, useStore } from '..
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, Disclosure, Icon, IconButton, List, ListItem, Menu, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, Icon, IconButton, List, ListItem, Menu, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
+import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
 type Height = 'peek' | 'most';
@@ -52,6 +54,11 @@ const GROUPS: CharacterPart[][] = [
   ['display'],
 ];
 const LIST = '캐릭터 항목';
+type Reading = 'source' | 'translated';
+const READINGS: { value: Reading; label: string }[] = [
+  { value: 'source', label: '원문' },
+  { value: 'translated', label: '번역' },
+];
 
 type Props = {
   shelf: CharacterShelf<ChatSummary>;
@@ -86,6 +93,9 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const text = { ...held, name: typedText(typedName, filled, held.name, String) };
   // Most cards leave these two empty. Fixed at mount, so clearing one while typing does not hide it.
   const [legacy] = useState(() => ({ personality: !!held.personality, scenario: !!held.scenario }));
+  const translation = useCardTranslation(id, character);
+  const [reading, setReading] = useState<Reading>('source');
+  const translated = reading === 'translated';
   const pictures: Pictures = { ...character.pictures, ...pictureSave.unsaved };
   const fold = pictures.fold !== false;
   const decor = character.decor !== false;
@@ -121,6 +131,36 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     if (field === 'name') setTypedName(value as string);
     queue({ [field]: value }, field !== 'name' || !!(value as string).trim());
   }
+
+  const readingSwitch = (
+    <Row kind="toolbar">
+      {translated &&
+        (translation.running.size > 0 ? (
+          <Button variant="secondary" size="sm" icon={Square} onClick={translation.stop}>
+            멈추기
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" icon={Languages} disabled={!translation.translator.ok || translation.sources.length === 0} onClick={translation.start}>
+            {translation.missing.length > 0 ? '번역하기' : '다시 번역'}
+          </Button>
+        ))}
+      <ChoiceGroup layout="segmented" label="보기" options={READINGS} value={reading} onChange={setReading} />
+    </Row>
+  );
+  const translatorMissing = translated && !translation.translator.ok && <Callout tone="warn">{`번역할 수 없어요. ${describeTranslateFailure(translation.translator.failure)}`}</Callout>;
+  // The stored card's text, as it was translated; a draft not saved yet is not.
+  const translatedField = (label: string, source: string, lines: number) =>
+    source.trim() && (
+      <TextField
+        key={label}
+        label={label}
+        lines={lines}
+        readOnly
+        value={translation.translationOf(source) ?? ''}
+        placeholder={translation.running.has(source) ? '번역 중…' : '아직 번역하지 않았어요.'}
+        onChange={() => {}}
+      />
+    );
 
   const notUsed = describeUnused(unused(card));
   const split = layout === 'split';
@@ -164,32 +204,56 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
           />
         </Section>
         {card.creatorNotes.trim() && (
-          <Section title="소개">
-            <Story html={storyHtml(card.creatorNotes, true)} />
+          <Section title="소개" action={readingSwitch}>
+            {translatorMissing}
+            {!translated ? (
+              <Story html={storyHtml(card.creatorNotes, true)} />
+            ) : translation.translationOf(card.creatorNotes) !== undefined ? (
+              <Story html={storyHtml(translation.translationOf(card.creatorNotes)!, true)} />
+            ) : (
+              <Text variant="note">{translation.running.has(card.creatorNotes) ? '번역 중…' : '아직 번역하지 않았어요.'}</Text>
+            )}
           </Section>
         )}
       </>
     ),
     character: (
-      <Section title={PARTS.character.label}>
-        <TextField label="설명" lines={20} value={text.description} onChange={(value) => change('description', value)} />
-        {legacy.personality && <TextField label="성격" lines={4} value={text.personality} onChange={(value) => change('personality', value)} />}
-        {legacy.scenario && <TextField label="상황" lines={4} value={text.scenario} onChange={(value) => change('scenario', value)} />}
-        <TextField label="예시 대화" lines={6} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
+      <Section title={PARTS.character.label} action={readingSwitch}>
+        {translatorMissing}
+        {translated ? (
+          <>
+            {translatedField('설명', card.description, 20)}
+            {translatedField('성격', card.personality, 4)}
+            {translatedField('상황', card.scenario, 4)}
+            {translatedField('예시 대화', card.exampleDialogue, 6)}
+          </>
+        ) : (
+          <>
+            <TextField label="설명" lines={20} value={text.description} onChange={(value) => change('description', value)} />
+            {legacy.personality && <TextField label="성격" lines={4} value={text.personality} onChange={(value) => change('personality', value)} />}
+            {legacy.scenario && <TextField label="상황" lines={4} value={text.scenario} onChange={(value) => change('scenario', value)} />}
+            <TextField label="예시 대화" lines={6} value={text.exampleDialogue} onChange={(value) => change('exampleDialogue', value)} />
+          </>
+        )}
       </Section>
     ),
     greetings: (
-      <Section title={PARTS.greetings.label} hint="새 채팅을 열 때 이 중에서 선택할 수 있어요.">
-        <EntryList
-          entries={text.greetings}
-          onChange={(greetings) => change('greetings', greetings)}
-          name={(index) => `첫인사 ${index + 1}`}
-          blank=""
-          addLabel="첫인사 추가"
-          removed={(index) => `${index + 1}번째 첫인사를 삭제했어요.`}
-        >
-          {({ value, name, set, remove }) => <TextField label={name} lines={6} value={value} onChange={set} action={remove} />}
-        </EntryList>
+      <Section title={PARTS.greetings.label} hint="새 채팅을 열 때 이 중에서 선택할 수 있어요." action={readingSwitch}>
+        {translatorMissing}
+        {translated ? (
+          card.greetings.map((greeting, index) => translatedField(`첫인사 ${index + 1}`, greeting, 6))
+        ) : (
+          <EntryList
+            entries={text.greetings}
+            onChange={(greetings) => change('greetings', greetings)}
+            name={(index) => `첫인사 ${index + 1}`}
+            blank=""
+            addLabel="첫인사 추가"
+            removed={(index) => `${index + 1}번째 첫인사를 삭제했어요.`}
+          >
+            {({ value, name, set, remove }) => <TextField label={name} lines={6} value={value} onChange={set} action={remove} />}
+          </EntryList>
+        )}
       </Section>
     ),
     instructions: (

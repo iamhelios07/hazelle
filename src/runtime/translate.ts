@@ -8,7 +8,7 @@ import type { Stream } from '../model/stream';
 import type { Phase } from '../connectors/types';
 import type { ApiFailure, ApiResult } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
-import { setGreetingTranslation, translateSwitches, translatorNotes } from './characters';
+import { setTextTranslation, translateSwitches, translatorNotes } from './characters';
 import { appendTranslation, savedElsewhere } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
@@ -155,7 +155,7 @@ export class Translator {
     this.run(chat, version, target, (signal, onText) => translate({ store: this.store, credentials: this.credentials }, input, target, signal, onText), (made) =>
       this.store.get('chat', chat)
         ? appendTranslation(this.store, chat, version, made.translation, target.result)
-        : setGreetingTranslation(this.store, input.chat.character!, original, made.language!, made.translation),
+        : setTextTranslation(this.store, input.chat.character!, original, made.language!, made.translation),
     );
   }
 

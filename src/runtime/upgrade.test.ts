@@ -23,6 +23,13 @@ describe('upgradeValue', () => {
     expect(upgradeValue('folder', { name: 'secret' })).toBeNull();
   });
 
+  it('moves a character’s greeting translations into its text translations', () => {
+    const translation = { text: '안녕', receipt: null, at: 1 };
+    const character = { folder: null, greetingTranslations: [{ greeting: 'Hello', language: 'Korean', translation }] };
+    expect(upgradeValue('character', character)).toEqual({ folder: null, translations: [{ source: 'Hello', language: 'Korean', translation }] });
+    expect(upgradeValue('character', { folder: null, translations: [] })).toBeNull();
+  });
+
   it('holds an old connection upgraded as it is read, and writes it back once', async () => {
     const { store, open } = await server.account();
     const created = await store.create('connection', old as never);

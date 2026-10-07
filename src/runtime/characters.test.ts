@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Card, LoreEntry } from '../engine/import/types';
-import { KEEP_DELETED, type Character, type Lore } from '../model/library';
+import { KEEP_DELETED, textTranslation, type Character, type Lore } from '../model/library';
 import { memoryId } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addCharacter, copyCharacter, dropCharacterTranslate, importCharacter, markDeleted, purgeExpired, purgeNow, resetToggles, setDeleted, setOwnTranslate, setPictures, setToggle, setTranslate, translateSwitches } from './characters';
+import { addCharacter, copyCharacter, dropCharacterTranslate, importCharacter, markDeleted, purgeExpired, purgeNow, resetToggles, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
 import { thumbnail } from './picture';
@@ -236,6 +236,25 @@ describe('setToggle', () => {
     expect([store.get('character', id)?.value.toggles, store.get('settings', SETTINGS_ID)?.value.toggles]).toEqual([{ sims: '1', mode: '2' }, { sims: '0' }]);
     await resetToggles(store, id);
     expect(store.get('character', id)?.value.toggles).toBeUndefined();
+  });
+});
+
+describe('setTextTranslation', () => {
+  it('keeps one per text and language, and drops those of texts the card no longer holds', async () => {
+    const { store } = await server.account();
+    const added = await addCharacter(store, { ...bare('루나'), card: { ...testCard('루나'), description: 'Old', greetings: ['Hello'] } }, none, () => {});
+    const id = added.ok ? added.data : '';
+    const made = (text: string) => ({ text, receipt: null, at: 1 });
+    await setTextTranslation(store, id, 'Old', 'Korean', made('옛'));
+    await setTextTranslation(store, id, 'Hello', 'Korean', made('안녕'));
+    await setTextTranslation(store, id, 'Hello', 'Korean', made('안녕하세요'));
+    await store.update('character', id, (current) => ({ ...current, card: { ...current.card, description: 'New' } }));
+    await setTextTranslation(store, id, 'New', 'Korean', made('새'));
+    expect(store.get('character', id)!.value.translations!.map(({ source, translation }) => [source, translation.text])).toEqual([
+      ['Hello', '안녕하세요'],
+      ['New', '새'],
+    ]);
+    expect(textTranslation(store.get('character', id)!.value, 'Hello', 'Japanese')).toBeUndefined();
   });
 });
 

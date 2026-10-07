@@ -193,12 +193,14 @@ export function translationInput(reader: Reader, id: string, chat: Chat, message
 }
 
 // 설정 › 번역기 translates as a new 캐릭터 없이 chat would: the shared switches' prompt, that chat's 보조 모델 and the
-// 전역 번역가의 노트, but no persona, since the text belongs to no story. Nothing is saved, so no marker is written.
+// 전역 번역가의 노트. Nothing is saved, so no marker is written.
 export const TRANSLATOR_CHAT: Chat = { title: null, character: null, models: {} };
 
+// A text of no story, as a new chat would translate it (TRANSLATOR_CHAT, or a character's for its card's texts), but
+// with no persona and no card: a card's text would go along as context of its own translation, every time.
 // The call ends however it went, stopped too: the abort only stops reading, and no reload picks this call up.
-export function translateText(session: Pick<Session, 'store' | 'credentials'>, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
-  const input: TranslateInput = { chat: TRANSLATOR_CHAT, scope: { ...scopeOf(session, null, TRANSLATOR_CHAT, []), persona: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language };
+export function translateText(session: Pick<Session, 'store' | 'credentials'>, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
+  const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language };
   const target: CallTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
   return translate(session, input, target, signal, onText).finally(() => endCall(session.store, target.id));
 }

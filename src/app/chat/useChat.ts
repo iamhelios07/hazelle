@@ -3,7 +3,7 @@ import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem, type ChatSummary, type TranslateSwitches } from '../../model/chat';
-import { greetingTranslation, type CharacterShelf } from '../../model/library';
+import { textTranslation, type CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
 import { resetToggles, setKeepStatus, setOwnTranslate, setStatusScript, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
@@ -88,8 +88,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   if (openingIds !== madeIds) setOpeningIds(openingIds);
   const translate = translateSwitches(store, chat.character);
   const choices = useMemo(() => item === null && card
-    ? projectGreetings(greetings, openingIds, picked, (text) => greetingTranslation(shelf!.character, text, translate.replyLanguage))
-    : null, [item === null, card, shelf?.character.greetingTranslations, translate.replyLanguage, openingIds, picked]);
+    ? projectGreetings(greetings, openingIds, picked, (text) => textTranslation(shelf!.character, text, translate.replyLanguage))
+    : null, [item === null, card, shelf?.character.translations, translate.replyLanguage, openingIds, picked]);
   const unstarted: Shown | null = useMemo(() => {
     const preview = greetingPreview(choices, openedAt);
     return preview && { ...preview, live: null };

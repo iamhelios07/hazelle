@@ -56,7 +56,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
     abort.current = controller;
     let last = '';
     setRun({ kind: 'running', text: '' });
-    const made = await translateText(session, source, language, controller.signal, (text) => {
+    const made = await translateText(session, TRANSLATOR_CHAT, source, language, controller.signal, (text) => {
       last = text;
       setRun({ kind: 'running', text });
     });

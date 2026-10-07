@@ -42,6 +42,10 @@
   resize: vertical;
 }
 
+.input:read-only {
+  background: var(--color-bg);
+}
+
 .input[aria-invalid='true'] {
   border-color: var(--color-warn-border);
 }

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown, type Message } from '../model/chat';
-import { greetingTranslation } from '../model/library';
+import { textTranslation } from '../model/library';
 import { appendUserMessage, startChat } from './chat-log';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { setTranslate, setTranslatorNote } from './characters';
 import { SETTINGS_ID } from '../model/settings';
 import { setDefaultModel, setTaskModel } from './assignment';
 import { translate, translatorOf } from './translate';
-import { takeTurn, translateText, translationInput } from './turn';
+import { takeTurn, translateText, translationInput, TRANSLATOR_CHAT } from './turn';
 
 const server = testServer();
 
@@ -97,7 +97,7 @@ describe('Translator', () => {
       const leave = read.subscribe(() => {});
       await vi.waitFor(() => expect(read.snapshot().display.texts).toEqual(['Hello']));
       expect(session.translator.snapshot().live.size).toBe(0);
-      expect(greetingTranslation(session.store.get('character', character)!.value, 'Hello', 'Korean')).toBeUndefined();
+      expect(textTranslation(session.store.get('character', character)!.value, 'Hello', 'Korean')).toBeUndefined();
       expect(log).toHaveLength(0);
       leave();
     }));
@@ -186,7 +186,7 @@ describe('Translator', () => {
       await setTranslatorNote(session.store, null, 'Master -> 주인님');
       const log = stubRelay(inTurn([saying('はい、ご主人様。')]));
       const fetched = vi.spyOn(globalThis, 'fetch');
-      const made = await translateText(session, 'Yes, Master.', 'Japanese', new AbortController().signal, () => {});
+      const made = await translateText(session, TRANSLATOR_CHAT, 'Yes, Master.', 'Japanese', new AbortController().signal, () => {});
       expect(made).toMatchObject({ ok: true, translation: { text: 'はい、ご主人様。' } });
       const sent: { role: string; content: string }[] = JSON.parse(log[0]!.sent.body!).messages;
       expect(sent.map(({ role }) => role)).toEqual(['system', 'system', 'user']);
@@ -194,5 +194,19 @@ describe('Translator', () => {
       expect(sent[1]!.content).toContain('Master -> 주인님');
       expect(sent[2]!.content).toBe('Yes, Master.');
       expect(fetched.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => String(url))).toEqual([expect.stringMatching(/^\/api\/streams\//)]);
+    }));
+
+  it('translates a character’s text with its 번역가의 노트 and without its card', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const card = { name: 'Luna', nickname: null, description: 'Luna keeps the lighthouse.', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [], loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } };
+      const created = await session.store.create('character', { card, folder: null, loreFolders: [] });
+      const character = created.ok ? created.data.id : '';
+      await setTranslatorNote(session.store, character, 'Luna -> 루나');
+      const log = stubRelay(inTurn([saying('루나는 등대를 지킨다.')]));
+      await translateText(session, { title: null, character, models: {} }, card.description, 'Korean', new AbortController().signal, () => {});
+      const sent: { content: string }[] = JSON.parse(log[0]!.sent.body!).messages;
+      expect(sent.some(({ content }) => content.includes('Luna -> 루나'))).toBe(true);
+      expect(sent.filter(({ content }) => content.includes(card.description))).toHaveLength(1);
     }));
 });

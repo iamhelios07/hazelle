@@ -2,7 +2,7 @@ import { imageType } from '../engine/import/card';
 import type { Card, Imported, Picture } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { Stored, Values } from '../model/kinds';
-import { daysLeft, holds, nest, REMOVABLE, type Asset, type Avatar, type Character, type Lore, type Mark, type Pictures, type Removable } from '../model/library';
+import { daysLeft, holds, nest, readableTexts, REMOVABLE, type Asset, type Avatar, type Character, type Lore, type Mark, type Pictures, type Removable } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
@@ -242,14 +242,15 @@ export function setTranslatorNote(store: ObjectStore, character: string | null, 
   return store.update('character', character, noted);
 }
 
-export function setGreetingTranslation(store: ObjectStore, character: string, greeting: string, language: string, translation: Translation) {
-  return store.update('character', character, (current) => ({
-    ...current,
-    greetingTranslations: [
-      ...(current.greetingTranslations ?? []).filter((each) => current.card.greetings.includes(each.greeting) && !(each.greeting === greeting && each.language === language)),
-      { greeting, language, translation },
-    ],
-  }));
+// Drops the translations of texts the card no longer holds.
+export function setTextTranslation(store: ObjectStore, character: string, source: string, language: string, translation: Translation) {
+  return store.update('character', character, (current) => {
+    const held = readableTexts(current.card);
+    return {
+      ...current,
+      translations: [...(current.translations ?? []).filter((each) => held.includes(each.source) && !(each.source === source && each.language === language)), { source, language, translation }],
+    };
+  });
 }
 
 export function resetToggles(store: ObjectStore, character: string | null): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {

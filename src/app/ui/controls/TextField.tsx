@@ -22,10 +22,11 @@ type Props = {
   help?: string;
   error?: string;
   lines?: number;
+  readOnly?: boolean;
   action?: ReactNode;
 };
 
-export function TextField({ label, kind = 'text', value, onChange, placeholder, hint, help, error, lines, action }: Props) {
+export function TextField({ label, kind = 'text', value, onChange, placeholder, hint, help, error, lines, readOnly, action }: Props) {
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
@@ -34,6 +35,7 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
     value,
     onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value),
     placeholder,
+    readOnly,
     'aria-invalid': error ? true : undefined,
     'aria-describedby': note ? noteId : undefined,
   };
