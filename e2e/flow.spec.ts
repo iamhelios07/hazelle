@@ -59,6 +59,7 @@ test('a new account imports a card, chats through the fake provider and finds th
   await test.step('import the card and see its report', async () => {
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '봇 가져오기', exact: true }).click();
+    await page.getByRole('button', { name: '확인했어요', exact: true }).click();
     await (await chooser).setFiles(CARD);
     const report = page.getByRole('dialog', { name: '가져왔어요', exact: true });
     await expect(report).toContainText('첫인사 1개 · 로어북 1개 · 정규식 1개');

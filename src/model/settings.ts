@@ -13,7 +13,8 @@ export const SETTINGS_ID = '00000000-0000-4000-8000-000000000000';
 // (Character.ownTranslate). profile: the default 설정 묶음, absent only until the first is added.
 // memory: every chat's memory settings, absent fields read through runtime/memory memorySetup. modules: the modules
 // on in every chat (항상), in the order they were turned on (design §6.5). translatorNote: 전역 번역가의 노트, sent in every
-// character's translations together with the character's own (runtime/characters translatorNotes).
+// character's translations together with the character's own (runtime/characters translatorNotes). importNotice: the
+// RisuAI-only bot notice was confirmed, so imports no longer ask first (library/ImportFlow).
 export type Settings = {
   models: Assignment;
   prompt?: string;
@@ -26,4 +27,5 @@ export type Settings = {
   memory?: Partial<MemorySettings>;
   modules?: string[];
   translatorNote?: string;
+  importNotice?: true;
 };

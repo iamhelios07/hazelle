@@ -1,4 +1,4 @@
-import { MessageSquarePlus, Package } from 'lucide-react';
+import { Check, MessageSquarePlus, Package } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ImportFailure } from '../../engine/import/types';
 import { live } from '../../model/library';
@@ -10,10 +10,10 @@ import { fillPictures, risuMatch } from '../../runtime/move';
 import { ofSort } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
 import { describeFailure } from '../common/failure';
-import { useFiles, useStore } from '../session';
+import { useFiles, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
-import { Button, Callout, Dialog, DropOverlay, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
+import { Button, Callout, ConfirmDialog, Dialog, DropOverlay, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
 import { characterOutcome, moduleOutcome, type ImportOutcome } from './importOutcome';
 import { assetsMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
@@ -67,11 +67,14 @@ function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
 }
 
 // Risu backups (.bin) go to MoveFlow together, and a card named like a character brought from Risu may only fill that
-// character's pictures.
+// character's pictures. Every way in asks once per account for the RisuAI-only notice first: Risu cards carry no such
+// mark (their license field is Creative Commons only), so the notice cannot be shown per card.
 export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
   const files = useFiles();
   const route = useRoute();
+  const noticed = useSettings().importNotice === true;
+  const [notice, setNotice] = useState<(() => void) | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const readers = useRef(new Set<ImportWorker>());
   const mounted = useRef(true);
@@ -137,14 +140,20 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     setState({ busy: null, results, ask: null });
   }
 
-  const dragging = useFileDrop((dropped) => void take(dropped));
+  // then runs inside the confirming press, so a file picker it opens still counts as the user's own.
+  function asked(then: () => void) {
+    if (noticed) then();
+    else setNotice(() => then);
+  }
+
+  const dragging = useFileDrop((dropped) => asked(() => void take(dropped)));
 
   const done = state?.results.flatMap((result) => result.kind === 'character' ? [result.id] : []) ?? [];
   const modules = state?.results.flatMap((result) => result.kind === 'module' ? [result.id] : []) ?? [];
   const came = state?.results.some((result) => result.kind !== 'failed') ?? false;
   const title = state?.ask ? '이미지만 가져올까요?' : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
   return (
-    <ImportContext.Provider value={{ pick: () => input.current?.click(), move: () => setAsking(true) }}>
+    <ImportContext.Provider value={{ pick: () => asked(() => input.current?.click()), move: () => asked(() => setAsking(true)) }}>
       {children}
       <input
         ref={input}
@@ -158,6 +167,21 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           void take(files);
         }}
       />
+      {notice && (
+        <ConfirmDialog
+          title="가져오기 전에 확인해 주세요"
+          confirm="확인했어요"
+          icon={Check}
+          onConfirm={() => {
+            setNotice(null);
+            void store.upsert('settings', (current) => ({ models: {}, ...current, importNotice: true }));
+            notice();
+          }}
+          onClose={() => setNotice(null)}
+        >
+          제작자가 RisuAI에서만 쓰도록 배포한 봇은 가져오지 마세요.
+        </ConfirmDialog>
+      )}
       {dragging && <DropOverlay>여기에 놓으면 봇, 모듈이나 Risu 백업을 가져와요</DropOverlay>}
       {asking && (
         <MoveDialog

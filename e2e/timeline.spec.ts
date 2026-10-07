@@ -161,6 +161,7 @@ async function signUp(page: Page) {
 async function importCard(page: Page) {
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '봇 가져오기', exact: true }).click();
+  await page.getByRole('button', { name: '확인했어요', exact: true }).click();
   await (await chooser).setFiles(CARD);
   await expect(page.getByRole('dialog', { name: '가져왔어요', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
