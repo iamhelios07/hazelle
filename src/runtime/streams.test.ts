@@ -47,6 +47,7 @@ describe('a detached call', () => {
     await writer.write(delta('Hello, '));
     await vi.waitFor(() => expect(first.talk.snapshot(chat)?.text).toBe('Hello, '));
     await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
+    const [marker] = first.store.list('stream');
     first.close();
     expect(await turn).toBeNull();
     expect(first.store.projections.get(chat)).toBeNull();
@@ -58,6 +59,8 @@ describe('a detached call', () => {
     try {
       await vi.waitFor(() => expect(shown(messages(second, chat)[1]!)).toMatchObject({ text: 'Hello, traveler.', receipt: { state: 'done', firstTextMs: null } }));
       await vi.waitFor(() => expect(second.store.list('stream')).toEqual([]));
+      const saved = shown(messages(second, chat)[1]!);
+      expect(saved.at).toBe(marker!.value.at + saved.receipt!.totalMs);
     } finally {
       second.close();
     }

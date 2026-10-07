@@ -240,7 +240,7 @@ export class Talk {
     if (this.closed) return null;
     // Kept before the save, whose store change is what shows the reply's 정보.
     this.sentBy.set(reply.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
-    return await this.save(chat, await this.ended(chat, this.written(held, reply, callOf(route), answer)), call.id);
+    return await this.save(chat, await this.ended(chat, this.written(held, reply, callOf(route), answer, Date.now())), call.id);
   }
 
   // A reply the server was writing when this page came, which Streams hands over; it waits while its chat has a turn.
@@ -259,7 +259,9 @@ export class Talk {
       await this.store.pinned(async () => {
         if (await lease.ready) return;
         const answer = await resume(this.store, stream, held.abort.signal, this.writer(held), this.inline(held));
-        if (!this.closed) await this.save(chat, await this.ended(chat, this.written(held, reply, stream.value.call, answer)), stream.id);
+        // Not Date.now(): the call may have ended long before this page read it, and the cache timer counts back from at.
+        const at = stream.value.at + answer.totalMs;
+        if (!this.closed) await this.save(chat, await this.ended(chat, this.written(held, reply, stream.value.call, answer, at)), stream.id);
       });
     } finally {
       this.unseat(held);
@@ -278,9 +280,9 @@ export class Talk {
     return { keep, takeBack: (chars) => this.change(held, { ...held.turn, reasoning: held.turn.reasoning.slice(0, held.turn.reasoning.length - chars) }) };
   }
 
-  private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply): Written {
+  private written({ turn }: Held, reply: Turn['reply'], call: Stream['call'], answer: Reply, at: number): Written {
     const receipt: Receipt = { ...receiptOf(call, answer), ...(reply.continues && { continues: reply.continues.receipt }) };
-    return { id: reply.id, message: reply.message, replaces: reply.replaces, at: Date.now(), text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
+    return { id: reply.id, message: reply.message, replaces: reply.replaces, at, text: turn.text, receipt, seed: reply.continues?.seed, ...(reply.before && { before: reply.before }), ...(turn.reasoning && { reasoning: turn.reasoning }) };
   }
 }
 
