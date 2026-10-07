@@ -13,6 +13,7 @@ const fails = (name, file, code, error) => ({ name, filename: at(file), code, er
 
 new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('boundaries', boundaries, {
   valid: [
+    ok('the kit imports the change signal without importing runtime', 'src/app/ui/overlays/Menu.tsx', "import { ChangeSignal } from '../../../change-signal';"),
     ok('the server imports wire contracts', 'src/server/files.ts', "import { FILE_ID } from '../contracts/files';"),
     ok('the runtime imports wire contracts', 'src/runtime/api.ts', "import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';"),
     ok('a feature imports wire contracts directly', 'src/app/admin/RestoresDialog.tsx', "import type { RestorePhase } from '../../contracts/admin';"),
@@ -31,6 +32,7 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('boundaries
     ok('packages are not areas', 'src/app/ui/controls/Button.tsx', "import { useState } from 'react';"),
   ],
   invalid: [
+    fails('the change signal imports no runtime', 'src/change-signal.ts', "import { api } from './runtime/api';", /^changeSignal may not import runtime:/),
     fails('contracts import no server implementation', 'src/contracts/admin.ts', "import type { Db } from '../server/db/service-db';", /^contracts may not import server:/),
     fails('contracts import no client domain', 'src/contracts/admin.ts', "import type { Chat } from '../model/chat';", /^contracts may not import model:/),
     fails('contracts import no runtime', 'src/contracts/http.ts', "import { api } from '../runtime/api';", /^contracts may not import runtime:/),

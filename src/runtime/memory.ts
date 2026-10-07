@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import { chatMemory, memorySetup, sourcesOf } from './memory-read';
 import { chatSent, type ChatSent } from './memory-view';
 import type { ModelSettings } from '../connectors/settings';
@@ -207,7 +208,7 @@ type Outcome = 'done' | 'moved' | 'stopped' | MemoryFailure;
 export class Rememberer {
   private closed = false;
   private state: Remembering = { running: new Map(), failed: new Map() };
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
   // The chats with a job running, and of those the ones that may summarize new messages too, not only stale records.
   private readonly working = new Set<string>();
   private readonly full = new Set<string>();
@@ -234,10 +235,7 @@ export class Rememberer {
     });
   }
 
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
 
   readonly snapshot = () => this.state;
 
@@ -288,7 +286,7 @@ export class Rememberer {
     if (change.failed === null) next.failed.delete(chat);
     else if (change.failed) next.failed.set(chat, change.failed);
     this.state = next;
-    for (const listener of this.listeners) listener();
+    this.changes.notify();
   }
 
   private start(chat: string, full: boolean) {

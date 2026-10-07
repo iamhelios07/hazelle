@@ -4,7 +4,7 @@ import path from 'node:path';
 // without its extension, relative to the repo root (the folder above this one), and a test file belongs where the module
 // it tests does. An area imports itself, the areas in `imports`, with `import type` those in `types`, and from its test
 // files those in `tests`. A module in no area fails lint until this table places it.
-const RUNTIME_IMPORTS = ['contracts', 'model', 'engine', 'connectors', 'priceLists', 'vault'];
+const RUNTIME_IMPORTS = ['changeSignal', 'contracts', 'model', 'engine', 'connectors', 'priceLists', 'vault'];
 const BELOW_APP = ['runtime', ...RUNTIME_IMPORTS];
 const FEATURES = ['account', 'admin', 'library', 'chat', 'connections', 'models', 'prompts', 'personas', 'modules', 'settings'];
 const FEATURE = {
@@ -12,6 +12,7 @@ const FEATURE = {
   why: 'a feature folder imports no other feature folder and nothing from the shell but routes and router (only the shell and main.tsx compose features), and reaches the server over HTTP only.',
 };
 const AREAS = {
+  changeSignal: { paths: ['src/change-signal'], why: 'argument-free change notifications import no application or environment code.' },
   contracts: { paths: ['src/contracts'], why: 'wire values shared by the server and client import no other layer.' },
   connectors: {
     paths: ['src/connectors'],
@@ -44,7 +45,7 @@ const AREAS = {
     why: 'the runtime is below the UI and reaches the server over HTTP only; only its tests run the server, through the harness.',
   },
   harness: { paths: ['src/runtime/testing'], imports: ['runtime', 'server', ...RUNTIME_IMPORTS], why: 'the runtime tests\' harness is below the UI.' },
-  ui: { paths: ['src/app/ui'], why: 'the kit imports nothing outside src/app/ui, so a component never reaches the session, router, toasts, a screen or the layers below.' },
+  ui: { paths: ['src/app/ui'], imports: ['changeSignal'], why: 'the kit imports only the argument-free change signal outside src/app/ui, so a component never reaches the session, router, toasts, a screen or the layers below.' },
   routes: { paths: ['src/app/shell/routes', 'src/app/shell/router'], imports: BELOW_APP, why: 'the route table and router are what features take from the shell, so they compose nothing.' },
   shell: {
     paths: ['src/app/shell'],

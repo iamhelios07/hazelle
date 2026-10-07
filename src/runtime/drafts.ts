@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 // Unsent text per chat, kept in page memory until the session closes: it outlives the chat's screen, and a reply that
 // fails after its screen is gone still hands its text back. A chat not saved yet has no id to keep it under, so its
 // text is kept per character (draftKey) and moved under the chat's id once it is saved.
@@ -5,12 +6,9 @@ export const draftKey = (chat: string | null, character: string | null) => chat 
 
 export class Drafts {
   private readonly texts = new Map<string, string>();
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
 
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
 
   text(key: string): string {
     return this.texts.get(key) ?? '';
@@ -19,7 +17,7 @@ export class Drafts {
   set(key: string, text: string) {
     if (text) this.texts.set(key, text);
     else this.texts.delete(key);
-    for (const listener of this.listeners) listener();
+    this.changes.notify();
   }
 
   move(from: string, to: string) {

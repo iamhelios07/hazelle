@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
 import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
@@ -12,17 +13,14 @@ import { evaluateChat } from './chat-context';
 import { summaryId, type ChatModel } from './summary';
 
 class Snapshot<T> {
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
   constructor(private value: T) {}
   readonly snapshot = () => this.value;
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
   set(value: T) {
     if (value === this.value) return;
     this.value = value;
-    for (const listener of this.listeners) listener();
+    this.changes.notify();
   }
 }
 

@@ -1,5 +1,6 @@
 import { Check, type LucideIcon } from 'lucide-react';
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
+import { ChangeSignal } from '../../../change-signal';
 import { Item } from '../collections/Item';
 import { Icon } from '../foundation/Icon';
 import { keepOnScreen, useLayer } from './layers';
@@ -14,16 +15,13 @@ export type MenuHandle = { read: () => State; subscribe: (listener: () => void) 
 
 function menuHandle(): MenuHandle {
   let state = CLOSED;
-  const listeners = new Set<() => void>();
+  const changes = new ChangeSignal();
   return {
     read: () => state,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
+    subscribe: changes.subscribe,
     set: (next) => {
       state = next;
-      listeners.forEach((listener) => listener());
+      changes.notify();
     },
   };
 }

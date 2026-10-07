@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import type { AccountState } from '../contracts/admin';
 import { passwordCredential, recoveryCredential, type Credential, type Method, type VaultRecord } from '../vault/keys';
 import { api, SLOW_ROUTE_WAIT, type Heard } from './api';
@@ -26,7 +27,7 @@ export type Standing = { suspended: boolean; full: boolean; restoring: boolean; 
 // A cap the operator changes is learned on the next page load.
 export class AccountFacts {
   private now: Standing;
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
 
   constructor({ suspended, state, storage }: SessionFacts) {
     this.now = { suspended, full: false, restoring: state === 'restoring', storage };
@@ -34,10 +35,7 @@ export class AccountFacts {
 
   readonly snapshot = (): Standing => this.now;
 
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
 
   readonly heard = (heard: Exclude<Heard, { kind: 'elsewhere' }>) => {
     const { now } = this;
@@ -58,7 +56,7 @@ export class AccountFacts {
 
   private set(next: Standing) {
     this.now = next;
-    for (const listener of this.listeners) listener();
+    this.changes.notify();
   }
 }
 

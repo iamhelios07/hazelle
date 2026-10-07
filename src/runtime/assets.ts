@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import type { Files } from './files';
 import type { ObjectStore } from './store';
 
@@ -16,7 +17,7 @@ export class AssetUrls {
   private readonly pins = new Map<string, number>();
   private readonly inactive = new Map<string, Cached>();
   private inactiveBytes = 0;
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
   private readonly unsubscribe: () => void;
   private version = 0;
   private closed = false;
@@ -46,10 +47,7 @@ export class AssetUrls {
     });
   }
 
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
 
   readonly snapshot = () => this.version;
 
@@ -150,7 +148,7 @@ export class AssetUrls {
 
   private changed() {
     this.version++;
-    for (const listener of this.listeners) listener();
+    this.changes.notify();
   }
 
   close() {
@@ -158,6 +156,6 @@ export class AssetUrls {
     this.unsubscribe();
     for (const [file, cached] of this.urls) this.evict(file, cached);
     this.pins.clear();
-    this.listeners.clear();
+    this.changes.clear();
   }
 }

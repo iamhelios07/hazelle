@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import { Runaway } from '../engine/cbs/evaluate';
 import type { Pack, Trigger } from '../engine/import/types';
 import type { Role } from '../connectors/assignment';
@@ -63,7 +64,7 @@ type Anchor = { version: string; stays?: true };
 // The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
   private state: ScriptsState = { notes: [], questions: [] };
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
   private readonly answers = new Map<number, (answer: string | null) => void>();
   private readonly queues = new Map<string, Promise<unknown>>();
   // What each chat was already told of its bot's errors, so a script failing on every message says so once.
@@ -76,10 +77,7 @@ export class Scripts {
     private readonly open: () => Promise<Runner>,
   ) {}
 
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
 
   readonly snapshot = () => this.state;
 
@@ -379,6 +377,6 @@ export class Scripts {
 
   private set(state: ScriptsState) {
     this.state = state;
-    for (const listener of this.listeners) listener();
+    this.changes.notify();
   }
 }

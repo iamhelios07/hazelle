@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import type { ModelSettings } from '../connectors/settings';
 import type { InlineThoughts } from '../connectors/stream';
 import type { Phase } from '../connectors/types';
@@ -93,7 +94,7 @@ export class Talk {
   private writingChats: ReadonlySet<string> = new Set();
   private closed = false;
   private readonly unsaved = new Map<string, { chat: string; reply: Written; call: string }>();
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
   // By the id of the version each reply wrote.
   private readonly sentBy = new Map<string, { chat: string; sent: Sent }>();
   private readonly leave: () => void;
@@ -114,10 +115,7 @@ export class Talk {
     });
   }
 
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
 
   readonly snapshot = (chat: string): Turn | null => this.turns.get(chat)?.turn ?? null;
 
@@ -176,15 +174,11 @@ export class Talk {
     return null;
   }
 
-  private notify() {
-    for (const listener of this.listeners) listener();
-  }
-
   private seat(turn: Turn): Held {
     const held: Held = { turn, abort: new AbortController(), calling: null };
     this.turns.set(turn.chat, held);
     this.writingChats = new Set(this.turns.keys());
-    this.notify();
+    this.changes.notify();
     return held;
   }
 
@@ -194,12 +188,12 @@ export class Talk {
     if (held.calling) this.reading.delete(held.calling);
     this.turns.delete(held.turn.chat);
     this.writingChats = new Set(this.turns.keys());
-    this.notify();
+    this.changes.notify();
   }
 
   private change(held: Held, turn: Turn) {
     held.turn = turn;
-    this.notify();
+    this.changes.notify();
   }
 
   // The turn is shown before prepare, which may save a new chat, translate the user's message and builds the prompt,

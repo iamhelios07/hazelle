@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import type { RanAway } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
@@ -119,7 +120,7 @@ export class Translator {
   private closed = false;
   private state: Translating = { live: new Map(), failed: new Map() };
   private readonly aborts = new Map<string, AbortController>();
-  private readonly listeners = new Set<() => void>();
+  private readonly changes = new ChangeSignal();
 
   constructor(
     private readonly store: ObjectStore,
@@ -129,10 +130,7 @@ export class Translator {
     private readonly reading: Set<string>,
   ) {}
 
-  readonly subscribe = (listener: () => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  readonly subscribe = this.changes.subscribe;
 
   readonly snapshot = () => this.state;
 
@@ -143,7 +141,7 @@ export class Translator {
     if (change.failed === null) next.failed.delete(version);
     else if (change.failed) next.failed.set(version, change.failed);
     this.state = next;
-    for (const listener of this.listeners) listener();
+    this.changes.notify();
   }
 
   // chat: its id, saved or not yet; a chat not saved when the translation ends shows only its character's greetings,

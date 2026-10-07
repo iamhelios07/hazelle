@@ -1,3 +1,4 @@
+import { ChangeSignal } from '../change-signal';
 import { ChatFold } from '../model/chat';
 import { KINDS, parentKinds, type AppendOnly, type Kind, type Singleton, type Stored, type Values } from '../model/kinds';
 import { objectKey } from '../vault/objects';
@@ -85,7 +86,7 @@ export class ObjectStore {
   private unreadableCount = 0;
   private readonly upgraded = new Map<string, string>();
   private readonly listeners = new Set<(changes: readonly StoreChange[]) => void>();
-  private readonly waitListeners = new Set<() => void>();
+  private readonly waitChanges = new ChangeSignal();
   private waitingCalls = 0;
   private readonly changes: StoreChange[] = [];
   private reading: StoreRead[] | null = null;
@@ -336,10 +337,7 @@ export class ObjectStore {
     return count;
   };
 
-  readonly subscribeWaiting = (listener: () => void) => {
-    this.waitListeners.add(listener);
-    return () => this.waitListeners.delete(listener);
-  };
+  readonly subscribeWaiting = this.waitChanges.subscribe;
 
   // Capture is synchronous: every missing read counts too, so a later create invalidates it.
   capture<T>(read: () => T): { value: T; reads: StoreRead[] } {
@@ -931,7 +929,7 @@ export class ObjectStore {
 
   private wait(by: 1 | -1) {
     this.waitingCalls += by;
-    for (const listener of this.waitListeners) listener();
+    this.waitChanges.notify();
   }
 
   private async commit(steps: Step[], progress: (index: number) => void = () => {}, signal?: AbortSignal): Promise<ApiResult<(Held | null)[]>> {
