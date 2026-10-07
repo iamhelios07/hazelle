@@ -1,15 +1,13 @@
 import type { BackupResult, Imported, ImportedModule, ImportResult, RisuCharacter, RisuChat } from '../../engine/import/types';
 import { ImportReadError, type AssetRead, type Down, type Method, type ModuleData, type Replies, type Request, type Up } from './protocol';
+import { PendingRequests } from '../pending-requests';
 import { moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
-
-type Pending = { resolve: (value: Replies[Method]) => void; reject: (error: ImportReadError) => void };
 
 export class ImportWorker {
   private worker: Worker | null = null;
   private closed = false;
-  private next = 0;
-  private pending = new Map<number, Pending>();
+  private readonly pending = new PendingRequests<Replies[Method]>();
 
   async card(file: File): Promise<ImportResult> {
     const result = await this.ask({ kind: 'card', file });
@@ -68,24 +66,21 @@ export class ImportWorker {
 
   private ask<K extends Method>(request: Request<K>): Promise<Replies[K]> {
     if (this.closed) return Promise.reject(new ImportReadError('closed'));
-    const id = ++this.next;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve: (value) => resolve(value as Replies[K]), reject });
-      try {
-        this.open().postMessage({ id, request } satisfies Down<K>);
-      } catch (error) {
-        this.end(error instanceof Error ? error.message : String(error));
-      }
-    });
+    const { id, promise } = this.pending.add();
+    try {
+      this.open().postMessage({ id, request } satisfies Down<K>);
+    } catch (error) {
+      this.end(error instanceof Error ? error.message : String(error));
+    }
+    return promise as Promise<Replies[K]>;
   }
 
   private open(): Worker {
     if (this.worker) return this.worker;
     const worker = moduleWorker(workerUrl);
     worker.onmessage = ({ data }: MessageEvent<Up>) => {
-      const pending = this.pending.get(data.id);
+      const pending = this.pending.take(data.id);
       if (!pending) return;
-      this.pending.delete(data.id);
       if ('error' in data) pending.reject(new ImportReadError(data.error));
       else pending.resolve(data.result);
     };
@@ -100,7 +95,6 @@ export class ImportWorker {
     this.worker?.terminate();
     this.worker = null;
     const error = new ImportReadError(message);
-    for (const { reject } of this.pending.values()) reject(error);
-    this.pending.clear();
+    this.pending.rejectAll(() => error);
   }
 }

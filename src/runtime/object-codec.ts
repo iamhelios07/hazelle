@@ -1,4 +1,5 @@
 import type { CodecDown, CodecJob, CodecResult, CodecUp, OpenItem, SealItem } from './object-codec-core';
+import { PendingRequests } from './pending-requests';
 import { moduleWorker } from './worker';
 import workerUrl from './object-codec-worker?worker&url';
 
@@ -21,13 +22,11 @@ function objectCodecTransport(account: string, key: CryptoKey, count: number): C
   const workers: Worker[] = [];
   const loads: number[] = [];
   let failure: Error | null = null;
-  let ids = 0;
-  const pending = new Map<number, { worker: number; resolve: (results: CodecResult[]) => void; reject: (error: Error) => void }>();
+  const pending = new PendingRequests<CodecResult[], number>();
   const end = (error: Error) => {
     failure ??= error;
     for (const worker of workers) worker.terminate();
-    for (const call of pending.values()) call.reject(failure);
-    pending.clear();
+    pending.rejectAll(() => failure);
   };
   try {
     for (let index = 0; index < count; index++) workers.push(moduleWorker(workerUrl));
@@ -37,10 +36,9 @@ function objectCodecTransport(account: string, key: CryptoKey, count: number): C
   for (const worker of workers) {
     loads.push(0);
     worker.onmessage = ({ data }: MessageEvent<CodecUp>) => {
-      const call = pending.get(data.id);
-      pending.delete(data.id);
+      const call = pending.take(data.id);
       if (!call) return;
-      loads[call.worker]!--;
+      loads[call.context]!--;
       call.resolve(data.results);
     };
     worker.onerror = worker.onmessageerror = () => end(new CodecUnavailable('Object codec worker failed'));
@@ -51,18 +49,18 @@ function objectCodecTransport(account: string, key: CryptoKey, count: number): C
     }
   }
   return {
-    run: (job) => new Promise((resolve, reject) => {
-      if (failure) return reject(failure);
-      const id = ++ids;
+    run: (job) => {
+      if (failure) return Promise.reject(failure);
       const index = loads.indexOf(Math.min(...loads));
       loads[index]!++;
-      pending.set(id, { worker: index, resolve, reject });
+      const { id, promise } = pending.add(index);
       try {
         workers[index]!.postMessage({ kind: 'batch', id, job } satisfies CodecDown);
       } catch {
         end(new CodecUnavailable('Object codec request could not be sent'));
       }
-    }),
+      return promise;
+    },
     close: () => end(new CodecAborted('Object store closed')),
   };
 }

@@ -4,6 +4,7 @@ import type { Host, LuaMessage, Snapshot } from '../../engine/lua/state';
 import type { ChatScope } from '../../engine/render';
 import type { ScriptOutcome } from './event';
 import { changedTail, sameHistory, type Tail } from '../history-delta';
+import { PendingRequests } from '../pending-requests';
 import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
@@ -35,15 +36,12 @@ const STUCK_MS = 8000;
 
 export class LuaStuck extends Error {}
 
-type Pending = { resolve: (result: ScriptOutcome | DisplayBatch | null) => void; reject: (error: Error) => void; host: Host | null };
-
 export class LuaWorker implements Runner {
   private worker: Worker | null = null;
-  private readonly pending = new Map<number, Pending>();
+  private readonly pending = new PendingRequests<ScriptOutcome | DisplayBatch | null, Host | null>();
   private readonly displays = new Map<string, { revision: number; snapshot: Snapshot }>();
   // One ordered event transport, not a cache per chat; the receiver applies each tail before awaiting Lua.
   private history: ChatScope['messages'] = [];
-  private ids = 0;
   private readonly heart = new Heartbeat(STUCK_MS, () => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
 
   run(owner: string, triggers: Trigger[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> {
@@ -81,14 +79,12 @@ export class LuaWorker implements Runner {
   }
 
   private send(message: (id: number) => Down, host: Host | null): Promise<ScriptOutcome | DisplayBatch | null> {
-    const id = ++this.ids;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, host });
-      try {
-        this.open().postMessage(message(id));
-        this.heart.start();
-      } catch (error) { this.end(new LuaStuck(String(error))); }
-    });
+    const { id, promise } = this.pending.add(host);
+    try {
+      this.open().postMessage(message(id));
+      this.heart.start();
+    } catch (error) { this.end(new LuaStuck(String(error))); }
+    return promise;
   }
 
   private open(): Worker {
@@ -102,18 +98,18 @@ export class LuaWorker implements Runner {
 
   private receive(message: Up) {
     if (message.kind === 'pong') return this.heart.answered();
-    const run = this.pending.get(message.id);
-    if (!run) return;
     if (message.kind === 'done' || message.kind === 'failed') {
-      this.pending.delete(message.id);
+      const run = this.pending.take(message.id);
+      if (!run) return;
       if (this.pending.size === 0) this.heart.rest();
       if (message.kind === 'done') run.resolve(message.result);
       else run.reject(new Error(message.message));
       return;
     }
-    if (!run.host) return;
-    if (message.kind === 'say') return run.host.say(...message.args);
-    const answering: Promise<unknown> = message.kind === 'ask' ? run.host.ask(...message.args) : message.kind === 'model' ? run.host.model(...message.args) : message.kind === 'lore' ? run.host.lore(...message.args) : run.host.tokens(...message.args);
+    const host = this.pending.context(message.id);
+    if (!host) return;
+    if (message.kind === 'say') return host.say(...message.args);
+    const answering: Promise<unknown> = message.kind === 'ask' ? host.ask(...message.args) : message.kind === 'model' ? host.model(...message.args) : message.kind === 'lore' ? host.lore(...message.args) : host.tokens(...message.args);
     const worker = this.worker;
     const answer = (value: unknown) => worker?.postMessage({ kind: 'answer', call: message.call, value } satisfies Down);
     // A call the host failed at answers nothing, as a dismissed question does: unanswered, its run would never end.
@@ -126,8 +122,6 @@ export class LuaWorker implements Runner {
     this.displays.clear();
     this.history = [];
     this.heart.rest();
-    const pending = [...this.pending.values()];
-    this.pending.clear();
-    for (const run of pending) run.reject(error);
+    this.pending.rejectAll(() => error);
   }
 }

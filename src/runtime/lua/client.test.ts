@@ -74,3 +74,41 @@ it('sends event history tails in order across edits, truncation, chat switches a
     expect(histories).toEqual([scope.messages, scope.messages, changed.messages, shorter.messages, other.messages, other.messages]);
   } finally { runner.close(); }
 });
+
+it('keeps each pending host until completion and ignores old replies after a crash and restart', async () => {
+  const made: FakeWorker[] = [];
+  class FakeWorker {
+    onmessage: ((event: { data: Up }) => void) | null = null;
+    onerror: (() => void) | null = null;
+    postMessage = vi.fn<(message: Down) => void>();
+    terminate = vi.fn();
+    constructor() { made.push(this); }
+    receive(data: Up) { this.onmessage?.({ data }); }
+  }
+  vi.stubGlobal('Worker', FakeWorker);
+  const runner = new LuaWorker();
+  const host: Host = { say: vi.fn(), ask: async () => null, model: async () => ({ success: true, result: '' }), tokens: async () => 0, lore: async () => [] };
+  const other = { ...host, say: vi.fn() };
+  const scope: ChatScope = { ...snapshot.scope, cast: [], packs: [], toggles: new Map() };
+  try {
+    const first = runner.run('first', [], scope, { kind: 'start' }, host);
+    const second = runner.run('second', [], scope, { kind: 'start' }, other);
+    const worker = made[0]!;
+    worker.receive({ kind: 'failed', id: 1, message: 'script failed' });
+    await expect(first).rejects.toThrow('script failed');
+    worker.receive({ kind: 'say', id: 1, args: ['normal', 'late'] });
+    worker.receive({ kind: 'say', id: 2, args: ['normal', 'still running'] });
+    expect(host.say).not.toHaveBeenCalled();
+    expect(other.say).toHaveBeenCalledExactlyOnceWith('normal', 'still running');
+    worker.onerror!();
+    await expect(second).rejects.toThrow('crashed');
+    const restarted = runner.run('third', [], scope, { kind: 'start' }, host);
+    worker.receive({ kind: 'done', id: 2, result: null });
+    const next = made[1]!;
+    expect(next.postMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run', id: 3 }));
+    next.receive({ kind: 'say', id: 3, args: ['normal', 'new run'] });
+    expect(host.say).toHaveBeenCalledExactlyOnceWith('normal', 'new run');
+    next.receive({ kind: 'failed', id: 3, message: 'new failure' });
+    await expect(restarted).rejects.toThrow('new failure');
+  } finally { runner.close(); }
+});
