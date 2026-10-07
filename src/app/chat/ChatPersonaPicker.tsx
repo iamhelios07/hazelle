@@ -14,27 +14,24 @@ export function ChatPersonaPicker({ chat }: { chat: OpenChat }) {
   const { persona, dialog, actions } = chat;
   const shown = persona.kind === 'persona' ? persona.persona.value : null;
   return (
-    <>
-      <ChipButton
-        label={shown ? aliased(shown.name, shown.alias) : MISSING[persona.from]}
-        title="이 채팅의 페르소나"
-        variant="ghost"
-        opens="up"
-        popup="dialog"
-        expanded={dialog === 'persona'}
-        ref={null}
-        leading={<Avatar size="sm" tone="you" face={shown?.name ?? UserRound} image={shown?.picture} />}
-        tone={shown ? 'default' : 'warn'}
-        onClick={() => actions.openDialog('persona')}
-      />
-      {dialog === 'persona' && <PersonaDialog chat={chat} />}
-    </>
+    <ChipButton
+      label={shown ? aliased(shown.name, shown.alias) : MISSING[persona.from]}
+      title="이 채팅의 페르소나"
+      variant="ghost"
+      opens="up"
+      popup="dialog"
+      expanded={dialog === 'persona'}
+      ref={null}
+      leading={<Avatar size="sm" tone="you" face={shown?.name ?? UserRound} image={shown?.picture} />}
+      tone={shown ? 'default' : 'warn'}
+      onClick={() => actions.openDialog('persona')}
+    />
   );
 }
 
 // Mounted only while open, so each opening starts with an empty search. A touch screen gets no focused search, whose
 // keyboard would cover half the faces.
-function PersonaDialog({ chat }: { chat: OpenChat }) {
+export function PersonaDialog({ chat }: { chat: OpenChat }) {
   const { persona, shelf, actions } = chat;
   const personas = usePersonas().toSorted((a, b) => byName(a.value, b.value));
   const toast = useToast();

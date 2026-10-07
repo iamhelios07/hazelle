@@ -7,6 +7,7 @@ import { runShortcut } from '../shortcuts';
 import { ChatTitle, Divider, IconButton, Menu, MenuItem, ToolButton, useMenuOpener, useWide } from '../ui';
 import { ChatCastMenu } from './ChatCastMenu';
 import { ChatModelMenu } from './ChatModelMenu';
+import { PersonaDialog } from './ChatPersonaPicker';
 import { ChatPromptMenu } from './ChatPromptMenu';
 import { ReadingDialog, ReadingMenu } from './ChatReading';
 import type { OpenChat } from './useChat';
@@ -74,8 +75,10 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   );
 }
 
+// The persona dialog mounts here, not beside its chip: a folded composer hides its tool bar, and a dialog inside it.
 export function ChatDialogs({ chat }: { chat: OpenChat }) {
   const { dialog, item, actions } = chat;
+  if (dialog === 'persona') return <PersonaDialog chat={chat} />;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
   if (dialog === 'rename' && item) {
     return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 표시돼요." onSave={actions.rename} onClose={actions.closeDialog} />;
