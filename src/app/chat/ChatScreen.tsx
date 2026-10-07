@@ -56,6 +56,8 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
         panel={
           panel?.kind === 'toggles' ? (
             <ChatToggles chat={chat} />
+          ) : panel?.kind === 'info' ? (
+            <ChatInfo chat={chat} />
           ) : panel?.kind === 'memory' ? (
             // The panel opens only from a saved chat.
             id && <ChatMemory id={id} record={panel.record} chat={chat} />
@@ -66,7 +68,6 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
         peek={
           <SidePeeks>
             {chat.peeking && <ChatStatusPeek chat={chat} />}
-            <ChatInfo chat={chat} />
           </SidePeeks>
         }
         aside={chat.status.length > 0 && <ChatStatusAside chat={chat} />}

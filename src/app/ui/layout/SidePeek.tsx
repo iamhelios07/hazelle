@@ -6,15 +6,9 @@ import styles from './SidePeek.module.css';
 
 type Props = {
   label: string;
-  tab?: string;
-  // The drawer's id, which buttons elsewhere that hold it open name (IconButton's controls): a press on them is not
-  // outside, so the one that holds it lets go of it again, and another keeps it held.
-  id?: string;
   // Held open by a key or a tap; pointing at the tab shows it only while the pointer stays.
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  variant?: 'card' | 'panel';
-  subtitle?: string;
   actions: ReactNode;
   children: ReactNode;
 };
@@ -25,25 +19,22 @@ export function SidePeeks({ children }: { children: ReactNode }) {
 
 // Held open, it has its own close: on a phone the drawer covers nearly all the story, and what is left outside it
 // is the composer, whose press raises the keyboard.
-export function SidePeek({ label, tab = label, id, open, onOpenChange, variant = 'card', subtitle, actions, children }: Props) {
+export function SidePeek({ label, open, onOpenChange, actions, children }: Props) {
   const root = useRef<HTMLDivElement>(null);
 
   useLayer(open, {
-    outside: (target) => !root.current?.contains(target) && !(id && (target instanceof Element ? target : target.parentElement)?.closest(`[aria-controls="${id}"]`)),
+    outside: (target) => !root.current?.contains(target),
     close: () => onOpenChange(false),
   });
 
   return (
     <div ref={root} className={open ? `${styles.peek} ${styles.open}` : styles.peek}>
-      <button type="button" className={styles.tab} aria-expanded={open} aria-controls={id} onClick={() => onOpenChange(!open)}>
-        {tab}
+      <button type="button" className={styles.tab} aria-expanded={open} onClick={() => onOpenChange(!open)}>
+        {label}
       </button>
-      <aside id={id} className={variant === 'panel' ? `${styles.drawer} ${styles.panel}` : styles.drawer} aria-label={label}>
+      <aside className={styles.drawer} aria-label={label}>
         <div className={styles.head}>
-          <div className={styles.titles}>
-            <h2 className={styles.title}>{label}</h2>
-            {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
-          </div>
+          <h2 className={styles.title}>{label}</h2>
           {actions}
           {open && <IconButton icon={X} size="xs" label={`${label} 닫기`} onClick={() => onOpenChange(false)} />}
         </div>

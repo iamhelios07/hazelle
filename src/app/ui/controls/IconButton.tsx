@@ -13,15 +13,13 @@ type Props = {
   // expanded alone.
   popup?: 'menu' | 'dialog';
   expanded?: boolean;
-  // The id of what it holds open elsewhere, such as a SidePeek's drawer.
-  controls?: string;
   ref?: Ref<HTMLButtonElement>;
   size?: 'xs' | 'sm' | 'md';
   disabled?: boolean;
 };
 
 // label is required: an icon-only button has no other accessible name.
-export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, controls, ref, size = 'md', disabled = false }: Props) {
+export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, ref, size = 'md', disabled = false }: Props) {
   return (
     <button
       ref={ref}
@@ -32,7 +30,6 @@ export function IconButton({ icon, label, title = label, onClick, pressed, popup
       aria-pressed={pressed}
       aria-haspopup={popup}
       aria-expanded={expanded}
-      aria-controls={controls}
       disabled={disabled}
       onClick={onClick}
     >

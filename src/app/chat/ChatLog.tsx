@@ -10,7 +10,7 @@ import { foldTerm } from './search';
 import type { OpenChat } from './useChat';
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, decor, hosted, offered, translating, awaited, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, found, search, branching, modelMenu, infoDrawer, actions } = chat;
+  const { item, messages, texts, decor, hosted, offered, translating, awaited, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -63,7 +63,6 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           term={term}
           branching={branching}
           modelMenu={modelMenu}
-          infoDrawer={infoDrawer}
           actions={rowActions}
         />
         {/* Deleting the message the split comes after takes its divider with it, until 되돌리기. */}

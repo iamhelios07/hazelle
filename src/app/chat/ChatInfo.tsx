@@ -4,7 +4,7 @@ import { calls, shown, type Receipt } from '../../model/chat';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useChatMemory, useSession } from '../session';
-import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePeek, Stack, Tab, Tabs, Text } from '../ui';
+import { Breakdown, Callout, Empty, Facts, IconButton, Section, SidePanel, Stack, Tab, Tabs, Text } from '../ui';
 import { SentLore, SentMemory, SentRequest } from './ChatSent';
 import { cost, seconds, speed, tokens, UNKNOWN } from '../common/receipt';
 import { infoReply } from './infoReply';
@@ -36,7 +36,7 @@ const timeFacts = (receipt: Receipt) => [
 ];
 
 export function ChatInfo({ chat: open }: { chat: OpenChat }) {
-  const { id: chat, messages, held, infoPick, infoDrawer, actions } = open;
+  const { id: chat, messages, infoPick, actions } = open;
   const { talk, costs } = useSession();
   const memory = useChatMemory(chat);
   const [tab, setTab] = useState<(typeof TABS)[number]['value']>('reply');
@@ -53,12 +53,6 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
     if (!chat) return;
     for (const call of [...(receipt ? calls(receipt) : []), ...(translated ? [translated] : [])]) costs.settle(chat, call);
   }, [chat, receipt, translated, costs]);
-
-  // A record is read in the memory panel beside the story, so the drawer over the story lets go.
-  const record = (id: string) => {
-    actions.hold('info', false);
-    actions.memory(id);
-  };
 
   const stepper = (
     <>
@@ -127,16 +121,16 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
           </>
         )}
         {tab === 'lore' && <SentLore sent={sent} />}
-        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={record} />}
+        {tab === 'memory' && <SentMemory sent={sent} memory={memory} onRecord={actions.memory} />}
         {tab === 'request' && <SentRequest sent={sent} receipt={receipt} />}
       </>
     );
   }
 
   return (
-    <SidePeek label="응답 정보" tab="정보" id={infoDrawer} open={held === 'info'} onOpenChange={(on) => actions.hold('info', on)} variant="panel" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper}>
+    <SidePanel title="응답 정보" subtitle={version ? ago(version.at) : undefined} actions={replies.length > 1 && stepper} onClose={actions.closePanel}>
       {body}
-    </SidePeek>
+    </SidePanel>
   );
 }
 

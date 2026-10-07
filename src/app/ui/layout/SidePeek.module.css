@@ -43,8 +43,6 @@
    the tab, so a pointer crossing the edge does not bring it, and leaves a moment after the pointer does, so a pointer
    passing from the tab to it does not close it. */
 .drawer {
-  --peek-hidden: translate(calc(100% + var(--space-12)), -50%);
-  --peek-shown: translateY(-50%);
   position: absolute;
   top: 50%;
   right: var(--space-12);
@@ -57,32 +55,16 @@
   background: var(--color-bg);
   box-shadow: var(--shadow-popover);
   visibility: hidden;
-  transform: var(--peek-hidden);
+  transform: translate(calc(100% + var(--space-12)), -50%);
   transition:
     transform var(--duration-slow) var(--ease-enter) var(--duration-fast),
     visibility var(--duration-instant) linear calc(var(--duration-slow) + var(--duration-fast));
 }
 
-/* The panel 응답 정보 was beside the story (user, 2026-10-04: keep that design, "옛날의 그 전체 크기"): the page's full
-   height at its edge, over the header and the composer too, sliding in from the edge. */
-.panel {
-  --peek-hidden: translateX(100%);
-  --peek-shown: none;
-  top: calc(-1 * var(--header-height));
-  right: calc(-1 * var(--story-scrollbar));
-  bottom: calc(-1 * var(--footer-space));
-  width: min(var(--panel-width), 100%);
-  max-height: none;
-  border: 0;
-  border-left: var(--border-thin) solid var(--color-divider);
-  border-radius: 0;
-  background: var(--color-sidebar);
-}
-
 .tab:hover + .drawer {
   visibility: visible;
   pointer-events: auto;
-  transform: var(--peek-shown);
+  transform: translateY(-50%);
   transition:
     transform var(--duration-slow) var(--ease-enter) var(--duration-intent),
     visibility var(--duration-instant) linear var(--duration-intent);
@@ -93,15 +75,10 @@
 .open .drawer {
   visibility: visible;
   pointer-events: auto;
-  transform: var(--peek-shown);
+  transform: translateY(-50%);
   transition:
     transform var(--duration-slow) var(--ease-enter),
     visibility var(--duration-instant);
-}
-
-/* Another drawer pointed at takes the place of the one held open, which comes back when the pointer leaves. */
-.peeks:has(.peek:not(.open) > .tab:hover, .peek:not(.open) > .drawer:hover) .open .drawer {
-  visibility: hidden;
 }
 
 .head {
@@ -112,31 +89,11 @@
   padding: var(--space-16) var(--space-24) 0;
 }
 
-.panel .head {
-  height: var(--header-height);
-  padding: 0 var(--space-8) 0 var(--space-24);
-  border-bottom: var(--border-thin) solid var(--color-divider);
-}
-
-.titles {
+.title {
   flex-grow: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.title {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-}
-
-.panel .title {
-  font-size: var(--text-md);
-}
-
-.subtitle {
-  color: var(--color-text-faint);
-  font-size: var(--text-xs);
 }
 
 .body {
@@ -148,8 +105,4 @@
   padding: var(--space-16) var(--space-24) var(--space-24);
   overflow-y: auto;
   scrollbar-width: thin;
-}
-
-.panel .body {
-  gap: var(--space-24);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
@@ -132,7 +132,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const promptMenu = useMenuHandle();
   const castMenu = useMenuHandle();
   // 토글, 장기 기억 and the prompt list take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | Side | null>(null);
+  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | Side | null>(null);
   const [found, setFound] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
   // The search bar's term and current hit, by message id so rows coming and going keep it. focus asks the field to take
   // the focus again, as Ctrl+F does while the bar is open.
@@ -146,14 +146,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [hidden, setHidden] = useState(false);
   const hosted = (index: number) => beside ? [] : status.flatMap(({ drawn }) => (drawn?.message === index ? [drawn] : []));
   const { seen, watch } = useSeen();
-  // 상태 or 응답 정보 shown over the story by a key or a tap, rather than by pointing at its tab. Their drawers slide
-  // over the same place, so holding one lets go of the other.
-  const [held, setHeld] = useState<'status' | 'info' | null>(null);
-  const hold = (which: 'status' | 'info', open: boolean) => setHeld((current) => (open ? which : current === which ? null : current));
-  const peeking = status.length > 0 && !(beside && !hidden) && (held === 'status' || status.some(({ script }) => !seen.has(script)));
+  // 상태 shown over the story by a key or a tap, rather than by pointing at its tab.
+  const [held, hold] = useState(false);
+  const peeking = status.length > 0 && !(beside && !hidden) && (held || status.some(({ script }) => !seen.has(script)));
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
-  const infoDrawer = useId();
   const [editing, setEditing] = useState<{ id: string; text: string; translation: string | null } | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<string | null>(null);
@@ -179,7 +176,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
 
   useEffect(() => {
-    if (replyTarget && held === 'info') setInfoPick(pickStarted(messages, replyTarget));
+    if (replyTarget && panel?.kind === 'info') setInfoPick(pickStarted(messages, replyTarget));
   }, [replyTarget]);
 
   function report(failure: TurnFailure | null) {
@@ -381,14 +378,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     const character = chat.character;
     if (!character) return;
     void setStatusScript(store, character, script, on).then((saved) => saved.ok || toast.failed(saved));
-    if (!on && statusScripts.length === 1) hold('status', false);
+    if (!on && statusScripts.length === 1) hold(false);
     toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, script, !on), [scriptName(script), card?.name].filter(Boolean).join(' · '));
   }
 
   // 옆에 두기, or on false 탭으로 접기, for every chat of the character.
   function keepStatus(keep: boolean) {
     if (!chat.character) return;
-    hold('status', false);
+    hold(false);
     setHidden(false);
     void setKeepStatus(store, chat.character, keep).then((saved) => saved.ok || toast.failed(saved));
   }
@@ -396,7 +393,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   // The key shows or hides 상태 for now, storing nothing: in the margin while it stands there, or else the drawer
   // over the story.
   function toggleStatus() {
-    hold('status', !beside && held !== 'status');
+    hold(!beside && !held);
     if (beside) setHidden(!hidden);
   }
 
@@ -443,7 +440,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     held,
     peeking,
     infoPick,
-    infoDrawer,
     aside: beside && !hidden,
     canKeep: fits,
     translate,
@@ -499,7 +495,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       follow,
       info: (reply: string) => {
         setInfoPick(reply);
-        setHeld('info');
+        setPanel({ kind: 'info' });
       },
       pickInfo: setInfoPick,
       showToggles: () => setPanel({ kind: 'toggles' }),

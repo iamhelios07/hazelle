@@ -47,7 +47,6 @@ type Props = {
   term: string;
   branching: boolean;
   modelMenu: MenuHandle;
-  infoDrawer: string;
   actions: ChatActions;
 };
 
@@ -59,7 +58,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, infoDrawer, actions } = props;
+  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -251,7 +250,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message)} />}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />}
-      {!mine && <IconButton icon={Info} size="xs" label="응답 정보" controls={infoDrawer} onClick={() => actions.info(message.id)} />}
+      {!mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />}
       {statusTool}
       <Divider variant="tools" />
       <IconButton icon={Trash2} size="xs" label="삭제" onClick={() => actions.remove(message)} />

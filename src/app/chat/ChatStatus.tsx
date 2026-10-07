@@ -8,8 +8,8 @@ export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
   return (
     <SidePeek
       label="상태"
-      open={held === 'status'}
-      onOpenChange={(open) => actions.hold('status', open)}
+      open={held}
+      onOpenChange={actions.hold}
       actions={
         <>
           {unmarkOnly(chat)}
