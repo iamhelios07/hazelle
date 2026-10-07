@@ -52,13 +52,12 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
           <span className={styles.time}>{time}</span>
         </div>
         {mine ? <div className={styles.bubble}>{children}</div> : children}
-        {after}
-      </div>
-      {tools && (
-        <div className={styles.rail}>
-          <div className={styles.tools}>{tools}</div>
+        {/* The foot keeps its height while the tools are absent, as while a reply streams, so nothing moves when they come. */}
+        <div className={styles.foot}>
+          <div className={styles.after}>{after}</div>
+          {tools && <div className={styles.tools}>{tools}</div>}
         </div>
-      )}
+      </div>
     </article>
   );
 }

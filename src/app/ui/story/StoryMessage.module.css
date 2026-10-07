@@ -84,45 +84,33 @@
   background: var(--color-surface);
 }
 
-/* As tall as the message, so the bar, stuck to the story's bottom edge above the composer, rides along a long message
-   and never leaves it. Sticky holds only while no ancestor up to the story's scroller is transformed: see .row in
-   Viewport.module.css. */
-.rail {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+/* The tools take a row of their own under the message, never over its words. */
+.foot {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-8);
+  min-height: var(--control-xs);
+}
+
+.after {
+  flex-grow: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  align-items: flex-end;
-  pointer-events: none;
+  gap: var(--space-8);
 }
 
 .tools {
-  position: sticky;
-  bottom: calc(var(--footer-space) + var(--space-8));
-  z-index: var(--layer-raised);
   display: flex;
   align-items: center;
-  padding: var(--space-2);
-  border: var(--border-thin) solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-popover);
   opacity: 0;
-  transform: translateY(3px);
-  transition:
-    opacity var(--duration-fast),
-    transform var(--duration-fast);
+  transition: opacity var(--duration-fast);
   pointer-events: none;
 }
 
-/* The rail never takes the pointer, or it would take the presses on the text beneath. */
 .message:focus-within .tools,
 .pinned .tools {
   opacity: 1;
-  transform: none;
   pointer-events: auto;
 }
 
@@ -134,7 +122,6 @@
 
   .message:hover .tools {
     opacity: 1;
-    transform: none;
     pointer-events: auto;
   }
 
