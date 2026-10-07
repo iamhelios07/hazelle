@@ -2,6 +2,8 @@
 # shellcheck disable=SC2016 # LIB and TRANSACTION expand on the machine
 # Deploys a release to the hosted machine by its image digest:
 #   scripts/deploy.sh v1.2.3
+# or only captures the pre-upgrade backup ahead, which a deploy within 15 minutes uses (scripts/release.sh, see PREPARE):
+#   scripts/deploy.sh --prepare
 # Needs: a clean tree with the tag, gh logged in, docker, terraform state in infra/ (for the address), and ssh as root
 # to the machine. Order: the release's digest and archive are checked against the tag's commit; then one ssh session,
 # holding an flock on /run/hazelle-deploy.lock for an hour at most, reads the running digest, has the machine pull the
@@ -37,32 +39,20 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO=ghcr.io/jiniill/hazelle
-tag=${1:?usage: scripts/deploy.sh <tag>}
 
-[ -z "$(git status --porcelain)" ] || { echo "deploy: uncommitted changes" >&2; git status --short >&2; exit 1; }
-git fetch -q origin tag "$tag"
-commit=$(git rev-parse "$tag^{commit}")
+tag=${1:?usage: scripts/deploy.sh <tag> | --prepare}
 host=$(terraform -chdir=infra output -raw ip)
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
-
-gh release download "$tag" -p image-digest.txt -p source.tar.gz -D "$work"
-digest=$(cat "$work/image-digest.txt")
-[[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "deploy: image-digest.txt of $tag holds no image digest" >&2; exit 1; }
-image="$REPO@$digest"
-
-archive_commit() { gunzip -c "$1" | git get-tar-commit-id; }
-[ "$(archive_commit "$work/source.tar.gz")" = "$commit" ] || { echo "deploy: the release's source archive is not $tag's commit" >&2; exit 1; }
-docker pull -q --platform linux/amd64 "$image" >/dev/null
-container=$(docker create --platform linux/amd64 "$image")
-docker cp -q "$container:/app/dist/client/source.tar.gz" "$work/image-source.tar.gz"
-docker rm "$container" >/dev/null
-[ "$(archive_commit "$work/image-source.tar.gz")" = "$commit" ] || { echo "deploy: $image serves a source archive of another commit" >&2; exit 1; }
-echo "deploy: $tag = $commit = $image"
 
 # The functions the transaction starts with. health_ok: the app answers 2xx with "ok":true. wait_healthy <seconds>.
 # running <image>: the app container runs that image.
+# capture: a pre-upgrade backup generation, off-site; sets generation. It asks the running app for one (node.ts's
+# SIGUSR2 handler), follows its log for the outcome, has the copier send the generation off-site and checks its copied
+# marker; 30 minutes in all. The signal goes from inside the container: Docker's kill API marks a container manually
+# stopped, after which restart: unless-stopped no longer restarts it.
+# PREPARED_FOR: how long after it went off-site a prepared generation stands in for the capture. A release's build takes
+# minutes; an older one would widen the writes a rollback loses.
 LIB='
+PREPARED_FOR=900
 health_ok() {
   body=$(timeout 10 hazelle-compose exec -T app wget -qO- -T 5 http://127.0.0.1:8080/api/health 2>/dev/null) &&
     case $body in *"\"ok\":true"*) ;; *) false ;; esac
@@ -74,6 +64,30 @@ wait_healthy() {
     sleep 3
   done
 }
+capture() {
+  deadline=$(($(date +%s) + 1800))
+  app=$(hazelle-compose ps -q app)
+  # Since the process started: a request cut off by a crash before it ended never logs its outcome.
+  started=$(docker inspect --format "{{.State.StartedAt}}" "$app")
+  count() { docker logs --since "$started" "$app" 2>&1 | grep -c "\"event\":\"backup $1\"" || true; }
+  # An earlier request still running would log the first "backup finished" after this one was sent.
+  [ "$(count requested)" -le "$(count finished)" ] || { echo "deploy: an earlier backup request has not finished yet" >&2; exit 1; }
+  since=$(date +%s.%N)
+  hazelle-compose exec -T app kill -USR2 1
+  until line=$(docker logs --since "$since" "$app" 2>&1 | grep -m1 -e "\"event\":\"backup finished\"" -e "\"event\":\"backup refused\""); do
+    [ "$(date +%s)" -lt "$deadline" ] || { echo "deploy: the app logged no backup outcome within 30 minutes" >&2; exit 1; }
+    sleep 5
+  done
+  case $line in *"\"snapshots\":\"ok\""*) ;; *) echo "deploy: backup failed: $line" >&2; exit 1 ;; esac
+  case $line in *"\"generation\":\"ok\""*) ;; *) echo "deploy: backup failed: $line" >&2; exit 1 ;; esac
+  generation=$(echo "$line" | sed -n "s/.*\"id\":\"\([0-9]*-[0-9a-f]*\)\".*/\1/p")
+  [ -n "$generation" ] || { echo "deploy: backup finished without a generation id: $line" >&2; exit 1; }
+  left=$((deadline - $(date +%s)))
+  [ "$left" -gt 0 ] && timeout "$left" hazelle-compose exec -T backup /bin/sh /hazelle/rclone-backup.sh once >&2 ||
+    { echo "deploy: the copier failed or did not finish within 30 minutes" >&2; exit 1; }
+  [ -f "/data/backup/$generation/copied" ] || { echo "deploy: generation $generation is not marked copied" >&2; exit 1; }
+  echo "deploy: pre-upgrade generation $generation is off-site" >&2
+}
 running() {
   id=$(hazelle-compose ps -q app) && [ -n "$id" ] &&
     [ "$(docker inspect --format "{{.Config.Image}}" "$id")" = "$1" ] &&
@@ -84,10 +98,7 @@ running() {
 # The deploy on the machine, from reading the selected image to the health check. Every exit other than 0 goes
 # through ended(), which prints the step's summary and exits with the step's code. set -e skips a failing && list
 # that is not the script's last command, so each such list carries its own || exit 1.
-# The capture asks the running app for a backup generation (node.ts's SIGUSR2 handler), follows its log for the
-# outcome, has the copier send the generation off-site and checks its copied marker; 30 minutes in all. The signal goes
-# from inside the container: Docker's kill API marks a container manually stopped, after which restart:
-# unless-stopped no longer restarts it.
+# The capture is skipped for a generation --prepare left under the digest still selected, within PREPARED_FOR.
 TRANSACTION='
 set -eu
 code=1
@@ -120,28 +131,16 @@ summary="the machine could not pull $image; nothing changed"
 timeout 900 docker pull -q "$image" >/dev/null
 
 code=3 summary="no pre-upgrade backup; nothing changed"
-deadline=$(($(date +%s) + 1800))
-app=$(hazelle-compose ps -q app)
-# Since the process started: a request cut off by a crash before it ended never logs its outcome.
-started=$(docker inspect --format "{{.State.StartedAt}}" "$app")
-count() { docker logs --since "$started" "$app" 2>&1 | grep -c "\"event\":\"backup $1\"" || true; }
-# An earlier request still running would log the first "backup finished" after this one was sent.
-[ "$(count requested)" -le "$(count finished)" ] || { echo "deploy: an earlier backup request has not finished yet" >&2; exit 1; }
-since=$(date +%s.%N)
-hazelle-compose exec -T app kill -USR2 1
-until line=$(docker logs --since "$since" "$app" 2>&1 | grep -m1 -e "\"event\":\"backup finished\"" -e "\"event\":\"backup refused\""); do
-  [ "$(date +%s)" -lt "$deadline" ] || { echo "deploy: the app logged no backup outcome within 30 minutes" >&2; exit 1; }
-  sleep 5
-done
-case $line in *"\"snapshots\":\"ok\""*) ;; *) echo "deploy: backup failed: $line" >&2; exit 1 ;; esac
-case $line in *"\"generation\":\"ok\""*) ;; *) echo "deploy: backup failed: $line" >&2; exit 1 ;; esac
-generation=$(echo "$line" | sed -n "s/.*\"id\":\"\([0-9]*-[0-9a-f]*\)\".*/\1/p")
-[ -n "$generation" ] || { echo "deploy: backup finished without a generation id: $line" >&2; exit 1; }
-left=$((deadline - $(date +%s)))
-[ "$left" -gt 0 ] && timeout "$left" hazelle-compose exec -T backup /bin/sh /hazelle/rclone-backup.sh once >&2 ||
-  { echo "deploy: the copier failed or did not finish within 30 minutes" >&2; exit 1; }
-[ -f "/data/backup/$generation/copied" ] || { echo "deploy: generation $generation is not marked copied" >&2; exit 1; }
-echo "deploy: pre-upgrade generation $generation is off-site" >&2
+prepared=$(cat /run/hazelle-prepared 2>/dev/null || true)
+rm -f /run/hazelle-prepared
+at=$(echo "$prepared" | sed -n 3p)
+generation=$(echo "$prepared" | sed -n 2p)
+if [ "$(echo "$prepared" | sed -n 1p)" = "$selected" ] && [ "$(($(date +%s) - ${at:-0}))" -lt "$PREPARED_FOR" ] &&
+  [ -f "/data/backup/$generation/copied" ]; then
+  echo "deploy: pre-upgrade generation $generation went off-site $(($(date +%s) - at)) s ago" >&2
+else
+  capture
+fi
 
 code=1 summary="could not record the rollback pair or select $image; nothing changed"
 printf "%s\n%s\n" "$selected" "$generation" >/etc/hazelle/previous
@@ -153,17 +152,55 @@ wait_healthy 300 && running "$image" || exit 1
 echo "deploy: running $image (previous $selected, pre-upgrade generation $generation)" >&2
 '
 
-# Every process the transaction starts inherits fd 9 and with it the lock. LIB and TRANSACTION hold no single quote,
-# and $image is a checked digest, so the single-quoted bash -c argument reaches bash whole whatever root's login shell
-# is. ssh gives up on a dead connection within a minute on its own.
-status=0
-ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "root@$host" "
-  exec 9>/run/hazelle-deploy.lock
-  flock -n 9 || { echo 'deploy: another deploy holds /run/hazelle-deploy.lock on the machine; nothing changed' >&2; exit 5; }
-  exec timeout -k 60 3600 bash -c 'image=$image
-$LIB$TRANSACTION'" </dev/null || status=$?
-case $status in
-  0 | 1 | 3 | 4 | 5) exit "$status" ;;
-esac
-echo "deploy: the session ended without an outcome (status $status; 124: the hour on the machine ran out, 255: the connection was lost); run this again, it carries on from what /etc/hazelle/env selects (see the header)" >&2
-exit 1
+# --prepare (scripts/release.sh, while the image builds): the capture alone, recorded in /run/hazelle-prepared with
+# the digest it was taken under and when it went off-site. Under the same lock, so no deploy switches the image between
+# the capture and the record.
+PREPARE='
+set -eu
+selected=$(sed -n "s/^HAZELLE_IMAGE=//p" /etc/hazelle/env)
+running "$selected" && health_ok || { echo "deploy: the app is not running $selected healthy; nothing prepared" >&2; exit 1; }
+capture
+printf "%s\n%s\n%s\n" "$selected" "$generation" "$(date +%s)" >/run/hazelle-prepared
+'
+
+# Every process the script starts inherits fd 9 and with it the lock. LIB, TRANSACTION and PREPARE hold no single
+# quote, and $image is a checked digest, so the single-quoted bash -c argument reaches bash whole whatever root's login
+# shell is. ssh gives up on a dead connection within a minute on its own.
+on_machine() {
+  status=0
+  ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "root@$host" "
+    exec 9>/run/hazelle-deploy.lock
+    flock -n 9 || { echo 'deploy: another deploy holds /run/hazelle-deploy.lock on the machine; nothing changed' >&2; exit 5; }
+    exec timeout -k 60 3600 bash -c '$LIB$1'" </dev/null || status=$?
+  case $status in
+    0 | 1 | 3 | 4 | 5) exit "$status" ;;
+  esac
+  echo "deploy: the session ended without an outcome (status $status; 124: the hour on the machine ran out, 255: the connection was lost); run this again, it carries on from what /etc/hazelle/env selects (see the header)" >&2
+  exit 1
+}
+
+[ "$tag" = --prepare ] && on_machine "$PREPARE"
+
+
+[ -z "$(git status --porcelain)" ] || { echo "deploy: uncommitted changes" >&2; git status --short >&2; exit 1; }
+git fetch -q origin tag "$tag"
+commit=$(git rev-parse "$tag^{commit}")
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+gh release download "$tag" -p image-digest.txt -p source.tar.gz -D "$work"
+digest=$(cat "$work/image-digest.txt")
+[[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "deploy: image-digest.txt of $tag holds no image digest" >&2; exit 1; }
+image="$REPO@$digest"
+
+archive_commit() { gunzip -c "$1" | git get-tar-commit-id; }
+[ "$(archive_commit "$work/source.tar.gz")" = "$commit" ] || { echo "deploy: the release's source archive is not $tag's commit" >&2; exit 1; }
+docker pull -q --platform linux/amd64 "$image" >/dev/null
+container=$(docker create --platform linux/amd64 "$image")
+docker cp -q "$container:/app/dist/client/source.tar.gz" "$work/image-source.tar.gz"
+docker rm "$container" >/dev/null
+[ "$(archive_commit "$work/image-source.tar.gz")" = "$commit" ] || { echo "deploy: $image serves a source archive of another commit" >&2; exit 1; }
+echo "deploy: $tag = $commit = $image"
+
+on_machine "image=$image
+$TRANSACTION"

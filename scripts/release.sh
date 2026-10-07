@@ -2,6 +2,8 @@
 # Releases HEAD to the hosted machine in one command:
 #   scripts/release.sh v1.2.3
 # Tags HEAD, pushes the tag, waits for .github/workflows/release.yml on it, then runs scripts/deploy.sh with the tag.
+# While the image builds, deploy.sh --prepare captures the pre-upgrade backup, so the deploy need not wait for one; a
+# failed capture leaves it to the deploy.
 # Needs what deploy.sh needs, a clean tree whose HEAD is pushed to its upstream (the branch must hold what the release
 # is of), and a tag that exists nowhere yet. A failed build leaves the tag in place: the next release takes the next
 # version, so the release list says what happened.
@@ -19,6 +21,8 @@ if git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git ls-remote --exit
 fi
 git tag "$tag"
 git push origin "$tag"
+scripts/deploy.sh --prepare &
+prepare=$!
 # The run appears a few seconds after the push; tag-triggered runs list the tag as their branch.
 run=
 for _ in $(seq 1 12); do
@@ -29,4 +33,5 @@ done
 [ -n "$run" ] || { echo "release: no build started for $tag within a minute; see gh run list --workflow=release.yml" >&2; exit 1; }
 echo "release: building $tag (run $run)"
 gh run watch "$run" --exit-status --interval 20 >/dev/null || { echo "release: the build of $tag failed; see gh run view $run --log-failed" >&2; exit 1; }
+wait "$prepare" || echo "release: no backup captured ahead; the deploy captures its own" >&2
 exec scripts/deploy.sh "$tag"
