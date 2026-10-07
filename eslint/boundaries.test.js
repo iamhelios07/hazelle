@@ -13,6 +13,9 @@ const fails = (name, file, code, error) => ({ name, filename: at(file), code, er
 
 new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('boundaries', boundaries, {
   valid: [
+    ok('the server imports wire contracts', 'src/server/files.ts', "import { FILE_ID } from '../contracts/files';"),
+    ok('the runtime imports wire contracts', 'src/runtime/api.ts', "import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';"),
+    ok('a feature imports wire contracts directly', 'src/app/admin/RestoresDialog.tsx', "import type { RestorePhase } from '../../contracts/admin';"),
     ok('the runtime imports the model', 'src/runtime/turn.ts', "import { fold } from '../model/chat';"),
     ok('the model takes types from connectors', 'src/model/kinds.ts', "import type { Connection } from '../connectors/types';"),
     ok('the model takes types through import()', 'src/model/chat.ts', "type U = import('../connectors/types').Usage;"),
@@ -28,6 +31,9 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('boundaries
     ok('packages are not areas', 'src/app/ui/controls/Button.tsx', "import { useState } from 'react';"),
   ],
   invalid: [
+    fails('contracts import no server implementation', 'src/contracts/admin.ts', "import type { Db } from '../server/db/service-db';", /^contracts may not import server:/),
+    fails('contracts import no client domain', 'src/contracts/admin.ts', "import type { Chat } from '../model/chat';", /^contracts may not import model:/),
+    fails('contracts import no runtime', 'src/contracts/http.ts', "import { api } from '../runtime/api';", /^contracts may not import runtime:/),
     fails('the kit imports no feature', 'src/app/ui/controls/Button.tsx', "import { useChat } from '../../chat/useChat';", /^ui may not import chat:/),
     fails('the kit imports no root module at any depth', 'src/app/ui/controls/deep/er/Thing.tsx', "import { useSession } from '../../../../session';", /^ui may not import root:/),
     fails('the kit imports no layer below the app', 'src/app/ui/story/Prose.tsx', "import type { Chat } from '../../../model/chat';", /^ui may not import model:/),

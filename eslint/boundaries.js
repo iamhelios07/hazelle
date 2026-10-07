@@ -4,7 +4,7 @@ import path from 'node:path';
 // without its extension, relative to the repo root (the folder above this one), and a test file belongs where the module
 // it tests does. An area imports itself, the areas in `imports`, with `import type` those in `types`, and from its test
 // files those in `tests`. A module in no area fails lint until this table places it.
-const RUNTIME_IMPORTS = ['model', 'engine', 'connectors', 'priceLists', 'vault'];
+const RUNTIME_IMPORTS = ['contracts', 'model', 'engine', 'connectors', 'priceLists', 'vault'];
 const BELOW_APP = ['runtime', ...RUNTIME_IMPORTS];
 const FEATURES = ['account', 'admin', 'library', 'chat', 'connections', 'models', 'prompts', 'personas', 'modules', 'settings'];
 const FEATURE = {
@@ -12,6 +12,7 @@ const FEATURE = {
   why: 'a feature folder imports no other feature folder and nothing from the shell but routes and router (only the shell and main.tsx compose features), and reaches the server over HTTP only.',
 };
 const AREAS = {
+  contracts: { paths: ['src/contracts'], why: 'wire values shared by the server and client import no other layer.' },
   connectors: {
     paths: ['src/connectors'],
     imports: ['priceLists', 'destination'],
@@ -33,8 +34,8 @@ const AREAS = {
   vault: { paths: ['src/vault'], why: 'the vault is crypto and device storage only; it never reaches the network.' },
   server: {
     paths: ['src/server'],
-    imports: ['priceLists', 'destination'],
-    why: 'the server knows nothing about the client or providers, but which price lists to keep (connectors/price-list) and how a local provider\'s address is matched (connectors/destination).',
+    imports: ['contracts', 'priceLists', 'destination'],
+    why: 'the server knows nothing about the client or providers, but their wire contracts, which price lists to keep (connectors/price-list) and how a local provider\'s address is matched (connectors/destination).',
   },
   runtime: {
     paths: ['src/runtime'],

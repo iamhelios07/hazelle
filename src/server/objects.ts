@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
+import { ACCOUNT_USAGE_HEADERS } from '../contracts/http';
 import type { FeedQuery, Write } from './account-store';
-import { USE_HEADERS } from './caps';
 import { fail, ID, readObject, refused, type AppEnv } from './http';
 import { store } from './lifecycle';
 import { canWrite, requireSession } from './session';
@@ -39,7 +39,7 @@ objects.get('/', async (c) => {
   c.set('storeMs', Date.now() - asked);
   if ('refused' in page || 'unavailable' in page) return refused(c, page);
   if ('stale' in page || 'reset' in page) return fail(c, 409, 'cache-reset');
-  c.header(USE_HEADERS.bytes, String(page.bytes));
+  c.header(ACCOUNT_USAGE_HEADERS.bytes, String(page.bytes));
   return c.json({
     limits: BATCH_LIMITS,
     timeline: page.timeline,
@@ -71,7 +71,7 @@ objects.post('/batch', canWrite, async (c) => {
   const done = await store(c.env, account.incarnation).batch(account.incarnation, input.timeline, writes, account.bytesCap);
   c.set('storeMs', Date.now() - asked);
   if ('revs' in done) {
-    c.header(USE_HEADERS.bytes, String(done.bytes));
+    c.header(ACCOUNT_USAGE_HEADERS.bytes, String(done.bytes));
     return c.json({ revs: done.revs, timeline: done.timeline });
   }
   if ('stale' in done) return fail(c, 409, 'cache-reset');

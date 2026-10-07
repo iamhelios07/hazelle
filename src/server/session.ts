@@ -2,9 +2,11 @@ import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { every } from 'hono/combine';
 import { createMiddleware } from 'hono/factory';
+import type { AccountState } from '../contracts/admin';
+import { ACCOUNT_HEADER } from '../contracts/http';
 import { CAP } from './caps';
 import type { Db } from './db/service-db';
-import { fail, hex, sha256Hex, type Account, type AppEnv, type State } from './http';
+import { fail, hex, sha256Hex, type Account, type AppEnv } from './http';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIFETIME_MS = 30 * DAY_MS;
@@ -30,7 +32,7 @@ const sessionGuard = (read: (c: Context<AppEnv>) => Promise<Account | null>) =>
     // and what this page sealed or asks for must not be filed under it. This is the only such check: routes have none.
     // A request stating none is not from a page holding an account: bad input, since a 409 here would close the page's
     // account as if another tab had signed in, and a 401 would say the session is gone.
-    const stated = c.req.header('x-account');
+    const stated = c.req.header(ACCOUNT_HEADER);
     if (stated === undefined) return fail(c, 400, 'bad-input');
     if (stated !== account.id) return fail(c, 409, 'account-mismatch');
     c.set('account', account);
@@ -89,7 +91,7 @@ async function readSession(db: Db, token: string): Promise<Account | null> {
        FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?`,
     )
     .bind(tokenHash, now)
-    .first<{ id: string; username: string; suspended_at: number | null; incarnation: string; state: State; cap: number | null; expires_at: number; admin: number }>();
+    .first<{ id: string; username: string; suspended_at: number | null; incarnation: string; state: AccountState; cap: number | null; expires_at: number; admin: number }>();
   if (!row) return null;
   // Sliding expiry, written at most once a day rather than on every request.
   if (row.expires_at - now < SESSION_LIFETIME_MS - DAY_MS) {

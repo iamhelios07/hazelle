@@ -1,5 +1,6 @@
 import type { ExecutionContext } from 'hono';
-import type { Life, Phase, Unavailable } from './account-store';
+import type { RestoreAction, RestorePhase } from '../contracts/admin';
+import type { Life, Unavailable } from './account-store';
 import { RETENTION_MS } from './db/account-db';
 import type { Db } from './db/service-db';
 import type { Services } from './http';
@@ -92,7 +93,7 @@ async function leave(
   return 'left';
 }
 
-export type Run = { id: number; phase: Phase; verified: boolean; error: string | null };
+export type Run = { id: number; phase: RestorePhase; verified: boolean; error: string | null };
 
 type Operation = {
   id: number;
@@ -101,12 +102,12 @@ type Operation = {
   undoes: number | null;
   timeline: string;
   target: string | null;
-  phase: Phase;
+  phase: RestorePhase;
   verified: number;
   error: string | null;
 };
 
-const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
+const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
 // The eligibility of a begin, over an accounts row (unaliased) with ?1 the account, ?2 the report, ?3 the time asked
 // for, ?4 the restore to undo and ?5 now. The begin's insert and the explanation of a refused one read the same text.
@@ -285,7 +286,7 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
   }
 }
 
-function advance(db: Db, id: number, from: Phase, to: Phase, set?: string, ...binds: (string | number)[]) {
+function advance(db: Db, id: number, from: RestorePhase, to: RestorePhase, set?: string, ...binds: (string | number)[]) {
   return db
     .prepare(`UPDATE restores SET phase = ?, error = NULL, updated_at = ?${set ? `, ${set}` : ''} WHERE id = ? AND phase = ?`)
     .bind(to, Date.now(), ...binds, id, from)
@@ -293,7 +294,7 @@ function advance(db: Db, id: number, from: Phase, to: Phase, set?: string, ...bi
 }
 
 // true: this run ended it.
-async function release(env: Services, operation: Operation, to: 'cancelled' | 'failed', from: Phase[], error: string | null) {
+async function release(env: Services, operation: Operation, to: 'cancelled' | 'failed', from: RestorePhase[], error: string | null) {
   const db = env.db;
   const [ended] = await db.batch([
     db
@@ -324,7 +325,7 @@ export function run({ id, phase, verified, error }: Pick<Operation, 'id' | 'phas
   return { id, phase, verified: Boolean(verified), error };
 }
 
-export function restoreActions(phase: Phase, verified: boolean): ('resume' | 'cancel' | 'finalize')[] {
+export function restoreActions(phase: RestorePhase, verified: boolean): RestoreAction[] {
   if (phase === 'done' || phase === 'cancelled' || phase === 'failed') return verified ? [] : ['finalize'];
   return BEFORE_ARMED.includes(phase) ? ['resume', 'cancel'] : ['resume'];
 }

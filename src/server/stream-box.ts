@@ -1,14 +1,5 @@
+import { HELLO, HEAD, DATA, END, PING } from '../contracts/streams';
 import { forward, type Upstream } from './relay';
-
-// A frame is [u32 length of what follows][u8 type][u32 seq][body]. hello's body is the object's ECDH public key in the
-// clear and ping's is empty; every other body is sealed. vault/streams opens them and runtime/relay reads them: the
-// three change together. ping keeps one reader's connection alive and is not part of the reply: never stored, seq 0,
-// skipped by its type before its seq is looked at.
-const HELLO = 0;
-const HEAD = 1;
-const DATA = 2;
-const END = 3;
-const PING = 4;
 
 // A stream that closes with no end frame was lost: the process restarted with the call gone.
 type Reason = { reason: 'done' | 'stopped' | 'limit' } | { reason: 'network'; detail: string };

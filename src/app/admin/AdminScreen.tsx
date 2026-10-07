@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { readService, type BackupWarning, type Report } from '../../runtime/admin';
+import type { BackupWarning } from '../../contracts/admin';
+import { readService, type Report } from '../../runtime/admin';
 import { PAGES } from '../common/words';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';

@@ -1,6 +1,7 @@
 import { Send } from 'lucide-react';
 import { useState } from 'react';
-import { REPORT_LENGTH, sendReport } from '../../runtime/account';
+import { MAX_REPORT_LENGTH } from '../../contracts/admin';
+import { sendReport } from '../../runtime/account';
 import { describeFailure } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
 import { useToast } from '../toast';
@@ -11,7 +12,7 @@ export function ReportSection() {
   const [text, setText] = useState('');
   const { busy, failure, run } = useAttempt();
   const length = text.trim().length;
-  const over = length > REPORT_LENGTH;
+  const over = length > MAX_REPORT_LENGTH;
 
   const send = () =>
     run(async () => {
@@ -31,8 +32,8 @@ export function ReportSection() {
           value={text}
           onChange={setText}
           placeholder="예: 이미지 하나가 열리지 않아요."
-          hint={`${length.toLocaleString('ko-KR')} / ${REPORT_LENGTH.toLocaleString('ko-KR')}자`}
-          error={over ? `${REPORT_LENGTH.toLocaleString('ko-KR')}자까지 보낼 수 있어요.` : undefined}
+          hint={`${length.toLocaleString('ko-KR')} / ${MAX_REPORT_LENGTH.toLocaleString('ko-KR')}자`}
+          error={over ? `${MAX_REPORT_LENGTH.toLocaleString('ko-KR')}자까지 보낼 수 있어요.` : undefined}
         />
         <Row kind="actions">
           <Button variant="secondary" size="sm" icon={Send} busy={busy} disabled={length === 0 || over} onClick={() => void send()}>

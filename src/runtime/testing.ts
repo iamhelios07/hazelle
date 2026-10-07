@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
+import { RELAY_HEADER } from '../contracts/http';
 import type { Card } from '../engine/import/types';
 import type { HttpRequest } from '../connectors/types';
 import { Lua } from '../engine/lua/run';
@@ -91,12 +92,12 @@ export function stubRelay(answer: Relay): { at: number; sent: HttpRequest }[] {
   return log;
 }
 
-export const upstream = (status: number, body: unknown) => Response.json(body, { status, headers: { 'x-relay': 'upstream' } });
+export const upstream = (status: number, body: unknown) => Response.json(body, { status, headers: { [RELAY_HEADER]: 'upstream' } });
 
 export const inTurn = (answers: (Response | null)[]): Relay => () => answers.shift() ?? null;
 
 export const saying = (text: string) =>
-  new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { headers: { 'x-relay': 'upstream' } });
+  new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { headers: { [RELAY_HEADER]: 'upstream' } });
 
 export async function answerable(session: Session): Promise<void> {
   const model = { id: 'm', name: 'M', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };

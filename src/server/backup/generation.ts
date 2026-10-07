@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
-import type { Phase } from '../account-store';
+import type { AccountState, RestorePhase } from '../../contracts/admin';
 import { ACCOUNT_SCHEMA_VERSION, RETENTION_MS, snapshotPath } from '../db/account-db';
 import { digest, fsyncPath, makeDirs } from '../db/durable';
 import type { Services } from '../http';
@@ -37,9 +37,9 @@ export type Manifest = {
   service: Artifact;
   migrations: string[];
   accountSchema: number;
-  accounts: { incarnation: string; state: 'active' | 'restoring' | 'leaving'; baseline: string | null; pictureBytes: number }[];
+  accounts: { incarnation: string; state: AccountState; baseline: string | null; pictureBytes: number }[];
   snapshots: (Artifact & { id: string; incarnation: string })[];
-  operations: { id: number; incarnation: string; phase: Phase; verified: boolean; checkpoint: string | null; target: string | null }[];
+  operations: { id: number; incarnation: string; phase: RestorePhase; verified: boolean; checkpoint: string | null; target: string | null }[];
   pictures: string[];
 };
 

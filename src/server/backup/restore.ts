@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import type { ExecutionContext } from 'hono';
-import type { Phase } from '../account-store';
+import type { RestorePhase } from '../../contracts/admin';
 import { serviceReads } from '../account-store';
 import { accountPath, accountRegistry, installSnapshot, snapshotPath } from '../db/account-db';
 import { digest, fsyncPath, makeDirs } from '../db/durable';
@@ -25,7 +25,7 @@ import { POOL, readManifest, type Manifest } from './generation';
 // account names; the server must not start until this has finished. Pending operations are then resolved through the
 // live server's own lifecycle code, and every account gets a fresh timeline, so a device holding an older one re-pulls.
 
-const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
+const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
 async function gunzipTo(source: string, target: string) {
   makeDirs(dirname(target));
@@ -50,7 +50,7 @@ async function verify(generation: string, manifest: Manifest) {
   for (const picture of manifest.pictures) await check(join(generation, '..', POOL, picture), picture);
 }
 
-export type Restored = { accounts: number; pictures: number; operations: { id: number; phase: Phase }[]; deleted: number };
+export type Restored = { accounts: number; pictures: number; operations: { id: number; phase: RestorePhase }[]; deleted: number };
 
 export async function restoreGeneration(generation: string, dataDir: string, migrationsDir: string): Promise<Restored> {
   const manifest = await readManifest(generation);
@@ -102,7 +102,7 @@ export async function restoreGeneration(generation: string, dataDir: string, mig
   try {
     const operations: Restored['operations'] = [];
     for (const { id } of manifest.operations) {
-      const { phase } = (await db.prepare('SELECT phase FROM restores WHERE id = ?').bind(id).first<{ phase: Phase }>())!;
+      const { phase } = (await db.prepare('SELECT phase FROM restores WHERE id = ?').bind(id).first<{ phase: RestorePhase }>())!;
       const ended = BEFORE_ARMED.includes(phase) ? await cancelRestore(env, id) : await runRestore(env, id);
       if (ended === null || ended === 'too-late' || !ended.verified) throw new Error(`restore: operation ${id} did not end (${JSON.stringify(ended)})`);
       operations.push({ id, phase: ended.phase });

@@ -1,7 +1,8 @@
 import { Ban, HardDrive, History, MoreHorizontal, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import type { AccountState } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
-import { liftSuspension, removeAccount, sendNotice, suspend, type AccountState, type AdminAccount, type OwnCap } from '../../runtime/admin';
+import { liftSuspension, removeAccount, sendNotice, suspend, type AdminAccount, type OwnCap } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';

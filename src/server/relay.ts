@@ -1,3 +1,4 @@
+import { RELAY_HEADER } from '../contracts/http';
 import { PolicyRefusal } from './ssrf';
 
 export type UpstreamInit = {
@@ -91,7 +92,7 @@ export async function forward(upstream: Upstream, body: unknown, signal: AbortSi
   response.headers.forEach((value, name) => {
     if (!DROPPED_RESPONSE_HEADERS.has(name)) headers.set(name, value);
   });
-  headers.set('x-relay', 'upstream');
+  headers.set(RELAY_HEADER, 'upstream');
   headers.set('cache-control', 'no-store');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
@@ -119,5 +120,5 @@ function outboundHeaders(input: Record<string, string>): Headers {
 }
 
 function refuse(status: number, error: RelayError, detail: Record<string, unknown> = {}): Response {
-  return Response.json({ error, ...detail }, { status, headers: { 'x-relay': 'error', 'cache-control': 'no-store' } });
+  return Response.json({ error, ...detail }, { status, headers: { [RELAY_HEADER]: 'error', 'cache-control': 'no-store' } });
 }

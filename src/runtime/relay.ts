@@ -1,3 +1,5 @@
+import { RELAY_HEADER } from '../contracts/http';
+import { HEAD, DATA, END, PING } from '../contracts/streams';
 import { providerMessage } from '../connectors/errors';
 import { isRecord } from '../connectors/values';
 import type { HttpRequest } from '../connectors/types';
@@ -35,7 +37,7 @@ async function send(request: HttpRequest, signal?: AbortSignal): Promise<Respons
 }
 
 async function sourced(response: Response): Promise<Response | RelayFailure> {
-  const source = response.headers.get('x-relay');
+  const source = response.headers.get(RELAY_HEADER);
   if (source === 'upstream') return response;
   const code = await errorCode(response);
   return source === 'error' ? { kind: 'relay', code } : { kind: 'app', code };
@@ -147,11 +149,6 @@ async function reach(id: string, from: number, tries: number, signal: AbortSigna
   }
 }
 
-// Frame types and layout as server/stream-box writes them.
-const HEAD = 1;
-const DATA = 2;
-const END = 3;
-const PING = 4;
 const NO_BODY = new Set([101, 204, 205, 304]);
 
 async function unframe(call: StreamCall, body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<Response | RelayFailure> {
@@ -212,7 +209,6 @@ async function* framesOf(id: string, first: ReadableStream<Uint8Array>, signal: 
   }
 }
 
-// [u32 length][u8 type][u32 seq][body], as server/stream-box writes them.
 async function* split(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   let buffer = new Uint8Array(0);

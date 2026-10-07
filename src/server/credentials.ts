@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
+import type { AccountState } from '../contracts/admin';
 import type { Db } from './db/service-db';
-import { fail, sha256Hex, type AppEnv, type State } from './http';
+import { fail, sha256Hex, type AppEnv } from './http';
 
 export type Method = 'password' | 'recovery';
 export type StoredAccount = {
@@ -12,7 +13,7 @@ export type StoredAccount = {
   locked_until: number | null;
   suspended_at: number | null;
   incarnation: string;
-  state: State;
+  state: AccountState;
 };
 
 // 256 bits in base64: what the client derives from the password or the recovery key.

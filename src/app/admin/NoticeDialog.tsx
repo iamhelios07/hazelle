@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { MAX_NOTICE_LENGTH } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
-import { NOTICE_LENGTH } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { useAttempt } from '../common/useAttempt';
 import { Button, Callout, Dialog, TextField } from '../ui';
@@ -26,7 +26,7 @@ export function NoticeDialog({ title, note, label, optional = false, placeholder
   const [text, setText] = useState('');
   const { busy, failure, run } = useAttempt();
   const length = text.trim().length;
-  const over = length > NOTICE_LENGTH;
+  const over = length > MAX_NOTICE_LENGTH;
   const submit = () =>
     run(async () => {
       const sent = await send(text);
@@ -55,8 +55,8 @@ export function NoticeDialog({ title, note, label, optional = false, placeholder
         value={text}
         onChange={setText}
         placeholder={placeholder}
-        hint={`${length.toLocaleString('ko-KR')} / ${NOTICE_LENGTH.toLocaleString('ko-KR')}자`}
-        error={over ? `${NOTICE_LENGTH.toLocaleString('ko-KR')}자까지 보낼 수 있어요.` : undefined}
+        hint={`${length.toLocaleString('ko-KR')} / ${MAX_NOTICE_LENGTH.toLocaleString('ko-KR')}자`}
+        error={over ? `${MAX_NOTICE_LENGTH.toLocaleString('ko-KR')}자까지 보낼 수 있어요.` : undefined}
       />
       {failure && (
         <Callout tone="warn" alert>

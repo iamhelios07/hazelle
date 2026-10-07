@@ -1,6 +1,7 @@
+import type { AccountState } from '../contracts/admin';
 // The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
 
-export type Life = { state: 'active' | 'restoring' | 'leaving' | 'gone'; timeline: string | null; operation: number | null };
+export type Life = { state: AccountState | 'gone'; timeline: string | null; operation: number | null };
 export type Unavailable = { unavailable: true };
 // unavailable: the wake's service read failed, timed out or answered something that is neither a row nor no row, or
 // the account's file is missing, corrupt or of a newer schema.
@@ -9,7 +10,6 @@ export type Write = { id: string; kind: string; parent: string | null; body: str
 export type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
 // count: the first page of a bootstrap asks how many changes the whole bootstrap holds, for a bar.
 export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null; count: boolean };
-export type Phase = 'begun' | 'fenced' | 'checkpointed' | 'targeted' | 'armed' | 'rewound' | 'done' | 'failed' | 'cancelled';
 export type FeedPage = { timeline: string; bytes: number; until: number | null; changes: Change[]; cursor: number; more: boolean; total?: number };
 type WrongPhase = { wrongPhase: true };
 

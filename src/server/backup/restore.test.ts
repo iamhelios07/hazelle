@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { serviceReads, type Phase } from '../account-store';
+import type { RestorePhase } from '../../contracts/admin';
+import { serviceReads } from '../account-store';
 import { accountRegistry } from '../db/account-db';
 import { openDatabase, serviceDb, type Db, type Statement } from '../db/service-db';
 import { diskBucket } from '../files/disk-bucket';
@@ -40,7 +41,7 @@ const emptyDir = () => {
 class Stop extends Error {}
 
 // env whose run throws right after the operation's phase moved to `phase`, leaving the rows there.
-function stoppingAt(phase: Phase): Services {
+function stoppingAt(phase: RestorePhase): Services {
   const db: Db = {
     ...t.env.db,
     prepare: (sql) => {
@@ -67,7 +68,7 @@ async function signedUp(username: string) {
 
 // An account holding X 'old' in a baseline from an hour ago, X 'mid' in a newer baseline, then X 'new', and a restore
 // to the first baseline left at `phase`: 'old' only comes back by installing the target, 'new' only from the checkpoint.
-async function leftAt(username: string, phase: Phase) {
+async function leftAt(username: string, phase: RestorePhase) {
   const now = Date.now();
   t.clock.now = () => now - HOUR_MS;
   const user = await signedUp(username);

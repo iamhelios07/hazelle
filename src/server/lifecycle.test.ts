@@ -1,6 +1,7 @@
 import { rmSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Phase, Write } from './account-store';
+import type { RestorePhase } from '../contracts/admin';
+import type { Write } from './account-store';
 import { expireSnapshots } from './backup/snapshots';
 import { snapshotPath, type Stores } from './db/account-db';
 import type { Db, Result, Statement } from './db/service-db';
@@ -30,7 +31,7 @@ const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const BEFORE: Record<string, string> = { [A]: 'new', [B]: 'b' };
 const AT_TARGET: Record<string, string> = { [A]: 'old' };
-const BEFORE_ARMED: Phase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
+const BEFORE_ARMED: RestorePhase[] = ['begun', 'fenced', 'checkpointed', 'targeted'];
 
 class Crash extends Error {}
 
@@ -180,7 +181,7 @@ async function reported(accountId: string, cookie: string) {
 }
 
 const account = (id: string) => t.env.db.prepare('SELECT incarnation, state, timeline, operation FROM accounts WHERE id = ?').bind(id).first<{ incarnation: string; state: string; timeline: string; operation: number | null }>();
-const operation = (id: number) => t.env.db.prepare('SELECT phase, verified, target, error FROM restores WHERE id = ?').bind(id).first<{ phase: Phase; verified: number; target: string | null; error: string | null }>();
+const operation = (id: number) => t.env.db.prepare('SELECT phase, verified, target, error FROM restores WHERE id = ?').bind(id).first<{ phase: RestorePhase; verified: number; target: string | null; error: string | null }>();
 const logged = async (action: string, operation?: number) =>
   (await t.env.db
     .prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = ?1 AND (?2 IS NULL OR json_extract(detail, '$.operation') = ?2)")
@@ -613,7 +614,7 @@ describe('an account id used again', () => {
   });
 });
 
-function pausedAt(phase: Phase) {
+function pausedAt(phase: RestorePhase) {
   return watched(async (what) => {
     const reached = await t.env.db.prepare('SELECT 1 FROM restores WHERE phase = ? AND verified = 0').bind(phase).first();
     if (reached) throw new Crash(what);

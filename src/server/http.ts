@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import type { AccountState } from '../contracts/admin';
 import type { Refused } from './account-store';
 import type { Backups } from './backup/backups';
 import type { Stores } from './db/account-db';
@@ -9,10 +10,9 @@ import type { Limiter } from './limits';
 import type { Upstream } from './relay';
 import type { Streams } from './stream-registry';
 
-export type State = 'active' | 'restoring' | 'leaving';
 // incarnation: the server-made id of the account's data (migrations/0001_baseline.sql). bytesCap: the cap as this
 // request's session read it, null for none. admin: the installation row names this account as the operator.
-export type Account = { id: string; username: string; suspended: boolean; incarnation: string; state: State; bytesCap: number | null; admin: boolean };
+export type Account = { id: string; username: string; suspended: boolean; incarnation: string; state: AccountState; bytesCap: number | null; admin: boolean };
 // Account and object ids are UUIDs made by the client.
 export const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

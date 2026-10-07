@@ -1,17 +1,15 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import type { Phase } from './account-store';
+import { type AccountState, type RestorePhase, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
 import { RETENTION_MS, StoreUnavailable } from './db/account-db';
 import { fileBlocks } from './files';
 import type { Db, SqlValue, Statement } from './db/service-db';
-import { fail, ID, readObject, refused, type AppEnv, type Services, type State } from './http';
+import { fail, ID, readObject, refused, type AppEnv, type Services } from './http';
 import { beginRestore, cancelRestore, leaveAccount, restoreActions, runRestore, store, undoable } from './lifecycle';
 import { requireSession } from './session';
 
-const MAX_REPORT_LENGTH = 4000;
 // Reports are plaintext rows no byte cap counts, so one account's unresolved ones are bounded.
 const MAX_OPEN_REPORTS = 20;
-const MAX_NOTICE_LENGTH = 2000;
 const PAGE_ROWS = 100;
 // How long a resolved report and a log row are kept, as the privacy page says. An open report stays whatever its age.
 const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
@@ -122,7 +120,7 @@ type AccountRow = {
   username: string;
   createdAt: number;
   suspended: number;
-  state: State;
+  state: AccountState;
   incarnation: string;
   fileBytes: number;
   own_bytes_cap: number;
@@ -333,7 +331,7 @@ admin.get('/accounts/:id/restores', async (c) => {
      FROM restores r JOIN accounts ON accounts.incarnation = r.incarnation WHERE accounts.id = ?1 ORDER BY r.id DESC`,
   )
     .bind(c.req.param('id'), Date.now())
-    .all<{ phase: Phase; verified: number; canUndo: number; ended_at: number | null }>();
+    .all<{ phase: RestorePhase; verified: number; canUndo: number; ended_at: number | null }>();
   return c.json({
     restores: results.map(({ ended_at, canUndo, ...row }) => ({
       ...row,

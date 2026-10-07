@@ -1,3 +1,4 @@
+import { MAX_FILE_IDS } from '../contracts/files';
 import { openFile, sealFile, type FileRef } from '../vault/files';
 import type { ApiResult, api as realApi } from './api';
 import type { ObjectStore } from './store';
@@ -7,7 +8,6 @@ type Missing = { missing: Set<string>; maxBytes: number };
 
 // A PUT is three or four D1 round trips, so a window this wide keeps a move at a few pictures a second on a far link.
 const UPLOADS = 12;
-const ASKED = 1000;
 const REFUSED = new Set(['too-large', 'file-blocked', 'files-full']);
 
 // A file is sealed by its content, so one the server already holds, from this account or any other, is never sent
@@ -51,12 +51,11 @@ export class Files {
   }
 
   // The ids the server holds no readable file for (never stored, or blocked) and the largest sealed body it takes.
-  // Asked ASKED at a time, the server's MAX_ASKED (server/files).
   async missing(ids: string[]): Promise<ApiResult<Missing>> {
     const missing = new Set<string>();
     let maxBytes = 0;
-    for (let start = 0; start < ids.length; start += ASKED) {
-      const asked = await this.store.reaching(() => this.request<{ missing: string[]; maxBytes: number }>('POST', 'files/missing', { ids: ids.slice(start, start + ASKED) }));
+    for (let start = 0; start < ids.length; start += MAX_FILE_IDS) {
+      const asked = await this.store.reaching(() => this.request<{ missing: string[]; maxBytes: number }>('POST', 'files/missing', { ids: ids.slice(start, start + MAX_FILE_IDS) }));
       if (!asked.ok) return asked;
       for (const id of asked.data.missing) missing.add(id);
       maxBytes = asked.data.maxBytes;

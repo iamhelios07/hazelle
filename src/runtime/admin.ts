@@ -1,3 +1,4 @@
+import type { BackupWarning, AccountState, RestoreAction, RestorePhase } from '../contracts/admin';
 import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 import { page } from './pages';
 
@@ -6,7 +7,6 @@ import { page } from './pages';
 // The caps every account has unless given its own; null is no cap. fileBytes: every account's pictures together.
 // backupAgeHours: since the newest backup copied off-site, null for none yet. warnings: what the server says needs the
 // operator (server/backup/freshness).
-export type BackupWarning = 'backup-stale' | 'disk-full';
 export type Service = {
   signupCap: number;
   accountBytesCap: number | null;
@@ -19,8 +19,6 @@ export type Service = {
 };
 // An account's own cap: bytes, null for none, or 'default' for the service's.
 export type OwnCap = number | null | 'default';
-// restoring: held by a restore until it ends. leaving: its deletion stopped before the end; removing it again finishes it.
-export type AccountState = 'active' | 'restoring' | 'leaving';
 // bytes and disk (what the account's store takes on the server) are null when its store was not read: it did not answer in
 // time, or the account is not active.
 export type AdminAccount = {
@@ -76,17 +74,12 @@ export async function readServiceUsage(progress: (totals: ServiceUsage) => void,
 // reason: a notice to the account, sent with the suspension.
 export const suspend = (account: string, reason: string) => api<undefined>('PUT', `admin/accounts/${account}/suspended`, { suspended: true, reason });
 export const liftSuspension = (account: string) => api<undefined>('PUT', `admin/accounts/${account}/suspended`, { suspended: false });
-// Plaintext, to one account or, with null, to every account there now. The server's MAX_NOTICE_LENGTH (server/admin).
-export const NOTICE_LENGTH = 2000;
+// Plaintext, to one account or, with null, to every account there now.
 export const sendNotice = (to: string | null, text: string) => api<undefined>('POST', 'admin/notices', { to, text });
 export const setCaps = (account: string, caps: Pick<AdminAccount, 'bytesCap' | 'fileBytesCap'>) => api<undefined>('PUT', `admin/accounts/${account}/caps`, caps);
 // Also finishes the deletion of a leaving account.
 export const removeAccount = (account: string) => api<undefined>('DELETE', `admin/accounts/${account}`, undefined, undefined, SLOW_ROUTE_WAIT);
 
-// A restore rewinds an account's stored objects to a time; an undo rewinds them to just before a restore. Each runs only
-// on a report that account sent. The phases run in order; from armed on, a restore can only go forward.
-export type RestorePhase = 'begun' | 'fenced' | 'checkpointed' | 'targeted' | 'armed' | 'rewound' | 'done' | 'failed' | 'cancelled';
-export type RestoreAction = 'resume' | 'cancel' | 'finalize';
 // at: the time asked for, null for an undo. targetAt: when the snapshot it rewinds to was taken, null until chosen.
 // verified: the account was seen open again after done. actions: what the server allows in this phase.
 export type Restore = {
@@ -127,6 +120,4 @@ export const readReports = (before: number | null) => page<'reports', Report>('a
 export const resolveReport = (id: number, reply = '') => api<undefined>('POST', `admin/reports/${id}/resolve`, { reply });
 export const readLog = (before: number | null) => page<'log', LogRow>('admin/log', 'log', before);
 
-// A stored file's id: the hex SHA-256 its sealed body hashes to (server/files FILE_ID).
-export const FILE_ID = /^[0-9a-f]{64}$/;
 export const setFileBlocked = (file: string, blocked: boolean) => api<undefined>('PUT', `admin/files/${file}/blocked`, { blocked });

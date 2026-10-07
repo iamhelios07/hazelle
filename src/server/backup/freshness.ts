@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { statfs } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { BackupWarning } from '../../contracts/admin';
 import type { Services } from '../http';
 import { COPIED, generationsDir, listGenerations, MANIFEST } from './generation';
 
@@ -11,10 +12,9 @@ const HOUR_MS = 60 * 60 * 1000;
 const STALE_HOURS = 36;
 const MIN_FREE_PERCENT = 20;
 
-export type Warning = 'backup-stale' | 'disk-full';
 // backupAgeHours: since the newest complete generation was captured, null when none is. diskFreePercent: the lowest
 // among the data directory and files/, which may be a filesystem of its own.
-export type Freshness = { backupAgeHours: number | null; diskFreePercent: number; warnings: Warning[] };
+export type Freshness = { backupAgeHours: number | null; diskFreePercent: number; warnings: BackupWarning[] };
 // Free space of the filesystem holding path, in percent. Tests give a fixed one: the machine running them has a disk of its own.
 export type DiskFree = (path: string) => Promise<number>;
 
@@ -33,7 +33,7 @@ export async function freshness(env: Services, dataDir: string, now: number, fre
   // With no complete generation yet, the installation's own age is how long it has gone without one.
   const unbackedHours =
     backupAgeHours ?? (now - (await env.db.prepare('SELECT created_at FROM installation').first<number>('created_at'))!) / HOUR_MS;
-  const warnings: Warning[] = [];
+  const warnings: BackupWarning[] = [];
   if (unbackedHours > STALE_HOURS) warnings.push('backup-stale');
   if (diskFreePercent < MIN_FREE_PERCENT) warnings.push('disk-full');
   return { backupAgeHours, diskFreePercent, warnings };

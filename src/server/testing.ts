@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExecutionContext } from 'hono';
+import { ACCOUNT_HEADER } from '../contracts/http';
 import { serviceReads } from './account-store';
 import { backups } from './backup/backups';
 import { accountRegistry } from './db/account-db';
@@ -47,7 +48,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   // given. A Uint8Array body goes as bytes.
   const holding = async (cookie: string): Promise<Record<string, string>> => {
     const account = await env.db.prepare('SELECT account_id FROM sessions WHERE token_hash = ?').bind(await sha256Hex(cookie.split('=')[1]!)).first<string>('account_id');
-    return account ? { cookie, 'x-account': account } : { cookie };
+    return account ? { cookie, [ACCOUNT_HEADER]: account } : { cookie };
   };
   const send = async (method: string, path: string, body?: unknown, cookie?: string) => {
     const bytes = body instanceof Uint8Array;

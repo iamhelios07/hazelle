@@ -1,6 +1,7 @@
 import { History, MoreHorizontal, Play, Undo2, X } from 'lucide-react';
 import { useState } from 'react';
-import { beginRestore, continueRestore, readRestores, readSnapshotTime, type Report, type Restore, type RestoreAction, type RestorePhase, type RestoreRun } from '../../runtime/admin';
+import type { RestoreAction, RestorePhase } from '../../contracts/admin';
+import { beginRestore, continueRestore, readRestores, readSnapshotTime, type Report, type Restore, type RestoreRun } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
 import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';
