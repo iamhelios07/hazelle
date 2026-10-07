@@ -22,7 +22,7 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   const store = {
     list: (kind: Kind) => [...items.values()].filter((item) => item.kind === kind),
     get: (kind: Kind, id: string) => items.get(id)?.kind === kind ? items.get(id)! : null,
-    projection: () => null,
+    projections: { get: () => null },
     unreadable: () => 0,
     subscribe: (listener: (changes: readonly StoreChange[]) => void) => { listeners.add(listener); return () => listeners.delete(listener); },
   } as unknown as ObjectStore;

@@ -43,7 +43,7 @@ function page(initial: Stored<Kind>[]) {
   const store = {
     list,
     get: (kind: Kind, id: string) => items.get(id)?.kind === kind ? items.get(id)! : null,
-    projection: (id: string) => models.has(id) ? { model: models.get(id)! } : null,
+    projections: { get: (id: string) => models.has(id) ? { model: models.get(id)! } : null },
     unreadable: () => 0,
     subscribe: (listener: (changes: readonly StoreChange[]) => void) => { listeners.add(listener); return () => listeners.delete(listener); },
     retainChat: retain,

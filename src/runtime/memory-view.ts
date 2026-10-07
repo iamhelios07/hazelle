@@ -12,7 +12,7 @@ import { wouldSend } from './turn-context';
 export type ChatSent = { chat: Chat; scope: ChatScope; read: ChatRead; tokens: number[]; standing: Standing | null };
 
 export async function chatSent(session: Pick<Session, 'store' | 'read'>, id: string, asker: 'memory' | 'view', memory: Memory | null): Promise<ChatSent | { kind: 'tokenizer' } | null> {
-  if (!(await session.store.evaluated(id))) return null;
+  if (!(await session.store.projections.evaluate(id))) return null;
   const stored = session.store.get('chat', id);
   const model = session.read.chat(id).snapshot();
   if (!stored || !model) return null;

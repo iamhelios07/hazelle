@@ -49,7 +49,7 @@ describe('a detached call', () => {
     await vi.waitFor(() => expect(first.store.list('stream')).toHaveLength(1));
     first.close();
     expect(await turn).toBeNull();
-    expect(first.store.projection(chat)).toBeNull();
+    expect(first.store.projections.get(chat)).toBeNull();
 
     await writer.write(delta('traveler.'));
     await writer.write(ending);

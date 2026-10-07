@@ -54,7 +54,7 @@ function greetingWrites(chat: string, { choices, selected }: Greetings, at: numb
 // other whole.
 export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<string>> {
   return store.withChat(item.id, async () => {
-    const current = store.projection(item.id)?.model;
+    const current = store.projections.get(item.id)?.model;
     if (!current) return { ok: false, error: 'gone' };
     item = current;
     const upTo = item.messages.findIndex((candidate) => candidate.id === message);

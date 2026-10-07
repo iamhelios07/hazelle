@@ -132,7 +132,7 @@ describe('selective account reads', () => {
     second.release();
     expect(store.scopeState('a')).toBe('unloaded');
     expect(read.chat('a').snapshot()).toBeNull();
-    expect(store.projection('a')).toBeNull();
+    expect(store.projections.get('a')).toBeNull();
     expect(() => store.get('entry', 'a1')).toThrow('not loaded');
     expect(read.chats.snapshot()[0]?.preview).toBe('held');
     read.close();
@@ -186,7 +186,7 @@ describe('selective account reads', () => {
       await vi.advanceTimersByTimeAsync(1000);
       expect(await lease.ready).toBeNull();
       expect(store.waiting()).toBe(false);
-      expect(store.projection('a')?.model.messages).toHaveLength(1);
+      expect(store.projections.get('a')?.model.messages).toHaveLength(1);
       lease.release();
     } finally {
       vi.useRealTimers();
@@ -210,7 +210,7 @@ describe('selective account reads', () => {
     lease.release();
     expect(await lease.ready).toEqual({ ok: false, error: 'stopped' });
     expect(store.scopeState('a')).toBe('unloaded');
-    expect(store.projection('a')).toBeNull();
+    expect(store.projections.get('a')).toBeNull();
   });
 
   it('refreshes held memory on a conflict before reapplying the edit', async () => {
@@ -225,6 +225,47 @@ describe('selective account reads', () => {
     expect(saved.ok && saved.data.value.threads.map(({ id }) => id)).toEqual(['first', 'second']);
     release();
     releasePhone();
+  });
+
+  it('cancels projection work only at the last lease and drops a late answer after release', async () => {
+    const { store, seed } = await account();
+    await seed('a', 'chat', null, chat);
+    await seed('a1', 'entry', 'a', message('original'));
+    await store.pull();
+    const first = store.retainChat('a', { summarize: false });
+    const second = store.retainChat('a', { summarize: false });
+    await Promise.all([first.ready, second.ready]);
+    const display = store.evaluation.display.bind(store.evaluation);
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    let signal: AbortSignal | undefined;
+    vi.spyOn(store.evaluation, 'display').mockImplementationOnce(async (...args) => {
+      const answer = await display(...args);
+      signal = args[3];
+      await gate;
+      return answer;
+    });
+    await seed('a2', 'entry', 'a', message('late'));
+    const refreshing = store.refreshChat('a');
+    try {
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      first.release();
+      expect(signal!.aborted).toBe(false);
+      second.release();
+      expect(signal!.aborted).toBe(true);
+      expect(store.projections.get('a')).toBeNull();
+      finish();
+      await refreshing;
+      expect(store.scopeState('a')).toBe('unloaded');
+      expect(store.projections.get('a')).toBeNull();
+      expect(store.get('summary', summaryId('a'))).toBeNull();
+    } finally {
+      finish();
+      first.release();
+      second.release();
+      store.close();
+      await refreshing;
+    }
   });
 
   it('checks a detached result inside its loaded scope, waiting out a dropped connection, without resuming an already saved reply', async () => {
@@ -274,7 +315,7 @@ describe('selective account reads', () => {
     await seed('a2', 'entry', 'a', message('two'));
     expect(await store.refreshChat('a')).toBeNull();
     blocked = true;
-    const saving = store.saveSummary('a');
+    const saving = store.projections.save('a');
     await vi.waitFor(() => expect(waiting).toBe(true));
     await seed('a3', 'entry', 'a', message('three'));
     expect(await store.refreshChat('a')).toBeNull();
@@ -496,9 +537,9 @@ describe('per-chat read models', () => {
     expect((await latest).ok).toBe(true);
     finish();
     await old;
-    await store.evaluated('a');
+    await store.projections.evaluate('a');
     expect(seen).toEqual(['latest']);
-    await store.saveSummary('a');
+    await store.projections.save('a');
     expect(read.summary('a').snapshot()?.preview).toBe('latest');
     read.close();
     release();
@@ -654,8 +695,8 @@ describe('per-chat read models', () => {
     await store.update('chat', 'a', (current) => ({ ...current, title: 'A' }));
     expect(read.chats.snapshot().map(({ id }) => id)).toEqual(['b', 'a']);
     expect(read.chat('a').snapshot()?.messages).toBe(messages);
-    await store.saveSummary('a');
-    await store.saveSummary('b');
+    await store.projections.save('a');
+    await store.projections.save('b');
     const summaries = read.chats.snapshot();
     const library = read.library.snapshot();
     await store.upsert('settings', () => ({ models: {} }));

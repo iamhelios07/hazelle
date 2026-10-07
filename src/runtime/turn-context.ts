@@ -97,7 +97,7 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: 
   // What the prompt reads may change while it is evaluated: it is gathered and evaluated again once, so a save landing
   // mid-flight does not cost memory its round.
   for (let tries = 0; tries < 2; tries++) {
-    const projection = await session.store.evaluated(chat);
+    const projection = await session.store.projections.evaluate(chat);
     if (!projection) return null;
     const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
     const revisions = reads.map((read) => session.store.revision(read));

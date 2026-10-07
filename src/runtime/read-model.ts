@@ -94,7 +94,7 @@ export class ReadModels {
   chat(id: string): Snapshot<ChatModel | null> {
     let snapshot = this.byChat.get(id);
     if (!snapshot) {
-      snapshot = new Snapshot(this.store.projection(id)?.model ?? null);
+      snapshot = new Snapshot(this.store.projections.get(id)?.model ?? null);
       this.byChat.set(id, snapshot);
     }
     return snapshot;
@@ -148,7 +148,7 @@ export class ReadModels {
   }
 
   async displayed(id: string): Promise<ScreenChat | null> {
-    await this.store.evaluated(id);
+    await this.store.projections.evaluate(id);
     const model = this.chat(id).snapshot();
     return model && { chat: model.chat, messages: withTurn(model.messages, null, id), display: model.display };
   }
@@ -160,7 +160,7 @@ export class ReadModels {
   }
 
   private changed(changes: readonly StoreChange[]) {
-    for (const [id, snapshot] of this.byChat) snapshot.set(this.store.projection(id)?.model ?? null);
+    for (const [id, snapshot] of this.byChat) snapshot.set(this.store.projections.get(id)?.model ?? null);
     const listsChanged = this.updateLists(changes);
     const kinds = new Set(changes.map((change) => change.kind));
     for (const [kind, snapshot] of this.byKind) {

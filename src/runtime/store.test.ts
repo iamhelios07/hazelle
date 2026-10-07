@@ -5,7 +5,8 @@ import { emptyMemory } from '../model/memory';
 import { randomBytes, toBase64 } from '../vault/aead';
 import { api } from './api';
 import { EvaluationFailed } from './evaluation';
-import { ObjectStore, ScopeUnavailable, type ChatLease, type PullProgress, type Write } from './store';
+import { ObjectStore, type PullProgress, type Write } from './store';
+import { ScopeUnavailable, type ChatLease } from './chat-scope';
 import { summaryId, summaryStale } from './summary';
 import { BATCH_LIMITS, testServer } from './testing';
 
@@ -84,13 +85,13 @@ describe('object store', () => {
     const ids = [crypto.randomUUID(), crypto.randomUUID()];
     const leases = ids.map((id) => store.retainChat(id, { created: true }));
     for (const lease of leases) expect(await lease.ready).toBeNull();
-    const summarizing = vi.spyOn(store, 'saveSummary');
+    const summarizing = vi.spyOn(store.projections, 'save');
     const entries: Write[] = ids.map((parent) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent, value: { type: 'delete', message: 'm', at: 0 } }));
     expect(await store.batch(entries, undefined, { unheld: true })).toEqual({ ok: true, data: null });
     const roots: Write[] = ids.map((id) => ({ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } }));
     expect(await store.batch(roots, undefined, { unheld: true })).toEqual({ ok: true, data: null });
     const fetched = vi.spyOn(globalThis, 'fetch');
-    expect(await store.summarizeChats(ids)).toBeNull();
+    expect(await store.projections.saveMany(ids)).toBeNull();
     expect(summarizing).not.toHaveBeenCalled();
     expect(fetched.mock.calls.map(([url, init]) => `${init?.method} ${String(url)}`)).toEqual(['POST /api/objects/batch']);
     for (const id of ids) {
@@ -98,7 +99,7 @@ describe('object store', () => {
       expect(summaryStale(store, id, summary)).toBe(false);
     }
     for (const lease of leases) lease.release();
-    expect(await store.summarizeChats(ids.slice(0, 1)).catch((error: unknown) => error)).toBeInstanceOf(ScopeUnavailable);
+    expect(await store.projections.saveMany(ids.slice(0, 1)).catch((error: unknown) => error)).toBeInstanceOf(ScopeUnavailable);
   });
 
   it('answers a held chat whose evaluation failed with that failure instead of throwing', async () => {
@@ -108,9 +109,9 @@ describe('object store', () => {
     expect(await lease.ready).toBeNull();
     vi.spyOn(store.evaluation, 'display').mockRejectedValue(new EvaluationFailed('down'));
     expect(await store.batch([{ type: 'create', kind: 'chat', id, parent: null, value: { title: null, character: null, models: {} } }], undefined, { unheld: true })).toEqual({ ok: true, data: null });
-    await store.evaluated(id).catch(() => null);
+    await store.projections.evaluate(id).catch(() => null);
     expect(store.scopeState(id)).toBe('failed');
-    expect(await store.summarizeChats([id])).toEqual({ ok: false, error: 'evaluation-unavailable' });
+    expect(await store.projections.saveMany([id])).toEqual({ ok: false, error: 'evaluation-unavailable' });
     lease.release();
   });
 
@@ -121,20 +122,20 @@ describe('object store', () => {
     for (const lease of leases) expect(await lease.ready).toBeNull();
     expect(await store.batch([message(a, 1), message(b, 1)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
     expect(await store.batch([root(a), root(b)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
-    await store.evaluated(a);
-    await store.evaluated(b);
-    const evaluated = store.evaluated.bind(store);
+    await store.projections.evaluate(a);
+    await store.projections.evaluate(b);
+    const evaluated = store.projections.evaluate.bind(store.projections);
     let grown = false;
     // The second chat's turn comes once the first's summary is captured; a's growth goes unheld, so nothing but the
     // pass under test could summarize it again.
-    vi.spyOn(store, 'evaluated').mockImplementation(async (chat) => {
+    vi.spyOn(store.projections, 'evaluate').mockImplementation(async (chat) => {
       if (chat === b && !grown) {
         grown = true;
         expect(await store.batch([message(a, 2)], undefined, { unheld: true })).toEqual({ ok: true, data: null });
       }
       return evaluated(chat);
     });
-    expect(await store.summarizeChats([a, b])).toBeNull();
+    expect(await store.projections.saveMany([a, b])).toBeNull();
     const summary = store.get('summary', summaryId(a))!.value;
     expect(summary.count).toBe(2);
     expect(summaryStale(store, a, summary)).toBe(false);
@@ -152,7 +153,7 @@ describe('object store', () => {
     expect((await phone.batch([message(a, 2)], undefined, { unheld: true })).ok).toBe(true);
     vi.spyOn(store, 'refreshChat').mockResolvedValue({ ok: false, error: 'unreadable' });
     await store.pull();
-    expect(await store.summarizeChats([a, b])).toBeNull();
+    expect(await store.projections.saveMany([a, b])).toBeNull();
     expect(store.get('summary', summaryId(a))).toBeNull();
     expect(store.get('summary', summaryId(b))!.value.count).toBe(1);
     for (const lease of leases) lease.release();
@@ -182,11 +183,11 @@ describe('object store', () => {
     expect((await phone.batch([message(a, 1), message(b, 1), root(a), root(b)], undefined, { unheld: true })).ok).toBe(true);
     await store.pull();
     const stop = new AbortController();
-    const evaluated = store.evaluated.bind(store);
+    const evaluated = store.projections.evaluate.bind(store.projections);
     // Armed once both are open: the stop lands inside the pass, before its first write.
     const pass = await store.withChats([a, b], async (ids) => {
-      vi.spyOn(store, 'evaluated').mockImplementation(async (chat) => { stop.abort(); return evaluated(chat); });
-      return await store.summarizeChats(ids, stop.signal) ?? { ok: true, data: null };
+      vi.spyOn(store.projections, 'evaluate').mockImplementation(async (chat) => { stop.abort(); return evaluated(chat); });
+      return await store.projections.saveMany(ids, stop.signal) ?? { ok: true, data: null };
     }, { signal: stop.signal, summarize: false });
     expect(pass).toEqual({ ok: false, error: 'stopped' });
     expect([a, b].map((id) => store.scopeState(id))).toEqual(['unloaded', 'unloaded']);
@@ -480,12 +481,43 @@ describe('writes shown before their answer', () => {
     const [mine, theirs] = [crypto.randomUUID(), crypto.randomUUID()];
     hold();
     const saving = store.create('entry', message('mine'), { id: mine, parent: chat.data.id });
-    await vi.waitFor(async () => expect((await store.evaluated(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([mine]));
+    await vi.waitFor(async () => expect((await store.projections.evaluate(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([mine]));
     expect(await phone.create('entry', message('theirs'), { id: theirs, parent: chat.data.id })).toMatchObject({ ok: true });
     await store.refreshChat(chat.data.id);
-    expect((await store.evaluated(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([theirs, mine]);
+    expect((await store.projections.evaluate(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([theirs, mine]);
     answer(true);
     expect(await saving).toMatchObject({ ok: true });
-    expect((await store.evaluated(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([theirs, mine]);
+    expect((await store.projections.evaluate(chat.data.id))?.model.messages.map(({ id }) => id)).toEqual([theirs, mine]);
+  });
+
+  it.each([false, true])('never saves pending text in a summary before its write is confirmed (lands: %s)', async (lands) => {
+    const { store, open, hold, answer, held } = await gated();
+    const chat = await store.create('chat', { title: null, character: null, models: {} });
+    if (!chat.ok) throw new Error(chat.error);
+    const id = chat.data.id;
+    await server.hold(store, id);
+    await store.projections.save(id);
+    const original = store.get('summary', summaryId(id))!;
+    const phone = await open();
+    hold();
+    const saving = store.create('entry', { type: 'message', role: 'user', text: 'pending text', at: 0, receipt: null }, { parent: id });
+    try {
+      await vi.waitFor(() => expect(held()).toBe(1));
+      expect((await store.projections.evaluate(id))?.summary.preview).toBe('pending text');
+      expect(await store.projections.save(id)).toBeNull();
+      expect(await store.projections.saveMany([id])).toBeNull();
+      expect(held()).toBe(1);
+      expect(store.get('summary', summaryId(id))?.rev).toBe(original.rev);
+      await phone.pull();
+      expect(phone.get('summary', summaryId(id))?.value.count).toBe(0);
+      answer(lands);
+      expect((await saving).ok).toBe(lands);
+      await store.projections.save(id);
+      await phone.pull();
+      expect(phone.get('summary', summaryId(id))?.value).toMatchObject({ count: lands ? 1 : 0, preview: lands ? 'pending text' : '' });
+    } finally {
+      answer(false);
+      await saving;
+    }
   });
 });

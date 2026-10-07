@@ -12,7 +12,8 @@ import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { generate, resume, type Reply } from './generate';
 import { stopStream } from './relay';
-import type { ChatLease, ObjectStore } from './store';
+import type { ObjectStore } from './store';
+import type { ChatLease } from './chat-scope';
 import { callOf, endCall, newCall } from './streams';
 
 // A continuation's text and reasoning start as those it continues. before:

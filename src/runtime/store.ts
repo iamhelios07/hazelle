@@ -9,7 +9,8 @@ import { codecValue, type CodecResult, type OpenItem, type SealItem } from './ob
 import { orderOwned } from './removal';
 import { GenerationChanged, SCOPED, type CachedScope, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
 import { Evaluation, EvaluationFailed, EvaluationStopped } from './evaluation';
-import { projectChat, summaryId, summaryStale, type Projection } from './summary';
+import { ChatProjections } from './summary';
+import { ScopeUnavailable, type ChatLease, type ScopeState } from './chat-scope';
 import { upgradeValue } from './upgrade';
 
 type Api = typeof realApi;
@@ -66,14 +67,7 @@ const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 // busy: the server's upload slots are all taken (server/files).
 const WAITED = new Set(['offline', 'account-restoring', 'store-unavailable', 'busy']);
 const waits = (result: ApiResult<unknown> | null): result is ApiFailure => result?.ok === false && WAITED.has(result.error);
-export type ScopeState = 'unloaded' | 'loading' | 'loaded' | 'failed';
 type Scope = { fold: ChatFold; opening: Promise<ApiFailure | null> | null; abort: AbortController; state: ScopeState; users: number; cursor: number; head: number; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null; summarize: boolean };
-export type ChatLease = { ready: Promise<ApiFailure | null>; release: () => void };
-
-export class ScopeUnavailable extends Error {
-  constructor(readonly chat: string | null) { super(`Chat scope is not loaded: ${chat ?? 'unknown'}`); }
-}
-
 // The server stays the only source of truth: writes go to it first, and a version conflict is resolved by pulling the
 // newer copy and applying the change again on top of it.
 export class ObjectStore {
@@ -102,9 +96,7 @@ export class ObjectStore {
   private readonly heads = new Map<string, number>();
   private readonly revisions = new Map<string, number>();
   readonly evaluation = new Evaluation();
-  private readonly projecting = new Map<string, Promise<Projection | null>>();
-  private readonly projections = new Map<string, Projection>();
-  private readonly summarizing = new Map<string, Promise<ApiFailure | null>>();
+  readonly projections: ChatProjections;
   private readonly behind = new Set<string>();
   private limits: Limits | null = null;
   private pulling: Promise<ApiFailure | null> | null = null;
@@ -132,7 +124,45 @@ export class ObjectStore {
     key: CryptoKey,
     private readonly request: Api,
     private readonly cache?: DeviceCache,
-  ) { this.codec = new ObjectCodec(accountId, key); }
+  ) {
+    this.codec = new ObjectCodec(accountId, key);
+    this.projections = new ChatProjections({
+      get: (kind, id) => this.get(kind, id),
+      children: (kind, parent) => this.children(kind, parent),
+      capture: (read) => this.capture(read),
+      revision: (read) => this.revision(read),
+      foldedChat: (chat) => this.foldedChat(chat),
+      entryHead: (chat) => this.entryHead(chat),
+      loadedHead: (chat) => this.loadedHead(chat),
+      shownMark: (chat) => this.shownMark(chat),
+    }, this.evaluation, {
+      epoch: () => this.epoch,
+      ending: () => this.ended.signal,
+      closing: this.closing.signal,
+      scope: (chat) => {
+        const scope = this.scopes.get(chat);
+        return scope && { signal: scope.abort.signal, state: scope.state, loading: scope.loading, error: scope.error };
+      },
+      held: () => this.scopes.keys(),
+      showing: (chat) => this.showing(chat),
+      refresh: (chat) => this.refreshChat(chat),
+      retain: (chat) => this.retainChat(chat),
+      write: async (writes, signal) => {
+        const result = await this.commit(writes.map((write) => this.step(write)), undefined, signal);
+        return result.ok ? null : result;
+      },
+      publish: (chat) => {
+        this.changes.push({ kind: 'projection', id: chat, parent: chat });
+        this.changed();
+      },
+      fail: (chat, signal, epoch, error) => {
+        const scope = this.scopes.get(chat);
+        return scope?.abort.signal === signal ? this.failScope(chat, scope, epoch, error) : this.codecFailure(error, epoch);
+      },
+      failure: (error, epoch) => this.codecFailure(error, epoch),
+      halted: (epoch) => this.halted(epoch),
+    });
+  }
 
   static async open(accountId: string, vaultKey: VaultKey, request: Api, cache?: DeviceCache, signal?: AbortSignal): Promise<ObjectStore> {
     const store = new ObjectStore(accountId, await objectKey(vaultKey), request, cache);
@@ -279,8 +309,7 @@ export class ObjectStore {
     this.byParent.clear();
     this.heads.clear();
     this.revisions.clear();
-    this.projections.clear();
-    this.projecting.clear();
+    this.projections.reset();
     this.unreadableCount = this.cursor = this.known = 0;
     this.bootstrap = null;
     this.bootstrapped = this.restored = false;
@@ -409,8 +438,7 @@ export class ObjectStore {
     this.overlays.clear();
     this.byKind.clear();
     this.byParent.clear();
-    this.projections.clear();
-    this.projecting.clear();
+    this.projections.close();
     this.scopes.clear();
     this.heads.clear();
     this.revisions.clear();
@@ -451,53 +479,6 @@ export class ObjectStore {
     return this.scopes.get(chat)!.fold.snapshot();
   }
 
-  projection(chat: string): Projection | null {
-    return this.scopeState(chat) === 'loaded' ? this.projections.get(chat) ?? null : null;
-  }
-
-  async evaluated(chat: string): Promise<Projection | null> {
-    const pending = this.projecting.get(chat);
-    if (pending) { await pending; return this.evaluated(chat); }
-    const loading = this.scopes.get(chat)?.loading;
-    if (loading) { if (await loading) return null; return this.evaluated(chat); }
-    if (this.scopeState(chat) !== 'loaded') return null;
-    const previous = this.projections.get(chat);
-    if (previous && previous.shown === this.shownMark(chat) && !summaryStale(this, chat, previous.summary, this.loadedHead(chat))) return previous;
-    const epoch = this.epoch;
-    const scope = this.scopes.get(chat)!;
-    const work = (async () => {
-      for (;;) {
-        const next = await projectChat(this, chat, AbortSignal.any([scope.abort.signal, this.ended.signal, this.closing.signal])).catch((error: unknown) => {
-          this.failScope(chat, scope, epoch, error);
-          throw error;
-        });
-        if (epoch !== this.epoch || this.scopes.get(chat) !== scope || scope.state !== 'loaded' || this.closing.signal.aborted) return null;
-        if (scope.loading) return this.projections.get(chat) ?? null;
-        if (next && (next.shown !== this.shownMark(chat) || summaryStale(this, chat, next.summary, this.loadedHead(chat)))) continue;
-        if (next) this.projections.set(chat, next);
-        else this.projections.delete(chat);
-        this.changes.push({ kind: 'projection', id: chat, parent: chat });
-        this.changed();
-        return next;
-      }
-    })();
-    this.projecting.set(chat, work);
-    let result: Projection | null;
-    try { result = await work; }
-    finally { if (this.projecting.get(chat) === work) this.projecting.delete(chat); }
-    return scope.loading ? this.evaluated(chat) : result;
-  }
-
-  // A write or a pull is done once the server took it; the held chats' projections follow. Whoever reads a chat as the
-  // write left it waits for evaluated(chat), and a projection that fails is shown on its chat's scope, never as the
-  // write's failure.
-  private refreshHeld() {
-    const epoch = this.epoch;
-    for (const [chat, scope] of this.scopes) {
-      if (scope.state === 'loaded' && !scope.loading) void this.evaluated(chat).catch((error: unknown) => void this.codecFailure(error, epoch));
-    }
-  }
-
   // A held chat that could not be opened or evaluated: its screen says so and offers 다시 시도 (useChatModel).
   private failScope(chat: string, scope: Scope, epoch: number, error: unknown): ApiFailure {
     const failure = this.codecFailure(error, epoch);
@@ -527,7 +508,7 @@ export class ObjectStore {
     // gets one when a later holder asked for it: that holder's screen shows the chat in the list.
     if (summarize && !held.summarize) {
       held.summarize = true;
-      void (held.opening ?? Promise.resolve(null)).then((failure) => { if (!failure && this.scopes.get(chat) === held) this.summarizeChat(chat); });
+      void (held.opening ?? Promise.resolve(null)).then((failure) => { if (!failure && this.scopes.get(chat) === held) this.projections.summarizeChat(chat); });
     }
     if (held.state !== 'loaded' && !held.opening) {
       const epoch = this.epoch;
@@ -535,7 +516,7 @@ export class ObjectStore {
       held.opening = opening;
     }
     const epoch = this.epoch;
-    const ready = held.opening ?? (held.loading ? Promise.resolve(null) : this.evaluated(chat).then(() => null, (error: unknown) => this.codecFailure(error, epoch)));
+    const ready = held.opening ?? (held.loading ? Promise.resolve(null) : this.projections.evaluate(chat).then(() => null, (error: unknown) => this.codecFailure(error, epoch)));
     let released = false;
     return { ready, release: () => {
       if (released) return;
@@ -572,16 +553,16 @@ export class ObjectStore {
       if (signal.aborted) return this.halted(epoch);
       if (saved.state.complete && !saved.changes.some((row) => row.omitted)) {
         scope.state = 'loaded';
-        await this.evaluated(chat);
+        await this.projections.evaluate(chat);
         this.changes.push({ kind: 'scope', id: chat, parent: chat });
         this.changed();
         // Ready is cache-only; catch-up and summary writes must not hold the chat screen behind the network.
-        void this.refreshChat(chat).then((failure) => { if (!failure && scope.users && summarize) this.summarizeChat(chat); });
+        void this.refreshChat(chat).then((failure) => { if (!failure && scope.users && summarize) this.projections.summarizeChat(chat); });
         return null;
       }
     }
     const failure = await this.refreshChat(chat);
-    return failure ?? (summarize ? await this.saveSummary(chat) : null);
+    return failure ?? (summarize ? await this.projections.save(chat) : null);
   }
 
   // What an operation begun in epoch answers when it is cut short: timeline-changed once a reset has ended that epoch,
@@ -610,7 +591,7 @@ export class ObjectStore {
   }
 
   // signal: the caller's stop, which lets the chat go at once, ending its opening and a summary write waiting on the
-  // connection; what run does with the chat after that ends as stopped (saveSummary).
+  // connection; what run does with the chat after that ends as stopped (ChatProjections.save).
   withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
     return this.withChats([chat], (readable) => (readable.length ? run() : Promise.resolve({ ok: false, error: 'unreadable' })), { signal });
   }
@@ -649,7 +630,7 @@ export class ObjectStore {
       scope.state = failure && (scope.state !== 'loaded' || failure.error === 'unreadable') ? 'failed' : 'loaded';
       scope.loading = null;
       if (!failure) {
-        try { await this.evaluated(chat); }
+        try { await this.projections.evaluate(chat); }
         catch (error) { failure = this.codecFailure(error, epoch); }
       }
       this.changes.push({ kind: 'scope', id: chat, parent: chat });
@@ -667,8 +648,8 @@ export class ObjectStore {
     for (const kind of SCOPED) {
       for (const id of [...(this.byParent.get(chat)?.get(kind) ?? [])]) this.forget(id);
     }
-    this.projections.delete(chat);
-    for (const lane of ['projection', 'headless', 'send', 'forecast', 'memory', 'view']) this.evaluation.forget(`${lane}:${chat}`);
+    this.projections.release(chat);
+    for (const lane of ['headless', 'send', 'forecast', 'memory', 'view']) this.evaluation.forget(`${lane}:${chat}`);
     scope.state = 'unloaded';
     scope.cursor = 0;
     scope.head = 0;
@@ -676,79 +657,6 @@ export class ObjectStore {
     if (this.scopes.get(chat) === scope) this.scopes.delete(chat);
     this.changes.push({ kind: 'scope', id: chat, parent: chat });
     this.changed();
-  }
-
-  async saveSummary(chat: string): Promise<ApiFailure | null> {
-    const pending = this.summarizing.get(chat);
-    if (pending) return pending;
-    const epoch = this.epoch;
-    const save = async (): Promise<ApiFailure | null> => {
-      for (;;) {
-        // The scope's own controller, ended when its last lease is let go, the timeline resets or the store closes: no
-        // retry of a summary write outlives the chat being held.
-        const scope = this.scopes.get(chat);
-        if (!scope || scope.abort.signal.aborted) return this.halted(epoch);
-        if (this.loadedHead(chat) < this.entryHead(chat)) {
-          const failed = await this.refreshChat(chat);
-          if (failed) return failed;
-        }
-        const write = await this.summaryWrite(chat);
-        if (!write) return null;
-        const result = await this.commit([this.step(write)], undefined, scope.abort.signal);
-        if (!result.ok) return result;
-      }
-    };
-    const saving = save().catch((error: unknown) => this.codecFailure(error, epoch)).finally(() => this.summarizing.delete(chat));
-    this.summarizing.set(chat, saving);
-    return saving;
-  }
-
-  // chats: held by the caller and loaded, their entries written under those leases (a move's character) or opened
-  // (withChats), so every summary comes from memory and all go in one request. A pass runs until no chat has outgrown
-  // its summary, as saveSummary does: one that changed while the others were built would otherwise keep what was
-  // captured. One not held is a caller's error, as in refreshChat; one whose opening or evaluation failed answers with
-  // that failure.
-  async summarizeChats(chats: Iterable<string>, signal?: AbortSignal): Promise<ApiFailure | null> {
-    const epoch = this.epoch;
-    let passes = 0;
-    try {
-      for (;;) {
-        const writes: Write[] = [];
-        for (const chat of chats) {
-          const scope = this.scopes.get(chat);
-          if (!scope || scope.abort.signal.aborted) {
-            // Let go by the caller's stop or after a pass (withChats): halted. Never held: the caller's error.
-            if (passes || signal?.aborted || this.closing.signal.aborted) return this.halted(epoch);
-            throw new ScopeUnavailable(chat);
-          }
-          // A chat whose history cannot be read is passed over, as withChats passes over one that cannot open: its
-          // screen says so.
-          const failure = scope.state !== 'loaded' ? scope.error ?? this.halted(epoch) : this.loadedHead(chat) < this.entryHead(chat) ? await this.refreshChat(chat) : null;
-          if (failure?.error === 'unreadable') continue;
-          if (failure) return failure;
-          const write = await this.summaryWrite(chat);
-          if (write) writes.push(write);
-        }
-        if (!writes.length) return null;
-        const result = await this.commit(writes.map((write) => this.step(write)), undefined, signal);
-        if (!result.ok) return result;
-        passes++;
-      }
-    } catch (error) {
-      return this.codecFailure(error, epoch);
-    }
-  }
-
-  private async summaryWrite(chat: string): Promise<Write | null> {
-    const projection = await this.evaluated(chat);
-    // Neither a chat still showing an overlay nor a projection folded while it did: the commit that ends the chat's last
-    // overlay summarizes it again (summarizeHeld).
-    if (!projection || this.showing(chat) || projection.shown !== this.shownMark(chat)) return null;
-    const id = summaryId(chat);
-    const current = this.get('summary', id);
-    if (current && !summaryStale(this, chat, current.value) && current.value.title === projection.summary.title && current.value.preview === projection.summary.preview) return null;
-    // The projection's source versions travel with it. A concurrent edit can never make an old summary look current.
-    return { type: 'restore', id, kind: 'summary', parent: chat, value: projection.summary };
   }
 
   // An explicit account/parent walk; it never fills the held chat scopes. Backup and ownership walks run on their
@@ -859,7 +767,7 @@ export class ObjectStore {
   // larger than one request goes as several, the owner in the last; one cut short leaves only unreachable pieces.
   // unheld: the writes' chats are not held for them and nothing is summarized after them: a restore's entries before
   // their chats, whose next lease pulls what was written, or a move's, held by the move and summarized together once
-  // their character is published (summarizeChats). signal: the caller's stop, which also ends a wait for the
+  // their character is published (ChatProjections.saveMany). signal: the caller's stop, which also ends a wait for the
   // connection to return.
   async batch(writes: Write[], progress: (write: Write) => void = () => {}, { unheld = false, signal }: { unheld?: boolean; signal?: AbortSignal } = {}): Promise<ApiResult<null>> {
     const puts = orderOwned(writes.filter((write) => write.type !== 'remove'));
@@ -884,7 +792,7 @@ export class ObjectStore {
       }
       const result = await this.commit(ordered.map((write) => this.step(write)), (index) => progress(ordered[index]!), signal);
       if (!result.ok) return result;
-      if (!unheld) this.summarizeHeld();
+      if (!unheld) this.projections.summarizeHeld();
       return { ok: true, data: null };
     } finally {
       for (const lease of leases) lease.release();
@@ -944,20 +852,6 @@ export class ObjectStore {
     return removed.ok ? { ok: true, data: object } : removed;
   }
 
-  // Summaries follow a write unawaited: one that fails stays stale, and the chat's next opening (retainChat) writes it
-  // again. Only held chats are summarized; any write can change what they display.
-  private summarizeHeld() {
-    for (const [chat, scope] of this.scopes) {
-      if (scope.state !== 'loaded') continue;
-      this.summarizeChat(chat);
-    }
-  }
-
-  private summarizeChat(chat: string) {
-    const lease = this.retainChat(chat);
-    void lease.ready.then((failure) => failure ?? this.saveSummary(chat)).finally(lease.release);
-  }
-
   // chat: a scoped write's chat, held for the base revision of what the write changes.
   private async writeOne<K extends Kind>(step: Step, chat: string | null): Promise<ApiResult<Stored<K>>> {
     const lease = chat ? this.retainChat(chat) : null;
@@ -968,7 +862,7 @@ export class ObjectStore {
         if (failure) return failure;
       }
       const result = await this.one<K>(step);
-      if (result.ok) this.summarizeHeld();
+      if (result.ok) this.projections.summarizeHeld();
       return result;
     } finally {
       lease?.release();
@@ -1064,7 +958,7 @@ export class ObjectStore {
       }
       if (shown.size) {
         this.changed();
-        this.refreshHeld();
+        this.projections.refreshHeld();
       }
       if (earlier.length) {
         if (!(await waited(Promise.all(earlier), stop))) return { ok: false, error: 'stopped' };
@@ -1081,7 +975,7 @@ export class ObjectStore {
       if (shown.size) {
         for (const id of [...shown.keys()]) this.unshow(id, shown);
         this.changed();
-        this.refreshHeld();
+        this.projections.refreshHeld();
       }
     }
   }
@@ -1176,7 +1070,7 @@ export class ObjectStore {
       saved.push(...result.data);
       for (let index = start; index < saved.length; index++) progress(index);
     }
-    this.refreshHeld();
+    this.projections.refreshHeld();
     return { ok: true, data: saved };
   }
 
@@ -1270,7 +1164,7 @@ export class ObjectStore {
       const failure = await this.refreshChat(chat);
       if (failure) return failure;
     }
-    this.refreshHeld();
+    this.projections.refreshHeld();
     return stopped() ? { ok: false, error: 'stopped' } : null;
   }
 

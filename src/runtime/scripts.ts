@@ -360,7 +360,7 @@ export class Scripts {
   // never holds up a send.
   private queued<T>(chat: string, task: () => Promise<T>): Promise<T> {
     for (const { id, chat: asked } of this.state.questions) if (asked === chat) this.answer(id, null);
-    const next = (this.queues.get(chat) ?? Promise.resolve()).then(() => this.session.store.evaluated(chat).catch(evaluationFailure)).then(task);
+    const next = (this.queues.get(chat) ?? Promise.resolve()).then(() => this.session.store.projections.evaluate(chat).catch(evaluationFailure)).then(task);
     this.queues.set(chat, next.catch(() => {}));
     return next;
   }

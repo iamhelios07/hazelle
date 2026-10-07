@@ -171,8 +171,8 @@ describe('backup', () => {
       } };
     });
     const stop = new AbortController();
-    const summarize = store.summarizeChats.bind(store);
-    const summary = vi.spyOn(store, 'summarizeChats').mockImplementation(async (ids, signal) => {
+    const summarize = store.projections.saveMany.bind(store.projections);
+    const summary = vi.spyOn(store.projections, 'saveMany').mockImplementation(async (ids, signal) => {
       const result = await summarize(ids, signal);
       stop.abort();
       return result;

@@ -9,6 +9,7 @@ import { forgetVault } from './device-cache';
 import type { SealedChange } from './object-cache';
 import { openSession } from './session';
 import { ObjectStore } from './store';
+import { summaryId } from './summary';
 import { Usage } from './usage';
 import { exportBackup } from './testing/backup';
 import { GENERATION_STEPS, generationSteps, MemoryCache } from './testing/cache';
@@ -100,6 +101,53 @@ function tab() {
 }
 
 const ids = (store: ObjectStore) => store.list('connection').map(({ id }) => id).toSorted();
+
+it('discards a late projection and summary job from the timeline before a restore', async () => {
+  const f = await fixture();
+  await f.add('a', 'chat', null, { title: null, character: null, models: {} });
+  await f.add('a1', 'entry', 'a', { type: 'message', role: 'user', text: 'restored', at: 0, receipt: null });
+  const snapshot = f.snapshot();
+  const store = await f.open();
+  await store.pull();
+  const lease = store.retainChat('a', { summarize: false });
+  expect(await lease.ready).toBeNull();
+  const seen: string[] = [];
+  store.subscribe((changes) => {
+    if (changes.some(({ kind }) => kind === 'projection')) seen.push(store.projections.get('a')?.summary.preview ?? '');
+  });
+  const display = store.evaluation.display.bind(store.evaluation);
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  let signal: AbortSignal | undefined;
+  vi.spyOn(store.evaluation, 'display').mockImplementationOnce(async (...args) => {
+    const answer = await display(...args);
+    signal = args[3];
+    await gate;
+    return answer;
+  });
+  await f.add('a1', 'entry', 'a', { type: 'message', role: 'user', text: 'obsolete', at: 0, receipt: null });
+  const refreshing = store.refreshChat('a');
+  await vi.waitFor(() => expect(signal).toBeDefined());
+  const saving = store.projections.save('a');
+  try {
+    f.restore(snapshot, 'restored-timeline');
+    await store.pull();
+    expect(signal!.aborted).toBe(true);
+    expect(store.projections.get('a')?.summary.preview).toBe('restored');
+    finish();
+    await refreshing;
+    expect(await saving).toEqual({ ok: false, error: 'timeline-changed' });
+    expect(seen).not.toContain('obsolete');
+    expect(store.projections.get('a')?.summary.preview).toBe('restored');
+    expect(await store.projections.save('a')).toBeNull();
+    expect(store.get('summary', summaryId('a'))?.value.preview).toBe('restored');
+  } finally {
+    finish();
+    lease.release();
+    store.close();
+    await Promise.allSettled([refreshing, saving]);
+  }
+});
 
 it('reopens a session with sealed cached objects before any network read', async () => {
   const f = await fixture();

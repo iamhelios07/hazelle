@@ -146,9 +146,9 @@ type Unevaluated = { kind: 'unsent'; failure: ApiFailure };
 const evaluating = <T>(work: Promise<T>): Promise<T | Unevaluated> => work.catch((error: unknown) => ({ kind: 'unsent' as const, failure: evaluationFailure(error) }));
 
 // The turn as the chat stands once what was last written to it is evaluated: a write returns before its chat's
-// projection is made again (ObjectStore.refreshHeld).
+// projection is made again (ChatProjections.refreshHeld).
 async function gatheredTurn(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, ids: Parameters<typeof gatherTurn>[3]): Promise<TurnContext | Blocked | Unevaluated | null> {
-  const evaluated = await evaluating(session.store.evaluated(chat));
+  const evaluated = await evaluating(session.store.projections.evaluate(chat));
   return evaluated && 'kind' in evaluated ? evaluated : gatherTurn(session, chat, target, ids);
 }
 
