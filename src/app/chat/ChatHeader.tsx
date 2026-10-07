@@ -1,4 +1,4 @@
-import { History, MoreHorizontal, SlidersHorizontal } from 'lucide-react';
+import { MoreHorizontal, SlidersHorizontal } from 'lucide-react';
 import { NameDialog } from '../common/NameDialog';
 import { CAST } from '../common/words';
 import { useRemembering } from '../session';
@@ -8,8 +8,8 @@ import { ChatTitle, Divider, IconButton, Menu, MenuItem, ToolButton, useMenuOpen
 import { ChatCastMenu } from './ChatCastMenu';
 import { ChatModelMenu } from './ChatModelMenu';
 import { PersonaDialog } from './ChatPersonaPicker';
-import { ChatPromptMenu } from './ChatPromptMenu';
-import { ReadingDialog, ReadingMenu } from './ChatReading';
+import { ChatPromptPicker, PromptDialog } from './ChatPromptPicker';
+import { ReadingDialog } from './ChatReading';
 import type { OpenChat } from './useChat';
 
 // Wide screens name the character in the sidebar beside the chat, whose title opens it; the header names only the chat.
@@ -32,8 +32,8 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const current = 'kind' in route ? null : { connection: route.connection.id, model: route.model.id };
   return (
     <>
-      <ChatPromptMenu chat={chat} />
-      <ChatCastMenu chat={chat} button={wide} />
+      <ChatPromptPicker chat={chat} />
+      <ChatCastMenu chat={chat} />
       <ChatModelMenu handle={modelMenu} current={current} label={label} onPick={actions.pickModel} />
       <ToolButton
         icon={SlidersHorizontal}
@@ -42,27 +42,15 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         mark={{ kind: 'count', count: toggles.changed }}
         phone="icon"
         expanded={panel?.kind === 'toggles'}
-        onClick={() => (panel?.kind === 'toggles' ? actions.closePanel() : actions.showToggles())}
+        onClick={actions.flipToggles}
       />
-      {/* A phone's header has no room left beside the chat's title, so there 등장인물, 장기 기억 and 읽기 설정 open from ⋯. */}
-      {wide && item && (
-        <ToolButton
-          icon={History}
-          label="장기 기억"
-          detail={failed ? '정리 실패' : undefined}
-          mark={failed ? { kind: 'dot' } : undefined}
-          expanded={panel?.kind === 'memory'}
-          onClick={toggleMemory}
-        />
-      )}
-      {wide && <ReadingMenu />}
-      <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" {...opener} />}>
+      <Menu place="below-end" label="더보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="더보기" size="sm" dot={failed} {...opener} />}>
         {!wide && <MenuItem label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />}
-        {!wide && <MenuItem label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />}
+        <MenuItem label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
-        {!wide && item && <MenuItem label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
-        {!wide && <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />}
-        {!wide && <MenuItem label="검색" onClick={actions.openSearch} />}
+        {item && <MenuItem label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />
+        <MenuItem label="검색" onClick={actions.openSearch} />
         <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>
@@ -75,10 +63,12 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   );
 }
 
-// The persona dialog mounts here, not beside its chip: a folded composer hides its tool bar, and a dialog inside it.
+// The persona and prompt dialogs mount here, not beside their chips: a folded composer hides its tool bar and a hidden
+// header its actions, and a dialog inside them.
 export function ChatDialogs({ chat }: { chat: OpenChat }) {
   const { dialog, item, actions } = chat;
   if (dialog === 'persona') return <PersonaDialog chat={chat} />;
+  if (dialog === 'prompt') return <PromptDialog chat={chat} />;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
   if (dialog === 'rename' && item) {
     return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 표시돼요." onSave={actions.rename} onClose={actions.closeDialog} />;

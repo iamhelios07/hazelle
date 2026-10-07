@@ -1,4 +1,5 @@
 .button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -46,4 +47,14 @@
 
 .button[aria-pressed='true'] svg {
   fill: currentColor;
+}
+
+.dot {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
 }

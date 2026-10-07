@@ -97,8 +97,9 @@ test('a new account imports a card, chats through the fake provider and finds th
     await expect(messages.nth(2)).toContainText('Mira smiles. (bows)');
   });
 
-  await test.step('Ctrl+P opens the prompts beside the chat, a role changed there comes back with Ctrl+Z, Ctrl+/ lists every shortcut, and Ctrl+S opens and closes 설정', async () => {
+  await test.step('Ctrl+P opens the chat\'s prompt choice, whose 프롬프트 관리 opens the prompts beside the chat, a role changed there comes back with Ctrl+Z, Ctrl+/ lists every shortcut, and Ctrl+S opens and closes 설정', async () => {
     await page.keyboard.press('Control+p');
+    await page.getByRole('dialog', { name: '이 채팅의 프롬프트' }).getByRole('button', { name: '프롬프트 관리' }).click();
     const side = page.getByRole('complementary', { name: '프롬프트' });
     await side.getByRole('button', { name: /핑퐁 간소화/ }).first().click();
     await side.getByRole('button', { name: /^1\. / }).click();
@@ -109,7 +110,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.keyboard.press('Control+z');
     await expect(system).toHaveAttribute('aria-pressed', 'true');
     await expect(messages).toHaveCount(3);
-    await page.keyboard.press('Control+p');
+    await side.getByRole('button', { name: '프롬프트 닫기' }).click();
     await expect(side).toBeHidden();
     await page.keyboard.press('Control+/');
     await expect(page.getByRole('dialog', { name: '단축키' })).toBeVisible();

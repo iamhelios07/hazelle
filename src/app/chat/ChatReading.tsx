@@ -1,14 +1,6 @@
 import { ReadingRows, ReplyRow } from '../common/ReadingRows';
 import { useDisplay } from '../display';
-import { Button, Dialog, IconButton, Menu, Row, Stack } from '../ui';
-
-export function ReadingMenu() {
-  return (
-    <Menu kind="dialog" size="lg" place="below-end" label="읽기 설정" trigger={(opener) => <IconButton icon="가" label="읽기 설정" size="sm" {...opener} />}>
-      <ReadingForm />
-    </Menu>
-  );
-}
+import { Button, Dialog, Row, Stack } from '../ui';
 
 export function ReadingDialog({ onClose }: { onClose: () => void }) {
   return (

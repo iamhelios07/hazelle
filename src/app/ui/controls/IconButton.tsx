@@ -16,10 +16,12 @@ type Props = {
   ref?: Ref<HTMLButtonElement>;
   size?: 'xs' | 'sm' | 'md';
   disabled?: boolean;
+  // Something behind it needs a look, such as a failure inside the menu it opens; the words are inside.
+  dot?: boolean;
 };
 
 // label is required: an icon-only button has no other accessible name.
-export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, ref, size = 'md', disabled = false }: Props) {
+export function IconButton({ icon, label, title = label, onClick, pressed, popup, expanded, ref, size = 'md', disabled = false, dot = false }: Props) {
   return (
     <button
       ref={ref}
@@ -40,6 +42,7 @@ export function IconButton({ icon, label, title = label, onClick, pressed, popup
       ) : (
         <Icon icon={icon} size={size} />
       )}
+      {dot && <span className={styles.dot} aria-hidden />}
     </button>
   );
 }

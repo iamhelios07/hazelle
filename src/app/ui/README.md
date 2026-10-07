@@ -12,7 +12,7 @@ and only this folder styles elements.**
   defined per theme.
 - `foundation/global.css` loads fonts and tokens and sets element defaults. `main.tsx` imports it once.
 - `foundation/media.ts` lists every media query in `MEDIA` and reads them in JavaScript (`useWide`,
-  `useSplit`, `useHover`). A stylesheet cannot read it, so it writes the query out in full, and
+  `useSplit`, `usePanelCovers`, `useHover`). A stylesheet cannot read it, so it writes the query out in full, and
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
 - `foundation/motion.module.css` holds every keyframe, and `foundation/a11y.module.css` the
   screen-reader-only box and the one-line ellipsis. Components take them with `composes`.
@@ -39,7 +39,7 @@ and only this folder styles elements.**
 | foundation | — | `tokens.css`, `global.css` | Every raw value; element defaults, a bare button among them, and reduced motion |
 | foundation | — | `motion.module.css` | Every animation: fade, rise, drop, fade away, spin, pulse, blink, waiting dots |
 | foundation | — | `a11y.module.css` | Screen-reader-only labels; one-line ellipsis |
-| foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `useHover`) | — | Every breakpoint and media query |
+| foundation | `media.ts` (`MEDIA`, `useWide`, `useSplit`, `usePanelCovers`, `useHover`) | — | Every breakpoint and media query |
 | foundation | `keys.ts` (`Chord`, `pressed`, `pressedKey`, `isComposing`, `keyCaps`, `formatKeys`) | — | Matching a key press, the IME guard, and keys written as text |
 | foundation | `Avatar` | `Avatar.module.css` | A face: picture, first letter or icon, three sizes |
 | foundation | `Brand` | `Brand.module.css` | The wordmark |
@@ -69,7 +69,7 @@ and only this folder styles elements.**
 | controls | `Composer` | `Composer.module.css` | The message box, with the chat's tools in its bar; `compact` folds it to one line until focus goes inside |
 | controls | `EditBox` | `EditBox.module.css` | A message edited in place |
 | controls | `FileButton` | — | A `Button` that opens a file picker |
-| controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가 |
+| controls | `IconButton` | `IconButton.module.css` | Icon-only buttons and toggles, down to a message's tools; a letter in the icon's place, such as 가; a dot when something behind it needs a look |
 | controls | `Link` | `Link.module.css` | A link to another site |
 | controls | `MarkupArea` (`typeInto`, `markup.ts`) | `MarkupArea.module.css` | Prompt text with CBS tags, <tags>, headings and rules colored on a layer behind the textarea; an insert into it that Ctrl+Z takes back |
 | controls | `NumberInput` | `NumberInput.module.css` | A number typed as text, with its unit: no spinner, no scroll-wheel changes |

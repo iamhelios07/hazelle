@@ -8,7 +8,7 @@ export const SHORTCUTS = {
   // Its handler must never pass Ctrl+S on, or the browser's save-page dialog opens.
   settings: { label: '설정 열기 · 닫기', keys: [{ key: ',', mod: true }, { key: 's', mod: true }] },
   personas: { label: '페르소나 (채팅에서는 바꾸기)', keys: [{ key: 'e', mod: true }] },
-  prompts: { label: '프롬프트 (채팅에서는 옆 패널)', keys: [{ key: 'p', mod: true }] },
+  prompts: { label: '프롬프트 (채팅에서는 바꾸기)', keys: [{ key: 'p', mod: true }] },
   shortcutList: { label: '단축키 보기', keys: [{ key: '/', mod: true }] },
   sidebar: { label: '사이드바 접기 · 펴기', keys: [{ key: 'b', mod: true }] },
   status: { label: '상태 보기 · 닫기 (상태창을 지정한 채팅)', keys: [{ key: '.', mod: true }] },

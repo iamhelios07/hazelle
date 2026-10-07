@@ -37,7 +37,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
   const { id, busy, panel, scroll, prompt, actions } = chat;
   const folded = display.foldComposer && scroll.away;
   useShortcut('personas', () => actions.openDialog('persona'));
-  useShortcut('prompts', () => actions.toggleSide('prompts'));
+  useShortcut('prompts', () => actions.openDialog('prompt'));
   useEditBeside(shelf?.id ?? null, () => shelf && actions.side({ kind: 'character', id: shelf.id, part: null }));
   useShortcut('status', () => {
     if (!chat.status.length) return false;

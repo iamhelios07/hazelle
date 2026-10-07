@@ -24,8 +24,8 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, busy, problem, translate, sendLanguage, modelMenu, promptMenu, actions } = chat;
-  const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: useMenuOpener(promptMenu), persona: { onClick: () => actions.openDialog('persona') } };
+  const { draft, messages, last, busy, problem, translate, sendLanguage, modelMenu, actions } = chat;
+  const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: { onClick: () => actions.openDialog('prompt') }, persona: { onClick: () => actions.openDialog('persona') } };
   const input = useRef<HTMLTextAreaElement>(null);
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {

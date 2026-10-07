@@ -1,4 +1,3 @@
-import { Users } from 'lucide-react';
 import { useState } from 'react';
 import { CAST_MAX } from '../../model/chat';
 import { matches } from '../../model/library';
@@ -6,19 +5,19 @@ import { aliased } from '../common/alias';
 import { noResults, SEARCH_FROM } from '../common/search';
 import { CAST } from '../common/words';
 import { useLibrary } from '../session';
-import { Avatar, Empty, Menu, MenuHeading, MenuItem, SearchField, ToolButton } from '../ui';
+import { Avatar, Empty, Menu, MenuHeading, MenuItem, SearchField } from '../ui';
 import type { OpenChat } from './useChat';
 
-// button false: a phone's header has no room for it, so there the menu opens from ⋯ (ChatHeaderActions).
-export function ChatCastMenu({ chat, button }: { chat: OpenChat; button: boolean }) {
-  const { cast, castMenu } = chat;
+// No button of its own: it opens from the header's ⋯ (ChatHeaderActions).
+export function ChatCastMenu({ chat }: { chat: OpenChat }) {
+  const { castMenu } = chat;
   return (
     <Menu
       handle={castMenu}
       place="below-end"
       size="lg"
       label={CAST}
-      trigger={(opener) => button && <ToolButton icon={Users} label={CAST} detail={cast.length ? `${cast.length}명` : undefined} mark={{ kind: 'count', count: cast.length }} {...opener} />}
+      trigger={() => null}
     >
       <CastChoices chat={chat} />
     </Menu>

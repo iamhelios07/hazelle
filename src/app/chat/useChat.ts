@@ -47,6 +47,7 @@ import { useFollow } from './useFollow';
 import { useChatSearch } from './useChatSearch';
 import { useChatStatus } from './useChatStatus';
 import { useMessageEdit } from './useMessageEdit';
+import { useChatPanel } from './useChatPanel';
 
 type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
@@ -120,12 +121,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, answered, reply === 'stay');
   const memory = useChatMemory(id);
   const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy);
-  const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | null>(null);
+  const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | null>(null);
   const modelMenu = useMenuHandle();
-  const promptMenu = useMenuHandle();
   const castMenu = useMenuHandle();
-  // 토글, 장기 기억 and the prompt list take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | Side | null>(null);
+  const { panel, visit, flipToggles, closePanel } = useChatPanel();
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -376,7 +375,6 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     panel,
     dialog,
     modelMenu,
-    promptMenu,
     castMenu,
     draft,
     scroll,
@@ -403,16 +401,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       follow,
       info: (reply: string) => {
         setInfoPick(reply);
-        setPanel({ kind: 'info' });
+        visit({ kind: 'info' });
       },
       pickInfo: setInfoPick,
-      showToggles: () => setPanel({ kind: 'toggles' }),
-      memory: (record: string | null) => setPanel({ kind: 'memory', record }),
-      side: (open: Side) => setPanel(open),
-      // The keys open the list, and close it again while that list or one of its items is open.
-      toggleSide: (kind: 'prompts') => setPanel((current) => (current?.kind === kind ? null : { kind, id: null, pane: null })),
-      closePanel: () => setPanel(null),
-      openDialog: (which: 'rename' | 'reading' | 'persona') => setDialog(which),
+      flipToggles,
+      memory: (record: string | null) => visit({ kind: 'memory', record }),
+      side: (open: Side) => visit(open),
+      closePanel,
+      openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
       setOwn,
