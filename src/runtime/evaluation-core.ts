@@ -1,6 +1,8 @@
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { standing, type Standing } from '../engine/memory';
 import { activeLore, assemble, assembleMemory, assembleTranslation, rewritten, type Assembled, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
+import type { RegexScript } from '../engine/import/types';
+import { trySample } from '../engine/regex/scripts';
 import { renderChat, type ChatScope } from '../engine/render';
 import type { Memory, Source } from '../model/memory';
 import { applyTail, type Tail } from './history-delta';
@@ -21,7 +23,8 @@ export type LuaResult = LuaText & { version: string };
 export type EvaluationInput =
   | { lane: string; scope: ScopeData; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
   | { lane: string; patch: { revision: number; generation: number; items: LuaResult[] } }
-  | { lane: string; count: string[] };
+  | { lane: string; count: string[] }
+  | { lane: string; sample: { script: Omit<RegexScript, 'id'>; text: string } };
 export type DisplayEvaluation = { display: Display; work: DisplayWork | null };
 // Every count is made here, in the worker, the only realm that loads the tokenizer.
 export type Counted<T> = T | { kind: 'tokenizer' };
@@ -32,6 +35,7 @@ export type EvaluationResult =
   | DisplayPatch
   | EvaluatedPrompt
   | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
+  | { sampled: string }
   | null;
 export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true };
 export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true };
@@ -58,6 +62,7 @@ export class Evaluator {
       const countTokens = await tokenizer().catch(() => null);
       return countTokens ? input.count.map(countTokens) : { kind: 'tokenizer' };
     }
+    if ('sample' in input) return { sampled: trySample(input.sample.script, input.sample.text) };
     const { lane, scope: data, history, job } = input;
     const messages = applyTail(this.histories.get(lane) ?? [], history);
     this.histories.set(lane, messages);

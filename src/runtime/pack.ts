@@ -1,6 +1,7 @@
 import type { Listed, Pack, RegexScript, Trigger } from '../engine/import/types';
 import { without } from '../model/fields';
 import type { ApiResult } from './api';
+import { evaluationFailure } from './evaluation';
 import type { ObjectStore } from './store';
 
 export type PackOwner = { kind: 'character' | 'module'; id: string };
@@ -103,3 +104,8 @@ export async function removeScript(store: ObjectStore, owner: PackOwner, list: S
 
 export const restoreScript = (store: ObjectStore, owner: PackOwner, { list, script, at }: RemovedScript) =>
   updateList(store, owner, list, (scripts) => (holds(scripts, script.id) ? scripts : scripts.toSpliced(Math.min(at, scripts.length), 0, script as (typeof scripts)[number])));
+
+// A pattern may never end, so a sample runs where a chat's scripts do: in the evaluation worker, which is stopped when
+// it hangs. A newer sample of the same script takes the place of one still waiting.
+export const sampleScript = (store: ObjectStore, owner: PackOwner, script: RegexScript, text: string, signal: AbortSignal): Promise<ApiResult<string>> =>
+  store.evaluation.sample(`sample:${owner.id}:${script.id}`, script, text, signal).then((data) => ({ ok: true, data }), evaluationFailure);

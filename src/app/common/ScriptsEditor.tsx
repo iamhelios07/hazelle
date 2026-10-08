@@ -1,9 +1,9 @@
 import { ChevronDown, ChevronLeft, ChevronUp, Plus, type LucideIcon } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { Pack, RegexScript, Trigger } from '../../engine/import/types';
-import { checkScript, trySample, type ScriptCheck } from '../../engine/regex/scripts';
+import { checkScript, type ScriptCheck } from '../../engine/regex/scripts';
 import type { ApiResult } from '../../runtime/api';
-import { addLua, addRegex, editRegex, editTrigger, moveScript, neighbour, removeScript, restoreScript, setScriptOff, type PackOwner, type RemovedScript, type ScriptList } from '../../runtime/pack';
+import { addLua, addRegex, editRegex, editTrigger, moveScript, neighbour, removeScript, restoreScript, sampleScript, setScriptOff, type PackOwner, type RemovedScript, type ScriptList } from '../../runtime/pack';
 import { useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, SearchField, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
@@ -190,6 +190,7 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
   const check = checkScript(shown);
   const actions = useScriptActions(props, 'regex', script, name, save.remove);
   const [sample, setSample] = useState('');
+  const tried = useTried(owner, shown, sample);
   const tag = shown.off ? OFF : check ? CHECKS[check] : status ? '상태창' : null;
   return (
     <Item {...props} title={name} tag={tag} aside={searched ? STAGES[shown.stage] : undefined}>
@@ -210,12 +211,28 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
       <Disclosure label="시험해 보기">
         <Stack gap="related">
           <TextField label="예시 텍스트" lines={3} value={sample} onChange={setSample} />
-          <TextField label="결과" kind="key" lines={3} readOnly value={sample && trySample(shown, sample)} onChange={() => {}} />
+          <TextField label="결과" kind="key" lines={3} readOnly value={sample && (tried ?? '')} onChange={() => {}} error={sample && tried === null ? '결과를 내지 못했어요.' : undefined} />
         </Stack>
       </Disclosure>
       {actions(save.status)}
     </Item>
   );
+}
+
+// 시험해 보기's latest answer: undefined before the first, null when the worker could not give one.
+function useTried(owner: PackOwner, script: RegexScript, text: string) {
+  const store = useStore();
+  const [tried, setTried] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!text) return;
+    const stop = new AbortController();
+    void sampleScript(store, owner, script, text, stop.signal).then((answer) => {
+      if (answer.ok) setTried(answer.data);
+      else if (answer.error !== 'stopped') setTried(null);
+    });
+    return () => stop.abort();
+  }, [store, owner.id, script.id, script.find, script.replace, script.flags, script.stage, text]);
+  return tried;
 }
 
 // Its code is stored only on 적용, never as it is typed, since a chat beside it runs what is stored.
