@@ -15,6 +15,9 @@
   /* Either margin's column (StoryAside, MarginPicture): from the story's edge to the page's, less a gap at the page's.
      --story-side is measured in ChatFrame.tsx. */
   --story-margin: max(0px, calc(var(--story-side) - var(--space-16)));
+  /* A 삽화's most height (StoryPicture): what the screen shows between the header and the composer, less its foot row,
+     so a picture stuck under the header (MarginPicture) ends above the composer. */
+  --story-illustration-most: calc(100dvh - var(--header-height) - var(--footer-space) - var(--control-tool) - 3 * var(--space-8));
 }
 
 /* 읽기 설정: ChatFrame.tsx readingScope sets --reading-size and one class of each kind. */

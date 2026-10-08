@@ -241,9 +241,6 @@
   /* A picture line's defaults (Story.shadow.css); a character's own replace them (ChatFrame's pictures). */
   --story-picture-peek: 40vh;
   --story-picture-most: none;
-  /* A 삽화's most height (StoryPicture), and in the story's margin (MarginPicture) until pointed at. */
-  --story-illustration-most: 70vh;
-  --story-margin-picture-most: 50vh;
   --aside-tools-opacity: 0.35;
 
   --space-2: 2px;

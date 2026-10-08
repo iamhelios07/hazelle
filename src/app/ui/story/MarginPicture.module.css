@@ -1,6 +1,5 @@
 .column {
   /* Read by StoryPicture's frame; pointed at, it grows over the text to its size there. */
-  --picture-most: var(--story-margin-picture-most);
   --picture-grow: calc(var(--read-width) - 2 * var(--read-gutter));
 
   position: absolute;
