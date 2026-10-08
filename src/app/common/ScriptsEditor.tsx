@@ -84,7 +84,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
             const staged = pack.regex.filter((script) => script.stage === stage);
             return (
               staged.length > 0 && (
-                <Section key={stage} level={3} title={label} note={`${staged.length}개`}>
+                <Section key={stage} level={3} title={label} note={staged.length < pack.regex.length ? `${staged.length}개` : undefined}>
                   <List box label={`${label} ${SCRIPTS.regex}`}>{staged.map(({ id }) => item('regex', id, false))}</List>
                 </Section>
               )
