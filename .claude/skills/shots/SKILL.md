@@ -51,3 +51,7 @@ Facts that cost reruns before:
 - The account is `shots` / `shots-password`, holding the Mira card. On a `.data/` with no account, the next `enterShots` signs it up and imports the card. As the first signup it is the installation's operator, so screens show what the operator sees, and signup closes behind it. Keep signup closed on `.data/`: while it is open, `enterShots` tries to sign up again. To start over, stop the server and remove `.data/`.
 - A shot taken right after `enterShots` can be blank: wait for something on the screen first.
 - A failing locator waits for the whole timeout. When a run fails, read `test-results/*/error-context.md`: it lists the real accessible names.
+
+## One kit component with chosen input
+
+To run a component in a real browser on input you choose (a story with pictures, a bot's CSS), write `shots/<topic>-harness.tsx` that imports from `../src/...` and exports a `mount(...)` doing `createRoot(box).render(...)`, then call it from the test with `page.evaluate(async () => (await import('/shots/<topic>-harness.tsx' as string)).mount(...))` after `enterShots`. Bare specifiers (`react-dom/client`) fail inside `page.evaluate`; only Vite-served paths load. A `Story`'s shadow root is `box.firstElementChild.firstElementChild.shadowRoot`, and DOMPurify drops some elements (`use`) and attributes (a `data:` `poster`), so read them null-safe.
