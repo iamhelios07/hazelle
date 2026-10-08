@@ -3,12 +3,13 @@
 
 export const OPERATOR = '정말고마워요';
 // The date the current text takes effect, set by the operator. Changing either text sets it anew.
-export const EFFECTIVE: string | null = '2026년 10월 6일';
+export const EFFECTIVE: string | null = '2026년 10월 8일';
 
 type Block = string | string[];
 export type LegalText = { path: string; title: string; sections: { title: string; body: Block[] }[] };
 
-const ASK = '문의는 설정 › 계정 › 운영자에게 알리기로 보내 주시기 바랍니다.';
+const CONTACT = 'contact@hazelle.app';
+const ASK = `문의는 설정 › 계정 › 운영자에게 알리기로 보내 주시기 바랍니다. 계정이 없거나 로그인할 수 없으면 ${CONTACT}으로 보내 주시기 바랍니다.`;
 
 export const TERMS: LegalText = {
   path: '/terms',
@@ -188,6 +189,7 @@ export const PRIVACY: LegalText = {
           '브라우저와 서버 사이의 통신은 Cloudflare, Inc.(미국)의 네트워크를 거쳐 전달됩니다.',
           '매일 한 번 서버에 저장된 내용을 백업하여 그 사본을 Cloudflare의 파일 저장소(R2)에 둡니다. 백업 사본은 7일이 지나면 삭제합니다.',
           '모델 제공자에게 전달되는 요청은 서울의 서버에서 나갑니다.',
+          `${CONTACT}으로 보낸 메일은 Cloudflare, Inc.(미국)를 거쳐 Google LLC(미국)의 Gmail 계정으로 전달되어 보관됩니다. 보낸 사람의 메일 주소와 내용은 문의를 처리하는 데에만 사용하며, 처리한 날부터 1년이 지나면 삭제합니다.`,
         ],
         '보관 기간은 위 목록과 아래 "삭제"에 따릅니다. Vultr와 Cloudflare가 개인정보를 처리하는 방법은 각 회사의 개인정보 처리방침에 따릅니다.',
       ],
@@ -245,7 +247,7 @@ export const PRIVACY: LegalText = {
     },
     {
       title: '문의',
-      body: [`개인정보 보호책임자: ${OPERATOR}`, ASK, '이 방침이 변경되면 운영자가 보낸 알림으로 통지합니다.'],
+      body: [`개인정보 보호책임자: ${OPERATOR} (${CONTACT})`, ASK, '이 방침이 변경되면 운영자가 보낸 알림으로 통지합니다.'],
     },
   ],
 };
