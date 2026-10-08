@@ -197,12 +197,14 @@ describe('purgeExpired', () => {
     const expired = await savedChat(store);
     await store.create('memory', { records: [], chapters: [], state: [], threads: [{ id: 't', text: '등대', opened: null }] }, { id: memoryId(expired), parent: expired });
     await store.create('stream', { key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } }, { parent: expired });
+    const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
+    await store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent: { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 }, file: { id: 'f', key: 'k' }, type: 'image/png', size: 1, at: 0 }, { parent: expired });
     await removeChat(store, expired);
     const now = Date.now() + KEEP_DELETED;
     const recent = await savedChat(store);
     await markDeleted(store, 'chat', recent, now);
-    const owned = (chat: string) => (['entry', 'summary', 'memory', 'stream'] as const).flatMap((kind) => store.children(kind, chat)).length;
-    expect(owned(expired)).toBe(4);
+    const owned = (chat: string) => (['entry', 'summary', 'memory', 'stream', 'illustration'] as const).flatMap((kind) => store.children(kind, chat)).length;
+    expect(owned(expired)).toBe(5);
     const before = bytes;
 
     await purgeExpired(store, now, new AbortController().signal);

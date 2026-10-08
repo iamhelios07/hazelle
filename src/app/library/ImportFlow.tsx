@@ -113,7 +113,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     const name = shown && aliased(shown.card.name, shown.alias);
     const failed = (failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
     if ('chat' in read) {
-      const saved = await importChat(store, read.chat, character);
+      const saved = await importChat({ store, files }, read.chat, character);
       return saved.ok ? chatOutcome(file, [saved.data.id], name, chatMissed(saved.data.dropped)) : failed(saved);
     }
     const saved = await importRisuChats(store, character, read.risuChats);
