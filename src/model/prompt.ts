@@ -92,14 +92,19 @@ export type MemoryPrompt = {
 // Danbooru-style tags, comma separated, put into every picture the prompt makes (engine/illustrate pictureRequest).
 export type PictureTags = { artist: string; quality: string; negative: string };
 
+// How each picture is drawn, a field absent for the image model's own (connectors PictureRequest), seed absent for a
+// new one each picture.
+export type PictureSettings = { steps?: number; scale?: number; rescale?: number; sampler?: string; seed?: number };
+
 // model: the one place the scene writer is chosen; without one, the chat's 보조 모델, then its 대화 모델. The picture's
 // model is the chat's 삽화 switches' (runtime/characters illustrateSwitches). tags: absent reads as the app's
-// (engine/illustrate pictureTags); an empty field sends none.
+// (engine/illustrate PICTURE_DEFAULTS); an empty field sends none.
 export type IllustratePrompt = {
   task: 'illustrate';
   name: string;
   model?: ModelRef;
   tags?: PictureTags;
+  picture?: PictureSettings;
   blocks: Block[];
   toggles: Toggle[];
   origin?: { id: string; name: string };

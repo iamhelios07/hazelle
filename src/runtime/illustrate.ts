@@ -2,7 +2,7 @@ import { ChangeSignal } from '../change-signal';
 import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
-import { parseScene, pictureRequest, pictureTags, type SceneInvalid } from '../engine/illustrate';
+import { parseScene, pictureRequest, type SceneInvalid } from '../engine/illustrate';
 import type { RanAway } from '../engine/pipeline';
 import { fold, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
@@ -155,7 +155,7 @@ export class Illustrator {
     const switches = illustrateSwitches(store, stored.value.character);
     const route = imageRoute(store, switches.model);
     if ('kind' in route) return route;
-    // A given scene draws with the tags of the prompt chosen now, as a written one does.
+    // A given scene draws with the tags and settings of the prompt chosen now, as a written one does.
     const prompt = illustrationPrompt(store, switches.prompt);
     if (prompt.kind === 'missing') return { kind: 'prompt-missing', own: prompt.own };
     let scene = given;
@@ -170,7 +170,7 @@ export class Illustrator {
       onScene(scene);
     }
     const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-    const request = pictureRequest(scene, pictureTags(prompt.prompt.value), route.model, seed);
+    const request = pictureRequest(scene, prompt.prompt.value, route.model, seed);
     const drawn = await this.picture(route, request, spend || switches.spend, signal);
     if ('kind' in drawn) return drawn;
     const saved = await files.save([drawn.bytes], { signal });

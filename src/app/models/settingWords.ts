@@ -1,10 +1,7 @@
 import type { Cache, Change, ModelSettings, NumberSetting, ServiceTier, Verbosity } from '../../connectors/settings';
 import type { Stored } from '../../model/kinds';
-import { count } from './typedNumber';
+import { count } from '../common/typedNumber';
 
-// An empty field is unset: nothing is sent, and the provider's default applies. It is never shown as a number.
-// Not 기본값, which reads as the default 설정 named 기본.
-export const UNSET = '모델 원래 값';
 
 export type Field = NumberSetting | 'context';
 export const NUMBER: Record<Field, { label: string; help?: string; unit?: string; unset?: string }> = {

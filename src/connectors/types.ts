@@ -178,7 +178,8 @@ type TypeHooks = {
 };
 
 // center: where a character stands, 0–1 from the top left. A model that places no one gets the characters' prompts
-// joined into the main one by its connector.
+// joined into the main one by its connector. steps, scale (prompt guidance), rescale (guidance rescale) and sampler (an
+// id of Draws.samplers): null for the model's own, which its connector holds.
 export type PictureRequest = {
   model: Model;
   prompt: string;
@@ -187,6 +188,10 @@ export type PictureRequest = {
   width: number;
   height: number;
   seed: number;
+  steps: number | null;
+  scale: number | null;
+  rescale: number | null;
+  sampler: string | null;
 };
 
 export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string };
@@ -194,6 +199,8 @@ export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string };
 // Filled by a connection type whose models draw (Model.output holds 'image'). The request is built without the
 // credential, which authHeaders adds last, as for a chat. parse answers null for a body that holds no picture.
 export type Draws = {
+  // The samplers a request may name, the default first.
+  samplers: readonly { id: string; label: string }[];
   request(picture: PictureRequest): HttpRequest;
   authHeaders(secret: string): Record<string, string>;
   parse(body: Uint8Array<ArrayBuffer>, contentType: string | null): Promise<Picture | null>;

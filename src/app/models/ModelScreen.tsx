@@ -15,7 +15,7 @@ import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
 import { changeWords, defaultFirst, NOT_CALLABLE, valueWords } from './settingWords';
-import { count } from './typedNumber';
+import { count } from '../common/typedNumber';
 
 const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일' };
 

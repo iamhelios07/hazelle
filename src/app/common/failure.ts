@@ -62,6 +62,7 @@ const REFUSED: Record<string, string> = {
   'image-only': '이미지만 만드는 모델이라 대화에 쓸 수 없어요.',
   'too-many-characters': '이 모델이 한 장면에 그릴 수 있는 인물 수를 넘었어요.',
   'unknown-model': '이 버전에서 모르는 모델이에요. 새로고침해 주세요.',
+  'unknown-sampler': '이 모델이 모르는 샘플러예요. 삽화 프롬프트에서 샘플러를 다시 선택해 주세요.',
   'model-gone': '모델이 연결에서 빠져서 응답을 이어 받을 수 없어요.',
 };
 

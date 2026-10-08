@@ -17,14 +17,14 @@ import {
 } from '../../runtime/profiles';
 import { typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS } from '../common/words';
+import { BIN_KEEPS, UNSET } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Row, Screen, Section, SettingGroup, SettingRow, Stack, Text } from '../ui';
-import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, UNSET, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
-import { count, readTyped } from './typedNumber';
+import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
+import { count, readTyped } from '../common/typedNumber';
 
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
 // undefined: left empty, which unsets it. null: not a number the field takes.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Model } from '../connectors/types';
-import { parseScene, pictureRequest, PICTURE_DEFAULTS, sceneText } from './illustrate';
+import { illustratorPrompt, parseScene, pictureRequest, PICTURE_DEFAULTS, sceneText } from './illustrate';
 
 const answer = {
   after: 2,
@@ -39,7 +39,7 @@ it('builds the picture request: characters at their centers, the shape as its si
   const model = { id: 'nai-diffusion-5' } as Model;
   const parsed = parseScene(JSON.stringify(answer), 3);
   if (!parsed.ok) throw new Error(parsed.reason);
-  expect(pictureRequest(parsed.scene, PICTURE_DEFAULTS, model, 42)).toEqual({
+  expect(pictureRequest(parsed.scene, illustratorPrompt(), model, 42)).toEqual({
     model,
     prompt: `2girls, indoors, cafe, night, wide shot, ${PICTURE_DEFAULTS.quality}`,
     negative: PICTURE_DEFAULTS.negative,
@@ -50,16 +50,25 @@ it('builds the picture request: characters at their centers, the shape as its si
     width: 1216,
     height: 832,
     seed: 42,
+    steps: null,
+    scale: null,
+    rescale: null,
+    sampler: null,
   });
-  expect(pictureRequest({ ...parsed.scene, shape: 'portrait' }, PICTURE_DEFAULTS, model, 1)).toMatchObject({ width: 832, height: 1216 });
+  expect(pictureRequest({ ...parsed.scene, shape: 'portrait' }, illustratorPrompt(), model, 1)).toMatchObject({ width: 832, height: 1216 });
 });
 
-it("puts a prompt's own tags into the picture: artist first, an emptied field sends none", () => {
+it("puts a prompt's own tags and settings into the picture: artist first, an emptied field sends none, a fixed seed", () => {
   const model = { id: 'nai-diffusion-5' } as Model;
   const parsed = parseScene(JSON.stringify(answer), 3);
   if (!parsed.ok) throw new Error(parsed.reason);
-  expect(pictureRequest(parsed.scene, { artist: 'artist:somebody', quality: '', negative: ' bad hands ' }, model, 42)).toMatchObject({
+  const prompt = { ...illustratorPrompt(), tags: { artist: 'artist:somebody', quality: '', negative: ' bad hands ' }, picture: { steps: 23, sampler: 'k_euler', seed: 7 } };
+  expect(pictureRequest(parsed.scene, prompt, model, 42)).toMatchObject({
     prompt: 'artist:somebody, 2girls, indoors, cafe, night, wide shot',
     negative: 'bad hands',
+    seed: 7,
+    steps: 23,
+    scale: null,
+    sampler: 'k_euler',
   });
 });

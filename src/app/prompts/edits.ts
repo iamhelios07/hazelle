@@ -1,16 +1,17 @@
-import { SLOTS, type Block, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
+import { SLOTS, type Block, type PictureSettings, type PictureTags, type Prompt, type Role, type SlotKind, type TextBlock, type Toggle } from '../../model/prompt';
 import type { PromptPatch } from '../../runtime/prompts';
 import { blockSource } from './blocks';
 import { renameToggle, toggleUses } from './rekey';
 
 // authorNote: null for a sort of prompt that has none.
-export type Draft = Pick<Prompt, 'name' | 'blocks' | 'toggles'> & { authorNote: string | null; tags?: PictureTags };
+export type Draft = Pick<Prompt, 'name' | 'blocks' | 'toggles'> & { authorNote: string | null; tags?: PictureTags; picture?: PictureSettings };
 export const draftOf = (prompt: Prompt): Draft => ({
   name: prompt.name,
   blocks: prompt.blocks,
   toggles: prompt.toggles,
   authorNote: prompt.task === undefined ? prompt.authorNote : null,
   tags: prompt.task === 'illustrate' ? prompt.tags : undefined,
+  picture: prompt.task === 'illustrate' ? prompt.picture : undefined,
 });
 
 export type NewBlock = { text: Role } | { slot: SlotKind };

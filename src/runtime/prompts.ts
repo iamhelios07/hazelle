@@ -5,7 +5,7 @@ import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
-import { sortOf, type Block, type ConversationPrompt, type PictureTags, type Prompt, type PromptOf, type PromptSort, type Toggle } from '../model/prompt';
+import { sortOf, type Block, type ConversationPrompt, type PictureSettings, type PictureTags, type Prompt, type PromptOf, type PromptSort, type Toggle } from '../model/prompt';
 import { SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiFailure, ApiResult } from './api';
@@ -119,8 +119,8 @@ async function starterBytes(): Promise<Uint8Array<ArrayBuffer>> {
 }
 
 // Only the fields given, merged into the current prompt, so an edit to another field on another device survives.
-// authorNote is a conversation prompt's only, tags a 삽화 prompt's; tags undefined goes back to the app's.
-export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: Toggle[]; authorNote: string; tags: PictureTags }>;
+// authorNote is a conversation prompt's only, tags and picture a 삽화 prompt's; tags undefined goes back to the app's.
+export type PromptPatch = Partial<{ name: string; blocks: Block[]; toggles: Toggle[]; authorNote: string; tags: PictureTags; picture: PictureSettings }>;
 
 export const editPrompt = (store: ObjectStore, id: string, patch: PromptPatch) => store.update('prompt', id, (current): Prompt => ({ ...current, ...patch }));
 

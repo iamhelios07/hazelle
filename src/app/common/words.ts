@@ -83,3 +83,7 @@ export const EXPORT = '내보내기';
 export const CHAT_FILE = '채팅 파일';
 export const IMPORT_CHATS = '채팅 가져오기';
 export const ARCA_LOG = '아카라이브용 HTML';
+
+// An empty model setting is unset: nothing is sent, and the provider's default applies. It is never shown as a number.
+// Not 기본값, which reads as the default 설정 named 기본.
+export const UNSET = '모델 원래 값';

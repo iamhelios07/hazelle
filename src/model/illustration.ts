@@ -16,14 +16,17 @@ export type Figure = { name: string; look: string; outfit: string; action: strin
 export type Scene = { paragraph: number; shape: Shape; setting: string; framing: string; characters: Figure[] };
 
 // receipt: the call that wrote the scene, null for a scene the user changed (어떻게 바꿀까요?). model and sent are
-// what was drawn with, enough to draw it again. No cost: the image call reports none.
+// what was drawn with, enough to draw it again; a picture drawn before 2026-10-09 has no steps, scale, rescale or
+// sampler, and drew with the model's own. No cost: the image call reports none.
+type Tuning = 'steps' | 'scale' | 'rescale' | 'sampler';
+
 export type Illustration = {
   message: string;
   version: string;
   scene: Scene;
   receipt: Receipt | null;
   model: ModelRef;
-  sent: Omit<PictureRequest, 'model'>;
+  sent: Omit<PictureRequest, 'model' | Tuning> & Partial<Pick<PictureRequest, Tuning>>;
   file: FileRef;
   type: string;
   size: number;

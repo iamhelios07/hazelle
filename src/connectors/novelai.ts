@@ -30,13 +30,30 @@ const MODELS: Model[] = [
   drawing('nai-diffusion-4-5-curated', 'NovelAI Diffusion V4.5 Curated'),
 ];
 
+// NovelAI's own list for V4.5 and V5, as NAIWeaver's NaiModel.samplers states it (nai_model.dart).
+const SAMPLERS = [
+  { id: 'k_euler_ancestral', label: 'Euler Ancestral' },
+  { id: 'k_euler', label: 'Euler' },
+  { id: 'k_dpmpp_2s_ancestral', label: 'DPM++ 2S Ancestral' },
+  { id: 'k_dpmpp_2m_sde', label: 'DPM++ 2M SDE' },
+  { id: 'k_dpmpp_2m', label: 'DPM++ 2M' },
+  { id: 'k_dpmpp_sde', label: 'DPM++ SDE' },
+];
+
+// The default and the most an Opus picture takes free.
+const FREE_STEPS = 28;
+const stepsOf = (picture: PictureRequest) => picture.steps ?? FREE_STEPS;
+
 const onGrid = (value: number) => (Math.min(Math.floor(value * 5), 4) * 2 + 1) / 10;
 const thousandths = (value: number) => Math.round(value * 1000) / 1000;
 
-// Steps stay at 28 and samples at 1: past either, an Opus picture costs Anlas.
-function generateBody({ model, prompt, negative, characters, width, height, seed }: PictureRequest): Record<string, unknown> {
+// Samples stay at 1: past it, an Opus picture costs Anlas.
+function generateBody(picture: PictureRequest): Record<string, unknown> {
+  const { model, prompt, negative, characters, width, height, seed } = picture;
   const body = BODIES[model.id];
   if (!body) throw new ConnectorError('unknown-model');
+  const sampler = picture.sampler ?? SAMPLERS[0]!.id;
+  if (!SAMPLERS.some(({ id }) => id === sampler)) throw new ConnectorError('unknown-sampler');
   if (characters.length > body.maxCharacters) throw new ConnectorError('too-many-characters');
   const place = body.grid ? onGrid : thousandths;
   const centers = characters.map(({ center }) => [{ x: place(center.x), y: place(center.y) }]);
@@ -48,16 +65,16 @@ function generateBody({ model, prompt, negative, characters, width, height, seed
       params_version: body.paramsVersion,
       width,
       height,
-      scale: body.scale,
-      sampler: 'k_euler_ancestral',
-      steps: 28,
+      scale: picture.scale ?? body.scale,
+      sampler,
+      steps: stepsOf(picture),
       seed,
       n_samples: 1,
       noise_schedule: 'karras',
       // V4.5 keeps the SMEA keys, always false: true is a 500 on every V4+ model. V5 drops them.
       ...(!body.v5 && { sm: false, sm_dyn: false }),
       dynamic_thresholding: false,
-      cfg_rescale: 0,
+      cfg_rescale: picture.rescale ?? 0,
       deliberate_euler_ancestral_bug: false,
       prefer_brownian: true,
       uc: negative,
@@ -111,12 +128,13 @@ const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
 
 const subscription = (secret: string) => ({ url: 'https://image.novelai.net/user/subscription', method: 'GET' as const, headers: bearer(secret), body: null });
 
-// Free on Opus only, for one picture of at most 1,048,576 pixels at 28 steps (generateBody keeps both). Past its V5
-// allowance every V5 picture costs Anlas until it refills, so a V5 picture is free only while some is left; a missing
-// allowance is not known, never free.
-function free(payload: unknown, { model, width, height }: PictureRequest): boolean | null {
+// Free on Opus only, for one picture of at most 1,048,576 pixels at no more than 28 steps. Past its V5 allowance every
+// V5 picture costs Anlas until it refills, so a V5 picture is free only while some is left; a missing allowance is not
+// known, never free.
+function free(payload: unknown, picture: PictureRequest): boolean | null {
+  const { model, width, height } = picture;
   if (!isRecord(payload) || typeof payload.tier !== 'number') return null;
-  if (payload.active !== true || payload.tier !== 3 || width * height > 1_048_576) return false;
+  if (payload.active !== true || payload.tier !== 3 || width * height > 1_048_576 || stepsOf(picture) > FREE_STEPS) return false;
   if (!BODIES[model.id]?.v5) return true;
   const usage = isRecord(payload.usage) ? payload.usage : null;
   if (!usage || typeof usage.percent !== 'number') return null;
@@ -134,6 +152,7 @@ export const novelai: ConnectionType = {
   // The only check that a pasted key works: there is no model list to ask. api.novelai.net refuses this path now.
   meters: [{ request: subscription, parse: meters, plan }],
   draws: {
+    samplers: SAMPLERS,
     request: (picture) => ({ url: 'https://image.novelai.net/ai/generate-image', method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(generateBody(picture)) }),
     authHeaders: bearer,
     parse: (body) => Promise.resolve(pictureIn(body)),

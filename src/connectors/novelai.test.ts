@@ -18,6 +18,10 @@ const picture = (model: Model): PictureRequest => ({
   width: 832,
   height: 1216,
   seed: 42,
+  steps: null,
+  scale: null,
+  rescale: null,
+  sampler: null,
 });
 const sent = (model: Model) => JSON.parse(novelai.draws!.request(picture(model)).body!) as { model: string; parameters: Record<string, unknown> };
 
@@ -75,6 +79,13 @@ describe('NovelAI', () => {
     expect(await novelai.draws!.parse(strToU8('{"statusCode":402,"message":"Not enough Anlas"}'), 'application/json')).toBeNull();
   });
 
+  it("sends a picture's own steps, guidance, rescale and sampler, and refuses a sampler it does not know", () => {
+    const own = { ...picture(v45!), steps: 23, scale: 6.5, rescale: 0.2, sampler: 'k_dpmpp_2m' };
+    expect(JSON.parse(novelai.draws!.request(own).body!).parameters).toMatchObject({ steps: 23, scale: 6.5, cfg_rescale: 0.2, sampler: 'k_dpmpp_2m' });
+    expect(sent(v45!).parameters).toMatchObject({ steps: 28, scale: 5, cfg_rescale: 0, sampler: 'k_euler_ancestral' });
+    expect(() => novelai.draws!.request({ ...own, sampler: 'ddim' })).toThrow(new ConnectorError('unknown-sampler'));
+  });
+
   it('calls a picture free only on Opus, inside the free size, and for V5 only while its allowance lasts', () => {
     const { parse } = novelai.draws!.free!;
     const opus = { tier: 3, active: true, usage: { percent: 12, isNegative: false } };
@@ -85,6 +96,7 @@ describe('NovelAI', () => {
     expect(parse({ ...opus, usage: { percent: 0, isNegative: false } }, picture(v45!))).toBe(true);
     expect(parse({ ...opus, tier: 2 }, picture(v5!))).toBe(false);
     expect(parse(opus, { ...picture(v5!), width: 1024, height: 1536 })).toBe(false);
+    expect(parse(opus, { ...picture(v5!), steps: 29 })).toBe(false);
   });
 
   it('reads the V5 usage limit and Anlas from the subscription, and names the tier', () => {

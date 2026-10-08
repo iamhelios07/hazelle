@@ -86,12 +86,13 @@ export const PICTURE_DEFAULTS: PictureTags = {
   negative: 'lowres, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, blurry, jpeg artifacts, signature, watermark, username, text, worst quality, low quality',
 };
 
-export const pictureTags = (prompt: IllustratePrompt): PictureTags => prompt.tags ?? PICTURE_DEFAULTS;
 
 const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 
-// Artist tags lead the base caption (design §6.6).
-export function pictureRequest(scene: Scene, { artist, quality, negative }: PictureTags, model: Model, seed: number): PictureRequest {
+// Artist tags lead the base caption (design §6.6). random: the seed of a prompt that fixes none.
+export function pictureRequest(scene: Scene, prompt: IllustratePrompt, model: Model, random: number): PictureRequest {
+  const { artist, quality, negative } = prompt.tags ?? PICTURE_DEFAULTS;
+  const { steps = null, scale = null, rescale = null, sampler = null, seed = random } = prompt.picture ?? {};
   return {
     model,
     prompt: tags(artist, scene.setting, scene.framing, quality),
@@ -99,5 +100,9 @@ export function pictureRequest(scene: Scene, { artist, quality, negative }: Pict
     characters: scene.characters.map(({ look, outfit, action, x, y }) => ({ prompt: tags(look, outfit, action), negative: '', center: { x, y } })),
     ...SIZES[scene.shape],
     seed,
+    steps,
+    scale,
+    rescale,
+    sampler,
   };
 }
