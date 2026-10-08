@@ -260,7 +260,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   return (
     <StoryMessage
       avatar={mine ? <Avatar face={me?.name ?? '?'} image={me?.image} tone="you" /> : character ? <Avatar face={character.name} image={character.image} /> : <Avatar face={Bot} />}
-      name={mine ? (me?.name ?? NO_PERSONA) : (character?.name ?? receipt?.modelName ?? modelName ?? '모델')}
+      name={speaker(message, character, me, modelName)}
       time={timeOfDay(version.at)}
       mine={mine && editing === null}
       mark={mark}
@@ -289,4 +289,8 @@ function sameRow(previous: Props, next: Props): boolean {
   return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
 }
 
-export const shownHtml = (text: string, { bot, url }: Props['decor']) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));
+// The name a row goes by: the persona's for the user's, else the character's, or with none the model's.
+export const speaker = (message: Shown, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>
+  message.role === 'user' ? (me?.name ?? NO_PERSONA) : (character?.name ?? shown(message).receipt?.modelName ?? modelName ?? '모델');
+
+export const shownHtml = (text: string, { bot, url }: Pick<Props['decor'], 'bot' | 'url'>) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));

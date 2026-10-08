@@ -1,21 +1,26 @@
-import { Check, MessageSquarePlus, Package } from 'lucide-react';
+import { Check, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ImportFailure } from '../../engine/import/types';
-import { live } from '../../model/library';
+import { live, matches } from '../../model/library';
 import { importCharacter } from '../../runtime/characters';
+import { importChat } from '../../runtime/chat-log';
+import type { ApiFailure } from '../../runtime/api';
 import { ImportWorker } from '../../runtime/import/client';
-import { ImportReadError } from '../../runtime/import/protocol';
+import { ImportReadError, type ChatsRead } from '../../runtime/import/protocol';
 import { importModule, setModuleAt, type ModulePlace } from '../../runtime/modules';
-import { fillPictures, risuMatch } from '../../runtime/move';
+import { fillPictures, importRisuChats, risuMatch } from '../../runtime/move';
 import { ofSort } from '../../runtime/prompts';
 import type { ObjectStore } from '../../runtime/store';
+import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
-import { useFiles, useSettings, useStore } from '../session';
+import { SEARCH_FROM } from '../common/search';
+import { NO_CHARACTER } from '../common/words';
+import { useFiles, useLibrary, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
-import { Button, Callout, ConfirmDialog, Dialog, DropOverlay, Progress, Row, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
-import { characterOutcome, moduleOutcome, type ImportOutcome } from './importOutcome';
-import { assetsMissed } from './missed';
+import { Avatar, Button, Callout, ConfirmDialog, Dialog, DropOverlay, Menu, MenuItem, Progress, Row, SearchField, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
+import { characterOutcome, chatOutcome, moduleOutcome, type ImportOutcome } from './importOutcome';
+import { assetsMissed, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
 import { MoveFlow } from './MoveFlow';
 import { stepOf } from './saving';
@@ -24,10 +29,14 @@ const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin';
 
 type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed: string[] };
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
-type Ask = { name: string; answer: (fill: boolean) => void };
+// fill: whether to bring only a card's pictures to the character Risu's move brought under its name. character: which
+// character a file of chats goes to, null for 캐릭터 없이; name is the one the file was with, when it says.
+type Ask = { kind: 'fill'; name: string; answer: (fill: boolean) => void } | { kind: 'character'; file: string; name: string | null; fallback: string | null; answer: (character: string | null) => void };
+// Where a file of chats goes: a character's id, null for 캐릭터 없이, undefined where the way in names none.
+type Target = string | null | undefined;
 type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Result[]; ask: Ask | null };
 
-const ImportContext = createContext<{ pick: () => void; move: () => void } | null>(null);
+const ImportContext = createContext<{ pick: () => void; pickChats: (target: string | null) => void; move: () => void } | null>(null);
 
 export function useImport() {
   const context = useContext(ImportContext);
@@ -42,7 +51,7 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
 };
 
 // Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,
-// a conversation prompt's editor, or 설정 › 모듈 for 항상.
+// a conversation prompt's editor, or 설정 › 모듈 for 항상. A file of chats that names no character goes to the character found here too.
 function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
   switch (route.kind) {
     case 'shelf':
@@ -76,6 +85,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const noticed = useSettings().importNotice === true;
   const [notice, setNotice] = useState<(() => void) | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const target = useRef<Target>(undefined);
   const readers = useRef(new Set<ImportWorker>());
   const mounted = useRef(true);
   const [state, setState] = useState<State | null>(null);
@@ -91,12 +101,32 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function save(file: File, place: ModulePlace | null, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>): Promise<Result> {
+  // A file of chats goes where the way in named, else to the character it was with when that one is here. When that
+  // one is gone, the user picks, with a character of the same name picked first. A file that names none goes to the
+  // route's character, else where the user picks.
+  async function saveChats(file: string, read: ChatsRead, target: Target, place: ModulePlace | null, choose: (name: string | null, fallback: string | null) => Promise<string | null>): Promise<Result> {
+    const named = 'chat' in read ? read.chat.character : null;
+    const routed = place?.kind === 'character' && live(store.get('character', place.id)) ? place.id : null;
+    const character =
+      target !== undefined ? target : named === null ? (routed ?? (await choose(null, null))) : live(store.get('character', named.id)) ? named.id : await choose(named.name, routed);
+    const shown = character === null ? null : store.get('character', character)!.value;
+    const name = shown && aliased(shown.card.name, shown.alias);
+    const failed = (failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
+    if ('chat' in read) {
+      const saved = await importChat(store, read.chat, character);
+      return saved.ok ? chatOutcome(file, [saved.data.id], name, chatMissed(saved.data.dropped)) : failed(saved);
+    }
+    const saved = await importRisuChats(store, character, read.risuChats);
+    return saved.ok ? chatOutcome(file, saved.data, name, moveMissed(read.missed)) : failed(saved);
+  }
+
+  async function save(file: File, place: ModulePlace | null, target: Target, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>, choose: (name: string | null, fallback: string | null) => Promise<string | null>): Promise<Result> {
     const reader = new ImportWorker();
     readers.current.add(reader);
     try {
       const parsed = await reader.card(file);
       if (!parsed.ok) return { kind: 'failed', file: file.name, failure: FAILURE[parsed.failure.kind] };
+      if ('chat' in parsed || 'risuChats' in parsed) return await saveChats(file.name, parsed, target, place, choose);
       if ('module' in parsed) {
         const saved = await importModule(store, files, parsed.module, (step) => progress(stepOf(step)));
         if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
@@ -124,7 +154,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function take(files: File[]) {
+  async function take(files: File[], target: Target) {
     if (files.length === 0 || state?.busy || moving) return;
     const backups = files.filter((file) => file.name.toLowerCase().endsWith('.bin'));
     if (backups.length > 0) return setMoving({ files: backups, aside: files.length - backups.length });
@@ -134,8 +164,9 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       if (!mounted.current) return;
       setState({ busy: { file: file.name, steps: [] }, results, ask: null });
       const progress = (step: ProgressStep) => setState({ busy: { file: file.name, steps: [step] }, results, ask: null });
-      const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { name, answer } }));
-      results.push(await save(file, place, progress, ask));
+      const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'fill', name, answer } }));
+      const choose = (name: string | null, fallback: string | null) => new Promise<string | null>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, fallback, answer } }));
+      results.push(await save(file, place, target, progress, ask, choose));
     }
     setState({ busy: null, results, ask: null });
   }
@@ -146,14 +177,22 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     else setNotice(() => then);
   }
 
-  const dragging = useFileDrop((dropped) => asked(() => void take(dropped)));
+  function open(to: Target) {
+    asked(() => {
+      target.current = to;
+      input.current?.click();
+    });
+  }
+
+  const dragging = useFileDrop((dropped) => asked(() => void take(dropped, undefined)));
 
   const done = state?.results.flatMap((result) => result.kind === 'character' ? [result.id] : []) ?? [];
+  const chats = state?.results.flatMap((result) => result.kind === 'chat' ? [result.id] : []) ?? [];
   const modules = state?.results.flatMap((result) => result.kind === 'module' ? [result.id] : []) ?? [];
   const came = state?.results.some((result) => result.kind !== 'failed') ?? false;
-  const title = state?.ask ? '이미지만 가져올까요?' : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
+  const title = state?.ask ? (state.ask.kind === 'fill' ? '이미지만 가져올까요?' : '어느 캐릭터에 넣을까요?') : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
   return (
-    <ImportContext.Provider value={{ pick: () => asked(() => input.current?.click()), move: () => asked(() => setAsking(true)) }}>
+    <ImportContext.Provider value={{ pick: () => open(undefined), pickChats: open, move: () => asked(() => setAsking(true)) }}>
       {children}
       <input
         ref={input}
@@ -164,7 +203,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         onChange={(event) => {
           const files = [...(event.target.files ?? [])];
           event.target.value = '';
-          void take(files);
+          void take(files, target.current);
         }}
       />
       {notice && (
@@ -182,7 +221,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           제작자가 RisuAI에서만 쓰도록 배포한 봇은 가져오지 마세요.
         </ConfirmDialog>
       )}
-      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈이나 Risu 백업을 가져와요</DropOverlay>}
+      {dragging && <DropOverlay>여기에 놓으면 봇, 모듈, 채팅이나 Risu 백업을 가져와요</DropOverlay>}
       {asking && (
         <MoveDialog
           onRead={(files) => {
@@ -199,7 +238,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
             {state.results.map((result, index) =>
               result.kind === 'failed' ? <Failed key={index} file={result.file} failure={result.failure} /> : result.kind === 'filled' ? <FilledSummary key={index} result={result} /> : <Summary key={index} result={result} />,
             )}
-            {state.ask ? <FillChoice ask={state.ask} onAnswer={() => setState({ ...state, ask: null })} /> : state.busy && <><Text variant="note">{state.busy.file}</Text><Progress steps={state.busy.steps} /></>}
+            {state.ask?.kind === 'fill' ? <FillChoice ask={state.ask} onAnswer={() => setState({ ...state, ask: null })} /> : state.ask ? <CharacterChoice key={state.ask.file} ask={state.ask} onAnswer={() => setState({ ...state, ask: null })} /> : state.busy && <><Text variant="note">{state.busy.file}</Text><Progress steps={state.busy.steps} /></>}
             {!state.busy && done.length === 1 && (
               <Button
                 icon={MessageSquarePlus}
@@ -209,6 +248,18 @@ export function ImportProvider({ children }: { children: ReactNode }) {
                 }}
               >
                 채팅 시작
+              </Button>
+            )}
+            {!state.busy && chats.length === 1 && chats[0] !== null && (
+              <Button
+                variant={done.length === 1 ? 'secondary' : 'primary'}
+                icon={MessageSquare}
+                onClick={() => {
+                  setState(null);
+                  navigate({ kind: 'chat', id: chats[0]! });
+                }}
+              >
+                열기
               </Button>
             )}
             {!state.busy && modules.length === 1 && (
@@ -241,7 +292,40 @@ function Summary({ result }: { result: ImportOutcome }) {
   );
 }
 
-function FillChoice({ ask, onAnswer }: { ask: Ask; onAnswer: () => void }) {
+function CharacterChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'character' }>; onAnswer: () => void }) {
+  const { characters } = useLibrary();
+  const [picked, setPicked] = useState(() => characters.find(({ character }) => character.card.name === ask.name)?.id ?? ask.fallback);
+  const [query, setQuery] = useState('');
+  const found = characters.filter(({ character }) => matches(character, query));
+  const chosen = characters.find(({ id }) => id === picked)?.character;
+  const name = chosen ? aliased(chosen.card.name, chosen.alias) : NO_CHARACTER;
+  return (
+    <Section title={ask.name ?? ask.file}>
+      <Stack gap="related">
+        <Menu place="below-start" size="lg" label="캐릭터" trigger={(opener) => <Button variant="secondary" size="md" {...opener}>{name}</Button>}>
+          {characters.length >= SEARCH_FROM && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={setQuery} />}
+          {!query.trim() && <MenuItem label={NO_CHARACTER} checked={picked === null} onClick={() => setPicked(null)} />}
+          {found.map(({ id, character, face }) => (
+            <MenuItem key={id} label={aliased(character.card.name, character.alias)} avatar={<Avatar face={character.card.name} image={face} />} checked={picked === id} onClick={() => setPicked(id)} />
+          ))}
+        </Menu>
+        <Row kind="actions">
+          <Button
+            size="md"
+            onClick={() => {
+              onAnswer();
+              ask.answer(picked);
+            }}
+          >
+            넣기
+          </Button>
+        </Row>
+      </Stack>
+    </Section>
+  );
+}
+
+function FillChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'fill' }>; onAnswer: () => void }) {
   const answer = (fill: boolean) => {
     onAnswer();
     ask.answer(fill);

@@ -5,7 +5,7 @@ import { fold, shown } from '../model/chat';
 import { randomBytes } from '../vault/aead';
 import { importCharacter } from './characters';
 import { MEMORY_DEFAULTS } from './memory-read';
-import { broughtFromRisu, fillPictures, moveFromRisu, risuMatch, type MoveStep } from './move';
+import { broughtFromRisu, fillPictures, importRisuChats, moveFromRisu, risuMatch, type MoveStep } from './move';
 import { setModuleAlways } from './modules';
 import { addPersona, setCurrentPersona } from './personas';
 import { testCard, testServer } from './testing';
@@ -104,6 +104,16 @@ describe('moveFromRisu', () => {
     expect(backup.character).toHaveBeenCalledExactlyOnceWith(0);
     expect(store.list('character')).toHaveLength(1);
     expect(broughtFromRisu(store)).toEqual(new Set(['risu-luna']));
+  });
+
+  it('opens a chat whose greeting lies past the card\'s on its last one', async () => {
+    const { store, files } = await server.account();
+    const backup = source({ characters: [{ ...luna, chats: [{ ...luna.chats[0]!, greeting: 5 }] }] });
+    await moveFromRisu(store, files, backup, backup.catalog, () => {});
+    const [chat] = store.list('chat');
+    await server.hold(store, chat!.id);
+    const [greeting] = fold(store.children('entry', chat!.id));
+    expect([shown(greeting!).text, shown(greeting!).greeting]).toEqual(['둘째 인사', 2]);
   });
 
   it('gives a chat Risu bound to no persona the current one', async () => {
@@ -210,6 +220,21 @@ describe('moveFromRisu', () => {
     expect(await moveFromRisu(store, files, backup, backup.catalog, () => {})).toMatchObject({ ok: true, data: { prompts: 1 } });
     const ids = new Map(store.list('module').map(({ id, value }) => [value.name, id]));
     expect(store.list('prompt').find(({ value }) => value.name === '짝')!.value).toMatchObject({ modules: [ids.get('Chime'), ids.get('Bell')] });
+  });
+});
+
+describe('importRisuChats', () => {
+  it('writes the chats of a Risu chat file in one batch, their messages staged, with the current persona', async () => {
+    const { store } = await server.account();
+    const current = await addPersona(store, { name: '진', description: '', picture: null });
+    await setCurrentPersona(store, current.ok ? current.data.id : '');
+    const batch = vi.spyOn(store, 'batch');
+    const imported = await importRisuChats(store, null, [luna.chats[0]!, { ...luna.chats[0]!, title: '둘째' }]);
+    if (!imported.ok) throw new Error(imported.error);
+    expect(batch).toHaveBeenCalledOnce();
+    expect(imported.data.map((id) => store.get('chat', id)!.value.persona)).toEqual([current.ok && current.data.id, current.ok && current.data.id]);
+    await server.hold(store, imported.data[0]!);
+    expect(fold(store.children('entry', imported.data[0]!)).map((message) => [shown(message).text, shown(message).staged])).toEqual([['안녕', true], ['반가워 [HP 7]', true]]);
   });
 });
 

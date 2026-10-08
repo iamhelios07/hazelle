@@ -1,4 +1,5 @@
 import { ChangeSignal } from '../change-signal';
+import { toBase64 } from '../vault/aead';
 import type { Files } from './files';
 import type { ObjectStore } from './store';
 
@@ -158,4 +159,17 @@ export class AssetUrls {
     this.pins.clear();
     this.changes.clear();
   }
+}
+
+// Each asset's file as a data: URL, for a page that outlives this one's blob: URLs. missing: assets gone or unreadable.
+export async function assetDataUrls(store: Pick<ObjectStore, 'get'>, files: Pick<Files, 'read'>, ids: Iterable<string>): Promise<{ urls: Map<string, string>; missing: number }> {
+  const urls = new Map<string, string>();
+  let missing = 0;
+  for (const id of ids) {
+    const asset = store.get('asset', id)?.value;
+    const read = asset && (await files.read(asset.file));
+    if (asset && read?.ok) urls.set(id, `data:${asset.type};base64,${toBase64(read.data)}`);
+    else missing++;
+  }
+  return { urls, missing };
 }

@@ -1,5 +1,7 @@
 import { readBackup } from '../../engine/import/backup';
 import { importCard } from '../../engine/import/card';
+import { risuChatFile } from '../../engine/import/risu-character';
+import { readChatFile } from '../chat-file';
 import type { BackupSource, Imported, ImportedModule, Picture, RisuBackup, RisuChat } from '../../engine/import/types';
 import { MESSAGE_BYTES, MESSAGE_PAGE, type AssetRead, type CardData, type Method, type ModuleData, type Replies, type Request } from './protocol';
 
@@ -8,6 +10,21 @@ const sourceOf = (file: File): BackupSource => ({
   size: file.size,
   read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
 });
+
+// null for a JSON that is no file of chats, which importCard then reads as a card, parsing it again.
+function chatsOf(bytes: Uint8Array<ArrayBuffer>): Replies['card'] | null {
+  let json: unknown;
+  try {
+    json = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+  const read = readChatFile(json);
+  if (read.ok) return { ok: true, chat: read.file };
+  if (read.error === 'other-version') return { ok: false, failure: { kind: 'unreadable', detail: read.error } };
+  const risu = risuChatFile(json);
+  return risu && { ok: true, risuChats: risu.chats, missed: risu.missed };
+}
 
 export class ImportReader {
   private backup: RisuBackup | null = null;
@@ -29,7 +46,10 @@ export class ImportReader {
       case 'card': {
         this.clear();
         this.backup = null;
-        const result = importCard(request.file.name, new Uint8Array(await request.file.arrayBuffer()));
+        const bytes = new Uint8Array(await request.file.arrayBuffer());
+        const chats = request.file.name.toLowerCase().endsWith('.json') ? chatsOf(bytes) : null;
+        if (chats) return chats;
+        const result = importCard(request.file.name, bytes);
         if (!result.ok) return result;
         return 'card' in result ? { ok: true, card: this.card(result.card) } : { ok: true, module: this.module(result.module) };
       }

@@ -1,0 +1,58 @@
+/* Out of sight, yet laid out: snapshot reads computed styles and pictures must decode. */
+.stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  translate: -200% 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Its own background and color: the log is pasted onto another site's page. */
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  width: var(--read-width);
+  padding: var(--space-24);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.sub {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.name {
+  composes: name from './StoryMessage.module.css';
+  margin: 0;
+}
+
+.me {
+  composes: me from './StoryMessage.module.css';
+  margin: 0;
+}
+
+.bubble {
+  composes: bubble from './StoryMessage.module.css';
+}

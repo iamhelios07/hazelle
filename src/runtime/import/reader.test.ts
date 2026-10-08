@@ -128,6 +128,17 @@ describe('ImportReader', () => {
     expect(await ask(reader, { kind: 'messages', index: 0, from: 4 })).toEqual({ messages: [{ role: 'user', text: 'tail', at: 5 }], next: 5 });
   });
 
+  it('reads a JSON file of chats, this app\'s own or Risu\'s in either form, and any other JSON as a card', async () => {
+    const reader = new ImportReader();
+    const read = (value: unknown) => ask(reader, { kind: 'card', file: new File([json(value)], 'file.json') });
+    const chat = { name: '등대', message: [{ role: 'user', data: '안녕', time: 1 }, { role: 'char', data: '반가워 {{inlay::a}}', time: 2 }], bookmarks: ['x'] };
+    expect(await read({ type: 'risuChat', ver: 2, data: chat })).toMatchObject({ ok: true, risuChats: [{ title: '등대', greeting: 0, messages: [{ role: 'user', text: '안녕' }, { role: 'assistant' }] }], missed: [{ kind: 'inlay', count: 1 }, { kind: 'bookmark', count: 1 }] });
+    expect(await read({ type: 'risuAllChats', ver: 1, data: [chat, { ...chat, name: '둘째', fmIndex: 1 }] })).toMatchObject({ ok: true, risuChats: [{ title: '등대' }, { title: '둘째', greeting: 2 }] });
+    const rows = [{ id: 'c', kind: 'chat', parent: null, rev: 1, value: { title: null, character: null, models: {} } }, { id: 'e', kind: 'entry', parent: 'c', rev: 2, value: { type: 'message', role: 'user', at: 1, text: '안녕', receipt: null } }];
+    expect(await read({ format: 'hazelle-chat', version: 1, character: null, rows })).toMatchObject({ ok: true, chat: { chat: { id: 'c' }, entries: [{ id: 'e' }], memory: null } });
+    expect(await read({ spec: 'chara_card_v3', spec_version: '3.0', data: { name: 'Card' } })).toMatchObject({ ok: true, card: { card: { name: 'Card' } } });
+  });
+
   it('transfers fresh buffers so repeated asset and picture reads cannot detach the CHARX archive', async () => {
     const second = new Uint8Array([...PNG, 3]);
     const archive = zipSync({

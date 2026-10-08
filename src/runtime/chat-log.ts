@@ -1,10 +1,13 @@
 import type { Cost } from '../connectors/types';
 import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
-import { CAST_MAX, shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
+import { CAST_MAX, fold, shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import { live } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
+import { routeOf } from './assignment';
+import type { ChatFile } from './chat-file';
 import { markDeleted } from './removal';
 import type { Greetings } from './greetings';
 import { withPersona } from './personas';
@@ -14,7 +17,8 @@ import type { ObjectStore, Write } from './store';
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
 // the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with
 // its character, a backup's restore, which copies them as they were, and a move from Risu, which saves chatWrites'
-// entries before its character and the chat root with it (runtime/characters addCharacter).
+// entries before its character and the chat root with it (runtime/characters addCharacter). An imported chat file or
+// Risu chat file (importChat here, importRisuChats in runtime/move) is saved through saveNewChats.
 
 // A new chat is saved in this order: the chat with its greetings, the one shown selected, then the user's first
 // message, sent with its reply. Messages stand in the order they were saved, so the greeting leads only when it is
@@ -60,26 +64,91 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const upTo = item.messages.findIndex((candidate) => candidate.id === message);
     if (upTo === -1) return { ok: false, error: 'gone' };
     const id = crypto.randomUUID();
-    let after = '';
-    const writes: Write[] = [];
-    const messages = new Map<string, string>();
-    const versions = new Map<string, string>();
-    for (const source of item.messages.slice(0, upTo + 1)) {
-      after = crypto.randomUUID();
-      messages.set(source.id, after);
-      const copy = copied(after, source);
-      for (const [old, made] of copy.versions) versions.set(old, made);
-      for (const [entryId, entry] of copy.entries) {
-        writes.push({ type: 'create', kind: 'entry', id: entryId, parent: id, value: entry });
-      }
-    }
     const memory = store.children('memory', item.id).find((entry) => entry.id === memoryId(item.id))?.value;
-    const kept = memory && branchMemory(memory, messages, versions);
-    if (kept) writes.push({ type: 'create', kind: 'memory', id: memoryId(id), parent: id, value: kept });
+    const { writes, after } = copyWrites(id, item.messages.slice(0, upTo + 1), memory);
     writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
     const created = await store.batch(writes);
     return created.ok ? { ok: true, data: id } : created;
   });
+}
+
+// What a chat file's chat named that this account does not hold live, by kind; models counts roles.
+export type Dropped = { prompt: number; persona: number; cast: number; models: number };
+
+// A chat file's chat, copied under new ids as a branch is, to character. What it names that is not live here is
+// left out and counted, so the chat follows the default there; a persona left out gives the one a new chat takes.
+export async function importChat(store: ObjectStore, file: ChatFile, character: string | null): Promise<ApiResult<{ id: string; dropped: Dropped }>> {
+  const id = crypto.randomUUID();
+  const { writes, messages } = copyWrites(id, fold(file.entries), file.memory?.value);
+  const { prompt, persona, cast = [], models, origin, ...value } = without(without(file.chat.value, 'deleted'), 'purging');
+  const held = (kind: 'prompt' | 'persona' | 'character' | 'chat', ref: string | undefined): ref is string => ref !== undefined && live(store.get(kind, ref)) !== null;
+  const kept = cast.filter((each) => held('character', each));
+  const roles = Object.entries(models).filter(([, ref]) => ref && !('kind' in routeOf(store, ref)));
+  const after = origin && messages.get(origin.after);
+  const chat: Chat = {
+    ...value,
+    character,
+    models: Object.fromEntries(roles),
+    seed: value.seed ?? file.chat.id,
+    ...(held('prompt', prompt) && { prompt }),
+    ...(held('persona', persona) && { persona }),
+    ...(origin && after && held('chat', origin.id) && { origin: { ...origin, after } }),
+  };
+  const dropped = {
+    prompt: Number(prompt !== undefined && chat.prompt === undefined),
+    persona: Number(persona !== undefined && chat.persona === undefined),
+    cast: cast.length - kept.length,
+    models: Object.keys(models).length - roles.length,
+  };
+  writes.push({ type: 'create', kind: 'chat', id, parent: null, value: withCast(withPersona(store, chat), character, kept) });
+  const failure = await saveNewChats(store, [id], writes);
+  return failure ?? { ok: true, data: { id, dropped } };
+}
+
+// Chats written here for the first time, each root after what it owns: held while they land and summarized before
+// this answers, so the list shows them at once. landed: what goes after the batch and before the summaries, which read
+// it; a move saves its character there, with the chat roots.
+export async function saveNewChats(
+  store: ObjectStore,
+  chats: string[],
+  writes: Write[],
+  { written, landed }: { written?: (write: Write) => void; landed?: () => Promise<ApiFailure | null> } = {},
+): Promise<ApiFailure | null> {
+  const leases = chats.map((chat) => store.retainChat(chat, { created: true }));
+  try {
+    for (const lease of leases) {
+      const failure = await lease.ready;
+      if (failure) return failure;
+    }
+    const saved = await store.batch(writes, written, { unheld: true });
+    if (!saved.ok) return saved;
+    const failure = await landed?.();
+    if (failure) return failure;
+    return await store.projections.saveMany(chats);
+  } finally {
+    for (const lease of leases) lease.release();
+  }
+}
+
+// Each message copied to the chat id, with the memory that still applies. messages: each copy's id by the original's.
+// after: the last copy's id.
+function copyWrites(id: string, source: Message[], memory: Memory | undefined): { writes: Write[]; messages: Map<string, string>; after: string } {
+  let after = '';
+  const writes: Write[] = [];
+  const messages = new Map<string, string>();
+  const versions = new Map<string, string>();
+  for (const message of source) {
+    after = crypto.randomUUID();
+    messages.set(message.id, after);
+    const copy = copied(after, message);
+    for (const [old, made] of copy.versions) versions.set(old, made);
+    for (const [entryId, entry] of copy.entries) {
+      writes.push({ type: 'create', kind: 'entry', id: entryId, parent: id, value: entry });
+    }
+  }
+  const kept = memory && branchMemory(memory, messages, versions);
+  if (kept) writes.push({ type: 'create', kind: 'memory', id: memoryId(id), parent: id, value: kept });
+  return { writes, messages, after };
 }
 
 // The records whose every message lies before the split, their sources remapped to the branch's messages and versions

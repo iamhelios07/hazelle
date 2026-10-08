@@ -2,10 +2,11 @@ import { MessageSquare } from 'lucide-react';
 import type { ChatSummary } from '../../model/chat';
 import { daysLeft, type CharacterShelf, type Shelf } from '../../model/library';
 import { aliased } from '../common/alias';
+import { NO_CHARACTER } from '../common/words';
 import { ago } from '../common/time';
 import { Avatar } from '../ui';
 
-export const shelfName = ({ character }: Shelf<ChatSummary>) => (character ? aliased(character.card.name, character.alias) : '캐릭터 없이');
+export const shelfName = ({ character }: Shelf<ChatSummary>) => (character ? aliased(character.card.name, character.alias) : NO_CHARACTER);
 
 export const NO_CHATS = '채팅이 없어요';
 

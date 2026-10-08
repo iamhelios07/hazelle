@@ -1,9 +1,11 @@
-import { ChevronLeft, Plus } from 'lucide-react';
+import { ChevronLeft, Import, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import type { Shelf } from '../../../model/library';
 import { openCharacter } from '../../chat/editBeside';
 import { matches, noResults, SEARCH_FROM } from '../../common/search';
+import { IMPORT_CHATS } from '../../common/words';
+import { useImport } from '../../library/ImportFlow';
 import { ago } from '../../common/time';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useWritingChats } from '../../session';
@@ -22,6 +24,7 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
   const [query, setQuery] = useState('');
   const found = useMemo(() => shelf.chats.filter((item) => matches(query, item.title, item.preview ?? '')), [shelf.chats, query]);
   const writing = useWritingChats();
+  const { pickChats } = useImport();
   const route = useRoute();
   const openChat = route.kind === 'chat' ? route.id : undefined;
   const id = shelf.id;
@@ -40,6 +43,9 @@ export function ShelfChats({ page, shelf, onUp }: Props) {
           />
           <Button variant="secondary" size="md" icon={Plus} onClick={() => navigate({ kind: 'new-chat', character: shelf.id })}>
             새 채팅
+          </Button>
+          <Button variant="ghost" size="md" icon={Import} onClick={() => pickChats(shelf.id)}>
+            {IMPORT_CHATS}
           </Button>
           {shelf.chats.length >= SEARCH_FROM && <SearchField size="sm" label="채팅 검색" value={query} onChange={setQuery} />}
         </>

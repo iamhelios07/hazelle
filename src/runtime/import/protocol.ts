@@ -1,10 +1,13 @@
-import type { BackupCatalog, BackupFailure, Imported, ImportedModule, ImportFailure, Picture, RisuCharacter, RisuChat, RisuMessage, RisuPersona, RisuPreset } from '../../engine/import/types';
+import type { BackupCatalog, BackupFailure, Imported, ImportedModule, ImportFailure, MoveUnsupported, Picture, RisuCharacter, RisuChat, RisuMessage, RisuPersona, RisuPreset } from '../../engine/import/types';
+import type { ChatFile } from '../chat-file';
 
 export type AssetRead = { name: string; handle: number };
 export type CardData = Omit<Imported, 'avatar' | 'assets'> & { avatar: number | null; assets: AssetRead[] };
 export type ModuleData = Omit<ImportedModule, 'assets'> & { assets: AssetRead[] };
 export type CharacterData = Omit<RisuCharacter, 'avatar' | 'assets' | 'chats'> & { avatar: number; assets: AssetRead[]; chatCount: number };
 export type PersonaData = Omit<RisuPersona, 'picture'> & { picture: number };
+// A file of chats, which a JSON card file may be instead: this app's own, or Risu's.
+export type ChatsRead = { ok: true; chat: ChatFile } | { ok: true; risuChats: RisuChat[]; missed: MoveUnsupported[] };
 
 type Inputs = {
   backup: { files: File[] };
@@ -21,7 +24,7 @@ type Inputs = {
 };
 export type Replies = {
   backup: { ok: true; catalog: BackupCatalog } | { ok: false; failure: BackupFailure };
-  card: { ok: true; card: CardData } | { ok: true; module: ModuleData } | { ok: false; failure: ImportFailure };
+  card: { ok: true; card: CardData } | { ok: true; module: ModuleData } | ChatsRead | { ok: false; failure: ImportFailure };
   character: CharacterData;
   persona: PersonaData;
   preset: RisuPreset;

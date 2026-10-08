@@ -1,6 +1,6 @@
 import { strFromU8, strToU8 } from 'fflate';
 import { isRecord } from '../connectors/values';
-import { KINDS, isValue, parentKinds, type Kind, type Stored } from '../model/kinds';
+import { KINDS, parentKinds, type Kind, type Stored } from '../model/kinds';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import { toBase64 } from '../vault/aead';
@@ -12,7 +12,7 @@ import { FIRST_ID } from './personas';
 import { FIRST_PROFILE_ID } from './profiles';
 import { MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import { ownershipDepth } from './removal';
-import { upgradeValue } from './upgrade';
+import { readRow } from './upgrade';
 import type { ObjectRow, ObjectStore, Pin, Write } from './store';
 
 // version is the file format's one version key: a file of any other version is refused, never read as this one.
@@ -232,8 +232,8 @@ async function* readObjects(backup: ReadArchive, signal: AbortSignal) {
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let text = '';
   const line = (text: string) => {
-    const object = upgraded(parse(text));
-    if (!isStored(object) || !Number.isFinite(object.rev)) throw new Error('Bad object');
+    const object = readRow(parse(text));
+    if (!object) throw new Error('Bad object');
     return { object, size: text.length * 2 };
   };
   for await (const bytes of unzipEntry(backup.file, entry, signal)) {
@@ -405,22 +405,4 @@ function parse(text: string | undefined): unknown {
   } catch {
     return undefined;
   }
-}
-
-function upgraded(line: unknown): unknown {
-  if (!isRecord(line) || typeof line.kind !== 'string') return line;
-  const value = upgradeValue(line.kind, line.value);
-  return value ? { ...line, value } : line;
-}
-
-function isStored(line: unknown): line is Stored<Kind> {
-  return (
-    isRecord(line) &&
-    typeof line.kind === 'string' &&
-    Object.hasOwn(KINDS, line.kind) &&
-    typeof line.id === 'string' &&
-    (line.parent === null || typeof line.parent === 'string') &&
-    typeof line.rev === 'number' &&
-    isValue(line.kind as Kind, line.value)
-  );
 }

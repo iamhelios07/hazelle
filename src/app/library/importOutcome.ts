@@ -4,11 +4,12 @@ import type { ImportedCharacter } from '../../runtime/characters';
 import type { ModulePlace } from '../../runtime/modules';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
-import { ALWAYS, inSettings, SCRIPTS } from '../common/words';
+import { ALWAYS, inSettings, NO_CHARACTER, SCRIPTS } from '../common/words';
 import { cardMissed, moduleMissed } from './missed';
 
-// Completed reports must not retain asset readers: their closures keep the source archive alive.
-export type ImportOutcome = { kind: 'character' | 'module'; file: string; id: string; title: string; holds: string; placed: { text: string; failed: boolean } | null; missed: string[]; unused: string | null };
+// Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
+// when the file held several.
+export type ImportOutcome = { file: string; title: string; holds: string; placed: { text: string; failed: boolean } | null; missed: string[]; unused: string | null } & ({ kind: 'character' | 'module'; id: string } | { kind: 'chat'; id: string | null });
 // at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
 export type Placement = { at: ModulePlace['kind'] | null; failure: string | null };
 
@@ -36,4 +37,9 @@ export function moduleOutcome(file: string, module: ImportedModule, id: string, 
       : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true },
     missed: moduleMissed(module.unsupported, skipped), unused: null,
   };
+}
+
+// character: the name of the one they went to, null for 캐릭터 없이.
+export function chatOutcome(file: string, ids: string[], character: string | null, missed: string[]): ImportOutcome {
+  return { kind: 'chat', file, id: ids.length === 1 ? ids[0]! : null, title: file, holds: `채팅 ${ids.length}개`, placed: { text: character === null ? `${NO_CHARACTER} 넣었어요.` : `${character}에 넣었어요.`, failed: false }, missed, unused: null };
 }

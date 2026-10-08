@@ -123,7 +123,7 @@ export type RisuChat = {
   // 작가의 노트; null when Risu's is empty.
   note: string | null;
   persona: string | null;
-  // Index into the card's greetings.
+  // Index into the card's greetings, which may lie past them: the card is known only where the chat is written.
   greeting: number;
   // Risu's chat variables (scriptstate without its `$`), Lua's state included.
   variables: [string, string][];

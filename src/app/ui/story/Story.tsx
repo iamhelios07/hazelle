@@ -18,6 +18,8 @@ type Props = {
   onPress?: (button: BotButton | null) => void;
   // Lit wherever a text node holds it; lower case and NFC, as the caller's search folds it. '' for none.
   term?: string;
+  // Every picture open, for a page drawn once where nothing can be tapped open (snapshot).
+  whole?: boolean;
 };
 
 const NAMED = '[risu-trigger], [risu-btn]';
@@ -81,6 +83,8 @@ function termRanges(shadow: ShadowRoot, term: string): Range[] {
 const cleanCss = (css: string, veiled: boolean) => css.replaceAll('.x-risu-', '.').replace(IMPORT, '').replace(veiled ? ANY_URL : OUTSIDE_URL, 'none');
 
 let base: CSSStyleSheet | null = null;
+// The sheets a story's root holds besides the app's own.
+export const botSheets = (shadow: ShadowRoot) => shadow.adoptedStyleSheets.filter((sheet) => sheet !== base);
 const sheets = new Map<string, CSSStyleSheet>();
 function sheetFor(css: string, veiled: boolean): CSSStyleSheet {
   const key = `${veiled}:${css}`;
@@ -169,7 +173,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
-export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '' }: Props) {
+export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
   const veil = useVeil();
   // A tapped veil changes only veil.revealed, which no render sees.
@@ -180,10 +184,10 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
   useLayoutEffect(() => {
     const fragment = sanitize(html, cursor, veil);
     for (const picture of fragment.querySelectorAll(`[${PICTURE}]`)) {
-      if (pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
+      if (whole || pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
     }
     root().replaceChildren(fragment);
-  }, [html, cursor, pictures, veil, reveals]);
+  }, [html, cursor, pictures, veil, reveals, whole]);
 
   // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
   useEffect(() => {
