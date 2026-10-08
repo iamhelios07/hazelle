@@ -2,13 +2,14 @@ import { ChangeSignal } from '../change-signal';
 import type { ModelRef } from '../connectors/assignment';
 import { resolveConnection } from '../connectors/registry';
 import { ConnectorError, type Draws, type HttpRequest, type Picture, type PictureRequest } from '../connectors/types';
-import { parseScene, pictureRequest, type SceneInvalid } from '../engine/illustrate';
+import { parseScene, pictureRequest, pictureTags, type SceneInvalid } from '../engine/illustrate';
 import type { RanAway } from '../engine/pipeline';
 import { fold, type Receipt } from '../model/chat';
 import { without } from '../model/fields';
 import { paragraphsOf, type Illustration, type Scene } from '../model/illustration';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
+import type { IllustratePrompt } from '../model/prompt';
 import type { ApiFailure } from './api';
 import { taskModel, type Route, type RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
@@ -154,19 +155,22 @@ export class Illustrator {
     const switches = illustrateSwitches(store, stored.value.character);
     const route = imageRoute(store, switches.model);
     if ('kind' in route) return route;
+    // A given scene draws with the tags of the prompt chosen now, as a written one does.
+    const prompt = illustrationPrompt(store, switches.prompt);
+    if (prompt.kind === 'missing') return { kind: 'prompt-missing', own: prompt.own };
     let scene = given;
     let receipt: Receipt | null = null;
     if (!scene) {
       const paragraphs = paragraphsOf(text);
       if (!paragraphs.length) return { kind: 'empty' };
       const history = [...messages.slice(0, index), { ...messages[index]!, selected }];
-      const written = await this.scene(chat, stored.value, history, paragraphs, switches.prompt, auto, signal);
+      const written = await this.scene(chat, stored.value, history, paragraphs, prompt.prompt.value, auto, signal);
       if ('kind' in written) return written;
       ({ scene, receipt } = written);
       onScene(scene);
     }
     const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-    const request = pictureRequest(scene, route.model, seed);
+    const request = pictureRequest(scene, pictureTags(prompt.prompt.value), route.model, seed);
     const drawn = await this.picture(route, request, spend || switches.spend, signal);
     if ('kind' in drawn) return drawn;
     const saved = await files.save([drawn.bytes], { signal });
@@ -180,17 +184,15 @@ export class Illustrator {
 
   // The scene call reads through the server's stream like any model call, but leaves no marker: a pick-up on another
   // device would draw the picture again and pay for it twice.
-  private async scene(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], chosen: string | undefined, auto: boolean, signal: AbortSignal): Promise<{ scene: Scene; receipt: Receipt } | IllustrateFailure | Stopped> {
+  private async scene(chat: string, value: Stored<'chat'>['value'], history: ReturnType<typeof fold>, paragraphs: string[], prompt: IllustratePrompt, auto: boolean, signal: AbortSignal): Promise<{ scene: Scene; receipt: Receipt } | IllustrateFailure | Stopped> {
     const { store, credentials } = this.deps;
-    const prompt = illustrationPrompt(store, chosen);
-    if (prompt.kind === 'missing') return { kind: 'prompt-missing', own: prompt.own };
-    const route = taskModel(store, value, prompt.prompt.value.model);
+    const route = taskModel(store, value, prompt.model);
     if ('kind' in route) return route;
     const profile = modelProfile(store, route.model);
     if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
     const lane = { asker: auto ? ('auto-illustration' as const) : ('illustration' as const), chat };
     const scope = scopeOf({ store }, chat, value, history);
-    const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt: prompt.prompt.value, index: history.length - 1, paragraphs, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
+    const assembled = await store.evaluation.illustration(lane, { scope, take: pinned({ store }, value), prompt, index: history.length - 1, paragraphs, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
       const failure = evaluationFailure(error);
       return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
     });

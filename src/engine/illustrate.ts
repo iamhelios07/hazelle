@@ -1,6 +1,6 @@
 import type { Model, PictureRequest } from '../connectors/types';
 import type { Figure, Scene, Shape } from '../model/illustration';
-import type { IllustratePrompt } from '../model/prompt';
+import type { IllustratePrompt, PictureTags } from '../model/prompt';
 
 // The scene format below, the parser and the request builder are one contract: a field the prompt asks for is read
 // here, and one read here is asked for there.
@@ -79,19 +79,23 @@ export const SIZES = {
   square: { width: 1024, height: 1024 },
 } as const satisfies Record<Shape, { width: number; height: number }>;
 
-// One default for every picture until characters' profiles bring artist tags (design §6.6).
-export const PICTURE_DEFAULTS = {
+// The tags of a 삽화 prompt that sets none.
+export const PICTURE_DEFAULTS: PictureTags = {
+  artist: '',
   quality: 'best quality, amazing quality, very aesthetic, absurdres',
   negative: 'lowres, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, blurry, jpeg artifacts, signature, watermark, username, text, worst quality, low quality',
 };
 
+export const pictureTags = (prompt: IllustratePrompt): PictureTags => prompt.tags ?? PICTURE_DEFAULTS;
+
 const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 
-export function pictureRequest(scene: Scene, model: Model, seed: number): PictureRequest {
+// Artist tags lead the base caption, as NovelAI reads them.
+export function pictureRequest(scene: Scene, { artist, quality, negative }: PictureTags, model: Model, seed: number): PictureRequest {
   return {
     model,
-    prompt: tags(scene.setting, scene.framing, PICTURE_DEFAULTS.quality),
-    negative: PICTURE_DEFAULTS.negative,
+    prompt: tags(artist, scene.setting, scene.framing, quality),
+    negative: negative.trim(),
     characters: scene.characters.map(({ look, outfit, action, x, y }) => ({ prompt: tags(look, outfit, action), negative: '', center: { x, y } })),
     ...SIZES[scene.shape],
     seed,

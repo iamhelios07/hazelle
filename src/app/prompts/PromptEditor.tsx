@@ -1,4 +1,4 @@
-import { Copy, Cpu, Ellipsis, SlidersHorizontal } from 'lucide-react';
+import { Copy, Cpu, Ellipsis, SlidersHorizontal, Tags } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
@@ -40,11 +40,13 @@ import {
 } from './history';
 import { ModelPane, modelWords, TaskModelPane, taskModelWords } from './ModelPane';
 import { chatWarning } from './ranges';
+import { PictureTagsPane } from './PictureTagsPane';
 import { TogglePane } from './TogglePane';
 import { EMPTY_USE, usePromptUse } from './usePromptUse';
 
 const MODEL = 'model';
 const TOGGLES = 'toggles';
+const TAGS = 'tags';
 const SORT_WORDS = {
   conversation: { default: '기본 프롬프트', makeDefault: '새 채팅이 이 프롬프트로 시작해요', refused: ['기본 프롬프트는 삭제할 수 없어요.', '다른 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'] },
   translate: {
@@ -114,7 +116,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const [drilled, setDrilled] = useState(pane === TOGGLES);
   const [reordering, setReordering] = useState(false);
   const [addingToggle, setAddingToggle] = useState(false);
-  const open = pane === TOGGLES ? TOGGLES : picked === MODEL || draft.blocks.some((block) => block.id === picked) ? picked : firstText();
+  const open = pane === TOGGLES ? TOGGLES : picked === MODEL || picked === TAGS || draft.blocks.some((block) => block.id === picked) ? picked : firstText();
   const index = draft.blocks.findIndex((block) => block.id === open);
   const block = draft.blocks[index];
 
@@ -301,6 +303,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
           current={split && open === MODEL}
           onClick={() => pick(MODEL)}
         />
+        {sort === 'illustrate' && <NavRow icon={Tags} label="이미지 태그" meta={draft.tags ? '직접 지정' : '기본값'} current={split && open === TAGS} onClick={() => pick(TAGS)} />}
         <NavRow icon={SlidersHorizontal} label="토글" meta={`${draft.toggles.length}개`} current={split && open === TOGGLES} onClick={() => pick(TOGGLES)} />
       </Stack>
       <Section
@@ -349,6 +352,8 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
       ) : (
         <TaskModelPane task={stored.value.task} own={stored.value.model} connections={connections} onPick={(ref) => void pickTaskModel(ref)} />
       )
+    ) : open === TAGS ? (
+      <PictureTagsPane tags={draft.tags} onChange={(tags) => update(() => ({ tags }))} />
     ) : open === TOGGLES ? (
       <TogglePane
         toggles={draft.toggles}
@@ -395,7 +400,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     );
 
   if (!split && drilled) {
-    const title = open === MODEL ? '모델' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
+    const title = open === MODEL ? '모델' : open === TAGS ? '이미지 태그' : open === TOGGLES ? '토글' : block ? blockTitle(block).title : '';
     return frame({ head: { title, onBack: leavePage, backLabel: '보내는 순서', status: SAVE_STATUS[save.status ?? 'saved'] }, body: page, open });
   }
 

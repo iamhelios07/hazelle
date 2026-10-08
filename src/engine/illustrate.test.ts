@@ -39,7 +39,7 @@ it('builds the picture request: characters at their centers, the shape as its si
   const model = { id: 'nai-diffusion-5' } as Model;
   const parsed = parseScene(JSON.stringify(answer), 3);
   if (!parsed.ok) throw new Error(parsed.reason);
-  expect(pictureRequest(parsed.scene, model, 42)).toEqual({
+  expect(pictureRequest(parsed.scene, PICTURE_DEFAULTS, model, 42)).toEqual({
     model,
     prompt: `2girls, indoors, cafe, night, wide shot, ${PICTURE_DEFAULTS.quality}`,
     negative: PICTURE_DEFAULTS.negative,
@@ -51,5 +51,15 @@ it('builds the picture request: characters at their centers, the shape as its si
     height: 832,
     seed: 42,
   });
-  expect(pictureRequest({ ...parsed.scene, shape: 'portrait' }, model, 1)).toMatchObject({ width: 832, height: 1216 });
+  expect(pictureRequest({ ...parsed.scene, shape: 'portrait' }, PICTURE_DEFAULTS, model, 1)).toMatchObject({ width: 832, height: 1216 });
+});
+
+it("puts a prompt's own tags into the picture: artist first, an emptied field sends none", () => {
+  const model = { id: 'nai-diffusion-5' } as Model;
+  const parsed = parseScene(JSON.stringify(answer), 3);
+  if (!parsed.ok) throw new Error(parsed.reason);
+  expect(pictureRequest(parsed.scene, { artist: 'artist:somebody', quality: '', negative: ' bad hands ' }, model, 42)).toMatchObject({
+    prompt: 'artist:somebody, 2girls, indoors, cafe, night, wide shot',
+    negative: 'bad hands',
+  });
 });
