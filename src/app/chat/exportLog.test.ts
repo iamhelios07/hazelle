@@ -49,6 +49,8 @@ it('puts a version’s newest 삽화 in its text where the chat places it, and i
   const picture = '<p><img src="illustration:22222222-2222-4222-8222-222222222222"></p>';
   expect(shownAs('original').rows[0]!.stories[0]).toBe(`<p>One</p>\n<p>Two</p>\n${picture}\n<p>Three</p>\n`);
   expect(shownAs('translation').rows[0]!.stories[0]).toBe(`<p>하나</p>\n<p>둘</p>\n${picture}\n<p>셋</p>\n`);
+  const boxed = logDraft([message('a', 'assistant')], { ...view, texts: ['<div>\nOne\nTwo\n</div>'] }, { placed: new Map([[0, `<div>\nOne\n${placeMark(1)}\nTwo\n</div>`]]), pictures }, new Set(), true, names, { pictures: true, hideMe: false, text: 'original', from: 1, to: 1 });
+  expect(boxed.rows[0]!.stories[0]).toBe('<div>\nOne\n<img src="illustration:22222222-2222-4222-8222-222222222222">\nTwo\n</div>');
   const both = shownAs('both');
   expect([both.rows[0]!.stories.join('').split('illustration:').length - 1, both.pictures.get('illustration:22222222-2222-4222-8222-222222222222')?.kind]).toEqual([1, 'illustration']);
 });

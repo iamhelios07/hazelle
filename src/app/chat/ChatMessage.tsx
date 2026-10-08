@@ -83,8 +83,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const [page, setPage] = useState<string | null>(null);
   const slot = slotOf(drawing, pictures.find(({ id }) => id === page) ?? pictures.at(-1) ?? null);
   const paragraph = slot?.scene?.paragraph ?? null;
-  // The original is shown with the display's marks; a translation, never displayed, takes the same paragraph's.
-  const originalShown = flipped || (!translatingText && translation === null);
+  // A translation never goes through the display, so it takes its mark here, by the same paragraph.
+  const originalShown = text === original;
   const storyText = paragraph === null ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraph) : withMarks(text, new Set([paragraph]));
   const html = useMemo(() => shownHtml(storyText, decor), [storyText, decor.bot, decor.url]);
   const running = drawing !== null && drawing.stage !== 'failed';
