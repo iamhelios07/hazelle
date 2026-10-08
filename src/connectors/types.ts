@@ -170,6 +170,29 @@ export type ConnectionType = {
   // A cost the provider books only after the reply, looked up by the reply's id. Until it is booked
   // the lookup answers 404.
   settle?: { request(secret: string, id: string): HttpRequest; parse(payload: unknown): Cost | null };
+  draws?: Draws;
+};
+
+// center: where a character stands, 0–1 from the top left. A model that places no one gets the characters' prompts
+// joined into the main one by its connector.
+export type PictureRequest = {
+  model: Model;
+  prompt: string;
+  negative: string;
+  characters: { prompt: string; negative: string; center: { x: number; y: number } }[];
+  width: number;
+  height: number;
+  seed: number;
+};
+
+export type Picture = { bytes: Uint8Array<ArrayBuffer>; type: string };
+
+// Filled by a connection type whose models draw (Model.output holds 'image'). The request is built without the
+// credential, which authHeaders adds last, as for a chat. parse answers null for a body that holds no picture.
+export type Draws = {
+  request(picture: PictureRequest): HttpRequest;
+  authHeaders(secret: string): Record<string, string>;
+  parse(body: Uint8Array<ArrayBuffer>, contentType: string | null): Promise<Picture | null>;
 };
 
 export type Token = { value: string; expiresAt: number };
