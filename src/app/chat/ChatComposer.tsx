@@ -3,7 +3,7 @@ import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { withRo } from '../common/languages';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Button, Callout, Composer, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
+import { Button, Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
 import { ChatNote } from './ChatNote';
@@ -24,7 +24,7 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, busy, problem, translate, sendLanguage, modelMenu, actions } = chat;
+  const { draft, messages, last, busy, problem, stuck, translate, sendLanguage, modelMenu, actions } = chat;
   const chips: Record<Chip, { onClick: () => void }> = { model: useMenuOpener(modelMenu), prompt: { onClick: () => actions.openDialog('prompt') }, persona: { onClick: () => actions.openDialog('persona') } };
   const input = useRef<HTMLTextAreaElement>(null);
 
@@ -58,6 +58,12 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
       {problem && (
         <Callout tone="warn" action={{ label: FIX[problem.kind].label, onClick: chips[FIX[problem.kind].chip].onClick }}>
           {describeTurnFailure(problem)}
+        </Callout>
+      )}
+      {stuck && (
+        <Callout tone="warn" action={{ label: '다시 시도', onClick: actions.retryRegex }}>
+          봇 스크립트가 끝나지 않아 정규식 없이 표시하고 있어요.
+          <Hint label="정규식 없이 표시">다시 시도하기 전까지 다른 기기에서도 정규식 없이 표시돼요.</Hint>
         </Callout>
       )}
       <ChatAsk chat={chat} onTyped={() => input.current?.focus()} />

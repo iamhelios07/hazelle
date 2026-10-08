@@ -9,7 +9,7 @@ import { CodecAborted, CodecUnavailable, ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SE
 import { codecValue, type CodecResult, type OpenItem, type SealItem } from './object-codec-core';
 import { orderOwned } from './removal';
 import { GenerationChanged, SCOPED, type CachedScope, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
-import { Evaluation, EvaluationFailed, EvaluationStopped } from './evaluation';
+import { Evaluation, EvaluationFailed, EvaluationStopped, EvaluationStuck } from './evaluation';
 import { ChatProjections } from './summary';
 import { ScopeUnavailable, type ChatLease, type ScopeState } from './chat-scope';
 import { upgradeValue } from './upgrade';
@@ -96,7 +96,7 @@ export class ObjectStore {
   private readonly scopes = new Map<string, Scope>();
   private readonly heads = new Map<string, number>();
   private readonly revisions = new Map<string, number>();
-  readonly evaluation = new Evaluation();
+  readonly evaluation = new Evaluation({ verdict: (chat) => this.unrecorded(() => this.projections.verdict(chat) !== null), judged: (chat) => this.projections.judge(chat) });
   readonly projections: ChatProjections;
   private readonly behind = new Set<string>();
   private limits: Limits | null = null;
@@ -352,6 +352,18 @@ export class ObjectStore {
     }
   }
 
+  // The evaluation reads a chat's verdict as it posts a job, which may be inside the capture of what asked for it: that
+  // is the job's own bookkeeping, not what its caller displays from.
+  private unrecorded<T>(read: () => T): T {
+    const previous = this.reading;
+    this.reading = null;
+    try {
+      return read();
+    } finally {
+      this.reading = previous;
+    }
+  }
+
   get<K extends Kind>(kind: K, id: string): Stored<K> | null {
     this.reading?.push({ kind, id });
     const held = this.shown(id);
@@ -571,6 +583,7 @@ export class ObjectStore {
 
   private codecFailure(error: unknown, epoch: number): ApiFailure {
     if (error instanceof EvaluationStopped || error instanceof CodecAborted) return this.halted(epoch);
+    if (error instanceof EvaluationStuck) return { ok: false, error: 'bot-stuck' };
     if (error instanceof EvaluationFailed) return { ok: false, error: 'evaluation-unavailable' };
     if (error instanceof CodecUnavailable) return { ok: false, error: 'codec-unavailable' };
     throw error;
@@ -647,7 +660,7 @@ export class ObjectStore {
       for (const id of [...(this.byParent.get(chat)?.get(kind) ?? [])]) this.forget(id);
     }
     this.projections.release(chat);
-    for (const lane of ['headless', 'send', 'forecast', 'memory', 'view']) this.evaluation.forget(`${lane}:${chat}`);
+    for (const asker of ['headless', 'send', 'forecast', 'memory', 'view'] as const) this.evaluation.forget({ asker, chat });
     scope.state = 'unloaded';
     scope.cursor = 0;
     scope.head = 0;

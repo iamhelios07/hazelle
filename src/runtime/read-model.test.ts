@@ -9,7 +9,7 @@ import { removeChat, restoreChat } from './chat-log';
 import { Files } from './files';
 import { backfillSummaries, saveSummaries, summaryId, summaryStale } from './summary';
 import type { api, ApiResult } from './api';
-import { EvaluationFailed } from './evaluation';
+import { EvaluationFailed, EvaluationStuck } from './evaluation';
 import { ReadModels } from './read-model';
 import { planRemoval } from './removal';
 import { openSession } from './session';
@@ -455,7 +455,7 @@ describe('per-chat read models', () => {
     await store.pull();
     expect(folded.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(folded.mock.calls.every(([id]) => id === 'a')).toBe(true);
-    expect(displayed.mock.calls.every(([lane]) => lane.endsWith(':a'))).toBe(true);
+    expect(displayed.mock.calls.every(([lane]) => lane.chat === 'a')).toBe(true);
     expect(read.chat('b').snapshot()).toBe(b);
     expect(bChanged).not.toHaveBeenCalled();
     expect(read.library.snapshot()).not.toBe(folders);
@@ -482,7 +482,7 @@ describe('per-chat read models', () => {
     await store.update('character', 'ca', (current) => ({ ...current, card: { ...current.card, name: 'Luna' } }));
     await store.update('prompt', 'pa', (current) => ({ ...current, authorNote: 'night' }));
     await store.update('persona', 'ua', (current) => ({ ...current, name: 'Mina' }));
-    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a', 'a', 'a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.chat)).toEqual(['a', 'a', 'a']);
     expect(folded).not.toHaveBeenCalled();
     expect(read.chat('b').snapshot()).toBe(b);
     expect(read.chat('a').snapshot()?.display.texts).toEqual(['Luna / Mina / night']);
@@ -491,7 +491,7 @@ describe('per-chat read models', () => {
     await store.update('persona', 'ua', (current) => ({ ...current, name: 'unused' }));
     expect(displayed).not.toHaveBeenCalled();
     await store.create('persona', { name: 'arrived', description: '', picture: null }, { id: 'missing' });
-    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.chat)).toEqual(['a']);
     expect(read.chat('a').snapshot()?.preview).toBe('Luna / arrived / night');
     read.close();
   });
@@ -574,7 +574,7 @@ describe('per-chat read models', () => {
     talk.set({ ...turn, text: 'one two' });
     await vi.waitFor(() => expect(screen.snapshot().display.texts[0]).toBe('latest: one two'));
     const next = screen.snapshot();
-    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a', 'a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.chat)).toEqual(['a', 'a']);
     expect(next.display.texts[0]).toBe('latest: one two');
     expect(next.messages[0]).toBe(chunk.messages[0]);
     expect(next.messages[1]).toBe(chunk.messages[1]);
@@ -584,7 +584,7 @@ describe('per-chat read models', () => {
     expect(displayed).toHaveBeenCalledTimes(2);
     const b = read.chat('b').snapshot();
     screen.setInputs(opening, { width: 900, height: 600 });
-    expect(displayed.mock.calls.map(([lane]) => lane.split(':').at(-1))).toEqual(['a', 'a', 'a']);
+    expect(displayed.mock.calls.map(([lane]) => lane.chat)).toEqual(['a', 'a', 'a']);
     expect(read.chat('b').snapshot()).toBe(b);
     leave();
     read.close();
@@ -612,6 +612,29 @@ describe('per-chat read models', () => {
     vi.spyOn(read.open, 'display').mockRejectedValueOnce(new Error('again'));
     await screen.refresh();
     expect(screen.snapshot()).toEqual({ ...shown, error: new Error('again') });
+    leave();
+    read.close();
+  });
+
+  it("shows a chat not saved yet whose display stuck without the bot's regex, and with it again once 다시 시도 clears that", async () => {
+    const { store } = await account();
+    const read = new ReadModels(store);
+    const opening = { chat, messages: [] };
+    const screen = read.screen('n', liveTalk(), opening);
+    const display = read.open.display.bind(read.open);
+    let stalled = false;
+    const displayed = vi.spyOn(read.open, 'display').mockImplementation(async (...args) => {
+      if (stalled || !args[3]) return display(...args);
+      stalled = true;
+      throw new EvaluationStuck('stuck');
+    });
+    const leave = screen.subscribe(() => {});
+    screen.setInputs(opening, { width: 800, height: 600 });
+    await vi.waitFor(() => expect(screen.snapshot()).toMatchObject({ stuck: true }));
+    expect(screen.snapshot().error).toBeUndefined();
+    expect(displayed).toHaveBeenCalledTimes(3);
+    store.projections.clear('n');
+    await vi.waitFor(() => expect(screen.snapshot()).toMatchObject({ stuck: false }));
     leave();
     read.close();
   });

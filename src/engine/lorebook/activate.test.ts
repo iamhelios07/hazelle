@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
 import type { Card, LoreEntry } from '../import/types';
+import { onProgress } from '../progress';
 import { prepareLore, type Activation, type LoreEntries, type LoreTurn } from './activate';
 
 const NULLS = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
@@ -31,6 +32,17 @@ const ids = (activation: Activation) => order(activation).sort();
 const why = (activation: Activation, id: string) => activation.fired.find((fired) => fired.id === id)?.why;
 
 describe('activate', () => {
+  it('gives a sign of life for each entry it scans', () => {
+    let signs = 0;
+    onProgress(() => signs++);
+    try {
+      run([lore('dragon', { keys: ['dragon'] }), lore('sword', { keys: ['sword'] })], chat('a dragon'), { settings: { ...NULLS, recursive: false } });
+    } finally {
+      onProgress(() => {});
+    }
+    expect(signs).toBe(2);
+  });
+
   it('honors enabled: false and fires constant entries without keys (row 5a)', () => {
     const result = run([lore('always', { constant: true }), lore('off', { constant: true, enabled: false }), lore('keyless', {})], chat('hi'));
     expect(result.fired).toEqual([{ id: 'always', why: { kind: 'constant' }, fate: { kind: 'placed', tokens: 6 } }]);

@@ -277,7 +277,7 @@ export class Scripts {
       },
       lore: async (reserve) => {
         const context = scope.model?.maxContext ?? null;
-        const lore = await this.session.store.evaluation.lore(scope, crypto.randomUUID(), reserve === null || context === null ? Infinity : context - reserve);
+        const lore = await this.session.store.evaluation.lore({ asker: 'lore', chat }, scope, crypto.randomUUID(), reserve === null || context === null ? Infinity : context - reserve);
         if (!('kind' in lore)) return lore;
         if (lore.kind === 'tokenizer') throw new Error('tokenizer');
         // The script reads none, and the person is told why.

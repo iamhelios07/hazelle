@@ -4,6 +4,7 @@ import { evaluate } from './cbs/evaluate';
 import { display, DisplayPass, storyHtml } from './display';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
+import { onProgress } from './progress';
 import { contexts, type ChatScope, type LuaDisplay } from './render';
 
 const card: Card = {
@@ -81,6 +82,19 @@ describe('the editDisplay pass', () => {
     expect(stamps([['mood', 'calm']])).toEqual(stamps([['mood', 'calm']]));
     expect(stamps([['mood', 'calm']])).not.toEqual(stamps([['mood', 'angry']]));
   });
+});
+
+it('gives a sign of life per stage of each message, and per row a Lua pass patches', () => {
+  let signs = 0;
+  onProgress(() => signs++);
+  try {
+    const pass = new DisplayPass({ ...scope, messages: [message('a', 'user', 'one'), message('b', 'assistant', 'two')] }, new Set(), () => null);
+    expect(signs).toBe(4);
+    pass.patch([{ version: 'b', text: 'done' }]);
+    expect(signs).toBe(5);
+  } finally {
+    onProgress(() => {});
+  }
 });
 
 it('finishes newest-first Lua patches like a full display, including variable history, boxes and CSS order', () => {

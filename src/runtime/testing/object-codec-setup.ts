@@ -16,7 +16,7 @@ export class CodecWorker {
     if ('warm' in message) return;
     if ('forget' in message) return this.evaluator.forget(message.forget);
     if ('input' in message) {
-      void this.evaluator.run(structuredClone(message.input)).then((result) => this.onmessage?.({ data: { id: message.id, result: structuredClone(result) } }), (error: unknown) => this.onmessage?.({ data: { id: message.id, error: String(error) } }));
+      void this.evaluator.run(structuredClone(message.input), () => this.onmessage?.({ data: { started: message.id } })).then((result) => this.onmessage?.({ data: { id: message.id, result: structuredClone(result) } }), (error: unknown) => this.onmessage?.({ data: { id: message.id, error: String(error) } }));
       return;
     }
     if (message.kind === 'init') {

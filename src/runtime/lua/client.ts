@@ -42,7 +42,7 @@ export class LuaWorker implements Runner {
   private readonly displays = new Map<string, { revision: number; snapshot: Snapshot }>();
   // One ordered event transport, not a cache per chat; the receiver applies each tail before awaiting Lua.
   private history: ChatScope['messages'] = [];
-  private readonly heart = new Heartbeat(STUCK_MS, () => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
+  private readonly heart = new Heartbeat(() => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
 
   run(owner: string, triggers: Trigger[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> {
     const { messages, ...fixed } = scope;
@@ -81,7 +81,7 @@ export class LuaWorker implements Runner {
     const { id, promise } = this.pending.add(host);
     try {
       this.open().postMessage(message(id));
-      this.heart.start();
+      this.heart.start(STUCK_MS);
     } catch (error) { this.end(new LuaStuck(String(error))); }
     return promise;
   }

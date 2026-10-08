@@ -39,7 +39,7 @@ export const TRANSLATOR_CHAT: Chat = { title: null, character: null, models: {} 
 // with no persona and no card: a card's text would go along as context of its own translation, every time.
 // The call ends however it went, stopped too: the abort only stops reading, and no reload picks this call up.
 export function translateText(session: Pick<Session, 'store' | 'credentials'>, chat: Chat, text: string, language: string, signal: AbortSignal, onText: (text: string) => void) {
-  const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language };
+  const input: TranslateInput = { chat, scope: { ...scopeOf(session, null, chat, []), persona: null, card: null }, take: new Set(), translations: [], request: { kind: 'input', text }, language, lane: null };
   const target: CallTarget = { id: crypto.randomUUID(), chat: null, result: crypto.randomUUID(), for: { kind: 'input', typed: text, language } };
   return translate(session, input, target, signal, onText).finally(() => endCall(session.store, target.id));
 }
@@ -57,7 +57,7 @@ async function translateReceived(session: Pick<Session, 'store' | 'read' | 'tran
   const version = shown(view.messages[index]!);
   // Another version, already translated, may have been switched to while onOutput ran.
   if (version.translation || !view.display.texts[index]!.trim()) return;
-  session.translator.translate(chat, version, translationInput(session, chat, view.chat, view.messages, { kind: 'message', index }));
+  session.translator.translate(chat, version, { ...translationInput(session, chat, view.chat, view.messages, { kind: 'message', index }), lane: { asker: 'auto-translation', chat } });
 }
 
 const displayed = (session: Pick<Session, 'read'>, chat: string) =>
@@ -159,10 +159,10 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in started) return started;
   const { route, settings, scope, budget, memory, said, reply } = started.turn;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const prompt = await evaluating(session.store.evaluation.prompt(`send:${chat}`, { scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
+  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
-  const sent = requested.messages === prompt.messages ? prompt : await evaluating(session.store.evaluation.rewrite(`send:${chat}`, scope, { prompt, messages: requested.messages, budget }, signal));
+  const sent = requested.messages === prompt.messages ? prompt : await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, budget }, signal));
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
   return { route, settings, prompt: sent, said, ...(before.length > 0 && { before }) };

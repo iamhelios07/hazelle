@@ -3,7 +3,7 @@ import type { DisplayBatch, Displayed, Script } from '../engine/lua/run';
 import type { Snapshot } from '../engine/lua/state';
 import type { ChatScope, Missed } from '../engine/render';
 import type { Chat, Message } from '../model/chat';
-import { EvaluationStopped } from './evaluation';
+import { EvaluationStopped, EvaluationStuck } from './evaluation';
 import type { Runner } from './lua/client';
 import { luaSnapshot, luaStanding } from './lua/snapshot';
 import { scriptsOf } from './scripts';
@@ -64,7 +64,7 @@ export class ScriptDisplay {
     this.passes.delete(chat);
     this.wanted.delete(chat);
     this.bases.delete(chat);
-    this.store.evaluation.forget(`screen:${chat}`);
+    this.store.evaluation.forget({ asker: 'screen', chat });
   }
 
   async display(id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'], signal?: AbortSignal): Promise<Display> {
@@ -79,7 +79,7 @@ export class ScriptDisplay {
       const previous = this.passes.get(id);
       if (previous) void this.runner?.then((runner) => runner.forgetDisplay(id, previous.revision));
       this.passes.delete(id);
-      return this.told(id, (await this.store.evaluation.display(`screen:${id}`, scope, take, signal)).display);
+      return this.told(id, (await this.store.evaluation.display({ asker: 'screen', chat: id }, scope, take, signal)).display);
     }
     // Until an engine has answered, its script is passed all the same, and the source is only a guess at what to show
     // meanwhile: one that names the hook waits empty as a listening one does, any other shows its text as it is.
@@ -89,7 +89,7 @@ export class ScriptDisplay {
     // Of all the bot's scripts, not only those passed: an engine's answer takes its script out of the passes and must
     // not make the others' results stale.
     const generation = this.generation(id, [String(all.length), ...all.map(({ code }) => code), ...standing.globals.flat(), character.name, character.description, character.firstMessage, persona.name, persona.description, standing.note]);
-    const { display, work } = await this.store.evaluation.display(`screen:${id}`, scope, take, signal, { waits, generation, revision });
+    const { display, work } = await this.store.evaluation.display({ asker: 'screen', chat: id }, scope, take, signal, { waits, generation, revision });
     if (work && this.listeners.has(id) && this.wanted.get(id) === revision && !signal?.aborted) {
       this.passes.set(id, { revision, generation, scripts, snapshot: luaSnapshot(scope, standing, work.staged, work.start), items: work.items, remaining: work.items.length, installed: false, view: display, signal });
       this.drain(id);
@@ -152,7 +152,7 @@ export class ScriptDisplay {
         pass.remaining = batch.remaining;
         const rows = pass.items.slice(batch.from, batch.from + batch.texts.length).map((item, at) => ({ version: item.version, text: item.text, stamp: item.stamp, shown: batch.texts[at]! }));
         try {
-          const patch = await this.store.evaluation.patch(`screen:${chat}`, pass.revision, pass.generation, rows);
+          const patch = await this.store.evaluation.patch({ asker: 'screen', chat }, pass.revision, pass.generation, rows);
           if (!patch || pass.signal?.aborted || this.wanted.get(chat) !== pass.revision || !this.listeners.has(chat)) continue;
           const texts = pass.view.texts.slice();
           const drawn = pass.view.drawn.slice();
@@ -161,7 +161,8 @@ export class ScriptDisplay {
           pass.view = { texts, drawn, boxes, css: patch.css, pass: patch.pass, stopped: patch.stopped };
           await this.tell(chat, this.told(chat, pass.view));
         } catch (error) {
-          if (!(error instanceof EvaluationStopped)) { this.report(chat, error); break; }
+          // A stuck patch judged the chat, which the composer says.
+          if (!(error instanceof EvaluationStopped || error instanceof EvaluationStuck)) { this.report(chat, error); break; }
         }
         if (!pass.remaining) {
           pass.items = [];

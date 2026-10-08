@@ -25,6 +25,7 @@ const MESSAGES: Record<string, string> = {
   conflict: '다른 기기에서 동시에 변경해서 저장하지 못했어요. 다시 시도해 주세요.',
   unreadable: '암호화 키로 열 수 없는 항목이라 변경할 수 없어요.',
   'evaluation-unavailable': '채팅을 처리하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.',
+  'bot-stuck': '봇 스크립트가 끝나지 않아 멈췄어요.',
   'codec-unavailable': '데이터를 처리하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.',
   gone: '다른 곳에서 삭제된 항목이라 변경할 수 없어요.',
   'too-large': '너무 커서 저장할 수 없어요.',

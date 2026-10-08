@@ -33,7 +33,9 @@ export type EvaluationResult =
   | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | null;
 export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true };
-export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true };
+// started: the job's pass over the chat began, past loading the tokenizer. progress: the pass is still moving
+// (engine/progress).
+export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true } | { started: number } | { progress: true };
 
 export class Evaluator {
   private readonly displays = new Map<string, { revision: number; pass: DisplayPass }>();
@@ -42,8 +44,9 @@ export class Evaluator {
 
   forget(lane: string) { this.histories.delete(lane); this.displays.delete(lane); this.held.delete(lane); }
 
-  async run(input: EvaluationInput): Promise<EvaluationResult> {
+  async run(input: EvaluationInput, started: () => void): Promise<EvaluationResult> {
     if ('patch' in input) {
+      started();
       const current = this.displays.get(input.lane);
       if (!current) return null;
       const held = this.held.get(input.lane)!;
@@ -55,7 +58,9 @@ export class Evaluator {
     }
     if ('count' in input) {
       const countTokens = await tokenizer().catch(() => null);
-      return countTokens ? input.count.map(countTokens) : { kind: 'tokenizer' };
+      if (!countTokens) return { kind: 'tokenizer' };
+      started();
+      return input.count.map(countTokens);
     }
     const { lane, scope: data, history, job } = input;
     const messages = applyTail(this.histories.get(lane) ?? [], history);
@@ -64,6 +69,7 @@ export class Evaluator {
     if (job.kind !== 'display') {
       const countTokens = await tokenizer().catch(() => null);
       if (!countTokens) return { kind: 'tokenizer' };
+      started();
       switch (job.kind) {
         case 'rewrite':
           return rewritten(job.prompt, job.messages, countTokens, job.budget);
@@ -92,6 +98,7 @@ export class Evaluator {
         }
       }
     }
+    started();
     const lua = job.lua;
     const held = this.held.get(lane) ?? new Map<string, LuaText>();
     if (lua) this.held.set(lane, held);
