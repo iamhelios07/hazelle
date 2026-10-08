@@ -51,6 +51,9 @@ function figure(value: unknown): Figure | null {
   return isText(name) && isText(look) && isText(outfit) && isText(action) && isPlace(x) && isPlace(y) ? { name, look, outfit, action, x, y } : null;
 }
 
+// A scene as the writer answers it, for the user to change (어떻게 바꿀까요?) and parseScene to read back.
+export const sceneText = ({ paragraph, ...rest }: Scene) => JSON.stringify({ after: paragraph + 1, ...rest }, null, 2);
+
 // paragraphs: how many the message holds. A field left out fails the scene; none is filled in.
 export function parseScene(text: string, paragraphs: number): { ok: true; scene: Scene } | { ok: false; reason: SceneInvalid } {
   const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```$/.exec(text.trim());

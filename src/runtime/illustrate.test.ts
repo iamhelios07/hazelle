@@ -6,6 +6,7 @@ import { appendUserMessage, startChat } from './chat-log';
 import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
+import { removeIllustration, restoreIllustration } from './illustrate';
 
 const { PAINTER } = vi.hoisted(() => {
   const PAINTER: ConnectionType = {
@@ -78,5 +79,23 @@ describe('Illustrator', () => {
       session.illustrator.draw(chat, reply.id, shown(reply).id);
       await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ stage: 'failed', failure: { kind: 'no-image-model' }, scene: null }));
       expect(log).toHaveLength(1);
+      session.illustrator.dismiss(reply.id);
+      expect(session.illustrator.snapshot().has(reply.id)).toBe(false);
+    }));
+
+  it('deletes a picture at once and 되돌리기 brings it back under its id', () =>
+    server.withSession(async (session) => {
+      const chat = await painted(session);
+      const saved = await session.files.save([PNG]);
+      const file = saved.ok ? saved.data[0]! : { id: '', key: '' };
+      const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
+      const sent = { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
+      const made = await session.store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent, file, type: 'image/png', size: PNG.byteLength, at: 1 }, { parent: chat });
+      if (!made.ok) throw new Error(made.error);
+      const removed = await removeIllustration(session.store, made.data.id);
+      expect(session.store.children('illustration', chat)).toEqual([]);
+      if (!removed.ok) throw new Error(removed.error);
+      await restoreIllustration(session.store, removed.data);
+      expect(session.store.children('illustration', chat).map(({ id, value }) => [id, value.file])).toEqual([[made.data.id, file]]);
     }));
 });
