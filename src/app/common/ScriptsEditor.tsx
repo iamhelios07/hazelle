@@ -158,9 +158,10 @@ function useScriptActions({ owner, pack, onOpen }: ItemProps, list: ScriptList, 
     toast.undoable(`'${name}' ${SCRIPTS[list]}${list === 'regex' ? '을' : '를'} 삭제했어요.`, () => void restoreScript(store, owner, done.data).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.')));
   }
 
-  const move = (by: -1 | 1, icon: LucideIcon, label: string) => (
-    <IconButton icon={icon} size="sm" label={label} disabled={neighbour(pack, list, script.id, by) === null} onClick={() => void moveScript(store, owner, list, script.id, by).then(failed)} />
-  );
+  const move = (by: -1 | 1, icon: LucideIcon, label: string) => {
+    const past = neighbour(pack, list, script.id, by);
+    return <IconButton icon={icon} size="sm" label={label} disabled={past === null} onClick={() => void moveScript(store, owner, list, script.id, by, past!).then(failed)} />;
+  };
   return (status: keyof typeof SAVE_STATUS | null) => (
     <>
       <SettingGroup label="켬">

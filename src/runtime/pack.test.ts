@@ -23,11 +23,30 @@ describe('pack scripts', () => {
     const owner = await character(store);
     const other = await open();
     await other.pull();
-    expect((await moveScript(store, owner, 'regex', 'c', -1)).ok).toBe(true);
+    expect((await moveScript(store, owner, 'regex', 'c', -1, 'a')).ok).toBe(true);
     expect((await editRegex(other, owner, 'a', { find: 'edited' })).ok).toBe(true);
     await store.pull();
     expect(regexOf(store, owner).map(({ id, find }) => `${id}:${find}`)).toEqual(['c:c', 'b:b', 'a:edited']);
-    expect(await moveScript(store, owner, 'regex', 'c', -1)).toMatchObject({ ok: false, error: 'gone' });
+  });
+
+  it('applies each change once when it runs again over its own result, as a write whose answer was lost does', async () => {
+    const { store, open } = await server.account();
+    const owner = await character(store);
+    const other = await open();
+    const twice = async <T>(change: (on: ObjectStore) => Promise<T>) => {
+      await other.pull();
+      await change(store);
+      return change(other);
+    };
+    await twice((on) => addLua(on, owner, 'x'));
+    await twice((on) => moveScript(on, owner, 'regex', 'c', -1, 'a'));
+    const removed = await twice((on) => removeScript(on, owner, 'regex', 'b'));
+    expect(removed).toEqual({ ok: true, data: { list: 'regex', script: REGEX[1], at: 1 } });
+    if (!removed.ok) return;
+    await twice((on) => restoreScript(on, owner, removed.data));
+    await store.pull();
+    expect(regexOf(store, owner).map(({ id }) => id)).toEqual(['c', 'b', 'a']);
+    expect(store.get('character', owner.id)!.value.card.triggers.map(({ id }) => id)).toEqual(['x']);
   });
 
   it('puts a removed script back where it stood, turned off as it was', async () => {

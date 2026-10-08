@@ -36,7 +36,7 @@ export type Pack = {
 };
 
 // id: opaque, and unique within its pack only (import/convert stampIds). off keeps a script in its place but stops it.
-type Listed = { id: string; off?: true };
+export type Listed = { id: string; off?: true };
 
 // name is Risu's comment. Risu runs a Lua trigger at every event, whatever its trigger type, so a Lua one keeps no
 // `on`. A block trigger is normalized at import; unsupported conditions/effects retain opaque source data so future
