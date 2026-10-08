@@ -278,8 +278,8 @@ describe('call counts', () => {
         counted(theirs, since - DAY_MS, 'generate', 50),
         counted(theirs, since, 'generate', 5),
         counted(theirs, today(), 'short', 2),
-        counted(mine, today() - DAY_MS, 'generate', 9),
-        counted(mine, today() - DAY_MS, 'refused', 4),
+        counted(mine, today() - DAY_MS, 'generate', 5),
+        counted(mine, today() - DAY_MS, 'refused', 10),
       ]);
       expect(await (await t.get(`admin/accounts/${other.id}/calls`, admin.cookie)).json()).toEqual({
         calls: { since, today: today(), days: [{ day: since, kind: 'generate', calls: 5 }, { day: today(), kind: 'short', calls: 2 }] },
@@ -287,7 +287,7 @@ describe('call counts', () => {
       expect(await (await t.get('admin/calls', admin.cookie)).json()).toEqual({
         since,
         today: today(),
-        accounts: [{ accountId: admin.id, username: 'operator', calls: 9, refused: 4 }, { accountId: other.id, username: 'other', calls: 7, refused: 0 }],
+        accounts: [{ accountId: other.id, username: 'other', calls: 7, refused: 0 }, { accountId: admin.id, username: 'operator', calls: 5, refused: 10 }],
       });
       expect(await (await t.get(`admin/accounts/${crypto.randomUUID()}/calls`, admin.cookie)).json()).toEqual({ calls: null });
       expect((await t.get('admin/accounts/invalid/calls', admin.cookie)).status).toBe(400);

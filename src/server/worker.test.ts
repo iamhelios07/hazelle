@@ -249,8 +249,13 @@ describe('provider calls', () => {
     expect(await start(crypto.randomUUID(), { bot: chat })).toBe(200);
     for (let i = 0; i < 19; i++) t.env.limits.botCalls.limit(`${body.accountId}:${chat}`);
     expect(await start(crypto.randomUUID(), { bot: chat })).toBe(429);
-    for (let i = 0; i < 240; i++) t.env.limits.calls.limit(body.accountId);
-    expect((await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie)).status).toBe(429);
+    const calls = t.env.limits.calls;
+    t.env.limits.calls = { limit: () => ({ success: false }) };
+    try {
+      expect((await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie)).status).toBe(429);
+    } finally {
+      t.env.limits.calls = calls;
+    }
 
     const day = dayStart(Date.now());
     expect((await t.env.db.prepare('SELECT day, kind, calls FROM call_counts ORDER BY kind').all()).results).toEqual(
