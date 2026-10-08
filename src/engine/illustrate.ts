@@ -90,7 +90,7 @@ export const pictureTags = (prompt: IllustratePrompt): PictureTags => prompt.tag
 
 const tags = (...parts: string[]) => parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 
-// Artist tags lead the base caption, as NovelAI reads them.
+// Artist tags lead the base caption (design §6.6).
 export function pictureRequest(scene: Scene, { artist, quality, negative }: PictureTags, model: Model, seed: number): PictureRequest {
   return {
     model,
