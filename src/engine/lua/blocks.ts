@@ -2,7 +2,7 @@ import type { Comparison, Operand } from '../import/blocks';
 import type { Trigger } from '../import/types';
 import { add, cbs as evaluated, read, write, type Acting } from './state';
 
-export type Blocks = Extract<Trigger, { kind: 'blocks' }>;
+export type Blocks = Omit<Extract<Trigger, { kind: 'blocks' }>, 'id' | 'off'>;
 const isTrue = (value: string) => value === 'true' || value === '1';
 const numbers = (left: string, right: string) => !Number.isNaN(Number(left)) && !Number.isNaN(Number(right));
 const same = (left: string, right: string) => (numbers(left, right) ? Number(left) === Number(right) : left === right);

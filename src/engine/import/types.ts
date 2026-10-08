@@ -35,13 +35,16 @@ export type Pack = {
   toggles: string;
 };
 
+// id: opaque, and unique within its pack only (import/convert stampIds). off keeps a script in its place but stops it.
+type Listed = { id: string; off?: true };
+
 // name is Risu's comment. Risu runs a Lua trigger at every event, whatever its trigger type, so a Lua one keeps no
 // `on`. A block trigger is normalized at import; unsupported conditions/effects retain opaque source data so future
 // support can read it without a new import. Execution consumes only the canonical operations.
-export type Trigger = { kind: 'lua'; name: string; code: string } | { kind: 'blocks'; name: string; on: string; conditions: BlockCondition[]; effects: BlockEffect[] };
+export type Trigger = Listed & ({ kind: 'lua'; name: string; code: string } | { kind: 'blocks'; name: string; on: string; conditions: BlockCondition[]; effects: BlockEffect[] });
 
 // flags: the custom flag string, <…> meta blocks included; null runs the default `g`.
-export type RegexScript = { name: string; find: string; replace: string; stage: 'input' | 'output' | 'process' | 'display'; flags: string | null };
+export type RegexScript = Listed & { name: string; find: string; replace: string; stage: 'input' | 'output' | 'process' | 'display'; flags: string | null };
 
 export type LoreEntry = {
   name: string;

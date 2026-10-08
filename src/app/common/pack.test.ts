@@ -9,8 +9,8 @@ describe('what a pack holds', () => {
     const pack: Pack = {
       ...EMPTY,
       triggers: [
-        { kind: 'lua', name: '', code: '' },
-        { kind: 'blocks', name: '', on: 'start', conditions: [], effects: [] },
+        { kind: 'lua', id: 'trigger-0', name: '', code: '' },
+        { kind: 'blocks', id: 'trigger-1', name: '', on: 'start', conditions: [], effects: [] },
       ],
       toggles: 'storm=폭풍\nweather=날씨',
       background: '<style></style>',

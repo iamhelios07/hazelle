@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ORDER } from '../engine/import/convert';
 import type { Character } from '../model/library';
-import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder, type LoreOwner } from './lore';
+import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from './lore';
+import type { PackOwner } from './pack';
 import type { ObjectStore } from './store';
 import { testCard, testServer } from './testing';
 
 const server = testServer();
 
-async function owned(store: ObjectStore): Promise<LoreOwner> {
+async function owned(store: ObjectStore): Promise<PackOwner> {
   const character: Character = { card: testCard('루나'), folder: null, loreFolders: [{ id: 'sea', name: '바다' }] };
   const created = await store.create('character', character);
   if (!created.ok) throw new Error(created.error);

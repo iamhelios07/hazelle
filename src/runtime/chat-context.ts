@@ -3,7 +3,7 @@ import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Display } from '../engine/display';
 import { readToggles } from '../engine/import/toggles';
-import type { Pack } from '../engine/import/types';
+import type { Card, Pack } from '../engine/import/types';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
@@ -124,25 +124,34 @@ export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) 
 export const evaluateChat = async (reader: { store: Reader['store'] & Pick<ObjectStore, 'evaluation'> }, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, signal?: AbortSignal): Promise<Display> =>
   (await reader.store.evaluation.display(`headless:${id}`, { ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat), signal)).display;
 
+// 상태창 지정's scripts at their places among a chat's scripts, which the engine knows them by. The character's pack
+// comes first (packsOf), so a place in card.regex is the same place there. An id that names no script marks nothing.
+export type StatusScript = { id: string; place: number };
+export const statusPlaces = (card: Pick<Card, 'regex'>, ids: readonly string[]): StatusScript[] =>
+  ids.flatMap((id) => {
+    const place = card.regex.findIndex((script) => script.id === id);
+    return place === -1 ? [] : [{ id, place }];
+  });
+
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
 // 봇 스타일 is off; the chat draws the latest box itself.
 export function pinned({ store }: Reader, chat: Chat): ReadonlySet<number> {
   const character = chat.character === null ? null : store.get('character', chat.character)?.value;
-  return new Set(character?.decor === false ? [] : (character?.statusScripts ?? []));
+  return new Set(!character || character.decor === false ? [] : statusPlaces(character.card, character.statusScripts ?? []).map(({ place }) => place));
 }
 
 // A reply still being written is passed over, since half a box would show; so is a box its script left empty, as bots
 // do on older messages. null: no message drew one yet.
-export type StatusBox = { script: number; drawn: (Box & { message: number }) | null };
+export type StatusBox = StatusScript & { drawn: (Box & { message: number }) | null };
 
-export function statusBoxes(shown: Display, messages: Shown[], scripts: readonly number[]): StatusBox[] {
+export function statusBoxes(shown: Display, messages: Shown[], scripts: readonly StatusScript[]): StatusBox[] {
   return scripts.map((script) => {
     for (let index = messages.length - 1; index >= 0; index--) {
       if (messages[index]!.live !== null) continue;
-      const box = shown.boxes[index]!.find((each) => each.script === script);
-      if (box?.html.trim()) return { script, drawn: { ...box, message: index } };
+      const box = shown.boxes[index]!.find((each) => each.script === script.place);
+      if (box?.html.trim()) return { ...script, drawn: { ...box, message: index } };
     }
-    return { script, drawn: null };
+    return { ...script, drawn: null };
   });
 }
 

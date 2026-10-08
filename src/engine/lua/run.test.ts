@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LuaFactory } from 'wasmoon';
-import type { Trigger } from '../import/types';
 import { blockConditions, blockEffects } from '../import/blocks';
+import type { Blocks } from './blocks';
 import { Lua, type Event, type Script } from './run';
 import type { Host, Snapshot } from './state';
 
@@ -42,7 +42,7 @@ const host = (over: Partial<Host> = {}): Host & { said: string[] } => {
 const lua = await Lua.create({ sliceMs: 300 });
 let owner = 0;
 const run = (code: string, event: Event, over: Partial<Host> = {}, snapshot = SNAPSHOT) => lua.run(String(owner++), [{ kind: 'lua', name: 'main', code }], snapshot, event, host(over));
-const blocks = (on: string, effects: unknown[], conditions: unknown[] = []): Trigger => ({ kind: 'blocks', name: 'blocks', on, conditions: blockConditions(conditions), effects: blockEffects(effects) });
+const blocks = (on: string, effects: unknown[], conditions: unknown[] = []): Blocks => ({ kind: 'blocks', name: 'blocks', on, conditions: blockConditions(conditions), effects: blockEffects(effects) });
 
 describe('Lua runs', () => {
   it('pins complete nine-script worksets across stretches and lanes, then evicts idle worksets as a whole', async () => {
@@ -268,7 +268,7 @@ describe('block triggers', () => {
 
   it('run on their own event when their conditions pass, in one run with the Lua around them', async () => {
     const bonus = blocks('start', [{ type: 'setvar', operator: '+=', var: 'hp', value: '5' }], [{ type: 'var', var: 'hp', operator: '>=', value: '{{getvar::hp}}' }]);
-    const seen: Trigger = { kind: 'lua', name: 'main', code: `function onStart(id) setChatVar(id, 'seen', getChatVar(id, 'hp')) end` };
+    const seen: Script = { kind: 'lua', name: 'main', code: `function onStart(id) setChatVar(id, 'seen', getChatVar(id, 'hp')) end` };
     const refused = blocks('start', [{ type: 'setvar', operator: '=', var: 'hp', value: '0' }], [{ type: 'var', var: 'hp', operator: 'null' }]);
     const triggers = [bonus, seen, refused, blocks('output', [{ type: 'setvar', operator: '=', var: 'late', value: '1' }])];
     expect(await lua.run(String(owner++), triggers, SNAPSHOT, { kind: 'start' }, host())).toMatchObject({ errors: [], writes: [['hp', '15'], ['seen', '15']] });

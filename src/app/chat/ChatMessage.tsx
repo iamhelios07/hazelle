@@ -20,8 +20,8 @@ type Props = {
   // Editing starts from the stored text.
   text: string;
   decor: { bot: boolean; css: string; url: (id: string) => string | undefined; buttons: 'live' | 'inert' };
-  hosted: Box[];
-  offered: { script: number; name: string; marked: boolean }[];
+  hosted: (Box & { id: string })[];
+  offered: { id: string; name: string; marked: boolean }[];
   translating: Translating;
   awaited: boolean;
   flipped: boolean;
@@ -144,8 +144,8 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   } else if (opening && !version.text.trim()) {
     body = <Text variant="note">{`${NO_GREETING} 시작해요.`}</Text>;
   } else if (!empty || hosted.length > 0) {
-    const box = ({ script, html }: Box) => (
-      <div key={script} ref={actions.watch(script)}>
+    const box = ({ id, html }: Props['hosted'][number]) => (
+      <div key={id} ref={actions.watch(id)}>
         <Story html={shownHtml(html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} />
       </div>
     );
@@ -225,13 +225,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         icon={only!.marked ? PinOff : Pin}
         size="xs"
         label={`${only!.marked ? '상태창 지정 풀기' : '상태창으로 지정'} · ${only!.name}`}
-        onClick={() => actions.markStatus(only!.script, !only!.marked)}
+        onClick={() => actions.markStatus(only!.id, !only!.marked)}
       />
     ) : offered.length > 1 ? (
       <Menu place="below-end" label="상태창으로 지정" trigger={(opener) => <IconButton icon={Pin} size="xs" label="상태창으로 지정" {...opener} />}>
         <MenuHeading>상태창으로 지정할 블록</MenuHeading>
-        {offered.map(({ script, name, marked }) => (
-          <MenuItem key={script} label={name} checked={marked} onClick={() => actions.markStatus(script, !marked)} />
+        {offered.map(({ id, name, marked }) => (
+          <MenuItem key={id} label={name} checked={marked} onClick={() => actions.markStatus(id, !marked)} />
         ))}
       </Menu>
     ) : null;
@@ -283,8 +283,8 @@ function sameRow(previous: Props, next: Props): boolean {
   if (aDecor.bot !== bDecor.bot || aDecor.css !== bDecor.css || aDecor.url !== bDecor.url || aDecor.buttons !== bDecor.buttons) return false;
   if (aCharacter?.name !== bCharacter?.name || aCharacter?.image !== bCharacter?.image) return false;
   if (aMe?.name !== bMe?.name || aMe?.image !== bMe?.image) return false;
-  if (aHosted.length !== bHosted.length || aHosted.some((box, index) => box.script !== bHosted[index]!.script || box.html !== bHosted[index]!.html || box.at !== bHosted[index]!.at)) return false;
-  if (aOffered.length !== bOffered.length || aOffered.some((box, index) => box.script !== bOffered[index]!.script || box.name !== bOffered[index]!.name || box.marked !== bOffered[index]!.marked)) return false;
+  if (aHosted.length !== bHosted.length || aHosted.some((box, index) => box.id !== bHosted[index]!.id || box.html !== bHosted[index]!.html || box.at !== bHosted[index]!.at)) return false;
+  if (aOffered.length !== bOffered.length || aOffered.some((box, index) => box.id !== bOffered[index]!.id || box.name !== bOffered[index]!.name || box.marked !== bOffered[index]!.marked)) return false;
   const id = shown(next.message).id;
   return aTranslating.live.get(id) === bTranslating.live.get(id) && aTranslating.failed.get(id) === bTranslating.failed.get(id);
 }

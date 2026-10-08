@@ -207,7 +207,7 @@ describe('importCard', () => {
       },
     });
     const imported = charx({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': Uint8Array.from(atob(RISU_MODULE.join('')), (char) => char.charCodeAt(0)) });
-    expect(imported.card.regex).toEqual([{ name: '상태창 숨김', find: '<status>[\\s\\S]*?</status>', replace: '', stage: 'display', flags: 'gi' }]);
+    expect(imported.card.regex).toEqual([{ id: 'regex-0', name: '상태창 숨김', find: '<status>[\\s\\S]*?</status>', replace: '', stage: 'display', flags: 'gi' }]);
     expect(imported.card.loreSettings).toEqual({ scanDepth: 7, tokenBudget: 900, recursive: false, fullWordMatching: true });
     expect(imported.loreFolders).toEqual(['장소']);
     expect(imported.lore).toMatchObject([
@@ -241,8 +241,8 @@ describe('importCard', () => {
       namespace: 'phone',
       risu: 'risu-id',
       pack: {
-        regex: [{ name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }],
-        triggers: [{ kind: 'lua', name: 'tap', code: 'function tap() end' }],
+        regex: [{ id: 'regex-0', name: 'screen', find: 'a', replace: 'b', stage: 'display', flags: null }],
+        triggers: [{ kind: 'lua', id: 'trigger-0', name: 'tap', code: 'function tap() end' }],
         background: '<style>.phone { color: red }</style>',
         toggles: 'ring=Ring',
       },
@@ -256,7 +256,7 @@ describe('importCard', () => {
   it('imports the card alone when module.risum is unreadable', () => {
     const card = v3({ extensions: { risuai: { customScripts: [{ comment: 'card', in: 'a', out: 'b', type: 'editoutput', ableFlag: false, flag: 'i' }] } } });
     const imported = charx({ 'card.json': strToU8(JSON.stringify(card)), 'module.risum': new Uint8Array([111, 0, 255, 255, 255, 255]) });
-    expect(imported.card.regex).toEqual([{ name: 'card', find: 'a', replace: 'b', stage: 'output', flags: null }]);
+    expect(imported.card.regex).toEqual([{ id: 'regex-0', name: 'card', find: 'a', replace: 'b', stage: 'output', flags: null }]);
     expect(counts(imported)).toEqual({ module: 1 });
   });
 
@@ -294,8 +294,8 @@ describe('importCard', () => {
     expect(imported.card.description).toBe('{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}');
     expect(imported.avatar).toBeNull();
     expect(imported.card.triggers).toEqual([
-      { kind: 'lua', name: 'hp', code: 'setChatVar("hp", "1")' },
-      { kind: 'blocks', name: 'set', on: 'manual', conditions: [], effects: [{ kind: 'set', name: '', operator: null, value: { kind: 'text', text: '' } }] },
+      { kind: 'lua', id: 'trigger-0', name: 'hp', code: 'setChatVar("hp", "1")' },
+      { kind: 'blocks', id: 'trigger-1', name: 'set', on: 'manual', conditions: [], effects: [{ kind: 'set', name: '', operator: null, value: { kind: 'text', text: '' } }] },
     ]);
     expect(imported.report.unsupported).toEqual([
       { kind: 'asset', count: 1 },

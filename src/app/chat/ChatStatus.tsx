@@ -20,7 +20,7 @@ export function ChatStatusPeek({ chat }: { chat: OpenChat }) {
       <Stack gap="section">
         {status.map((box) => (
           <StatusBox
-            key={box.script}
+            key={box.id}
             name={box.name}
             html={box.drawn && shownHtml(box.drawn.html, decor)}
             css={decor.css}
@@ -50,15 +50,15 @@ export function ChatStatusAside({ chat }: { chat: OpenChat }) {
     >
       {status.map((box) =>
         box.drawn ? (
-          <MarginBox key={box.script} html={shownHtml(box.drawn.html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} onFit={(fits) => actions.fitStatus(box.script, fits)} />
+          <MarginBox key={box.id} html={shownHtml(box.drawn.html, decor)} css={decor.css} buttons={decor.buttons} onPress={actions.press} onFit={(fits) => actions.fitStatus(box.id, fits)} />
         ) : null,
       )}
     </StoryAside>
   );
 }
 
-const unmark = ({ actions }: OpenChat, { script, name }: OpenChat['status'][number]) => (
-  <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${name}`} onClick={() => actions.markStatus(script, false)} />
+const unmark = ({ actions }: OpenChat, { id, name }: OpenChat['status'][number]) => (
+  <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${name}`} onClick={() => actions.markStatus(id, false)} />
 );
 
 // One box has no head of its own: its 지정 풀기 sits with the drawer's or the margin's actions.

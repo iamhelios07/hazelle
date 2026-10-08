@@ -1,4 +1,5 @@
 import type { Role } from '../../connectors/assignment';
+import type { RegexScript } from '../../engine/import/types';
 import { KEEP_DAYS } from '../../model/library';
 
 // Sentences stay in their
@@ -64,3 +65,9 @@ export const NOT_STARRED = '즐겨찾기에 없음';
 export const noStarred = (then: string) => `즐겨찾기한 모델이 없어요. ${inSettings('connections')}에서 모델을 즐겨찾기하면 여기서 ${then}.`;
 
 export const CAST = '등장인물';
+
+// A pack's scripts, 정규식 and 트리거 (Lua and block ones), under one 스크립트.
+export const SCRIPTS = { part: '스크립트', regex: '정규식', triggers: '트리거' };
+export const STAGES: Record<RegexScript['stage'], string> = { input: '입력', output: '응답', process: '요청', display: '표시' };
+// One without a name, by its place in its list: the same in the editor and in 상태창 지정.
+export const scriptName = (name: string, list: 'regex' | 'triggers', place: number) => name.trim() || `${SCRIPTS[list]} ${place + 1}`;

@@ -24,7 +24,7 @@ const card: Card = {
   utility: false,
   bias: [],
   triggers: [],
-  regex: [{ name: 'shout', find: 'lamp', replace: 'LAMP', stage: 'display', flags: null }],
+  regex: [{ id: 'regex-0', name: 'shout', find: 'lamp', replace: 'LAMP', stage: 'display', flags: null }],
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
 const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
