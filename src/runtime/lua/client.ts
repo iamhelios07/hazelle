@@ -1,7 +1,7 @@
 import type { Trigger } from '../../engine/import/types';
 import type { DisplayBatch, DisplayItem, Event, Lua, Script } from '../../engine/lua/run';
 import type { Host, LuaMessage, Snapshot } from '../../engine/lua/state';
-import type { ChatScope } from '../../engine/render';
+import type { ChatBasis, ChatScope } from '../../engine/render';
 import type { ScriptOutcome } from './event';
 import { changedTail, sameHistory, type Tail } from '../history-delta';
 import { PendingRequests } from '../pending-requests';
@@ -9,7 +9,7 @@ import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
 export type Runner = Pick<Lua, 'installDisplay' | 'display' | 'forgetDisplay' | 'close'> & { run(owner: string, triggers: Trigger[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> };
-export type EventInput = { scope: Omit<ChatScope, 'messages' | 'lua'>; history: Tail<ChatScope['messages'][number]> };
+export type EventInput = { scope: ChatBasis; history: Tail<ChatScope['messages'][number]> };
 
 export type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
 
@@ -46,7 +46,6 @@ export class LuaWorker implements Runner {
 
   run(owner: string, triggers: Trigger[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> {
     const { messages, ...fixed } = scope;
-    delete fixed.lua;
     const input: EventInput = { scope: fixed, history: changedTail(this.history, messages, sameHistory) };
     this.history = messages;
     return this.send((id) => ({ kind: 'run', id, owner, triggers, input, event }), host) as Promise<ScriptOutcome>;

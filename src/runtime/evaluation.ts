@@ -141,7 +141,6 @@ export class Evaluation {
       else if (work.job.kind === 'count') input = { lane: work.lane, count: work.job.texts };
       else {
         const { messages, ...scope } = work.scope!;
-        delete scope.lua;
         input = { lane: work.lane, scope, history: changedTail(this.histories.get(work.lane) ?? [], messages, sameHistory), job: work.job };
         this.histories.set(work.lane, messages);
       }

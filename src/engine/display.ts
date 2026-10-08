@@ -2,13 +2,13 @@ import MarkdownIt, { type StateCore, type Token } from 'markdown-it';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { Box } from './regex/scripts';
-import { contexts, renderChat, type ChatScope, type Missed } from './render';
+import { contexts, renderChat, type ChatScope, type LuaDisplay, type Missed } from './render';
 
 // texts: each message's text as shown, its <style> blocks taken out. css: what those blocks and the packs'
 // backgroundHTML carry. As in Risu, it applies to every message of the chat, not only the one that carried it.
 // drawn: the display scripts, by place among the packs' regex, that drew a box in each message; boxes: each message's
 // boxes taken out of it (상태창 지정), their <style> blocks in css too. pass: whether the bot's Lua editDisplay pass
-// still has pending messages (scope.lua). stopped: the bot's commands in a message or a backgroundHTML that ran away (renderChat); a
+// still has pending messages (lua). stopped: the bot's commands in a message or a backgroundHTML that ran away (renderChat); a
 // backgroundHTML that did is left out.
 export type Display = { texts: string[]; css: string; drawn: number[][]; boxes: Box[][]; pass: boolean; stopped: Runaway | null };
 
@@ -18,7 +18,7 @@ const STYLE = /<style\b[^>]*>([\s\S]*?)(?:<\/style\s*>|$)/gi;
 export type DisplayWork = { items: Missed[]; staged: string[]; start: [string, string][] };
 export type DisplayPatch = { rows: { index: number; text: string; drawn: number[]; boxes: Box[] }[]; css: string; pass: boolean; stopped: Runaway | null };
 
-export const display = (scope: ChatScope, take: ReadonlySet<number> = new Set()): Display => new DisplayPass(scope, take).value;
+export const display = (scope: ChatScope, take: ReadonlySet<number> = new Set(), lua?: LuaDisplay): Display => new DisplayPass(scope, take, lua).value;
 
 export class DisplayPass {
   readonly value: Display;
@@ -31,8 +31,8 @@ export class DisplayPass {
   private readonly boxStyles: string[][];
   private backgroundStop: Runaway | null = null;
 
-  constructor(scope: ChatScope, take: ReadonlySet<number>) {
-    const rendered = renderChat('display', scope, take);
+  constructor(scope: ChatScope, take: ReadonlySet<number>, lua?: LuaDisplay) {
+    const rendered = renderChat('display', scope, take, lua);
     this.rendered = rendered;
     this.byVersion = new Map(scope.messages.map(({ id }, index) => [id, index]));
     this.missing = new Set(rendered.missed.map(({ version }) => version));
