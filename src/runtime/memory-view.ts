@@ -1,4 +1,4 @@
-import { memoryBudget, windowStart, type ChatRead, type RecordStatus, type Staleness, type Standing } from '../engine/memory';
+import { memoryBudget, speakersOf, windowStart, type ChatRead, type RecordStatus, type Staleness, type Standing } from '../engine/memory';
 import type { Assembled } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { Chat } from '../model/chat';
@@ -22,7 +22,7 @@ export async function chatSent(session: Pick<Session, 'store' | 'read'>, id: str
   const budget = memoryBudget(memorySetup(session.store, stored.value).budget, promptBudget(session.store, stored.value));
   const texts = await session.store.evaluation.read({ asker, chat: id }, scope, memory && { memory, shown, budget });
   if ('kind' in texts) return texts;
-  return { chat: stored.value, scope, read: { shown, roles: messages.map(({ role }) => role), texts: texts.texts }, tokens: texts.tokens, standing: texts.standing };
+  return { chat: stored.value, scope, read: { shown, roles: messages.map(({ role }) => role), speakers: speakersOf(scope), texts: texts.texts }, tokens: texts.tokens, standing: texts.standing };
 }
 
 // slot: whether the chat's prompt holds 장기 기억 where a request reaches it, false while the chat cannot send. stale: why
@@ -38,6 +38,7 @@ export type MemoryView = {
   covered: number;
   waiting: number;
   tokens: { used: number; budget: number; state: number; stateLimit: number };
+  crowded: boolean;
 };
 
 export async function memoryView(session: Pick<Session, 'store' | 'read'>, chat: string): Promise<MemoryView | null> {
@@ -55,6 +56,7 @@ export async function memoryView(session: Pick<Session, 'store' | 'read'>, chat:
     covered: held.covered,
     waiting: Math.max(windowStart(sent.tokens, setup.window) - held.covered, 0),
     tokens: held.tokens,
+    crowded: held.crowded,
   };
 }
 

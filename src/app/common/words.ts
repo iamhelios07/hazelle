@@ -72,3 +72,5 @@ export const SCRIPTS = { part: '스크립트', regex: '정규식', triggers: '�
 export const STAGES: Record<RegexScript['stage'], string> = { input: '입력', output: '응답', process: '요청', display: '표시' };
 // One without a name, by its place in its list: the same in the editor and in 상태창 지정.
 export const scriptName = (name: string, list: 'regex' | 'triggers', place: number) => name.trim() || `${SCRIPTS[list]} ${place + 1}`;
+
+export const CHAPTER = '챕터';

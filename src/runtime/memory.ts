@@ -3,12 +3,12 @@ import { chatMemory, memorySetup, sourcesOf } from './memory-read';
 import { chatSent, type ChatSent } from './memory-view';
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
-import { coveredBy, fingerprint, memoryBudget, nextSpan, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted } from '../engine/memory';
+import { chapterCap, chapterTarget, coveredBy, fingerprint, isChapter, memoryBudget, nextChapters, nextSpan, owned, parseChapter, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type Invalid, type Scene } from '../engine/memory';
 import type { RanAway } from '../engine/pipeline';
-import { fold, shown, type Message, type Receipt } from '../model/chat';
+import { fold, shown, type Chat, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
-import { emptyMemory, memoryId, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread } from '../model/memory';
+import { emptyMemory, memoryId, type Chapter, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread, type Written } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 import type { Stream } from '../model/stream';
 import type { ApiFailure, ApiResult } from './api';
@@ -22,7 +22,7 @@ import { without } from '../model/fields';
 import type { ObjectStore } from './store';
 import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { receiptOf } from './talk';
-import { promptBudget } from './chat-context';
+import { budgetOf, promptBudget, sentSettings } from './chat-context';
 import { wouldSend } from './turn-context';
 
 export type { RecordStatus } from '../engine/memory';
@@ -53,21 +53,36 @@ async function changeMemory(store: ObjectStore, chat: string, change: (memory: M
   });
 }
 
-const withRecord = (store: ObjectStore, chat: string, id: string, change: (record: MemoryRecord) => MemoryRecord) =>
-  changeMemory(store, chat, (memory) => {
-    const at = memory.records.findIndex((record) => record.id === id);
-    return at === -1 ? null : { ...memory, records: memory.records.with(at, change(memory.records[at]!)) };
-  });
+// The writers below that take a record's id take a chapter's too.
+type ItemChange = <T extends MemoryRecord | Chapter>(item: T) => T;
 
-export type RecordPatch = Partial<Pick<MemoryRecord, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome'>>;
+function changed(memory: Memory, id: string, change: ItemChange): Memory | null {
+  const record = memory.records.findIndex((each) => each.id === id);
+  if (record !== -1) return { ...memory, records: memory.records.with(record, change(memory.records[record]!)) };
+  const chapter = memory.chapters.findIndex((each) => each.id === id);
+  return chapter === -1 ? null : { ...memory, chapters: memory.chapters.with(chapter, change(memory.chapters[chapter]!)) };
+}
 
-// at moves too, so a summary of the record started before the edit is refused.
+const withItem = (store: ObjectStore, chat: string, id: string, change: ItemChange) => changeMemory(store, chat, (memory) => changed(memory, id, change));
+
+export type RecordPatch = Partial<Pick<Written, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome'>>;
+
+// at moves too, so a summary of the record started before the edit is refused, and a chapter holding it waits for the
+// user.
 export const editRecord = (store: ObjectStore, chat: string, record: string, patch: RecordPatch): Write =>
-  withRecord(store, chat, record, (current) => ({ ...current, ...patch, edited: true, at: Date.now() }));
+  withItem(store, chat, record, (current) => ({ ...current, ...patch, edited: true, at: Date.now() }));
 
 // 고정. A pinned record is sent even when stale, which is how the user keeps one as canon.
 export const pinRecord = (store: ObjectStore, chat: string, record: string, pinned: boolean): Write =>
-  withRecord(store, chat, record, (current) => (pinned ? { ...current, pinned: true } : without(current, 'pinned')));
+  withItem(store, chat, record, (current) => (pinned ? { ...current, pinned: true } : without(current, 'pinned')));
+
+// 이 기억 넣기, on records only.
+export const recallRecord = (store: ObjectStore, chat: string, record: string, recalled: boolean): Write =>
+  changeMemory(store, chat, (memory) => {
+    const at = memory.records.findIndex(({ id }) => id === record);
+    const current = memory.records[at];
+    return current ? { ...memory, records: memory.records.with(at, recalled ? { ...current, recalled: true } : without(current, 'recalled')) } : null;
+  });
 
 // The store applies a change again when a try's answer was lost after it landed (ObjectStore reaching), and that
 // copy no longer holds the thing: the snapshot stays the last copy's that held it, and the deletion already made, by
@@ -83,15 +98,16 @@ async function taking<T>(store: ObjectStore, chat: string, find: (memory: Memory
   return saved.ok ? { ok: true, data: was! } : saved;
 }
 
-export const forgetRecord = (store: ObjectStore, chat: string, record: string): Write<MemoryRecord> =>
+export const forgetRecord = (store: ObjectStore, chat: string, record: string): Write<MemoryRecord | Chapter> =>
   taking(
     store,
     chat,
-    (memory) => memory.records.find(({ id, forgotten }) => id === record && !forgotten),
-    (memory, found) => ({ ...memory, records: memory.records.map((each) => (each === found ? { ...found, forgotten: true } : each)) }),
+    (memory) => [...memory.records, ...memory.chapters].find(({ id, forgotten }) => id === record && !forgotten),
+    (memory, found) => changed(memory, found.id, (item) => ({ ...item, forgotten: true }))!,
   );
 
-export const restoreRecord = (store: ObjectStore, chat: string, record: MemoryRecord): Write => withRecord(store, chat, record.id, () => record);
+// The same id is the same kind.
+export const restoreRecord = (store: ObjectStore, chat: string, record: MemoryRecord | Chapter): Write => withItem(store, chat, record.id, <T,>() => record as T);
 
 const sameFact = (a: Pick<Fact, 'about' | 'field'>, b: Pick<Fact, 'about' | 'field'>) => a.about === b.about && a.field === b.field;
 
@@ -132,25 +148,50 @@ export const removeThread = (store: ObjectStore, chat: string, thread: string): 
     (memory, found) => ({ ...memory, threads: memory.threads.filter((each) => each !== found) }),
   );
 
-// One summary: the message versions it reads, in chat order, and the record it summarizes again as it was when the job
-// started (at), null for the messages after memory's end. user: the user asked, and may have a record they edited or
-// pinned, or forgot, summarized again.
-type Job = { sources: Source[]; redo: { record: string; at: number; user: boolean } | null };
+// One summary: the message versions it reads, in chat order, and the record or chapter it summarizes again as it was when
+// the job started (at), null for the messages after memory's end or for a new chapter. user: the user asked, and may
+// have one they edited, pinned or recalled, or forgot, summarized again. chapter: the records a chapter summarizes
+// again, null for records.
+type Job = { sources: Source[]; redo: { id: string; at: number; user: boolean } | null; chapter: string[] | null };
 
-function applies(memory: Memory, messages: Message[], { sources, redo }: Job): boolean {
+// A new chapter takes only records automatic work may still take, in no other chapter; one made again takes its records
+// as they are.
+function applies(memory: Memory, messages: Message[], { sources, redo, chapter }: Job): boolean {
   const places = placesOf(sourcesOf(messages));
   const showing = sources.every(({ message, version }) => {
     const at = places.get(message);
     return at !== undefined && shown(messages[at]!).id === version;
   });
   if (!showing) return false;
+  if (chapter) {
+    const records = new Map(memory.records.map((record) => [record.id, record]));
+    const held = new Set(memory.chapters.flatMap((each) => (each.id === redo?.id ? [] : each.records.map(({ id }) => id))));
+    const free = chapter.every((id) => {
+      const record = records.get(id);
+      return record !== undefined && !held.has(id) && (redo !== null || (!owned(record) && !record.forgotten));
+    });
+    return free && (!redo || memory.chapters.find(({ id }) => id === redo.id)?.at === redo.at);
+  }
   if (!redo) return coveredBy(memory, places) === places.get(sources[0]!.message);
-  const record = memory.records.find(({ id }) => id === redo.record);
-  return record !== undefined && record.at === redo.at && (redo.user || (!record.edited && !record.pinned && !record.forgotten));
+  const record = memory.records.find(({ id }) => id === redo.id);
+  return record !== undefined && record.at === redo.at && (redo.user || (!owned(record) && !record.forgotten));
+}
+
+// The records a chapter summarizes again when it is made again: its own, but those the user deleted.
+const members = (memory: Memory, chapter: Chapter) => chapter.records.flatMap(({ id }) => (memory.records.find((record) => record.id === id)?.forgotten ? [] : [id]));
+
+// A chapter in its place in chat order, with its records' at as they are; records, state and threads stay as they are.
+function withChapter(memory: Memory, { sources, redo }: Job, chapter: string[], scene: Scene, span: { role: string; text: string }[], receipt: Receipt, first: string): Memory {
+  const order = new Map(memory.records.map(({ id }, index) => [id, index]));
+  const made: Chapter = { id: first, sources, print: fingerprint(span), ...scene, receipt, at: Date.now(), records: chapter.map((id) => ({ id, at: memory.records[order.get(id)!]!.at })) };
+  const rest = memory.chapters.filter(({ id }) => id !== redo?.id);
+  const place = rest.findIndex(({ records }) => order.get(records[0]!.id)! > order.get(chapter[0]!)!);
+  return { ...memory, chapters: place === -1 ? [...rest, made] : rest.toSpliced(place, 0, made) };
 }
 
 // A fact a later record or the user set stays as it is. first: the id of the first record, which tells a call already
-// saved (Streams).
+// saved (Streams). A chapter holding the record summarized again names the new ones with its at, so it waits for the
+// user.
 function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], span: { role: string; text: string }[], receipt: Receipt, first: string): Memory {
   const at = Date.now();
   let from = 0;
@@ -161,11 +202,11 @@ function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], sp
     from = to;
     return record;
   });
-  const place = redo ? memory.records.findIndex(({ id }) => id === redo.record) : memory.records.length;
+  const place = redo ? memory.records.findIndex(({ id }) => id === redo.id) : memory.records.length;
   const records = [...memory.records.slice(0, place), ...made, ...memory.records.slice(redo ? place + 1 : place)];
   const later = new Set(records.slice(place + made.length).map(({ id }) => id));
-  let state = redo ? memory.state.filter(({ record }) => record !== redo.record) : memory.state;
-  let threads = redo ? memory.threads.filter(({ opened }) => opened !== redo.record) : memory.threads;
+  let state = redo ? memory.state.filter(({ record }) => record !== redo.id) : memory.state;
+  let threads = redo ? memory.threads.filter(({ opened }) => opened !== redo.id) : memory.threads;
   drafts.forEach((draft, index) => {
     const record = made[index]!.id;
     for (const { about, field, value } of draft.state) {
@@ -179,7 +220,10 @@ function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], sp
     const known = new Set(kept.map(({ text }) => sameText(text)));
     threads = [...kept, ...draft.opens.filter((text) => !known.has(sameText(text))).map((text) => ({ id: crypto.randomUUID(), text, opened: record }))];
   });
-  return { records, state, threads };
+  const chapters = memory.chapters.map((chapter) =>
+    redo && chapter.records.some(({ id }) => id === redo.id) ? { ...chapter, records: chapter.records.flatMap((each) => (each.id === redo.id ? made.map(({ id }) => ({ id, at: each.at })) : [each])) } : chapter,
+  );
+  return { ...memory, records, chapters, state, threads };
 }
 
 // invalid: the call answered, but not with records that pass validation (design §6.2, Validation); its receipt and why.
@@ -189,14 +233,17 @@ export type MemoryFailure =
   | { kind: 'profile-missing'; own: boolean }
   | { kind: 'tokenizer' }
   | { kind: 'failed'; receipt: Receipt }
-  | { kind: 'invalid'; receipt: Receipt; reason: 'unreadable' | 'fields' | 'lines' }
+  | { kind: 'invalid'; receipt: Receipt; reason: Invalid }
   | { kind: 'unsaved'; failure: ApiFailure }
   | RanAway;
 
 // failed: why a chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
-export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure> };
+// chapterFailed: why its last chapter did not; records go on being summarized meanwhile.
+export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure>; chapterFailed: ReadonlyMap<string, MemoryFailure> };
 
-type Planned = { job: Job; sent: ChatSent; from: number; to: number; memory: Memory; before: MemoryRecord | null; prompt: MemoryPrompt; route: Route; settings: ModelSettings; left: number };
+type Planned = { job: Job; sent: ChatSent; from: number; to: number; memory: Memory; before: Written | null; chapter: { target: number } | null; left: number } & Tools;
+
+type Tools = { prompt: MemoryPrompt; route: Route; settings: ModelSettings };
 
 // done: committed. moved: memory or the messages changed while the call ran, so its result was dropped and the next job
 // reads them as they are now. stopped: the session closed; the call's marker stays for the next load.
@@ -207,7 +254,7 @@ type Outcome = 'done' | 'moved' | 'stopped' | MemoryFailure;
 // one before it left. It never blocks or cancels a send.
 export class Rememberer {
   private closed = false;
-  private state: Remembering = { running: new Map(), failed: new Map() };
+  private state: Remembering = { running: new Map(), failed: new Map(), chapterFailed: new Map() };
   private readonly changes = new ChangeSignal();
   // The chats with a job running, and of those the ones that may summarize new messages too, not only stale records.
   private readonly working = new Set<string>();
@@ -217,6 +264,9 @@ export class Rememberer {
   // time it is read ({{time}}, or CBS reading later messages) stays stale, and is not summarized again from the same
   // versions, which would pay for a call on every check.
   private readonly reread = new Set<string>();
+  // The records of chapters that failed this session, by chat, left out of the next chapter until 다시 시도, so a chapter
+  // that keeps failing is not paid for on every check.
+  private readonly unchaptered = new Map<string, Set<string>>();
   // The calls ended here. A memory result is not always saved (a refused one is dropped), so a marker that lands after
   // its call ended (newCall writes it without waiting) cannot be told by its result, as a reply's is.
   private readonly ended = new Set<string>();
@@ -244,14 +294,16 @@ export class Rememberer {
   }
 
   retry(chat: string) {
-    this.change(chat, { failed: null });
+    this.unchaptered.delete(chat);
+    this.change(chat, { failed: null, chapterFailed: null });
     this.start(chat, true);
   }
 
-  // 원문에서 다시 만들기: one record from its source, or the whole chat's memory when record is null, which starts over
-  // from no memory at all.
+  // 원문에서 다시 만들기: one record or chapter from its source, or the whole chat's memory when record is null, which
+  // starts over from no memory at all.
   rebuild(chat: string, record: string | null) {
-    this.change(chat, { failed: null });
+    this.unchaptered.delete(chat);
+    this.change(chat, { failed: null, chapterFailed: null });
     if (record === null) {
       this.asked.delete(chat);
       void changeMemory(this.session.store, chat, () => emptyMemory()).then(() => this.start(chat, true));
@@ -279,12 +331,14 @@ export class Rememberer {
     for (const abort of this.aborts) abort.abort();
   }
 
-  private change(chat: string, change: { running?: { model: string; left: number } | null; failed?: MemoryFailure | null }) {
-    const next = { running: new Map(this.state.running), failed: new Map(this.state.failed) };
+  private change(chat: string, change: { running?: { model: string; left: number } | null; failed?: MemoryFailure | null; chapterFailed?: MemoryFailure | null }) {
+    const next = { running: new Map(this.state.running), failed: new Map(this.state.failed), chapterFailed: new Map(this.state.chapterFailed) };
     if (change.running === null) next.running.delete(chat);
     else if (change.running) next.running.set(chat, change.running);
     if (change.failed === null) next.failed.delete(chat);
     else if (change.failed) next.failed.set(chat, change.failed);
+    if (change.chapterFailed === null) next.chapterFailed.delete(chat);
+    else if (change.chapterFailed) next.chapterFailed.set(chat, change.chapterFailed);
     this.state = next;
     this.changes.notify();
   }
@@ -329,45 +383,71 @@ export class Rememberer {
       const outcome = await this.summarize(chat, planned);
       if (planned.job.redo) this.reread.add(readKey(planned.job.sources));
       if (outcome === 'stopped') return;
-      if (typeof outcome !== 'string') return this.change(chat, { failed: outcome });
+      if (typeof outcome === 'string') continue;
+      if (!planned.job.chapter) return this.change(chat, { failed: outcome });
+      this.unchapter(chat, planned.job.chapter, outcome);
     }
   }
 
-  // The next job, first the record the user asked for, then a stale automatic record, then new messages. A record one
-  // of whose messages was deleted waits for the user.
+  // A chapter is optional: its failure stops no record from being made.
+  private unchapter(chat: string, records: string[], failure: MemoryFailure) {
+    this.unchaptered.set(chat, new Set([...(this.unchaptered.get(chat) ?? []), ...records]));
+    this.change(chat, { chapterFailed: failure });
+  }
+
+  // The next job, first the record or chapter the user asked for, then a stale automatic record, then new messages, then
+  // a chapter. A chapter asked for waits for its stale records, whose new summaries would outdate it again. A record one
+  // of whose messages was deleted waits for the user, and a chapter is made again only when the user asks.
   private async plan(chat: string): Promise<Planned | MemoryFailure | null> {
     const { store } = this.session;
-    const sent = await chatSent(this.session, chat, 'memory', null);
+    const memory = chatMemory(store, chat);
+    const sent = await chatSent(this.session, chat, 'memory', memory);
     if (!sent || 'kind' in sent) return sent;
     const setup = memorySetup(store, sent.chat);
     if (!setup.on) return null;
-    const memory = chatMemory(store, chat);
+    const held = sent.standing!;
     const places = placesOf(sent.read.shown);
-    const asked = memory.records.find(({ id }) => id === this.asked.get(chat));
-    this.asked.delete(chat);
-    const stale = memory.records.filter((record) => !record.edited && !record.pinned && !record.forgotten && staleness(record, sent.read, places) === 'changed' && !this.reread.has(readKey(shownFor(record, sent.read, places))));
+    const asked = [...memory.records, ...memory.chapters].find(({ id }) => id === this.asked.get(chat));
+    const stale = memory.records.filter((record) => !owned(record) && !record.forgotten && staleness(record, sent.read, places) === 'changed' && !this.reread.has(readKey(shownFor(record, sent.read, places))));
+    const member = asked && isChapter(asked) ? stale.find(({ id }) => asked.records.some((each) => each.id === id)) : undefined;
+    if (!member) this.asked.delete(chat);
     // Without a 장기 기억 slot in the request, a new record would only take its messages out of it, and a stale one
     // summarized again would be paid for and never read. What the user asked for is made whatever the prompt holds.
     let slot: boolean | null = null;
     const reaches = async () => (slot ??= (await wouldSend(this.session, chat, { kind: 'answer' }, undefined, 'memory'))?.prompt.memory?.slot === true);
-    const again = asked ?? (stale.length && await reaches() ? stale[0] : undefined);
+    const again = member ?? asked ?? (stale.length && await reaches() ? stale[0] : undefined);
     const span = !again && this.full.has(chat) && await reaches() ? await this.span(chat, sent.tokens, coveredBy(memory, places), setup) : null;
-    if (!again && !span) return null;
+    const tools = this.tools(sent.chat);
+    const cap = 'kind' in tools ? null : chapterCap(setup.batch, budgetOf(tools.route.model, sentSettings(store, tools.route)));
+    const chapters = !again && !span && cap !== null && this.full.has(chat) && await reaches() ? nextChapters(memory, held, sent.read.shown, sent.tokens, setup.budget, cap, this.unchaptered.get(chat) ?? new Set()) : [];
+    const next = chapters[0];
+    if (!again && !span && !next) return null;
+    if ('kind' in tools) return tools;
     const indices = again ? again.sources.flatMap(({ message }) => places.get(message) ?? []) : [];
     if (again && !indices.length) return null;
-    const [from, to] = span ? [span.from, span.to] : [Math.min(...indices), Math.max(...indices) + 1];
-    const job: Job = { sources: sent.read.shown.slice(from, to), redo: again ? { record: again.id, at: again.at, user: again === asked } : null };
+    const [from, to] = again ? [Math.min(...indices), Math.max(...indices) + 1] : span ? [span.from, span.to] : [next!.from, next!.to];
+    const chapter = again && isChapter(again) ? members(memory, again) : again ? null : (next?.records ?? null);
+    if (chapter?.length === 0) return null;
+    const job: Job = { sources: sent.read.shown.slice(from, to), redo: again ? { id: again.id, at: again.at, user: again === asked } : null, chapter };
+    const order = new Map(memory.records.map(({ id }, index) => [id, index]));
+    const first = chapter ? order.get(chapter[0]!)! : again ? memory.records.indexOf(again as MemoryRecord) : memory.records.length;
+    const before = chapter
+      ? (memory.chapters.filter((each) => each !== again && order.get(each.records[0]!.id)! < first).findLast((each) => !each.forgotten) ?? null)
+      : (memory.records.slice(0, first).findLast((record) => !record.forgotten) ?? null);
+    const target = next ? next.target : chapter && chapterTarget(chapter.map((id) => held.costs.get(id)!));
+    const waiting = span ? Math.ceil(span.waiting / setup.batch) : 0;
+    return { job, sent, from, to, memory, before, chapter: target === null ? null : { target }, ...tools, left: Math.max(stale.length + waiting + chapters.length, 1) };
+  }
 
+  private tools(chat: Chat): Tools | MemoryFailure {
+    const { store } = this.session;
     const prompt = memoryPrompt(store);
     if (prompt.kind === 'missing') return { kind: 'prompt-missing' };
-    const route = taskModel(store, sent.chat, prompt.prompt.value.model);
+    const route = taskModel(store, chat, prompt.prompt.value.model);
     if ('kind' in route) return route;
     const profile = modelProfile(store, route.model);
     if (profile.kind === 'missing') return { kind: 'profile-missing', own: profile.own };
-    const place = again ? memory.records.indexOf(again) : memory.records.length;
-    const before = memory.records.slice(0, place).findLast((record) => !record.forgotten) ?? null;
-    const waiting = span ? Math.ceil(span.waiting / setup.batch) : 0;
-    return { job, sent, from, to, memory, before, prompt: prompt.prompt.value, route, settings: profile.profile.value.settings, left: Math.max(stale.length + waiting, 1) };
+    return { prompt: prompt.prompt.value, route, settings: profile.profile.value.settings };
   }
 
   // Earlier than batch when the next request drops messages for want of room.
@@ -380,14 +460,14 @@ export class Rememberer {
     return span && { ...span, waiting };
   }
 
-  private async summarize(chat: string, { job, sent, from, to, memory, before, prompt, route, settings }: Planned): Promise<Outcome> {
+  private async summarize(chat: string, { job, sent, from, to, memory, before, chapter, prompt, route, settings }: Planned): Promise<Outcome> {
     const { store, credentials } = this.session;
     const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
-    const assembled = await store.evaluation.memory({ asker: 'memory', chat }, { scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID() });
+    const assembled = await store.evaluation.memory({ asker: 'memory', chat }, { scope: sent.scope, prompt, memory, before, budget, span: { from, to }, chapter, seed: crypto.randomUUID() });
     if ('kind' in assembled) return assembled;
     const { messages, span } = assembled;
     const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));
-    const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read) } };
+    const target: CallTarget = { id: crypto.randomUUID(), chat, result: crypto.randomUUID(), for: { kind: 'memory', sources: job.sources, print: fingerprint(read), ...(job.chapter && { chapter: job.chapter }) } };
     const text = gather();
     const answer = await this.reads(target.id, async (signal) =>
       generate({ credentials, connection: route.connection.value, model: route.model, settings, messages, call: await newCall(store, route, target), signal, onText: text.add }),
@@ -399,7 +479,7 @@ export class Rememberer {
   // Rendered differently now, after a toggle or a variable an earlier message sets, the answer is dropped as one whose
   // versions changed is: its key lines cannot be checked against a text the call never read, and its records would
   // take the print of that text and never read as stale.
-  private async resumed(chat: string, stream: Stored<'stream'>, { sources, print }: Extract<Stream['for'], { kind: 'memory' }>) {
+  private async resumed(chat: string, stream: Stored<'stream'>, { sources, print, chapter }: Extract<Stream['for'], { kind: 'memory' }>) {
     const text = gather();
     const answer = await this.reads(stream.id, (signal) => resume(this.session.store, stream, signal, text.add));
     const sent = await chatSent(this.session, chat, 'memory', null);
@@ -412,13 +492,17 @@ export class Rememberer {
       return;
     }
     const memory = chatMemory(this.session.store, chat);
-    const again = memory.records.find((record) => {
-      const present = record.sources.filter(({ message }) => places.has(message));
-      return present.length === sources.length && present.every(({ message }, index) => message === sources[index]!.message);
-    });
-    const job: Job = { sources, redo: again ? { record: again.id, at: again.at, user: false } : null };
+    const again = chapter
+      ? memory.chapters.find((each) => members(memory, each).join(' ') === chapter.join(' '))
+      : memory.records.find((record) => {
+          const present = record.sources.filter(({ message }) => places.has(message));
+          return present.length === sources.length && present.every(({ message }, index) => message === sources[index]!.message);
+        });
+    const job: Job = { sources, redo: again ? { id: again.id, at: again.at, user: false } : null, chapter: chapter ?? null };
     const outcome = await this.finish(chat, stream.id, stream.value.result, stream.value.call, answer, text.value(), job, read);
-    if (typeof outcome !== 'string') this.change(chat, { failed: outcome });
+    if (typeof outcome === 'string') return;
+    if (chapter) this.unchapter(chat, chapter, outcome);
+    else this.change(chat, { failed: outcome });
   }
 
   private async reads(id: string, call: (signal: AbortSignal) => Promise<Reply>): Promise<Reply> {
@@ -442,11 +526,12 @@ export class Rememberer {
     const receipt = made.cost === 'pending' ? { ...made, cost: null } : made;
     const outcome = await (async (): Promise<Outcome> => {
       if (answer.state !== 'done') return { kind: 'failed', receipt };
-      const parsed = parseRecords(text, span.map(({ text }) => text));
+      const texts = span.map(({ text }) => text);
+      const parsed = job.chapter ? parseChapter(text, texts) : parseRecords(text, texts);
       if (!parsed.ok) return { kind: 'invalid', receipt, reason: parsed.reason };
       const saved = await changeMemory(store, chat, (memory) => {
-        const messages = fold(store.children('entry', chat));
-        return applies(memory, messages, job) ? committed(memory, job, parsed.records, span, receipt, first) : null;
+        if (!applies(memory, fold(store.children('entry', chat)), job)) return null;
+        return 'chapter' in parsed ? withChapter(memory, job, job.chapter!, parsed.chapter, span, receipt, first) : committed(memory, job, parsed.records, span, receipt, first);
       });
       return saved.ok ? 'done' : saved.error === 'gone' ? 'moved' : { kind: 'unsaved', failure: saved };
     })();
@@ -460,7 +545,7 @@ const sameText = (text: string) => text.replace(/\s+/g, ' ').trim();
 
 const readKey = (sources: Source[]) => sources.map(({ message, version }) => `${message}/${version}`).join(' ');
 
-const shownFor = (record: MemoryRecord, read: ChatRead, places: ReadonlyMap<string, number>) => record.sources.flatMap(({ message }) => {
+const shownFor = (record: Written, read: ChatRead, places: ReadonlyMap<string, number>) => record.sources.flatMap(({ message }) => {
   const at = places.get(message);
   return at === undefined ? [] : [read.shown[at]!];
 });

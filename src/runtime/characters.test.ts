@@ -195,7 +195,7 @@ describe('purgeExpired', () => {
     let bytes = 0;
     holdAccount(accountId, (heard) => { if (heard.kind === 'bytes') bytes = heard.bytes; });
     const expired = await savedChat(store);
-    await store.create('memory', { records: [], state: [], threads: [{ id: 't', text: '등대', opened: null }] }, { id: memoryId(expired), parent: expired });
+    await store.create('memory', { records: [], chapters: [], state: [], threads: [{ id: 't', text: '등대', opened: null }] }, { id: memoryId(expired), parent: expired });
     await store.create('stream', { key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } }, { parent: expired });
     await removeChat(store, expired);
     const now = Date.now() + KEEP_DELETED;

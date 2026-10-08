@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Assembled, From } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
+import { isChapter } from '../../engine/memory';
 import type { Memory } from '../../model/memory';
 import type { Role } from '../../model/prompt';
 import type { Sent } from '../../runtime/talk';
@@ -8,7 +9,7 @@ import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
 import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
 import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
-import { loreName } from '../common/words';
+import { CHAPTER, loreName } from '../common/words';
 
 type Lore = NonNullable<Assembled['lore']>[number];
 
@@ -129,7 +130,7 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
       </>
     );
   }
-  const records = new Map((memory?.records ?? []).map((record) => [record.id, record]));
+  const records = new Map([...(memory?.records ?? []), ...(memory?.chapters ?? [])].map((record) => [record.id, record]));
   return (
     <>
       {!used.slot && <Text variant="note">프롬프트에 장기 기억 블록이 없거나 꺼져 있어서 기억을 보내지 않았어요.</Text>}
@@ -148,7 +149,7 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
             {used.sent.map((id) => {
               const record = records.get(id);
               return record ? (
-                <ListItem key={id} title={recordTitle(record)} description={recordScene(record) || undefined} onClick={() => onRecord(id)} />
+                <ListItem key={id} title={recordTitle(record)} description={recordScene(record) || undefined} tags={isChapter(record) ? [CHAPTER] : undefined} onClick={() => onRecord(id)} />
               ) : (
                 <ListItem key={id} title="지금은 없는 기록" />
               );

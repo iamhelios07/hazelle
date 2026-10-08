@@ -250,13 +250,13 @@ it('does not serve an unloaded chat deletion from the cache on its next retain',
 
 it('requires a parent catch-up when an unloaded cached body was omitted by the main feed', async () => {
   const f = await fixture();
-  await f.add('memory', 'memory', 'chat', { records: [], state: [], threads: [] });
+  await f.add('memory', 'memory', 'chat', { records: [], chapters: [], state: [], threads: [] });
   const store = await f.open();
   await store.pull();
   const first = store.retainChat('chat');
   await first.ready;
   first.release();
-  await f.add('memory', 'memory', 'chat', { records: [], state: [], threads: [{ id: 'new', text: 'new', opened: null }] });
+  await f.add('memory', 'memory', 'chat', { records: [], chapters: [], state: [], threads: [{ id: 'new', text: 'new', opened: null }] });
   await store.pull();
   const respond = f.fetch.getMockImplementation()!;
   let resume!: () => void;

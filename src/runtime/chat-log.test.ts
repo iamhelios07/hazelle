@@ -130,7 +130,7 @@ describe('branchChat', () => {
     expect(await evaluateChat(reader, branched.data, stored.value, copy)).toEqual(await evaluateChat(reader, source, chat, item.messages.slice(0, -1)));
     expect(stored.rev).toBeGreaterThan(Math.max(...entries.map((entry) => entry.rev)));
   }, 15_000);
-  it('carries the memory records whose every message lies before the split, their sources remapped, with the facts and threads as they stood before a later record changed them', async () => {
+  it('carries the memory records whose every message lies before the split, their sources remapped, with the facts and threads as they stood before a later record changed them, and a chapter only with all its records and messages', async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
@@ -142,6 +142,7 @@ describe('branchChat', () => {
     const messages = fold(store.children('entry', source));
     const sourcesOf = (from: number, to: number) => messages.slice(from, to).map((message) => ({ message: message.id, version: shown(message).id }));
     const record = (id: string, sources: MemoryRecord['sources'], changes: Pick<MemoryRecord, 'state' | 'opens' | 'closes'>): MemoryRecord => ({ id, sources, print: 'p', when: null, where: null, who: [], what: id, lines: [], outcome: '', receipt: null, at: 0, ...changes });
+    const chapter = (id: string, records: string[]) => ({ id, sources: sourcesOf(0, 2 * records.length), print: 'p', when: null, where: null, who: [], what: id, lines: [], outcome: '', receipt: null, at: 0, records: records.map((each) => ({ id: each, at: 0 })) });
     await store.create(
       'memory',
       {
@@ -149,6 +150,7 @@ describe('branchChat', () => {
           record('before', sourcesOf(0, 2), { state: [{ about: 'Luna', field: 'mood', value: 'calm' }, { about: 'Luna', field: 'place', value: 'home' }, { about: 'jin', field: 'coat', value: 'red' }], opens: ['A vow'], closes: [] }),
           record('across', sourcesOf(2, 4), { state: [{ about: 'Luna', field: 'place', value: 'pier' }], opens: ['A promise'], closes: ['A vow'] }),
         ],
+        chapters: [chapter('kept', ['before']), chapter('split', ['before', 'across']), { ...chapter('read past', ['before']), sources: sourcesOf(0, 4) }],
         state: [
           { about: 'Luna', field: 'mood', value: 'calm', record: 'before' },
           { about: 'Luna', field: 'place', value: 'pier', record: 'across' },
@@ -168,6 +170,7 @@ describe('branchChat', () => {
     const copy = fold(store.children('entry', branched.data));
     const memory = store.get('memory', memoryId(branched.data))!.value;
     expect(memory.records.map(({ id, sources }) => [id, sources])).toEqual([['before', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);
+    expect(memory.chapters.map(({ id, sources }) => [id, sources])).toEqual([['kept', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);
     expect(memory.state.map(({ field, value, record }) => [field, value, record])).toEqual([['mood', 'calm', 'before'], ['name', 'Jin', null], ['place', 'home', 'before']]);
     expect(memory.threads.map(({ text, opened }) => [text, opened])).toEqual([['The user’s own', null], ['A vow', 'before']]);
   });

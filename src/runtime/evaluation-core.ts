@@ -1,5 +1,5 @@
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
-import { standing, type Standing } from '../engine/memory';
+import { speakersOf, standing, type Standing } from '../engine/memory';
 import { activeLore, assemble, assembleMemory, assembleTranslation, rewritten, type Assembled, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
 import type { RegexScript } from '../engine/import/types';
 import { trySample } from '../engine/regex/scripts';
@@ -89,7 +89,7 @@ export class Evaluator {
           return assembleMemory({ ...job.input, scope, countTokens });
         case 'read': {
           const { texts } = renderChat('prompt', scope);
-          const sent = job.memory && standing(job.memory.memory, { shown: job.memory.shown, roles: messages.map(({ role }) => role), texts }, job.memory.budget, countTokens);
+          const sent = job.memory && standing(job.memory.memory, { shown: job.memory.shown, roles: messages.map(({ role }) => role), speakers: speakersOf(scope), texts }, job.memory.budget, countTokens);
           return { texts, tokens: texts.map((text) => countTokens(text.trim())), standing: sent };
         }
         case 'lore': {

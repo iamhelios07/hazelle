@@ -75,9 +75,10 @@ export class Streams {
     this.stop();
   }
 
-  // A memory summary's result is not an entry: its first record takes the result's id.
+  // A memory summary's result is not an entry: its first record, or its chapter, takes the result's id.
   private saved({ parent, value: { result, for: purpose } }: Stored<'stream'>): boolean {
     if (purpose.kind !== 'memory') return this.store.children('entry', parent!).some((entry) => entry.id === result);
-    return this.store.children('memory', parent!).find((memory) => memory.id === memoryId(parent!))?.value.records.some(({ id }) => id === result) ?? false;
+    const memory = this.store.children('memory', parent!).find((each) => each.id === memoryId(parent!))?.value;
+    return memory !== undefined && [...memory.records, ...memory.chapters].some(({ id }) => id === result);
   }
 }

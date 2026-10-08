@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { memoryId } from '../model/memory';
+import { startChat } from './chat-log';
 import { testServer } from './testing';
 import { saveUpgraded, upgradeValue } from './upgrade';
 
@@ -79,6 +81,27 @@ describe('upgradeValue', () => {
     const third = await open();
     await third.pull();
     expect(third.get('module', created.data.id)?.value.regex).toEqual([{ ...old.regex[0], id: 'regex-0' }]);
+    expect(third.takeUpgraded()).toEqual([]);
+  });
+
+  it('gives a chat memory from before chapters none, and writes it back once its chat is loaded', async () => {
+    const memory = { records: [], state: [], threads: [{ id: 't', text: 'They meet again.', opened: null }] };
+    expect(upgradeValue('memory', memory)).toEqual({ ...memory, chapters: [] });
+    expect(upgradeValue('memory', { ...memory, chapters: [] })).toBeNull();
+
+    const { store, open } = await server.account();
+    const chat = crypto.randomUUID();
+    await server.hold(store, chat);
+    await startChat(store, chat, { title: null, character: null, models: {} }, null);
+    await store.create('memory', memory as never, { id: memoryId(chat), parent: chat });
+    const other = await open();
+    await server.hold(other, chat);
+    expect(other.get('memory', memoryId(chat))?.value).toEqual({ ...memory, chapters: [] });
+    await saveUpgraded(other);
+
+    const third = await open();
+    await server.hold(third, chat);
+    expect(third.get('memory', memoryId(chat))?.value).toEqual({ ...memory, chapters: [] });
     expect(third.takeUpgraded()).toEqual([]);
   });
 });

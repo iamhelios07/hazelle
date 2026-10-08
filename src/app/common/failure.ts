@@ -212,7 +212,7 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
 const INVALID = {
   unreadable: '모델 응답의 형식이 맞지 않아요.',
   fields: '모델 응답에 빠진 항목이 있어요.',
-  lines: '기록에 옮긴 대사가 원문과 달라요.',
+  lines: '모델 응답의 대사가 원문과 달라요.',
 } as const;
 
 export function describeMemoryFailure(failure: MemoryFailure): string {
