@@ -17,6 +17,7 @@ const { PAINTER } = vi.hoisted(() => {
     description: '',
     endpoint: { baseUrl: 'https://image.example', protocol: 'chat-completions' },
     draws: {
+      samplers: [],
       request: (picture) => ({ url: 'https://image.example/generate', method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(picture) }),
       authHeaders: (secret) => ({ authorization: `Bearer ${secret}` }),
       parse: async (bytes, type) => (type === 'image/png' ? { bytes, type } : null),
@@ -61,8 +62,11 @@ describe('Illustrator', () => {
 
       // The reply's save, the bot's onOutput, the scene's evaluation and both calls run in turn: more than waitFor's
       // default second on a loaded machine.
-      await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(1), { timeout: 5000 });
-      expect(session.illustrator.snapshot().size).toBe(0);
+      // The run's state clears after the picture is stored, not with it.
+      await vi.waitFor(() => {
+        expect(session.store.children('illustration', chat)).toHaveLength(1);
+        expect(session.illustrator.snapshot().size).toBe(0);
+      }, { timeout: 5000 });
       const reply = fold(session.store.children('entry', chat))[1]!;
       const { value } = session.store.children('illustration', chat)[0]!;
       expect(value).toMatchObject({ message: reply.id, version: shown(reply).id, scene: { paragraph: 1, shape: 'portrait' }, receipt: { state: 'done' }, sent: { width: 832, height: 1216, characters: [{ center: { x: 0.5, y: 0.5 } }] }, type: 'image/png', size: PNG.byteLength });
