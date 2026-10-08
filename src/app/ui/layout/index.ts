@@ -1,4 +1,4 @@
-export { ChatFrame, ChatTitle, readingDefault, type Reading } from './ChatFrame';
+export { ChatFrame, ChatTitle, readingDefault, useMarginRoom, type Reading } from './ChatFrame';
 export { Disclosure } from './Disclosure';
 export { FaceRow } from './FaceRow';
 export { EditorFrame } from './EditorFrame';

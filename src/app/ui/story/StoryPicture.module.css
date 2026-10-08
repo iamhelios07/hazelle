@@ -5,16 +5,26 @@
   margin: 0;
 }
 
-/* --ratio is the picture's width over its height, set by StoryPicture. */
+/* --ratio is the picture's width over its height, set by StoryPicture. --picture-most and --picture-grow are set
+   where it stands in the margin (MarginPicture). */
 .frame {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(100%, calc(var(--story-illustration-most) * var(--ratio)));
+  width: min(100%, calc(var(--picture-most, var(--story-illustration-most)) * var(--ratio)));
   aspect-ratio: var(--ratio);
   overflow: hidden;
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  transition: width var(--duration-slow) var(--ease-enter);
+}
+
+/* A touch screen keeps :hover on whatever was tapped last. */
+@media (hover: hover) {
+  .frame:hover {
+    width: min(var(--picture-grow, 100%), calc(var(--story-illustration-most) * var(--ratio)));
+    transition-delay: var(--duration-intent);
+  }
 }
 
 .making {

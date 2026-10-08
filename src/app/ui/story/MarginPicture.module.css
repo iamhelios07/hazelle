@@ -1,0 +1,23 @@
+.column {
+  /* Read by StoryPicture's frame; pointed at, it grows over the text to its size there. */
+  --picture-most: var(--story-margin-picture-most);
+  --picture-grow: calc(var(--read-width) - 2 * var(--read-gutter));
+
+  position: absolute;
+  top: 0;
+  right: calc(100% + var(--read-gutter));
+  bottom: 0;
+  width: var(--story-margin);
+  padding-top: var(--anchor);
+  pointer-events: none;
+}
+
+.picture {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-8));
+  pointer-events: auto;
+}
+
+.picture:hover {
+  z-index: var(--layer-raised);
+}

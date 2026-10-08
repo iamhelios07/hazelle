@@ -1,5 +1,5 @@
 import { Bot, Copy, GitBranch, ImagePlus, Info, Languages, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
-import { memo, useMemo, useState, type KeyboardEvent } from 'react';
+import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
@@ -13,7 +13,7 @@ import { describeReplyError, describeTranslateFailure } from '../common/failure'
 import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { SHORTCUTS, titled } from '../shortcuts';
-import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPicture, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotOf } from './ChatPicture';
 import type { ChatActions } from './useChat';
 import { seenText } from './search';
@@ -83,11 +83,14 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const [page, setPage] = useState<string | null>(null);
   const slot = slotOf(drawing, pictures.find(({ id }) => id === page) ?? pictures.at(-1) ?? null);
   const paragraph = slot?.scene?.paragraph ?? null;
+  const beside = useMarginRoom();
+  const anchor = useRef<HTMLDivElement>(null);
   // A translation never goes through the display, so it takes its mark here, by the same paragraph.
   const originalShown = text === original;
   const storyText = paragraph === null ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraph) : withMarks(text, new Set([paragraph]));
   const html = useMemo(() => shownHtml(storyText, decor), [storyText, decor.bot, decor.url]);
   const running = drawing !== null && drawing.stage !== 'failed';
+  const picture = slot && <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} actions={actions} />;
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
@@ -179,9 +182,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
             term={term}
             tone={pending ? 'faded' : 'plain'}
             cursor={live || reveal.revealing || (translatingText !== null && !flipped)}
-            inlay={slot ? { mark: paragraph === null ? null : placeMark(paragraph), node: <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} actions={actions} /> } : undefined}
+            inlay={slot ? { mark: paragraph === null ? null : placeMark(paragraph), node: beside ? <div ref={anchor} /> : picture } : undefined}
           />
         )}
+        {!empty && beside && picture && <MarginPicture anchor={anchor}>{picture}</MarginPicture>}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );

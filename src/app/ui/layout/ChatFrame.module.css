@@ -12,6 +12,9 @@
   flex-direction: column;
   /* A box in the aside, laid out as wide as the story, reaches past the page's edge where it draws nothing. */
   overflow-x: clip;
+  /* Either margin's column (StoryAside, MarginPicture): from the story's edge to the page's, less a gap at the page's.
+     --story-side is measured in ChatFrame.tsx. */
+  --story-margin: max(0px, calc(var(--story-side) - var(--space-16)));
 }
 
 /* 읽기 설정: ChatFrame.tsx readingScope sets --reading-size and one class of each kind. */

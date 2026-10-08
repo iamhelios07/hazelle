@@ -1,5 +1,5 @@
 import { ChevronLeft } from 'lucide-react';
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { IconButton } from '../controls/IconButton';
 import styles from './ChatFrame.module.css';
 
@@ -23,6 +23,11 @@ const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: sty
 
 // The reading settings on the element a story sits in: the chat's column, or an exported log (LogExport).
 export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[font]} ${LEADING[leading]} ${WIDTH[width]}`, style: { '--reading-size': `${size}px` } as CSSProperties });
+
+// Whether the story's margin holds at least half its text's width: a message's 삽화 stands there (MarginPicture), not
+// in the text. Outside a chat there is no margin.
+const MarginRoom = createContext(false);
+export const useMarginRoom = () => useContext(MarginRoom);
 
 type Props = {
   back?: { label: string; onClick: () => void };
@@ -53,6 +58,9 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   // stop the measuring.
   const [space, setSpace] = useState(0);
   const [scrollbar, setScrollbar] = useState(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [side, setSide] = useState(0);
+  const [room, setRoom] = useState(false);
 
   useLayoutEffect(() => {
     const element = footerRef.current!;
@@ -75,10 +83,18 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
 
   useLayoutEffect(() => {
     const element = scrollRef.current!;
-    const measure = () => setScrollbar(element.offsetWidth - element.clientWidth);
+    const content = contentRef.current!;
+    const measure = () => {
+      setScrollbar(element.offsetWidth - element.clientWidth);
+      const half = (element.clientWidth - content.offsetWidth) / 2;
+      const style = getComputedStyle(content);
+      setSide(half);
+      setRoom(half >= (content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / 2);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+    observer.observe(content);
     return () => observer.disconnect();
   }, [scrollRef]);
 
@@ -102,6 +118,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
             ...scope.style,
             '--footer-space': `${space}px`,
             '--story-scrollbar': `${scrollbar}px`,
+            '--story-side': `${side}px`,
             '--story-picture-peek': pictures?.fold === false ? 'none' : pictures?.peek && `${pictures.peek}vh`,
             '--story-picture-most': pictures?.most && `${pictures.most}vh`,
           } as CSSProperties
@@ -115,8 +132,8 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
           </header>
         </div>
         <div className={styles.scroll} ref={scrollRef} onScroll={scrolled}>
-          <div className={styles.content}>
-            {children}
+          <div ref={contentRef} className={styles.content}>
+            <MarginRoom.Provider value={room}>{children}</MarginRoom.Provider>
           </div>
         </div>
         {aside}
