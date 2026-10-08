@@ -248,10 +248,10 @@ describe('chapters', () => {
   const fact = { about: 'Luna', field: 'place', value: 'the pier', record: 'r0' };
   const thread = { id: crypto.randomUUID(), text: 'jin returns.', opened: 'r2' };
 
-  // Three records, one message each, under a setting whose budget only consolidation can meet.
+  // Three records, one message each, under a setting the state and threads fit in and the records only once consolidated.
   async function recorded(session: Session, settings: Partial<MemorySettings>, chapters: (ids: string[]) => Chapter[] = () => [], stale = false) {
     await answerable(session);
-    await setDefaultMemory(session.store, { window: 1, batch: 1000, budget: 1, ...settings });
+    await setDefaultMemory(session.store, { window: 1, batch: 1000, budget: 40, ...settings });
     const chat = crypto.randomUUID();
     await server.hold(session.store, chat);
     await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
@@ -312,11 +312,13 @@ describe('chapters', () => {
       expect([chatMemory(session.store, chat).chapters, session.memory.snapshot().chapterFailed.size, log.length]).toEqual([[], 0, 2]);
     }));
 
+  const meeting = (ids: string[]): Chapter[] => [
+    { id: 'c0', sources: ids.slice(0, 2).map((id) => ({ message: id, version: id })), print: fingerprint(said.slice(0, 2).map((text) => ({ role: 'user', text }))), when: null, where: null, who: [], what: 'They meet.', lines: [], outcome: '', receipt: null, at: 0, records: [{ id: 'r0', at: 0 }, { id: 'r1', at: 0 }] },
+  ];
+
   it('names the records a record inside a chapter is summarized again into, and leaves the chapter for the user to make again', () =>
     server.withSession(async (session) => {
-      const chapter = (ids: string[]): Chapter[] => [
-        { id: 'c0', sources: ids.slice(0, 2).map((id) => ({ message: id, version: id })), print: fingerprint(said.slice(0, 2).map((text) => ({ role: 'user', text }))), when: null, where: null, who: [], what: 'They meet.', lines: [], outcome: '', receipt: null, at: 0, records: [{ id: 'r0', at: 0 }, { id: 'r1', at: 0 }] },
-      ];
+      const chapter = meeting;
       const { chat } = await recorded(session, { budget: 1_000_000 }, chapter, true);
       const log = stubRelay(inTurn([saying(summary('jin and Luna meet.', 'We meet at the pier.'))]));
       session.memory.check(chat);
@@ -325,6 +327,18 @@ describe('chapters', () => {
       expect(memory.chapters[0]!.records).toEqual([{ id: memory.records[0]!.id, at: 0 }, { id: 'r1', at: 0 }]);
       await vi.waitFor(() => expect(session.memory.snapshot().running.size).toBe(0));
       expect(log).toHaveLength(1);
+    }));
+
+  it('makes a chapter the user asks for again after its stale records, so their new summaries do not outdate it', () =>
+    server.withSession(async (session) => {
+      const { chat } = await recorded(session, { budget: 1_000_000 }, meeting, true);
+      const again = JSON.stringify({ chapter: { when: null, where: 'the pier', who: ['Luna', 'jin'], what: 'They meet again.', lines: [{ speaker: 'jin', text: 'We meet at the pier.' }], outcome: '' } });
+      const log = stubRelay(inTurn([saying(summary('jin and Luna meet.', 'We meet at the pier.')), saying(again)]));
+      session.memory.rebuild(chat, 'c0');
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).chapters[0]).toMatchObject({ what: 'They meet again.' }));
+      const memory = chatMemory(session.store, chat);
+      expect(memory.chapters[0]!.records).toEqual([memory.records[0]!, memory.records[1]!].map(({ id, at }) => ({ id, at })));
+      expect([memory.records[0]!.what, log.length]).toEqual(['jin and Luna meet.', 2]);
     }));
 
   it('commits a chapter call picked up after a reload as a chapter', async () => {

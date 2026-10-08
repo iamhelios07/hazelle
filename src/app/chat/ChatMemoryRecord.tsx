@@ -1,3 +1,4 @@
+import { isChapter } from '../../engine/memory';
 import type { Chapter, Memory, MemoryRecord } from '../../model/memory';
 import type { MemoryView } from '../../runtime/memory-view';
 import { editRecord, forgetRecord, pinRecord, recallRecord, restoreRecord, type RecordPatch } from '../../runtime/memory';
@@ -8,7 +9,7 @@ import { CHAPTER } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, List, ListItem, NavBar, PhraseField, Row, Section, SettingGroup, SettingRow, SidePanel, Stack, Switch, Text, TextField, useWide } from '../ui';
-import { isChapter, recordScene, recordTitle, spanOf, statusWord } from './memory';
+import { recordScene, recordTitle, spanOf, statusWord } from './memory';
 import type { ChatActions } from './useChat';
 
 const STALE = { changed: '원문이 바뀌었어요.', deleted: '원문 메시지가 삭제됐어요.', records: '기록이 바뀌었어요.' };
@@ -23,7 +24,6 @@ type Props = {
   actions: ChatActions;
 };
 
-// A record's page or a chapter's, which lists its records.
 export function ChatMemoryRecord({ chat, item, memory, view, positions, actions }: Props) {
   const session = useSession();
   const { store } = session;
@@ -72,7 +72,7 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
   const text = (field: 'when' | 'where', label: string) => (
     <TextField label={label} value={shown[field] ?? ''} placeholder="이야기에 나오지 않음" onChange={(value) => change({ [field]: value === '' ? null : value })} />
   );
-  const kept = chapter ? `수정했거나 고정한 ${CHAPTER}라 계속 보내요.` : '수정했거나 고정한 기록이라 계속 보내요.';
+  const kept = chapter ? `이 ${CHAPTER}는 계속 보내요.` : '이 기록은 계속 보내요.';
   const dropped = chapter ? `이 ${CHAPTER} 대신 기록을 보내요.` : '이 기록은 보내지 않아요.';
 
   return (
@@ -161,7 +161,6 @@ export function ChatMemoryRecord({ chat, item, memory, view, positions, actions 
   );
 }
 
-// A record's or a chapter's row, on the panel and on its chapter's page.
 export function MemoryRow({ item, view, positions, onOpen }: { item: MemoryRecord | Chapter; view: MemoryView | null; positions: ReadonlyMap<string, number>; onOpen: () => void }) {
   const status = view?.records.get(item.id);
   const chapter = isChapter(item);

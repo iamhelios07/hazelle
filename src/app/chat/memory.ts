@@ -1,15 +1,12 @@
-import type { Staleness } from '../../engine/memory';
+import { isChapter, type Staleness } from '../../engine/memory';
 import type { Chapter, Fact, Memory, MemoryRecord, Source, Written } from '../../model/memory';
 import type { RecordStatus } from '../../runtime/memory';
 import { CHAPTER } from '../common/words';
 
-const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '예산 넘음', forgotten: '삭제됨', chaptered: `${CHAPTER}로 보냄`, 'recall-over': '원문 예산 넘음' };
+const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '예산 넘음', forgotten: '삭제됨', chaptered: `${CHAPTER}로 보냄`, 'recall-over': '요약 보냄' };
 
-// A row's tag for what is sent of it, none while it is sent as it is.
 export const statusWord = (status: RecordStatus | undefined, stale: Staleness | undefined) =>
   status === undefined || status === 'sent' ? [] : [status === 'stale' && stale === 'records' ? '기록 바뀜' : STATUS_WORDS[status]];
-
-export const isChapter = (item: MemoryRecord | Chapter): item is Chapter => 'records' in item;
 
 export const recordTitle = (item: MemoryRecord | Chapter) => item.what.trim() || (isChapter(item) ? `내용 없는 ${CHAPTER}` : '내용 없는 기록');
 

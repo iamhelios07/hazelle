@@ -28,8 +28,7 @@ export async function chatSent(session: Pick<Session, 'store' | 'read'>, id: str
 // slot: whether the chat's prompt holds 장기 기억 where a request reaches it, false while the chat cannot send. stale: why
 // each stale record is, a record the user edited or pinned included, which stays sent. waiting: messages past the window
 // not summarized yet. tokens: what the slot sends against its budget (shrunk to what the model can take), and the
-// state's share against its limit. crowded: what is sent whatever the budget, pinned and recalled ones with the state
-// and threads, takes all of it, so others are not sent.
+// state's share against its limit.
 export type MemoryView = {
   memory: Memory;
   setup: MemorySetup;
@@ -57,7 +56,7 @@ export async function memoryView(session: Pick<Session, 'store' | 'read'>, chat:
     covered: held.covered,
     waiting: Math.max(windowStart(sent.tokens, setup.window) - held.covered, 0),
     tokens: held.tokens,
-    crowded: held.fixed > held.tokens.budget,
+    crowded: held.crowded,
   };
 }
 

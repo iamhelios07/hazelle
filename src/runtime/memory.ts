@@ -3,7 +3,7 @@ import { chatMemory, memorySetup, sourcesOf } from './memory-read';
 import { chatSent, type ChatSent } from './memory-view';
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
-import { chapterCap, chapterTarget, coveredBy, fingerprint, memoryBudget, nextChapter, nextSpan, owned, parseChapter, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type Invalid, type Scene } from '../engine/memory';
+import { chapterCap, chapterTarget, coveredBy, fingerprint, isChapter, memoryBudget, nextChapters, nextSpan, owned, parseChapter, parseRecords, placesOf, staleness, threadLabel, windowStart, type ChatRead, type Drafted, type Invalid, type Scene } from '../engine/memory';
 import type { RanAway } from '../engine/pipeline';
 import { fold, shown, type Chat, type Message, type Receipt } from '../model/chat';
 import type { Stored } from '../model/kinds';
@@ -241,7 +241,6 @@ export type MemoryFailure =
 // chapterFailed: why its last chapter did not; records go on being summarized meanwhile.
 export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure>; chapterFailed: ReadonlyMap<string, MemoryFailure> };
 
-// chapter: a chapter job's length in tokens.
 type Planned = { job: Job; sent: ChatSent; from: number; to: number; memory: Memory; before: Written | null; chapter: { target: number } | null; left: number } & Tools;
 
 type Tools = { prompt: MemoryPrompt; route: Route; settings: ModelSettings };
@@ -397,8 +396,8 @@ export class Rememberer {
   }
 
   // The next job, first the record or chapter the user asked for, then a stale automatic record, then new messages, then
-  // a chapter. A record one of whose messages was deleted waits for the user, and a chapter is made again only when the
-  // user asks.
+  // a chapter. A chapter asked for waits for its stale records, whose new summaries would outdate it again. A record one
+  // of whose messages was deleted waits for the user, and a chapter is made again only when the user asks.
   private async plan(chat: string): Promise<Planned | MemoryFailure | null> {
     const { store } = this.session;
     const memory = chatMemory(store, chat);
@@ -409,23 +408,25 @@ export class Rememberer {
     const held = sent.standing!;
     const places = placesOf(sent.read.shown);
     const asked = [...memory.records, ...memory.chapters].find(({ id }) => id === this.asked.get(chat));
-    this.asked.delete(chat);
     const stale = memory.records.filter((record) => !owned(record) && !record.forgotten && staleness(record, sent.read, places) === 'changed' && !this.reread.has(readKey(shownFor(record, sent.read, places))));
+    const member = asked && isChapter(asked) ? stale.find(({ id }) => asked.records.some((each) => each.id === id)) : undefined;
+    if (!member) this.asked.delete(chat);
     // Without a 장기 기억 slot in the request, a new record would only take its messages out of it, and a stale one
     // summarized again would be paid for and never read. What the user asked for is made whatever the prompt holds.
     let slot: boolean | null = null;
     const reaches = async () => (slot ??= (await wouldSend(this.session, chat, { kind: 'answer' }, undefined, 'memory'))?.prompt.memory?.slot === true);
-    const again = asked ?? (stale.length && await reaches() ? stale[0] : undefined);
+    const again = member ?? asked ?? (stale.length && await reaches() ? stale[0] : undefined);
     const span = !again && this.full.has(chat) && await reaches() ? await this.span(chat, sent.tokens, coveredBy(memory, places), setup) : null;
     const tools = this.tools(sent.chat);
     const cap = 'kind' in tools ? null : chapterCap(setup.batch, budgetOf(tools.route.model, sentSettings(store, tools.route)));
-    const next = !again && !span && cap !== null && this.full.has(chat) && await reaches() ? nextChapter(memory, held, sent.read.shown, sent.tokens, setup.budget, cap, this.unchaptered.get(chat) ?? new Set()) : null;
+    const chapters = !again && !span && cap !== null && this.full.has(chat) && await reaches() ? nextChapters(memory, held, sent.read.shown, sent.tokens, setup.budget, cap, this.unchaptered.get(chat) ?? new Set()) : [];
+    const next = chapters[0];
     if (!again && !span && !next) return null;
     if ('kind' in tools) return tools;
     const indices = again ? again.sources.flatMap(({ message }) => places.get(message) ?? []) : [];
     if (again && !indices.length) return null;
     const [from, to] = again ? [Math.min(...indices), Math.max(...indices) + 1] : span ? [span.from, span.to] : [next!.from, next!.to];
-    const chapter = again && 'records' in again ? members(memory, again) : again ? null : (next?.records ?? null);
+    const chapter = again && isChapter(again) ? members(memory, again) : again ? null : (next?.records ?? null);
     if (chapter?.length === 0) return null;
     const job: Job = { sources: sent.read.shown.slice(from, to), redo: again ? { id: again.id, at: again.at, user: again === asked } : null, chapter };
     const order = new Map(memory.records.map(({ id }, index) => [id, index]));
@@ -435,10 +436,9 @@ export class Rememberer {
       : (memory.records.slice(0, first).findLast((record) => !record.forgotten) ?? null);
     const target = next ? next.target : chapter && chapterTarget(chapter.map((id) => held.costs.get(id)!));
     const waiting = span ? Math.ceil(span.waiting / setup.batch) : 0;
-    return { job, sent, from, to, memory, before, chapter: target === null ? null : { target }, ...tools, left: Math.max(stale.length + waiting + (next ? 1 : 0), 1) };
+    return { job, sent, from, to, memory, before, chapter: target === null ? null : { target }, ...tools, left: Math.max(stale.length + waiting + chapters.length, 1) };
   }
 
-  // The memory prompt, its model and that model's settings.
   private tools(chat: Chat): Tools | MemoryFailure {
     const { store } = this.session;
     const prompt = memoryPrompt(store);

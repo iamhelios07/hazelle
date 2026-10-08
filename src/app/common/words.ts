@@ -65,5 +65,4 @@ export const noStarred = (then: string) => `즐겨찾기한 모델이 없어요.
 
 export const CAST = '등장인물';
 
-// Consecutive records of 장기 기억 summarized again as one, which stands in their place.
 export const CHAPTER = '챕터';

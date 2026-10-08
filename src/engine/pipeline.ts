@@ -358,13 +358,13 @@ function translation({ scope, take, prompt, translations, notes, request, langua
   const laid = lay(scope, history, variables, seed, remembered(countTokens), language);
   const recent = ({ count, translations: withTranslations }: RecentSlot) => {
     const from = Math.max(before - count, 0);
+    const speakers = speakersOf(scope);
     return texts
       .slice(from, before)
       .map((text, offset) => {
         const at = from + offset;
-        const speaker = scope.messages[at]!.role === 'user' ? (scope.persona?.name ?? 'User') : (scope.card?.name ?? 'Assistant');
         const translation = withTranslations === false ? null : translations[at];
-        return [`[${speaker}]`, text.slice(-TAIL_CHARS), ...(translation ? ['Its translation:', translation.slice(-TAIL_CHARS)] : [])].join('\n');
+        return [`[${speakers[at]}]`, text.slice(-TAIL_CHARS), ...(translation ? ['Its translation:', translation.slice(-TAIL_CHARS)] : [])].join('\n');
       })
       .join('\n\n');
   };

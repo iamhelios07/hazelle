@@ -113,7 +113,9 @@ export function staleness(item: Written, chat: ChatRead, places: ReadonlyMap<str
   return item.print === printOf(chat, indices) ? null : 'changed';
 }
 
-const recalled = (item: MemoryRecord | Chapter): item is MemoryRecord => 'recalled' in item && item.recalled === true;
+export const isChapter = (item: MemoryRecord | Chapter): item is Chapter => 'records' in item;
+
+const recalled = (item: MemoryRecord | Chapter): item is MemoryRecord => !isChapter(item) && item.recalled === true;
 
 // The user's: automatic work never rewrites it, and it stays sent while stale.
 export const owned = (item: MemoryRecord | Chapter) => item.edited === true || item.pinned === true || recalled(item);
@@ -122,8 +124,10 @@ export const owned = (item: MemoryRecord | Chapter) => item.edited === true || i
 const fixed = (item: MemoryRecord | Chapter) => item.pinned === true || recalled(item);
 
 // costs: every record's and chapter's summary in tokens. fixed: what is sent whatever the budget, the state, the open
-// threads and the pinned and recalled summaries. free: the other summaries that would be sent if they fit. Neither
-// depends on the budget, so consolidation reads them against the setting.
+// threads and the pinned and recalled summaries. recalls: what each recalled record's messages take beyond its summary,
+// newest first. free: the other summaries that would be sent if they fit. None of these depends on the budget, so
+// consolidation reads them against the setting. crowded: the pinned summaries with the rest of the fixed part take the
+// whole budget, so others are over.
 export type Standing = {
   covered: number;
   status: Map<string, RecordStatus>;
@@ -135,8 +139,21 @@ export type Standing = {
   tokens: { used: number; budget: number; state: number; stateLimit: number };
   costs: Map<string, number>;
   fixed: number;
+  recalls: number[];
   free: number;
+  crowded: boolean;
 };
+
+// The room left once recalled records' messages take what fits of it, newest first, and which of them fit.
+function recallRoom(room: number, recalls: number[]): { room: number; fits: boolean[] } {
+  let left = room;
+  const fits = recalls.map((more) => {
+    if (more > left) return false;
+    left -= more;
+    return true;
+  });
+  return { room: left, fits };
+}
 
 // What memory sends against its budget: the state and open threads always, pinned and recalled ones always, then the
 // newest that fit, in chat order. A chapter that can be sent stands in its first record's place for its records; a
@@ -172,18 +189,16 @@ export function standing(memory: Memory, chat: ChatRead, budget: number, countTo
   }
   const threads = memory.threads.map(({ text }) => text);
   const always = countTokens(memoryText(memory.state, threads, [])) + units.reduce((sum, unit) => sum + (fixed(unit) ? costs.get(unit.id)! : 0), 0);
-  let room = budget - always;
   const texts = new Map(summaries);
-  for (const unit of [...units].reverse()) {
-    if (!recalled(unit)) continue;
-    const text = recalledText(unit, chat, places);
-    const more = countTokens(text) - costs.get(unit.id)!;
-    if (more > room) status.set(unit.id, 'recall-over');
-    else {
-      room -= more;
-      texts.set(unit.id, text);
-    }
-  }
+  const recalls = [...units].reverse().filter(recalled).map((unit) => ({ unit, text: recalledText(unit, chat, places) }));
+  const mores = recalls.map(({ unit, text }) => countTokens(text) - costs.get(unit.id)!);
+  const recall = recallRoom(budget - always, mores);
+  let room = recall.room;
+  recall.fits.forEach((fits, index) => {
+    const { unit, text } = recalls[index]!;
+    if (fits) texts.set(unit.id, text);
+    else status.set(unit.id, 'recall-over');
+  });
   let fits = true;
   let free = 0;
   for (const unit of [...units].reverse()) {
@@ -217,13 +232,17 @@ export function standing(memory: Memory, chat: ChatRead, budget: number, countTo
     tokens: { used: text ? countTokens(text) : 0, budget, state: state ? countTokens(state) : 0, stateLimit: stateLimit(budget) },
     costs,
     fixed: always,
+    recalls: mores,
     free,
+    crowded: always > budget && units.some(({ pinned }) => pinned === true) && [...status.values()].includes('over'),
   };
 }
 
-// Consolidation (design §6.2, When memory outgrows its budget) starts once the summaries sent newest first pass HIGH of
-// the room the setting leaves them, and each chapter takes records until they are projected under LOW, so it runs in
-// batches rather than on every new record. A chapter is told to take about 1 / CHAPTER_SHARE of its records.
+// Consolidation (design §6.2, When memory outgrows its budget) works on loose records alone, the only summaries it can
+// shrink: it starts once they pass HIGH of the room the rest leaves them, and makes chapters until they are projected
+// under LOW, so it runs in batches rather than on every new record. Once the rest fills the setting, it makes none:
+// chapters are never compressed again, and the oldest go over. A chapter is told to take about 1 / CHAPTER_SHARE of
+// its records.
 const HIGH = 0.9;
 const LOW = 0.5;
 const CHAPTER_SHARE = 4;
@@ -234,13 +253,15 @@ export const chapterTarget = (costs: number[]) => Math.ceil(costs.reduce((sum, c
 // the model's context is unknown.
 export const chapterCap = (batch: number, limit: number | null) => Math.min(4 * batch, limit === null ? Infinity : Math.floor(limit / 2));
 
-// The next chapter: from the oldest run of two or more loose records, its messages by place (from included, to not)
-// and its target length. A loose record is automatic, fresh, in no chapter (a deleted one included) and not in a run
-// that failed this session (failed). Measured against setting, the memory budget as set, never the budget a smaller
-// model shrinks it to for one request: switching models must not change what a chat remembers. null: nothing to do.
-export function nextChapter(memory: Memory, held: Standing, shown: Source[], tokens: number[], setting: number, cap: number, failed: ReadonlySet<string>): { from: number; to: number; records: string[]; target: number } | null {
-  const room = setting - held.fixed;
-  if (held.free <= room * HIGH) return null;
+type NextChapter = { from: number; to: number; records: string[]; target: number };
+
+// The chapters consolidation would make now, oldest first, each from a run of two or more loose records, its messages
+// by place (from included, to not) and its target length; the first is the next job, and their number the calls left. A
+// loose record is automatic, fresh, in no chapter (a deleted one included) and not in a chapter that failed this
+// session (failed). A record whose messages pass cap on their own is stepped over. Measured against setting, the memory
+// budget as set, never the budget a smaller model shrinks it to for one request: switching models must not change what
+// a chat remembers.
+export function nextChapters(memory: Memory, held: Standing, shown: Source[], tokens: number[], setting: number, cap: number, failed: ReadonlySet<string>): NextChapter[] {
   const places = placesOf(shown);
   const member = new Set(memory.chapters.flatMap(({ records }) => records.map(({ id }) => id)));
   const runs: MemoryRecord[][] = [[]];
@@ -248,24 +269,41 @@ export function nextChapter(memory: Memory, held: Standing, shown: Source[], tok
     if (!record.forgotten && !owned(record) && !member.has(record.id) && !held.stale.has(record.id) && !failed.has(record.id)) runs.at(-1)!.push(record);
     else if (runs.at(-1)!.length) runs.push([]);
   }
+  const loose = runs.flat().reduce((sum, { id }) => sum + held.costs.get(id)!, 0);
+  const room = recallRoom(setting - held.fixed, held.recalls).room - (held.free - loose);
+  if (room <= 0 || loose <= room * HIGH) return [];
+  const made: NextChapter[] = [];
+  let left = loose;
+  const done = () => left <= room * LOW;
   for (const run of runs) {
-    const picked: { record: MemoryRecord; indices: number[]; cost: number }[] = [];
-    let read = 0;
-    let cost = 0;
-    for (const record of run) {
-      const indices = record.sources.map(({ message }) => places.get(message)!);
-      const size = indices.reduce((sum, at) => sum + tokens[at]!, 0);
-      if (read + size > cap) break;
-      picked.push({ record, indices, cost: held.costs.get(record.id)! });
-      read += size;
-      cost += held.costs.get(record.id)!;
-      if (picked.length >= 2 && held.free - cost + chapterTarget([cost]) <= room * LOW) break;
+    let picked: { id: string; indices: number[]; size: number; cost: number }[] = [];
+    const sum = (key: 'size' | 'cost') => picked.reduce((total, each) => total + each[key], 0);
+    const close = () => {
+      const indices = picked.flatMap((each) => each.indices);
+      const target = chapterTarget(picked.map(({ cost }) => cost));
+      made.push({ from: Math.min(...indices), to: Math.max(...indices) + 1, records: picked.map(({ id }) => id), target });
+      left -= sum('cost') - target;
+      picked = [];
+    };
+    for (const { id, sources } of run) {
+      const indices = sources.map(({ message }) => places.get(message)!);
+      const size = indices.reduce((total, at) => total + tokens[at]!, 0);
+      if (picked.length && sum('size') + size > cap) {
+        if (picked.length >= 2) close();
+        else picked = [];
+        if (done()) return made;
+      }
+      if (size > cap) continue;
+      picked.push({ id, indices, size, cost: held.costs.get(id)! });
+      if (picked.length >= 2 && left - sum('cost') + chapterTarget(picked.map(({ cost }) => cost)) <= room * LOW) {
+        close();
+        return made;
+      }
     }
-    if (picked.length < 2) continue;
-    const indices = picked.flatMap((each) => each.indices);
-    return { from: Math.min(...indices), to: Math.max(...indices) + 1, records: picked.map(({ record }) => record.id), target: chapterTarget(picked.map((each) => each.cost)) };
+    if (picked.length >= 2) close();
+    if (done()) return made;
   }
-  return null;
+  return made;
 }
 
 // Rendered from memory alone, and a recalled record's messages as the prompt renders them, in stored order, with no

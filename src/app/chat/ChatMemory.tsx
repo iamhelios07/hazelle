@@ -74,7 +74,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const writing = running.get(id);
   const failure = failed.get(id);
   const unchaptered = chapterFailed.get(id);
-  const live = memory.records.filter((each) => !each.forgotten);
+  const rows = memoryRows(memory);
   const more = (
     <Menu place="below-end" label="장기 기억 더 보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="장기 기억 더 보기" size="sm" {...opener} />}>
       <MenuItem label="원문에서 전부 다시 만들기" onClick={() => setRebuilding(true)} />
@@ -129,11 +129,11 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
 
       <Threads chat={id} threads={memory.threads} />
 
-      <Section level={3} title="기록" note={`${live.length}개`}>
-        {view?.crowded && <Callout tone="warn">고정한 기록이 한도를 넘어 일부를 보내지 않아요. 고정을 풀거나 한도를 늘려 주세요.</Callout>}
+      <Section level={3} title="기록" note={`${rows.filter((each) => !each.forgotten).length}개`}>
+        {view?.crowded && <Callout tone="warn">고정한 기록이 한도를 다 써서 나머지는 보내지 않아요. 고정을 풀거나 한도를 늘려 주세요.</Callout>}
         {memory.records.length ? (
           <List label="기록">
-            {memoryRows(memory).map((each) => (
+            {rows.map((each) => (
               <MemoryRow key={each.id} item={each} view={view} positions={positions} onOpen={() => actions.memory(each.id)} />
             ))}
           </List>

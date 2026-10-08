@@ -85,13 +85,13 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
 // The records whose every message lies before the split, their sources remapped to the branch's messages and versions
 // (a version the branch does not hold keeps its old id, so the record stays stale there too), with the facts and threads
 // as they stood with only those records (engine/memory memoryThrough). A record across the split stays behind, and its
-// messages stay raw in the branch until its own summarizing reaches them. A chapter goes with its records, all of them.
-// null: nothing to carry.
+// messages stay raw in the branch until its own summarizing reaches them. A chapter goes with its records and its
+// messages, all of them: one made again past a deleted record still reads that record's messages. null: nothing to carry.
 function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, versions: ReadonlyMap<string, string>): Memory | null {
   const remap = ({ message, version }: Source): Source => ({ message: messages.get(message)!, version: versions.get(version) ?? version });
   const kept = memoryThrough(memory, memory.records.filter(({ sources }) => sources.every(({ message }) => messages.has(message))));
   const records = kept.records.map((record) => ({ ...record, sources: record.sources.map(remap) }));
-  const chapters = kept.chapters.map((chapter) => ({ ...chapter, sources: chapter.sources.map(remap) }));
+  const chapters = kept.chapters.filter(({ sources }) => sources.every(({ message }) => messages.has(message))).map((chapter) => ({ ...chapter, sources: chapter.sources.map(remap) }));
   return records.length || kept.state.length || kept.threads.length ? { ...kept, records, chapters } : null;
 }
 

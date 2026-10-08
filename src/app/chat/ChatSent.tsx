@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import type { Assembled, From } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
+import { isChapter } from '../../engine/memory';
 import type { Memory } from '../../model/memory';
 import type { Role } from '../../model/prompt';
 import type { Sent } from '../../runtime/talk';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
 import { ChoiceGroup, CodeBlock, Disclosure, Empty, Facts, List, ListItem, Section, Stack, Text } from '../ui';
-import { isChapter, recordScene, recordTitle } from './memory';
+import { recordScene, recordTitle } from './memory';
 import { tokens } from '../common/receipt';
 import { CHAPTER, loreName } from '../common/words';
 

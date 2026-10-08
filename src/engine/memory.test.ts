@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Chapter, Memory, MemoryRecord } from '../model/memory';
-import { fingerprint, memoryBefore, memoryBudget, nextChapter, nextSpan, parseChapter, parseRecords, printOf, standing, windowStart, type ChatRead } from './memory';
+import { fingerprint, memoryBefore, memoryBudget, nextChapters, nextSpan, parseChapter, parseRecords, printOf, standing, windowStart, type ChatRead } from './memory';
 
 const span = ['Luna: "I will  wait\nfor you until spring."', 'jin leaves the lighthouse.', 'Spring comes. Luna lights the lamp.'];
 const record = (to: number, lines: { speaker: string; text: string }[] = []) => ({
@@ -101,7 +101,8 @@ describe('chapters and recall in what memory sends', () => {
     expect([changed.sent, changed.status.get('c1'), changed.stale.get('c1')]).toEqual([['r1', 'r2', 'r3'], 'stale', 'changed']);
 
     const tight = standing(memoryOf([r1, r2, r3], [c1]), read, sent.costs.get('r2')! + sent.costs.get('r3')!, count);
-    expect([tight.sent, tight.status.get('c1'), tight.status.get('r1')]).toEqual([['r2', 'r3'], 'over', 'over']);
+    expect([tight.sent, tight.status.get('c1'), tight.status.get('r1'), tight.crowded]).toEqual([['r2', 'r3'], 'over', 'over', false]);
+    expect([standing(memoryOf([r1, r2, r3]), read, 1, count).crowded, standing(memoryOf([r2]), read, 1, count).crowded, standing(memoryOf([r1, r3]), read, 1, count).crowded]).toEqual([true, false, false]);
   });
 
   it("sends a recalled record's messages with their speakers in its place, and its summary when they do not fit", () => {
@@ -115,16 +116,39 @@ describe('chapters and recall in what memory sends', () => {
     expect(tight.text).toContain('They arrive.');
   });
 
-  it('takes the oldest run of loose records against the memory setting, never the budget shrunk for one request, within its read cap', () => {
+  it('takes the oldest run of loose records against the memory setting, never the budget shrunk for one request, within its read cap, and counts the chapters of the pass', () => {
     const records = texts.map((_, index) => record(`r${index}`, [index], `Event ${index} happens.`, index === 2 ? { pinned: true } : {}));
     const memory = memoryOf(records);
     const tokens = texts.map(count);
     const shrunk = standing(memory, read, 10, count);
     const setting = shrunk.fixed + shrunk.free;
-    expect(nextChapter(memory, shrunk, read.shown, tokens, 2 * setting, Infinity, new Set())).toBeNull();
-    expect(nextChapter(memory, shrunk, read.shown, tokens, setting, Infinity, new Set())).toEqual({ from: 0, to: 2, records: ['r0', 'r1'], target: Math.ceil((shrunk.costs.get('r0')! + shrunk.costs.get('r1')!) / 4) });
-    expect(nextChapter(memory, shrunk, read.shown, tokens, setting, tokens[3]! + tokens[4]!, new Set())).toMatchObject({ from: 3, to: 5, records: ['r3', 'r4'] });
-    expect(nextChapter(memory, shrunk, read.shown, tokens, setting, Infinity, new Set(['r0']))).toMatchObject({ from: 3, records: ['r3', 'r4', 'r5'] });
+    expect(nextChapters(memory, shrunk, read.shown, tokens, 2 * setting, Infinity, new Set())).toEqual([]);
+    expect(nextChapters(memory, shrunk, read.shown, tokens, setting, Infinity, new Set())).toEqual([
+      { from: 0, to: 2, records: ['r0', 'r1'], target: Math.ceil((shrunk.costs.get('r0')! + shrunk.costs.get('r1')!) / 4) },
+      expect.objectContaining({ records: ['r3', 'r4'] }),
+    ]);
+    expect(nextChapters(memory, shrunk, read.shown, tokens, setting, tokens[3]! + tokens[4]!, new Set())).toEqual([expect.objectContaining({ from: 3, to: 5, records: ['r3', 'r4'] })]);
+    expect(nextChapters(memory, shrunk, read.shown, tokens, setting, Infinity, new Set(['r0']))).toEqual([expect.objectContaining({ from: 3, records: ['r3', 'r4', 'r5'] })]);
+  });
+
+  it('starts again past a record that pairs with none in its read cap, leaves chapters and recalled messages out of what it can shrink, and makes no chapter once those fill the setting', () => {
+    const records = texts.map((_, index) => record(`r${index}`, [index], `Event ${index} happens.`));
+    const tokens = texts.map(count);
+    const plain = memoryOf(records);
+    const flat = standing(plain, read, 10, count);
+    expect(nextChapters(plain, flat, read.shown, tokens, flat.fixed + flat.free, tokens[0]! + 10, new Set())[0]).toMatchObject({ records: ['r1', 'r2', 'r3'] });
+
+    const told = memoryOf(records, [chapter('c0', records.slice(0, 3), 'They travel. '.repeat(200))]);
+    const held = standing(told, read, 10, count);
+    const loose = held.free - held.costs.get('c0')!;
+    expect(nextChapters(told, held, read.shown, tokens, held.fixed + held.costs.get('c0')! + 2 * loose, Infinity, new Set())).toEqual([]);
+    expect(nextChapters(told, held, read.shown, tokens, held.fixed + held.costs.get('c0')!, Infinity, new Set())).toEqual([]);
+    expect(nextChapters(told, held, read.shown, tokens, held.fixed + held.costs.get('c0')! + loose, Infinity, new Set())).toEqual([expect.objectContaining({ records: ['r3', 'r4', 'r5'] })]);
+
+    const recalled = memoryOf(records.map((each) => (each.id === 'r0' ? { ...each, recalled: true as const } : each)));
+    const recalling = standing(recalled, read, 10, count);
+    const room = recalling.fixed + recalling.recalls[0]! + recalling.free;
+    expect(nextChapters(recalled, recalling, read.shown, tokens, room, Infinity, new Set())).toEqual([expect.objectContaining({ records: ['r1', 'r2', 'r3', 'r4'] })]);
   });
 });
 
