@@ -5,7 +5,7 @@ import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown, usageCalls } from '../model/chat';
 import { setToggle } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
-import { EvaluationFailed } from './evaluation';
+import { EvaluationFailed, EvaluationStuck } from './evaluation';
 import { projectGreetings } from './greetings';
 import type { Runner } from './lua/client';
 import { openSession, type Session } from './session';
@@ -157,6 +157,12 @@ describe("a turn with the bot's Lua", () => {
       const { chat } = await chatWith(session, `function grow(id) cbs(${doubling}) end`);
       expect(await session.scripts.press(chat, { trigger: 'grow' })).toBe(true);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'runaway' }]);
+    }));
+
+  it('tells a display that did not end as the stuck note, not as an error', () =>
+    server.withSession(async (session) => {
+      session.scripts.report('c', new EvaluationStuck('Evaluation worker stuck', true));
+      expect(session.scripts.snapshot().notes).toMatchObject([{ chat: 'c', kind: 'stuck' }]);
     }));
 
   it('answers a button with the block trigger of its name, whose texts are CBS over what it wrote', () =>

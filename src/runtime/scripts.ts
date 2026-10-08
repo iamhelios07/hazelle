@@ -14,7 +14,7 @@ import { setBotModels } from './characters';
 import { appendCall, appendScripted, appendUserMessage, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
-import { evaluationFailure } from './evaluation';
+import { evaluationFailure, EvaluationStuck } from './evaluation';
 import { generate } from './generate';
 import type { ScriptOutcome } from './lua/event';
 import { LuaStuck, type Runner } from './lua/client';
@@ -254,7 +254,7 @@ export class Scripts {
   }
 
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown) {
-    if (result instanceof LuaStuck) return this.note(chat, { kind: 'stuck' });
+    if (result instanceof LuaStuck || result instanceof EvaluationStuck) return this.note(chat, { kind: 'stuck' });
     if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' });
     if (result instanceof Error) return this.tell(chat, `failed:${result.message}`, { kind: 'failed', message: result.message });
     const { errors, missing } = result as Pick<Outcome, 'errors' | 'missing'>;
