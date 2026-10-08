@@ -124,6 +124,7 @@ and only this folder styles elements.**
 | layout | `StoryAside` | `StoryAside.module.css` | A column in the story's right margin, over the page, its tools faint until pointed at, laid out even while not shown; ChatFrame's `aside` slot places it |
 | story | `StatusBox` | `StatusBox.module.css` | A box of a bot's status window (상태창 지정) away from its message, as wide as the story's text: its script's name and actions among several |
 | story | `MarginBox` | `MarginBox.module.css` | A bot's box in `StoryAside`: laid out at the story's text width, drawn smaller to fit the margin by what it visibly draws, whole over the story while pointed at; tells whether it fits at half its size or more |
+| story | `LogExport` (`LogRow`, `snapshotPage`) | `LogExport.module.css` | A chat drawn once out of sight and handed back as HTML whose look rides in style attributes only (`snapshot.ts`), for a page pasted on another site: the shadow roots read through, every picture whole, and the bot rules a style attribute cannot carry counted; `snapshotPage` wraps it as a file |
 
 ## Enforced by `npm run check`
 
