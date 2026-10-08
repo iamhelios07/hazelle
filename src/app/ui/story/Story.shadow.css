@@ -89,8 +89,21 @@ img {
   }
 }
 
+/* Story.tsx's stand-in for a picture while 이미지 가리기 is on. It always answers a tap, whatever data-buttons says. */
+[data-veiled] {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-8) var(--space-12);
+  border: var(--border-thin) dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: var(--text-sm) / var(--leading-tight) var(--font-sans);
+  cursor: pointer;
+}
+
 /* data-buttons is the host's (Story.tsx). A button nothing answers looks it, whatever the bot's CSS says. */
-:host([data-buttons='inert']) :is(button, [risu-btn], [risu-trigger]) {
+:host([data-buttons='inert']) :is(button:not([data-veiled]), [risu-btn], [risu-trigger]) {
   opacity: var(--story-inert-opacity) !important;
   cursor: not-allowed !important;
 }

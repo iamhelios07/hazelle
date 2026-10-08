@@ -30,9 +30,9 @@ export function parseReading(stored: string, fallback: Reading): Reading {
   };
 }
 
-export type Display = { theme: Theme; hideHeader: boolean; foldComposer: boolean };
+export type Display = { theme: Theme; hideHeader: boolean; foldComposer: boolean; hidePictures: boolean };
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', hideHeader: true, foldComposer: true };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', hideHeader: true, foldComposer: true, hidePictures: false };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -40,6 +40,7 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     theme: known(THEME, read.theme, fallback.theme),
     hideHeader: flag(read.hideHeader, fallback.hideHeader),
     foldComposer: flag(read.foldComposer, fallback.foldComposer),
+    hidePictures: flag(read.hidePictures, fallback.hidePictures),
   };
 }
 

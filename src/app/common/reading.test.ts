@@ -20,9 +20,9 @@ describe('stored reading settings', () => {
 
 describe('stored display settings', () => {
   it('keeps a known theme and real switches, and starts anything else from the fallback', () => {
-    const chosen = { theme: 'light', hideHeader: false, foldComposer: true } as const;
+    const chosen = { theme: 'light', hideHeader: false, foldComposer: true, hidePictures: true } as const;
     expect(parseDisplay(JSON.stringify(chosen), DISPLAY_DEFAULT)).toEqual(chosen);
-    expect(parseDisplay(JSON.stringify({ theme: 'sepia', hideHeader: 'no' }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
+    expect(parseDisplay(JSON.stringify({ theme: 'sepia', hideHeader: 'no', hidePictures: 1 }), DISPLAY_DEFAULT)).toEqual(DISPLAY_DEFAULT);
   });
 });
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePersisted } from '../common/usePersisted';
+import { useDisplay } from '../display';
 import { SHORTCUT_GROUPS, SHORTCUTS, useShortcut } from '../shortcuts';
 import { Dialog, Section, Shell, Shortcuts, Stack, Text, useWide } from '../ui';
 import { Page } from './Page';
@@ -20,6 +21,7 @@ export function Layout() {
   if (settings === null && outside !== route) setOutside(route);
   const closeSettings = () => navigate(outside);
   const [listing, setListing] = useState(false);
+  const { display, changeDisplay } = useDisplay();
 
   const fallback = { fallback: true };
   useShortcut('settings', () => (settings === null ? navigate(settingsEntry(wide)) : closeSettings()), fallback);
@@ -27,6 +29,7 @@ export function Layout() {
   useShortcut('prompts', () => navigate({ kind: 'prompts' }), fallback);
   useShortcut('shortcutList', () => setListing((open) => !open), fallback);
   useShortcut('sidebar', () => (wide && settings === null ? setCollapsed(!collapsed) : false), fallback);
+  useShortcut('pictures', () => changeDisplay({ hidePictures: !display.hidePictures }), fallback);
 
   const page = (
     <>

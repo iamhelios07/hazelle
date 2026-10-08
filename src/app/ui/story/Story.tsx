@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef } from 'react';
 import { useRowState } from '../collections/row-memory';
+import { useVeil, type Veil } from '../foundation/veil';
 import styles from './Story.module.css';
 import shadowCss from './Story.shadow.css?inline';
 
@@ -24,6 +25,8 @@ const NAMED = '[risu-trigger], [risu-btn]';
 const PICTURE = 'data-picture';
 const OPEN = 'data-open';
 const PICTURES = Symbol('pictures');
+// Named in Story.shadow.css. Holds the source of the picture it stands in for.
+const VEILED = 'data-veiled';
 const pictureKey = (picture: Element) => `${picture.getAttribute(PICTURE)}:${picture.querySelector('img')!.getAttribute('src')}`;
 // Sent from a message when the reader opens or closes one of its pictures, so the chat keeps its view where it is.
 export const READER_RESIZED = 'readerresized';
@@ -44,6 +47,7 @@ const CONFIG = {
 const VOID = new Set(['BR', 'HR', 'IMG', 'INPUT', 'WBR']);
 // The look-ahead takes the spaces itself: \s* giving one back would let url( "blob:…" ) past it.
 const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*\)/gi;
+const ANY_URL = /url\([^)]*\)/gi;
 // data: pictures, and blob: ones, which only the app itself can make: the chat puts its bots' pictures there.
 const OWN_SOURCE = /^(?:data|blob):/;
 const IMPORT = /@import[^;]*;?/gi;
@@ -73,25 +77,35 @@ function termRanges(shadow: ShadowRoot, term: string): Range[] {
 // For a stylesheet and a style attribute alike. Risu prefixes every class with x-risu- in the HTML and in the CSS, so
 // a bot may write either, and both lose it. Only the app's own URLs load: the CSP refuses the others anyway, and a
 // constructed stylesheet refuses @import.
-const cleanCss = (css: string) => css.replaceAll('.x-risu-', '.').replace(IMPORT, '').replace(OUTSIDE_URL, 'none');
+// While 이미지 가리기 is on, the app's own URLs go too: a bot draws its pictures as backgrounds as well.
+const cleanCss = (css: string, veiled: boolean) => css.replaceAll('.x-risu-', '.').replace(IMPORT, '').replace(veiled ? ANY_URL : OUTSIDE_URL, 'none');
 
 let base: CSSStyleSheet | null = null;
 const sheets = new Map<string, CSSStyleSheet>();
-function sheetFor(css: string): CSSStyleSheet {
-  let sheet = sheets.get(css);
+function sheetFor(css: string, veiled: boolean): CSSStyleSheet {
+  const key = `${veiled}:${css}`;
+  let sheet = sheets.get(key);
   if (!sheet) {
     sheet = new CSSStyleSheet();
-    sheet.replaceSync(cleanCss(css));
-    sheets.set(css, sheet);
+    sheet.replaceSync(cleanCss(css, veiled));
+    sheets.set(key, sheet);
     if (sheets.size > 8) sheets.delete(sheets.keys().next().value!);
   }
   return sheet;
 }
 
-function sanitize(html: string, cursor: boolean): DocumentFragment {
+function veilFor(source: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute(VEILED, source);
+  button.textContent = '이미지 보기';
+  return button;
+}
+
+function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFragment {
   const fragment = DOMPurify.sanitize(html.replace(STYLE_ATTRIBUTE, `$1${SET_ASIDE}`), CONFIG);
   for (const element of fragment.querySelectorAll<HTMLElement | SVGElement>(`[${SET_ASIDE}]`)) {
-    element.style.cssText = cleanCss(element.getAttribute(SET_ASIDE)!);
+    element.style.cssText = cleanCss(element.getAttribute(SET_ASIDE)!, veil !== null);
     element.removeAttribute(SET_ASIDE);
   }
   for (const element of fragment.querySelectorAll('[class]')) element.setAttribute('class', element.getAttribute('class')!.replace(/(^|\s)x-risu-/g, '$1'));
@@ -110,10 +124,29 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
     }
   }
   for (const element of fragment.querySelectorAll('[src], [srcset]')) {
-    const own = OWN_SOURCE.test(element.getAttribute('src') ?? '');
-    if (element.tagName === 'IMG' && !own) element.remove();
-    else if (!own) element.removeAttribute('src');
+    const source = element.getAttribute('src') ?? '';
+    const own = OWN_SOURCE.test(source);
+    if (element.tagName !== 'IMG') {
+      if (!own || veil) element.removeAttribute('src');
+    } else if (!own) {
+      element.remove();
+    } else if (veil && !veil.revealed.has(source)) {
+      element.replaceWith(veilFor(source));
+    }
     element.removeAttribute('srcset');
+  }
+  // The other ways HTML draws a picture, none of which a veil opens: SVG's image and feImage, a video's poster, the
+  // old background attribute. An SVG href to its own #part is not a picture.
+  if (veil) {
+    for (const element of fragment.querySelectorAll('[*|href]:not(a, area)')) {
+      if (!OWN_SOURCE.test(element.getAttribute('href') ?? element.getAttributeNS(XLINK, 'href') ?? '')) continue;
+      element.removeAttribute('href');
+      element.removeAttributeNS(XLINK, 'href');
+    }
+    for (const element of fragment.querySelectorAll('[background], [poster]')) {
+      element.removeAttribute('background');
+      element.removeAttribute('poster');
+    }
   }
   for (const [index, block] of [...fragment.children].entries()) {
     const only = block.childElementCount === 1 && block.firstElementChild!.tagName === 'IMG' && !block.textContent!.trim();
@@ -138,16 +171,19 @@ function sanitize(html: string, cursor: boolean): DocumentFragment {
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
 export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '' }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
+  const veil = useVeil();
+  // A tapped veil changes only veil.revealed, which no render sees.
+  const [reveals, reveal] = useReducer((count: number) => count + 1, 0);
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
 
   useLayoutEffect(() => {
-    const fragment = sanitize(html, cursor);
+    const fragment = sanitize(html, cursor, veil);
     for (const picture of fragment.querySelectorAll(`[${PICTURE}]`)) {
       if (pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
     }
     root().replaceChildren(fragment);
-  }, [html, cursor, pictures]);
+  }, [html, cursor, pictures, veil, reveals]);
 
   // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
   useEffect(() => {
@@ -159,16 +195,23 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     return () => {
       for (const range of ranges) lit.delete(range);
     };
-  }, [html, cursor, pictures, term]);
+  }, [html, cursor, pictures, veil, reveals, term]);
 
   useLayoutEffect(() => {
     if (!base) (base = new CSSStyleSheet()).replaceSync(shadowCss);
-    root().adoptedStyleSheets = css ? [base, sheetFor(css)] : [base];
-  }, [css]);
+    root().adoptedStyleSheets = css ? [base, sheetFor(css, veil !== null)] : [base];
+  }, [css, veil]);
 
   useEffect(() => {
     const shadow = root();
     const press = (event: Event) => {
+      const veiled = (event.target as Element).closest(`[${VEILED}]`);
+      if (veiled && veil) {
+        veil.revealed.add(veiled.getAttribute(VEILED)!);
+        reveal();
+        event.preventDefault();
+        return;
+      }
       const picture = (event.target as Element).closest(`[${PICTURE}]`);
       // A short picture, or one its character shows whole, has nothing to open, and a tap on it is the message's.
       if (picture && (picture.hasAttribute(OPEN) || picture.scrollHeight > picture.clientHeight)) {
@@ -198,7 +241,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
       shadow.removeEventListener('click', press);
       shadow.removeEventListener('transitionend', resized);
     };
-  }, [onPress, pictures]);
+  }, [onPress, pictures, veil]);
 
   return (
     <div className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>

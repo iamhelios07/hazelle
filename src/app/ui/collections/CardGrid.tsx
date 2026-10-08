@@ -3,6 +3,7 @@ import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type K
 import { Viewport } from './Viewport';
 import { Icon } from '../foundation/Icon';
 import { Tag } from '../foundation/Tag';
+import { useVeil } from '../foundation/veil';
 import styles from './CardGrid.module.css';
 
 const STEPS: Record<string, (columns: number) => number> = { ArrowLeft: () => -1, ArrowRight: () => 1, ArrowUp: (columns) => -columns, ArrowDown: (columns) => columns };
@@ -101,7 +102,8 @@ const TINTS = [styles.tint1, styles.tint2, styles.tint3, styles.tint4, styles.ti
 const tint = (name: string) => TINTS[[...name].reduce((hash, char) => (hash * 31 + char.codePointAt(0)!) >>> 0, 0) % TINTS.length];
 
 function Face({ image, name }: { image: string | null; name: string }) {
-  return image ? <img className={styles.image} src={image} alt="" /> : <span className={`${styles.letter} ${tint(name)}`} aria-hidden="true">{[...name][0]}</span>;
+  const veil = useVeil();
+  return image && !veil ? <img className={styles.image} src={image} alt="" /> : <span className={`${styles.letter} ${tint(name)}`} aria-hidden="true">{[...name][0]}</span>;
 }
 
 export function SelectionBar({ children }: { children: ReactNode }) {

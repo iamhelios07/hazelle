@@ -98,16 +98,17 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
   );
   return (
     <SessionProvider session={session} account={account}>
-      <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
-        <Restored store={session.store} />
-        <Unread count={unreadNotices} />
-        <BotNotes />
-        <DisplayProvider>
+      {/* Around the toasts, which show a character's picture that 이미지 가리기 covers. */}
+      <DisplayProvider>
+        <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
+          <Restored store={session.store} />
+          <Unread count={unreadNotices} />
+          <BotNotes />
           <ImportProvider>
             <Layout />
           </ImportProvider>
-        </DisplayProvider>
-      </ToastProvider>
+        </ToastProvider>
+      </DisplayProvider>
     </SessionProvider>
   );
 }

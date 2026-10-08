@@ -12,6 +12,7 @@ export const SHORTCUTS = {
   shortcutList: { label: '단축키 보기', keys: [{ key: '/', mod: true }] },
   sidebar: { label: '사이드바 접기 · 펴기', keys: [{ key: 'b', mod: true }] },
   status: { label: '상태 보기 · 닫기 (상태창을 지정한 채팅)', keys: [{ key: '.', mod: true }] },
+  pictures: { label: '이미지 가리기 · 보이기', keys: [{ key: 'h', mod: true, shift: true }] },
   send: { label: '보내기', keys: [{ key: 'Enter', shift: false }] },
   newline: { label: '줄바꿈', keys: [{ key: 'Enter', shift: true }] },
   stop: { label: '응답 멈추기', keys: [{ key: 'Escape' }] },
@@ -34,7 +35,7 @@ type Name = keyof typeof SHORTCUTS;
 
 // Where each shortcut works, in the order 단축키 lists them.
 export const SHORTCUT_GROUPS: readonly { title: string; note?: string; names: readonly Name[] }[] = [
-  { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'undoToast'] },
+  { title: '어디서나', names: ['settings', 'personas', 'prompts', 'shortcutList', 'sidebar', 'status', 'pictures', 'undoToast'] },
   { title: '채팅', note: '입력창에서 동작하고, 화살표는 입력창이 비어 있을 때만 동작해요.', names: ['send', 'newline', 'stop', 'editLast', 'swipe', 'saveEdit', 'cancelEdit', 'find'] },
   { title: '채팅 검색창', names: ['findNext', 'findPrevious', 'closeFind'] },
   { title: '번역기', note: '원문 칸에서 동작해요.', names: ['translate'] },

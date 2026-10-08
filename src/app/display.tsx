@@ -1,7 +1,7 @@
-import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { DISPLAY_DEFAULT, parseDisplay, parseReading, presets, type Display, type Preset } from './common/reading';
 import { readPersisted, usePersisted } from './common/usePersisted';
-import { applyTheme, readingDefault, type Reading } from './ui';
+import { applyTheme, readingDefault, VeilContext, type Reading } from './ui';
 
 // Per device, never in the synced settings, since a phone and a desktop screen differ (user, 2026-09-29).
 const READING = 'risu-alpha:reading';
@@ -32,6 +32,7 @@ export function DisplayProvider({ children }: { children: ReactNode }) {
   const [reading, setReading] = usePersisted(READING, (stored) => parseReading(stored, initial), initial);
   const [display, setDisplay] = usePersisted(DISPLAY, parseStoredDisplay, DISPLAY_DEFAULT);
   useLayoutEffect(() => applyTheme(display.theme), [display.theme]);
+  const veil = useMemo(() => (display.hidePictures ? { revealed: new Set<string>() } : null), [display.hidePictures]);
   const pick = ({ look: { theme, ...look } }: Preset) => {
     setReading({ ...reading, ...look });
     setDisplay({ ...display, theme });
@@ -45,7 +46,11 @@ export function DisplayProvider({ children }: { children: ReactNode }) {
     pick,
     reset: () => pick(list[0]!),
   };
-  return <DisplayContext value={control}>{children}</DisplayContext>;
+  return (
+    <DisplayContext value={control}>
+      <VeilContext value={veil}>{children}</VeilContext>
+    </DisplayContext>
+  );
 }
 
 export function useDisplay(): DisplayControl {
