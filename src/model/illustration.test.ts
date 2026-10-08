@@ -6,6 +6,12 @@ it('takes each non-blank line as a paragraph, whether the prose breaks with one 
   expect(paragraphsOf('\n \n')).toEqual([]);
 });
 
+it('counts no line of tags alone, in the paragraphs or the marks', () => {
+  const text = '<GT-SEP/>\n⏱️[11:21 AM]\n<div class="box">\n<b>Hi.</b>\n</div>';
+  expect(paragraphsOf(text)).toEqual(['⏱️[11:21 AM]', '<b>Hi.</b>']);
+  expect(withMarks(text, new Set([0]))).toBe(`<GT-SEP/>\n⏱️[11:21 AM]\n${placeMark(0)}\n<div class="box">\n<b>Hi.</b>\n</div>`);
+});
+
 it('places a picture whose paragraph an edit removed at the message end', () => {
   expect(placeOf({ paragraph: 1 }, 'One.\nTwo.')).toBe(1);
   expect(placeOf({ paragraph: 2 }, 'One.\nTwo.')).toBeNull();
