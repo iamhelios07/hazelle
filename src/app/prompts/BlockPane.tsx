@@ -117,12 +117,15 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
             label="메시지 수"
             control={<Stepper label="메시지 수" less="메시지 하나 줄이기" more="메시지 하나 늘리기" value={block.count} min={1} max={RECENT_MAX} onChange={(next) => onCount(block, next)} />}
           />
-          <SettingRow
-            place="panel"
-            label="번역 포함"
-            help="끄면 원문만 보내요."
-            control={<Switch label="번역 포함" checked={block.translations !== false} onChange={(on) => onTranslations(block, on)} />}
-          />
+          {/* A 삽화 prompt's 이전 메시지 never holds translations (engine/pipeline). */}
+          {sort === 'translate' && (
+            <SettingRow
+              place="panel"
+              label="번역 포함"
+              help="끄면 원문만 보내요."
+              control={<Switch label="번역 포함" checked={block.translations !== false} onChange={(on) => onTranslations(block, on)} />}
+            />
+          )}
         </>
       )}
       {block.kind === 'slot' && block.slot === 'authorNote' && authorNote !== null && (

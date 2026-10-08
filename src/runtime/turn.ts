@@ -109,7 +109,8 @@ function illustrateReceived(session: Pick<Session, 'store' | 'illustrator'>, cha
   const stored = live(session.store.get('chat', chat));
   if (reply.receipt.state === 'failed' || !stored || !illustrateSwitches(session.store, stored.value.character).auto) return;
   const message = fold(session.store.children('entry', chat)).find(({ id }) => id === (reply.message ?? reply.id));
-  if (message) session.illustrator.draw(chat, message.id, shown(message).id, { auto: true });
+  const version = message && shown(message);
+  if (version?.text.trim()) session.illustrator.draw(chat, message!.id, version.id, { auto: true });
 }
 
 // start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.

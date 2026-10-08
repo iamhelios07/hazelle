@@ -38,7 +38,7 @@ export const drawingModels = (connections: readonly Stored<'connection'>[]): Ima
 // no-image-model: no starred model draws. image-model-gone: the one the switches name no longer does.
 // invalid: the scene writer answered, but not with a scene the format reads. undrawn: the image call failed or was refused.
 // file-refused: the server refused the picture (too large, blocked, or past the account's picture cap).
-// gone: the message or its version was deleted, or holds no text to draw from.
+// gone: the message or its version was deleted. empty: the version holds no text to draw from.
 export type IllustrateFailure =
   | RouteFailure
   | { kind: 'prompt-missing'; own: boolean }
@@ -53,6 +53,7 @@ export type IllustrateFailure =
   | { kind: 'not-a-picture' }
   | { kind: 'file-refused' }
   | { kind: 'gone' }
+  | { kind: 'empty' }
   | { kind: 'unsaved'; failure: ApiFailure };
 
 // By message, one run each. scene: once written, so the chat shows the 그리는 중 slot after its paragraph; on a failure,
@@ -143,7 +144,7 @@ export class Illustrator {
     let receipt: Receipt | null = null;
     if (!scene) {
       const paragraphs = paragraphsOf(text);
-      if (!paragraphs.length) return { kind: 'gone' };
+      if (!paragraphs.length) return { kind: 'empty' };
       const history = [...messages.slice(0, index), { ...messages[index]!, selected }];
       const written = await this.scene(chat, stored.value, history, paragraphs, switches.prompt, auto, signal);
       if ('kind' in written) return written;

@@ -54,7 +54,9 @@ describe('Illustrator', () => {
       const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scene)), picture()]));
       expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
 
-      await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(1));
+      // The reply's save, the bot's onOutput, the scene's evaluation and both calls run in turn: more than waitFor's
+      // default second on a loaded machine.
+      await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(1), { timeout: 5000 });
       expect(session.illustrator.snapshot().size).toBe(0);
       const reply = fold(session.store.children('entry', chat))[1]!;
       const { value } = session.store.children('illustration', chat)[0]!;
