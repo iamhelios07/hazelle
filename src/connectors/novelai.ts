@@ -109,6 +109,20 @@ const plan = (payload: unknown) => (isRecord(payload) && payload.active === true
 
 const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
 
+const subscription = (secret: string) => ({ url: 'https://image.novelai.net/user/subscription', method: 'GET' as const, headers: bearer(secret), body: null });
+
+// Free on Opus only, for one picture of at most 1,048,576 pixels at 28 steps (generateBody keeps both). Past its V5
+// allowance every V5 picture costs Anlas until it refills, so a V5 picture is free only while some is left; a missing
+// allowance is not known, never free.
+function free(payload: unknown, { model, width, height }: PictureRequest): boolean | null {
+  if (!isRecord(payload) || typeof payload.tier !== 'number') return null;
+  if (payload.active !== true || payload.tier !== 3 || width * height > 1_048_576) return false;
+  if (!BODIES[model.id]?.v5) return true;
+  const usage = isRecord(payload.usage) ? payload.usage : null;
+  if (!usage || typeof usage.percent !== 'number') return null;
+  return usage.isNegative !== true && usage.percent > 0;
+}
+
 export const novelai: ConnectionType = {
   id: 'novelai',
   label: 'NovelAI',
@@ -118,10 +132,11 @@ export const novelai: ConnectionType = {
   detect: { key: /^pst-/, host: 'image.novelai.net' },
   models: MODELS,
   // The only check that a pasted key works: there is no model list to ask. api.novelai.net refuses this path now.
-  meters: [{ request: (secret) => ({ url: 'https://image.novelai.net/user/subscription', method: 'GET', headers: bearer(secret), body: null }), parse: meters, plan }],
+  meters: [{ request: subscription, parse: meters, plan }],
   draws: {
     request: (picture) => ({ url: 'https://image.novelai.net/ai/generate-image', method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(generateBody(picture)) }),
     authHeaders: bearer,
     parse: (body) => Promise.resolve(pictureIn(body)),
+    free: { request: subscription, parse: free },
   },
 };

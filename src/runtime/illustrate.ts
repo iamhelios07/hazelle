@@ -17,7 +17,7 @@ import { evaluationFailure } from './evaluation';
 import { generate, type ReplyError } from './generate';
 import { modelProfile } from './profiles';
 import { illustrationPrompt } from './prompts';
-import { relayBytes } from './relay';
+import { relayBytes, relayJson } from './relay';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
@@ -56,6 +56,9 @@ export type IllustrateFailure =
   | { kind: 'image-model-gone' }
   | { kind: 'undrawn'; error: Exclude<ReplyError, { kind: 'stopped' }> }
   | { kind: 'not-a-picture' }
+  // Not known to cost nothing (a used-up allowance, a plan without free pictures, or a connection that cannot say):
+  // drawn only on the user's press, with spend.
+  | { kind: 'costs' }
   | { kind: 'file-refused' }
   | { kind: 'gone' }
   | { kind: 'empty' }
@@ -99,8 +102,8 @@ export class Illustrator {
 
   // scene: one the user changed (어떻게 바꿀까요?) or a failed run's, drawn with no scene call. auto: asked by a reply
   // received here, whose scene a chat judged stuck refuses (evaluation's passive gate).
-  // 다시 그리기 is another draw: earlier pictures of the version stay.
-  draw(chat: string, message: string, version: string, { scene = null, auto = false }: { scene?: Scene | null; auto?: boolean } = {}) {
+  // 다시 그리기 is another draw: earlier pictures of the version stay. spend: the user agreed to a picture that may cost.
+  draw(chat: string, message: string, version: string, { scene = null, auto = false, spend = false }: { scene?: Scene | null; auto?: boolean; spend?: boolean } = {}) {
     if (this.closed || this.aborts.has(message)) return;
     const abort = new AbortController();
     this.aborts.set(message, abort);
@@ -110,7 +113,7 @@ export class Illustrator {
     void lease.ready
       .then(async (failure) => {
         if (failure) return { kind: 'unsaved' as const, failure };
-        return this.run(chat, message, version, scene, auto, abort.signal, (made) => {
+        return this.run(chat, message, version, scene, auto, spend, abort.signal, (made) => {
           written = made;
           this.change(message, { chat, version, stage: 'drawing', scene: made });
         });
@@ -139,7 +142,7 @@ export class Illustrator {
   }
 
   // null once the illustration is saved.
-  private async run(chat: string, message: string, version: string, given: Scene | null, auto: boolean, signal: AbortSignal, onScene: (scene: Scene) => void): Promise<IllustrateFailure | Stopped | null> {
+  private async run(chat: string, message: string, version: string, given: Scene | null, auto: boolean, spend: boolean, signal: AbortSignal, onScene: (scene: Scene) => void): Promise<IllustrateFailure | Stopped | null> {
     const { store, files } = this.deps;
     const stored = live(store.get('chat', chat));
     const messages = fold(store.children('entry', chat));
@@ -163,7 +166,7 @@ export class Illustrator {
     }
     const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
     const request = pictureRequest(scene, route.model, seed);
-    const drawn = await this.picture(route, request, signal);
+    const drawn = await this.picture(route, request, spend, signal);
     if ('kind' in drawn) return drawn;
     const saved = await files.save([drawn.bytes], { signal });
     if (!saved.ok) return saved.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unsaved', failure: saved };
@@ -204,7 +207,7 @@ export class Illustrator {
   }
 
   // Straight through the relay: a picture is one answer, not a stream to pick up.
-  private async picture({ connection, draws }: ImageRoute, picture: PictureRequest, signal: AbortSignal): Promise<Picture | IllustrateFailure | Stopped> {
+  private async picture({ connection, draws }: ImageRoute, picture: PictureRequest, spend: boolean, signal: AbortSignal): Promise<Picture | IllustrateFailure | Stopped> {
     const { credentials } = this.deps;
     let request: HttpRequest;
     try {
@@ -222,6 +225,12 @@ export class Illustrator {
     };
     const credential = await credentials.get(resolveConnection(connection.value)!, picked.account.secret, signal);
     if (!credential.ok) return failed(credential.failure);
+    if (!spend) {
+      if (!draws.free) return { kind: 'costs' };
+      const asked = await relayJson(draws.free.request(credential.credential), signal);
+      if (!asked.ok) return failed(asked.failure);
+      if (draws.free.parse(asked.data, picture) !== true) return { kind: 'costs' };
+    }
     const answer = await relayBytes({ ...request, headers: { ...request.headers, ...draws.authHeaders(credential.credential) } }, signal);
     if (!answer.ok) return failed(answer.failure);
     return (await draws.parse(answer.bytes, answer.type)) ?? { kind: 'not-a-picture' };

@@ -197,6 +197,9 @@ export type Draws = {
   request(picture: PictureRequest): HttpRequest;
   authHeaders(secret: string): Record<string, string>;
   parse(body: Uint8Array<ArrayBuffer>, contentType: string | null): Promise<Picture | null>;
+  // Whether this picture costs the account nothing right now, asked with the stored credential before each draw. A
+  // picture not known to be free waits for the user's press; without this hook every picture is one.
+  free?: { request(secret: string): HttpRequest; parse(payload: unknown, picture: PictureRequest): boolean | null };
 };
 
 export type Token = { value: string; expiresAt: number };

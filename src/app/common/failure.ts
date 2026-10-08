@@ -282,6 +282,8 @@ export function describeIllustrateFailure(failure: IllustrateFailure): string {
       return describeReplyError(failure.error);
     case 'not-a-picture':
       return '이미지가 아닌 응답이 왔어요.';
+    case 'costs':
+      return '무료로 만들 수 없는 이미지예요. 무료 사용량을 다 썼거나 요금제에 무료 이미지가 없어요.';
     case 'file-refused':
       return '서버가 이미지 저장을 거절했어요.';
     case 'gone':

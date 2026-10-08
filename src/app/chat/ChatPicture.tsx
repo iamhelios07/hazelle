@@ -47,12 +47,18 @@ export function ChatPicture({ slot, message, pictures, onPage, running, url, act
     const { drawing } = slot;
     return (
       <Failure
-        title="삽화 실패"
+        title={drawing.failure.kind === 'costs' ? '비용이 드는 이미지' : '삽화 실패'}
         actions={
           <>
-            <Button size="sm" onClick={() => actions.draw(message.id, drawing.version, drawing.scene)}>
-              다시 시도
-            </Button>
+            {drawing.failure.kind === 'costs' ? (
+              <Button size="sm" onClick={() => actions.draw(message.id, drawing.version, drawing.scene, true)}>
+                그래도 만들기
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => actions.draw(message.id, drawing.version, drawing.scene)}>
+                다시 시도
+              </Button>
+            )}
             <Button variant="secondary" size="sm" onClick={() => actions.dismissIllustration(message.id)}>
               닫기
             </Button>

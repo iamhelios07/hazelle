@@ -75,6 +75,18 @@ describe('NovelAI', () => {
     expect(await novelai.draws!.parse(strToU8('{"statusCode":402,"message":"Not enough Anlas"}'), 'application/json')).toBeNull();
   });
 
+  it('calls a picture free only on Opus, inside the free size, and for V5 only while its allowance lasts', () => {
+    const { parse } = novelai.draws!.free!;
+    const opus = { tier: 3, active: true, usage: { percent: 12, isNegative: false } };
+    expect(parse(opus, picture(v5!))).toBe(true);
+    expect(parse({ ...opus, usage: { percent: 0, isNegative: false } }, picture(v5!))).toBe(false);
+    expect(parse({ ...opus, usage: { percent: -3, isNegative: true } }, picture(v5!))).toBe(false);
+    expect(parse({ tier: 3, active: true }, picture(v5!))).toBeNull();
+    expect(parse({ ...opus, usage: { percent: 0, isNegative: false } }, picture(v45!))).toBe(true);
+    expect(parse({ ...opus, tier: 2 }, picture(v5!))).toBe(false);
+    expect(parse(opus, { ...picture(v5!), width: 1024, height: 1536 })).toBe(false);
+  });
+
   it('reads the V5 usage limit and Anlas from the subscription, and names the tier', () => {
     const { parse, plan } = novelai.meters![0]!;
     const opus = { tier: 3, active: true, trainingStepsLeft: { fixedTrainingStepsLeft: 1000, purchasedTrainingSteps: 250 }, usage: { percent: 42.5, isNegative: false, timeUntilNextPercent: 7888 } };

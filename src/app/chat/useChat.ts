@@ -299,9 +299,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void setOwnIllustrate(store, chat.character!, own).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  // scene: one already written, drawn again with no scene call.
-  function draw(message: string, version: string, scene: Scene | null = null) {
-    if (id) illustrator.draw(id, message, version, { scene });
+  // scene: one already written, drawn again with no scene call. spend: the user's 그래도 만들기 on a picture that may cost.
+  function draw(message: string, version: string, scene: Scene | null = null, spend = false) {
+    if (id) illustrator.draw(id, message, version, { scene, spend });
   }
 
   function dropPicture(picture: Stored<'illustration'>) {

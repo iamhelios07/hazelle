@@ -20,6 +20,7 @@ const { PAINTER } = vi.hoisted(() => {
       request: (picture) => ({ url: 'https://image.example/generate', method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(picture) }),
       authHeaders: (secret) => ({ authorization: `Bearer ${secret}` }),
       parse: async (bytes, type) => (type === 'image/png' ? { bytes, type } : null),
+      free: { request: () => ({ url: 'https://image.example/free', method: 'GET', headers: {}, body: null }), parse: (payload) => (payload as { free: boolean }).free },
     },
   };
   return { PAINTER };
@@ -34,6 +35,7 @@ const server = testServer();
 
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
 const picture = () => new Response(PNG, { headers: { 'x-relay': 'upstream', 'content-type': 'image/png' } });
+const free = (answer: boolean) => Response.json({ free: answer }, { headers: { 'x-relay': 'upstream' } });
 const scene = { after: 2, shape: 'portrait', setting: '1girl, indoors, night', framing: 'cowboy shot', characters: [{ name: 'Ari', look: 'girl, silver hair', outfit: 'white dress', action: 'smile', x: 0.5, y: 0.5 }] };
 const REPLY = 'She opened the door.\nThe room was dark.\n\nShe smiled.';
 const SCENE = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
@@ -54,7 +56,7 @@ describe('Illustrator', () => {
     server.withSession(async (session) => {
       const chat = await painted(session);
       await setIllustrate(session.store, null, { auto: true });
-      const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scene)), picture()]));
+      const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scene)), free(true), picture()]));
       expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
 
       // The reply's save, the bot's onOutput, the scene's evaluation and both calls run in turn: more than waitFor's
@@ -64,12 +66,29 @@ describe('Illustrator', () => {
       const reply = fold(session.store.children('entry', chat))[1]!;
       const { value } = session.store.children('illustration', chat)[0]!;
       expect(value).toMatchObject({ message: reply.id, version: shown(reply).id, scene: { paragraph: 1, shape: 'portrait' }, receipt: { state: 'done' }, sent: { width: 832, height: 1216, characters: [{ center: { x: 0.5, y: 0.5 } }] }, type: 'image/png', size: PNG.byteLength });
-      expect(log).toHaveLength(3);
+      expect(log).toHaveLength(4);
       expect(log[1]!.sent.body).toContain('[2] The room was dark.');
-      expect(log[2]!.sent).toMatchObject({ url: 'https://image.example/generate', headers: { authorization: 'Bearer pk-secret' } });
-      expect(JSON.parse(log[2]!.sent.body!)).toMatchObject({ seed: value.sent.seed, prompt: expect.stringContaining('1girl, indoors, night, cowboy shot') });
+      expect(log[2]!.sent.url).toBe('https://image.example/free');
+      expect(log[3]!.sent).toMatchObject({ url: 'https://image.example/generate', headers: { authorization: 'Bearer pk-secret' } });
+      expect(JSON.parse(log[3]!.sent.body!)).toMatchObject({ seed: value.sent.seed, prompt: expect.stringContaining('1girl, indoors, night, cowboy shot') });
       const read = await session.files.read(value.file);
       expect(read.ok && [...read.data]).toEqual([...PNG]);
+    }));
+
+  it('draws no picture not known to be free until the user agrees to spend, then draws it from the same scene', () =>
+    server.withSession(async (session) => {
+      const chat = await painted(session);
+      await setIllustrate(session.store, null, { auto: true });
+      const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scene)), free(false), picture()]));
+      await takeTurn(session, chat, { kind: 'answer' });
+      const reply = fold(session.store.children('entry', chat))[1]!;
+      await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ stage: 'failed', failure: { kind: 'costs' }, scene: { paragraph: 1 } }), { timeout: 5000 });
+      expect(log).toHaveLength(3);
+      const failed = session.illustrator.snapshot().get(reply.id);
+      session.illustrator.draw(chat, reply.id, shown(reply).id, { scene: failed?.stage === 'failed' ? failed.scene : null, spend: true });
+      await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(1));
+      expect(log).toHaveLength(4);
+      expect(log[3]!.sent.url).toBe('https://image.example/generate');
     }));
 
   it('refuses before any call when no starred model draws, and keeps the failure for the slot', () =>
