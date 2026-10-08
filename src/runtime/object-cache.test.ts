@@ -59,7 +59,7 @@ async function fixture() {
     const parent = url.searchParams.get('parent');
     const bootstrap = url.searchParams.has('bootstrap');
     const changes = [...rows.values()].filter((row) => row.rev > since && (parent === null || row.parent === parent)).flatMap((row) => {
-      if (!url.searchParams.has('exclude') || !['entry', 'memory'].includes(row.kind)) return [row];
+      if (!url.searchParams.has('exclude') || !['entry', 'memory', 'illustration'].includes(row.kind)) return [row];
       if (bootstrap) return [];
       const { body, ...metadata } = row;
       return [body === null ? row : { ...metadata, omitted: true as const }];
@@ -168,7 +168,7 @@ it('reopens a session with sealed cached objects before any network read', async
   expect(opened.data.store.get('connection', 'connection')?.value.label).toBe('cached');
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory&known=1&timeline=t0', expect.anything());
+  expect(f.fetch).toHaveBeenCalledWith('/api/objects?since=1&exclude=entry,memory,illustration&known=1&timeline=t0', expect.anything());
   opened.data.close();
 });
 
@@ -202,7 +202,7 @@ it('renders a saved bootstrap prefix and resumes its original until bound in the
   expect(opened.data.store.list('connection').map((row) => row.id)).toEqual(['first']);
   expect(f.fetch).not.toHaveBeenCalled();
   opened.data.startBackground();
-  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory&bootstrap=1&until=2&count=1&known=2&timeline=t0');
+  expect(f.fetch.mock.lastCall?.[0]).toBe('/api/objects?since=1&exclude=entry,memory,illustration&bootstrap=1&until=2&count=1&known=2&timeline=t0');
   opened.data.close();
 });
 

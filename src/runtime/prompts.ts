@@ -1,4 +1,5 @@
 import { importPreset, type PresetFailure, type PresetResult, type PresetUnsupported } from '../engine/import/preset';
+import { illustratorPrompt } from '../engine/illustrate';
 import { memoryTaskPrompt } from '../engine/memory';
 import { translatorPrompt } from '../engine/translate';
 import type { Chat } from '../model/chat';
@@ -19,14 +20,16 @@ import type { ObjectStore } from './store';
 export const STARTER_ID = '00000000-0000-4000-8000-000000000001';
 export const TRANSLATOR_ID = '00000000-0000-4000-8000-000000000004';
 export const MEMORY_PROMPT_ID = '00000000-0000-4000-8000-000000000005';
+export const ILLUSTRATOR_ID = '00000000-0000-4000-8000-000000000006';
 
 // Each task's built-in prompt, which a new prompt of its sort starts from while the account's default is gone.
-const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
+const BUILT_IN = { translate: translatorPrompt, memory: memoryTaskPrompt, illustrate: illustratorPrompt } satisfies { [S in Exclude<PromptSort, 'conversation'>]: () => PromptOf<S> };
 
 const DEFAULTS = {
   conversation: { setting: 'prompt', id: STARTER_ID, make: starter },
   translate: { setting: 'translatePrompt', id: TRANSLATOR_ID, make: () => Promise.resolve(BUILT_IN.translate()) },
   memory: { setting: 'memoryPrompt', id: MEMORY_PROMPT_ID, make: () => Promise.resolve(BUILT_IN.memory()) },
+  illustrate: { setting: 'illustratePrompt', id: ILLUSTRATOR_ID, make: () => Promise.resolve(BUILT_IN.illustrate()) },
 } as const satisfies { [S in PromptSort]: { setting: keyof Settings; id: string; make: () => Promise<PromptOf<S> | null> } };
 
 export type StoredPrompt<S extends PromptSort> = Stored<'prompt'> & { value: PromptOf<S> };
@@ -48,6 +51,8 @@ export const chatPrompt = (store: Pick<ObjectStore, 'get'>, chat: Pick<Chat, 'pr
 export const translationPrompt = (store: Pick<ObjectStore, 'get'>, chosen: string | undefined) => choose(store, 'translate', chosen);
 
 export const memoryPrompt = (store: Pick<ObjectStore, 'get'>) => choose(store, 'memory', undefined);
+
+export const illustrationPrompt = (store: Pick<ObjectStore, 'get'>, chosen: string | undefined) => choose(store, 'illustrate', chosen);
 
 // A new conversation prompt holds every slot once, the context before the chat with 장기 기억 last, where memory changing
 // at a boundary leaves the rest of the fixed part cached (design §6.2, Cache), and the notes after it, and the two

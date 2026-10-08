@@ -1,6 +1,6 @@
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
-import type { Block, ChatRange, ConversationPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
+import type { Block, ChatRange, ConversationPrompt, IllustratePrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
@@ -8,6 +8,7 @@ import type { Card } from './import/types';
 import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation } from './lorebook/activate';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
+import { numbered } from './illustrate';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
@@ -158,6 +159,7 @@ function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) 
 type Filling =
   | { sort: 'conversation'; note: string; memory: string }
   | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
+  | { sort: 'illustrate'; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'memory'; memory: string; span: string };
 
 const loreMessage = ({ entry }: Laid, { id, role, body }: Lore): ChatMessage => ({ role, content: entry(id, body) });
@@ -224,13 +226,13 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
           if (filling.sort === 'translate') wrapped(block, filling.note);
           break;
         case 'recent':
-          if (filling.sort === 'translate') verbatim(block, filling.recent(block));
+          if (filling.sort === 'translate' || filling.sort === 'illustrate') verbatim(block, filling.recent(block));
           break;
         case 'source':
-          if (filling.sort === 'translate') verbatim(block, filling.source);
+          if (filling.sort === 'translate' || filling.sort === 'illustrate') verbatim(block, filling.source);
           break;
         case 'memory':
-          if (filling.sort !== 'translate') memory = verbatim(block, filling.memory);
+          if (filling.sort === 'conversation' || filling.sort === 'memory') memory = verbatim(block, filling.memory);
           break;
         case 'span':
           if (filling.sort === 'memory') verbatim(block, filling.span);
@@ -356,20 +358,45 @@ function translation({ scope, take, prompt, translations, notes, request, langua
   const source = request.kind === 'message' ? texts[request.index]! : request.text;
   const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, seed, role: 'user' as const, text: request.text, time: null }];
   const laid = lay(scope, history, variables, seed, remembered(countTokens), language);
-  const recent = ({ count, translations: withTranslations }: RecentSlot) => {
-    const from = Math.max(before - count, 0);
-    const speakers = speakersOf(scope);
-    return texts
-      .slice(from, before)
-      .map((text, offset) => {
-        const at = from + offset;
-        const translation = withTranslations === false ? null : translations[at];
-        return [`[${speakers[at]}]`, text.slice(-TAIL_CHARS), ...(translation ? ['Its translation:', translation.slice(-TAIL_CHARS)] : [])].join('\n');
-      })
-      .join('\n\n');
-  };
-  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', note: notes, recent, source });
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', note: notes, recent: recentOf(scope, texts, before, translations), source });
   return { source, messages: cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message) };
+}
+
+// 이전 메시지: the messages before the one at before, as displayed, each with its translation unless the slot holds none.
+const recentOf = (scope: ChatScope, texts: string[], before: number, translations: (string | null)[]) => ({ count, translations: withTranslations }: RecentSlot) => {
+  const from = Math.max(before - count, 0);
+  const speakers = speakersOf(scope);
+  return texts
+    .slice(from, before)
+    .map((text, offset) => {
+      const at = from + offset;
+      const translation = withTranslations === false ? null : translations[at];
+      return [`[${speakers[at]}]`, text.slice(-TAIL_CHARS), ...(translation ? ['Its translation:', translation.slice(-TAIL_CHARS)] : [])].join('\n');
+    })
+    .join('\n\n');
+};
+
+export type IllustrationInput = {
+  // The chat's, its messages as shown, up to the one illustrated.
+  scope: ChatScope;
+  take: ReadonlySet<number>;
+  prompt: IllustratePrompt;
+  // The illustrated message's place in scope.messages, and its stored text's paragraphs (model/illustration
+  // paragraphsOf), which the scene names by number.
+  index: number;
+  paragraphs: string[];
+  seed: string;
+  countTokens: (text: string) => number;
+};
+
+// Like a translation, a 삽화 task holds no chat, so entries placed at a depth are not sent in it.
+export const assembleIllustration = (input: IllustrationInput): { messages: ChatMessage[] } | RanAway => stoppable(() => illustration(input));
+
+function illustration({ scope, take, prompt, index, paragraphs, seed, countTokens }: IllustrationInput): { messages: ChatMessage[] } {
+  const { texts, variables } = renderChat('display', scope, take);
+  const laid = lay(scope, scope.messages.slice(0, index + 1), variables, seed, remembered(countTokens), null);
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'illustrate', recent: recentOf(scope, texts, index, []), source: numbered(paragraphs) });
+  return { messages: cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message) };
 }
 
 export type MemoryTaskInput = {

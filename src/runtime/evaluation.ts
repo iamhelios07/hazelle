@@ -1,7 +1,7 @@
 import { Runaway } from '../engine/cbs/evaluate';
 import type { DisplayPatch } from '../engine/display';
 import type { RegexScript } from '../engine/import/types';
-import type { assembleMemory, assembleTranslation, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
+import type { assembleIllustration, assembleMemory, assembleTranslation, IllustrationInput, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { ApiFailure } from './api';
 import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult } from './evaluation-core';
@@ -44,8 +44,10 @@ const GATES = {
   memory: 'passive',
   view: 'passive',
   'auto-translation': 'passive',
+  'auto-illustration': 'passive',
   send: 'press',
   translation: 'press',
+  illustration: 'press',
   lore: 'press',
 } as const;
 type Asker = keyof typeof GATES;
@@ -106,6 +108,12 @@ export class Evaluation {
   translation(lane: Lane<'translation' | 'auto-translation'> | null, input: Omit<TranslationInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleTranslation>>> {
     const { scope, ...rest } = input;
     return this.once(lane?.asker ?? 'translation', lane && onChat(lane), scope, { kind: 'translation', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleTranslation>>>;
+  }
+
+  // Each its own lane, as a translation's: several messages' scenes may be written at once.
+  illustration(lane: Lane<'illustration' | 'auto-illustration'>, input: Omit<IllustrationInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleIllustration>>> {
+    const { scope, ...rest } = input;
+    return this.once(lane.asker, onChat(lane), scope, { kind: 'illustration', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleIllustration>>>;
   }
 
   lore(lane: Lane<'lore'>, scope: ChatScope, seed: string, limit: number): Promise<Counted<{ role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway>> {

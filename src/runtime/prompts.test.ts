@@ -8,7 +8,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import { chatModel, setPromptModel } from './assignment';
 import { setChatPrompt } from './chat-log';
-import { addDefaults, addPrompt, chatPrompt, copyPrompt, importPrompt, removePrompt, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
+import { addDefaults, addPrompt, ILLUSTRATOR_ID, chatPrompt, copyPrompt, importPrompt, removePrompt, restorePrompt, setDefaultPrompt, MEMORY_PROMPT_ID, STARTER_ID, TRANSLATOR_ID } from './prompts';
 import starter from './starter-prompt.risup?inline';
 import { testServer } from './testing';
 
@@ -72,15 +72,15 @@ describe('importPreset', () => {
 });
 
 describe('addDefaults', () => {
-  it('adds the starter, translation and memory prompts as the defaults once, even from two devices at the same time', async () => {
+  it('adds each sort’s default prompt once, even from two devices at the same time', async () => {
     const { store, open } = await server.account();
     const other = await open();
     await Promise.all([addDefaults(store), addDefaults(other)]);
     await store.pull();
     const names = () => store.list('prompt').filter(live).map((kept) => kept.value.name).sort();
-    expect(names()).toEqual(['기본 기억', '기본 번역', '🏓 핑퐁 간소화']);
+    expect(names()).toEqual(['기본 기억', '기본 번역', '기본 삽화', '🏓 핑퐁 간소화']);
     const settings = store.get('settings', SETTINGS_ID)?.value;
-    expect([settings?.prompt, settings?.translatePrompt, settings?.memoryPrompt]).toEqual([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID]);
+    expect([settings?.prompt, settings?.translatePrompt, settings?.memoryPrompt, settings?.illustratePrompt]).toEqual([STARTER_ID, TRANSLATOR_ID, MEMORY_PROMPT_ID, ILLUSTRATOR_ID]);
 
     const [mine, translator] = await Promise.all([addPrompt(store, '내 프롬프트', 'conversation'), addPrompt(store, '내 번역', 'translate')]);
     expect(await removePrompt(store, TRANSLATOR_ID)).toEqual({ ok: false, error: 'default' });
@@ -88,7 +88,7 @@ describe('addDefaults', () => {
     await setDefaultPrompt(store, translator.ok ? translator.data.id : '');
     await Promise.all([removePrompt(store, STARTER_ID), removePrompt(store, TRANSLATOR_ID)]);
     await addDefaults(store);
-    expect(names()).toEqual(['기본 기억', '내 번역', '내 프롬프트']);
+    expect(names()).toEqual(['기본 기억', '기본 삽화', '내 번역', '내 프롬프트']);
   });
 
   it('gives an account made before translation prompts its default translation prompt, keeping its own default prompt', async () => {
