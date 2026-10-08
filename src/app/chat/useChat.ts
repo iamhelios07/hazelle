@@ -3,10 +3,13 @@ import type { ModelRef } from '../../connectors/assignment';
 import { resolveAssets } from '../../engine/assets';
 import { unused } from '../../engine/pipeline';
 import { shown, type Chat, type ChatItem, type ChatSummary, type TranslateSwitches } from '../../model/chat';
+import type { IllustrateSwitches, Scene } from '../../model/illustration';
+import type { Stored } from '../../model/kinds';
 import { textTranslation, type CharacterShelf } from '../../model/library';
 import type { ApiFailure } from '../../runtime/api';
 import { chatModel, setChatModel } from '../../runtime/assignment';
-import { resetToggles, setOwnTranslate, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
+import { illustrateSwitches, resetToggles, setIllustrate, setOwnIllustrate, setOwnTranslate, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
+import { removeIllustration, restoreIllustration, type Drawing } from '../../runtime/illustrate';
 import {
   branchChat,
   removeChat,
@@ -30,12 +33,12 @@ import { blocked, type Blocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf, translationInput } from '../../runtime/chat-context';
 import { takeTurn, type TurnFailure } from '../../runtime/turn';
 import type { CharacterPart } from '../common/characterPart';
-import { describeTurnFailure } from '../common/failure';
+import { describeIllustrateFailure, describeTurnFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
 import { BIN_KEEPS } from '../common/words';
-import { useAssetUrl, useChatDisplay, useChatMemory, useSession, useTranslating, useTurn } from '../session';
+import { useAssetUrl, useChatDisplay, useChatMemory, useChildren, useIllustrating, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui';
@@ -51,6 +54,19 @@ import { useMessageEdit } from './useMessageEdit';
 type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
 
+// The failures a toast already said, by run: each is said once, though the chat is left and opened again.
+const told = new WeakSet<Drawing>();
+
+// A version's pictures, oldest first.
+function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap<string, Stored<'illustration'>[]> {
+  const versions = new Map<string, Stored<'illustration'>[]>();
+  for (const picture of [...illustrations].sort((a, b) => a.value.at - b.value.at)) versions.set(picture.value.version, [...(versions.get(picture.value.version) ?? []), picture]);
+  return versions;
+}
+
+// 어떻게 바꿀까요?: the scene a picture or a failed run had, drawn again once changed. paragraphs: how many its version holds.
+export type Reshaping = { message: string; version: string; scene: Scene; paragraphs: number };
+
 const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'image-only', 'prompt-missing', 'persona-missing', 'profile-missing']);
 const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failure.kind);
 
@@ -63,7 +79,7 @@ export type ChatActions = OpenChat['actions'];
 // item null is a new chat, saved under chatId with its first message; shelf null is 캐릭터 없이.
 export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterShelf<ChatSummary> | null, reply: Reading['reply']) {
   const session = useSession();
-  const { store, talk, translator, drafts } = session;
+  const { store, talk, translator, illustrator, drafts } = session;
   const turn = useTurn(chatId);
   const translating = useTranslating();
   const toast = useToast();
@@ -96,7 +112,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }, [choices, openedAt]);
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
-  const { messages, display: view, pending: displayPending, error: displayError, retry: retryDisplay, retryRegex, stuck } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
+  const { messages, display: view, placed, pending: displayPending, error: displayError, retry: retryDisplay, retryRegex, stuck } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
   const opening = unstarted && messages[0]!;
   // A display that fails after one was shown leaves that one up; one that never showed says so in the log (ChatLog).
   useEffect(() => {
@@ -108,6 +124,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const url = useAssetUrl();
   const sendLanguage = languageLabel(translate.inputLanguage);
   const translation = translatorOf(store, chat);
+  const illustrate = illustrateSwitches(store, chat.character);
+  const illustrations = useChildren('illustration', id);
+  const pictures = useMemo(() => picturesByVersion(illustrations), [illustrations]);
+  const illustrating = useIllustrating();
+  const [reshaping, setReshaping] = useState<Reshaping | null>(null);
   const busy = turn !== null;
   const last = messages.at(-1);
 
@@ -141,6 +162,14 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   useEffect(() => {
     if (id) session.memory.check(id);
   }, [id]);
+
+  useEffect(() => {
+    for (const drawing of illustrating.values()) {
+      if (drawing.chat !== chatId || drawing.stage !== 'failed' || told.has(drawing)) continue;
+      told.add(drawing);
+      toast.error(describeIllustrateFailure(drawing.failure));
+    }
+  }, [illustrating]);
 
   // 응답 번역 is shown awaited from the reply's first text; whether and when it starts is translateReceived's.
   const awaited = translate.replies && last?.live && texts.at(-1)!.trim() ? last.live : null;
@@ -262,6 +291,24 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void setOwnTranslate(store, chat.character!, own).then((saved) => saved.ok || toast.failed(saved));
   }
 
+  function setIllustrateSwitches(change: Partial<IllustrateSwitches>) {
+    void setIllustrate(store, chat.character, change).then((saved) => saved.ok || toast.failed(saved));
+  }
+
+  function setOwnIllustrateSwitches(own: boolean) {
+    void setOwnIllustrate(store, chat.character!, own).then((saved) => saved.ok || toast.failed(saved));
+  }
+
+  // scene: one already written, drawn again with no scene call.
+  function draw(message: string, version: string, scene: Scene | null = null) {
+    if (id) illustrator.draw(id, message, version, { scene });
+  }
+
+  function dropPicture(picture: Stored<'illustration'>) {
+    void removeIllustration(store, picture.id).then((removed) => removed.ok || toast.failed(removed));
+    toast.undoable('삽화를 삭제했어요.', () => void restoreIllustration(store, picture).then((saved) => saved.ok || toast.failed(saved)));
+  }
+
   async function branch(message: Shown) {
     if (!item || branching) return;
     setBranching(true);
@@ -360,6 +407,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     sendLanguage,
     translation,
     translating,
+    illustrate,
+    pictures,
+    illustrating,
+    placed,
+    reshaping,
     awaited,
     flipped,
     opening,
@@ -396,6 +448,13 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       flipTranslation,
       setTranslate: setSwitches,
       setOwnTranslate: setOwnSwitches,
+      setIllustrate: setIllustrateSwitches,
+      setOwnIllustrate: setOwnIllustrateSwitches,
+      illustrate: (message: Shown) => draw(message.id, shown(message).id),
+      draw,
+      dismissIllustration: (message: string) => illustrator.dismiss(message),
+      dropPicture,
+      reshape: setReshaping,
       copy,
       press: (button: BotButton | null) => void press(button),
       branch,

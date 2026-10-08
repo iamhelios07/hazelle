@@ -145,11 +145,13 @@ export function useBin() {
   const profiles = useKind('profile');
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
+const NO_CHILDREN: never[] = [];
 // The array is held until one of
 // them changes, since a fresh array on every read would make React re-render forever. Subscribing reads it anew, so
 // a change between the render and the subscription is not missed.
-// illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again.
-export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K, parent: string): Stored<K>[] {
+// illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again; parent null is a
+// chat not saved yet, which has none.
+export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K, parent: string | null): Stored<K>[] {
   const store = useStore();
   const model = useMemo(() => {
     let held: Stored<K>[] | null = null;
@@ -162,7 +164,7 @@ export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K
           listener();
         });
       },
-      snapshot: () => (held ??= store.children(kind, parent)),
+      snapshot: () => (held ??= parent === null ? NO_CHILDREN : store.children(kind, parent)),
     };
   }, [store, kind, parent]);
   return useSyncExternalStore(model.subscribe, model.snapshot);

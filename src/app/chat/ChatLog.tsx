@@ -1,6 +1,7 @@
 import { GitBranch } from 'lucide-react';
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
 import { shown } from '../../model/chat';
+import type { Stored } from '../../model/kinds';
 import { day } from '../common/time';
 import { useChatSummary } from '../session';
 import { navigate } from '../shell/router';
@@ -18,8 +19,10 @@ export function speakers({ card, shelf, persona, route }: OpenChat) {
   };
 }
 
+const NO_PICTURES: Stored<'illustration'>[] = [];
+
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, decor, hosted, offered, translating, awaited, flipped, opening, last, card, notUsed, busy, editing, pinned, found, search, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, placed, pictures, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, last, card, notUsed, busy, editing, pinned, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -43,6 +46,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
       traverse={false}>{(index) => {
       const message = messages[index]!;
       const label = day(message.at);
+      const version = shown(message).id;
+      const drawing = illustrating.get(message.id);
       const divider = index === 0 || day(messages[index - 1]!.at) !== label;
       return <Fragment>
         {divider && <Divider label={label} />}
@@ -50,6 +55,9 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           key={message.id}
           message={message}
           text={texts[index]!}
+          placed={placed.get(index) ?? null}
+          pictures={pictures.get(version) ?? NO_PICTURES}
+          drawing={drawing?.version === version ? drawing : null}
           decor={decor}
           hosted={hosted(index)}
           offered={offered(index)}

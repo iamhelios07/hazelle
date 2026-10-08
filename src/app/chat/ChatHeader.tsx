@@ -12,6 +12,7 @@ import { ChatModelMenu } from './ChatModelMenu';
 import { PersonaDialog } from './ChatPersonaPicker';
 import { ChatPromptPicker, PromptDialog } from './ChatPromptPicker';
 import { ReadingDialog } from './ChatReading';
+import { SceneDialog } from './ChatPicture';
 import type { OpenChat } from './useChat';
 
 // Wide screens name the character in the sidebar beside the chat, whose title opens it; the header names only the chat.
@@ -71,7 +72,8 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
 // The persona and prompt dialogs mount here, not beside their chips: a folded composer hides its tool bar and a hidden
 // header its actions, and a dialog inside them.
 export function ChatDialogs({ chat }: { chat: OpenChat }) {
-  const { dialog, item, actions } = chat;
+  const { dialog, item, reshaping, actions } = chat;
+  if (reshaping) return <SceneDialog reshaping={reshaping} actions={actions} />;
   if (dialog === 'persona') return <PersonaDialog chat={chat} />;
   if (dialog === 'prompt') return <PromptDialog chat={chat} />;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
