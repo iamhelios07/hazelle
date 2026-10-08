@@ -1,6 +1,6 @@
 import { Bot, Copy, GitBranch, Info, Languages, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
 import { memo, useMemo, type KeyboardEvent } from 'react';
-import { resolveAssets } from '../../engine/assets';
+import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
 import { firstLine, shown } from '../../model/chat';
@@ -19,7 +19,7 @@ type Props = {
   message: Shown;
   // Editing starts from the stored text.
   text: string;
-  decor: { bot: boolean; css: string; url: (id: string) => string | undefined; buttons: 'live' | 'inert' };
+  decor: { bot: boolean; css: string; url: PictureUrl; buttons: 'live' | 'inert' };
   hosted: (Box & { id: string })[];
   offered: { id: string; name: string; marked: boolean }[];
   translating: Translating;

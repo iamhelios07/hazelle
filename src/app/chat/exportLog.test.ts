@@ -28,7 +28,7 @@ it('draws the shown rows in range with their boxes, leaving out failed, empty an
   const draft = logDraft(messages, view, new Set(), true, names, { pictures: true, hideMe: true, text: 'both', from: 1, to: 5 });
   expect(draft.rows.map(({ key, name, mine, stories }) => [key, name, mine, stories.length])).toEqual([['a', '루나', false, 3], ['b', '나', true, 1]]);
   expect(draft.rows[0]!.stories.map((story) => story.replace(/<[^>]+>/g, '').trim())).toEqual(['Hello', '안녕', 'HP 7']);
-  expect(draft.assets).toEqual(new Set([picture]));
+  expect([...draft.pictures.values()]).toEqual([{ kind: 'asset', id: picture }]);
   expect(resolveLog(draft, () => 'data:image/png;base64,AA').css).toBe('.x { background: url(data:image/png;base64,AA) }');
   expect(logDraft(messages, view, new Set(), true, names, { pictures: true, hideMe: false, text: 'translation', from: 2, to: 2 }).rows.map(({ name }) => name)).toEqual(['진']);
 });

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
+import type { PictureUrl } from '../engine/assets';
 import type { ChatScope } from '../engine/render';
 import { binned, live } from '../model/library';
 import type { Kind, Stored } from '../model/kinds';
@@ -63,14 +64,14 @@ export const useIllustrator = (): Illustrator => useSession().illustrator;
 
 // The function is a new one when a picture has
 // loaded, so what shows pictures renders again.
-export function useAssetUrl(): (id: string) => string | undefined {
+export function useAssetUrl(): PictureUrl {
   const { assets } = useSession();
   // Page keys ChatScreen by chat id (including an unsaved chat), so leaving releases this view's story, CSS and
   // status pictures together. Saving the same chat keeps its key and must not revoke its mounted pictures.
   const view = useMemo(() => assets.view(), [assets]);
   useLayoutEffect(view.hold, [view]);
   const version = useSyncExternalStore(assets.subscribe, assets.snapshot);
-  return useCallback((id: string) => view.url(id), [view, version]);
+  return useCallback<PictureUrl>((kind, id) => view.url(kind, id), [view, version]);
 }
 
 // Every snapshot below is held until its own inputs change: fresh selector arrays would make React re-render forever.

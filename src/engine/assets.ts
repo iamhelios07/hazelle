@@ -2,11 +2,16 @@
 // absent for the character's own.
 export type BotAsset = { id: string; name: string; module?: string | null };
 
-// The chat screen puts the picture's own URL there once it is loaded (resolveAssets), and nothing before.
-export const assetUrl = (id: string) => `asset:${id}`;
-const ASSET_URL = /asset:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g;
+// A stored picture by its kind and id: a bot's asset, or a 삽화 (illustration), which only an export names this way.
+export type PictureKind = 'asset' | 'illustration';
+export type PictureUrl = (kind: PictureKind, id: string) => string | undefined;
 
-export const resolveAssets = (text: string, url: (id: string) => string | undefined) => text.replace(ASSET_URL, (_, id: string) => url(id) ?? '');
+// The chat screen puts the picture's own URL there once it is loaded (resolveAssets), and nothing before.
+export const pictureRef = (kind: PictureKind, id: string) => `${kind}:${id}`;
+export const assetUrl = (id: string) => pictureRef('asset', id);
+const PICTURE_REF = /(asset|illustration):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g;
+
+export const resolveAssets = (text: string, url: PictureUrl) => text.replace(PICTURE_REF, (_, kind: PictureKind, id: string) => url(kind, id) ?? '');
 
 // Risu's distance for a name that matches none: models write names from {{assetlist}} and often get one slightly wrong.
 const NEAR = 4;
