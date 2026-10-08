@@ -9,8 +9,17 @@ import { ChatMessage } from './ChatMessage';
 import { foldTerm } from './search';
 import type { OpenChat } from './useChat';
 
+// Who the rows name: the chat's character, the persona the user plays, and the model a reply with no receipt names.
+export function speakers({ card, shelf, persona, route }: OpenChat) {
+  return {
+    character: card && { name: card.nickname || card.name, image: shelf!.face },
+    me: persona.kind === 'persona' ? { name: persona.persona.value.name, image: persona.persona.value.picture } : null,
+    modelName: 'kind' in route ? null : route.model.name,
+  };
+}
+
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, decor, hosted, offered, translating, awaited, flipped, opening, last, card, shelf, route, notUsed, busy, editing, pinned, found, search, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, decor, hosted, offered, translating, awaited, flipped, opening, last, card, notUsed, busy, editing, pinned, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -19,9 +28,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   ])) as typeof actions, []);
   const originModel = useChatSummary(item?.chat.origin?.id ?? null);
   const origin = item?.chat.origin;
-  const character = card && { name: card.nickname || card.name, image: shelf!.face };
-  const me = chat.persona.kind === 'persona' ? { name: chat.persona.persona.value.name, image: chat.persona.persona.value.picture } : null;
-  const modelName = 'kind' in route ? null : route.model.name;
+  const { character, me, modelName } = speakers(chat);
   const term = search ? foldTerm(search.term) : '';
   if (chat.displayPending) return chat.displayError === undefined ? <Progress steps={[{ label: '채팅을 불러오는 중' }]} /> : <>
     <Text>채팅을 표시하지 못했어요.</Text>

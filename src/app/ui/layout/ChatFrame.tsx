@@ -21,6 +21,9 @@ export const readingDefault = (): Reading => ({
 const LEADING: Record<Spacing, string> = { narrow: styles.leadingNarrow, normal: styles.leadingNormal, wide: styles.leadingWide };
 const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: styles.widthNormal, wide: styles.widthWide };
 
+// The reading settings on the element a story sits in: the chat's column, or an exported log (LogExport).
+export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[font]} ${LEADING[leading]} ${WIDTH[width]}`, style: { '--reading-size': `${size}px` } as CSSProperties });
+
 type Props = {
   back?: { label: string; onClick: () => void };
   title: ReactNode;
@@ -41,6 +44,7 @@ type Props = {
 };
 
 export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, hideHeader, pictures, compact, scrollRef, onScroll }: Props) {
+  const scope = readingScope(reading);
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -92,10 +96,10 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   return (
     <div className={styles.frame}>
       <main
-        className={`${styles.column} ${styles[reading.font]} ${LEADING[reading.leading]} ${WIDTH[reading.width]}`}
+        className={`${styles.column} ${scope.className}`}
         style={
           {
-            '--reading-size': `${reading.size}px`,
+            ...scope.style,
             '--footer-space': `${space}px`,
             '--story-scrollbar': `${scrollbar}px`,
             '--story-picture-peek': pictures?.fold === false ? 'none' : pictures?.peek && `${pictures.peek}vh`,
