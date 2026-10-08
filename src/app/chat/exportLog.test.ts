@@ -25,10 +25,16 @@ const view: Display = {
 const names = { character: { name: '루나', image: null }, me: { name: '진', image: null }, modelName: null };
 
 it('draws the shown rows in range with their boxes, leaving out failed, empty and live ones, and collects their pictures', () => {
-  const draft = logDraft(messages, view, true, names, { pictures: true, hideMe: true, text: 'both', from: 1, to: 5 });
+  const draft = logDraft(messages, view, new Set(), true, names, { pictures: true, hideMe: true, text: 'both', from: 1, to: 5 });
   expect(draft.rows.map(({ key, name, mine, stories }) => [key, name, mine, stories.length])).toEqual([['a', '루나', false, 3], ['b', '나', true, 1]]);
   expect(draft.rows[0]!.stories.map((story) => story.replace(/<[^>]+>/g, '').trim())).toEqual(['Hello', '안녕', 'HP 7']);
   expect(draft.assets).toEqual(new Set([picture]));
   expect(resolveLog(draft, () => 'data:image/png;base64,AA').css).toBe('.x { background: url(data:image/png;base64,AA) }');
-  expect(logDraft(messages, view, true, names, { pictures: true, hideMe: false, text: 'translation', from: 2, to: 2 }).rows.map(({ name }) => name)).toEqual(['진']);
+  expect(logDraft(messages, view, new Set(), true, names, { pictures: true, hideMe: false, text: 'translation', from: 2, to: 2 }).rows.map(({ name }) => name)).toEqual(['진']);
+});
+
+it('keeps a version flipped to its original on screen in its original, and shows the translation elsewhere', () => {
+  const said = (flipped: Set<string>) => logDraft(messages, view, flipped, true, names, { pictures: true, hideMe: false, text: 'translation', from: 1, to: 1 }).rows[0]!.stories[0]!.replace(/<[^>]+>/g, '').trim();
+  expect(said(new Set())).toBe('안녕');
+  expect(said(new Set(['a']))).toBe('Hello');
 });

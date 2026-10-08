@@ -55,7 +55,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />
         <MenuItem label="이미지 가리기" checked={display.hidePictures} multiple onClick={() => changeDisplay({ hidePictures: !display.hidePictures })} />
         <MenuItem label="검색" onClick={actions.openSearch} />
-        {item && <MenuItem label={EXPORT} onClick={() => actions.openDialog('export')} />}
+        {item && !chat.displayPending && <MenuItem label={EXPORT} onClick={() => actions.openDialog('export')} />}
         <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>

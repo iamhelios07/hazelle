@@ -4,6 +4,7 @@ import type { ChatItem } from '../../model/chat';
 import { assetDataUrls } from '../../runtime/assets';
 import { chatFile } from '../../runtime/chat-file';
 import { download } from '../common/download';
+import { sizeText } from '../common/size';
 import { useCopyHtml } from '../common/useCopy';
 import { ARCA_LOG, CHAT_FILE, EXPORT } from '../common/words';
 import { useDisplay } from '../display';
@@ -27,20 +28,18 @@ const TEXTS: { value: LogText; label: string }[] = [{ value: 'translation', labe
 type Drawing = { key: string; title: string; sub: string | null; css: string; rows: LogRow[]; missing: number };
 type Prepared = { html: string; size: string; missing: number; rules: number };
 
-const megabytes = (text: string) => `${(new Blob([text]).size / 1024 / 1024).toFixed(1)}MB`;
-
 export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
   const store = useStore();
   const files = useFiles();
   const { reading, display } = useDisplay();
   const copyHtml = useCopyHtml();
-  const { messages, view, decor, card, busy, displayPending } = chat;
+  const { messages, view, decor, card, busy } = chat;
   const [form, setForm] = useState<'log' | 'file'>('log');
   const [choices, setChoices] = useState<LogChoices>(() => ({ pictures: !display.hidePictures, hideMe: false, text: 'translation', from: messages.length > SHORT ? messages.length - LATEST + 1 : 1, to: messages.length }));
   const [range, setRange] = useState({ from: String(choices.from), to: String(choices.to) });
   const [drawing, setDrawing] = useState<Drawing | null>(null);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
-  const waiting = busy ? '응답이 끝나면 내보낼 수 있어요.' : displayPending || view.pass ? '채팅을 불러오는 중이에요.' : null;
+  const waiting = busy ? '응답 중' : view.pass ? '채팅을 불러오는 중' : null;
   const translated = messages.some((message) => message.versions.some((version) => version.translation));
   const change = (next: Partial<LogChoices>) => setChoices({ ...choices, ...next });
 
@@ -49,7 +48,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
     setDrawing(null);
     if (form !== 'log' || waiting) return;
     let live = true;
-    const draft = logDraft(messages, view, decor.bot, speakers(chat), choices);
+    const draft = logDraft(messages, view, chat.flipped, decor.bot, speakers(chat), choices);
     const read = choices.pictures ? assetDataUrls(store, files, draft.assets) : Promise.resolve({ urls: new Map<string, string>(), missing: draft.assets.size });
     void read.then(({ urls, missing }) => {
       if (live) setDrawing({ key: crypto.randomUUID(), title: item.title, sub: card?.name ?? null, ...resolveLog(draft, (id) => urls.get(id)), missing });
@@ -57,7 +56,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
     return () => {
       live = false;
     };
-  }, [form, choices, messages, view, waiting]);
+  }, [form, choices, messages, view, chat.flipped, waiting]);
 
   function saveFile() {
     if (form === 'file') return download(fileNamed(item.title, 'json'), new Blob([chatFile(store, item.id)], { type: 'application/json' }));
@@ -74,7 +73,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
   const typed = (edge: 'from' | 'to') => Number(range[edge]) === choices[edge];
 
   const ready = form === 'file' || prepared !== null;
-  const lost = prepared && [prepared.missing > 0 && `이미지 ${prepared.missing}개`, prepared.rules > 0 && `스타일 ${prepared.rules}개`].filter(Boolean).join(', ');
+  const lost = prepared && [prepared.missing > 0 && `이미지 ${prepared.missing}개`, prepared.rules > 0 && `스타일 ${prepared.rules}개`].filter(Boolean).join(' · ');
   return (
     <Dialog
       title={EXPORT}
@@ -109,7 +108,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
                 {lost && <Callout tone="warn">{`빠진 것: ${lost}`}</Callout>}
               </>
             ) : (
-              <Progress steps={[{ label: drawing ? '그리는 중' : choices.pictures ? '이미지 읽는 중' : '준비하는 중' }]} />
+              <Progress steps={[{ label: '준비하는 중' }]} />
             )}
           </>
         )}
@@ -123,7 +122,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
           rows={drawing.rows}
           reading={reading}
           onDrawn={({ html, rules }) => {
-            setPrepared({ html, size: megabytes(html), rules, missing: drawing.missing });
+            setPrepared({ html, size: sizeText(new Blob([html]).size), rules, missing: drawing.missing });
             setDrawing(null);
           }}
         />

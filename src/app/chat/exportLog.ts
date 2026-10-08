@@ -5,6 +5,7 @@ import type { Shown } from '../../runtime/talk';
 import type { LogRow } from '../ui';
 import { shownHtml, speaker } from './ChatMessage';
 import type { speakers } from './ChatLog';
+import { seenText } from './search';
 
 export type LogText = 'translation' | 'original' | 'both';
 // from, to: message numbers, from 1, both included.
@@ -15,7 +16,7 @@ const ME_HIDDEN = '나';
 
 // The rows a log draws, as the chat draws them, their pictures still named by asset: id. A reply being written, a
 // failed one and an empty one are left out, and a message's boxes stand in it as they did when it was written.
-export function logDraft(messages: Shown[], view: Display, bot: boolean, names: ReturnType<typeof speakers>, { hideMe, text, from, to }: LogChoices): LogDraft {
+export function logDraft(messages: Shown[], view: Display, flipped: ReadonlySet<string>, bot: boolean, names: ReturnType<typeof speakers>, { hideMe, text, from, to }: LogChoices): LogDraft {
   const decor = { bot, url: assetUrl };
   const rows: LogRow[] = [];
   for (let index = Math.max(from, 1) - 1; index < Math.min(to, messages.length); index++) {
@@ -24,7 +25,7 @@ export function logDraft(messages: Shown[], view: Display, bot: boolean, names: 
     if (message.live !== null || version.receipt?.state === 'failed') continue;
     const original = view.texts[index]!;
     const translation = version.translation?.text ?? null;
-    const said = (translation === null || text === 'original' ? [original] : text === 'both' ? [original, translation] : [translation]).filter((each) => each.trim());
+    const said = (text === 'original' ? [original] : text === 'both' && translation !== null ? [original, translation] : [seenText(original, translation, null, flipped.has(version.id))]).filter((each) => each.trim());
     const boxes = view.boxes[index]!;
     if (!said.length && !boxes.length) continue;
     const stories = [...boxes.filter(({ at }) => at === 'top').map(({ html }) => html), ...said, ...boxes.filter(({ at }) => at === 'bottom').map(({ html }) => html)];
