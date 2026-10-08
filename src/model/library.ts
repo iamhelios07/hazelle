@@ -34,9 +34,6 @@ export type Character = Mark & {
   // for the latest message instead of in every one. An id that names no script marks nothing, so a deleted script's
   // 되돌리기 brings its mark back.
   statusScripts?: string[];
-  // 옆에 두기: 상태 rests in the panel beside the story whenever a chat of it opens with room for one, instead of
-  // peeking from the story's edge.
-  keepStatus?: true;
   // 추론을 본문에 표시: its replies keep the thinking blocks they write inside the text (connectors/thoughts) where they
   // are, for a bot that draws them itself. Absent: they move to the reply's reasoning.
   keepThoughts?: true;

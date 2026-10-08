@@ -1,6 +1,7 @@
 import { CONNECTION_TYPES } from '../connectors/registry';
 import { isRecord } from '../connectors/values';
 import { stampIds } from '../engine/import/convert';
+import { without } from '../model/fields';
 import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
 import { firstTurns } from '../model/turns';
 import type { ObjectStore } from './store';
@@ -44,7 +45,7 @@ function upgradeConnection(value: Record<string, unknown>) {
 // gives.
 function upgradeCharacter(value: Record<string, unknown>) {
   let upgraded: Record<string, unknown> | null = null;
-  for (const step of [translationsByText, cardScriptIds, statusIds]) upgraded = step(upgraded ?? value) ?? upgraded;
+  for (const step of [translationsByText, cardScriptIds, statusIds, dropKeepStatus]) upgraded = step(upgraded ?? value) ?? upgraded;
   return upgraded;
 }
 
@@ -81,6 +82,11 @@ function statusIds(value: Record<string, unknown>) {
     return isRecord(script) && typeof script.id === 'string' ? [script.id] : [];
   });
   return { ...value, statusScripts: [...new Set(ids)] };
+}
+
+// Until 2026-10-09 옆에 두기 could keep 상태 in the story's margin.
+function dropKeepStatus(value: Record<string, unknown>) {
+  return 'keepStatus' in value ? without(value, 'keepStatus') : null;
 }
 
 // Until 2026-10-08 a chat's memory held no chapters.

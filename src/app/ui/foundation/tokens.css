@@ -241,7 +241,6 @@
   /* A picture line's defaults (Story.shadow.css); a character's own replace them (ChatFrame's pictures). */
   --story-picture-peek: 40vh;
   --story-picture-most: none;
-  --aside-tools-opacity: 0.35;
 
   --space-2: 2px;
   --space-4: 4px;

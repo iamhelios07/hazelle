@@ -128,6 +128,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const illustrations = useChildren('illustration', id);
   const pictures = useMemo(() => picturesByVersion(illustrations), [illustrations]);
   const illustrating = useIllustrating();
+  // Settled by the switch and the pictures, not by a picture landing, so the story moves aside before one does.
+  const stage = illustrate.auto || illustrations.length > 0 || [...illustrating.values()].some((drawing) => drawing.chat === chatId);
   const [reshaping, setReshaping] = useState<Reshaping | null>(null);
   const busy = turn !== null;
   const last = messages.at(-1);
@@ -408,6 +410,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     translation,
     translating,
     illustrate,
+    stage,
     pictures,
     illustrating,
     placed,

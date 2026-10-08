@@ -24,8 +24,8 @@ const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: sty
 // The reading settings on the element a story sits in: the chat's column, or an exported log (LogExport).
 export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[font]} ${LEADING[leading]} ${WIDTH[width]}`, style: { '--reading-size': `${size}px` } as CSSProperties });
 
-// Whether the story's margin holds at least half its text's width: a message's 삽화 stands there (MarginPicture), not
-// in the text. Outside a chat there is no margin.
+// Whether the story stands at the page's left with a stage on its right at least half its text's width: a message's
+// 삽화 stands there (MarginPicture), not in the text. Outside a chat there is no stage.
 const MarginRoom = createContext(false);
 export const useMarginRoom = () => useContext(MarginRoom);
 
@@ -38,9 +38,10 @@ type Props = {
   footer: ReactNode;
   panel?: ReactNode;
   peek?: ReactNode;
-  aside?: ReactNode;
   reading: Reading;
   hideHeader: boolean;
+  // The chat has 삽화, or will: its story makes room on its right for them where the page is wide enough.
+  stage: boolean;
   // A character's own look for the lines that are only a picture, over the defaults in tokens.css.
   pictures?: { fold?: false; peek?: number; most?: number };
   compact: boolean;
@@ -48,7 +49,7 @@ type Props = {
   onScroll: () => void;
 };
 
-export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, aside, reading, hideHeader, pictures, compact, scrollRef, onScroll }: Props) {
+export function ChatFrame({ back, title, actions, children, above, footer, panel, peek, reading, hideHeader, stage, pictures, compact, scrollRef, onScroll }: Props) {
   const scope = readingScope(reading);
   const [shown, setShown] = useState(true);
   const lastTop = useRef(0);
@@ -59,8 +60,8 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   const [space, setSpace] = useState(0);
   const [scrollbar, setScrollbar] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [side, setSide] = useState(0);
-  const [room, setRoom] = useState(false);
+  const [room, setRoom] = useState({ stage: 0, text: 0 });
+  const staged = stage && room.stage >= room.text / 2;
 
   useLayoutEffect(() => {
     const element = footerRef.current!;
@@ -86,10 +87,11 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
     const content = contentRef.current!;
     const measure = () => {
       setScrollbar(element.offsetWidth - element.clientWidth);
-      const half = (element.clientWidth - content.offsetWidth) / 2;
+      // From the story's right edge, as it stands with a stage, to the page's, less a gap there and SidePeek's tab.
       const style = getComputedStyle(content);
-      setSide(half);
-      setRoom(half >= (content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / 2);
+      const px = (name: string) => parseFloat(style.getPropertyValue(name));
+      const width = element.clientWidth - px('--story-stage-lead') - content.offsetWidth - px('--space-16') - px('--peek-tab-width');
+      setRoom({ stage: Math.max(0, width), text: content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -112,13 +114,13 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   return (
     <div className={styles.frame}>
       <main
-        className={`${styles.column} ${scope.className}`}
+        className={`${styles.column} ${scope.className} ${staged ? styles.staged : ''}`}
         style={
           {
             ...scope.style,
             '--footer-space': `${space}px`,
             '--story-scrollbar': `${scrollbar}px`,
-            '--story-side': `${side}px`,
+            '--story-margin': `${room.stage}px`,
             '--story-picture-peek': pictures?.fold === false ? 'none' : pictures?.peek && `${pictures.peek}vh`,
             '--story-picture-most': pictures?.most && `${pictures.most}vh`,
           } as CSSProperties
@@ -133,10 +135,9 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
         </div>
         <div className={styles.scroll} ref={scrollRef} onScroll={scrolled}>
           <div ref={contentRef} className={styles.content}>
-            <MarginRoom.Provider value={room}>{children}</MarginRoom.Provider>
+            <MarginRoom.Provider value={staged}>{children}</MarginRoom.Provider>
           </div>
         </div>
-        {aside}
         {peek}
         <div ref={footerRef} className={`${styles.footer} ${compact ? styles.compact : ''}`}>
           <div className={styles.above}>{above}</div>

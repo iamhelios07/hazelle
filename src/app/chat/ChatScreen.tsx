@@ -12,7 +12,7 @@ import { ChatInfo } from './ChatInfo';
 import { ChatLog } from './ChatLog';
 import { ChatMemory } from './ChatMemory';
 import { ChatSearch } from './ChatSearch';
-import { ChatStatusAside, ChatStatusPeek } from './ChatStatus';
+import { ChatStatusPeek } from './ChatStatus';
 import { ChatToggles } from './ChatToggles';
 import { useEditBeside } from './editBeside';
 import { useChat, type Side } from './useChat';
@@ -70,9 +70,9 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
             {chat.peeking && <ChatStatusPeek chat={chat} />}
           </SidePeeks>
         }
-        aside={chat.status.length > 0 && <ChatStatusAside chat={chat} />}
         reading={reading}
         hideHeader={display.hideHeader}
+        stage={chat.stage}
         pictures={shelf?.character.pictures}
         compact={folded}
         scrollRef={scroll.scrollRef}

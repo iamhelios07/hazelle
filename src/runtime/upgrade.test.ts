@@ -48,6 +48,10 @@ describe('upgradeValue', () => {
     expect(upgradeValue('character', { card: { regex, triggers: [] }, statusScripts: ['regex-0', 0, 1] })).toEqual({ card: { regex, triggers: [] }, statusScripts: ['regex-0', 'new'] });
   });
 
+  it('drops 옆에 두기 from a character', () => {
+    expect(upgradeValue('character', { folder: null, keepStatus: true })).toEqual({ folder: null });
+  });
+
   it('leaves a current character or module alone, so the write-back touches only old ones', () => {
     expect(upgradeValue('character', { folder: null, card: { regex: [], triggers: [] } })).toBeNull();
     expect(upgradeValue('character', { card: { regex: [{ id: 'x' }], triggers: [{ id: 'y' }] }, statusScripts: ['x'] })).toBeNull();

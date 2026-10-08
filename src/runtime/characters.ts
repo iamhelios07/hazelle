@@ -147,10 +147,6 @@ export function setStatusScript(store: ObjectStore, id: string, script: string, 
   });
 }
 
-export function setKeepStatus(store: ObjectStore, id: string, keep: boolean): Promise<ApiResult<Stored<'character'>>> {
-  return store.update('character', id, (current) => (keep ? { ...current, keepStatus: true } : without(current, 'keepStatus')));
-}
-
 export function setKeepThoughts(store: ObjectStore, id: string, keep: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => (keep ? { ...current, keepThoughts: true } : without(current, 'keepThoughts')));
 }

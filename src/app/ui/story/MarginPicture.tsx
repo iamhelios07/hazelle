@@ -7,8 +7,8 @@ type Props = {
   children: ReactNode;
 };
 
-// A message's 삽화 in the story's left margin, so the text never moves when it lands. It follows the reader down to
-// the message's end. Laid out against the message, which StoryMessage positions, whose left edge is the text's.
+// A message's 삽화 on the stage right of the story, so the text never moves when it lands. It follows the reader down
+// to the message's end. Laid out against the message, which StoryMessage positions, whose right edge is the text's.
 export function MarginPicture({ anchor, children }: Props) {
   const column = useRef<HTMLDivElement>(null);
   const picture = useRef<HTMLDivElement>(null);

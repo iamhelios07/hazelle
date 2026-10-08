@@ -4,7 +4,7 @@
 
   position: absolute;
   top: 0;
-  right: calc(100% + var(--read-gutter));
+  left: calc(100% + var(--read-gutter));
   bottom: 0;
   width: var(--story-margin);
   padding-top: var(--anchor);

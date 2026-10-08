@@ -1,6 +1,5 @@
 export { READER_RESIZED, Story, type BotButton } from './Story';
 export { Failure, Marker, StoryMessage, Switcher, Waiting } from './StoryMessage';
-export { MarginBox } from './MarginBox';
 export { MarginPicture } from './MarginPicture';
 export { StatusBox } from './StatusBox';
 export { StoryPicture } from './StoryPicture';

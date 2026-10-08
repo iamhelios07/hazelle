@@ -10,14 +10,19 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  /* A box in the aside, laid out as wide as the story, reaches past the page's edge where it draws nothing. */
+  /* A SidePeek's drawer waits past the page's edge, where it draws nothing. */
   overflow-x: clip;
-  /* Either margin's column (StoryAside, MarginPicture): from the story's edge to the page's, less a gap at the page's.
-     --story-side is measured in ChatFrame.tsx. */
-  --story-margin: max(0px, calc(var(--story-side) - var(--space-16)));
+  /* The story's left edge: centred, or with a stage (ChatFrame.tsx) near the page's left edge. */
+  --story-lead: max(0px, calc((100% - var(--read-width)) / 2));
+  --story-stage-lead: var(--space-24);
   /* A 삽화's most height (StoryPicture): what the screen shows between the header and the composer, less its foot row,
      so a picture stuck under the header (MarginPicture) ends above the composer. */
   --story-illustration-most: calc(100dvh - var(--header-height) - var(--footer-space) - var(--control-tool) - 3 * var(--space-8));
+}
+
+/* The stage's width, --story-margin, is measured in ChatFrame.tsx. */
+.staged {
+  --story-lead: var(--story-stage-lead);
 }
 
 /* 읽기 설정: ChatFrame.tsx readingScope sets --reading-size and one class of each kind. */
@@ -129,7 +134,8 @@
 .content {
   max-width: var(--read-width);
   min-height: 100%;
-  margin: 0 auto;
+  margin: 0 auto 0 var(--story-lead);
+  transition: margin-left var(--duration-slow) var(--ease-enter);
   display: flex;
   flex-direction: column;
   gap: var(--space-24);
@@ -154,6 +160,18 @@
   background-color: var(--color-bg);
   pointer-events: none;
   transition: background-color var(--duration-slow) var(--ease-enter);
+}
+
+/* The composer and what stands above it go with the story's text. */
+.staged .footer {
+  justify-content: flex-start;
+  padding-left: calc(var(--story-stage-lead) + var(--read-gutter));
+}
+
+.staged .above {
+  right: auto;
+  left: var(--story-stage-lead);
+  width: var(--read-width);
 }
 
 .compact:not(:focus-within) {
