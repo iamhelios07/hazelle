@@ -3,7 +3,7 @@
 
 export const OPERATOR = '정말고마워요';
 // The date the current text takes effect, set by the operator. Changing either text sets it anew.
-export const EFFECTIVE: string | null = '2026년 10월 6일';
+export const EFFECTIVE: string | null = '2026년 10월 8일';
 
 type Block = string | string[];
 export type LegalText = { path: string; title: string; sections: { title: string; body: Block[] }[] };
@@ -154,9 +154,10 @@ export const PRIVACY: LegalText = {
           '운영자에게 알리기로 보낸 내용과 아이디, 보낸 시각, 처리한 시각: 문의를 처리하고 복원 요청을 확인하는 데 사용합니다. 탈퇴 후에도 남으며, 운영자가 처리한 날부터 1년이 지나면 삭제합니다. 처리하기 전에는 삭제하지 않습니다.',
           '운영자가 보낸 알림: 통지에 사용합니다. 한 계정에만 보낸 알림은 탈퇴 시 삭제하고, 전체 이용자에게 보낸 알림은 남습니다.',
           '운영자 기록(아래 참조): 운영자가 한 조치를 남깁니다. 탈퇴 후에도 남으며, 기록한 날부터 1년이 지나면 삭제합니다.',
+          '모델 호출 횟수(날짜별, 종류별, 횟수 제한으로 거절된 요청 포함): 과도한 요청을 막고 서버 용량을 계획하는 데 사용합니다. 30일 동안 보관하고 탈퇴 시 삭제합니다.',
         ],
         '운영자에게 알리기로 보낸 내용과 운영자가 보낸 알림은 암호화되지 않습니다. 운영자가 아이디와 함께 읽습니다.',
-        '운영자 화면에는 계정별로 아이디, 가입 시각, 상태, 정지 여부, 사용 중인 저장 공간과 한도가 표시됩니다.',
+        '운영자 화면에는 계정별로 아이디, 가입 시각, 상태, 정지 여부, 사용 중인 저장 공간과 한도, 날짜별 모델 호출 횟수가 표시됩니다.',
       ],
     },
     {

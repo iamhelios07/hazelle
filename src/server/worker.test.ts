@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { dayStart } from './backup/snapshots';
 import type { Upstream } from './relay';
 import { proof, sessionCookie, signupBody, testApp } from './testing';
 import app from './worker';
@@ -225,6 +226,50 @@ describe('provider calls', () => {
     expect(seen.aborted).toBe(true);
     await vi.waitFor(() => expect(live()).toBe(0));
     await resumed.cancel();
+  });
+
+  it('count each admitted call by kind, a repeated start of one call once, and each call the limits refused', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair;
+    const key = btoa(String.fromCharCode(...new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)));
+    const request = { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' };
+    const chat = crypto.randomUUID();
+    const start = async (id: string, extra: Record<string, unknown> = {}) => {
+      const answer = await post(`streams/${id}`, { key, request, ...extra }, cookie);
+      await answer.body?.cancel();
+      return answer.status;
+    };
+
+    expect((await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie)).status).toBe(200);
+    const id = crypto.randomUUID();
+    expect(await start(id)).toBe(200);
+    expect(await start(id)).toBe(409);
+    expect(await start(crypto.randomUUID(), { key: 'k' })).toBe(400);
+    expect(await start(crypto.randomUUID(), { bot: chat })).toBe(200);
+    for (let i = 0; i < 19; i++) t.env.limits.botCalls.limit(`${body.accountId}:${chat}`);
+    expect(await start(crypto.randomUUID(), { bot: chat })).toBe(429);
+    for (let i = 0; i < 240; i++) t.env.limits.calls.limit(body.accountId);
+    expect((await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie)).status).toBe(429);
+
+    const day = dayStart(Date.now());
+    expect((await t.env.db.prepare('SELECT day, kind, calls FROM call_counts ORDER BY kind').all()).results).toEqual(
+      [['bot', 1], ['generate', 1], ['refused', 2], ['short', 1]].map(([kind, calls]) => ({ day, kind, calls })),
+    );
+  });
+
+  it('relay a call whose count could not be written, and log only its kind', async () => {
+    const cookie = sessionCookie(await post('signup', signupBody()));
+    const db = t.env.db;
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    t.env.db = { ...db, prepare: (sql) => (sql.includes('call_counts') ? { bind: () => ({ run: () => Promise.reject(new Error('disk full')) }) } : db.prepare(sql)) } as typeof db;
+    try {
+      expect((await post('relay', { url: 'https://api.example.com/models', method: 'GET', headers: {}, body: null }, cookie)).status).toBe(200);
+      expect(logged).toHaveBeenCalledWith('call count failed', { kind: 'short', error: 'Error: disk full' });
+    } finally {
+      t.env.db = db;
+      logged.mockRestore();
+    }
   });
 });
 
