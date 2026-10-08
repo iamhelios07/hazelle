@@ -1,6 +1,7 @@
 import type { FileRef } from '../vault/files';
 import type { Card, LoreEntry, Pack } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from './chat';
+import type { IllustrateSwitches } from './illustration';
 import type { Stored } from './kinds';
 import type { ToggleValues } from './prompt';
 
@@ -21,6 +22,8 @@ export type Character = Mark & {
   ownTranslate?: TranslateSwitches;
   // 번역가의 노트: added to the 전역 one (Settings.translatorNote), never replacing it as the switches do.
   translatorNote?: string;
+  // 삽화's switches for its chats.
+  illustrate?: IllustrateSwitches;
   // 봇 스타일: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
   decor?: boolean;
   // Whether the bot's Lua may call models, which costs the user. Absent: not asked yet, and the first call asks.

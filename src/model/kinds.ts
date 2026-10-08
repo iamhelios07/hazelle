@@ -1,6 +1,7 @@
 import type { Connection } from '../connectors/types';
 import type { Chat, Entry, Summary } from './chat';
 import type { Asset, Avatar, Character, Folder, Lore, Module } from './library';
+import type { Illustration } from './illustration';
 import type { Memory } from './memory';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
@@ -20,6 +21,7 @@ export type Values = {
   summary: Summary;
   stream: Stream;
   memory: Memory;
+  illustration: Illustration;
   connection: Connection;
   settings: Settings;
   prompt: Prompt;
@@ -51,6 +53,7 @@ export const KINDS = {
   summary: { parent: 'chat' },
   stream: { parent: 'chat' },
   memory: { parent: 'chat' },
+  illustration: { parent: 'chat', file: true },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
   prompt: { parent: null },
@@ -92,7 +95,7 @@ const ENTRIES = {
 
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(shape({ key: str, label: str, kind: str })) });
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
-const task = shape({ task: (value) => value === 'translate' || value === 'memory', model: (value) => value === undefined || isRecord(value) });
+const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate', model: (value) => value === undefined || isRecord(value) });
 
 const SHAPES = {
   character: shape({
@@ -132,6 +135,16 @@ const SHAPES = {
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   stream: shape({ key: isRecord, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) }),
   memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), chapters: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, records: listOf(shape({ id: str, at: num })) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
+  illustration: shape({
+    ...all(str, 'message', 'version', 'type'),
+    scene: shape({ paragraph: num, shape: str, setting: str, framing: str, characters: listOf(shape({ ...all(str, 'name', 'look', 'outfit', 'action'), x: num, y: num })) }),
+    receipt: orNull(isRecord),
+    model: shape(all(str, 'connection', 'model')),
+    sent: shape({ prompt: str, negative: str, characters: listOf(shape({ prompt: str, negative: str, center: shape(all(num, 'x', 'y')) })), ...all(num, 'width', 'height', 'seed') }),
+    file: shape({ id: str, key: str }),
+    size: num,
+    at: num,
+  }),
   connection: shape({
     type: str,
     label: str,

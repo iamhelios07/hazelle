@@ -61,6 +61,19 @@ export async function relayJson(request: HttpRequest, signal?: AbortSignal): Pro
   return readJson(await relay(request, signal), signal);
 }
 
+export type BytesAnswer = { ok: true; bytes: Uint8Array<ArrayBuffer>; type: string | null } | { ok: false; failure: RelayFailure };
+
+// A body that is not text, such as a picture, with its content type.
+export async function relayBytes(request: HttpRequest, signal?: AbortSignal): Promise<BytesAnswer> {
+  const response = await relay(request, signal);
+  if (!(response instanceof Response)) return { ok: false, failure: response };
+  try {
+    return { ok: true, bytes: new Uint8Array(await response.arrayBuffer()), type: response.headers.get('content-type') };
+  } catch {
+    return { ok: false, failure: lost(signal) };
+  }
+}
+
 // OAuth puts its refusals in a JSON body for the caller to read: RFC 8628 answers "not yet" with a 400.
 export async function relayOAuth(request: HttpRequest, signal?: AbortSignal): Promise<JsonAnswer> {
   return readJson(await send(request, signal), signal);

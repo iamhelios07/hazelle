@@ -22,7 +22,7 @@ import { modelProfile } from './profiles';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
 import type { ObjectStore } from './store';
-import { botCall, callOf, endCall } from './streams';
+import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
 import { packsOf, scopeOf } from './chat-context';
 import type { Blocked, TurnContext } from './turn-context';
@@ -332,7 +332,7 @@ export class Scripts {
       return refused('no model is set');
     }
     let text = '';
-    const call = await botCall(chat);
+    const call = await pageCall(chat);
     // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
       credentials,

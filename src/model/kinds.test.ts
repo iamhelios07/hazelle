@@ -8,3 +8,11 @@ it("reads a summary's verdict as absent or well formed, and refuses a malformed 
   expect(isValue('summary', { ...summary, stuck: null })).toBe(false);
   expect(isValue('summary', { ...summary, stuck: { dependencies: 'c' } })).toBe(false);
 });
+
+it('accepts an illustration as the run stores it, and refuses one whose scene lost a field', () => {
+  const scene = { paragraph: 1, shape: 'portrait', setting: '1girl, indoors', framing: 'cowboy shot', characters: [{ name: 'Ari', look: 'girl, silver hair', outfit: 'white dress', action: 'smile', x: 0.5, y: 0.5 }] };
+  const sent = { prompt: '1girl, indoors', negative: 'lowres', characters: [{ prompt: 'girl', negative: '', center: { x: 0.5, y: 0.5 } }], width: 832, height: 1216, seed: 7 };
+  const illustration = { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'nai' }, sent, file: { id: 'f', key: 'k' }, type: 'image/png', size: 10, at: 1 };
+  expect(isValue('illustration', illustration)).toBe(true);
+  expect(isValue('illustration', { ...illustration, scene: { ...scene, framing: undefined } })).toBe(false);
+});

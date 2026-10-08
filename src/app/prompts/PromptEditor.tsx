@@ -57,6 +57,11 @@ const SORT_WORDS = {
     makeDefault: '장기 기억을 이 프롬프트로 정리해요',
     refused: ['기본 기억 프롬프트는 삭제할 수 없어요.', '다른 기억 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'],
   },
+  illustrate: {
+    default: '기본 삽화 프롬프트',
+    makeDefault: '삽화 프롬프트를 선택하지 않은 채팅에 사용해요',
+    refused: ['기본 삽화 프롬프트는 삭제할 수 없어요.', '다른 삽화 프롬프트를 기본으로 정한 뒤 삭제해 주세요.'],
+  },
 } satisfies Record<PromptSort, { default: string; makeDefault: string; refused: [string, string] }>;
 const HELP = '위아래 화살표로 이동, Alt+화살표로 순서 변경, Enter로 편집, Delete로 빼기';
 

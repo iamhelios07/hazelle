@@ -26,10 +26,10 @@ export async function newCall(store: ObjectStore, route: Route, { id, chat, resu
 }
 
 // A call no marker keeps, which only this page reads: a bot's Lua asking a model in the middle of a run, which a
-// reload has no use for. The server limits these per chat.
-export async function botCall(chat: string): Promise<StreamCall> {
+// reload has no use for (bot: its chat, where the server limits these), or a 삽화 scene (runtime/illustrate).
+export async function pageCall(bot: string | null): Promise<StreamCall> {
   const key = await streamKey();
-  return { id: crypto.randomUUID(), key: key.private, public: key.public, bot: chat };
+  return { id: crypto.randomUUID(), key: key.private, public: key.public, ...(bot !== null && { bot }) };
 }
 
 export function endCall(store: ObjectStore, id: string) {

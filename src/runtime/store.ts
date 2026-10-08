@@ -1112,7 +1112,7 @@ export class ObjectStore {
       // Only a bootstrap's first request asks for the count; the prefetched page after it is built before it answers.
       const count = !bootstrapped && !counted;
       counted ||= count;
-      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=entry,memory${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
+      const answer = this.reaching(() => this.request<Page>('GET', `objects?since=${since}&exclude=${[...SCOPED].join(',')}${bootstrapped ? '' : `&bootstrap=1${this.bootstrap === null ? '' : `&until=${this.bootstrap}`}`}${count ? '&count=1' : ''}${this.cacheBounds(known)}${sent === null ? '' : `&timeline=${encodeURIComponent(sent)}`}`, undefined, signal), AbortSignal.any([signal, this.closing.signal, this.ended.signal]));
       return { epoch: this.epoch, sent, answer };
     };
     while (more) {

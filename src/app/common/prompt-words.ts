@@ -19,4 +19,4 @@ export const MESSAGE_ROLES: Record<Role, string> = { system: '시스템', user: 
 
 export const textName = (role: Role) => `${MESSAGE_ROLES[role]} 메시지`;
 
-export const TASK_NAMES: Record<Exclude<PromptSort, 'conversation'>, string> = { translate: '번역', memory: '기억' };
+export const TASK_NAMES: Record<Exclude<PromptSort, 'conversation'>, string> = { translate: '번역', memory: '기억', illustrate: '삽화' };

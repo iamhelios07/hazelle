@@ -1,9 +1,10 @@
 import { scopeOf, translationInput } from './chat-context';
 import { gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
 import type { RanAway, TooLong } from '../engine/pipeline';
-import { shown, type Chat } from '../model/chat';
+import { fold, shown, type Chat } from '../model/chat';
+import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
-import { translateSwitches } from './characters';
+import { illustrateSwitches, translateSwitches } from './characters';
 import type { Session } from './session';
 import type { ApiFailure } from './api';
 import type { Halted } from './scripts';
@@ -99,6 +100,17 @@ export async function receiveReply(session: Session, chat: string, reply: Writte
     }
   }
   await translateReceived(session, chat, reply);
+  illustrateReceived(session, chat, reply);
+}
+
+// 삽화 on auto draws for a reply received here, as 응답 번역 translates it: the version shown once the bot's onOutput
+// ran, after any continuation, never the cut one it continued.
+function illustrateReceived(session: Pick<Session, 'store' | 'illustrator'>, chat: string, reply: Written) {
+  const stored = live(session.store.get('chat', chat));
+  if (reply.receipt.state === 'failed' || !stored || !illustrateSwitches(session.store, stored.value.character).auto) return;
+  const message = fold(session.store.children('entry', chat)).find(({ id }) => id === (reply.message ?? reply.id));
+  const version = message && shown(message);
+  if (version?.text.trim()) session.illustrator.draw(chat, message!.id, version.id, { auto: true });
 }
 
 // start: the new chat to save first, which the turn is shown in while it is saved; started runs once it is.

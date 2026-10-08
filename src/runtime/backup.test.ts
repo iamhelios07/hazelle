@@ -94,13 +94,19 @@ async function oldAccount({ profile = true } = {}) {
   const opened: Chat = { title: null, character, models: {} };
   const greetings = projectGreetings(['안녕', '반가워', '어서 와'], [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], 1);
   await startChat(store, chat, opened, greetings);
-  await appendUserMessage(store, chat, { id: crypto.randomUUID(), text: '등대에 가자' });
+  const said = crypto.randomUUID();
+  await appendUserMessage(store, chat, { id: said, text: '등대에 가자' });
+  const drawn = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...randomBytes(16)]);
+  const stored = await files.save([drawn]);
+  const sent = { prompt: 'lighthouse', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
+  const scene = { paragraph: 0, shape: 'square' as const, setting: 'lighthouse', framing: '', characters: [] };
+  await store.create('illustration', { message: said, version: said, scene, receipt: null, model: { connection: 'c', model: 'm' }, sent, file: stored.ok ? stored.data[0]! : { id: '', key: '' }, type: 'image/png', size: drawn.byteLength, at: 1 }, { parent: chat });
   const gone = crypto.randomUUID();
   await startChat(store, gone, opened, null);
   await appendUserMessage(store, gone, { id: crypto.randomUUID(), text: '지울 채팅' });
   await removeChat(store, gone);
   await store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [] });
-  return { store, files, image, smile, chat, gone };
+  return { store, files, image, smile, drawn, chat, gone };
 }
 
 async function exported(store: Pick<ObjectStore, 'scan' | 'pin' | 'list'>, files: Files) {
@@ -137,8 +143,10 @@ describe('backup', () => {
     expect(fold(store.children('entry', old.chat))).toEqual(fold(old.store.children('entry', old.chat)));
     const [avatar] = store.list('avatar');
     expect(await files.read(avatar!.value.file)).toEqual({ ok: true, data: old.image });
+    const [illustration] = store.children('illustration', old.chat);
+    expect(await files.read(illustration!.value.file)).toEqual({ ok: true, data: old.drawn });
     const zipped = unzipSync(new Uint8Array(await made.arrayBuffer()));
-    expect(Object.keys(zipped).filter((name) => name.startsWith('files/'))).toHaveLength(2);
+    expect(Object.keys(zipped).filter((name) => name.startsWith('files/'))).toHaveLength(3);
   });
 
   it('restores root pages unheld and resumes a stopped windowed summary pass without retaining histories', async () => {

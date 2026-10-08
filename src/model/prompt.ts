@@ -3,20 +3,21 @@ import type { Mark } from './library';
 
 export type Role = 'system' | 'user' | 'assistant';
 
-export type PromptSort = 'conversation' | 'translate' | 'memory';
+export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate';
 
 // A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 텍스트 with
 // {{slot}} where its content goes.
 export const SLOTS = {
-  description: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory'] },
-  persona: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory'] },
-  lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory'] },
+  description: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
+  persona: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
+  lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
   authorNote: { wrapped: true, repeats: false, sorts: ['conversation'] },
   postEverything: { wrapped: false, repeats: false, sorts: ['conversation'] },
   chat: { wrapped: false, repeats: true, sorts: ['conversation'] },
   note: { wrapped: true, repeats: false, sorts: ['translate'] },
-  recent: { wrapped: true, repeats: false, sorts: ['translate'] },
-  source: { wrapped: true, repeats: false, sorts: ['translate'] },
+  recent: { wrapped: true, repeats: false, sorts: ['translate', 'illustrate'] },
+  // In a 삽화 task, the message's paragraphs, numbered (model/illustration paragraphsOf).
+  source: { wrapped: true, repeats: false, sorts: ['translate', 'illustrate'] },
   // 장기 기억: in a conversation, the chat's memory as sent; in a memory task, the memory the new records follow.
   memory: { wrapped: true, repeats: false, sorts: ['conversation', 'memory'] },
   span: { wrapped: true, repeats: false, sorts: ['memory'] },
@@ -88,7 +89,18 @@ export type MemoryPrompt = {
   origin?: { id: string; name: string };
 };
 
-export type Prompt = (ConversationPrompt | TranslatePrompt | MemoryPrompt) & Mark;
-export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt }[S];
+// model: the one place the scene writer is chosen; without one, the chat's 보조 모델, then its 대화 모델. The picture's
+// model is the chat's 삽화 switches' (runtime/characters illustrateSwitches).
+export type IllustratePrompt = {
+  task: 'illustrate';
+  name: string;
+  model?: ModelRef;
+  blocks: Block[];
+  toggles: Toggle[];
+  origin?: { id: string; name: string };
+};
+
+export type Prompt = (ConversationPrompt | TranslatePrompt | MemoryPrompt | IllustratePrompt) & Mark;
+export type PromptOf<S extends PromptSort> = { conversation: ConversationPrompt; translate: TranslatePrompt; memory: MemoryPrompt; illustrate: IllustratePrompt }[S];
 
 export const sortOf = (prompt: Prompt): PromptSort => prompt.task ?? 'conversation';

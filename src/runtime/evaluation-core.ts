@@ -1,6 +1,6 @@
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { speakersOf, standing, type Standing } from '../engine/memory';
-import { activeLore, assemble, assembleMemory, assembleTranslation, rewritten, type Assembled, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
+import { activeLore, assemble, assembleIllustration, assembleMemory, assembleTranslation, rewritten, type Assembled, type IllustrationInput, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
 import type { RegexScript } from '../engine/import/types';
 import { trySample } from '../engine/regex/scripts';
 import { renderChat, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
@@ -16,6 +16,7 @@ export type EvaluationJob =
   | { kind: 'rewrite'; prompt: Assembled; messages: Parameters<typeof rewritten>[1]; budget: number | null }
   | { kind: 'translation'; input: Omit<TranslationInput, 'scope' | 'countTokens'> }
   | { kind: 'memory'; input: Omit<MemoryTaskInput, 'scope' | 'countTokens'> }
+  | { kind: 'illustration'; input: Omit<IllustrationInput, 'scope' | 'countTokens'> }
   | { kind: 'read'; memory: { memory: Memory; shown: Source[]; budget: number } | null }
   | { kind: 'lore'; seed: string; limit: number };
 export type LuaResult = LuaText & { version: string };
@@ -33,7 +34,7 @@ export type EvaluationResult =
   | DisplayEvaluation
   | DisplayPatch
   | EvaluatedPrompt
-  | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
+  | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ReturnType<typeof assembleIllustration> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | { sampled: string }
   | null;
 export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true };
@@ -87,6 +88,8 @@ export class Evaluator {
           return assembleTranslation({ ...job.input, scope, countTokens });
         case 'memory':
           return assembleMemory({ ...job.input, scope, countTokens });
+        case 'illustration':
+          return assembleIllustration({ ...job.input, scope, countTokens });
         case 'read': {
           const { texts } = renderChat('prompt', scope);
           const sent = job.memory && standing(job.memory.memory, { shown: job.memory.shown, roles: messages.map(({ role }) => role), speakers: speakersOf(scope), texts }, job.memory.budget, countTokens);

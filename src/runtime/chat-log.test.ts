@@ -179,8 +179,8 @@ describe('branchChat', () => {
 });
 
 describe('importChat', () => {
-  it('copies a chat file under new ids, folding as the source does, with its memory remapped and what is not here left out and counted', async () => {
-    const { store } = await server.account();
+  it('copies a chat file under new ids, folding as the source does, with its memory and illustrations remapped and what is not here left out and counted', async () => {
+    const { store, files } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
     const chat: Chat = { title: '기숙사의 밤', character: null, models: {}, note: '노트', prompt: crypto.randomUUID() };
@@ -198,9 +198,17 @@ describe('importChat', () => {
     const sources = messages.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }));
     await store.create('memory', { records: [{ id: 'r', sources, print: 'p', when: null, where: null, who: [], what: 'w', lines: [], outcome: '', receipt: null, at: 0, state: [], opens: [], closes: [] }], state: [], threads: [], chapters: [] }, { id: memoryId(source), parent: source });
 
-    const read = readChatFile(JSON.parse(chatFile(store, source)));
+    const picture = new Uint8Array([1, 2, 3]);
+    const stored = await files.save([picture]);
+    const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
+    const sent = { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
+    await store.create('illustration', { message: reply, version: reply, scene, receipt: null, model: { connection: 'c', model: 'm' }, sent, file: stored.ok ? stored.data[0]! : { id: '', key: '' }, type: 'image/png', size: 3, at: 4 }, { parent: source });
+
+    const written = await chatFile({ store, files }, source);
+    if (!written.ok) throw new Error(written.error);
+    const read = readChatFile(JSON.parse(written.data));
     if (!read.ok) throw new Error(read.error);
-    const imported = await importChat(store, read.file, null);
+    const imported = await importChat({ store, files }, read.file, null);
     if (!imported.ok) throw new Error(imported.error);
     const { id, dropped } = imported.data;
     expect(dropped).toEqual({ prompt: 1, persona: 0, cast: 0, models: 0 });
@@ -213,5 +221,10 @@ describe('importChat', () => {
     expect(store.children('entry', id).some((entry) => before.has(entry.id))).toBe(false);
     expect(store.get('chat', id)!.value).toEqual({ title: '기숙사의 밤', character: null, models: {}, note: '노트', seed: source });
     expect(store.get('memory', memoryId(id))!.value.records[0]!.sources).toEqual(copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id })));
+    const [illustration] = store.children('illustration', id);
+    const replied = copy.find((message) => message.versions.some(({ text }) => text === '답'))!;
+    expect(illustration?.value).toMatchObject({ message: replied.id, version: replied.versions.find(({ text }) => text === '답')!.id });
+    const opened = await files.read(illustration!.value.file);
+    expect(opened.ok && [...opened.data]).toEqual([1, 2, 3]);
   });
 });

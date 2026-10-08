@@ -3,11 +3,13 @@ import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
 import { CAST_MAX, fold, shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import type { Stored } from '../model/kinds';
+import type { Illustration } from '../model/illustration';
 import { live } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { ApiFailure, ApiResult } from './api';
 import { routeOf } from './assignment';
 import type { ChatFile } from './chat-file';
+import type { Session } from './session';
 import { markDeleted } from './removal';
 import type { Greetings } from './greetings';
 import { withPersona } from './personas';
@@ -65,7 +67,8 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     if (upTo === -1) return { ok: false, error: 'gone' };
     const id = crypto.randomUUID();
     const memory = store.children('memory', item.id).find((entry) => entry.id === memoryId(item.id))?.value;
-    const { writes, after } = copyWrites(id, item.messages.slice(0, upTo + 1), memory);
+    const illustrations = store.children('illustration', item.id).map(({ value }) => value);
+    const { writes, after } = copyWrites(id, item.messages.slice(0, upTo + 1), memory, illustrations);
     writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
     const created = await store.batch(writes);
     return created.ok ? { ok: true, data: id } : created;
@@ -77,9 +80,19 @@ export type Dropped = { prompt: number; persona: number; cast: number; models: n
 
 // A chat file's chat, copied under new ids as a branch is, to character. What it names that is not live here is
 // left out and counted, so the chat follows the default there; a persona left out gives the one a new chat takes.
-export async function importChat(store: ObjectStore, file: ChatFile, character: string | null): Promise<ApiResult<{ id: string; dropped: Dropped }>> {
+// Its pictures are saved first, each under the reference its bytes seal to here; one the server refuses leaves its
+// illustrations out, as a picture an import cannot read is.
+export async function importChat({ store, files }: Pick<Session, 'store' | 'files'>, file: ChatFile, character: string | null): Promise<ApiResult<{ id: string; dropped: Dropped }>> {
   const id = crypto.randomUUID();
-  const { writes, messages } = copyWrites(id, fold(file.entries), file.memory?.value);
+  const ids = [...file.pictures.keys()];
+  const saved = await files.save(ids.map((each) => file.pictures.get(each)!));
+  if (!saved.ok) return saved;
+  const refs = new Map(ids.map((each, index) => [each, saved.data[index]]));
+  const illustrations = file.illustrations.flatMap(({ value }) => {
+    const ref = refs.get(value.file.id);
+    return ref ? [{ ...value, file: ref }] : [];
+  });
+  const { writes, messages } = copyWrites(id, fold(file.entries), file.memory?.value, illustrations);
   const { prompt, persona, cast = [], models, origin, ...value } = without(without(file.chat.value, 'deleted'), 'purging');
   const held = (kind: 'prompt' | 'persona' | 'character' | 'chat', ref: string | undefined): ref is string => ref !== undefined && live(store.get(kind, ref)) !== null;
   const kept = cast.filter((each) => held('character', each));
@@ -130,9 +143,9 @@ export async function saveNewChats(
   }
 }
 
-// Each message copied to the chat id, with the memory that still applies. messages: each copy's id by the original's.
-// after: the last copy's id.
-function copyWrites(id: string, source: Message[], memory: Memory | undefined): { writes: Write[]; messages: Map<string, string>; after: string } {
+// Each message copied to the chat id, with the memory that still applies and the illustrations of the versions copied.
+// messages: each copy's id by the original's. after: the last copy's id.
+function copyWrites(id: string, source: Message[], memory: Memory | undefined, illustrations: Illustration[]): { writes: Write[]; messages: Map<string, string>; after: string } {
   let after = '';
   const writes: Write[] = [];
   const messages = new Map<string, string>();
@@ -148,6 +161,10 @@ function copyWrites(id: string, source: Message[], memory: Memory | undefined): 
   }
   const kept = memory && branchMemory(memory, messages, versions);
   if (kept) writes.push({ type: 'create', kind: 'memory', id: memoryId(id), parent: id, value: kept });
+  for (const illustration of illustrations) {
+    const [message, version] = [messages.get(illustration.message), versions.get(illustration.version)];
+    if (message && version) writes.push({ type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: id, value: { ...illustration, message, version } });
+  }
   return { writes, messages, after };
 }
 

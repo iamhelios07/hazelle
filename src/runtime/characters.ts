@@ -1,6 +1,7 @@
 import { imageType } from '../engine/import/card';
 import type { Card, Imported, Pack, Picture } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
+import type { IllustrateSwitches } from '../model/illustration';
 import type { Stored, Values } from '../model/kinds';
 import { holds, nest, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
 import { SETTINGS_ID } from '../model/settings';
@@ -190,6 +191,20 @@ export function setTranslate(store: ObjectStore, character: string | null, chang
 export function setOwnTranslate(store: ObjectStore, character: string, own: boolean): Promise<ApiResult<Stored<'character'>>> {
   const shared = store.get('settings', SETTINGS_ID)?.value.translate;
   return store.update('character', character, (current) => (own ? { ...current, ownTranslate: stored(shared) } : without(current, 'ownTranslate')));
+}
+
+// 삽화's switches for a chat of character, or with character null for 캐릭터 없이's. Absent auto is off.
+export type IllustrateSetup = Omit<IllustrateSwitches, 'auto'> & { auto: boolean };
+
+export function illustrateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): IllustrateSetup {
+  const switches = character === null ? store.get('settings', SETTINGS_ID)?.value.illustrate : store.get('character', character)?.value.illustrate;
+  return { ...switches, auto: switches?.auto ?? false };
+}
+
+// Only the switches given are merged in; prompt or model given as undefined goes back to the default.
+export function setIllustrate(store: ObjectStore, character: string | null, change: Partial<IllustrateSwitches>): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
+  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, illustrate: { ...current?.illustrate, ...change } }));
+  return store.update('character', character, (current) => ({ ...current, illustrate: { ...current.illustrate, ...change } }));
 }
 
 // Until 2026-10-06 every character kept its own switches in translate; the shared ones replaced them (design §6.3), and

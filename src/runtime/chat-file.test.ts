@@ -9,7 +9,7 @@ const server = testServer();
 const receipt: Receipt = { id: 'call', connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 100, totalMs: 900, cache: null };
 
 async function savedChat() {
-  const { store } = await server.account();
+  const { store, files } = await server.account();
   const id = crypto.randomUUID();
   await server.hold(store, id);
   const chat: Chat = { title: '밤', character: null, models: {} };
@@ -22,13 +22,20 @@ async function savedChat() {
   await selectVersion(store, id, reply, reply);
   await appendTranslation(store, id, reply, { text: 'First reply', receipt: null, at: 3 }, crypto.randomUUID());
   await store.create('memory', { records: [], state: [{ about: 'Luna', field: 'mood', value: 'calm', record: null }], threads: [], chapters: [] }, { id: memoryId(id), parent: id });
-  return { store, id };
+  return { store, files, id };
 }
+
+const written = async (session: Awaited<ReturnType<typeof savedChat>>) => {
+  const made = await chatFile(session, session.id);
+  if (!made.ok) throw new Error(made.error);
+  return JSON.parse(made.data) as { rows: { id: string; parent: string | null }[]; version: number };
+};
 
 describe('chat file', () => {
   it('reads back as the chat folds here, its memory with it', async () => {
-    const { store, id } = await savedChat();
-    const read = readChatFile(JSON.parse(chatFile(store, id)));
+    const saved = await savedChat();
+    const { store, id } = saved;
+    const read = readChatFile(await written(saved));
     if (!read.ok) throw new Error(read.error);
     expect(read.file.chat.id).toBe(id);
     expect(fold(read.file.entries)).toEqual(fold(store.children('entry', id)));
@@ -36,11 +43,11 @@ describe('chat file', () => {
   });
 
   it('refuses another format or version, a row that is not stored, a second chat, and a row of another chat', async () => {
-    const { store, id } = await savedChat();
-    const file = JSON.parse(chatFile(store, id)) as { rows: { id: string; parent: string | null }[] };
+    const file = await written(await savedChat());
     const [chat, entry] = file.rows;
     expect(readChatFile({ ...file, format: 'risu-alpha-backup' })).toEqual({ ok: false, error: 'not-chat-file' });
-    expect(readChatFile({ ...file, version: 2 })).toEqual({ ok: false, error: 'other-version' });
+    expect(readChatFile({ ...file, version: 3 })).toEqual({ ok: false, error: 'other-version' });
+    expect(readChatFile({ ...file, version: 1 }).ok).toBe(true);
     expect(readChatFile({ ...file, rows: [...file.rows, { ...entry, rev: 'one' }] })).toEqual({ ok: false, error: 'not-chat-file' });
     expect(readChatFile({ ...file, rows: [...file.rows, { ...chat, id: crypto.randomUUID() }] })).toEqual({ ok: false, error: 'not-chat-file' });
     expect(readChatFile({ ...file, rows: [...file.rows, { ...entry, id: crypto.randomUUID(), parent: crypto.randomUUID() }] })).toEqual({ ok: false, error: 'not-chat-file' });

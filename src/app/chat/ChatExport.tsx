@@ -9,6 +9,7 @@ import { useCopyHtml } from '../common/useCopy';
 import { ARCA_LOG, CHAT_FILE, EXPORT } from '../common/words';
 import { useDisplay } from '../display';
 import { useFiles, useStore } from '../session';
+import { useToast } from '../toast';
 import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Progress, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
 import { speakers } from './ChatLog';
 import { logDraft, resolveLog, type LogChoices, type LogText } from './exportLog';
@@ -31,6 +32,7 @@ type Prepared = { html: string; size: string; missing: number; rules: number };
 export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
   const store = useStore();
   const files = useFiles();
+  const toast = useToast();
   const { reading, display } = useDisplay();
   const copyHtml = useCopyHtml();
   const { messages, view, decor, card, busy } = chat;
@@ -58,8 +60,11 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
     };
   }, [form, choices, messages, view, chat.flipped, waiting]);
 
-  function saveFile() {
-    if (form === 'file') return download(fileNamed(item.title, 'json'), new Blob([chatFile(store, item.id)], { type: 'application/json' }));
+  async function saveFile() {
+    if (form === 'file') {
+      const made = await chatFile({ store, files }, item.id);
+      return made.ok ? download(fileNamed(item.title, 'json'), new Blob([made.data], { type: 'application/json' })) : toast.failed(made, '채팅 파일을 만들지 못했어요.');
+    }
     const page = snapshotPage(item.title, prepared!.html, getComputedStyle(document.body).backgroundColor);
     download(fileNamed(item.title, 'html'), new Blob([page], { type: 'text/html' }));
   }
@@ -84,7 +89,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
               복사
             </Button>
           )}
-          <Button icon={Download} disabled={!ready} onClick={saveFile}>
+          <Button icon={Download} disabled={!ready} onClick={() => void saveFile()}>
             저장
           </Button>
         </>

@@ -6,7 +6,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addCharacter, copyCharacter, dropCharacterTranslate, importCharacter, resetToggles, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addCharacter, copyCharacter, dropCharacterTranslate, illustrateSwitches, importCharacter, setIllustrate, resetToggles, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
@@ -197,12 +197,14 @@ describe('purgeExpired', () => {
     const expired = await savedChat(store);
     await store.create('memory', { records: [], chapters: [], state: [], threads: [{ id: 't', text: '등대', opened: null }] }, { id: memoryId(expired), parent: expired });
     await store.create('stream', { key: {}, call: { connection: 'c', source: 'c', model: 'm', modelName: 'm' }, at: 0, result: 'r', for: { kind: 'reply', message: null, replaces: null, continues: null } }, { parent: expired });
+    const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
+    await store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent: { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 }, file: { id: 'f', key: 'k' }, type: 'image/png', size: 1, at: 0 }, { parent: expired });
     await removeChat(store, expired);
     const now = Date.now() + KEEP_DELETED;
     const recent = await savedChat(store);
     await markDeleted(store, 'chat', recent, now);
-    const owned = (chat: string) => (['entry', 'summary', 'memory', 'stream'] as const).flatMap((kind) => store.children(kind, chat)).length;
-    expect(owned(expired)).toBe(4);
+    const owned = (chat: string) => (['entry', 'summary', 'memory', 'stream', 'illustration'] as const).flatMap((kind) => store.children(kind, chat)).length;
+    expect(owned(expired)).toBe(5);
     const before = bytes;
 
     await purgeExpired(store, now, new AbortController().signal);
@@ -349,5 +351,21 @@ describe('translation switches', () => {
     await dropCharacterTranslate(store);
     expect(old.ok && store.get('character', old.data.id)?.value).not.toHaveProperty('translate');
     expect(own.ok && translateSwitches(store, own.data.id)).toMatchObject({ replies: true, own: true });
+  });
+});
+
+describe('삽화 switches', () => {
+  it('start with auto off, are each character’s own and 캐릭터 없이’s apart, and keep the fields not given', async () => {
+    const { store } = await server.account();
+    const made = await store.create('character', bare('루나'));
+    const luna = made.ok ? made.data.id : '';
+    expect([illustrateSwitches(store, luna), illustrateSwitches(store, null)]).toEqual([{ auto: false }, { auto: false }]);
+
+    const model = { connection: 'c', model: 'nai-diffusion-5' };
+    await setIllustrate(store, luna, { auto: true, model });
+    await setIllustrate(store, luna, { prompt: 'p' });
+    expect([illustrateSwitches(store, luna), illustrateSwitches(store, null)]).toEqual([{ auto: true, model, prompt: 'p' }, { auto: false }]);
+    await setIllustrate(store, null, { auto: true });
+    expect(illustrateSwitches(store, null)).toEqual({ auto: true });
   });
 });

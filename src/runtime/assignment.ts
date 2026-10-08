@@ -12,17 +12,23 @@ import type { ObjectStore } from './store';
 // write otherwise; their `models` fields are written only here.
 
 export type Route = { connection: Stored<'connection'>; model: Model };
-export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' };
+// image-only: the model draws and writes no text, so it cannot answer a chat or a task (design §6.6).
+export type RouteFailure = { kind: 'no-model' } | { kind: 'model-gone' } | { kind: 'image-only' };
+
+// A model whose output is unknown is not image-only: it is shown as unknown, never refused for it.
+export const imageOnly = (model: Pick<Model, 'output'>) => model.output !== null && model.output.includes('image') && !model.output.includes('text');
+
+const writes = (route: Route | RouteFailure): Route | RouteFailure => ('kind' in route || !imageOnly(route.model) ? route : { kind: 'image-only' });
 
 // A missing prompt has no layer; the turn stops on it before the model matters.
 export function chatModel(store: Pick<ObjectStore, 'get'>, chat: Chat, role: Role): Route | RouteFailure {
   const prompt = chatPrompt(store, chat);
   const ref = resolveRole(role, [chat.models, ...(prompt.kind === 'prompt' ? [prompt.prompt.value.models] : []), store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
-  return ref ? routeOf(store, ref) : { kind: 'no-model' };
+  return ref ? writes(routeOf(store, ref)) : { kind: 'no-model' };
 }
 
 export function taskModel(store: Pick<ObjectStore, 'get'>, chat: Chat, own: ModelRef | undefined): Route | RouteFailure {
-  return own ? routeOf(store, own) : chatModel(store, chat, 'aux');
+  return own ? writes(routeOf(store, own)) : chatModel(store, chat, 'aux');
 }
 
 export function routeOf(store: Pick<ObjectStore, 'get'>, ref: ModelRef): Route | RouteFailure {
