@@ -20,13 +20,19 @@ const CORNERS = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
 const OWN = [
   'display', 'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'row-gap', 'column-gap', 'max-width',
   'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
-  'text-decoration-line', 'text-decoration-style', 'text-decoration-color', 'box-shadow', 'opacity', 'overflow-x', 'overflow-y',
+  'text-decoration-line', 'text-decoration-style', 'text-decoration-color', 'box-shadow', 'text-shadow', 'opacity', 'overflow-x', 'overflow-y',
+  'position', ...SIDES, 'transform', 'fill', 'stroke', 'stroke-width',
   ...SIDES.flatMap((side) => [`margin-${side}`, `padding-${side}`, `border-${side}-width`, `border-${side}-style`, `border-${side}-color`]),
   ...CORNERS.map((corner) => `border-${corner}-radius`),
 ];
 // A picture's drawn width, which max-width still bounds; its height follows from it.
 const REPLACED: Record<string, string[]> = { img: ['width'], video: ['width', 'height'], svg: ['width', 'height'] };
 const ATTRIBUTES = new Set(['src', 'alt', 'href', 'title', 'colspan', 'rowspan']);
+// What an SVG shape is drawn from; without them it draws nothing.
+const SVG = 'http://www.w3.org/2000/svg';
+const SVG_ATTRIBUTES = new Set(['viewBox', 'preserveAspectRatio', 'd', 'points', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height', 'transform', 'fill', 'stroke', 'stroke-width', 'opacity', 'text-anchor', 'offset', 'stop-color']);
+// A grid's computed tracks are the off-screen page's pixels, like a computed width, so its template is counted as lost.
+const TEMPLATES = ['grid-template-columns', 'grid-template-rows'];
 const SKIPPED = new Set(['script', 'style', 'template', 'slot', 'link', 'meta']);
 const VOID = new Set(['area', 'br', 'col', 'hr', 'img', 'input', 'wbr']);
 // Only sources that load on any page: blob: ones end with this one.
@@ -37,7 +43,7 @@ const escapeAttribute = (text: string) => escapeText(text).replaceAll('"', '&quo
 
 export function staticHtml(root: Element, look: Look): Snapshot {
   const out: string[] = [];
-  const lost = new Set<CSSRule>();
+  const lost = new Set<CSSRule | Element>();
   const write = (node: Element, parent: Pick<CSSStyleDeclaration, 'getPropertyValue'> | null) => {
     const name = node.localName;
     if (SKIPPED.has(name)) return;
@@ -54,7 +60,9 @@ export function staticHtml(root: Element, look: Look): Snapshot {
       const value = style.getPropertyValue(property);
       return value ? [`${property}:${value}`] : [];
     });
-    const attributes = [...node.attributes].filter(({ name: attribute, value }) => ATTRIBUTES.has(attribute) && (!(attribute === 'src' || attribute === 'href') || LOADS.test(value)));
+    const kept = node.namespaceURI === SVG ? SVG_ATTRIBUTES : ATTRIBUTES;
+    const attributes = [...node.attributes].filter(({ name: attribute, value }) => kept.has(attribute) && (!(attribute === 'src' || attribute === 'href') || LOADS.test(value)));
+    if (TEMPLATES.some((property) => !['', 'none'].includes(style.getPropertyValue(property)))) lost.add(node);
     out.push(`<${name}${attributes.map(({ name: attribute, value }) => ` ${attribute}="${escapeAttribute(value)}"`).join('')}${declarations.length ? ` style="${escapeAttribute(declarations.join(';'))}"` : ''}>`);
     if (node.shadowRoot) for (const rule of look.lost(node.shadowRoot)) lost.add(rule);
     for (const child of (node.shadowRoot ?? node).childNodes) {
@@ -82,12 +90,19 @@ export function pageLook(host: HTMLElement): Look {
       if (!element) references.set(name, (element = shadow.appendChild(document.createElement(name))));
       return element;
     },
-    lost: (root) => botSheets(root).flatMap((sheet) => [...sheet.cssRules].filter(isLost)),
+    lost: (root) => botSheets(root).flatMap((sheet) => lostRules(sheet.cssRules)),
   };
 }
 
-function isLost(rule: CSSRule): boolean {
-  // :host rules land on the root's host, whose computed style is read like any other element's.
-  if (rule instanceof CSSStyleRule) return rule.selectorText.replace(/:host(?![-(])/g, '').includes(':');
-  return rule instanceof CSSMediaRule || rule instanceof CSSKeyframesRule || rule instanceof CSSFontFaceRule;
+// Pseudo-elements and states the reader brings about: no computed style of the drawn page holds them. Structural
+// pseudo-classes such as :nth-child or :host() did apply, and their effect is read like any other.
+const UNDRAWN = /::|:(?:hover|focus|active|checked|target|visited|link|before|after|first-line|first-letter)\b/i;
+
+function lostRules(rules: CSSRuleList): CSSRule[] {
+  return [...rules].flatMap((rule): CSSRule[] => {
+    // A nested rule (CSS nesting) is lost by its own selector; older browsers give a style rule no cssRules.
+    if (rule instanceof CSSStyleRule) return UNDRAWN.test(rule.selectorText) ? [rule] : rule.cssRules ? lostRules(rule.cssRules) : [];
+    if (rule instanceof CSSMediaRule || rule instanceof CSSKeyframesRule || rule instanceof CSSFontFaceRule) return [rule];
+    return rule instanceof CSSGroupingRule ? lostRules(rule.cssRules) : [];
+  });
 }

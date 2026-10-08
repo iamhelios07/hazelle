@@ -32,3 +32,13 @@ it('walks into shadow roots, keeps allowed attributes and loading sources only, 
       '</section>',
   );
 });
+
+it("keeps an SVG shape's drawing attributes and counts a grid template as lost", () => {
+  const svgNamed = (fake: Fake) => ({ ...fake, namespaceURI: 'http://www.w3.org/2000/svg' });
+  const path = svgNamed(element('path', { display: 'inline' }, [], [{ name: 'd', value: 'M0 0L9 9' }, { name: 'onclick', value: 'run()' }]));
+  const svg = svgNamed(element('svg', { display: 'inline', width: '24px', height: '24px' }, [path], [{ name: 'viewBox', value: '0 0 24 24' }]));
+  const grid = element('div', { display: 'grid', 'grid-template-columns': '300px 300px' }, [svg]);
+  const { html, rules } = staticHtml(grid as unknown as Element, look);
+  expect(html).toBe('<div style="display:grid"><svg viewBox="0 0 24 24" style="width:24px;height:24px"><path d="M0 0L9 9"></path></svg></div>');
+  expect(rules).toBe(1);
+});
