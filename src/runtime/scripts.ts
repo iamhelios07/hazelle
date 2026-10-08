@@ -4,7 +4,7 @@ import type { Pack, Trigger } from '../engine/import/types';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { Event, Outcome, Script } from '../engine/lua/run';
+import type { Event, Outcome } from '../engine/lua/run';
 import type { Host, ModelMessage, Question } from '../engine/lua/state';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Writes } from '../model/chat';
@@ -55,9 +55,14 @@ export type Halted = { kind: 'halted' };
 export type Started = { turn: TurnContext } | Halted | ((Blocked | { kind: 'gone' } | { kind: 'unsent'; failure: ApiFailure }) & { kept?: true });
 
 // The triggers of a chat's packs, in the packs' order (design §6.5), which is the order a run walks them in. A block
-// trigger keeps its name as written, since a press finds it by that.
-export const triggersOf = (packs: readonly Pack[]): Trigger[] => packs.flatMap(({ triggers }) => triggers).map((trigger) => (trigger.kind === 'lua' ? { ...trigger, name: trigger.name || 'Lua' } : trigger));
-export const scriptsOf = (packs: readonly Pack[]): Script[] => triggersOf(packs).filter((trigger) => trigger.kind === 'lua');
+// trigger keeps its name as written, since a press finds it by that. One turned off, and a Lua one with no code yet,
+// are left out: it would start an engine and count the chat as scripted for nothing.
+export const triggersOf = (packs: readonly Pack[]): Trigger[] =>
+  packs
+    .flatMap(({ triggers }) => triggers)
+    .filter((trigger) => !trigger.off && (trigger.kind !== 'lua' || trigger.code.trim()))
+    .map((trigger) => (trigger.kind === 'lua' ? { ...trigger, name: trigger.name || 'Lua' } : trigger));
+export const scriptsOf = (packs: readonly Pack[]) => triggersOf(packs).filter((trigger): trigger is Extract<Trigger, { kind: 'lua' }> => trigger.kind === 'lua');
 
 type Anchor = { version: string; stays?: true };
 

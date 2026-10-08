@@ -27,8 +27,8 @@ const card: Card = {
   bias: [],
   triggers: [],
   regex: [
-    { name: 'hp', find: '\\[HP (\\d+)\\]', replace: '{{setvar::hp::$1}}<style>.x-risu-box { color: red }</style><div class="box">HP $1</div>', stage: 'output', flags: null },
-    { name: 'box', find: 'BOX', replace: '<style>.x-risu-box { color: red }</style><div class="box">box</div>', stage: 'display', flags: null },
+    { id: 'regex-0', name: 'hp', find: '\\[HP (\\d+)\\]', replace: '{{setvar::hp::$1}}<style>.x-risu-box { color: red }</style><div class="box">HP $1</div>', stage: 'output', flags: null },
+    { id: 'regex-1', name: 'box', find: 'BOX', replace: '<style>.x-risu-box { color: red }</style><div class="box">box</div>', stage: 'display', flags: null },
   ],
   background: '<style>.hp::after { content: "{{getvar::hp}}" }',
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },

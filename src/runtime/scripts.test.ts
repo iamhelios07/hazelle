@@ -11,13 +11,14 @@ import type { Runner } from './lua/client';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
 import { evaluateChat } from './chat-context';
+import { triggersOf } from './scripts';
 import { takeTurn } from './turn';
 
 const server = testServer();
 
 async function chatWith(session: Session, script: string | Trigger[], toggles = '') {
   await answerable(session);
-  const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', name: 'main', code: script }] : script;
+  const triggers: Trigger[] = typeof script === 'string' ? [{ kind: 'lua', id: 'trigger-0', name: 'main', code: script }] : script;
   const card = { ...testCard('루나'), greetings: ['어서 와.'], description: 'turn {{getvar::turn}}', triggers, toggles };
   const character = await session.store.create('character', { card, folder: null, loreFolders: [] });
   if (!character.ok) throw new Error(character.error);
@@ -29,6 +30,13 @@ async function chatWith(session: Session, script: string | Trigger[], toggles = 
   const shownTexts = async () => (await evaluateChat(session, chat, session.store.get('chat', chat)!.value, messages())).texts;
   return { chat, messages, shownTexts };
 }
+
+describe('triggersOf', () => {
+  it('leaves out a trigger turned off and a Lua one with no code', () => {
+    const lua = (id: string, code: string, off?: true): Trigger => ({ kind: 'lua', id, name: id, code, ...(off && { off }) });
+    expect(triggersOf([{ regex: [], triggers: [lua('a', 'x()'), lua('b', ' \n'), lua('c', 'y()', true)], toggles: '' }]).map(({ id }) => id)).toEqual(['a']);
+  });
+});
 
 describe("a turn with the bot's Lua", () => {
   it('runs input, start, the edit hooks and output in order, saving what each wrote where the story replays it', () =>
@@ -168,7 +176,7 @@ describe("a turn with the bot's Lua", () => {
   it('answers a button with the block trigger of its name, whose texts are CBS over what it wrote', () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, [
-        { kind: 'blocks', name: 'open', on: 'manual', conditions: [], effects: [
+        { kind: 'blocks', id: 'trigger-0', name: 'open', on: 'manual', conditions: [], effects: [
           { kind: 'set', operator: 'set', name: 'door', value: { kind: 'text', text: 'open' } },
           { kind: 'add', role: 'char', value: { kind: 'text', text: 'The door is {{getvar::door}} at {{lastmessageid}}.' } },
         ] },
@@ -325,8 +333,8 @@ describe("the display with the bot's Lua", () => {
 
       display.mockClear();
       const mixed = await open([
-        { kind: 'lua', name: 'named', code: `-- editDisplay\nfunction onInput(id) end` },
-        { kind: 'lua', name: 'listening', code: `listenEdit('editDisplay', function(id, value) return value .. '?' end)` },
+        { kind: 'lua', id: 'trigger-0', name: 'named', code: `-- editDisplay\nfunction onInput(id) end` },
+        { kind: 'lua', id: 'trigger-1', name: 'listening', code: `listenEdit('editDisplay', function(id, value) return value .. '?' end)` },
       ]);
       await expect.poll(mixed.texts).toEqual(['어서 와.?']);
       mixed.again();

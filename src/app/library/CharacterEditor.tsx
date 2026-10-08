@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, Copy, Eye, IdCard, Languages, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Square, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, ChevronRight, Copy, Eye, IdCard, Languages, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Square, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
@@ -12,12 +12,14 @@ import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
+import { scriptHolds } from '../common/pack';
 import { ModuleSwitches } from '../common/ModuleSwitches';
+import { ScriptsEditor } from '../common/ScriptsEditor';
 import type { CharacterPart } from '../common/characterPart';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, PAGES, TRANSLATOR_NOTE } from '../common/words';
+import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, TRANSLATOR_NOTE } from '../common/words';
 import { useCharacter, useChildren, useModules, useSettings, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
@@ -46,11 +48,12 @@ const PARTS: Record<CharacterPart, { label: string; icon: LucideIcon }> = {
   instructions: { label: '지시문', icon: ScrollText },
   lore: { label: '로어북', icon: BookOpen },
   modules: { label: PAGES.modules, icon: Package },
+  scripts: { label: SCRIPTS.part, icon: Braces },
   display: { label: '표시', icon: Eye },
 };
 const GROUPS: CharacterPart[][] = [
   ['profile', 'character', 'greetings'],
-  ['instructions', 'lore', 'modules'],
+  ['instructions', 'lore', 'modules', 'scripts'],
   ['display'],
 ];
 const LIST = '캐릭터 항목';
@@ -284,6 +287,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     ),
     lore: <LoreEditor owner={{ kind: 'character', id }} folders={character.loreFolders} />,
     modules: <ModuleSwitches owner={{ kind: 'character', id }} own={ownModules} />,
+    scripts: <ScriptsEditor owner={{ kind: 'character', id }} pack={card} drill={!split} status={character.statusScripts} />,
     display: (
       <Section title={PARTS.display.label}>
         <SettingGroup label={PARTS.display.label}>
@@ -310,7 +314,6 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
             </SettingGroup>
           </Disclosure>
         )}
-        <Text variant="note">정규식은 여기서 편집할 수 없어요.</Text>
       </Section>
     ),
   };
@@ -318,6 +321,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     greetings: `${text.greetings.length}개`,
     lore: `${lore.length}개`,
     modules: `${modules.filter((module) => always.includes(module.id) || ownModules.includes(module.id)).length}개 켜짐`,
+    scripts: scriptHolds(card) || undefined,
   };
   // A part with nothing to show is left out: 모듈 lists the account's modules, and there may be none.
   const groups = GROUPS.map((group) => group.filter((each) => each !== 'modules' || modules.length > 0));

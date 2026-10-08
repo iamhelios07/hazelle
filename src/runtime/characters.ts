@@ -1,5 +1,5 @@
 import { imageType } from '../engine/import/card';
-import type { Card, Imported, Picture } from '../engine/import/types';
+import type { Card, Imported, Pack, Picture } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from '../model/chat';
 import type { Stored, Values } from '../model/kinds';
 import { holds, nest, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
@@ -115,7 +115,7 @@ export async function copyCharacter(store: ObjectStore, id: string, name: string
 
 export const setDeleted = (store: ObjectStore, id: string, at: number | null) => markDeleted(store, 'character', id, at);
 
-export type CharacterText = Card & { alias: string };
+export type CharacterText = Omit<Card, keyof Pack> & { alias: string };
 
 // Only the fields given, the card's merged into the current card, so an edit to another field on another device
 // survives.
@@ -139,9 +139,9 @@ export function setBotModels(store: ObjectStore, id: string, botModels: boolean)
   return store.update('character', id, (current) => ({ ...current, botModels }));
 }
 
-export function setStatusScript(store: ObjectStore, id: string, script: number, on: boolean): Promise<ApiResult<Stored<'character'>>> {
+export function setStatusScript(store: ObjectStore, id: string, script: string, on: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => {
-    const rest = (current.statusScripts ?? []).filter((place) => place !== script);
+    const rest = (current.statusScripts ?? []).filter((each) => each !== script);
     return { ...current, statusScripts: on ? [...rest, script] : rest };
   });
 }

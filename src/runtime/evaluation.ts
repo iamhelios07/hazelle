@@ -1,5 +1,6 @@
 import { Runaway } from '../engine/cbs/evaluate';
 import type { DisplayPatch } from '../engine/display';
+import type { RegexScript } from '../engine/import/types';
 import type { assembleMemory, assembleTranslation, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { ApiFailure } from './api';
@@ -53,7 +54,10 @@ type Asker = keyof typeof GATES;
 export type Lane<A extends Asker = Asker> = { asker: A; chat: string };
 export type Verdicts = { verdict(chat: string): boolean; judged(chat: string): void };
 
-type LooseJob = { kind: 'patch'; owner: string; revision: number; generation: number; items: LuaResult[] } | { kind: 'count'; texts: string[] };
+type LooseJob =
+  | { kind: 'patch'; owner: string; revision: number; generation: number; items: LuaResult[] }
+  | { kind: 'count'; texts: string[] }
+  | { kind: 'sample'; script: Omit<RegexScript, 'id'>; text: string };
 type Work = { key: string; on: { chat: string; gate: (typeof GATES)[Asker] } | null; scope: ChatScope | null; regex: boolean; job: EvaluationJob | LooseJob; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
 
 const keyOf = ({ asker, chat }: Lane) => `${asker}:${chat}`;
@@ -110,6 +114,10 @@ export class Evaluation {
 
   count(texts: string[]): Promise<Counted<number[]>> {
     return this.run(`count:${++this.ids}`, null, null, { kind: 'count', texts }) as Promise<Counted<number[]>>;
+  }
+
+  sample(key: string, script: Omit<RegexScript, 'id'>, text: string, signal?: AbortSignal): Promise<string> {
+    return (this.run(key, null, null, { kind: 'sample', script, text }, signal) as Promise<{ sampled: string }>).then(({ sampled }) => sampled);
   }
 
   warm() {
@@ -178,6 +186,7 @@ export class Evaluation {
       let input: EvaluationInput;
       if (work.job.kind === 'patch') input = { lane: work.job.owner, patch: { revision: work.job.revision, generation: work.job.generation, items: work.job.items } };
       else if (work.job.kind === 'count') input = { lane: work.key, count: work.job.texts };
+      else if (work.job.kind === 'sample') input = { lane: work.key, sample: { script: work.job.script, text: work.job.text } };
       else {
         const { messages, ...scope } = work.scope!;
         input = { lane: work.key, scope, history: changedTail(this.histories.get(work.key) ?? [], messages, sameHistory), job: work.job };

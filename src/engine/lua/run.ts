@@ -1,12 +1,12 @@
 import { LuaFactory, type LuaEngine } from 'wasmoon';
 import type { Trigger } from '../import/types';
-import { runBlocks } from './blocks';
+import { runBlocks, type Blocks } from './blocks';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
 import { add, cbs, read, text, UNSET, working, write, type Acting, type Host, type ModelMessage, type Run, type Snapshot, type Working } from './state';
 
 // name is for error messages only.
-export type Script = Extract<Trigger, { kind: 'lua' }>;
+export type Script = Pick<Extract<Trigger, { kind: 'lua' }>, 'kind' | 'name' | 'code'>;
 
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
 export type Event =
@@ -90,7 +90,7 @@ export class Lua {
 
   // The triggers in the packs' order, as Risu walks them: each Lua one called for the event, each block one run when
   // the event is its own.
-  async run(owner: string, triggers: Trigger[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
+  async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
     const workset = this.hold(owner, 'event', triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
     try {
       const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };

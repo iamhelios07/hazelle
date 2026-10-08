@@ -9,7 +9,7 @@ import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
 import { autoContinue, takeTurn } from './turn';
-import { statusBoxes } from './chat-context';
+import { statusBoxes, statusPlaces } from './chat-context';
 import { wouldSend } from './turn-context';
 
 const server = testServer();
@@ -256,9 +256,14 @@ describe('상태', () => {
     const messages = [message('a', false), message('b', false), message('c', false), message('d', true)];
     const box = (html: string) => [{ script: 0, html, at: 'top' as const }];
     const boxes = [box('first'), box('second'), box(' '), box('half')];
-    expect(statusBoxes({ texts: [], css: '', drawn: [], boxes, pass: false, stopped: null }, messages, [0, 2])).toEqual([
-      { script: 0, drawn: { script: 0, html: 'second', at: 'top', message: 1 } },
-      { script: 2, drawn: null },
+    expect(statusBoxes({ texts: [], css: '', drawn: [], boxes, pass: false, stopped: null }, messages, [{ id: 'a', place: 0 }, { id: 'b', place: 2 }])).toEqual([
+      { id: 'a', place: 0, drawn: { script: 0, html: 'second', at: 'top', message: 1 } },
+      { id: 'b', place: 2, drawn: null },
     ]);
+  });
+
+  it('marks nothing with a status script that is gone or turned off', () => {
+    const script = (id: string, off?: true) => ({ id, name: '', find: 'x', replace: '', stage: 'display' as const, flags: null, ...(off && { off }) });
+    expect(statusPlaces({ regex: [script('a'), script('b', true), script('c')] }, ['c', 'b', 'gone'])).toEqual([{ id: 'c', place: 2 }]);
   });
 });

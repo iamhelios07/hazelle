@@ -257,8 +257,8 @@ describe('readBackup', () => {
     expect(card.card).toMatchObject({
       greetings: ['hi', 'hello', 'yo'],
       postHistoryInstructions: 'stay in character',
-      regex: [{ name: 'r', find: 'a', replace: 'b', stage: 'output', flags: null }],
-      triggers: [{ kind: 'lua', name: 'lua', code: 'print(1)' }],
+      regex: [{ id: 'regex-0', name: 'r', find: 'a', replace: 'b', stage: 'output', flags: null }],
+      triggers: [{ kind: 'lua', id: 'trigger-0', name: 'lua', code: 'print(1)' }],
     });
     expect(card.lore[0]!.content).toBe('@@probability 40\n{{user}} sees\n@@depth 0');
     expect(await card.avatar()).toEqual({ bytes: PNG, type: 'image/png' });
@@ -311,7 +311,7 @@ describe('readBackup', () => {
       '@@probability 40\n{{char}} {{user}}\n@@depth 0',
     ]);
     expect(character.card.regex[0]!.name).toBe('r');
-    expect(character.card.triggers).toEqual([{ kind: 'lua', name: 'lua', code: 'print(1)' }]);
+    expect(character.card.triggers).toEqual([{ kind: 'lua', id: 'trigger-0', name: 'lua', code: 'print(1)' }]);
   });
 
   it('reads a module with its pictures from the asset storage, and where Risu had it on as Risu ids', async () => {
@@ -324,7 +324,7 @@ describe('readBackup', () => {
         description: 'rings',
         namespace: 'bell',
         risu: 'm1',
-        pack: { regex: [{ name: 'ring', find: 'ding', replace: 'dong', stage: 'display', flags: null }] },
+        pack: { regex: [{ id: 'regex-0', name: 'ring', find: 'ding', replace: 'dong', stage: 'display', flags: null }] },
         lore: [{ name: 'Bell', keys: ['bell'], content: 'It rings.', constant: true }],
         unsupported: [{ kind: 'asset', count: 1 }],
       },

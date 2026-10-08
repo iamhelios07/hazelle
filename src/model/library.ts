@@ -27,10 +27,10 @@ export type Character = Mark & {
   botModels?: boolean;
   // Absent fields are the defaults.
   pictures?: Pictures;
-  // 상태창 지정: the display scripts, by place in card.regex, whose boxes are the character's status window, shown once
-  // for the latest message instead of in every one. Only an import writes card.regex; an editor that reorders it must
-  // move these along.
-  statusScripts?: number[];
+  // 상태창 지정: the display scripts, by id in card.regex, whose boxes are the character's status window, shown once
+  // for the latest message instead of in every one. An id that names no script marks nothing, so a deleted script's
+  // 되돌리기 brings its mark back.
+  statusScripts?: string[];
   // 옆에 두기: 상태 rests in the panel beside the story whenever a chat of it opens with room for one, instead of
   // peeking from the story's edge.
   keepStatus?: true;

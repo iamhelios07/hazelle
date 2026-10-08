@@ -45,6 +45,13 @@ it('replays old tail reads and forward variables after a history delta, and matc
   evaluation.close();
 });
 
+it('runs a regex sample in the worker, as the engine would on the screen', async () => {
+  const evaluation = new Evaluation();
+  const script = { name: '', find: 'cat', replace: 'dog', stage: 'display' as const, flags: null, off: true as const };
+  expect(await evaluation.sample('sample:a', script, 'a cat')).toBe('a dog');
+  evaluation.close();
+});
+
 it('coalesces queued revisions, settles cancellations and retains the active slot until its reply', async () => {
   const { workers, jobs } = fakeWorkers();
   const engine = new Evaluator();

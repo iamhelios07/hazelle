@@ -17,12 +17,12 @@ describe('modules', () => {
     server.withSession(async (session) => {
       const { store, files } = session;
       await answerable(session);
-      const card = { ...testCard('루나'), greetings: ['the lamp'], regex: [{ name: 'own', find: 'lamp', replace: 'LAMP', stage: 'display' as const, flags: null }] };
+      const card = { ...testCard('루나'), greetings: ['the lamp'], regex: [{ id: 'regex-0', name: 'own', find: 'lamp', replace: 'LAMP', stage: 'display' as const, flags: null }] };
       const character = await store.create('character', { card, folder: null, loreFolders: [] });
       if (!character.ok) throw new Error(character.error);
       const pack = {
-        regex: [{ name: 'after', find: 'LAMP', replace: 'STAR', stage: 'display' as const, flags: null }],
-        triggers: [{ kind: 'lua' as const, name: 'main', code: `listenEdit('editOutput', function(id, value) return value .. ' (module)' end)` }],
+        regex: [{ id: 'regex-0', name: 'after', find: 'LAMP', replace: 'STAR', stage: 'display' as const, flags: null }],
+        triggers: [{ kind: 'lua' as const, id: 'trigger-0', name: 'main', code: `listenEdit('editOutput', function(id, value) return value .. ' (module)' end)` }],
         background: '<style>.bell { color: red }</style>',
         toggles: 'ring=Ring',
       };

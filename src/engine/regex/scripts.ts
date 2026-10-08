@@ -42,21 +42,14 @@ export class Scripts {
   private readonly plans: Record<RegexScript['stage'], Plan[]> = { input: [], output: [], process: [], display: [] };
   private readonly repeat: (pattern: RegExp, index: number, dynamic: boolean) => string | null;
 
-  // Scripts are in source order (spec §c); <order N> reorders them here. History is raw, oldest first.
-  constructor(scripts: readonly RegexScript[], messages: readonly HistoryMessage[]) {
+  // Scripts are in source order (spec §c); <order N> reorders them here. History is raw, oldest first. An off script
+  // keeps its place, so the places after it (상태창 지정) stay.
+  constructor(scripts: readonly Script[], messages: readonly HistoryMessage[]) {
     this.repeat = latestMatches(messages);
     scripts.forEach((script, place) => {
-      const { flags, actions, order } = options(script.flags);
-      const out = prepare(script.replace, actions);
-      const directive = DIRECTIVE.exec(out);
-      const kind = directive?.[1] ?? ACTIONS.find((action) => actions.has(action)) ?? 'replace';
-      // Emotion images are not supported: an emo script does nothing.
-      if (kind === 'emo') return;
-      const dynamic = actions.has('cbs');
-      const source = script.find;
-      const pattern = dynamic ? null : compile(source, flags);
-      if (!dynamic && !pattern) return;
-      this.plans[script.stage].push({ source, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern });
+      if (script.off) return;
+      const plan = planOf(script, place);
+      if (typeof plan !== 'string') this.plans[script.stage].push(plan);
     });
     for (const plans of Object.values(this.plans)) plans.sort((a, b) => b.order - a.order);
   }
@@ -148,6 +141,35 @@ function latestMatches(messages: readonly HistoryMessage[]): (pattern: RegExp, i
     }
     return state.last?.text ?? null;
   };
+}
+
+type Script = Omit<RegexScript, 'id'>;
+
+// Why a script never runs. A <cbs> pattern is compiled only as it runs, so it is never found invalid here.
+export type ScriptCheck = 'empty' | 'invalid' | 'unsupported';
+
+function planOf(script: Pick<Script, 'find' | 'replace' | 'flags'>, place: number): Plan | ScriptCheck {
+  const { flags, actions, order } = options(script.flags);
+  const out = prepare(script.replace, actions);
+  const directive = DIRECTIVE.exec(out);
+  const kind = directive?.[1] ?? ACTIONS.find((action) => actions.has(action)) ?? 'replace';
+  // Emotion images are not supported: an emo script does nothing.
+  if (kind === 'emo') return 'unsupported';
+  const dynamic = actions.has('cbs');
+  const source = script.find;
+  const pattern = dynamic ? null : compile(source, flags);
+  if (!dynamic && !pattern) return source ? 'invalid' : 'empty';
+  return { source, place, order, flags, dynamic, kind, argument: directive ? out.slice(directive[0].length) : out, pattern };
+}
+
+export const checkScript = (script: Pick<Script, 'find' | 'replace' | 'flags'>): ScriptCheck | null => {
+  const plan = planOf(script, 0);
+  return typeof plan === 'string' ? plan : null;
+};
+
+// One script over one text at its own stage, as a chat's first message, with no CBS run.
+export function trySample(script: Script, text: string): string {
+  return new Scripts([{ ...script, off: undefined }], [{ id: '', seed: '', role: 'assistant', text, time: null }]).apply(script.stage, text, { index: 0, cbs: (each) => each }).text;
 }
 
 function compile(source: string, flags: string): Pattern | null {

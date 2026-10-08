@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
 import type { RegexScript } from '../import/types';
-import { Scripts, type Context } from './scripts';
+import { checkScript, Scripts, trySample, type Context } from './scripts';
 
-const script = (find: string, replace: string, over: Partial<RegexScript> = {}): RegexScript => ({ name: find, find, replace, stage: 'display', flags: null, ...over });
+const script = (find: string, replace: string, over: Partial<RegexScript> = {}): RegexScript => ({ id: find, name: find, find, replace, stage: 'display', flags: null, ...over });
 const message = (role: HistoryMessage['role'], text: string, index: number): HistoryMessage => ({ id: `m${index}`, seed: `m${index}`, role, text, time: null });
 const cbs = (text: string) => text.replaceAll('{{user}}', 'jin');
 const apply = (scripts: RegexScript[], text: string, over: Partial<Context> = {}) =>
@@ -151,5 +151,26 @@ describe('Scripts', () => {
   it('skips an emotion script, since emotion images are not supported, and leaves the text', () => {
     const scripts = [script('a', '@@emo happy'), script('b', 'c')];
     expect(apply(scripts, 'ab')).toEqual({ text: 'ac', drawn: [], boxes: [] });
+  });
+
+  it('skips a script turned off, and the scripts after it keep their places', () => {
+    const scripts = [script('a', 'x', { off: true }), script('b', '<div>box</div>')];
+    expect(apply(scripts, 'ab', { take: new Set([1]) })).toMatchObject({ text: 'a', boxes: [{ script: 1 }], drawn: [1] });
+  });
+});
+
+describe('checkScript', () => {
+  it('says why a script never runs: no pattern, a pattern that does not compile, or an emotion image; a <cbs> pattern waits for its run', () => {
+    expect(checkScript(script('', 'b'))).toBe('empty');
+    expect(checkScript(script('(', 'b'))).toBe('invalid');
+    expect(checkScript(script('a', '@@emo happy'))).toBe('unsupported');
+    expect(checkScript(script('(', 'b', { flags: '<cbs>' }))).toBeNull();
+    expect(checkScript(script('a', 'b'))).toBeNull();
+  });
+});
+
+describe('trySample', () => {
+  it('runs one script over a sample at its own stage, even one turned off, and leaves CBS as written', () => {
+    expect(trySample(script('a', '{{user}}', { stage: 'output', off: true }), 'abca')).toBe('{{user}}bc{{user}}');
   });
 });

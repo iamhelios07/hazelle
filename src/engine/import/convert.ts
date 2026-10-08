@@ -121,8 +121,19 @@ export function convert(raw: unknown, module: Json | null, tally: Tally, nativeL
   return { card, lore, loreFolders, spec, icon: icon && text(icon.uri), assets };
 }
 
+type Unstamped<S> = S extends unknown ? Omit<S, 'id'> : never;
+type Stamped<S> = S & { id: string };
+
+// A script without an id, just read or stored before scripts had ids, takes its place in its list as its id. Derived,
+// never random: every device, and every read of an old backup, gives one script the same id (runtime/upgrade).
+export function stampIds<R extends object, T extends object>(pack: { regex: readonly R[]; triggers: readonly T[] }): { regex: Stamped<R>[]; triggers: Stamped<T>[] } {
+  const stamp = <S extends object>(scripts: readonly S[], list: string) =>
+    scripts.map((script, place) => (isRecord(script) && typeof script.id !== 'string' ? { ...script, id: `${list}-${place}` } : script) as Stamped<S>);
+  return { regex: stamp(pack.regex, 'regex'), triggers: stamp(pack.triggers, 'trigger') };
+}
+
 function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; toggles: unknown }, tally: Tally): Pack {
-  const triggers: Trigger[] = [];
+  const triggers: Unstamped<Trigger>[] = [];
   for (const trigger of list(raw.trigger).map(record)) {
     const name = text(trigger.comment);
     const effects = list(trigger.effect).map(record);
@@ -134,7 +145,7 @@ function packOf(raw: { regex: unknown; trigger: unknown; background: unknown; to
   const background = text(raw.background);
   if (/<(?!style\b)[a-z]/i.test(background.replace(/<style\b[\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi, ''))) add(tally, 'background-html');
   add(tally, 'toggle-line', readToggles(text(raw.toggles)).unread);
-  return { regex: regexScripts(list(raw.regex), tally), triggers, ...(background.trim() ? { background } : {}), toggles: text(raw.toggles) };
+  return { ...stampIds({ regex: regexScripts(list(raw.regex), tally), triggers }), ...(background.trim() ? { background } : {}), toggles: text(raw.toggles) };
 }
 
 // A Risu module as RisuModule holds it (src/ts/process/modules.ts), without its pictures. Its lowLevelAccess is not
@@ -192,7 +203,7 @@ function variables(value: unknown): [string, string][] {
 }
 
 // Scripts on other stages (edittrans, disabled) never run in risu-alpha and are counted instead.
-function regexScripts(scripts: unknown[], tally: Tally): RegexScript[] {
+function regexScripts(scripts: unknown[], tally: Tally): Unstamped<RegexScript>[] {
   return scripts.filter(isRecord).flatMap((script) => {
     const stage = STAGES.get(script.type);
     if (!stage) {

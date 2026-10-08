@@ -73,7 +73,7 @@ const card = (over: Partial<Card> = {}): Card => ({
   ...over,
 });
 
-const script = (stage: RegexScript['stage'], find: string, replace: string): RegexScript => ({ name: stage, find, replace, stage, flags: null });
+const script = (stage: RegexScript['stage'], find: string, replace: string): RegexScript => ({ id: find, name: stage, find, replace, stage, flags: null });
 
 const lore = (id: string, content: string, over: Partial<LoreEntry> = {}, parent: string | null = null) => ({
   id,
