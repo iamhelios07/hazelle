@@ -51,7 +51,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
     setDrawing(null);
     if (form !== 'log' || waiting) return;
     let live = true;
-    const draft = logDraft(messages, view, chat.flipped, decor.bot, speakers(chat), choices);
+    const draft = logDraft(messages, view, chat, chat.flipped, decor.bot, speakers(chat), choices);
     const read = choices.pictures ? assetDataUrls(store, files, draft.pictures.values()) : Promise.resolve({ urls: new Map<string, string>(), missing: draft.pictures.size });
     void read.then(({ urls, missing }) => {
       if (live) setDrawing({ key: crypto.randomUUID(), title: item.title, sub: card?.name ?? null, ...resolveLog(draft, (kind, id) => urls.get(pictureRef(kind, id))), missing });
@@ -59,7 +59,7 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
     return () => {
       live = false;
     };
-  }, [form, choices, messages, view, chat.flipped, waiting]);
+  }, [form, choices, messages, view, chat.placed, chat.pictures, chat.flipped, waiting]);
 
   async function saveFile() {
     if (form === 'file') {
