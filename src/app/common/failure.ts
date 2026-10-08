@@ -156,6 +156,8 @@ export function describeTurnFailure(failure: TurnFailure): string {
       return `${MODEL_ROLES.main}이 지정되지 않았어요. 모델 버튼에서 선택해 주세요.`;
     case 'model-gone':
       return '선택한 모델이 즐겨찾기에 없어요. 모델 버튼에서 다시 선택해 주세요.';
+    case 'image-only':
+      return '선택한 모델은 이미지만 만들어요. 모델 버튼에서 다른 모델을 선택해 주세요.';
     case 'prompt-missing':
       return failure.own ? '이 채팅의 프롬프트가 삭제됐어요. 다른 프롬프트를 선택해 주세요.' : `기본 프롬프트가 없어요. ${inSettings('prompts')}에서 하나를 기본으로 지정해 주세요.`;
     case 'persona-missing':
@@ -200,6 +202,8 @@ export function describeTranslateFailure(failure: Exclude<TranslateFailure, { ki
       return `번역 모델이 지정되지 않았어요. 번역 프롬프트나 ${inSettings('models')}에서 선택해 주세요.`;
     case 'model-gone':
       return `번역 모델이 즐겨찾기에 없어요. 번역 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
+    case 'image-only':
+      return `번역 모델은 이미지만 만들어요. 번역 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
     case 'profile-missing':
       return failure.own ? `번역 모델의 설정이 삭제됐어요. ${inSettings('models')}에서 다른 설정을 선택해 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 설정 하나를 기본으로 지정해 주세요.`;
     case 'failed':
@@ -221,6 +225,8 @@ export function describeMemoryFailure(failure: MemoryFailure): string {
       return `기억 정리 모델이 지정되지 않았어요. 기억 프롬프트나 ${inSettings('models')}에서 선택해 주세요.`;
     case 'model-gone':
       return `기억 정리 모델이 즐겨찾기에 없어요. 기억 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
+    case 'image-only':
+      return `기억 정리 모델은 이미지만 만들어요. 기억 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
     case 'prompt-missing':
       return `기본 기억 프롬프트가 없어요. ${inSettings('prompts')}에서 기억 프롬프트 하나를 기본으로 지정해 주세요.`;
     case 'profile-missing':

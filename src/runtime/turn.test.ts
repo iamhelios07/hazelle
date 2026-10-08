@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, shown, type Receipt } from '../model/chat';
+import { setDefaultModel, taskModel } from './assignment';
 import { setTranslate } from './characters';
 import { appendUserMessage, removeChat, startChat, type Written } from './chat-log';
 import { projectGreetings } from './greetings';
@@ -266,4 +267,22 @@ describe('상태', () => {
     const script = (id: string, off?: true) => ({ id, name: '', find: 'x', replace: '', stage: 'display' as const, flags: null, ...(off && { off }) });
     expect(statusPlaces({ regex: [script('a'), script('b', true), script('c')] }, ['c', 'b', 'gone'])).toEqual([{ id: 'c', place: 2 }]);
   });
+});
+
+describe('image-only models', () => {
+  it('refuses a model that only makes images as the 대화 and the task model, before any call', () =>
+    server.withSession(async (session) => {
+      const painter = { id: 'nai-diffusion-5', name: 'V5', input: ['text' as const], output: ['image' as const], contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
+      const connection = await session.store.create('connection', { type: 'openrouter', label: 'OpenRouter', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'sk-or-x' }], turns: null, starred: [painter] });
+      if (!connection.ok) throw new Error(connection.error);
+      const ref = { connection: connection.data.id, model: painter.id };
+      await setDefaultModel(session.store, 'main', ref);
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      const log = stubRelay(inTurn([]));
+      expect(await takeTurn(session, chat, { kind: 'send', text: 'Hi' })).toEqual({ kind: 'image-only' });
+      expect(taskModel(session.store, { title: null, character: null, models: {} }, ref)).toEqual({ kind: 'image-only' });
+      expect(log).toEqual([]);
+    }));
 });

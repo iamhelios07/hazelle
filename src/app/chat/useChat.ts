@@ -51,7 +51,7 @@ import { useMessageEdit } from './useMessageEdit';
 type Own = 'prompt' | 'persona' | 'note';
 const WRITE_OWN = { prompt: setChatPrompt, persona: setChatPersona, note: setChatNote };
 
-const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'prompt-missing', 'persona-missing', 'profile-missing']);
+const BLOCKING = new Set<TurnFailure['kind']>(['no-model', 'model-gone', 'image-only', 'prompt-missing', 'persona-missing', 'profile-missing']);
 const blocks = (failure: TurnFailure): failure is Blocked => BLOCKING.has(failure.kind);
 
 export type OpenChat = ReturnType<typeof useChat>;

@@ -30,6 +30,11 @@ export type Illustration = {
   at: number;
 };
 
+// Per character, or for every 캐릭터 없이 chat. auto: draw after each reply received, off by default since every
+// picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
+// absent for the first one starred. Absent fields are read through runtime/characters illustrateSwitches.
+export type IllustrateSwitches = { auto?: boolean; prompt?: string; model?: ModelRef };
+
 // The one rule of what a paragraph is, which the scene writer reads numbered and the chat places pictures by: each
 // non-blank line of the stored text, since roleplay prose often breaks paragraphs with a single newline.
 export const paragraphsOf = (text: string): string[] => text.split('\n').map((line) => line.trim()).filter((line) => line !== '');

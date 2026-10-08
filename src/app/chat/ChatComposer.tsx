@@ -17,6 +17,7 @@ type Chip = 'model' | 'prompt' | 'persona';
 const FIX = {
   'no-model': { label: '모델 선택', chip: 'model' },
   'model-gone': { label: '모델 선택', chip: 'model' },
+  'image-only': { label: '모델 선택', chip: 'model' },
   'prompt-missing': { label: '프롬프트 선택', chip: 'prompt' },
   'persona-missing': { label: '페르소나 선택', chip: 'persona' },
   'profile-missing': { label: '모델 설정 선택', chip: 'model' },
