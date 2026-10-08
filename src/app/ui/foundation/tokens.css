@@ -159,6 +159,13 @@
   --color-markup-slot: var(--palette-gold-300);
   --color-markup-slot-bg: color-mix(in srgb, var(--palette-gold-400) 18%, transparent);
   --color-markup-angle: var(--palette-blue-300);
+  /* Image tags by their weight (controls/weights): warmer and brighter up, cooler and dimmer down. */
+  --color-weight-up-1: var(--palette-gold-300);
+  --color-weight-up-2: var(--palette-gold-500);
+  --color-weight-up-3: var(--palette-coral-400);
+  --color-weight-down-1: var(--palette-sky-400);
+  --color-weight-down-2: var(--palette-sky-700);
+  --color-weight-negative: var(--palette-rose-400);
   --color-text-soft: var(--palette-lilac-250);
   /* A faux weight: a real one would widen the letters and move the caret off them. */
   --markup-heading-shadow: 0.35px 0 0 var(--color-markup-heading), -0.35px 0 0 var(--color-markup-heading);
@@ -444,6 +451,12 @@
   --color-markup-cbs: var(--palette-gold-650);
   --color-markup-slot: var(--palette-gold-800);
   --color-markup-angle: var(--palette-blue-700);
+  --color-weight-up-1: var(--palette-gold-650);
+  --color-weight-up-2: var(--palette-gold-800);
+  --color-weight-up-3: var(--palette-coral-700);
+  --color-weight-down-1: var(--palette-sky-700);
+  --color-weight-down-2: var(--palette-sky-400);
+  --color-weight-negative: var(--palette-rose-700);
 
   --shadow-popover: 0 12px 32px var(--palette-shadow-soft);
   --shadow-toast: 0 22px 44px -14px var(--palette-shadow-soft-deep), 0 4px 12px var(--palette-shadow-soft);

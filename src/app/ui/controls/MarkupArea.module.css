@@ -81,3 +81,31 @@
   background: var(--color-markup-slot-bg);
   color: var(--color-markup-slot);
 }
+
+.weightSyntax {
+  color: var(--color-text-faint);
+}
+
+.weightUp1 {
+  color: var(--color-weight-up-1);
+}
+
+.weightUp2 {
+  color: var(--color-weight-up-2);
+}
+
+.weightUp3 {
+  color: var(--color-weight-up-3);
+}
+
+.weightDown1 {
+  color: var(--color-weight-down-1);
+}
+
+.weightDown2 {
+  color: var(--color-weight-down-2);
+}
+
+.weightNegative {
+  color: var(--color-weight-negative);
+}

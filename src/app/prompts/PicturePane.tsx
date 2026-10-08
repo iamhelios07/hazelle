@@ -7,7 +7,7 @@ import { typedText } from '../common/typed';
 import { readTyped } from '../common/typedNumber';
 import { UNSET } from '../common/words';
 import { useConnections } from '../session';
-import { Button, ChipButton, Menu, MenuHeading, MenuItem, NumberInput, Section, SettingGroup, SettingRow, Stack, TextField } from '../ui';
+import { Button, ChipButton, MarkupArea, Menu, MenuHeading, MenuItem, NumberInput, Section, SettingGroup, SettingRow, Stack } from '../ui';
 
 type Props = { tags: PictureTags | undefined; picture: PictureSettings | undefined; onTags: (tags: PictureTags | undefined) => void; onPicture: (picture: PictureSettings) => void };
 
@@ -20,6 +20,12 @@ const NUMBERS: Record<NumberField, { label: string; help?: string; whole: boolea
   rescale: { label: '가이던스 리스케일', whole: false, check: (value) => value >= 0 && value <= 1, error: '0에서 1 사이로 입력해 주세요.', unset: UNSET },
   seed: { label: '시드', help: '정해 두면 같은 장면은 같은 이미지로 만들어요.', whole: true, check: (value) => value >= 0 && value <= 0xffffffff, error: '0에서 4294967295 사이로 입력해 주세요.', unset: '무작위' },
 };
+
+const TAG_FIELDS: { field: keyof PictureTags; label: string; placeholder?: string }[] = [
+  { field: 'artist', label: '작가 태그', placeholder: 'artist:이름, 1.2::artist:이름::' },
+  { field: 'quality', label: '품질 태그' },
+  { field: 'negative', label: '제외할 태그' },
+];
 
 // The tag fields show the app's tags while the prompt sets none, since those are what is sent; the first edit stores
 // all three, and an emptied field sends none rather than the app's.
@@ -62,7 +68,7 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
       <Section
         title="태그"
         note={tags ? '직접 지정' : '기본값'}
-        hint="이 프롬프트로 만드는 모든 삽화에 넣어요. 작가 태그는 맨 앞에, 품질 태그는 장면 뒤에 붙어요."
+        hint="모든 삽화에 넣어요. 작가 태그는 맨 앞에, 품질 태그는 장면 뒤에 붙어요. 가중치({강조}, [약화], 1.5::태그::)에 따라 색이 달라져요."
         action={
           tags && (
             <Button variant="link" size="xs" onClick={() => onTags(undefined)}>
@@ -72,9 +78,11 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
         }
       >
         <Stack gap="related">
-          <TextField label="작가 태그" lines={2} value={shown.artist} onChange={setTag('artist')} placeholder="artist:이름, artist:이름" />
-          <TextField label="품질 태그" lines={2} value={shown.quality} onChange={setTag('quality')} />
-          <TextField label="제외할 태그" lines={4} value={shown.negative} onChange={setTag('negative')} />
+          {TAG_FIELDS.map(({ field, label, placeholder }) => (
+            <Section key={field} title={label} level={3}>
+              <MarkupArea label={label} variant="field" kind="tags" value={shown[field]} onChange={setTag(field)} placeholder={placeholder} />
+            </Section>
+          ))}
         </Stack>
       </Section>
       <Section title="생성" hint="비워 두면 이미지 모델의 원래 값을 써요.">
