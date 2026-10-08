@@ -91,6 +91,16 @@ describe('Illustrator', () => {
       expect(log[3]!.sent.url).toBe('https://image.example/generate');
     }));
 
+  it('draws without asking whether the picture is free while the switches spend', () =>
+    server.withSession(async (session) => {
+      const chat = await painted(session);
+      await setIllustrate(session.store, null, { auto: true, spend: true });
+      const log = stubRelay(inTurn([saying(REPLY), saying(JSON.stringify(scene)), picture()]));
+      await takeTurn(session, chat, { kind: 'answer' });
+      await vi.waitFor(() => expect(session.store.children('illustration', chat)).toHaveLength(1), { timeout: 5000 });
+      expect(log.map(({ sent }) => sent.url)).not.toContain('https://image.example/free');
+    }));
+
   it('refuses before any call when no starred model draws, and keeps the failure for the slot', () =>
     server.withSession(async (session) => {
       const chat = await painted(session, false);

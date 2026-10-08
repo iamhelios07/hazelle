@@ -102,7 +102,8 @@ export class Illustrator {
 
   // scene: one the user changed (어떻게 바꿀까요?) or a failed run's, drawn with no scene call. auto: asked by a reply
   // received here, whose scene a chat judged stuck refuses (evaluation's passive gate).
-  // 다시 그리기 is another draw: earlier pictures of the version stay. spend: the user agreed to a picture that may cost.
+  // 다시 그리기 is another draw: earlier pictures of the version stay. spend: the user agreed to a picture that may cost,
+  // as the switches' spend does for every draw.
   draw(chat: string, message: string, version: string, { scene = null, auto = false, spend = false }: { scene?: Scene | null; auto?: boolean; spend?: boolean } = {}) {
     if (this.closed || this.aborts.has(message)) return;
     const abort = new AbortController();
@@ -166,7 +167,7 @@ export class Illustrator {
     }
     const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
     const request = pictureRequest(scene, route.model, seed);
-    const drawn = await this.picture(route, request, spend, signal);
+    const drawn = await this.picture(route, request, spend || switches.spend, signal);
     if ('kind' in drawn) return drawn;
     const saved = await files.save([drawn.bytes], { signal });
     if (!saved.ok) return saved.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unsaved', failure: saved };

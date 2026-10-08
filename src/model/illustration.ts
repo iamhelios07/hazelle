@@ -33,7 +33,8 @@ export type Illustration = {
 // Shared by every chat, or a character's own (Character.ownIllustrate). auto: draw after each reply received, off by default since every
 // picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
 // absent for the first one starred. Absent fields are read through runtime/characters illustrateSwitches.
-export type IllustrateSwitches = { auto?: boolean; prompt?: string; model?: ModelRef };
+// spend: draw a picture not known to be free (runtime/illustrate costs) without asking each time.
+export type IllustrateSwitches = { auto?: boolean; spend?: boolean; prompt?: string; model?: ModelRef };
 
 // The one rule of what a paragraph is, which the scene writer reads numbered and the chat places pictures by: each
 // line of the stored text with words outside its tags, since roleplay prose often breaks paragraphs with a single

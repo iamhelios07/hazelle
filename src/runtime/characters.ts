@@ -212,12 +212,12 @@ export const setTranslate = (store: ObjectStore, character: string | null, chang
 
 export const setOwnTranslate = (store: ObjectStore, character: string, own: boolean) => setOwnScoped(store, character, 'translate', own);
 
-// Absent auto is off.
-export type IllustrateSetup = Omit<IllustrateSwitches, 'auto'> & { auto: boolean; own: boolean };
+// Absent auto and spend are off.
+export type IllustrateSetup = Omit<IllustrateSwitches, 'auto' | 'spend'> & { auto: boolean; spend: boolean; own: boolean };
 
 export function illustrateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): IllustrateSetup {
   const { switches, own } = scoped(store, character, 'illustrate');
-  return { ...switches, auto: switches?.auto ?? false, own };
+  return { ...switches, auto: switches?.auto ?? false, spend: switches?.spend ?? false, own };
 }
 
 export const setIllustrate = (store: ObjectStore, character: string | null, change: Partial<IllustrateSwitches>) => setScoped(store, character, 'illustrate', change);
