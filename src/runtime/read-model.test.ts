@@ -66,6 +66,7 @@ async function hold(store: ObjectStore, ...ids: string[]) {
   return () => leases.forEach((lease) => lease.release());
 }
 
+const NO_DRAWINGS = { snapshot: () => new Map(), subscribe: () => () => true };
 const chat: Chat = { title: null, character: null, models: {} };
 const message = (text: string) => ({ type: 'message' as const, role: 'user' as const, text, at: 0, receipt: null });
 const card = (name: string): Card => ({ name, nickname: null, description: '', personality: '', scenario: '', greetings: [], exampleDialogue: '', systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', creator: '', version: '', tags: [], variables: [], toggles: '', utility: false, bias: [], regex: [], triggers: [], loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null } });
@@ -555,7 +556,7 @@ describe('per-chat read models', () => {
     const read = new ReadModels(store);
     const talk = liveTalk();
     const opening = { chat, messages: [] };
-    const screen = read.screen('a', talk, opening);
+    const screen = read.screen('a', talk, NO_DRAWINGS, opening);
     const leave = screen.subscribe(() => {});
     await hold(store, screen.id);
     screen.setInputs(opening, { width: 800, height: 600 });
@@ -597,7 +598,7 @@ describe('per-chat read models', () => {
     await hold(store, 'a');
     const read = new ReadModels(store);
     const opening = { chat, messages: [] };
-    const screen = read.screen('a', liveTalk(), opening);
+    const screen = read.screen('a', liveTalk(), NO_DRAWINGS, opening);
     const failing = vi.spyOn(read.open, 'display').mockRejectedValue(new Error('crash'));
     const leave = screen.subscribe(() => {});
     screen.setInputs(opening, { width: 800, height: 600 });
@@ -620,7 +621,7 @@ describe('per-chat read models', () => {
     const { store } = await account();
     const read = new ReadModels(store);
     const opening = { chat, messages: [] };
-    const screen = read.screen('n', liveTalk(), opening);
+    const screen = read.screen('n', liveTalk(), NO_DRAWINGS, opening);
     const display = read.open.display.bind(read.open);
     let stalled = false;
     const displayed = vi.spyOn(read.open, 'display').mockImplementation(async (...args) => {
@@ -673,7 +674,7 @@ describe('per-chat read models', () => {
     const talk = liveTalk();
     const greeting: chatModel.Message = { id: 'opening', role: 'assistant', at: 0, versions: [{ id: 'g', seed: 'g', text: '{{screenwidth}}', receipt: null, edited: false, at: 0 }], selected: 0 };
     const opening = { chat, messages: [greeting] };
-    const screen = read.screen('new', talk, opening);
+    const screen = read.screen('new', talk, NO_DRAWINGS, opening);
     const leave = screen.subscribe(() => {});
     await hold(store, screen.id);
     screen.setInputs(opening, { width: 800, height: 600 });

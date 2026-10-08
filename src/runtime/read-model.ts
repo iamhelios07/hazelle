@@ -1,7 +1,9 @@
 import { ChangeSignal } from '../change-signal';
 import type { Display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
-import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/chat';
+import { chatTitle, shown, type Chat, type ChatSummary, type Message } from '../model/chat';
+import { withMarks, withoutMarks } from '../model/illustration';
+import type { Illustrating, Illustrator } from './illustrate';
 import type { Kind, Stored, Values } from '../model/kinds';
 import { indexFolders, isLive, live, nest, shelve, type CharacterShelf, type FolderContents, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
@@ -141,8 +143,8 @@ export class ReadModels {
     return snapshot;
   }
 
-  screen(id: string, talk: Pick<Talk, 'snapshot' | 'subscribe'>, opening: Opening): ChatScreenRead {
-    return new ChatScreenRead(this, talk, id, opening);
+  screen(id: string, talk: Pick<Talk, 'snapshot' | 'subscribe'>, drawings: Drawings, opening: Opening): ChatScreenRead {
+    return new ChatScreenRead(this, talk, drawings, id, opening);
   }
 
   async displayed(id: string): Promise<ScreenChat | null> {
@@ -230,9 +232,43 @@ export class ReadModels {
 export type Opening = { chat: Chat; messages: Message[] };
 // stuck: the display left the bot's regex out, its chat judged stuck (ChatProjections.verdict).
 export type ScreenChat = { chat: Chat; messages: Shown[]; display: Display; stuck: boolean; pending?: boolean; error?: unknown };
+// placed: by message index, the shown text of a message whose 삽화 have a place, with their marks as the display left
+// them (model/illustration withMarks); display.texts hold none.
+export type ChatScreen = ScreenChat & { placed: ReadonlyMap<number, string> };
+type Drawings = Pick<Illustrator, 'snapshot' | 'subscribe'>;
+
+// By version, the paragraphs its pictures and its picture being drawn stand after.
+function placesOf(store: ObjectStore, chat: string, drawings: Illustrating): Map<string, Set<number>> {
+  const places = new Map<string, Set<number>>();
+  const add = (version: string, paragraph: number) => places.set(version, (places.get(version) ?? new Set()).add(paragraph));
+  for (const { value } of store.children('illustration', chat)) add(value.version, value.scene.paragraph);
+  for (const drawing of drawings.values()) if (drawing.chat === chat && drawing.stage !== 'scene' && drawing.scene) add(drawing.version, drawing.scene.paragraph);
+  return places;
+}
+
+const drawingKey = (chat: string, drawings: Illustrating) =>
+  [...drawings.values()].flatMap((drawing) => (drawing.chat === chat && drawing.stage !== 'scene' && drawing.scene ? [`${drawing.version}:${drawing.scene.paragraph}`] : [])).sort().join(' ');
+
+function marked(messages: Shown[], places: Map<string, Set<number>>): Shown[] {
+  if (!places.size) return messages;
+  return messages.map((message) => {
+    const paragraphs = places.get(shown(message).id);
+    return paragraphs ? { ...message, versions: message.versions.map((version, index) => (index === message.selected ? { ...version, text: withMarks(version.text, paragraphs) } : version)) } : message;
+  });
+}
+
+function placing(display: Display): { display: Display; placed: Map<number, string> } {
+  const placed = new Map<number, string>();
+  const texts = display.texts.map((text, index) => {
+    const clean = withoutMarks(text);
+    if (clean !== text) placed.set(index, text);
+    return clean;
+  });
+  return { display: placed.size ? { ...display, texts } : display, placed };
+}
 
 export class ChatScreenRead {
-  private readonly state: Snapshot<ScreenChat>;
+  private readonly state: Snapshot<ChatScreen>;
   private reads: StoreRead[] = [];
   private evaluation: AbortController | null = null;
   private revision = 0;
@@ -241,13 +277,15 @@ export class ChatScreenRead {
   private judged = false;
   private turn: Turn | null;
   private model: ChatModel | null;
+  private drawing: string;
   private readonly listeners = new Set<() => void>();
   private leave: (() => void) | null = null;
 
-  constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, readonly id: string, private opening: Opening) {
+  constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, private readonly drawings: Drawings, readonly id: string, private opening: Opening) {
     this.model = models.chat(id).snapshot();
     this.turn = this.currentTurn();
-    this.state = new Snapshot<ScreenChat>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: false, stopped: null }, stuck: false, pending: true });
+    this.drawing = drawingKey(id, drawings.snapshot());
+    this.state = new Snapshot<ChatScreen>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: false, stopped: null }, stuck: false, pending: true, placed: new Map() });
   }
 
   readonly snapshot = () => this.state.snapshot();
@@ -269,11 +307,18 @@ export class ChatScreenRead {
         this.turn = turn;
         this.refresh();
       });
+      // Only a scene landing or going moves a picture's place.
+      const drawn = this.drawings.subscribe(() => {
+        const drawing = drawingKey(this.id, this.drawings.snapshot());
+        if (drawing === this.drawing) return;
+        this.drawing = drawing;
+        this.refresh();
+      });
       const passed = this.models.open.subscribe(this.id, (display) => {
         if (!display) return this.refresh();
-        this.state.set({ ...this.state.snapshot(), display });
+        this.state.set({ ...this.state.snapshot(), ...placing(display) });
       });
-      this.leave = () => { this.revision++; this.evaluation?.abort(); store(); talk(); passed(); lease.release(); };
+      this.leave = () => { this.revision++; this.evaluation?.abort(); store(); talk(); drawn(); passed(); lease.release(); };
       const model = this.models.chat(this.id).snapshot();
       const turn = this.currentTurn();
       // A pass the display was missing while nobody listened was not run: it is asked for again now.
@@ -320,11 +365,15 @@ export class ChatScreenRead {
     const judged = this.judged = this.verdict();
     const chat = this.model ? this.model.chat : this.opening.chat;
     const messages = withTurn(this.model ? this.model.messages : this.opening.messages, this.turn, this.id);
-    const { value, reads } = this.models.store.capture(() => this.models.open.display(this.id, chat, messages, this.screen, evaluation.signal));
+    const { store } = this.models;
+    const { value, reads } = store.capture(() => {
+      const places = store.scopeState(this.id) === 'loaded' ? placesOf(store, this.id, this.drawings.snapshot()) : new Map<string, Set<number>>();
+      return this.models.open.display(this.id, chat, marked(messages, places), this.screen, evaluation.signal);
+    });
     this.reads = reads;
     return value.then((display) => {
       if (evaluation.signal.aborted || revision !== this.revision) return;
-      this.state.set({ chat, messages, display, stuck: judged });
+      this.state.set({ chat, messages, ...placing(display), stuck: judged });
     }, (error: unknown) => {
       if (evaluation.signal.aborted || revision !== this.revision || error instanceof EvaluationStopped) return;
       // The worker judged a saved chat itself; one not saved yet is judged here, on what it was displayed from. The

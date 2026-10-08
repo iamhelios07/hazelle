@@ -192,8 +192,8 @@ export function useStored<K extends Kind>(kind: K, id: string | null): Stored<K>
 }
 
 export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['screen']) {
-  const { read, talk } = useSession();
-  const model = useMemo(() => read.screen(id, talk, opening), [read, talk, id]);
+  const { read, talk, illustrator } = useSession();
+  const model = useMemo(() => read.screen(id, talk, illustrator, opening), [read, talk, illustrator, id]);
   // The first layout installs viewport/greeting inputs before the external-store subscription; evaluation publishes asynchronously.
   useLayoutEffect(() => {
     model.setInputs(opening, screen);

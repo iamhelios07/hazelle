@@ -42,3 +42,22 @@ export const paragraphsOf = (text: string): string[] => text.split('\n').map((li
 // The paragraph a picture comes after in text as it stands now; null when an edit left fewer paragraphs, and the
 // picture goes at the message's end, never after another paragraph.
 export const placeOf = (scene: Pick<Scene, 'paragraph'>, text: string): number | null => (scene.paragraph < paragraphsOf(text).length ? scene.paragraph : null);
+
+// Where a picture stands while the chat's display reshapes the text: a mark on its own line after its paragraph, fed
+// to the bot's display scripts with the text and swapped for the picture where the story is drawn. A mark the scripts
+// dropped puts the picture at the message end. Never stored, sent, searched or copied: withoutMarks takes them out of
+// every display text but the one drawn.
+const MARK = /\n?(\d+)/g;
+export const placeMark = (paragraph: number) => `${paragraph}`;
+
+// paragraphs past the text's end get no mark.
+export function withMarks(text: string, paragraphs: ReadonlySet<number>): string {
+  let seen = -1;
+  return text
+    .split('\n')
+    .map((line) => (line.trim() && paragraphs.has(++seen) ? `${line}\n${placeMark(seen)}` : line))
+    .join('\n');
+}
+
+// keep: the one paragraph whose mark stays.
+export const withoutMarks = (text: string, keep: number | null = null) => (text.includes('') ? text.replace(MARK, (whole, paragraph: string) => (Number(paragraph) === keep ? whole : '')) : text);

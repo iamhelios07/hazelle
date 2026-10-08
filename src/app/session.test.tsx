@@ -30,7 +30,8 @@ it('C: composer and panel re-renders skip display, while streaming recomputes wi
   let turn: Turn | null = null;
   const listeners = new Set<() => void>();
   const talk = { snapshot: (id: string) => (turn?.chat === id ? turn : null), subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
-  const session = { store, read, talk } as Session;
+  const illustrator = { snapshot: () => new Map(), subscribe: () => () => true };
+  const session = { store, read, talk, illustrator } as unknown as Session;
   const opening: Opening = { chat, messages: [] };
   const screen = { width: 800, height: 600 } satisfies NonNullable<ChatScope['screen']>;
   let view: ScreenChat;
