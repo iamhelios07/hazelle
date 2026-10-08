@@ -7,6 +7,7 @@ import { purgeExpired } from './removal';
 import { Costs } from './cost';
 import { Credentials } from './credential';
 import { Files } from './files';
+import { Illustrator } from './illustrate';
 import { deviceCache } from './device-cache';
 import { Drafts } from './drafts';
 import type { DeviceCache } from './object-cache';
@@ -37,6 +38,7 @@ export type Session = {
   usage: Usage;
   translator: Translator;
   memory: Rememberer;
+  illustrator: Illustrator;
   drafts: Drafts;
   streams: Streams;
   scripts: Scripts;
@@ -88,6 +90,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
   const read = new ReadModels(store, display);
   const memory = new Rememberer({ store, read, credentials }, reading);
+  const illustrator = new Illustrator({ store, credentials, files });
   const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, machine);
   const talk = new Talk(
     store,
@@ -143,6 +146,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     void runner?.then((made) => made.close());
     translator.close();
     memory.close();
+    illustrator.close();
     drafts.close();
     costs.close();
     usage.close();
@@ -151,6 +155,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { username, store, files, assets, talk, costs, usage, translator, memory, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { username, store, files, assets, talk, costs, usage, translator, memory, illustrator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

@@ -5,6 +5,7 @@ import type { Kind, Stored } from '../model/kinds';
 import type { AccountFacts, Standing } from '../runtime/account';
 import { memoryId, type Memory } from '../model/memory';
 import type { Files } from '../runtime/files';
+import type { Illustrating, Illustrator } from '../runtime/illustrate';
 import type { Remembering } from '../runtime/memory';
 import { modulesOf } from '../runtime/modules';
 import type { Session } from '../runtime/session';
@@ -58,6 +59,7 @@ export function useStanding(): Standing {
 }
 export const useTalk = (): Talk => useSession().talk;
 export const useTranslator = (): Translator => useSession().translator;
+export const useIllustrator = (): Illustrator => useSession().illustrator;
 
 // The function is a new one when a picture has
 // loaded, so what shows pictures renders again.
@@ -145,7 +147,8 @@ export function useBin() {
 // The array is held until one of
 // them changes, since a fresh array on every read would make React re-render forever. Subscribing reads it anew, so
 // a change between the render and the subscription is not missed.
-export function useChildren<K extends 'lore' | 'asset'>(kind: K, parent: string): Stored<K>[] {
+// illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again.
+export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K, parent: string): Stored<K>[] {
   const store = useStore();
   const model = useMemo(() => {
     let held: Stored<K>[] | null = null;
@@ -153,7 +156,7 @@ export function useChildren<K extends 'lore' | 'asset'>(kind: K, parent: string)
       subscribe: (listener: () => void) => {
         held = null;
         return store.subscribe((changes) => {
-          if (!changes.some((change) => change.kind === kind && change.parent === parent)) return;
+          if (!changes.some((change) => (change.kind === kind || change.kind === 'scope') && change.parent === parent)) return;
           held = null;
           listener();
         });
@@ -222,6 +225,12 @@ export function useChatMemory(chat: string | null): Memory | null {
     [store, id],
   );
   return useSyncExternalStore(subscribe, () => (id === null ? null : store.children('memory', id).find((memory) => memory.id === memoryId(id)) ?? null))?.value ?? null;
+}
+
+// 삽화 runs by message: a 그리는 중 slot, or a failure with its retry.
+export function useIllustrating(): Illustrating {
+  const illustrator = useIllustrator();
+  return useSyncExternalStore(illustrator.subscribe, illustrator.snapshot);
 }
 
 export function useScripts(): ScriptsState {
