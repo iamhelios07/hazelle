@@ -75,8 +75,9 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
   });
 }
 
-// What a chat file's chat named that this account does not hold live, by kind; models counts roles.
-export type Dropped = { prompt: number; persona: number; cast: number; models: number };
+// What a chat file's chat named that this account does not hold live, by kind; models counts roles. pictures: the
+// illustrations whose picture the server refused.
+export type Dropped = { prompt: number; persona: number; cast: number; models: number; pictures: number };
 
 // A chat file's chat, copied under new ids as a branch is, to character. What it names that is not live here is
 // left out and counted, so the chat follows the default there; a persona left out gives the one a new chat takes.
@@ -112,6 +113,7 @@ export async function importChat({ store, files }: Pick<Session, 'store' | 'file
     persona: Number(persona !== undefined && chat.persona === undefined),
     cast: cast.length - kept.length,
     models: Object.keys(models).length - roles.length,
+    pictures: file.illustrations.length - illustrations.length,
   };
   writes.push({ type: 'create', kind: 'chat', id, parent: null, value: withCast(withPersona(store, chat), character, kept) });
   const failure = await saveNewChats(store, [id], writes);

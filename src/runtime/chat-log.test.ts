@@ -3,6 +3,7 @@ import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receip
 import { memoryId, type MemoryRecord } from '../model/memory';
 import { chatFile, readChatFile } from './chat-file';
 import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, removeMessage, selectVersion, setCast, startChat } from './chat-log';
+import type { Files } from './files';
 import { summaryId } from './summary';
 import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
@@ -211,7 +212,7 @@ describe('importChat', () => {
     const imported = await importChat({ store, files }, read.file, null);
     if (!imported.ok) throw new Error(imported.error);
     const { id, dropped } = imported.data;
-    expect(dropped).toEqual({ prompt: 1, persona: 0, cast: 0, models: 0 });
+    expect(dropped).toEqual({ prompt: 1, persona: 0, cast: 0, models: 0, pictures: 0 });
     expect(store.get('summary', summaryId(id))).not.toBeNull();
     await server.hold(store, id);
     const copy = fold(store.children('entry', id));
@@ -226,5 +227,11 @@ describe('importChat', () => {
     expect(illustration?.value).toMatchObject({ message: replied.id, version: replied.versions.find(({ text }) => text === '답')!.id });
     const opened = await files.read(illustration!.value.file);
     expect(opened.ok && [...opened.data]).toEqual([1, 2, 3]);
+
+    const refusing = { save: async (bytes: unknown[]) => ({ ok: true, data: bytes.map(() => null) }) } as unknown as Files;
+    const refused = await importChat({ store, files: refusing }, read.file, null);
+    if (!refused.ok) throw new Error(refused.error);
+    await server.hold(store, refused.data.id);
+    expect([refused.data.dropped.pictures, store.children('illustration', refused.data.id).length]).toEqual([1, 0]);
   });
 });
