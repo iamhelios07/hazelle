@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import anthropicMessage from './fixtures/anthropic-message.json';
 import chatCompletion from './fixtures/chat-completion.json';
-import { resolveConnection, type Resolved } from './registry';
+import { resolveConnection, type Route } from './registry';
 import { decodeStream, type InlineThoughts } from './stream';
 import type { Connection, Model, Phase } from './types';
 
-const connection = (type: string, extra: Partial<Connection> = {}): Resolved =>
-  resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra })!;
+const connection = (type: string, extra: Partial<Connection> = {}): Route =>
+  resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra }) as Route;
 
 const openRouter = connection('openrouter');
 const anthropic = connection('anthropic');
@@ -24,7 +24,7 @@ function body(text: string, cuts = 7): ReadableStream<Uint8Array> {
   });
 }
 
-async function decode(resolved: Resolved, stream: ReadableStream<Uint8Array>, controller = new AbortController(), media = 'text/event-stream', inline?: InlineThoughts) {
+async function decode(resolved: Route, stream: ReadableStream<Uint8Array>, controller = new AbortController(), media = 'text/event-stream', inline?: InlineThoughts) {
   const parts: [Phase, string][] = [];
   const response = new Response(stream, { headers: { 'content-type': media } });
   const outcome = await decodeStream(resolved, model, response, controller.signal, (phase, text) => parts.push([phase, text]), inline);
@@ -165,7 +165,7 @@ it('uses unquoted string errors in both streams without changing their terminal 
 });
 
 describe('a reply asked for whole', () => {
-  const whole = (resolved: Resolved, payload: unknown) => decode(resolved, body(JSON.stringify(payload)), new AbortController(), 'application/json; charset=utf-8');
+  const whole = (resolved: Route, payload: unknown) => decode(resolved, body(JSON.stringify(payload)), new AbortController(), 'application/json; charset=utf-8');
 
   it('reads a chat.completion into the same outcome as its stream', async () => {
     expect(await whole(openRouter, chatCompletion)).toEqual({

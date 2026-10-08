@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import recorded from './fixtures/gemini.json';
-import { chatRequest, detect, parseCatalog, resolveConnection, withCredential, type Resolved } from './registry';
+import { chatRequest, detect, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
 import { decodeStream } from './stream';
 import type { Phase } from './types';
 
-const google: Resolved = resolveConnection({ type: 'google', label: 'Google', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] })!;
+const google = resolveConnection({ type: 'google', label: 'Google', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] }) as Route;
 const [flash, old] = parseCatalog(google, recorded.models)!;
 
 async function decode(text: string, media = 'text/event-stream') {

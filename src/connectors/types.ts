@@ -89,8 +89,9 @@ export type Meter =
   | { kind: 'left'; label: string; unit: MeterUnit; amount: number; limit: number | null; resets: MeterReset | null }
   | { kind: 'spent'; label: string; unit: MeterUnit; amount: number };
 
-// concurrency: units a provider's plan lets requests hold at once (Featherless), not a count of requests.
-export type MeterUnit = 'usd' | 'credit' | 'requests' | 'tokens' | 'concurrency';
+// concurrency: units a provider's plan lets requests hold at once (Featherless), not a count of requests. percent: a
+// share of an allowance the provider states only as a share (NovelAI's usage limit), out of a limit of 100.
+export type MeterUnit = 'usd' | 'credit' | 'requests' | 'tokens' | 'concurrency' | 'percent';
 export type MeterReset = 'daily' | 'weekly' | 'monthly' | { at: number };
 
 // plan: the subscription the same answer names, shown beside the account; null where it names none.
@@ -134,7 +135,11 @@ export type Codec = {
 };
 
 // Every hook is optional: without one, the codec's default answers, exactly as for a connection described by hand.
-export type ConnectionType = {
+// A type that speaks no chat format has no endpoint: its models only draw, and models is its whole list, since there is
+// none to fetch.
+export type ConnectionType = TypeHooks & ({ endpoint: Endpoint; models?: never } | { endpoint?: never; models: Model[] });
+
+type TypeHooks = {
   id: string;
   label: string;
   group: 'gateway' | 'maker' | 'subscription';
@@ -142,7 +147,6 @@ export type ConnectionType = {
   major?: true;
   description: string;
   keyPage?: string;
-  endpoint: Endpoint;
   routes?: Partial<Record<Protocol, string>>;
   // Absent for a type the user connects by signing in: there is no key to paste.
   detect?: { key: RegExp | null; host: string };

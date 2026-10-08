@@ -1,6 +1,6 @@
 import { PRICE_LISTS } from './price-list';
 import { priceCost } from './pricing';
-import type { Resolved } from './registry';
+import type { Route } from './registry';
 import { SseParser } from './sse';
 import { thoughts } from './thoughts';
 import type { Codec, Cost, Model, Phase, StreamFacts, Terminal, Usage } from './types';
@@ -25,7 +25,7 @@ export type InlineThoughts = { keep?: boolean; takeBack?: (chars: number) => voi
 
 // The reply in the format the provider answered with: an event stream, or one JSON document when it was asked for
 // whole (ModelSettings streaming). Both read into the same facts and end through the same rules.
-export async function decodeStream({ type, codec }: Resolved, model: Model, response: Response, signal: AbortSignal, onText: (phase: Phase, text: string) => void, inline: InlineThoughts = {}): Promise<Outcome> {
+export async function decodeStream({ type, codec }: Route, model: Model, response: Response, signal: AbortSignal, onText: (phase: Phase, text: string) => void, inline: InlineThoughts = {}): Promise<Outcome> {
   const facts: StreamFacts = { rawUsage: {}, finishReason: null, id: null };
   const scanner = inline.keep ? null : thoughts(onText, inline.takeBack ?? (() => {}));
   const append = (phase: Phase, text: string) => text && (scanner ? scanner.push(phase, text) : onText(phase, text));

@@ -45,6 +45,7 @@ export class Catalogs {
   private async fetch(connection: Connection): Promise<CatalogResult> {
     const resolved = resolveConnection(connection);
     if (!resolved) return { ok: false, failure: { kind: 'refused', code: 'unknown-connection-type' } };
+    if (!resolved.codec) return { ok: true, models: resolved.models };
     // Prices that do not load leave the models unpriced, and their costs 알 수 없음; the list itself still loads.
     const list = resolved.type && PRICE_LISTS[resolved.type.id]?.list;
     const prices = list ? api<PriceList>('GET', `prices?provider=${encodeURIComponent(list)}`) : null;
