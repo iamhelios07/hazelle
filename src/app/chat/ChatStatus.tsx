@@ -57,8 +57,8 @@ export function ChatStatusAside({ chat }: { chat: OpenChat }) {
   );
 }
 
-const unmark = ({ actions }: OpenChat, { id, name }: OpenChat['status'][number]) => (
-  <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${name}`} onClick={() => actions.markStatus(id, false)} />
+const unmark = ({ actions }: OpenChat, script: OpenChat['status'][number]) => (
+  <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${script.name}`} onClick={() => actions.markStatus(script, false)} />
 );
 
 // One box has no head of its own: its 지정 풀기 sits with the drawer's or the margin's actions.

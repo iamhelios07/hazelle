@@ -12,6 +12,7 @@ import { describeTranslateFailure } from '../common/failure';
 import { describeUnused } from '../common/unused';
 import { EntryList } from '../common/EntryList';
 import { LoreEditor } from '../common/LoreEditor';
+import { scriptHolds } from '../common/pack';
 import { ModuleSwitches } from '../common/ModuleSwitches';
 import { ScriptsEditor } from '../common/ScriptsEditor';
 import type { CharacterPart } from '../common/characterPart';
@@ -320,7 +321,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
     greetings: `${text.greetings.length}개`,
     lore: `${lore.length}개`,
     modules: `${modules.filter((module) => always.includes(module.id) || ownModules.includes(module.id)).length}개 켜짐`,
-    scripts: [card.regex.length > 0 && `${SCRIPTS.regex} ${card.regex.length}`, card.triggers.length > 0 && `${SCRIPTS.triggers} ${card.triggers.length}`].filter(Boolean).join(' · ') || undefined,
+    scripts: scriptHolds(card) || undefined,
   };
   // A part with nothing to show is left out: 모듈 lists the account's modules, and there may be none.
   const groups = GROUPS.map((group) => group.filter((each) => each !== 'modules' || modules.length > 0));

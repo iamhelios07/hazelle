@@ -37,11 +37,13 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
     if (!saved.ok) toast.failed(saved, '추가하지 못했어요.');
   }
 
-  const draft = (id: string, code: string | null) =>
+  const draft = (id: string, code: string) => setDrafts((current) => new Map(current).set(id, code));
+  // Code typed while 적용 was on its way stays a draft.
+  const applied = (id: string, code: string) =>
     setDrafts((current) => {
+      if (current.get(id) !== code) return current;
       const next = new Map(current);
-      if (code === null) next.delete(id);
-      else next.set(id, code);
+      next.delete(id);
       return next;
     });
 
@@ -50,7 +52,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
     const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null) };
     if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={words.trim() !== ''} />;
     const trigger = pack.triggers[place]!;
-    return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
+    return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
   };
 
   const opened = drill && open !== null ? (['regex', 'triggers'] as const).find((list) => pack[list].some((script) => script.id === open)) : undefined;
@@ -236,8 +238,8 @@ function useTried(owner: PackOwner, script: RegexScript, text: string) {
 }
 
 // Its code is stored only on 적용, never as it is typed, since a chat beside it runs what is stored.
-function LuaItem(props: ItemProps & { trigger: Lua; draft: string | null; onDraft: (code: string | null) => void }) {
-  const { owner, place, trigger, draft, onDraft } = props;
+function LuaItem(props: ItemProps & { trigger: Lua; draft: string | null; onDraft: (code: string) => void; onApplied: (code: string) => void }) {
+  const { owner, place, trigger, draft, onDraft, onApplied } = props;
   const store = useStore();
   const save = useAutosave<Lua>(`script:${owner.id}:${trigger.id}`, (patch) => editTrigger(store, owner, trigger.id, patch));
   const shown: Lua = { ...trigger, ...save.unsaved };
@@ -247,7 +249,7 @@ function LuaItem(props: ItemProps & { trigger: Lua; draft: string | null; onDraf
   const pending = draft !== null && draft !== shown.code;
 
   async function apply() {
-    if (await save.save({ code })) onDraft(null);
+    if (await save.save({ code })) onApplied(code);
   }
 
   const tag = shown.off ? OFF : pending ? '적용 전' : !shown.code.trim() ? '코드 없음' : null;
@@ -265,7 +267,7 @@ function LuaItem(props: ItemProps & { trigger: Lua; draft: string | null; onDraf
   );
 }
 
-// Read only but for its order, its switch and its delete: no editor builds these yet.
+// Read only but for its order, its switch and its delete.
 function BlocksItem(props: ItemProps & { trigger: Blocks }) {
   const { trigger, place } = props;
   const name = scriptName(trigger.name, 'triggers', place);

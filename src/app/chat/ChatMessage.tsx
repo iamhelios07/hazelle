@@ -225,13 +225,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
         icon={only!.marked ? PinOff : Pin}
         size="xs"
         label={`${only!.marked ? '상태창 지정 풀기' : '상태창으로 지정'} · ${only!.name}`}
-        onClick={() => actions.markStatus(only!.id, !only!.marked)}
+        onClick={() => actions.markStatus(only!, !only!.marked)}
       />
     ) : offered.length > 1 ? (
       <Menu place="below-end" label="상태창으로 지정" trigger={(opener) => <IconButton icon={Pin} size="xs" label="상태창으로 지정" {...opener} />}>
         <MenuHeading>상태창으로 지정할 블록</MenuHeading>
-        {offered.map(({ id, name, marked }) => (
-          <MenuItem key={id} label={name} checked={marked} onClick={() => actions.markStatus(id, !marked)} />
+        {offered.map((script) => (
+          <MenuItem key={script.id} label={script.name} checked={script.marked} onClick={() => actions.markStatus(script, !script.marked)} />
         ))}
       </Menu>
     ) : null;

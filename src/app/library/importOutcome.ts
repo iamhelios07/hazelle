@@ -4,7 +4,7 @@ import type { ImportedCharacter } from '../../runtime/characters';
 import type { ModulePlace } from '../../runtime/modules';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
-import { ALWAYS, inSettings } from '../common/words';
+import { ALWAYS, inSettings, SCRIPTS } from '../common/words';
 import { cardMissed, moduleMissed } from './missed';
 
 // Completed reports must not retain asset readers: their closures keep the source archive alive.
@@ -19,7 +19,7 @@ export function characterOutcome(file: string, imported: Imported, { id, skipped
   const holds = [
     `첫인사 ${card.greetings.length}개`,
     lore.length > 0 && `로어북 ${lore.length}개`,
-    card.regex.length > 0 && `정규식 ${card.regex.length}개`,
+    card.regex.length > 0 && `${SCRIPTS.regex} ${card.regex.length}개`,
     card.variables.length > 0 && `기본 변수 ${card.variables.length}개`,
     card.toggles.trim() && '토글',
     assets.length - skipped > 0 && `에셋 ${assets.length - skipped}개`,

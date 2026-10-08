@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pack } from '../../engine/import/types';
-import { packHolds } from './pack';
+import { packHolds, scriptHolds } from './pack';
 
 const EMPTY: Pack = { regex: [], triggers: [], toggles: '' };
 
@@ -17,6 +17,7 @@ describe('what a pack holds', () => {
     };
     expect(packHolds(pack, 6, 0)).toBe('로어북 6개 · 트리거 2개 · 토글 2개 · 스타일');
     expect(packHolds(EMPTY, 0, 12)).toBe('에셋 12개');
+    expect(scriptHolds(pack)).toBe('트리거 2개');
   });
 
   it('says so when it holds nothing', () => {
