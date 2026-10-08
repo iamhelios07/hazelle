@@ -70,7 +70,7 @@ function statusIds(value: Record<string, unknown>) {
 }
 
 // An upgrade can reach every character and module, and each write is a request of its own, so they go a group at a
-// time. The size is a guess, not measured.
+// time. In process, 16 at a time took as long as all at once (469 characters, about 2 s); in a browser it is unmeasured.
 const WRITE_GROUP = 16;
 
 // The stored copies of what the store upgraded as it read them, written back once, so the old shape leaves the

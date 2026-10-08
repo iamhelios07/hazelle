@@ -16,7 +16,7 @@ type Blocks = Extract<Trigger, { kind: 'blocks' }>;
 
 const STAGE_OPTIONS = (Object.keys(STAGES) as RegexScript['stage'][]).map((value) => ({ value, label: STAGES[value] }));
 const CHECKS: Record<ScriptCheck, string> = { empty: '패턴 없음', invalid: '패턴 오류', unsupported: '지원하지 않음' };
-const ON: Record<string, string> = { start: '채팅 시작', input: '입력', output: '응답', manual: '버튼' };
+const ON: Record<string, string> = { start: '채팅 시작', input: STAGES.input, output: STAGES.output, manual: '버튼' };
 const OFF = '꺼짐';
 
 // One script open at a time. drill: the open script stands alone in place of the lists, for a narrow panel or page.
