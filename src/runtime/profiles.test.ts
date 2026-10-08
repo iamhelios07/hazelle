@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Connection, Model } from '../connectors/types';
-import { addFirstProfile, addProfile, FIRST_PROFILE_ID, modelProfile, removeProfile, setModelProfile, setProfileSettings } from './profiles';
+import { addFirstProfile, addProfile, FIRST_PROFILE_ID, modelProfile, profileUsers, removeProfile, setModelProfile, setProfileSettings } from './profiles';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -38,5 +38,11 @@ describe('설정 묶음', () => {
     await store.pull();
     await setProfileSettings(store, id, { stop: undefined });
     expect(store.get('profile', id)!.value.settings).toEqual({ temperature: 1, maxOutput: 6000 });
+  });
+
+  it('counts no model that only draws among a 묶음’s users', () => {
+    const drawing = { ...model, id: 'draws', output: ['image' as const] };
+    const stored = { id: 'c', value: { ...openRouter, starred: [model, drawing] } } as Parameters<typeof profileUsers>[0][number];
+    expect(profileUsers([stored], FIRST_PROFILE_ID, FIRST_PROFILE_ID).map(({ model: user }) => user.id)).toEqual(['m']);
   });
 });

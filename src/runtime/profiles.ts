@@ -5,6 +5,7 @@ import { live } from '../model/library';
 import type { Profile } from '../model/profile';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
+import { imageOnly } from './assignment';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
 import type { ObjectStore } from './store';
@@ -27,9 +28,10 @@ export function modelProfile(store: Pick<ObjectStore, 'get'>, model: Starred): P
   return profile ? { kind: 'profile', profile, own } : { kind: 'missing', own };
 }
 
+// A model that only draws uses no 묶음, whatever it names.
 export type ProfileUser = { connection: Stored<'connection'>; model: Starred };
 export function profileUsers(connections: readonly Stored<'connection'>[], defaultProfile: string | undefined, id: string): ProfileUser[] {
-  return connections.flatMap((connection) => connection.value.starred.filter((model) => profileId(model, defaultProfile) === id).map((model) => ({ connection, model })));
+  return connections.flatMap((connection) => connection.value.starred.filter((model) => !imageOnly(model) && profileId(model, defaultProfile) === id).map((model) => ({ connection, model })));
 }
 
 // An account that has never had a default 묶음 gets an empty one, once. The session awaits it when it opens;

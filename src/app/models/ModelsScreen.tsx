@@ -1,5 +1,5 @@
 import type { ModelRef, Role } from '../../connectors/assignment';
-import { setDefaultModel } from '../../runtime/assignment';
+import { imageOnly, setDefaultModel } from '../../runtime/assignment';
 import { modelProfile, profileUsers } from '../../runtime/profiles';
 import { TASK_NAMES } from '../common/prompt-words';
 import { findStarred, RolePicker } from '../common/RolePicker';
@@ -76,7 +76,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
                 key={`${connection.id}/${model.id}`}
                 title={model.name}
                 tags={[connection.value.label]}
-                aside={choice.kind === 'profile' ? choice.profile.value.name : '설정 없음'}
+                aside={imageOnly(model) ? '이미지 모델' : choice.kind === 'profile' ? choice.profile.value.name : '설정 없음'}
                 current={route.kind === 'model' && route.connection === connection.id && route.model === model.id}
                 onClick={() => navigate({ kind: 'model', connection: connection.id, model: model.id })}
               />

@@ -4,6 +4,7 @@ import { fit } from '../../connectors/settings';
 import type { Modality, Starred } from '../../connectors/types';
 import type { Stored } from '../../model/kinds';
 import { modelUsage, type ModelUsage } from '../../model/chat';
+import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
 import { money } from '../common/money';
 import { UNKNOWN } from '../common/receipt';
@@ -29,7 +30,47 @@ function spent({ costs, costUnknown }: ModelUsage): string {
   return costUnknown ? `${sums} · 알 수 없음 ${costUnknown}회` : sums;
 }
 
-export function ModelScreen({ connection, model, back }: { connection: Stored<'connection'>; model: Starred; back: Back }) {
+type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
+
+export const ModelScreen = (props: Props) => (imageOnly(props.model) ? <ImageModelScreen {...props} /> : <ChatModelScreen {...props} />);
+
+// A model that only draws takes no 설정 묶음 and leaves no reply to count: how it draws is the 삽화 prompt's (design §6.6),
+// and its allowance is its connection's meter.
+function ImageModelScreen({ connection, model, back }: Props) {
+  const settings = useSettings();
+  const prompt = settings.illustratePrompt;
+  return (
+    <Screen width="form" top={<NavBar title={model.name} subtitle={connection.value.label} {...backBar(back)} />}>
+      <SettingGroup label="이미지 설정">
+        <SettingRow
+          label="이미지 설정"
+          sub="태그, 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
+          control={
+            <Button variant="secondary" size="sm" onClick={() => navigate(prompt ? { kind: 'prompt', id: prompt, pane: null } : { kind: 'prompts' })}>
+              삽화 프롬프트 열기
+            </Button>
+          }
+        />
+      </SettingGroup>
+      <Section title="모델">
+        <Facts
+          items={[
+            { label: '연결', value: connection.value.label },
+            { label: '모델 ID', value: model.id },
+            { label: '출력', value: MODALITY.image },
+          ]}
+        />
+        <Row kind="actions">
+          <Button variant="secondary" size="sm" onClick={() => navigate({ kind: 'connection', id: connection.id })}>
+            연결 열기
+          </Button>
+        </Row>
+      </Section>
+    </Screen>
+  );
+}
+
+function ChatModelScreen({ connection, model, back }: Props) {
   const { store, usage: usageIndex } = useSession();
   const toast = useToast();
   const profiles = useProfiles();
