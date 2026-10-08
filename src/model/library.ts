@@ -22,8 +22,8 @@ export type Character = Mark & {
   ownTranslate?: TranslateSwitches;
   // 번역가의 노트: added to the 전역 one (Settings.translatorNote), never replacing it as the switches do.
   translatorNote?: string;
-  // 삽화's switches for its chats.
-  illustrate?: IllustrateSwitches;
+  // 이 캐릭터만 따로: its chats' 삽화 switches in place of the shared Settings.illustrate.
+  ownIllustrate?: IllustrateSwitches;
   // 봇 스타일: false shows the chats' messages without the bot's HTML and CSS. Absent is on.
   decor?: boolean;
   // Whether the bot's Lua may call models, which costs the user. Absent: not asked yet, and the first call asks.

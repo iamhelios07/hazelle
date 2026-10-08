@@ -30,7 +30,7 @@ export type Illustration = {
   at: number;
 };
 
-// Per character, or for every 캐릭터 없이 chat. auto: draw after each reply received, off by default since every
+// Shared by every chat, or a character's own (Character.ownIllustrate). auto: draw after each reply received, off by default since every
 // picture costs the image connection's credit. prompt: the 삽화 prompt, absent for the default. model: the image model,
 // absent for the first one starred. Absent fields are read through runtime/characters illustrateSwitches.
 export type IllustrateSwitches = { auto?: boolean; prompt?: string; model?: ModelRef };
