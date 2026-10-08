@@ -4,7 +4,7 @@ import type { Chat } from '../model/chat';
 import type { MemorySettings } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
-import { createFolder, importCharacter, saveAssets, type Progress } from './characters';
+import { createFolder, importCharacter, saveAssets, type ImportedCharacter, type Progress } from './characters';
 import { chatWrites, saveNewChats } from './chat-log';
 import type { Files } from './files';
 import { projectGreetings, startingGreetings } from './greetings';
@@ -119,27 +119,25 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     // the published character and go in one request: the source holds the whole character already, so this holds no
     // more than it. Nothing is pulled: what the leases hold is what this device wrote.
     const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).map((chat) => chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, current, memory));
-    const leases = chats.map(({ root }) => store.retainChat(root.id, { created: true }));
-    try {
-      for (const lease of leases) {
-        const failure = await lease.ready;
-        if (failure) return failure;
-      }
-      const last = new Set(chats.flatMap(({ entries }) => entries.at(-1)?.id ?? []));
-      let landed = 0;
-      const staged = await store.batch(chats.flatMap(({ entries }) => entries), (write) => { if (last.has(write.id)) progress({ kind: 'chats', done: chatsDone + ++landed, total: chatTotal }); }, { unheld: true });
-      if (!staged.ok) return staged;
-      chatsDone += chats.length;
-      const saved = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats: chats.map(({ root }) => root) });
-      if (!saved.ok) return saved;
-      const summarized = await store.projections.saveMany(chats.map(({ root }) => root.id));
-      if (summarized) return summarized;
-      picturesDone += character.assets.length;
-      const { skipped, faceless } = saved.data;
-      moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed: character.missed, unused: unused(character.card) });
-    } finally {
-      for (const lease of leases) lease.release();
-    }
+    const last = new Set(chats.flatMap(({ entries }) => entries.at(-1)?.id ?? []));
+    let staged = 0;
+    let saved: ImportedCharacter | undefined;
+    const failure = await saveNewChats(store, chats.map(({ root }) => root.id), chats.flatMap(({ entries }) => entries), {
+      written: (write) => {
+        if (last.has(write.id)) progress({ kind: 'chats', done: chatsDone + ++staged, total: chatTotal });
+      },
+      landed: async () => {
+        chatsDone += chats.length;
+        const imported = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats: chats.map(({ root }) => root) });
+        if (!imported.ok) return imported;
+        saved = imported.data;
+        return null;
+      },
+    });
+    if (failure) return failure;
+    picturesDone += character.assets.length;
+    const { skipped, faceless } = saved!;
+    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed: character.missed, unused: unused(character.card) });
   }
   if (due.length) landed('characters', due.length, due.length);
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };

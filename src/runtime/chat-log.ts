@@ -17,7 +17,8 @@ import type { ObjectStore, Write } from './store';
 // The only writer of `chat` and `entry` objects, except a chat's `models` layer, which runtime/assignment writes with
 // the other layers, a purge (runtime/characters), which claims a deleted chat and removes it with all it owns, or with
 // its character, a backup's restore, which copies them as they were, and a move from Risu, which saves chatWrites'
-// entries before its character and the chat root with it (runtime/characters addCharacter).
+// entries before its character and the chat root with it (runtime/characters addCharacter). An imported chat file or
+// Risu chat file (importChat here, importRisuChats in runtime/move) is saved through saveNewChats.
 
 // A new chat is saved in this order: the chat with its greetings, the one shown selected, then the user's first
 // message, sent with its reply. Messages stand in the order they were saved, so the greeting leads only when it is
@@ -105,16 +106,24 @@ export async function importChat(store: ObjectStore, file: ChatFile, character: 
 }
 
 // Chats written here for the first time, each root after what it owns: held while they land and summarized before
-// this answers, so the list shows them at once, as a move's are (runtime/move).
-export async function saveNewChats(store: ObjectStore, chats: string[], writes: Write[]): Promise<ApiFailure | null> {
+// this answers, so the list shows them at once. landed: what goes after the batch and before the summaries, which read
+// it; a move saves its character there, with the chat roots.
+export async function saveNewChats(
+  store: ObjectStore,
+  chats: string[],
+  writes: Write[],
+  { written, landed }: { written?: (write: Write) => void; landed?: () => Promise<ApiFailure | null> } = {},
+): Promise<ApiFailure | null> {
   const leases = chats.map((chat) => store.retainChat(chat, { created: true }));
   try {
     for (const lease of leases) {
       const failure = await lease.ready;
       if (failure) return failure;
     }
-    const saved = await store.batch(writes, () => {}, { unheld: true });
+    const saved = await store.batch(writes, written, { unheld: true });
     if (!saved.ok) return saved;
+    const failure = await landed?.();
+    if (failure) return failure;
     return await store.projections.saveMany(chats);
   } finally {
     for (const lease of leases) lease.release();
