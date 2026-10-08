@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ApiResult } from '../../runtime/api';
 import { readServiceUsage, readTopCallers, type ServiceUsage, type TopCallers } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { Button, Callout, Empty, List, ListItem, Section, Text } from '../ui';
-import { callDay, times } from './CallsDialog';
-import { moment } from './time';
+import { moment, times, utcDay } from './time';
 
 // Whole-service totals are intentionally independent of list navigation and account/notice actions. A refresh
 // walks bounded usage pages, retains just their sums and can stop without issuing the next page.
@@ -13,7 +13,7 @@ export function UsageSection() {
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
   const [totals, setTotals] = useState<ServiceUsage | null>(null);
-  const [top, setTop] = useState<TopCallers | null>(null);
+  const [top, setTop] = useState<ApiResult<TopCallers> | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   useEffect(() => () => job.current?.abort(), []);
 
@@ -30,9 +30,8 @@ export function UsageSection() {
     job.current = null;
     setBusy(false);
     setComplete(answer.ok);
-    if (ranked.ok) setTop(ranked.data);
-    const failed = [answer, ranked].find((read) => !read.ok && read.error !== 'stopped');
-    if (failed && !failed.ok) setFailure(describeFailure(failed));
+    setTop(ranked);
+    if (!answer.ok && answer.error !== 'stopped') setFailure(describeFailure(answer));
   }
 
   return (
@@ -51,11 +50,19 @@ export function UsageSection() {
   );
 }
 
-function Ranked({ top: { since, today, accounts } }: { top: TopCallers }) {
+function Ranked({ top }: { top: ApiResult<TopCallers> }) {
+  if (!top.ok) {
+    return (
+      <Section level={3} title="최근 7일 많이 쓴 계정">
+        <Callout tone="warn">{describeFailure(top)}</Callout>
+      </Section>
+    );
+  }
+  const { since, today, accounts } = top.data;
   const counting = since <= today;
   return (
-    <Section level={3} title="최근 7일 많이 쓴 계정" note={counting ? `${callDay(since)}부터` : undefined}>
-      {!counting && <Empty variant="section">{callDay(since)}부터 기록돼요.</Empty>}
+    <Section level={3} title="최근 7일 많이 쓴 계정" note={counting ? `${utcDay(since)}부터` : undefined}>
+      {!counting && <Empty variant="section">{utcDay(since)}부터 기록돼요.</Empty>}
       {counting && accounts.length === 0 && <Empty variant="section">호출한 계정이 없어요.</Empty>}
       {accounts.length > 0 && (
         <List label="최근 7일 많이 쓴 계정">
