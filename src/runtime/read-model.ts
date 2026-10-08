@@ -5,7 +5,7 @@ import { chatTitle, type Chat, type ChatSummary, type Message } from '../model/c
 import type { Kind, Stored, Values } from '../model/kinds';
 import { indexFolders, isLive, live, nest, shelve, type CharacterShelf, type FolderContents, type FolderTree, type Shelf } from '../model/library';
 import { SETTINGS_ID, type Settings } from '../model/settings';
-import { EvaluationStopped } from './evaluation';
+import { EvaluationStopped, EvaluationStuck } from './evaluation';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
 import { withTurn, type Shown, type Talk, type Turn } from './talk';
@@ -148,7 +148,7 @@ export class ReadModels {
   async displayed(id: string): Promise<ScreenChat | null> {
     await this.store.projections.evaluate(id);
     const model = this.chat(id).snapshot();
-    return model && { chat: model.chat, messages: withTurn(model.messages, null, id), display: model.display };
+    return model && { chat: model.chat, messages: withTurn(model.messages, null, id), display: model.display, stuck: this.store.projections.verdict(id) !== null };
   }
 
   close() {
@@ -228,7 +228,8 @@ export class ReadModels {
 }
 
 export type Opening = { chat: Chat; messages: Message[] };
-export type ScreenChat = { chat: Chat; messages: Shown[]; display: Display; pending?: boolean; error?: unknown };
+// stuck: the display left the bot's regex out, its chat judged stuck (ChatProjections.verdict).
+export type ScreenChat = { chat: Chat; messages: Shown[]; display: Display; stuck: boolean; pending?: boolean; error?: unknown };
 
 export class ChatScreenRead {
   private readonly state: Snapshot<ScreenChat>;
@@ -236,6 +237,8 @@ export class ChatScreenRead {
   private evaluation: AbortController | null = null;
   private revision = 0;
   private screen: ChatScope['screen'] = null;
+  // Whether the latest refresh ran under a verdict.
+  private judged = false;
   private turn: Turn | null;
   private model: ChatModel | null;
   private readonly listeners = new Set<() => void>();
@@ -244,7 +247,7 @@ export class ChatScreenRead {
   constructor(private readonly models: ReadModels, private readonly talk: Pick<Talk, 'snapshot' | 'subscribe'>, readonly id: string, private opening: Opening) {
     this.model = models.chat(id).snapshot();
     this.turn = this.currentTurn();
-    this.state = new Snapshot<ScreenChat>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: false, stopped: null }, pending: true });
+    this.state = new Snapshot<ScreenChat>({ chat: opening.chat, messages: [], display: { texts: [], css: '', drawn: [], boxes: [], pass: false, stopped: null }, stuck: false, pending: true });
   }
 
   readonly snapshot = () => this.state.snapshot();
@@ -256,7 +259,7 @@ export class ChatScreenRead {
       const lease = this.models.store.retainChat(this.id);
       const store = this.models.store.subscribe((changes) => {
         const model = this.models.chat(this.id).snapshot();
-        if (model === this.model && !readsChanged(this.reads, changes)) return;
+        if (model === this.model && !readsChanged(this.reads, changes) && this.verdict() === this.judged) return;
         this.model = model;
         this.refresh();
       });
@@ -300,20 +303,33 @@ export class ChatScreenRead {
     return this.talk.snapshot(this.id);
   }
 
+  private verdict() {
+    return this.models.store.projections.verdict(this.id) !== null;
+  }
+
+  // 다시 시도 on a chat judged stuck: the verdict's publish displays it again with the bot's regex.
+  retryRegex() {
+    this.models.store.projections.clear(this.id);
+  }
+
   refresh() {
     this.evaluation?.abort();
     const evaluation = new AbortController();
     this.evaluation = evaluation;
     const revision = ++this.revision;
+    const judged = this.judged = this.verdict();
     const chat = this.model ? this.model.chat : this.opening.chat;
     const messages = withTurn(this.model ? this.model.messages : this.opening.messages, this.turn, this.id);
     const { value, reads } = this.models.store.capture(() => this.models.open.display(this.id, chat, messages, this.screen, evaluation.signal));
     this.reads = reads;
     return value.then((display) => {
       if (evaluation.signal.aborted || revision !== this.revision) return;
-      this.state.set({ chat, messages, display });
+      this.state.set({ chat, messages, display, stuck: judged });
     }, (error: unknown) => {
       if (evaluation.signal.aborted || revision !== this.revision || error instanceof EvaluationStopped) return;
+      // The worker judged a saved chat itself; one not saved yet is judged here, on what it was displayed from. The
+      // verdict's publish displays it again without the bot's regex, and a display that sticks even so fails.
+      if (error instanceof EvaluationStuck && error.regex && !this.models.store.get('chat', this.id)) return this.models.store.projections.judge(this.id, this.reads);
       this.state.set({ ...this.state.snapshot(), error });
     });
   }

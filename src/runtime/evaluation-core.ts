@@ -1,14 +1,13 @@
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
 import { standing, type Standing } from '../engine/memory';
 import { activeLore, assemble, assembleMemory, assembleTranslation, rewritten, type Assembled, type MemoryTaskInput, type PromptInput, type RanAway, type TranslationInput } from '../engine/pipeline';
-import { renderChat, type ChatScope } from '../engine/render';
+import { renderChat, type ChatBasis, type ChatScope, type LuaDisplay } from '../engine/render';
 import type { Memory, Source } from '../model/memory';
 import { applyTail, type Tail } from './history-delta';
 import { tokenizer } from './tokenizer';
 
 export type LuaText = { text: string; stamp: string; shown: string };
 const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
-export type ScopeData = Omit<ChatScope, 'lua' | 'messages'>;
 export type EvaluationJob =
   | { kind: 'display'; take: ReadonlySet<number>; lua?: { generation: number; revision: number; waits: boolean } }
   | { kind: 'prompt'; input: Omit<PromptInput, 'scope' | 'countTokens'> }
@@ -19,7 +18,7 @@ export type EvaluationJob =
   | { kind: 'lore'; seed: string; limit: number };
 export type LuaResult = LuaText & { version: string };
 export type EvaluationInput =
-  | { lane: string; scope: ScopeData; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
+  | { lane: string; scope: ChatBasis; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
   | { lane: string; patch: { revision: number; generation: number; items: LuaResult[] } }
   | { lane: string; count: string[] };
 export type DisplayEvaluation = { display: Display; work: DisplayWork | null };
@@ -34,7 +33,9 @@ export type EvaluationResult =
   | Counted<ReturnType<typeof assembleTranslation> | ReturnType<typeof assembleMemory> | ChatTexts | { role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway | number[]>
   | null;
 export type EvaluationDown = { id: number; input: EvaluationInput } | { forget: string } | { warm: true } | { ping: true };
-export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true };
+// started: the job's pass over the chat began, past loading the tokenizer. progress: the pass is still moving
+// (engine/progress).
+export type EvaluationUp = { id: number; result: EvaluationResult } | { id: number; error: string } | { pong: true } | { started: number } | { progress: true };
 
 export class Evaluator {
   private readonly displays = new Map<string, { revision: number; pass: DisplayPass }>();
@@ -43,8 +44,9 @@ export class Evaluator {
 
   forget(lane: string) { this.histories.delete(lane); this.displays.delete(lane); this.held.delete(lane); }
 
-  async run(input: EvaluationInput): Promise<EvaluationResult> {
+  async run(input: EvaluationInput, started: () => void): Promise<EvaluationResult> {
     if ('patch' in input) {
+      started();
       const current = this.displays.get(input.lane);
       if (!current) return null;
       const held = this.held.get(input.lane)!;
@@ -56,7 +58,9 @@ export class Evaluator {
     }
     if ('count' in input) {
       const countTokens = await tokenizer().catch(() => null);
-      return countTokens ? input.count.map(countTokens) : { kind: 'tokenizer' };
+      if (!countTokens) return { kind: 'tokenizer' };
+      started();
+      return input.count.map(countTokens);
     }
     const { lane, scope: data, history, job } = input;
     const messages = applyTail(this.histories.get(lane) ?? [], history);
@@ -65,6 +69,7 @@ export class Evaluator {
     if (job.kind !== 'display') {
       const countTokens = await tokenizer().catch(() => null);
       if (!countTokens) return { kind: 'tokenizer' };
+      started();
       switch (job.kind) {
         case 'rewrite':
           return rewritten(job.prompt, job.messages, countTokens, job.budget);
@@ -93,15 +98,16 @@ export class Evaluator {
         }
       }
     }
+    started();
     const lua = job.lua;
     const held = this.held.get(lane) ?? new Map<string, LuaText>();
     if (lua) this.held.set(lane, held);
-    if (lua) scope.lua = (version, text, stamp) => {
+    const edited: LuaDisplay | undefined = lua && ((version, text, stamp) => {
       const had = held.get(version);
       return had ? { text: had.shown, fresh: had.text === text && had.stamp === stamped(lua.generation, stamp) } : lua.waits ? null : { text, fresh: false };
-    };
+    });
     // CBS can read later messages and threads variables forward: always display the whole chat, never only its tail.
-    const pass = new DisplayPass(scope, job.take);
+    const pass = new DisplayPass(scope, job.take, edited);
     if (lua && pass.work) this.displays.set(lane, { revision: lua.revision, pass });
     else this.displays.delete(lane);
     if (!lua) this.held.delete(lane);

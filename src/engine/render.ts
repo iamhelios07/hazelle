@@ -5,6 +5,7 @@ import { evaluate, Runaway, type CbsContext } from './cbs/evaluate';
 import type { HistoryMessage } from './history';
 import type { Card, Pack } from './import/types';
 import type { LoreEntries } from './lorebook/activate';
+import { progressed } from './progress';
 import { Scripts, type Box } from './regex/scripts';
 
 export type Stage = 'display' | 'prompt';
@@ -27,10 +28,6 @@ export type ChatScope = {
   variables: [string, string][];
   // The variables the bot's Lua wrote for the reply being made, which stand after the last message.
   pending?: [string, string][];
-  // The bot's Lua editDisplay pass over the display, when its card listens for one (design §6.8): what a version's
-  // text became, as far as the pass has run. fresh: it was run on this text at this state; otherwise it is the last
-  // one made, shown until the new one lands. null: never run, and the message shows nothing until it is.
-  lua?: (version: string, text: string, stamp: string) => { text: string; fresh: boolean } | null;
   greeting: CbsContext['greeting'];
   // The declared toggles' values, the one table a turn, the display and the bot's Lua globals read; a key nothing
   // declares reads null.
@@ -45,6 +42,14 @@ export type ChatScope = {
   // The character and the chat, which pick and rollp seed with a message count.
   pick: string;
 };
+
+// What crosses to a worker beside the messages, which travel as a tail (history-delta).
+export type ChatBasis = Omit<ChatScope, 'messages'>;
+
+// The bot's Lua editDisplay pass over the display, when its card listens for one (design §6.8): what a version's text
+// became, as far as the pass has run. fresh: it was run on this text at this state; otherwise it is the last one made,
+// shown until the new one lands. null: never run, and the message shows nothing until it is.
+export type LuaDisplay = (version: string, text: string, stamp: string) => { text: string; fresh: boolean } | null;
 
 export const authorNote = (note: string | null, prompt: ConversationPrompt) => note ?? prompt.authorNote;
 const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prompt.blocks.find((block): block is TextBlock => block.kind === 'text' && block.mark === mark)?.text ?? '';
@@ -79,18 +84,18 @@ export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles:
 // take: the display scripts, by place among the packs' regex, whose boxes leave the messages (상태창 지정). drawn and
 // boxes are each message's; only the display reads them. staged: each message's text past its input or output stage,
 // which is what the bot's Lua reads; wrote: the variables that stage's own CBS wrote. missed: the messages whose
-// editDisplay pass (scope.lua) is not fresh. stopped: a stage of some message whose CBS ran away, which leaves that stage's
+// editDisplay pass (lua) is not fresh. stopped: a stage of some message whose CBS ran away, which leaves that stage's
 // text as it came in, its tags as written; null when none did.
 export function renderChat(
   stage: Stage,
   scope: ChatScope,
   take: ReadonlySet<number> = new Set(),
+  lua?: LuaDisplay,
 ): { texts: string[]; staged: string[]; wrote: [string, string][][]; start: [string, string][]; variables: Map<string, string>; drawn: number[][]; boxes: Box[][]; missed: Missed[]; stopped: Runaway | null; finish: ((index: number, text: string) => ReturnType<typeof renderStage>) | null; failures: { input: Map<number, Runaway>; display: Map<number, Runaway> } } {
   const context = contexts(scope, stage, null);
   const scripts = new Scripts(scope.packs.flatMap(({ regex }) => regex), scope.messages);
   const start: [string, string][] = [...(scope.card?.variables ?? []), ...scope.variables];
   const variables = new Logged();
-  const lua = stage === 'display' ? scope.lua : undefined;
   if (lua) variables.changed = new Set();
   // Through set, so the stamp tells one start from another; then cleared, since a pass begins from start.
   for (const [name, value] of start) variables.set(name, value);
@@ -118,6 +123,7 @@ export function renderChat(
   };
   const texts = scope.messages.map(({ id, role, text, staged, before = [], after = [] }, index) => {
     states?.begin();
+    progressed();
     const cbs = (read: Map<string, string>) => (part: string) => evaluate(part, context({ message: index }, read));
     // Neither the user nor the model wrote the greeting, so it skips their stages, as does a text already past them; its
     // CBS still writes.
@@ -156,6 +162,7 @@ export function renderChat(
 }
 
 function renderStage(stage: Stage, scripts: Scripts, context: ReturnType<typeof contexts>, index: number, text: string, variables: ReadonlyMap<string, string>, take: ReadonlySet<number>) {
+  progressed();
   const read = new Map(variables);
   let stopped: Runaway | null = null;
   let result: { text: string; drawn: number[]; boxes: Box[] };

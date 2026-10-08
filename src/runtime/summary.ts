@@ -1,9 +1,9 @@
 import type { Display } from '../engine/display';
-import { chatTitle, previewLine, recentIn, shown, type ChatItem, type Summary } from '../model/chat';
+import { chatTitle, previewLine, recentIn, shown, type Chat, type ChatItem, type Message, type Summary, type SummaryRead } from '../model/chat';
 import { live } from '../model/library';
 import type { ApiFailure } from './api';
-import type { ObjectStore } from './store';
-import type { Evaluation } from './evaluation';
+import type { ObjectStore, StoreRead } from './store';
+import { EvaluationStuck, type Evaluation } from './evaluation';
 import { ScopeUnavailable, type ChatLease, type ScopeState } from './chat-scope';
 import { pinned, scopeOf } from './chat-context';
 import { pause } from './pause';
@@ -18,13 +18,19 @@ export type Projection = { model: ChatModel; summary: Summary; shown: number };
 export const summaryId = (chat: string) => chat.replace(/[0-9a-f]/, (digit) => (parseInt(digit, 16) ^ 8).toString(16));
 
 export function summaryStale(store: Pick<ObjectStore, 'get' | 'entryHead' | 'revision'>, id: string, summary: Summary, head = store.entryHead(id)): boolean {
-  return summary.version !== VERSION || summary.chatRev !== store.get('chat', id)?.rev || summary.head < head
-    || summary.dependencies.some((read) => store.revision(read) !== read.rev);
+  return summary.version !== VERSION || summary.chatRev !== store.get('chat', id)?.rev || summary.head < head || !readsCurrent(store, summary.dependencies);
 }
+
+const readsCurrent = (store: Pick<ObjectStore, 'revision'>, reads: SummaryRead[]) => reads.every((read) => store.revision(read) === read.rev);
+const revised = (store: Pick<ObjectStore, 'revision'>, reads: StoreRead[]): SummaryRead[] => [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()];
 
 type Source = Pick<ObjectStore, 'get' | 'children' | 'capture' | 'revision' | 'foldedChat' | 'entryHead' | 'loadedHead' | 'shownMark'>;
 type Scope = { signal: AbortSignal; state: ScopeState; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
 type SummaryWrite = { type: 'restore'; id: string; kind: 'summary'; parent: string; value: Summary };
+// cleared: 다시 시도 asked for the bot's regex again; the summary written next drops the stored verdict.
+// over: the revision of the chat's stored summary it was set against. Once a summary is written, by this device or
+// another, the stored one is the verdict: a held entry never writes itself back over another device's.
+type Verdict = { over: number } & ({ state: 'judged'; dependencies: SummaryRead[] } | { state: 'cleared' });
 type Lifecycle = {
   epoch(): number;
   ending(): AbortSignal;
@@ -47,6 +53,7 @@ export class ChatProjections {
   private readonly projecting = new Map<string, Promise<Projection | null>>();
   private readonly projections = new Map<string, Projection>();
   private readonly summarizing = new Map<string, Promise<ApiFailure | null>>();
+  private readonly verdicts = new Map<string, Verdict>();
   private closed = false;
 
   constructor(private readonly source: Source, private readonly evaluation: Pick<Evaluation, 'display' | 'forget'>, private readonly life: Lifecycle) {}
@@ -55,11 +62,12 @@ export class ChatProjections {
     this.projections.delete(chat);
     this.projecting.delete(chat);
     this.summarizing.delete(chat);
-    this.evaluation.forget(`projection:${chat}`);
+    this.verdicts.delete(chat);
+    this.evaluation.forget({ asker: 'projection', chat });
   }
 
   reset() {
-    for (const chat of new Set([...this.projections.keys(), ...this.projecting.keys(), ...this.summarizing.keys()])) this.release(chat);
+    for (const chat of new Set([...this.projections.keys(), ...this.projecting.keys(), ...this.summarizing.keys(), ...this.verdicts.keys()])) this.release(chat);
   }
 
   close() {
@@ -71,6 +79,39 @@ export class ChatProjections {
     return !this.closed && this.life.scope(chat)?.state === 'loaded' ? this.projections.get(chat) ?? null : null;
   }
 
+  // A chat whose bot's script did not end (EvaluationStuck): its displays leave the bot's regex out, and what only reads
+  // it is refused, while the reads it was judged on stand. Held for the session, and on the chat's summary for every
+  // device, until 다시 시도 clears it.
+  verdict(chat: string): SummaryRead[] | null {
+    const held = this.verdicts.get(chat);
+    const dependencies = held?.over === this.summaryRev(chat) ? (held.state === 'judged' ? held.dependencies : null) : (this.source.get('summary', summaryId(chat))?.value.stuck?.dependencies ?? null);
+    return dependencies && readsCurrent(this.source, dependencies) ? dependencies : null;
+  }
+
+  // reads: what a chat not saved yet was displayed from; a saved one is judged on its basis.
+  judge(chat: string, reads?: StoreRead[]) {
+    const stored = live(this.source.get('chat', chat));
+    // The chat's own prompt, persona and cast are handed to its basis as a value, not read: its record stands for them.
+    const dependencies = reads ? revised(this.source, reads) : stored && [...this.basis(chat, stored.value, []).dependencies, ...revised(this.source, [{ kind: 'chat', id: chat }])];
+    if (!dependencies) return;
+    this.verdicts.set(chat, { state: 'judged', dependencies, over: this.summaryRev(chat) });
+    this.changedVerdict(chat);
+  }
+
+  clear(chat: string) {
+    this.verdicts.set(chat, { state: 'cleared', over: this.summaryRev(chat) });
+    this.changedVerdict(chat);
+  }
+
+  private summaryRev(chat: string) {
+    return this.source.revision({ kind: 'summary', id: summaryId(chat) });
+  }
+
+  private changedVerdict(chat: string) {
+    this.life.publish(chat);
+    if (this.life.scope(chat)?.state === 'loaded') this.summarizeChat(chat);
+  }
+
   async evaluate(chat: string): Promise<Projection | null> {
     const pending = this.projecting.get(chat);
     if (pending) { await pending; return this.evaluate(chat); }
@@ -78,7 +119,7 @@ export class ChatProjections {
     if (loading) { if (await loading) return null; return this.evaluate(chat); }
     if (this.closed || this.life.scope(chat)?.state !== 'loaded') return null;
     const previous = this.projections.get(chat);
-    if (previous && previous.shown === this.source.shownMark(chat) && !summaryStale(this.source, chat, previous.summary, this.source.loadedHead(chat))) return previous;
+    if (previous && previous.shown === this.source.shownMark(chat) && !summaryStale(this.source, chat, previous.summary, this.source.loadedHead(chat)) && (previous.summary.stuck !== undefined) === (this.verdict(chat) !== null)) return previous;
     const epoch = this.life.epoch();
     const scope = this.life.scope(chat)!;
     const work = (async () => {
@@ -184,7 +225,7 @@ export class ChatProjections {
     if (!projection || this.life.showing(chat) || projection.shown !== this.source.shownMark(chat)) return null;
     const id = summaryId(chat);
     const current = this.source.get('summary', id);
-    if (current && !summaryStale(this.source, chat, current.value) && current.value.title === projection.summary.title && current.value.preview === projection.summary.preview) return null;
+    if (current && !summaryStale(this.source, chat, current.value) && current.value.title === projection.summary.title && current.value.preview === projection.summary.preview && JSON.stringify(current.value.stuck) === JSON.stringify(projection.summary.stuck)) return null;
     // The projection's source versions travel with it. A concurrent edit can never make an old summary look current.
     return { type: 'restore', id, kind: 'summary', parent: chat, value: projection.summary };
   }
@@ -211,15 +252,24 @@ export class ChatProjections {
     const head = store.loadedHead(id);
     const marks = store.shownMark(id);
     const rendered = { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
-    const { value: input, reads } = store.capture(() => ({ scope: { ...scopeOf({ store }, id, stored.value, messages), clock: rendered }, take: pinned({ store }, stored.value) }));
-    const dependencies = [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()];
-    const { display } = await this.evaluation.display(`projection:${id}`, input.scope, input.take, signal);
+    const { scope, take, dependencies } = this.basis(id, stored.value, messages);
+    const lane = { asker: 'projection', chat: id } as const;
+    // A run that stuck with the bot's regex judged the chat, so it is run once more without; one that stuck without it
+    // fails the chat.
+    let display: Display;
+    try { ({ display } = await this.evaluation.display(lane, { ...scope, clock: rendered }, take, signal)); }
+    catch (error) {
+      if (!(error instanceof EvaluationStuck && error.regex)) throw error;
+      ({ display } = await this.evaluation.display(lane, { ...scope, clock: rendered }, take, signal));
+    }
+    const verdict = this.verdict(id);
     // A message is named as the reader reads it: its translation when it has one.
     const texts = display.texts.map((text, index) => shown(messages[index]!).translation?.text ?? text);
     const last = texts.at(-1);
     const summary: Summary = {
       version: VERSION, head, chatRev: stored.rev, rendered,
       dependencies,
+      ...(verdict && { stuck: { dependencies: verdict } }),
       character: stored.value.character, count: messages.length,
       title: chatTitle(stored.value, messages, texts).slice(0, 256),
       preview: last === undefined ? '' : previewLine(last).slice(0, 256),
@@ -227,12 +277,20 @@ export class ChatProjections {
     };
     return { summary, model: { ...summary, id, chat: stored.value, messages, display }, shown: marks };
   }
+
+  // What a chat's display stands on besides its messages, with the reads it was taken from.
+  private basis(id: string, chat: Chat, messages: Message[]) {
+    const store = this.source;
+    const { value, reads } = store.capture(() => ({ scope: scopeOf({ store }, id, chat, messages), take: pinned({ store }, chat) }));
+    return { ...value, dependencies: revised(store, reads) };
+  }
 }
 
 // SUMMARY_WINDOW chats held at a time, opened together and summarized in one request (ChatProjections.saveMany), so
 // a pass over a whole account never holds more than that many histories. A chat with a summary is passed over: what
 // rewrites a summary its chat outgrew is opening that chat (ObjectStore.retainChat), and a stopped restore carries on
-// from the first window it did not finish. An unreadable chat is passed over too; its screen says so.
+// from the first window it did not finish. An unreadable chat is passed over too, as is one whose bot does not end;
+// its screen says so.
 export const SUMMARY_WINDOW = 16;
 export async function saveSummaries(store: ObjectStore, chats: Iterable<string>, signal = new AbortController().signal, progress: (done: number, total: number) => void = () => {}): Promise<ApiFailure | null> {
   const due = [...chats].filter((id) => !store.get('summary', summaryId(id)));

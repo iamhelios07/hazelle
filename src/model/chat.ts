@@ -404,6 +404,8 @@ export type Summary = {
   at: number | null;
   order: number;
   recent: RecentModel[];
+  // The chat's bot judged stuck (runtime ChatProjections.verdict), on the reads that stand for it; absent when never.
+  stuck?: { dependencies: SummaryRead[] };
 };
 export type RecentModel = { at: number; ref: ModelRef };
 

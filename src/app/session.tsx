@@ -195,7 +195,7 @@ export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['
     model.setInputs(opening, screen);
   }, [model, opening.chat, opening.messages, screen?.width, screen?.height]);
   const snapshot = useSyncExternalStore(model.subscribe, model.snapshot);
-  return useMemo(() => ({ ...snapshot, retry: () => void model.refresh() }), [snapshot, model]);
+  return useMemo(() => ({ ...snapshot, retry: () => void model.refresh(), retryRegex: () => model.retryRegex() }), [snapshot, model]);
 }
 
 export function useTurn(chat: string): Turn | null {

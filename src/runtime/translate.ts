@@ -19,11 +19,12 @@ import { modelProfile } from './profiles';
 import { translationPrompt } from './prompts';
 import type { ObjectStore } from './store';
 import { receiptOf } from './talk';
-import { evaluationFailure } from './evaluation';
+import { evaluationFailure, type Lane } from './evaluation';
 
 // take: the display scripts that draw the status window (상태창 지정), whose boxes the source leaves out.
-// language: what the text is translated into.
-export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest; language: string };
+// language: what the text is translated into. lane: auto-translation for 응답 번역, which a chat judged stuck refuses;
+// null for a text of no chat (translateText).
+export type TranslateInput = { chat: Chat; scope: ChatScope; take: ReadonlySet<number>; translations: (string | null)[]; request: TranslationRequest; language: string; lane: Lane<'translation' | 'auto-translation'> | null };
 
 // failed: the call's receipt says why, and a cut one that wrote nothing is failed too.
 export type TranslateFailure =
@@ -41,7 +42,7 @@ type Deps = { store: ObjectStore; credentials: Credentials };
 // A translation cut at its length keeps what it wrote, and its receipt says it was cut.
 export async function translate(
   { store, credentials }: Deps,
-  { chat, scope, take, translations, request, language }: TranslateInput,
+  { chat, scope, take, translations, request, language, lane }: TranslateInput,
   target: CallTarget,
   signal: AbortSignal,
   onText: (text: string) => void,
@@ -51,7 +52,7 @@ export async function translate(
   const { prompt, route } = translator;
   const profile = modelProfile(store, route.model);
   if (profile.kind === 'missing') return { ok: false, failure: { kind: 'profile-missing', own: profile.own } };
-  const assembled = await store.evaluation.translation({ scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
+  const assembled = await store.evaluation.translation(lane, { scope, take, prompt, translations, notes: translatorNotes(store, chat.character), request, language, seed: crypto.randomUUID() }, signal).catch((error: unknown) => {
     const failure = evaluationFailure(error);
     return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
   });

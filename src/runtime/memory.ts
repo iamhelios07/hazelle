@@ -383,7 +383,7 @@ export class Rememberer {
   private async summarize(chat: string, { job, sent, from, to, memory, before, prompt, route, settings }: Planned): Promise<Outcome> {
     const { store, credentials } = this.session;
     const budget = memoryBudget(memorySetup(store, sent.chat).budget, promptBudget(store, sent.chat));
-    const assembled = await store.evaluation.memory(`memory:${chat}`, { scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID() });
+    const assembled = await store.evaluation.memory({ asker: 'memory', chat }, { scope: sent.scope, prompt, memory, before, budget, span: { from, to }, seed: crypto.randomUUID() });
     if ('kind' in assembled) return assembled;
     const { messages, span } = assembled;
     const read = span.map((each, offset) => ({ role: sent.read.roles[from + offset]!, text: each }));

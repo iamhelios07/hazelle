@@ -9,7 +9,7 @@ import { CodecAborted, CodecUnavailable, ObjectCodec, OPEN_BYTES, OPEN_ITEMS, SE
 import { codecValue, type CodecResult, type OpenItem, type SealItem } from './object-codec-core';
 import { orderOwned } from './removal';
 import { GenerationChanged, SCOPED, type CachedScope, type CacheState, type CacheWrite, type DeviceCache, type Generation, type SealedChange } from './object-cache';
-import { Evaluation, EvaluationFailed, EvaluationStopped } from './evaluation';
+import { Evaluation, EvaluationFailed, EvaluationStopped, EvaluationStuck } from './evaluation';
 import { ChatProjections } from './summary';
 import { ScopeUnavailable, type ChatLease, type ScopeState } from './chat-scope';
 import { upgradeValue } from './upgrade';
@@ -96,7 +96,7 @@ export class ObjectStore {
   private readonly scopes = new Map<string, Scope>();
   private readonly heads = new Map<string, number>();
   private readonly revisions = new Map<string, number>();
-  readonly evaluation = new Evaluation();
+  readonly evaluation = new Evaluation({ verdict: (chat) => this.unrecorded(() => this.projections.verdict(chat) !== null), judged: (chat) => this.projections.judge(chat) });
   readonly projections: ChatProjections;
   private readonly behind = new Set<string>();
   private limits: Limits | null = null;
@@ -352,6 +352,18 @@ export class ObjectStore {
     }
   }
 
+  // The evaluation reads a chat's verdict as it posts a job, which may be inside the capture of what asked for it: that
+  // is the job's own bookkeeping, not what its caller displays from.
+  private unrecorded<T>(read: () => T): T {
+    const previous = this.reading;
+    this.reading = null;
+    try {
+      return read();
+    } finally {
+      this.reading = previous;
+    }
+  }
+
   get<K extends Kind>(kind: K, id: string): Stored<K> | null {
     this.reading?.push({ kind, id });
     const held = this.shown(id);
@@ -571,6 +583,7 @@ export class ObjectStore {
 
   private codecFailure(error: unknown, epoch: number): ApiFailure {
     if (error instanceof EvaluationStopped || error instanceof CodecAborted) return this.halted(epoch);
+    if (error instanceof EvaluationStuck) return { ok: false, error: 'bot-stuck' };
     if (error instanceof EvaluationFailed) return { ok: false, error: 'evaluation-unavailable' };
     if (error instanceof CodecUnavailable) return { ok: false, error: 'codec-unavailable' };
     throw error;
@@ -591,26 +604,29 @@ export class ObjectStore {
   // signal: the caller's stop, which lets the chat go at once, ending its opening and a summary write waiting on the
   // connection; what run does with the chat after that ends as stopped (ChatProjections.save).
   withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
-    return this.withChats([chat], (readable) => (readable.length ? run() : Promise.resolve({ ok: false, error: 'unreadable' })), { signal });
+    return this.withChats([chat], (_, [passed]) => (passed ? Promise.resolve(passed) : run()), { signal });
   }
 
-  // Several chats held together and opened at once, for run. One whose history cannot be read is left out of what run
-  // gets, since its screen says so and a pass over many (saveSummaries) passes it over; any other failure to open ends
-  // the whole. signal: as withChat, for every chat. summarize: as retainChat.
-  async withChats<T>(chats: string[], run: (readable: string[]) => Promise<ApiResult<T>>, { signal, summarize = true }: { signal?: AbortSignal; summarize?: boolean } = {}): Promise<ApiResult<T>> {
+  // Several chats held together and opened at once, for run. One whose history cannot be read, or whose bot does not end
+  // even without its regex, is left out of what run gets (passed, its failure), since its screen says so and a pass over
+  // many (saveSummaries) passes it over; any other failure to open ends the whole. signal: as withChat, for every chat.
+  // summarize: as retainChat.
+  async withChats<T>(chats: string[], run: (readable: string[], passed: ApiFailure[]) => Promise<ApiResult<T>>, { signal, summarize = true }: { signal?: AbortSignal; summarize?: boolean } = {}): Promise<ApiResult<T>> {
     if (signal?.aborted) return { ok: false, error: 'stopped' };
     const leases = chats.map((chat) => this.retainChat(chat, { summarize }));
     const release = () => { for (const lease of leases) lease.release(); };
     signal?.addEventListener('abort', release, { once: true });
     try {
       const readable: string[] = [];
+      const passed: ApiFailure[] = [];
       for (const [index, lease] of leases.entries()) {
         const failure = await lease.ready;
         if (signal?.aborted) return { ok: false, error: 'stopped' };
         if (!failure) readable.push(chats[index]!);
-        else if (failure.error !== 'unreadable') return failure;
+        else if (failure.error === 'unreadable' || failure.error === 'bot-stuck') passed.push(failure);
+        else return failure;
       }
-      return await run(readable);
+      return await run(readable, passed);
     } finally { signal?.removeEventListener('abort', release); release(); }
   }
 
@@ -647,7 +663,7 @@ export class ObjectStore {
       for (const id of [...(this.byParent.get(chat)?.get(kind) ?? [])]) this.forget(id);
     }
     this.projections.release(chat);
-    for (const lane of ['headless', 'send', 'forecast', 'memory', 'view']) this.evaluation.forget(`${lane}:${chat}`);
+    for (const asker of ['headless', 'send', 'forecast', 'memory', 'view'] as const) this.evaluation.forget({ asker, chat });
     scope.state = 'unloaded';
     scope.cursor = 0;
     scope.head = 0;

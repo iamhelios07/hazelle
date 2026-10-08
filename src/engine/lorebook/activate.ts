@@ -1,5 +1,6 @@
 import type { HistoryMessage } from '../history';
 import type { Card, LoreEntry } from '../import/types';
+import { progressed } from '../progress';
 import { seeded } from '../random';
 import { args, parseDecorators, type DecoratorLine } from './decorators';
 import { compile, scan, type Matcher, type Scanned, type Source } from './keys';
@@ -164,6 +165,7 @@ function activate(books: Book[], settings: Card['loreSettings'], invalidKeys: Ac
     const now: Book[] = [];
     waiting = [];
     for (const pending of waited) {
+      progressed();
       const { book, evidence } = pending;
       const why = triggered(book, afterMatch, () => {
         if (first) consume(book.matchers, evidence, window(history, turn, book.rules.scanDepth ?? scanDepth));

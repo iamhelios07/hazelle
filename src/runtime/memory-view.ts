@@ -20,7 +20,7 @@ export async function chatSent(session: Pick<Session, 'store' | 'read'>, id: str
   const scope = scopeOf(session, id, stored.value, messages);
   const shown = sourcesOf(messages);
   const budget = memoryBudget(memorySetup(session.store, stored.value).budget, promptBudget(session.store, stored.value));
-  const texts = await session.store.evaluation.read(`${asker}:${id}`, scope, memory && { memory, shown, budget });
+  const texts = await session.store.evaluation.read({ asker, chat: id }, scope, memory && { memory, shown, budget });
   if ('kind' in texts) return texts;
   return { chat: stored.value, scope, read: { shown, roles: messages.map(({ role }) => role), texts: texts.texts }, tokens: texts.tokens, standing: texts.standing };
 }

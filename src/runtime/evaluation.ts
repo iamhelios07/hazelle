@@ -10,84 +10,114 @@ import workerUrl from './evaluation-worker?worker&url';
 
 export class EvaluationStopped extends Error {}
 export class EvaluationFailed extends Error {}
+// A bot's script that does not end: the started job that went STUCK_MS without a sign of life, which alone fails, or a
+// passive job refused unposted because its chat is judged. regex: the job ran with the bot's regex, so a run without it
+// may land.
+export class EvaluationStuck extends EvaluationFailed {
+  constructor(message: string, readonly regex: boolean) {
+    super(message);
+  }
+}
 
 export function evaluationFailure(error: unknown): ApiFailure {
   if (error instanceof EvaluationStopped) return { ok: false, error: 'stopped' };
+  if (error instanceof EvaluationStuck) return { ok: false, error: 'bot-stuck' };
   if (error instanceof EvaluationFailed) return { ok: false, error: 'evaluation-unavailable' };
   throw error;
 }
 
-// No pass over a real chat comes near this (the longest one measured, 217 messages, opens in about a second,
-// 2026-10-03); a bot's regex that never ends does, and nothing in the engine stops it.
-const STUCK_MS = 20_000;
+// The worker gives a sign of life per stage of a message, lorebook entry scanned and text counted (engine/progress), so
+// STUCK_MS bounds one such unit, never a whole pass over a long chat; a bot's regex that never ends is what passes it.
+// Before a job has started, which a job that counts does once the tokenizer has loaded, only a worker that cannot
+// answer at all is ended, after LOAD_MS.
+const STUCK_MS = 3_000;
+const LOAD_MS = 20_000;
+
+// What a verdict on a job's chat (ChatProjections.verdict) does to it: a display runs without the bot's regex, a
+// passive job is refused before it is posted, and a press runs as asked.
+const GATES = {
+  projection: 'display',
+  screen: 'display',
+  headless: 'display',
+  forecast: 'passive',
+  memory: 'passive',
+  view: 'passive',
+  'auto-translation': 'passive',
+  send: 'press',
+  translation: 'press',
+  lore: 'press',
+} as const;
+type Asker = keyof typeof GATES;
+// Who asks, for which chat, saved or not yet. A lane holds one job: a newer one on the same lane stops the one waiting
+// or running. Its history is kept until it is forgotten, so its next job sends the worker only what changed.
+export type Lane<A extends Asker = Asker> = { asker: A; chat: string };
+export type Verdicts = { verdict(chat: string): boolean; judged(chat: string): void };
 
 type LooseJob = { kind: 'patch'; owner: string; revision: number; generation: number; items: LuaResult[] } | { kind: 'count'; texts: string[] };
-type Work = { lane: string; scope: ChatScope | null; job: EvaluationJob | LooseJob; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
+type Work = { key: string; on: { chat: string; gate: (typeof GATES)[Asker] } | null; scope: ChatScope | null; regex: boolean; job: EvaluationJob | LooseJob; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
 
-// A lane holds one job: a newer one on the same lane stops the one waiting or running. A lane's history is kept until
-// it is forgotten, so its next job sends the worker only what changed.
+const keyOf = ({ asker, chat }: Lane) => `${asker}:${chat}`;
+const onChat = ({ asker, chat }: Lane): Work['on'] => ({ chat, gate: GATES[asker] });
+const bare = (scope: ChatScope): ChatScope => ({ ...scope, packs: scope.packs.map((pack) => ({ ...pack, regex: [] })) });
+
 export class Evaluation {
   private worker: Worker | null = null;
-  private active: { id: number; work: Work } | null = null;
+  private active: { id: number; work: Work; started: boolean } | null = null;
   private readonly waiting = new Map<string, Work>();
   private readonly histories = new Map<string, ChatScope['messages']>();
-  private readonly heart = new Heartbeat(STUCK_MS, () => this.worker?.postMessage({ ping: true } satisfies EvaluationDown), () => this.end(new EvaluationFailed('Evaluation worker stuck')));
+  private readonly heart = new Heartbeat(() => this.worker?.postMessage({ ping: true } satisfies EvaluationDown), () => this.silent());
   private ids = 0;
   private closed = false;
 
-  display(lane: string, scope: ChatScope, take: ReadonlySet<number>, signal?: AbortSignal, lua?: Extract<EvaluationJob, { kind: 'display' }>['lua']): Promise<DisplayEvaluation> {
-    return this.run(lane, scope, { kind: 'display', take, ...(lua && { lua }) }, signal) as Promise<DisplayEvaluation>;
+  constructor(private readonly verdicts: Verdicts) {}
+
+  display(lane: Lane<'projection' | 'screen' | 'headless'>, scope: ChatScope, take: ReadonlySet<number>, signal?: AbortSignal, lua?: Extract<EvaluationJob, { kind: 'display' }>['lua']): Promise<DisplayEvaluation> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'display', take, ...(lua && { lua }) }, signal) as Promise<DisplayEvaluation>;
   }
 
-  patch(lane: string, revision: number, generation: number, items: LuaResult[], signal?: AbortSignal): Promise<DisplayPatch | null> {
-    return this.run(`patch:${lane}`, null, { kind: 'patch', owner: lane, revision, generation, items }, signal) as Promise<DisplayPatch | null>;
+  patch(lane: Lane<'screen'>, revision: number, generation: number, items: LuaResult[], signal?: AbortSignal): Promise<DisplayPatch | null> {
+    return this.run(`patch:${keyOf(lane)}`, onChat(lane), null, { kind: 'patch', owner: keyOf(lane), revision, generation, items }, signal) as Promise<DisplayPatch | null>;
   }
 
-  prompt(lane: string, input: Omit<PromptInput, 'countTokens'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {
+  prompt(lane: Lane<'send' | 'forecast' | 'memory' | 'view'>, input: Omit<PromptInput, 'countTokens'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {
     const { scope, ...rest } = input;
-    return this.run(lane, scope, { kind: 'prompt', input: rest }, signal) as Promise<EvaluatedPrompt>;
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'prompt', input: rest }, signal) as Promise<EvaluatedPrompt>;
   }
 
-  rewrite(lane: string, scope: ChatScope, input: Omit<Extract<EvaluationJob, { kind: 'rewrite' }>, 'kind'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {
-    return this.run(lane, scope, { kind: 'rewrite', ...input }, signal) as Promise<EvaluatedPrompt>;
+  rewrite(lane: Lane<'send'>, scope: ChatScope, input: Omit<Extract<EvaluationJob, { kind: 'rewrite' }>, 'kind'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'rewrite', ...input }, signal) as Promise<EvaluatedPrompt>;
   }
 
-  memory(lane: string, input: Omit<MemoryTaskInput, 'countTokens'>): Promise<Counted<ReturnType<typeof assembleMemory>>> {
+  memory(lane: Lane<'memory'>, input: Omit<MemoryTaskInput, 'countTokens'>): Promise<Counted<ReturnType<typeof assembleMemory>>> {
     const { scope, ...rest } = input;
-    return this.run(lane, scope, { kind: 'memory', input: rest }) as Promise<Counted<ReturnType<typeof assembleMemory>>>;
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'memory', input: rest }) as Promise<Counted<ReturnType<typeof assembleMemory>>>;
   }
 
-  read(lane: string, scope: ChatScope, memory: Extract<EvaluationJob, { kind: 'read' }>['memory']): Promise<Counted<ChatTexts>> {
-    return this.run(lane, scope, { kind: 'read', memory }) as Promise<Counted<ChatTexts>>;
+  read(lane: Lane<'memory' | 'view'>, scope: ChatScope, memory: Extract<EvaluationJob, { kind: 'read' }>['memory']): Promise<Counted<ChatTexts>> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'read', memory }) as Promise<Counted<ChatTexts>>;
   }
 
   // A translation's, and a bot's lorebook read, may run beside others of the same chat: each has a lane of its own,
   // forgotten once it answers.
-  translation(input: Omit<TranslationInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleTranslation>>> {
+  translation(lane: Lane<'translation' | 'auto-translation'> | null, input: Omit<TranslationInput, 'countTokens'>, signal?: AbortSignal): Promise<Counted<ReturnType<typeof assembleTranslation>>> {
     const { scope, ...rest } = input;
-    return this.once('translation', scope, { kind: 'translation', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleTranslation>>>;
+    return this.once(lane?.asker ?? 'translation', lane && onChat(lane), scope, { kind: 'translation', input: rest }, signal) as Promise<Counted<ReturnType<typeof assembleTranslation>>>;
   }
 
-  lore(scope: ChatScope, seed: string, limit: number): Promise<Counted<{ role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway>> {
-    return this.once('lore', scope, { kind: 'lore', seed, limit }) as Promise<Counted<{ role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway>>;
+  lore(lane: Lane<'lore'>, scope: ChatScope, seed: string, limit: number): Promise<Counted<{ role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway>> {
+    return this.once(lane.asker, onChat(lane), scope, { kind: 'lore', seed, limit }) as Promise<Counted<{ role: 'system' | 'user' | 'assistant'; text: string }[] | RanAway>>;
   }
 
   count(texts: string[]): Promise<Counted<number[]>> {
-    return this.run(`count:${++this.ids}`, null, { kind: 'count', texts }) as Promise<Counted<number[]>>;
+    return this.run(`count:${++this.ids}`, null, null, { kind: 'count', texts }) as Promise<Counted<number[]>>;
   }
 
   warm() {
     if (!this.closed) this.open().postMessage({ warm: true } satisfies EvaluationDown);
   }
 
-  forget(lane: string) {
-    for (const key of [lane, `patch:${lane}`]) {
-      const waiting = this.waiting.get(key);
-      if (waiting) { this.waiting.delete(key); waiting.stop(); waiting.reject(new EvaluationStopped()); }
-      if (this.active?.work.lane === key) this.active.work.reject(new EvaluationStopped());
-      this.histories.delete(key);
-    }
-    this.worker?.postMessage({ forget: lane } satisfies EvaluationDown);
+  forget(lane: Lane) {
+    this.drop(keyOf(lane));
   }
 
   close() {
@@ -95,24 +125,34 @@ export class Evaluation {
     this.end(new EvaluationStopped());
   }
 
-  private once(kind: string, scope: ChatScope, job: EvaluationJob, signal?: AbortSignal): Promise<EvaluationResult> {
-    const lane = `${kind}:${++this.ids}`;
-    return this.run(lane, scope, job, signal).finally(() => this.forget(lane));
+  private drop(owner: string) {
+    for (const key of [owner, `patch:${owner}`]) {
+      const waiting = this.waiting.get(key);
+      if (waiting) { this.waiting.delete(key); waiting.stop(); waiting.reject(new EvaluationStopped()); }
+      if (this.active?.work.key === key) this.active.work.reject(new EvaluationStopped());
+      this.histories.delete(key);
+    }
+    this.worker?.postMessage({ forget: owner } satisfies EvaluationDown);
   }
 
-  private run(lane: string, scope: ChatScope | null, job: Work['job'], signal?: AbortSignal): Promise<EvaluationResult> {
+  private once(asker: Asker, on: Work['on'], scope: ChatScope, job: EvaluationJob, signal?: AbortSignal): Promise<EvaluationResult> {
+    const key = `${asker}:${++this.ids}`;
+    return this.run(key, on, scope, job, signal).finally(() => this.drop(key));
+  }
+
+  private run(key: string, on: Work['on'], scope: ChatScope | null, job: Work['job'], signal?: AbortSignal): Promise<EvaluationResult> {
     return new Promise((resolve, reject) => {
       if (this.closed || signal?.aborted) return reject(new EvaluationStopped());
-      if (this.active?.work.lane === lane) this.active.work.reject(new EvaluationStopped());
-      const old = this.waiting.get(lane);
+      if (this.active?.work.key === key) this.active.work.reject(new EvaluationStopped());
+      const old = this.waiting.get(key);
       if (old) { old.stop(); old.reject(new EvaluationStopped()); }
       const abort = () => {
-        if (this.waiting.get(lane) === work) this.waiting.delete(lane);
+        if (this.waiting.get(key) === work) this.waiting.delete(key);
         reject(new EvaluationStopped());
       };
-      const work: Work = { lane, scope, job, resolve, reject, signal, stop: () => signal?.removeEventListener('abort', abort) };
+      const work: Work = { key, on, scope, regex: true, job, resolve, reject, signal, stop: () => signal?.removeEventListener('abort', abort) };
       signal?.addEventListener('abort', abort, { once: true });
-      this.waiting.set(lane, work);
+      this.waiting.set(key, work);
       this.dispatch();
     });
   }
@@ -129,30 +169,51 @@ export class Evaluation {
   private dispatch() {
     // Cancelling an executing synchronous pass cannot preempt it; keep its slot until the worker answers.
     if (this.active || this.closed) return;
-    const work = [...this.waiting.values()].find((work) => work.lane.startsWith('send:')) ?? this.waiting.values().next().value;
+    const work = this.next();
     if (!work) return this.heart.rest();
-    this.waiting.delete(work.lane);
     const id = ++this.ids;
-    this.active = { id, work };
+    this.active = { id, work, started: false };
     try {
       const worker = this.open();
       let input: EvaluationInput;
       if (work.job.kind === 'patch') input = { lane: work.job.owner, patch: { revision: work.job.revision, generation: work.job.generation, items: work.job.items } };
-      else if (work.job.kind === 'count') input = { lane: work.lane, count: work.job.texts };
+      else if (work.job.kind === 'count') input = { lane: work.key, count: work.job.texts };
       else {
         const { messages, ...scope } = work.scope!;
-        delete scope.lua;
-        input = { lane: work.lane, scope, history: changedTail(this.histories.get(work.lane) ?? [], messages, sameHistory), job: work.job };
-        this.histories.set(work.lane, messages);
+        input = { lane: work.key, scope, history: changedTail(this.histories.get(work.key) ?? [], messages, sameHistory), job: work.job };
+        this.histories.set(work.key, messages);
       }
+      // Before posting: a worker in this realm (tests) may say it started before postMessage returns.
+      this.heart.start(LOAD_MS);
       worker.postMessage({ id, input } satisfies EvaluationDown);
-      this.heart.start();
     } catch (error) { this.end(new EvaluationFailed(String(error))); }
   }
 
+  // The verdict is read as a job is posted, not as it is asked for, so one queued before its chat was judged is held
+  // to it too.
+  private next(): Work | undefined {
+    for (;;) {
+      const work = [...this.waiting.values()].find((work) => work.key.startsWith('send:')) ?? this.waiting.values().next().value;
+      if (!work) return undefined;
+      this.waiting.delete(work.key);
+      if (!work.on || !this.verdicts.verdict(work.on.chat)) return work;
+      if (work.on.gate === 'press') return work;
+      if (work.on.gate === 'display') return work.scope ? { ...work, scope: bare(work.scope), regex: false } : work;
+      work.stop();
+      work.reject(new EvaluationStuck('refused under a verdict', false));
+    }
+  }
+
   private receive(data: EvaluationUp) {
-    if ('pong' in data) return this.heart.answered();
+    if ('pong' in data || 'progress' in data) return this.heart.answered();
     const active = this.active;
+    if ('started' in data) {
+      if (active?.id !== data.started) return;
+      active.started = true;
+      this.heart.answered();
+      this.heart.start(STUCK_MS);
+      return;
+    }
     if (!active || data.id !== active.id) return;
     this.active = null;
     active.work.stop();
@@ -163,6 +224,22 @@ export class Evaluation {
       if (data.result && 'display' in data.result && data.result.display.stopped) data.result.display.stopped = new Runaway();
       active.work.resolve(data.result);
     }
+    this.dispatch();
+  }
+
+  // A started job held the worker: only it fails, its chat is judged before anything else is posted, and the jobs
+  // waiting go on in a new worker, which holds no history.
+  private silent() {
+    const active = this.active;
+    if (!active?.started) return this.end(new EvaluationFailed('Evaluation worker stuck'));
+    this.worker?.terminate();
+    this.worker = null;
+    this.heart.rest();
+    this.histories.clear();
+    this.active = null;
+    active.work.stop();
+    active.work.reject(new EvaluationStuck('Evaluation worker stuck', active.work.regex));
+    if (active.work.on) this.verdicts.judged(active.work.on.chat);
     this.dispatch();
   }
 

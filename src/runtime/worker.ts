@@ -18,14 +18,20 @@ export function moduleWorker(url: string): Worker {
 const BEAT_MS = 1000;
 
 // A worker that leaves a ping unanswered past limit ms is held by a job that will not end. Counted from the ping, never
-// from the clock alone: a hidden tab's timers run late, and the worker answers at once all the same.
+// from the clock alone: a hidden tab's timers run late, and the worker answers at once all the same. A beat that comes
+// late to a shown tab pings again rather than judging, since the page itself was held and an answer may be waiting
+// behind it; in a hidden tab every beat is late while the worker's messages are not.
 export class Heartbeat {
   private beat: ReturnType<typeof setInterval> | null = null;
   private pinged: number | null = null;
+  private last: number | null = null;
+  private limit = 0;
 
-  constructor(private readonly limit: number, private readonly ping: () => void, private readonly stuck: () => void) {}
+  constructor(private readonly ping: () => void, private readonly stuck: () => void) {}
 
-  start() {
+  // limit: for the job running now, which may differ from the one before it.
+  start(limit: number) {
+    this.limit = limit;
     this.beat ??= setInterval(() => this.check(), BEAT_MS);
   }
 
@@ -37,14 +43,18 @@ export class Heartbeat {
     if (this.beat) clearInterval(this.beat);
     this.beat = null;
     this.pinged = null;
+    this.last = null;
   }
 
   private check() {
-    if (this.pinged !== null) {
-      if (Date.now() - this.pinged > this.limit) this.stuck();
+    const now = Date.now();
+    const late = this.last !== null && now - this.last > 2 * BEAT_MS && globalThis.document?.visibilityState !== 'hidden';
+    this.last = now;
+    if (this.pinged !== null && !late) {
+      if (now - this.pinged > this.limit) this.stuck();
       return;
     }
-    this.pinged = Date.now();
+    this.pinged = now;
     this.ping();
   }
 }

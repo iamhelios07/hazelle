@@ -4,7 +4,8 @@ import { evaluate } from './cbs/evaluate';
 import { display, DisplayPass, storyHtml } from './display';
 import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
-import { contexts, type ChatScope } from './render';
+import { onProgress } from './progress';
+import { contexts, type ChatScope, type LuaDisplay } from './render';
 
 const card: Card = {
   name: 'Luna',
@@ -75,12 +76,25 @@ describe('the editDisplay pass', () => {
   it('stamps each message with the variables the chat starts from, so a pass run from other ones is not fresh', () => {
     const stamps = (variables: [string, string][]) => {
       const seen: string[] = [];
-      display({ ...scope, variables, lua: (_version, _text, stamp) => (seen.push(stamp), null) });
+      display({ ...scope, variables }, undefined, (_version, _text, stamp) => (seen.push(stamp), null));
       return seen;
     };
     expect(stamps([['mood', 'calm']])).toEqual(stamps([['mood', 'calm']]));
     expect(stamps([['mood', 'calm']])).not.toEqual(stamps([['mood', 'angry']]));
   });
+});
+
+it('gives a sign of life per stage of each message, and per row a Lua pass patches', () => {
+  let signs = 0;
+  onProgress(() => signs++);
+  try {
+    const pass = new DisplayPass({ ...scope, messages: [message('a', 'user', 'one'), message('b', 'assistant', 'two')] }, new Set(), () => null);
+    expect(signs).toBe(4);
+    pass.patch([{ version: 'b', text: 'done' }]);
+    expect(signs).toBe(5);
+  } finally {
+    onProgress(() => {});
+  }
 });
 
 it('finishes newest-first Lua patches like a full display, including variable history, boxes and CSS order', () => {
@@ -91,15 +105,15 @@ it('finishes newest-first Lua patches like a full display, including variable hi
   const runaway = '{{settempvar::x::ab}}' + '{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}'.repeat(24);
   const values = new Map<string, string>([['b', runaway]]);
   const complete = new Set<string>();
-  const lua: NonNullable<ChatScope['lua']> = (id) => values.has(id) ? { text: values.get(id)!, fresh: complete.has(id) } : null;
+  const lua: LuaDisplay = (id) => values.has(id) ? { text: values.get(id)!, fresh: complete.has(id) } : null;
   const take = new Set([1]);
-  const pass = new DisplayPass({ ...changed, lua }, take);
+  const pass = new DisplayPass(changed, take, lua);
   expect(pass.value.stopped).not.toBeNull();
   for (const [version, text] of [['b', '<style>.last { color: blue }</style>BOX {{getvar::hp}}'], ['a', '<style>.first { color: red }</style>BOX {{getvar::hp}}']]) {
     values.set(version!, text!);
     complete.add(version!);
     pass.patch([{ version: version!, text: text! }]);
-    expect(pass.value).toEqual(display({ ...changed, lua }, take));
+    expect(pass.value).toEqual(display(changed, take, lua));
   }
   expect(pass.value.texts[0]).toContain('8');
   expect(pass.value.texts[1]).toContain('9');

@@ -121,8 +121,8 @@ export function promptBudget(store: Reader['store'], chat: Chat): number | null 
 export const asSent = (store: Reader['store'], chat: Chat, messages: Message[]) => (translateSwitches(store, chat.character).reverse ? messages.map(reversed) : messages);
 
 // screen: the window the chat is shown in, for a bot's layout; null for what is not shown, such as a preview.
-export const evaluateChat = async (reader: { store: Reader['store'] & Pick<ObjectStore, 'evaluation'> }, id: string | null, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, signal?: AbortSignal): Promise<Display> =>
-  (await reader.store.evaluation.display(`headless:${id}`, { ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat), signal)).display;
+export const evaluateChat = async (reader: { store: Reader['store'] & Pick<ObjectStore, 'evaluation'> }, id: string, chat: Chat, messages: Message[], screen: ChatScope['screen'] = null, signal?: AbortSignal): Promise<Display> =>
+  (await reader.store.evaluation.display({ asker: 'headless', chat: id }, { ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat), signal)).display;
 
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless
 // 봇 스타일 is off; the chat draws the latest box itself.
@@ -150,7 +150,7 @@ export function statusBoxes(shown: Display, messages: Shown[], scripts: readonly
 export function translationInput(reader: Reader, id: string, chat: Chat, messages: Message[], request: TranslationRequest): TranslateInput {
   const switches = translateSwitches(reader.store, chat.character);
   const language = request.kind === 'message' ? switches.replyLanguage : switches.inputLanguage;
-  return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request, language };
+  return { chat, scope: scopeOf(reader, id, chat, messages), take: pinned(reader, chat), translations: messages.map((message) => shown(message).translation?.text ?? null), request, language, lane: { asker: 'translation', chat: id } };
 }
 
 function reversed(message: Message): Message {

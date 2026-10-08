@@ -96,7 +96,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }, [choices, openedAt]);
   const openingMessages = useMemo(() => unstarted ? [unstarted] : [], [unstarted]);
   const [width, height] = useViewport().split('x').map(Number);
-  const { messages, display: view, pending: displayPending, error: displayError, retry: retryDisplay } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
+  const { messages, display: view, pending: displayPending, error: displayError, retry: retryDisplay, retryRegex, stuck } = useChatDisplay(chatId, { chat, messages: openingMessages }, { width: width!, height: height! });
   const opening = unstarted && messages[0]!;
   // A display that fails after one was shown leaves that one up; one that never showed says so in the log (ChatLog).
   useEffect(() => {
@@ -338,7 +338,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   }
 
   return {
-    displayPending, displayError, retryDisplay,
+    displayPending, displayError, retryDisplay, stuck,
     id,
     item,
     shelf,
@@ -384,6 +384,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       ...editActions,
       send,
       answer: () => ask({ kind: 'answer' }),
+      retryRegex,
       stop: () => talk.stop(chatId),
       regenerate: (message: Shown) => ask({ kind: 'regenerate', message: message.id }),
       retry: (message: Shown) => ask({ kind: 'retry', message: message.id, version: shown(message).id }),

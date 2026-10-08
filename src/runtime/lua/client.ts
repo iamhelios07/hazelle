@@ -1,7 +1,7 @@
 import type { Trigger } from '../../engine/import/types';
 import type { DisplayBatch, DisplayItem, Event, Lua, Script } from '../../engine/lua/run';
 import type { Host, LuaMessage, Snapshot } from '../../engine/lua/state';
-import type { ChatScope } from '../../engine/render';
+import type { ChatBasis, ChatScope } from '../../engine/render';
 import type { ScriptOutcome } from './event';
 import { changedTail, sameHistory, type Tail } from '../history-delta';
 import { PendingRequests } from '../pending-requests';
@@ -9,7 +9,7 @@ import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
 export type Runner = Pick<Lua, 'installDisplay' | 'display' | 'forgetDisplay' | 'close'> & { run(owner: string, triggers: Trigger[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> };
-export type EventInput = { scope: Omit<ChatScope, 'messages' | 'lua'>; history: Tail<ChatScope['messages'][number]> };
+export type EventInput = { scope: ChatBasis; history: Tail<ChatScope['messages'][number]> };
 
 export type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
 
@@ -42,11 +42,10 @@ export class LuaWorker implements Runner {
   private readonly displays = new Map<string, { revision: number; snapshot: Snapshot }>();
   // One ordered event transport, not a cache per chat; the receiver applies each tail before awaiting Lua.
   private history: ChatScope['messages'] = [];
-  private readonly heart = new Heartbeat(STUCK_MS, () => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
+  private readonly heart = new Heartbeat(() => this.worker?.postMessage({ kind: 'ping' } satisfies Down), () => this.end(new LuaStuck('stuck')));
 
   run(owner: string, triggers: Trigger[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> {
     const { messages, ...fixed } = scope;
-    delete fixed.lua;
     const input: EventInput = { scope: fixed, history: changedTail(this.history, messages, sameHistory) };
     this.history = messages;
     return this.send((id) => ({ kind: 'run', id, owner, triggers, input, event }), host) as Promise<ScriptOutcome>;
@@ -82,7 +81,7 @@ export class LuaWorker implements Runner {
     const { id, promise } = this.pending.add(host);
     try {
       this.open().postMessage(message(id));
-      this.heart.start();
+      this.heart.start(STUCK_MS);
     } catch (error) { this.end(new LuaStuck(String(error))); }
     return promise;
   }
