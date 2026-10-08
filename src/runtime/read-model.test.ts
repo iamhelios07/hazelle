@@ -216,7 +216,7 @@ describe('selective account reads', () => {
   it('refreshes held memory on a conflict before reapplying the edit', async () => {
     const { store, open } = await account();
     await store.create('chat', chat, { id: 'a' });
-    await store.create('memory', { records: [], state: [], threads: [] }, { id: 'memory', parent: 'a' });
+    await store.create('memory', { records: [], chapters: [], state: [], threads: [] }, { id: 'memory', parent: 'a' });
     const phone = await open();
     const release = await hold(store, 'a');
     const releasePhone = await hold(phone, 'a');
@@ -389,7 +389,7 @@ describe('selective account reads', () => {
     await seed('a', 'chat', null, { ...chat, character: 'ca' });
     await seed('a1', 'entry', 'a', message('one'));
     await seed('a2', 'entry', 'a', message('two'));
-    await seed('memory', 'memory', 'a', { records: [], state: [], threads: [] });
+    await seed('memory', 'memory', 'a', { records: [], chapters: [], state: [], threads: [] });
     const store = await open();
     const decrypt = vi.spyOn(sealedObjects, 'openObject');
     const plan = await store.pinned((pin) => planRemoval(store, { kind: 'character', id: 'ca' }, pin));

@@ -8,11 +8,15 @@ import type { ObjectStore } from './store';
 const ACCOUNT = 'account-1';
 const GROUP = 'group-1';
 
+// The kinds upgradeValue upgrades, and so the only ones the store holds as upgraded.
+type Upgraded = 'connection' | 'character' | 'memory';
+
 // Every decrypted value and every backup line passes here before anything reads it. null for a value already current.
 export function upgradeValue(kind: string, value: unknown): Record<string, unknown> | null {
   if (!isRecord(value)) return null;
   if (kind === 'connection') return upgradeConnection(value);
   if (kind === 'character') return upgradeCharacter(value);
+  if (kind === 'memory') return upgradeMemory(value);
   return null;
 }
 
@@ -31,9 +35,14 @@ function upgradeCharacter(value: Record<string, unknown>) {
   return { ...rest, translations: greetingTranslations.map(({ greeting, ...each }: { greeting: string }) => ({ source: greeting, ...each })) };
 }
 
+// Until 2026-10-08 a chat's memory held no chapters.
+function upgradeMemory(value: Record<string, unknown>) {
+  return 'chapters' in value ? null : { ...value, chapters: [] };
+}
+
 // The stored copies of what the store upgraded as it read them, written back once, so the old shape leaves the
-// account. Each is written as it is held then, so a change another device made meanwhile is kept.
+// account. Each is written as it is held then, so a change another device made meanwhile is kept. A chat's memory
+// read after this ran is written back by its next change.
 export async function saveUpgraded(store: ObjectStore): Promise<void> {
-  // upgradeValue upgrades these two kinds only.
-  await Promise.all(store.takeUpgraded().map(({ id, kind }) => (kind === 'character' ? store.update('character', id, (current) => current) : store.update('connection', id, (current) => current))));
+  await Promise.all(store.takeUpgraded().map(({ id, kind }) => store.update(kind as Upgraded, id, (current) => current)));
 }

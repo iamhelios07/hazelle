@@ -64,3 +64,6 @@ export const NOT_STARRED = '즐겨찾기에 없음';
 export const noStarred = (then: string) => `즐겨찾기한 모델이 없어요. ${inSettings('connections')}에서 모델을 즐겨찾기하면 여기서 ${then}.`;
 
 export const CAST = '등장인물';
+
+// Consecutive records of 장기 기억 summarized again as one, which stands in their place.
+export const CHAPTER = '챕터';

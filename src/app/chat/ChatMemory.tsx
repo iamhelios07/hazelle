@@ -9,12 +9,12 @@ import { MemoryFields, settingsOf } from '../common/MemoryFields';
 import { tokens } from '../common/receipt';
 import { filled, typedText } from '../common/typed';
 import { useAutosave } from '../common/useAutosave';
-import { inSettings } from '../common/words';
+import { CHAPTER, inSettings } from '../common/words';
 import { useChatMemory, usePrompts, useRemembering, useSession, useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, ListItem, Menu, MenuItem, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
-import { ChatMemoryRecord } from './ChatMemoryRecord';
-import { factGroups, MessagePositions, recordScene, recordTitle, spanOf, STATUS_WORDS } from './memory';
+import { Button, Callout, ConfirmDialog, Empty, Facts, IconButton, List, Menu, MenuItem, Row, Section, SidePanel, Stack, Text, TextField } from '../ui';
+import { ChatMemoryRecord, MemoryRow } from './ChatMemoryRecord';
+import { factGroups, memoryRows, MessagePositions } from './memory';
 import type { OpenChat } from './useChat';
 
 const NO_MEMORY = emptyMemory();
@@ -46,7 +46,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const memory = useChatMemory(id) ?? NO_MEMORY;
   const settings = useSettings();
   const prompts = usePrompts();
-  const { running, failed } = useRemembering();
+  const { running, failed, chapterFailed } = useRemembering();
   const { item, messages, prompt, busy, actions } = chat;
   const [messagePositions] = useState(() => new MessagePositions());
   const positions = messagePositions.read(messages);
@@ -62,8 +62,8 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
     return setChatMemory(store, id, { ...settingsOf(memorySetup(store, current.value)), ...patch });
   });
 
-  const opened = record === null ? undefined : memory.records.find((each) => each.id === record);
-  if (opened) return <ChatMemoryRecord chat={id} record={opened} status={view?.records.get(opened.id) ?? null} stale={view?.stale.get(opened.id) ?? null} positions={positions} actions={actions} />;
+  const opened = record === null ? undefined : [...memory.records, ...memory.chapters].find((each) => each.id === record);
+  if (opened) return <ChatMemoryRecord chat={id} item={opened} memory={memory} view={view} positions={positions} actions={actions} />;
 
   async function revert() {
     if (!(await save.flush())) return;
@@ -73,8 +73,8 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
 
   const writing = running.get(id);
   const failure = failed.get(id);
+  const unchaptered = chapterFailed.get(id);
   const live = memory.records.filter((each) => !each.forgotten);
-  const pinnedOver = memory.records.some((each) => each.pinned && view?.records.get(each.id) === 'over');
   const more = (
     <Menu place="below-end" label="장기 기억 더 보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="장기 기억 더 보기" size="sm" {...opener} />}>
       <MenuItem label="원문에서 전부 다시 만들기" onClick={() => setRebuilding(true)} />
@@ -91,6 +91,11 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
             {`기억을 정리하지 못했어요. ${describeMemoryFailure(failure)}`}
           </Callout>
         )
+      )}
+      {!writing && unchaptered && (
+        <Callout tone="warn" action={{ label: '다시 시도', onClick: () => session.memory.retry(id) }}>
+          {`${CHAPTER}를 만들지 못했어요. ${describeMemoryFailure(unchaptered)}`}
+        </Callout>
       )}
       {!setup.on && <Text variant="note">이 채팅은 장기 기억을 쓰지 않아요.</Text>}
       {setup.on && view && !view.slot && (
@@ -125,21 +130,12 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
       <Threads chat={id} threads={memory.threads} />
 
       <Section level={3} title="기록" note={`${live.length}개`}>
-        {pinnedOver && <Callout tone="warn">고정한 기록이 한도를 넘어 일부를 보내지 않아요. 고정을 풀거나 한도를 늘려 주세요.</Callout>}
+        {view?.crowded && <Callout tone="warn">고정한 기록이 한도를 넘어 일부를 보내지 않아요. 고정을 풀거나 한도를 늘려 주세요.</Callout>}
         {memory.records.length ? (
           <List label="기록">
-            {memory.records.map((each) => {
-              const status = view?.records.get(each.id);
-              return (
-                <ListItem
-                  key={each.id}
-                  title={recordTitle(each)}
-                  description={[spanOf(each.sources, positions).words, recordScene(each)].filter(Boolean).join(' · ')}
-                  tags={[...(each.pinned ? ['고정'] : []), ...(status && status !== 'sent' ? [STATUS_WORDS[status]] : [])]}
-                  onClick={() => actions.memory(each.id)}
-                />
-              );
-            })}
+            {memoryRows(memory).map((each) => (
+              <MemoryRow key={each.id} item={each} view={view} positions={positions} onOpen={() => actions.memory(each.id)} />
+            ))}
           </List>
         ) : (
           <Empty variant="section">기록이 없어요.</Empty>

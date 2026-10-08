@@ -6,7 +6,7 @@ import type { Prompt } from '../model/prompt';
 import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
 import { assemble, rewritten, unused, type Assembled, type From, type PromptInput } from './pipeline';
-import { printOf, type ChatRead } from './memory';
+import { printOf, speakersOf, type ChatRead } from './memory';
 import { renderChat } from './render';
 
 // The user's own Risu preset "🏓 핑퐁 간소화" (design §4.2), block for block: its wrappers and marks as written,
@@ -312,7 +312,7 @@ describe('assemble with memory', () => {
   ];
   const shown = messages.map(({ id }) => ({ message: `message-${id}`, version: id }));
   const chatScope = (over: Partial<PromptInput['scope']> = {}) => scope({ messages, greeting: null, ...over });
-  const read = (): ChatRead => ({ shown, roles: messages.map(({ role }) => role), texts: renderChat('prompt', chatScope()).texts });
+  const read = (): ChatRead => ({ shown, roles: messages.map(({ role }) => role), speakers: speakersOf(chatScope()), texts: renderChat('prompt', chatScope()).texts });
   const record = (id: string, indices: number[], what: string, over: Partial<MemoryRecord> = {}): MemoryRecord => ({
     id,
     sources: indices.map((index) => shown[index]!),
@@ -330,7 +330,7 @@ describe('assemble with memory', () => {
     at: 0,
     ...over,
   });
-  const memoryOf = (records: MemoryRecord[]): Memory => ({ records, state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
+  const memoryOf = (records: MemoryRecord[]): Memory => ({ records, chapters: [], state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
   const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}): Assembled =>
     assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: { memory, budget, shown } }));
   const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
@@ -389,7 +389,7 @@ describe('assemble with memory', () => {
     } as Prompt & { task?: never };
     const off = withMemory(memory, 25_000, { prompt: toggled, toggles: new Map([['sims', '0']]) });
     expect([off.memory, memoryOfSent(off)]).toEqual([{ sent: ['r1'], covered: 2, missing: 2, slot: false }, undefined]);
-    const empty = withMemory({ records: [], state: [], threads: [] });
+    const empty = withMemory({ records: [], chapters: [], state: [], threads: [] });
     expect([empty.memory, memoryOfSent(empty), chatOf(empty)]).toEqual([{ sent: [], covered: 0, missing: 0, slot: true }, undefined, messages.map(() => expect.any(String))]);
   });
 });

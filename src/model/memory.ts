@@ -15,13 +15,11 @@ export type Source = { message: string; version: string };
 export type Line = { speaker: string; text: string };
 
 // when and where are null when the story does not say; they are never invented. lines are kept word for word, each
-// with its speaker. print: the fingerprint of the span as the prompt rendered it when it was read; a record is stale
-// when the same span renders differently now. receipt: the call that wrote it, null for one the user wrote. edited
-// and pinned (고정) are the user's, and automatic work never rewrites either. forgotten: the user deleted it; its
-// span stays covered and sends nothing, and is not summarized again until the user asks. state: the facts it changed,
-// each with its new value, or null for one it found no longer holds, so automatic work removes a fact only by a
-// change a record names. opens and closes: the threads it opened and closed, as their text.
-export type MemoryRecord = {
+// with its speaker. print: the fingerprint of the span as the prompt rendered it when it was read; it is stale when the
+// same span renders differently now. receipt: the call that wrote it, null for one the user wrote. edited and pinned
+// (고정) are the user's, and automatic work never rewrites either. forgotten: the user deleted it; its span stays
+// covered and sends nothing, and is not summarized again until the user asks.
+export type Written = {
   id: string;
   sources: Source[];
   print: string;
@@ -31,15 +29,22 @@ export type MemoryRecord = {
   what: string;
   lines: Line[];
   outcome: string;
-  state: Change[];
-  opens: string[];
-  closes: string[];
   receipt: Receipt | null;
   at: number;
   edited?: true;
   pinned?: true;
   forgotten?: true;
 };
+
+// state: the facts it changed, each with its new value, or null for one it found no longer holds, so automatic work
+// removes a fact only by a change a record names. opens and closes: the threads it opened and closed, as their text.
+// recalled (이 기억 넣기): its messages are sent in its place while they fit, and it is the user's as pinned is.
+export type MemoryRecord = Written & { state: Change[]; opens: string[]; closes: string[]; recalled?: true };
+
+// Consecutive records summarized again from their messages, never from their text; a chapter is never folded into
+// another. sources: the messages it read, from its first record's first to its last record's last. records: each with
+// its at as the chapter read it; one changed, deleted or made again since makes the chapter wait for the user.
+export type Chapter = Written & { records: { id: string; at: number }[] };
 
 export type Change = { about: string; field: string; value: string | null };
 
@@ -49,10 +54,10 @@ export type Fact = { about: string; field: string; value: string; record: string
 // opened: the record that opened it, null when the user did.
 export type Thread = { id: string; text: string; opened: string | null };
 
-// records in chat order.
-export type Memory = { records: MemoryRecord[]; state: Fact[]; threads: Thread[] };
+// records and chapters in chat order.
+export type Memory = { records: MemoryRecord[]; chapters: Chapter[]; state: Fact[]; threads: Thread[] };
 
-export const emptyMemory = (): Memory => ({ records: [], state: [], threads: [] });
+export const emptyMemory = (): Memory => ({ records: [], chapters: [], state: [], threads: [] });
 
 // The chat's id with its first group's hex digits inverted: a UUID no device makes at random, the same on every
 // device, so two devices creating a chat's memory at once meet in a version conflict instead of making two.

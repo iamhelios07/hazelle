@@ -1,11 +1,28 @@
-import type { Fact, MemoryRecord, Source } from '../../model/memory';
+import type { Staleness } from '../../engine/memory';
+import type { Chapter, Fact, Memory, MemoryRecord, Source, Written } from '../../model/memory';
 import type { RecordStatus } from '../../runtime/memory';
+import { CHAPTER } from '../common/words';
 
-export const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '예산 넘음', forgotten: '삭제됨' };
+const STATUS_WORDS: Record<RecordStatus, string> = { sent: '보냄', stale: '원문 바뀜', over: '예산 넘음', forgotten: '삭제됨', chaptered: `${CHAPTER}로 보냄`, 'recall-over': '원문 예산 넘음' };
 
-export const recordTitle = (record: MemoryRecord) => record.what.trim() || '내용 없는 기록';
+// A row's tag for what is sent of it, none while it is sent as it is.
+export const statusWord = (status: RecordStatus | undefined, stale: Staleness | undefined) =>
+  status === undefined || status === 'sent' ? [] : [status === 'stale' && stale === 'records' ? '기록 바뀜' : STATUS_WORDS[status]];
 
-export const recordScene = (record: MemoryRecord) => [record.when, record.where].filter(Boolean).join(' · ');
+export const isChapter = (item: MemoryRecord | Chapter): item is Chapter => 'records' in item;
+
+export const recordTitle = (item: MemoryRecord | Chapter) => item.what.trim() || (isChapter(item) ? `내용 없는 ${CHAPTER}` : '내용 없는 기록');
+
+export const recordScene = (item: Written) => [item.when, item.where].filter(Boolean).join(' · ');
+
+// The 기록 list in chat order: a chapter in its first record's place, its records only on its page.
+export function memoryRows(memory: Memory): (MemoryRecord | Chapter)[] {
+  const holder = new Map(memory.chapters.flatMap((chapter) => chapter.records.map(({ id }) => [id, chapter] as const)));
+  return memory.records.flatMap((record): (MemoryRecord | Chapter)[] => {
+    const chapter = holder.get(record.id);
+    return !chapter ? [record] : chapter.records[0]!.id === record.id ? [chapter] : [];
+  });
+}
 
 export class MessagePositions {
   private messages: readonly { id: string }[] | undefined;

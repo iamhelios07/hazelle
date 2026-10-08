@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
 import { fingerprint } from '../engine/memory';
-import { memoryId } from '../model/memory';
+import { memoryId, type Chapter, type MemorySettings } from '../model/memory';
 import { appendUserMessage, editMessage, startChat } from './chat-log';
 import { api } from './api';
 import { chatMemory } from './memory-read';
-import { forgetRecord, removeFact, removeThread, setDefaultMemory, setFact, setThread } from './memory';
+import { editRecord, forgetRecord, removeFact, removeThread, setDefaultMemory, setFact, setThread } from './memory';
 import { addPrompt, editPrompt } from './prompts';
 import { ObjectStore } from './store';
-import { openSession } from './session';
+import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
 
@@ -65,7 +65,7 @@ describe('Rememberer', () => {
       const thread = { id: crypto.randomUUID(), text: 'Luna waits for jin.', opened: 'r0' };
       await session.store.create(
         'memory',
-        { records: [earlier], state: [{ about: 'Luna', field: 'place', value: 'the pier', record: 'r0' }, { about: 'Luna', field: 'mood', value: 'calm', record: 'r0' }], threads: [thread] },
+        { records: [earlier], chapters: [], state: [{ about: 'Luna', field: 'place', value: 'the pier', record: 'r0' }, { about: 'Luna', field: 'mood', value: 'calm', record: 'r0' }], threads: [thread] },
         { id: memoryId(chat), parent: chat },
       );
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'jin arrives, and they leave the pier together.' });
@@ -112,7 +112,7 @@ describe('Rememberer', () => {
       await appendUserMessage(session.store, chat, { id: said, text: 'We meet at the pier.' });
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Luna waves.' });
       const stale = { id: 'r0', sources: [{ message: said, version: said }], print: 'another text', when: null, where: null, who: [], what: 'They meet.', lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 };
-      await session.store.create('memory', { records: [stale], state: [], threads: [] }, { id: memoryId(chat), parent: chat });
+      await session.store.create('memory', { records: [stale], chapters: [], state: [], threads: [] }, { id: memoryId(chat), parent: chat });
       const log = stubRelay(inTurn([saying(summary('jin and Luna meet at the pier.', 'We meet at the pier.'))]));
       session.memory.check(chat);
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -133,7 +133,7 @@ describe('Rememberer', () => {
       const text = 'Luna waits at the pier.';
       await appendUserMessage(session.store, chat, { id: said, text });
       const earlier = { id: 'r0', sources: [{ message: said, version: said }], print: fingerprint([{ role: 'user', text }]), when: null, where: null, who: ['Luna'], what: 'Luna waits.', lines: [], outcome: '', state: [], opens: ['Luna waits for jin.'], closes: [], receipt: null, at: 0 };
-      await session.store.create('memory', { records: [earlier], state: [], threads: [{ id: crypto.randomUUID(), text: 'Luna waits for jin.', opened: 'r0' }] }, { id: memoryId(chat), parent: chat });
+      await session.store.create('memory', { records: [earlier], chapters: [], state: [], threads: [{ id: crypto.randomUUID(), text: 'Luna waits for jin.', opened: 'r0' }] }, { id: memoryId(chat), parent: chat });
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'jin is late again.' });
       const answer = JSON.stringify({ records: [{ to: 1, when: null, where: null, who: ['jin'], what: 'jin is late.', lines: [], outcome: '', state: [], opens: ['Luna waits  for jin. '], closes: [] }] });
       stubRelay(inTurn([saying('Luna sighs.'), saying(answer)]));
@@ -159,7 +159,7 @@ describe('a deletion from memory', () => {
     await startChat(store, chat, { title: null, character: null, models: {} }, null);
     const record = { id: 'r0', sources: [], print: 'p', when: null, where: null, who: [], what: 'Luna waits.', lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 };
     const fact = { about: 'Luna', field: 'place', value: 'the pier', record: 'r0' };
-    await store.create('memory', { records: [record], state: [fact], threads: [] }, { id: memoryId(chat), parent: chat });
+    await store.create('memory', { records: [record], chapters: [], state: [fact], threads: [] }, { id: memoryId(chat), parent: chat });
 
     const unanswered = async <T,>(write: () => Promise<T>) => {
       drop = true;
@@ -172,7 +172,7 @@ describe('a deletion from memory', () => {
     try {
       expect(await unanswered(() => removeFact(store, chat, fact))).toEqual({ ok: true, data: fact });
       expect(await unanswered(() => forgetRecord(store, chat, 'r0'))).toEqual({ ok: true, data: record });
-      expect(chatMemory(store, chat)).toEqual({ records: [{ ...record, forgotten: true }], state: [], threads: [] });
+      expect(chatMemory(store, chat)).toEqual({ records: [{ ...record, forgotten: true }], chapters: [], state: [], threads: [] });
     } finally {
       vi.useRealTimers();
     }
@@ -187,7 +187,7 @@ describe('an edit of memory', () => {
     await startChat(store, chat, { title: null, character: null, models: {} }, null);
     const fact = { about: 'Luna', field: 'place', value: 'the pier', record: null };
     const thread = { id: 't0', text: 'They meet again tomorrow.', opened: null };
-    await store.create('memory', { records: [], state: [fact], threads: [thread] }, { id: memoryId(chat), parent: chat });
+    await store.create('memory', { records: [], chapters: [], state: [fact], threads: [thread] }, { id: memoryId(chat), parent: chat });
     const other = await open();
     await server.hold(other, chat);
     await removeFact(other, chat, fact);
@@ -195,7 +195,7 @@ describe('an edit of memory', () => {
 
     expect(await setFact(store, chat, { ...fact, value: 'the lighthouse' }, fact)).toEqual({ ok: false, error: 'gone' });
     expect(await setThread(store, chat, { ...thread, text: 'Tomorrow, at noon.' }, true)).toEqual({ ok: false, error: 'gone' });
-    expect(chatMemory(store, chat)).toEqual({ records: [], state: [], threads: [] });
+    expect(chatMemory(store, chat)).toEqual({ records: [], chapters: [], state: [], threads: [] });
   });
 });
 
@@ -236,6 +236,126 @@ describe('a summary picked up after a reload', () => {
       await writer.close();
       await vi.waitFor(() => expect(second.store.list('stream')).toEqual([]));
       expect(chatMemory(second.store, chat).records).toEqual([]);
+    } finally {
+      second.close();
+    }
+  });
+});
+
+describe('chapters', () => {
+  const said = ['We meet at the pier.', 'Luna waves at jin.', 'jin promises to return.'];
+  const chapterAnswer = JSON.stringify({ chapter: { when: null, where: 'the pier', who: ['Luna', 'jin'], what: 'They meet, and jin promises to return.', lines: [{ speaker: 'jin', text: 'jin promises to return.' }], outcome: '' } });
+  const fact = { about: 'Luna', field: 'place', value: 'the pier', record: 'r0' };
+  const thread = { id: crypto.randomUUID(), text: 'jin returns.', opened: 'r2' };
+
+  // Three records, one message each, under a setting whose budget only consolidation can meet.
+  async function recorded(session: Session, settings: Partial<MemorySettings>, chapters: (ids: string[]) => Chapter[] = () => [], stale = false) {
+    await answerable(session);
+    await setDefaultMemory(session.store, { window: 1, batch: 1000, budget: 1, ...settings });
+    const chat = crypto.randomUUID();
+    await server.hold(session.store, chat);
+    await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+    const ids: string[] = [];
+    for (const text of said) {
+      const id = crypto.randomUUID();
+      ids.push(id);
+      await appendUserMessage(session.store, chat, { id, text });
+    }
+    const records = said.map((text, index) => ({ id: `r${index}`, sources: [{ message: ids[index]!, version: ids[index]! }], print: stale && index === 0 ? 'another text' : fingerprint([{ role: 'user', text }]), when: null, where: 'the pier', who: ['Luna'], what: `Event ${index}.`, lines: [], outcome: '', state: [], opens: [], closes: [], receipt: null, at: 0 }));
+    await session.store.create('memory', { records, chapters: chapters(ids), state: [fact], threads: [thread] }, { id: memoryId(chat), parent: chat });
+    await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Will you wait?' });
+    return { chat, records };
+  }
+
+  it('summarizes the oldest records again into one chapter from their messages once memory passes its setting, leaving records, state and threads as they are', () =>
+    server.withSession(async (session) => {
+      const { chat, records } = await recorded(session, {});
+      const log = stubRelay(inTurn([saying('Luna smiles.'), saying(chapterAnswer)]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).chapters).toHaveLength(1));
+      const memory = chatMemory(session.store, chat);
+      expect(memory.chapters[0]).toMatchObject({ what: 'They meet, and jin promises to return.', records: [{ id: 'r0', at: 0 }, { id: 'r1', at: 0 }, { id: 'r2', at: 0 }], sources: records.flatMap(({ sources }) => sources) });
+      expect([memory.records, memory.state, memory.threads]).toEqual([records, [fact], [thread]]);
+      expect(log[1]!.sent.body).toContain('Write no state and no threads');
+      await vi.waitFor(() => expect(session.store.list('stream')).toEqual([]));
+      expect(log).toHaveLength(2);
+    }));
+
+  it('holds a failed chapter apart, so records go on being made', () =>
+    server.withSession(async (session) => {
+      const { chat } = await recorded(session, {});
+      stubRelay(inTurn([saying('Luna smiles.'), saying('No chapter today.')]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      await vi.waitFor(() => expect(session.memory.snapshot().chapterFailed.get(chat)).toMatchObject({ kind: 'invalid', reason: 'unreadable' }));
+      expect(session.memory.snapshot().failed.has(chat)).toBe(false);
+
+      await setDefaultMemory(session.store, { batch: 1, budget: 1_000_000 });
+      stubRelay(inTurn([saying(summary('jin asks Luna to wait.', 'Will you wait?'))]));
+      session.memory.check(chat);
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).records).toHaveLength(4));
+      expect(chatMemory(session.store, chat).chapters).toEqual([]);
+    }));
+
+  it('drops a chapter whose record the user edited while it was written', () =>
+    server.withSession(async (session) => {
+      const { chat } = await recorded(session, {});
+      const stream = new TransformStream<Uint8Array, Uint8Array>();
+      const writer = stream.writable.getWriter();
+      const log = stubRelay(inTurn([saying('Luna smiles.'), new Response(stream.readable, { headers: { 'x-relay': 'upstream' } })]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      await vi.waitFor(() => expect(log).toHaveLength(2));
+      await editRecord(session.store, chat, 'r1', { what: 'jin waves back.' });
+      await writer.write(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: chapterAnswer }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`));
+      await writer.close();
+      await vi.waitFor(() => expect(session.store.list('stream')).toEqual([]));
+      await vi.waitFor(() => expect(session.memory.snapshot().running.size).toBe(0));
+      expect([chatMemory(session.store, chat).chapters, session.memory.snapshot().chapterFailed.size, log.length]).toEqual([[], 0, 2]);
+    }));
+
+  it('names the records a record inside a chapter is summarized again into, and leaves the chapter for the user to make again', () =>
+    server.withSession(async (session) => {
+      const chapter = (ids: string[]): Chapter[] => [
+        { id: 'c0', sources: ids.slice(0, 2).map((id) => ({ message: id, version: id })), print: fingerprint(said.slice(0, 2).map((text) => ({ role: 'user', text }))), when: null, where: null, who: [], what: 'They meet.', lines: [], outcome: '', receipt: null, at: 0, records: [{ id: 'r0', at: 0 }, { id: 'r1', at: 0 }] },
+      ];
+      const { chat } = await recorded(session, { budget: 1_000_000 }, chapter, true);
+      const log = stubRelay(inTurn([saying(summary('jin and Luna meet.', 'We meet at the pier.'))]));
+      session.memory.check(chat);
+      await vi.waitFor(() => expect(chatMemory(session.store, chat).records[0]).toMatchObject({ what: 'jin and Luna meet.' }));
+      const memory = chatMemory(session.store, chat);
+      expect(memory.chapters[0]!.records).toEqual([{ id: memory.records[0]!.id, at: 0 }, { id: 'r1', at: 0 }]);
+      await vi.waitFor(() => expect(session.memory.snapshot().running.size).toBe(0));
+      expect(log).toHaveLength(1);
+    }));
+
+  it('commits a chapter call picked up after a reload as a chapter', async () => {
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('document', { visibilityState: 'hidden' });
+    const { accountId, vaultKey } = await server.account();
+    const open = async () => {
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal);
+      if (!opened.ok) throw new Error(opened.error);
+      opened.data.startBackground();
+      return opened.data;
+    };
+    const first = await open();
+    const { chat } = await recorded(first, {});
+    const provider = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = provider.writable.getWriter();
+    const log = stubRelay(inTurn([saying('Luna smiles.'), new Response(provider.readable, { headers: { 'x-relay': 'upstream' } })]));
+    expect(await takeTurn(first, chat, { kind: 'answer' })).toBeNull();
+    await vi.waitFor(() => expect(first.store.list('stream').map(({ value }) => value.for)).toEqual([expect.objectContaining({ kind: 'memory', chapter: ['r0', 'r1', 'r2'] })]));
+    await vi.waitFor(() => expect(log).toHaveLength(2));
+    const result = first.store.list('stream')[0]!.value.result;
+    first.close();
+
+    const second = await open();
+    try {
+      await server.hold(second.store, chat);
+      await vi.waitFor(() => expect(second.memory.snapshot().running.has(chat)).toBe(true));
+      await writer.write(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: chapterAnswer }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`));
+      await writer.close();
+      await vi.waitFor(() => expect(second.store.list('stream')).toEqual([]));
+      expect(chatMemory(second.store, chat).chapters.map(({ id, records }) => [id, records.map(({ id }) => id)])).toEqual([[result, ['r0', 'r1', 'r2']]]);
     } finally {
       second.close();
     }

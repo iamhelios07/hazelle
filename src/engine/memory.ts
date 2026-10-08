@@ -1,22 +1,28 @@
 import { isRecord } from '../connectors/values';
-import type { Change, Fact, Line, Memory, MemoryRecord, Source, Thread } from '../model/memory';
+import type { Change, Chapter, Fact, Line, Memory, MemoryRecord, Source, Thread, Written } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 
-// covered: the leading messages memory covers, which the chat slots leave out. missing: how many of those went with no
-// memory standing for them (stale, over the budget, forgotten, or the slot did not reach the request). slot: whether
-// the prompt holds 장기 기억 where it reaches the request, whatever memory holds.
+// sent: the records and chapters sent. covered: the leading messages memory covers, which the chat slots leave out.
+// missing: how many of those went with no memory standing for them (stale, over the budget, forgotten, or the slot did
+// not reach the request). slot: whether the prompt holds 장기 기억 where it reaches the request, whatever memory holds.
 export type MemorySent = { sent: string[]; covered: number; missing: number; slot: boolean };
 
-// stale: its messages render differently now, so it waits (design §6.2, When the source changes).
-export type RecordStatus = 'sent' | 'stale' | 'over' | 'forgotten';
+// A record's or a chapter's. stale: its messages render differently now, so it waits (design §6.2, When the source
+// changes). chaptered: a record whose chapter is sent in its place. recall-over: a recalled record whose messages do
+// not fit, sent as its summary.
+export type RecordStatus = 'sent' | 'stale' | 'over' | 'forgotten' | 'chaptered' | 'recall-over';
 
 // deleted: one of its messages is gone, and the record waits for the user, since 되돌리기 may bring the message back.
 // changed: its messages render differently now, after an edit, a version switch or a variable an earlier message sets.
-export type Staleness = 'deleted' | 'changed';
+// records: one of a chapter's records changed, was deleted or was made again since the chapter read it.
+export type Staleness = 'deleted' | 'changed' | 'records';
 
-// The chat's messages as one request reads them, oldest first: each one's id and shown version, and its role and text as
-// the prompt renders it.
-export type ChatRead = { shown: Source[]; roles: ('user' | 'assistant')[]; texts: string[] };
+// The chat's messages as one request reads them, oldest first: each one's id and shown version, and its role, its
+// speaker's name and its text as the prompt renders it.
+export type ChatRead = { shown: Source[]; roles: ('user' | 'assistant')[]; speakers: string[]; texts: string[] };
+
+export const speakersOf = ({ messages, persona, card }: { messages: readonly { role: 'user' | 'assistant' }[]; persona: { name: string } | null; card: { name: string } | null }) =>
+  messages.map(({ role }) => (role === 'user' ? (persona?.name ?? 'User') : (card?.name ?? 'Assistant')));
 
 export type MemoryInput = { memory: Memory; budget: number; shown: Source[] };
 
@@ -53,7 +59,7 @@ export const printOf = (chat: ChatRead, indices: number[]) => fingerprint(indice
 export const placesOf = (shown: Source[]) => new Map(shown.map(({ message }, index) => [message, index]));
 
 // The leading messages memory covers: through the last message any record read that is still in the chat. The planner
-// and the commit both read it, so a refused commit always means memory moved.
+// and the commit both read it, so a refused commit always means memory moved. A chapter's messages are its records'.
 export function coveredBy(memory: Memory, places: ReadonlyMap<string, number>): number {
   let end = 0;
   for (const { sources } of memory.records) {
@@ -70,7 +76,7 @@ export function coveredBy(memory: Memory, places: ReadonlyMap<string, number>): 
 // it set or removed takes the last kept record's value, and a thread it closed is open again. Only a record's own
 // changes say where in the chat they were made: what the user set, rewrote or deleted is carried as it stands now, so a
 // fact or thread of a kept record that is missing with no left-out record's change to explain it stays out, as the
-// user's deletion.
+// user's deletion. A chapter is kept when all its records are.
 export function memoryThrough(memory: Memory, kept: MemoryRecord[]): Memory {
   const carried = new Set(kept.map(({ id }) => id));
   const rest = memory.records.filter(({ id }) => !carried.has(id));
@@ -93,19 +99,31 @@ export function memoryThrough(memory: Memory, kept: MemoryRecord[]): Memory {
   const closed = new Set(rest.flatMap((record) => record.closes));
   return {
     records: kept,
+    chapters: memory.chapters.filter(({ records }) => records.every(({ id }) => carried.has(id))),
     state: [...state, ...[...facts].filter(([at]) => changed.has(at) && !held.has(at)).map(([, fact]) => fact)],
     threads: [...threads, ...[...opened].filter(([text]) => closed.has(text) && !open.has(text)).map(([text, record]) => ({ id: crypto.randomUUID(), text, opened: record }))],
   };
 }
 
-export function staleness(record: MemoryRecord, chat: ChatRead, places: ReadonlyMap<string, number>): Staleness | null {
-  const at = record.sources.map(({ message }) => places.get(message));
+export function staleness(item: Written, chat: ChatRead, places: ReadonlyMap<string, number>): Staleness | null {
+  const at = item.sources.map(({ message }) => places.get(message));
   if (at.some((index) => index === undefined)) return 'deleted';
   const indices = at as number[];
-  if (record.sources.some(({ version }, index) => chat.shown[indices[index]!]!.version !== version)) return 'changed';
-  return record.print === printOf(chat, indices) ? null : 'changed';
+  if (item.sources.some(({ version }, index) => chat.shown[indices[index]!]!.version !== version)) return 'changed';
+  return item.print === printOf(chat, indices) ? null : 'changed';
 }
 
+const recalled = (item: MemoryRecord | Chapter): item is MemoryRecord => 'recalled' in item && item.recalled === true;
+
+// The user's: automatic work never rewrites it, and it stays sent while stale.
+export const owned = (item: MemoryRecord | Chapter) => item.edited === true || item.pinned === true || recalled(item);
+
+// Sent whatever the budget, as the state and the open threads are.
+const fixed = (item: MemoryRecord | Chapter) => item.pinned === true || recalled(item);
+
+// costs: every record's and chapter's summary in tokens. fixed: what is sent whatever the budget, the state, the open
+// threads and the pinned and recalled summaries. free: the other summaries that would be sent if they fit. Neither
+// depends on the budget, so consolidation reads them against the setting.
 export type Standing = {
   covered: number;
   status: Map<string, RecordStatus>;
@@ -115,38 +133,77 @@ export type Standing = {
   sent: string[];
   held: number;
   tokens: { used: number; budget: number; state: number; stateLimit: number };
+  costs: Map<string, number>;
+  fixed: number;
+  free: number;
 };
 
-// What memory sends against its budget: the state and open threads always, pinned records always, then the newest
-// records that fit, in chat order. An automatic record that is stale is not sent; one the user edited or pinned stays
-// sent, marked, until the user decides.
+// What memory sends against its budget: the state and open threads always, pinned and recalled ones always, then the
+// newest that fit, in chat order. A chapter that can be sent stands in its first record's place for its records; a
+// pinned or recalled record in it is sent too. A recalled record sends its messages instead of its summary while they
+// fit what the budget leaves. An automatic record or chapter that is stale is not sent, nor a chapter whose records
+// moved; one the user edited or pinned stays sent, marked, until the user decides.
 export function standing(memory: Memory, chat: ChatRead, budget: number, countTokens: (text: string) => number): Standing {
   const places = placesOf(chat.shown);
   const status = new Map<string, RecordStatus>();
   const stale = new Map<string, Staleness>();
-  const candidates: MemoryRecord[] = [];
+  const summaries = new Map([...memory.records, ...memory.chapters].map((item) => [item.id, recordText(item)]));
+  const costs = new Map([...summaries].map(([id, text]) => [id, countTokens(text)]));
+  const records = new Map(memory.records.map((record) => [record.id, record]));
+  const holder = new Map<string, Chapter>();
+  for (const chapter of memory.chapters) {
+    const moved = chapter.records.some(({ id, at }) => records.get(id)?.at !== at || records.get(id)!.forgotten);
+    const why = moved ? 'records' : staleness(chapter, chat, places);
+    if (why) stale.set(chapter.id, why);
+    if (chapter.forgotten) status.set(chapter.id, 'forgotten');
+    else if (moved || (why && !owned(chapter))) status.set(chapter.id, 'stale');
+    else for (const { id } of chapter.records) holder.set(id, chapter);
+  }
+  const units: (MemoryRecord | Chapter)[] = [];
   for (const record of memory.records) {
     const why = staleness(record, chat, places);
     if (why) stale.set(record.id, why);
+    const chapter = holder.get(record.id);
+    if (chapter?.records[0]!.id === record.id) units.push(chapter);
     if (record.forgotten) status.set(record.id, 'forgotten');
-    else if (why && !record.edited && !record.pinned) status.set(record.id, 'stale');
-    else candidates.push(record);
+    else if (chapter && !fixed(record)) continue;
+    else if (why && !owned(record)) status.set(record.id, 'stale');
+    else units.push(record);
   }
   const threads = memory.threads.map(({ text }) => text);
-  const cost = new Map(candidates.map((record) => [record.id, countTokens(recordText(record))]));
-  let room = budget - countTokens(memoryText(memory.state, threads, [])) - candidates.reduce((sum, record) => sum + (record.pinned ? cost.get(record.id)! : 0), 0);
+  const always = countTokens(memoryText(memory.state, threads, [])) + units.reduce((sum, unit) => sum + (fixed(unit) ? costs.get(unit.id)! : 0), 0);
+  let room = budget - always;
+  const texts = new Map(summaries);
+  for (const unit of [...units].reverse()) {
+    if (!recalled(unit)) continue;
+    const text = recalledText(unit, chat, places);
+    const more = countTokens(text) - costs.get(unit.id)!;
+    if (more > room) status.set(unit.id, 'recall-over');
+    else {
+      room -= more;
+      texts.set(unit.id, text);
+    }
+  }
   let fits = true;
-  for (const record of [...candidates].reverse()) {
-    if (!record.pinned && (!fits || cost.get(record.id)! > room)) {
-      fits = false;
-      status.set(record.id, 'over');
+  let free = 0;
+  for (const unit of [...units].reverse()) {
+    if (fixed(unit)) {
+      if (!status.has(unit.id)) status.set(unit.id, 'sent');
       continue;
     }
-    if (!record.pinned) room -= cost.get(record.id)!;
-    status.set(record.id, 'sent');
+    const cost = costs.get(unit.id)!;
+    free += cost;
+    if (!fits || cost > room) {
+      fits = false;
+      status.set(unit.id, 'over');
+      continue;
+    }
+    room -= cost;
+    status.set(unit.id, 'sent');
   }
-  const sent = memory.records.filter(({ id }) => status.get(id) === 'sent');
-  const text = memoryText(memory.state, threads, sent);
+  for (const [id, chapter] of holder) if (!status.has(id)) status.set(id, status.get(chapter.id) === 'over' ? 'over' : 'chaptered');
+  const sent = units.filter(({ id }) => status.get(id) === 'sent' || status.get(id) === 'recall-over');
+  const text = memoryText(memory.state, threads, sent.map(({ id }) => texts.get(id)!));
   const covered = coveredBy(memory, places);
   const held = new Set(sent.flatMap(({ sources }) => sources.flatMap(({ message }) => places.get(message) ?? [])));
   const state = memoryText(memory.state, [], []);
@@ -158,24 +215,85 @@ export function standing(memory: Memory, chat: ChatRead, budget: number, countTo
     sent: sent.map(({ id }) => id),
     held: held.size,
     tokens: { used: text ? countTokens(text) : 0, budget, state: state ? countTokens(state) : 0, stateLimit: stateLimit(budget) },
+    costs,
+    fixed: always,
+    free,
   };
 }
 
-// Rendered from memory alone, in its stored order, with no clock and nothing random, so between two commits the block is
-// the same text on every turn and the cache point before it holds.
-function memoryText(state: Fact[], threads: string[], records: MemoryRecord[], heading = 'What happened, in the order of the chat:', stateHead = 'Current state:'): string {
+// Consolidation (design §6.2, When memory outgrows its budget) starts once the summaries sent newest first pass HIGH of
+// the room the setting leaves them, and each chapter takes records until they are projected under LOW, so it runs in
+// batches rather than on every new record. A chapter is told to take about 1 / CHAPTER_SHARE of its records.
+const HIGH = 0.9;
+const LOW = 0.5;
+const CHAPTER_SHARE = 4;
+
+export const chapterTarget = (costs: number[]) => Math.ceil(costs.reduce((sum, cost) => sum + cost, 0) / CHAPTER_SHARE);
+
+// The most tokens of messages one chapter reads: four batches, and half of what its model can take. limit: null when
+// the model's context is unknown.
+export const chapterCap = (batch: number, limit: number | null) => Math.min(4 * batch, limit === null ? Infinity : Math.floor(limit / 2));
+
+// The next chapter: from the oldest run of two or more loose records, its messages by place (from included, to not)
+// and its target length. A loose record is automatic, fresh, in no chapter (a deleted one included) and not in a run
+// that failed this session (failed). Measured against setting, the memory budget as set, never the budget a smaller
+// model shrinks it to for one request: switching models must not change what a chat remembers. null: nothing to do.
+export function nextChapter(memory: Memory, held: Standing, shown: Source[], tokens: number[], setting: number, cap: number, failed: ReadonlySet<string>): { from: number; to: number; records: string[]; target: number } | null {
+  const room = setting - held.fixed;
+  if (held.free <= room * HIGH) return null;
+  const places = placesOf(shown);
+  const member = new Set(memory.chapters.flatMap(({ records }) => records.map(({ id }) => id)));
+  const runs: MemoryRecord[][] = [[]];
+  for (const record of memory.records) {
+    if (!record.forgotten && !owned(record) && !member.has(record.id) && !held.stale.has(record.id) && !failed.has(record.id)) runs.at(-1)!.push(record);
+    else if (runs.at(-1)!.length) runs.push([]);
+  }
+  for (const run of runs) {
+    const picked: { record: MemoryRecord; indices: number[]; cost: number }[] = [];
+    let read = 0;
+    let cost = 0;
+    for (const record of run) {
+      const indices = record.sources.map(({ message }) => places.get(message)!);
+      const size = indices.reduce((sum, at) => sum + tokens[at]!, 0);
+      if (read + size > cap) break;
+      picked.push({ record, indices, cost: held.costs.get(record.id)! });
+      read += size;
+      cost += held.costs.get(record.id)!;
+      if (picked.length >= 2 && held.free - cost + chapterTarget([cost]) <= room * LOW) break;
+    }
+    if (picked.length < 2) continue;
+    const indices = picked.flatMap((each) => each.indices);
+    return { from: Math.min(...indices), to: Math.max(...indices) + 1, records: picked.map(({ record }) => record.id), target: chapterTarget(picked.map((each) => each.cost)) };
+  }
+  return null;
+}
+
+// Rendered from memory alone, and a recalled record's messages as the prompt renders them, in stored order, with no
+// clock and nothing random, so between two commits the block is the same text on every turn and the cache point before
+// it holds.
+function memoryText(state: Fact[], threads: string[], items: string[], heading = 'What happened, in the order of the chat:', stateHead = 'Current state:'): string {
   return [
     state.length ? [stateHead, ...state.map(({ about, field, value }) => `- ${about}, ${field}: ${value}`)].join('\n') : '',
     threads.length ? ['Open threads:', ...threads.map((thread) => `- ${thread}`)].join('\n') : '',
-    records.length ? [heading, ...records.map(recordText)].join('\n\n') : '',
+    items.length ? [heading, ...items].join('\n\n') : '',
   ]
     .filter((part) => part !== '')
     .join('\n\n');
 }
 
-function recordText({ when, where, who, what, lines, outcome }: MemoryRecord): string {
-  const head = [`When: ${when ?? 'unknown'}`, `Where: ${where ?? 'unknown'}`, ...(who.length ? [`Present: ${who.join(', ')}`] : [])].join(' · ');
-  return [`[${head}]`, what, ...lines.map(({ speaker, text }) => `${speaker}: "${text}"`), ...(outcome ? [`Outcome: ${outcome}`] : [])].join('\n');
+const headOf = ({ when, where, who }: Written) => `[${[`When: ${when ?? 'unknown'}`, `Where: ${where ?? 'unknown'}`, ...(who.length ? [`Present: ${who.join(', ')}`] : [])].join(' · ')}]`;
+
+function recordText(item: Written): string {
+  const { what, lines, outcome } = item;
+  return [headOf(item), what, ...lines.map(({ speaker, text }) => `${speaker}: "${text}"`), ...(outcome ? [`Outcome: ${outcome}`] : [])].join('\n');
+}
+
+function recalledText(record: MemoryRecord, chat: ChatRead, places: ReadonlyMap<string, number>): string {
+  const said = record.sources.flatMap(({ message }) => {
+    const at = places.get(message);
+    return at === undefined ? [] : [`${chat.speakers[at]}: ${chat.texts[at]!.trim()}`];
+  });
+  return [headOf(record), 'The messages, word for word:', ...said].join('\n');
 }
 
 // Where the raw window starts, by each message's tokens, oldest first: a message partly inside the window is inside it,
@@ -205,16 +323,19 @@ export function nextSpan(tokens: number[], covered: number, { window, batch }: {
 // A thread as a job names it: its id's first group, which stays the same whichever device reads the answer.
 export const threadLabel = (thread: Thread) => `T-${thread.id.slice(0, 8)}`;
 
-export function memoryBefore(memory: Memory, before: MemoryRecord | null, limit: number, countTokens: (text: string) => number): string {
+export function memoryBefore(memory: Memory, before: Written | null, limit: number, countTokens: (text: string) => number): string {
   const size = countTokens(memoryText(memory.state, [], []));
   return memoryText(
     memory.state,
     memory.threads.map((thread) => `[${threadLabel(thread)}] ${thread.text}`),
-    before ? [before] : [],
+    before ? [recordText(before)] : [],
     'The record just before these messages:',
     `Current state (${size} of at most ${limit} tokens${size > limit ? '; over the limit, so remove or merge facts' : ''}):`,
   );
 }
+
+// A chapter job reads no state and no threads, which describe the present, not the chapter's time.
+export const chapterBefore = (before: Written | null) => memoryText([], [], before ? [recordText(before)] : [], 'The chapter just before these messages:');
 
 export const spanText = (messages: { speaker: string; text: string }[]) => messages.map(({ speaker, text }, index) => `[#${index + 1} ${speaker}]\n${text}`).join('\n\n');
 
@@ -226,8 +347,18 @@ export const memoryFormat = (count: number) =>
     'Every record has every field: "to" (a number); "when" and "where" (text, or null when the messages do not say); "who" (the names of those present); "what" (what happened); "lines" (key lines, each {"speaker": name, "text": the line copied word for word from the messages}); "outcome" (text); "state" (only the facts this record changes, each {"about": name, "field": what it is, "value": its new value, or null when the fact no longer holds, such as a healed injury, an item given away or a place left}; one value per field, so merge duplicates of the same about and field into one); "opens" (new unresolved promises, foreshadowing or events, as text); "closes" (the labels of the open threads it resolves, such as "T-1a2b3c4d").',
   ].join('\n');
 
+// The app's own sentence after a memory prompt for a chapter, which overrides what the prompt asks of records:
+// parseChapter depends on every word of it.
+export const chapterFormat = (count: number, target: number) =>
+  [
+    'Answer with one JSON object and nothing else: {"chapter": {...}}.',
+    `The chapter is one summary of all ${count} numbered messages, about ${target} tokens long. Write no state and no threads, whatever the instructions above ask.`,
+    'It has every field: "when" and "where" (text, or null when the messages do not say); "who" (the names of those present); "what" (what happened); "lines" (key lines, each {"speaker": name, "text": the line copied word for word from the messages}); "outcome" (text).',
+  ].join('\n');
+
+export type Scene = Pick<Written, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome'>;
 // closes: the labels of the threads it closes (threadLabel).
-export type Drafted = Pick<MemoryRecord, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome' | 'state' | 'opens'> & { to: number; closes: string[] };
+export type Drafted = Scene & Pick<MemoryRecord, 'state' | 'opens'> & { to: number; closes: string[] };
 export type Invalid = 'unreadable' | 'fields' | 'lines';
 
 const isText = (value: unknown): value is string => typeof value === 'string';
@@ -239,12 +370,8 @@ const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
 // messages' texts as the prompt rendered them) exactly, every field present, and every key line found word for word in
 // its own record's messages, spacing aside.
 export function parseRecords(answer: string, span: string[]): { ok: true; records: Drafted[] } | { ok: false; reason: Invalid } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(answer.slice(answer.indexOf('{'), answer.lastIndexOf('}') + 1));
-  } catch {
-    return { ok: false, reason: 'unreadable' };
-  }
+  const parsed = jsonOf(answer);
+  if (parsed === undefined) return { ok: false, reason: 'unreadable' };
   if (!isRecord(parsed) || !Array.isArray(parsed.records) || !parsed.records.length) return { ok: false, reason: 'fields' };
   const records: Drafted[] = [];
   let from = 0;
@@ -259,25 +386,39 @@ export function parseRecords(answer: string, span: string[]): { ok: true; record
   return from === span.length ? { ok: true, records } : { ok: false, reason: 'fields' };
 }
 
-function drafted(item: unknown): Drafted | null {
+// A chapter job's answer, by the same rules over its whole span, with no state or threads.
+export function parseChapter(answer: string, span: string[]): { ok: true; chapter: Scene } | { ok: false; reason: Invalid } {
+  const parsed = jsonOf(answer);
+  if (parsed === undefined) return { ok: false, reason: 'unreadable' };
+  const chapter = isRecord(parsed) ? sceneOf(parsed.chapter) : null;
+  if (!chapter) return { ok: false, reason: 'fields' };
+  const source = flat(span.join('\n'));
+  return chapter.lines.every(({ text }) => source.includes(flat(text))) ? { ok: true, chapter } : { ok: false, reason: 'lines' };
+}
+
+function jsonOf(answer: string): unknown {
+  try {
+    return JSON.parse(answer.slice(answer.indexOf('{'), answer.lastIndexOf('}') + 1));
+  } catch {
+    return undefined;
+  }
+}
+
+function sceneOf(item: unknown): Scene | null {
   if (!isRecord(item)) return null;
-  const { to, when, where, who, what, lines, outcome, state, opens, closes } = item;
+  const { when, where, who, what, lines, outcome } = item;
   const line = (value: unknown): value is Line => isRecord(value) && isText(value.speaker) && isText(value.text) && flat(value.text) !== '';
+  if (!textOrNull(when) || !textOrNull(where) || !textsOf(who) || !isText(what) || !flat(what) || !isText(outcome) || !Array.isArray(lines) || !lines.every(line)) return null;
+  return { when, where, who, what, lines: lines.map(({ speaker, text }) => ({ speaker, text })), outcome };
+}
+
+function drafted(item: unknown): Drafted | null {
+  const scene = sceneOf(item);
+  if (!scene || !isRecord(item)) return null;
+  const { to, state, opens, closes } = item;
   const change = (value: unknown): value is Change => isRecord(value) && isText(value.about) && isText(value.field) && textOrNull(value.value);
-  if (typeof to !== 'number' || !textOrNull(when) || !textOrNull(where) || !textsOf(who) || !isText(what) || !flat(what) || !isText(outcome)) return null;
-  if (!Array.isArray(lines) || !lines.every(line) || !Array.isArray(state) || !state.every(change) || !textsOf(opens) || !textsOf(closes)) return null;
-  return {
-    to,
-    when,
-    where,
-    who,
-    what,
-    lines: lines.map(({ speaker, text }) => ({ speaker, text })),
-    outcome,
-    state: state.map(({ about, field, value }) => ({ about, field, value })),
-    opens,
-    closes,
-  };
+  if (typeof to !== 'number' || !Array.isArray(state) || !state.every(change) || !textsOf(opens) || !textsOf(closes)) return null;
+  return { to, ...scene, state: state.map(({ about, field, value }) => ({ about, field, value })), opens, closes };
 }
 
 const INSTRUCTIONS = [

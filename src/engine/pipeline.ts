@@ -1,5 +1,5 @@
 import type { ChatMessage } from '../connectors/types';
-import type { Memory, MemoryRecord } from '../model/memory';
+import type { Memory, Written } from '../model/memory';
 import type { Block, ChatRange, ConversationPrompt, MemoryPrompt, RecentSlot, Role, SlotKind, TextBlock, TranslatePrompt, WrappedSlot } from '../model/prompt';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
@@ -7,7 +7,7 @@ import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
 import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation } from './lorebook/activate';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
-import { memoryBefore, memoryBudget, memoryFormat, spanText, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
+import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
@@ -253,7 +253,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory }: 
   const tokens = remembered(countTokens);
   const laid = lay(scope, scope.messages, chat.variables, seed, tokens, null);
   const { activation, named } = laid;
-  const recalled = memory && standing(memory.memory, { shown: memory.shown, roles: scope.messages.map(({ role }) => role), texts: chat.texts }, memoryBudget(memory.budget, budget), tokens);
+  const recalled = memory && standing(memory.memory, { shown: memory.shown, roles: scope.messages.map(({ role }) => role), speakers: speakersOf(scope), texts: chat.texts }, memoryBudget(memory.budget, budget), tokens);
   const covered = recalled?.covered ?? 0;
 
   const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: recalled?.text ?? '' });
@@ -378,10 +378,13 @@ export type MemoryTaskInput = {
   prompt: MemoryPrompt;
   // budget: the 장기 기억 slot's in the chat's requests, whose share the state may take.
   memory: Memory;
-  before: MemoryRecord | null;
+  // The chapter just before a chapter's messages, else the record just before the messages.
+  before: Written | null;
   budget: number;
   // The messages summarized, by place in scope.messages, from included and to not.
   span: { from: number; to: number };
+  // A chapter's job, with its length in tokens; null for records.
+  chapter: { target: number } | null;
   seed: string;
   countTokens: (text: string) => number;
 };
@@ -391,16 +394,17 @@ export type MemoryTaskInput = {
 // depth are not sent in it.
 export const assembleMemory = (input: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } | RanAway => stoppable(() => memoryTask(input));
 
-function memoryTask({ scope, prompt, memory, before, budget, span: { from, to }, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
+function memoryTask({ scope, prompt, memory, before, budget, span: { from, to }, chapter, seed, countTokens }: MemoryTaskInput): { messages: ChatMessage[]; span: string[] } {
   const { texts, variables, stopped } = renderChat('prompt', scope);
   if (stopped) throw stopped;
   const laid = lay(scope, scope.messages.slice(0, to), variables, seed, remembered(countTokens), null);
-  const speaker = (role: 'user' | 'assistant') => (role === 'user' ? (scope.persona?.name ?? 'User') : (scope.card?.name ?? 'Assistant'));
+  const speakers = speakersOf(scope);
   const span = texts.slice(from, to);
-  const shown = spanText(span.map((text, offset) => ({ speaker: speaker(scope.messages[from + offset]!.role), text: text.trim() })));
-  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'memory', memory: memoryBefore(memory, before, stateLimit(budget), countTokens), span: shown });
+  const shown = spanText(span.map((text, offset) => ({ speaker: speakers[from + offset]!, text: text.trim() })));
+  const held = chapter ? chapterBefore(before) : memoryBefore(memory, before, stateLimit(budget), countTokens);
+  const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'memory', memory: held, span: shown });
   const messages = cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
-  return { messages: [...messages, { role: 'user', content: memoryFormat(to - from) }], span };
+  return { messages: [...messages, { role: 'user', content: chapter ? chapterFormat(to - from, chapter.target) : memoryFormat(to - from) }], span };
 }
 
 type ChatPart = { range: ChatRange; from: From };
