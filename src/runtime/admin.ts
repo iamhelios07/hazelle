@@ -1,4 +1,4 @@
-import type { BackupWarning, AccountState, RestoreAction, RestorePhase } from '../contracts/admin';
+import type { BackupWarning, AccountState, CallKind, RestoreAction, RestorePhase } from '../contracts/admin';
 import { api, SLOW_ROUTE_WAIT, type ApiResult } from './api';
 import { page } from './pages';
 
@@ -44,6 +44,12 @@ export type AccountsPage = { accounts: AdminAccount[]; next: string | null };
 const afterQuery = (after: string | null) => after === null ? '' : `?after=${encodeURIComponent(after)}`;
 export const readAccounts = (after: string | null = null, signal?: AbortSignal) => api<AccountsPage>('GET', `admin/accounts${afterQuery(after)}`, undefined, signal);
 export const readAdminAccount = (account: string) => api<{ account: AdminAccount | null }>('GET', `admin/accounts/${account}`);
+// since, today: UTC day starts. A day from since to today without a row had no call; a day before since was not counted.
+export type AccountCalls = { since: number; today: number; days: { day: number; kind: CallKind; calls: number }[] };
+export const readCalls = (account: string) => api<{ calls: AccountCalls | null }>('GET', `admin/accounts/${account}/calls`);
+// The last seven days' accounts with the most admitted calls; refused: calls the rate limits refused.
+export type TopCallers = { since: number; today: number; accounts: { accountId: string; username: string; calls: number; refused: number }[] };
+export const readTopCallers = () => api<TopCallers>('GET', 'admin/calls');
 // readAt: when the first page was read; later pages were read after it.
 export type ServiceUsage = Totals & { accounts: number };
 type UsagePage = { totals: Totals; accounts: number; next: string | null };

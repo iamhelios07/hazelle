@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { forgetOldRecords, readAll } from './admin';
+import { DAY_MS, dayStart } from './backup/snapshots';
 import { beginRestore } from './lifecycle';
 import { hex, type Services } from './http';
 import { sessionCookie, signupBody, testApp } from './testing';
@@ -254,4 +255,56 @@ it('forgets resolved reports and log rows a year old, and keeps an open report o
   await forgetOldRecords(t.env.db);
   expect((await t.env.db.prepare('SELECT id FROM reports ORDER BY id').all()).results).toEqual([{ id: 1 }, { id: 3 }]);
   expect((await t.env.db.prepare('SELECT at FROM admin_log').all()).results).toEqual([{ at: recent }]);
+});
+
+describe('call counts', () => {
+  const today = () => dayStart(Date.now());
+  const counted = (incarnation: string, day: number, kind: string, calls: number) =>
+    t.env.db.prepare('INSERT INTO call_counts (incarnation, day, kind, calls) VALUES (?, ?, ?, ?)').bind(incarnation, day, kind, calls);
+  const incarnation = async (id: string) => (await t.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation'))!;
+  const BEGAN = `SELECT applied_at FROM migrations WHERE name = '0002_call_counts.sql'`;
+
+  it("answers one account's days from the first whole day counted, and ranks the week's accounts by admitted calls", async () => {
+    const admin = await operator();
+    const other = await account('other');
+    const since = today() - 3 * DAY_MS;
+    const applied = await t.env.db.prepare(BEGAN).first<number>('applied_at');
+    const [mine, theirs] = [await incarnation(admin.id), await incarnation(other.id)];
+    try {
+      await t.env.db.batch([
+        t.env.db.prepare(`UPDATE migrations SET applied_at = ? WHERE name = '0002_call_counts.sql'`).bind(since - DAY_MS + 3 * 60 * 60 * 1000),
+        t.env.db.prepare('UPDATE accounts SET created_at = ?').bind(today() - 40 * DAY_MS),
+        // The day counting began on is partial: neither view shows it.
+        counted(theirs, since - DAY_MS, 'generate', 50),
+        counted(theirs, since, 'generate', 5),
+        counted(theirs, today(), 'short', 2),
+        counted(mine, today() - DAY_MS, 'generate', 5),
+        counted(mine, today() - DAY_MS, 'refused', 10),
+      ]);
+      expect(await (await t.get(`admin/accounts/${other.id}/calls`, admin.cookie)).json()).toEqual({
+        calls: { since, today: today(), days: [{ day: since, kind: 'generate', calls: 5 }, { day: today(), kind: 'short', calls: 2 }] },
+      });
+      expect(await (await t.get('admin/calls', admin.cookie)).json()).toEqual({
+        since,
+        today: today(),
+        accounts: [{ accountId: other.id, username: 'other', calls: 7, refused: 0 }, { accountId: admin.id, username: 'operator', calls: 5, refused: 10 }],
+      });
+      expect(await (await t.get(`admin/accounts/${crypto.randomUUID()}/calls`, admin.cookie)).json()).toEqual({ calls: null });
+      expect((await t.get('admin/accounts/invalid/calls', admin.cookie)).status).toBe(400);
+    } finally {
+      await t.env.db.prepare(`UPDATE migrations SET applied_at = ? WHERE name = '0002_call_counts.sql'`).bind(applied).run();
+    }
+  });
+
+  it('forgets a day past the thirty kept, and every day with its account', async () => {
+    await operator();
+    const other = await account('other');
+    const kept = today() - 29 * DAY_MS;
+    const theirs = await incarnation(other.id);
+    await t.env.db.batch([counted(theirs, kept, 'short', 1), counted(theirs, kept - DAY_MS, 'short', 1)]);
+    await forgetOldRecords(t.env.db);
+    expect((await t.env.db.prepare('SELECT day FROM call_counts').all()).results).toEqual([{ day: kept }]);
+    await t.env.db.prepare('DELETE FROM accounts WHERE id = ?').bind(other.id).run();
+    expect((await t.env.db.prepare('SELECT day FROM call_counts').all()).results).toEqual([]);
+  });
 });

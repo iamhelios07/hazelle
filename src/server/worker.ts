@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { accounts } from './accounts';
 import { admin, notices, reports } from './admin';
+import { countCall } from './call-counts';
 import { files, MAX_FILE_BYTES } from './files';
 import { fail, type AppEnv } from './http';
 import { BATCH_LIMITS, objects } from './objects';
@@ -73,7 +74,10 @@ app.route('/reports', reports);
 app.route('/notices', notices);
 app.route('/admin', admin);
 app.route('/prices', prices);
-app.post('/relay', requireSession, canCall, (c) => createRelay(c.env.outbound)(c.req.raw));
+app.post('/relay', requireSession, canCall, async (c) => {
+  await countCall(c.env.db, c.get('account').incarnation, 'short');
+  return createRelay(c.env.outbound)(c.req.raw);
+});
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 
