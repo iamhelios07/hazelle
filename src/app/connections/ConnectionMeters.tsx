@@ -14,9 +14,9 @@ const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[reset
 
 // At a glance: whole numbers from ten up, so 812.4 reads 812.
 const plain = (value: number) => (value >= 10 ? Math.round(value).toLocaleString('ko-KR') : creditAmount(value));
-const UNITS: Record<Exclude<MeterUnit, 'usd'>, string> = { credit: ' 크레딧', requests: '회', tokens: ' 토큰', concurrency: '' };
-const amount = (unit: MeterUnit, value: number) => (unit === 'usd' ? usd(value) : plain(value));
+const UNITS: Record<Exclude<MeterUnit, 'usd'>, string> = { credit: ' 크레딧', requests: '회', tokens: ' 토큰', concurrency: '', percent: '%' };
 const figure = (unit: MeterUnit, value: number) => (unit === 'usd' ? usd(value) : `${plain(value)}${UNITS[unit]}`);
+const amount = (unit: MeterUnit, value: number) => (unit === 'usd' || unit === 'percent' ? figure(unit, value) : plain(value));
 
 // What is left of the first allowance, as a row elsewhere names it; null where there is none.
 export function leftOf(result: MetersResult): string | null {
@@ -32,7 +32,7 @@ export function MeterGauge({ meter, turn = null, waiting = false, labeled = true
   if (meter.kind === 'spent') return <Gauge label={meter.label} amount={amount(meter.unit, meter.amount)} of="사용" />;
   const label = labeled ? (meter.resets ? `${meter.label} · ${reset(meter.resets)}` : meter.label) : undefined;
   if (meter.limit === null) return <Gauge label={label} amount={amount(meter.unit, meter.amount)} of="남음" />;
-  const left = { amount: amount(meter.unit, meter.amount), of: `/ ${figure(meter.unit, meter.limit)} 남음`, share: (meter.limit - meter.amount) / meter.limit };
+  const left = { amount: amount(meter.unit, meter.amount), of: meter.unit === 'percent' ? '남음' : `/ ${figure(meter.unit, meter.limit)} 남음`, share: (meter.limit - meter.amount) / meter.limit };
   if (meter.amount <= 0) {
     const back = meter.resets === null ? undefined : typeof meter.resets === 'string' ? RESETS[meter.resets] : `${monthDay(meter.resets.at)} 초기화`;
     return <Gauge label={label} {...left} tone="warn" status="소진" note={back} />;

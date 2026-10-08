@@ -15,6 +15,7 @@ import { groq } from './groq';
 import { mistral } from './mistral';
 import { moonshot } from './moonshot';
 import { nanogpt } from './nanogpt';
+import { novelai } from './novelai';
 import { ollama } from './ollama';
 import { openai } from './openai';
 import { openRouter } from './openrouter';
@@ -51,6 +52,7 @@ export const CONNECTION_TYPES: readonly ConnectionType[] = [
   mistral,
   moonshot,
   upstage,
+  novelai,
   copilot,
 ];
 
@@ -60,7 +62,9 @@ export const GENERIC = 'generic';
 // version of the app speaks.
 const CODECS: Partial<Record<string, Codec>> = { 'chat-completions': chatCompletions, 'anthropic-messages': anthropicMessages, gemini, responses };
 
-export type Resolved = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
+// Route: a connection that speaks a chat format. codec null: one whose type speaks none, with its fixed model list.
+export type Route = { type: ConnectionType | null; endpoint: Endpoint; codec: Codec };
+export type Resolved = Route | { type: ConnectionType; endpoint: null; codec: null; models: Model[] };
 
 // null for a type this version does not know, such as one saved by a newer version of the app.
 export function resolveConnection(connection: Connection): Resolved | null {
@@ -70,12 +74,14 @@ export function resolveConnection(connection: Connection): Resolved | null {
     return { type: null, endpoint: { baseUrl: connection.baseUrl, protocol: connection.protocol }, codec };
   }
   const type = CONNECTION_TYPES.find((candidate) => candidate.id === connection.type);
-  return type ? { type, endpoint: type.endpoint, codec: CODECS[type.endpoint.protocol]! } : null;
+  if (!type) return null;
+  return type.endpoint ? { type, endpoint: type.endpoint, codec: CODECS[type.endpoint.protocol]! } : { type, endpoint: null, codec: null, models: type.models };
 }
 
 const typeForHost = (hostname: string) => CONNECTION_TYPES.find((type) => type.detect?.host === hostname);
 
-export function resolveModel(resolved: Resolved, model: Model): Resolved {
+export function resolveModel(resolved: Resolved, model: Model): Route {
+  if (resolved.codec === null) throw new ConnectorError('image-only');
   const protocol = model.protocol ?? resolved.endpoint.protocol;
   if (protocol === resolved.endpoint.protocol) return resolved;
   const baseUrl = protocol !== 'unsupported' && resolved.type?.routes?.[protocol];
@@ -84,13 +90,13 @@ export function resolveModel(resolved: Resolved, model: Model): Resolved {
   return { type: resolved.type, endpoint: { baseUrl, protocol }, codec };
 }
 
-export function parseCatalog({ type, codec }: Resolved, payload: unknown): Model[] | null {
+export function parseCatalog({ type, codec }: Route, payload: unknown): Model[] | null {
   return (type?.parseModels ?? codec.parseModels)(payload);
 }
 
-const cacheWay = ({ type, codec }: Resolved, model: Model): CacheWay | null => codec.cache ?? type?.cachePoints?.(model) ?? null;
+const cacheWay = ({ type, codec }: Route, model: Model): CacheWay | null => codec.cache ?? type?.cachePoints?.(model) ?? null;
 
-function carries(route: Resolved, model: Model): Carries {
+function carries(route: Route, model: Model): Carries {
   const { reasoning } = route.codec.carries;
   const way = cacheWay(route, model);
   return {
@@ -115,13 +121,13 @@ export function modelSettings(connection: Connection, model: Model): SettingsSch
 
 // settings is the 묶음's as stored; the 모델 설정 screen names each change with the same fit().
 // chatRequest writes it and cacheView reads it, so a forecast compares what is sent.
-function sending(route: Resolved, { model, messages, settings: stored }: ChatRequest): ChatRequest {
+function sending(route: Route, { model, messages, settings: stored }: ChatRequest): ChatRequest {
   const { settings } = fit(settingsSchema(carries(route, model), model), stored);
   const roled = settings.systemAsUser ? messages.map((message) => (message.role === 'system' ? { ...message, role: 'user' as const } : message)) : messages;
   return { model, messages: cachePoints(roled, settings.cache !== undefined), settings };
 }
 
-export function chatRequest(route: Resolved, request: ChatRequest): HttpRequest {
+export function chatRequest(route: Route, request: ChatRequest): HttpRequest {
   const sent = sending(route, request);
   const { reasoning, maxOutput } = sent.settings;
   const fields = reasoning?.kind === 'budget' && !route.codec.carries.reasoning.budget && route.type?.reasoningBudget ? route.type.reasoningBudget(reasoning.tokens) : {};
@@ -136,7 +142,7 @@ export type CacheView = { model: string; reasoning: ModelSettings['reasoning']; 
 
 // A prompt_cache_key marks no point: the provider caches what prefix it finds, so the view holds none and nothing is
 // forecast.
-export function cacheView(route: Resolved, request: ChatRequest): CacheView {
+export function cacheView(route: Route, request: ChatRequest): CacheView {
   const { settings, messages: sent } = sending(route, request);
   const messages = cacheWay(route, request.model)?.mark.kind === 'key' ? sent.map(({ role, content }): ChatMessage => ({ role, content })) : sent;
   const placed = messages.map((message, index) => ({ ...message, index }));
@@ -153,7 +159,7 @@ function cachePoints(messages: ChatMessage[], caching: boolean): ChatMessage[] {
   return messages.map((message, index) => (!message.cache || kept.has(index) ? message : { role: message.role, content: message.content }));
 }
 
-export function withCredential({ type, codec }: Resolved, request: HttpRequest, credential: string): HttpRequest {
+export function withCredential({ type, codec }: Route, request: HttpRequest, credential: string): HttpRequest {
   return { ...request, headers: { ...request.headers, ...(type?.headers ?? codec.authHeaders)(credential) } };
 }
 

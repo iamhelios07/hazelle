@@ -20,11 +20,12 @@ import {
   resolveModel,
   searchTypes,
   withCredential,
+  type Route,
 } from './registry';
 import { ConnectorError, type Connection, type Model } from './types';
 
 const connection = (type: string, extra: Partial<Connection> = {}) =>
-  resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra })!;
+  resolveConnection({ type, label: type, baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [], ...extra }) as Route;
 
 const model = (extra: Partial<Model> = {}): Model => ({
   id: 'm',

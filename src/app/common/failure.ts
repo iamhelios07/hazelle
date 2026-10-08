@@ -58,6 +58,9 @@ const REFUSED: Record<string, string> = {
   'max-tokens-unknown': '이 모델의 최대 출력 길이를 알 수 없어서 보낼 수 없어요.',
   'unknown-connection-type': '지원하지 않는 연결 종류예요. 새로고침해 주세요.',
   'unsupported-protocol': '이 모델의 요청 방식은 지원하지 않아요.',
+  'image-only': '이미지만 만드는 모델이라 대화에 쓸 수 없어요.',
+  'too-many-characters': '이 모델이 한 장면에 그릴 수 있는 인물 수를 넘었어요.',
+  'unknown-model': '이 버전에서 모르는 모델이에요. 새로고침해 주세요.',
   'model-gone': '모델이 연결에서 빠져서 응답을 이어 받을 수 없어요.',
 };
 

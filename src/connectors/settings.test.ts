@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import copilotModels from './fixtures/copilot-models.json';
 import openRouterModels from './fixtures/openrouter-models.json';
 import vercelModels from './fixtures/vercel-models.json';
-import { cacheView, chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel } from './registry';
+import { cacheView, chatRequest, modelSettings, parseCatalog, resolveConnection, resolveModel, type Route } from './registry';
 import { fit, type ModelSettings } from './settings';
 import type { ChatMessage, Connection, Model } from './types';
 
@@ -11,7 +11,7 @@ const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', p
 const bare: Model = { id: 'm', name: 'm', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
 
 function listed(type: string, payload: unknown, id: string): Model {
-  return parseCatalog(resolveConnection(connection(type))!, payload)!.find((model) => model.id === id)!;
+  return parseCatalog(resolveConnection(connection(type)) as Route, payload)!.find((model) => model.id === id)!;
 }
 
 function body(on: Connection, model: Model, settings: ModelSettings) {

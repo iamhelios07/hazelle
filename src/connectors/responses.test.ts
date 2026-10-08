@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatRequest, modelSettings, resolveConnection, type Resolved } from './registry';
+import { chatRequest, modelSettings, resolveConnection, type Route } from './registry';
 import { fit, type ModelSettings } from './settings';
 import { decodeStream } from './stream';
 import type { ChatMessage, Connection, Model, Phase } from './types';
@@ -7,10 +7,10 @@ import type { ChatMessage, Connection, Model, Phase } from './types';
 // Event and reply shapes follow OpenAI's Responses API reference (streaming events, the response object) and
 // provider-hub's parser (wire/formats/openai-responses.js). None was captured from a live provider.
 const on: Connection = { type: 'generic', label: '직접 연결', baseUrl: 'https://api.example.com/v1', protocol: 'responses', accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] };
-const route = resolveConnection(on)!;
+const route = resolveConnection(on) as Route;
 const model: Model = { id: 'gpt-5', name: 'gpt-5', input: null, output: null, contextLength: null, maxOutput: null, reasoning: null, tools: null, protocol: null, takes: { settings: null, reasoning: null } };
 
-async function decode(resolved: Resolved, text: string, media = 'text/event-stream') {
+async function decode(resolved: Route, text: string, media = 'text/event-stream') {
   const parts: [Phase, string][] = [];
   const outcome = await decodeStream(resolved, model, new Response(text, { headers: { 'content-type': media } }), new AbortController().signal, (phase, chunk) => parts.push([phase, chunk]));
   const joined = (phase: Phase) => parts.filter(([p]) => p === phase).map(([, chunk]) => chunk).join('');
