@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { scopeOf } from './chat-context';
 import { EvaluationStuck } from './evaluation';
 import type { ObjectStore, Write } from './store';
 import { saveSummaries, summaryId } from './summary';
@@ -34,6 +35,15 @@ describe('a chat whose bot does not end', () => {
     await phone.pull();
     expect(phone.projections.verdict(a)).not.toBeNull();
     expect(phone.projections.verdict(b)).toBeNull();
+  });
+
+  it("keeps its verdict out of the reads of the display that asked for a job", async () => {
+    const { store } = await server.account();
+    const a = crypto.randomUUID();
+    const scope = scopeOf({ store }, a, { title: null, character: null, models: {} }, []);
+    const { value, reads } = store.capture(() => store.evaluation.display({ asker: 'headless', chat: a }, scope, new Set()));
+    await value;
+    expect(reads).toEqual([]);
   });
 
   it('fails as bot-stuck, once, when even its display without the regex does not end', async () => {

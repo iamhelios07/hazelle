@@ -155,7 +155,7 @@ it('kills only a started job that goes silent, judges its chat before the next i
   evaluation.close();
 });
 
-it('holds a job to its chat\'s verdict as it is posted: a passive one is refused, a display leaves the regex out', async () => {
+it('holds a job to its chat\'s verdict as it is posted: a passive one is refused, a display leaves the regex out, a press runs', async () => {
   const { workers, jobs } = fakeWorkers();
   const stuck = new Set<string>();
   const evaluation = new Evaluation({ verdict: (chat) => stuck.has(chat), judged: () => {} });
@@ -172,6 +172,10 @@ it('holds a job to its chat\'s verdict as it is posted: a passive one is refused
   worker.receive({ id: posted[1]!.id, result: null });
   await queued;
   await expect(asked).rejects.toBeInstanceOf(EvaluationStuck);
-  expect(jobs(worker).map(({ input }) => input.lane)).toEqual(['screen:x', 'projection:c']);
+  const translation = { scope, take: new Set<number>(), prompt: { name: '', blocks: [], toggles: [], task: 'translate' as const }, translations: [], notes: '', request: { kind: 'input' as const, text: 'hi' }, language: 'Korean', seed: 's' };
+  await expect(evaluation.translation({ asker: 'auto-translation', chat: 'c' }, translation)).rejects.toBeInstanceOf(EvaluationStuck);
+  const pressed = evaluation.translation({ asker: 'translation', chat: 'c' }, translation);
+  expect(jobs(worker).map(({ input }) => input.lane)).toEqual(['screen:x', 'projection:c', expect.stringMatching(/^translation:/)]);
   evaluation.close();
+  await expect(pressed).rejects.toBeInstanceOf(EvaluationStopped);
 });

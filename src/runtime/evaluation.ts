@@ -231,9 +231,9 @@ export class Evaluation {
     this.heart.rest();
     this.histories.clear();
     this.active = null;
-    if (active.work.on) this.verdicts.judged(active.work.on.chat);
     active.work.stop();
     active.work.reject(new EvaluationStuck('Evaluation worker stuck'));
+    if (active.work.on) this.verdicts.judged(active.work.on.chat);
     this.dispatch();
   }
 
