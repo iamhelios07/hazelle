@@ -31,7 +31,7 @@ type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
 // fill: whether to bring only a card's pictures to the character Risu's move brought under its name. character: which
 // character a file of chats goes to, null for 캐릭터 없이; name is the one the file was with, when it says.
-type Ask = { kind: 'fill'; name: string; answer: (fill: boolean) => void } | { kind: 'character'; file: string; name: string | null; answer: (character: string | null) => void };
+type Ask = { kind: 'fill'; name: string; answer: (fill: boolean) => void } | { kind: 'character'; file: string; name: string | null; fallback: string | null; answer: (character: string | null) => void };
 // Where a file of chats goes: a character's id, null for 캐릭터 없이, undefined where the way in names none.
 type Target = string | null | undefined;
 type State = { busy: { file: string; steps: ProgressStep[] } | null; results: Result[]; ask: Ask | null };
@@ -51,7 +51,7 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
 };
 
 // Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,
-// a conversation prompt's editor, or 설정 › 모듈 for 항상.
+// a conversation prompt's editor, or 설정 › 모듈 for 항상. A file of chats that names no character goes to the character found here too.
 function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
   switch (route.kind) {
     case 'shelf':
@@ -101,12 +101,16 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // A file of chats goes where the way in named, else to the character it was with when that one is here, else to the
-  // route's, else where the user picks.
-  async function saveChats(file: string, read: ChatsRead, target: Target, place: ModulePlace | null, choose: (name: string | null) => Promise<string | null>): Promise<Result> {
+  // A file of chats goes where the way in named, else to the character it was with when that one is here. When that
+  // one is gone, the user picks, with a character of the same name picked first. A file that names none goes to the
+  // route's character, else where the user picks.
+  async function saveChats(file: string, read: ChatsRead, target: Target, place: ModulePlace | null, choose: (name: string | null, fallback: string | null) => Promise<string | null>): Promise<Result> {
     const named = 'chat' in read ? read.chat.character : null;
-    const character = target !== undefined ? target : named && live(store.get('character', named.id)) ? named.id : place?.kind === 'character' ? place.id : await choose(named?.name ?? null);
-    const name = character === null ? null : (store.get('character', character)?.value.card.name ?? null);
+    const routed = place?.kind === 'character' ? place.id : null;
+    const character =
+      target !== undefined ? target : named === null ? (routed ?? (await choose(null, null))) : live(store.get('character', named.id)) ? named.id : await choose(named.name, routed);
+    const shown = character === null ? null : store.get('character', character)!.value;
+    const name = shown && aliased(shown.card.name, shown.alias);
     const failed = (failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
     if ('chat' in read) {
       const saved = await importChat(store, read.chat, character);
@@ -116,7 +120,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     return saved.ok ? chatOutcome(file, saved.data, name, moveMissed(read.missed)) : failed(saved);
   }
 
-  async function save(file: File, place: ModulePlace | null, target: Target, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>, choose: (name: string | null) => Promise<string | null>): Promise<Result> {
+  async function save(file: File, place: ModulePlace | null, target: Target, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>, choose: (name: string | null, fallback: string | null) => Promise<string | null>): Promise<Result> {
     const reader = new ImportWorker();
     readers.current.add(reader);
     try {
@@ -161,7 +165,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       setState({ busy: { file: file.name, steps: [] }, results, ask: null });
       const progress = (step: ProgressStep) => setState({ busy: { file: file.name, steps: [step] }, results, ask: null });
       const ask = (name: string) => new Promise<boolean>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'fill', name, answer } }));
-      const choose = (name: string | null) => new Promise<string | null>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, answer } }));
+      const choose = (name: string | null, fallback: string | null) => new Promise<string | null>((answer) => setState({ busy: { file: file.name, steps: [] }, results, ask: { kind: 'character', file: file.name, name, fallback, answer } }));
       results.push(await save(file, place, target, progress, ask, choose));
     }
     setState({ busy: null, results, ask: null });
@@ -290,10 +294,11 @@ function Summary({ result }: { result: ImportOutcome }) {
 
 function CharacterChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'character' }>; onAnswer: () => void }) {
   const { characters } = useLibrary();
-  const [picked, setPicked] = useState(() => characters.find(({ character }) => character.card.name === ask.name)?.id ?? null);
+  const [picked, setPicked] = useState(() => characters.find(({ character }) => character.card.name === ask.name)?.id ?? ask.fallback);
   const [query, setQuery] = useState('');
   const found = characters.filter(({ character }) => matches(character, query));
-  const name = characters.find(({ id }) => id === picked)?.character.card.name ?? NO_CHARACTER;
+  const chosen = characters.find(({ id }) => id === picked)?.character;
+  const name = chosen ? aliased(chosen.card.name, chosen.alias) : NO_CHARACTER;
   return (
     <Section title={ask.name ?? ask.file}>
       <Stack gap="related">
