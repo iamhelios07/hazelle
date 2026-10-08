@@ -119,15 +119,16 @@ export type Avatar = { type: string; size: number; thumb: string; file: FileRef 
 export type Asset = { name: string; type: string; size: number; file: FileRef };
 
 // A character with its chats, or (id null) the chats that have no character: 캐릭터 없이.
-export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; chats: C[]; order: number };
+export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; chats: C[] };
 export type CharacterShelf<C> = Shelf<C> & { id: string; character: Character };
 
 type ChatLike = { chat: { character: string | null } & Mark; order: number };
 
-// chats come newest first. A character is as recent as its latest chat, or, with none yet, as its own
-// last change. Deleted characters and their chats are kept apart, most recently deleted first. binned are the deleted
-// chats: deletedChats lists those binsChat lists, most recently deleted first. One being removed for good (purging) is
-// listed nowhere: it can no longer be brought back.
+// chats come newest first. A character is as recent as its latest chat; those with none come last, by name (user
+// ruling, 2026-10-08), not by their own rev, which every edit and upgrade rewrite moves. Deleted characters and their
+// chats are kept apart, most recently deleted first. binned are the deleted chats: deletedChats lists those binsChat
+// lists, most recently deleted first. One being removed for good (purging) is listed nowhere: it can no longer be
+// brought back.
 export function shelve<C extends ChatLike>(
   characters: Stored<'character'>[],
   avatars: Stored<'avatar'>[],
@@ -141,16 +142,13 @@ export function shelve<C extends ChatLike>(
     if (own) own.push(item);
     else grouped.set(item.chat.character, [item]);
   }
-  const shelves = characters.map(({ id, rev, value }) => {
-    const own = grouped.get(id) ?? [];
-    return { id, character: value, face: faces.get(id) ?? null, chats: own, order: own[0]?.order ?? rev };
-  });
+  const shelves = characters.map(({ id, value }) => ({ id, character: value, face: faces.get(id) ?? null, chats: grouped.get(id) ?? [] }));
   const loose = grouped.get(null) ?? [];
   const live = shelves.filter((shelf) => isLive(shelf.character));
   const liveIds = new Set(live.map((shelf) => shelf.id));
   return {
-    characters: live.sort((a, b) => b.order - a.order),
-    none: { id: null, character: null, face: null, chats: loose, order: loose[0]?.order ?? 0 },
+    characters: live.sort((a, b) => (b.chats[0]?.order ?? 0) - (a.chats[0]?.order ?? 0) || a.character.card.name.localeCompare(b.character.card.name, 'ko')),
+    none: { id: null, character: null, face: null, chats: loose },
     deleted: shelves.filter((shelf) => isBinned(shelf.character)).sort((a, b) => b.character.deleted! - a.character.deleted!),
     deletedChats: binned
       .filter(({ chat }) => binsChat(chat, (id) => liveIds.has(id)))

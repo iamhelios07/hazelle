@@ -7,15 +7,15 @@ const character = (id: string, rev: number): Stored<'character'> => ({ id, kind:
 const chat = (id: string, character: string | null, order: number) => ({ id, chat: { character }, order });
 
 describe('shelve', () => {
-  it('groups chats under their character, most recent character first, and keeps characterless chats apart', () => {
+  it('groups chats under their character, most recent character first, those without chats last by name, and keeps characterless chats apart', () => {
     const avatar: Stored<'avatar'> = { id: 'blob', kind: 'avatar', parent: 'b', rev: 3, value: { type: 'image/png', size: 1, thumb: 'data:thumb', file: { id: 'f', key: 'k' } } };
     // Newest first, as chatItems gives them.
     const chats = [chat('c3', null, 9), chat('c2', 'a', 8), chat('c1', 'a', 5)];
-    const { characters, none } = shelve([character('a', 1), character('b', 2), character('c', 7)], [avatar], chats, []);
-    expect(characters.map((shelf) => [shelf.id, shelf.order, shelf.chats.map((item) => item.id)])).toEqual([
-      ['a', 8, ['c2', 'c1']],
-      ['c', 7, []],
-      ['b', 2, []],
+    const { characters, none } = shelve([character('a', 1), character('c', 7), character('b', 2)], [avatar], chats, []);
+    expect(characters.map((shelf) => [shelf.id, shelf.chats.map((item) => item.id)])).toEqual([
+      ['a', ['c2', 'c1']],
+      ['b', []],
+      ['c', []],
     ]);
     expect(characters.find((shelf) => shelf.id === 'b')!.face).toBe('data:thumb');
     expect(none.chats.map((item) => item.id)).toEqual(['c3']);

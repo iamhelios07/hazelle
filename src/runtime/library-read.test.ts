@@ -58,8 +58,8 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   items.set('c', character('c', 'k', 80));
   announce('character', 'c');
   const moved = read.library.snapshot();
-  expect(ids(moved.byFolder.get('f')!.characters)).toEqual(['c', 'a', 'b']);
-  expect(ids(moved.byFolder.get('k')!.direct)).toEqual(['c', 'a']);
+  expect(ids(moved.byFolder.get('f')!.characters)).toEqual(['a', 'b', 'c']);
+  expect(ids(moved.byFolder.get('k')!.direct)).toEqual(['a', 'c']);
   expect(ids(moved.loose)).toEqual(['d']);
   expect(changed).not.toHaveBeenCalled();
 
@@ -67,8 +67,8 @@ it('indexes folder membership and bin characters once per changed snapshot witho
   announce('folder', 'f');
   const orphaned = read.library.snapshot();
   expect(orphaned.byFolder.get('k')!.top).toBe(orphaned.byFolder.get('k')!.folder);
-  expect(ids(orphaned.byFolder.get('k')!.characters)).toEqual(['c', 'a']);
-  expect(ids(orphaned.loose)).toEqual(['d', 'b']);
+  expect(ids(orphaned.byFolder.get('k')!.characters)).toEqual(['a', 'c']);
+  expect(ids(orphaned.loose)).toEqual(['b', 'd']);
   items.set('a', character('a', 'k', 90, { deleted: 3 }));
   announce('character', 'a');
   expect(ids(read.library.snapshot().byFolder.get('k')!.characters)).toEqual(['c']);

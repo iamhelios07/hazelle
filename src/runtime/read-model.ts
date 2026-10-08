@@ -217,7 +217,7 @@ export class ReadModels {
     const previous = this.library?.snapshot();
     const reuse = <T extends Shelf<ChatSummary>>(shelf: T): T => {
       const held = shelf.id === null ? previous?.none : previous?.byCharacter.get(shelf.id);
-      return held && held.character === shelf.character && held.face === shelf.face && held.order === shelf.order && sameItems(held.chats, shelf.chats) ? held as T : shelf;
+      return held && held.character === shelf.character && held.face === shelf.face && sameItems(held.chats, shelf.chats) ? held as T : shelf;
     };
     const next = { characters: shelves.characters.map(reuse), deleted: shelves.deleted.map(reuse), deletedChats: shelves.deletedChats, none: reuse(shelves.none), folders: this.folders };
     const sameCharacters = previous !== undefined && sameItems(previous.characters, next.characters);
