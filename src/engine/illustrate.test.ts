@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Model } from '../connectors/types';
-import { parseScene, pictureRequest, PICTURE_DEFAULTS } from './illustrate';
+import { parseScene, pictureRequest, PICTURE_DEFAULTS, sceneText } from './illustrate';
 
 const answer = {
   after: 2,
@@ -27,6 +27,11 @@ describe('parseScene', () => {
     expect(parseScene(JSON.stringify({ ...answer, characters: [{ ...answer.characters[0], x: undefined }] }), 3)).toEqual({ ok: false, reason: 'fields' });
     expect(parseScene(JSON.stringify(answer), 1)).toEqual({ ok: false, reason: 'paragraph' });
     expect(parseScene('Here is the scene.', 3)).toEqual({ ok: false, reason: 'unreadable' });
+  });
+
+  it('reads back a scene written out for the user to change', () => {
+    const read = parseScene(JSON.stringify(answer), 3);
+    expect(read.ok && parseScene(sceneText(read.scene), 3)).toEqual(read);
   });
 });
 

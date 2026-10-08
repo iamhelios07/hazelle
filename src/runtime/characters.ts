@@ -165,47 +165,64 @@ export function setToggle(store: ObjectStore, character: string | null, key: str
 // hold none of those, and read as these.
 const TRANSLATE_DEFAULTS = { replies: false, input: false, reverse: false, replyLanguage: 'Korean', inputLanguage: 'English' };
 
+// 번역's and 삽화's switches: shared by every chat (Settings), or a character's own copy in their place (캐릭터별 설정).
+const OWN = { translate: 'ownTranslate', illustrate: 'ownIllustrate' } as const;
+type Scoped = keyof typeof OWN;
+type SwitchesOf = { translate: TranslateSwitches; illustrate: IllustrateSwitches };
+// What a write stores: the switches held, with a translation's required ones filled.
+const FILL: { [S in Scoped]: (saved: SwitchesOf[S] | undefined, change?: Partial<SwitchesOf[S]>) => SwitchesOf[S] } = {
+  translate: (saved, change = {}) => ({ replies: TRANSLATE_DEFAULTS.replies, input: TRANSLATE_DEFAULTS.input, ...saved, ...change }),
+  illustrate: (saved, change = {}) => ({ ...saved, ...change }),
+};
+
+function scoped<S extends Scoped>(store: Pick<ObjectStore, 'get'>, character: string | null, scope: S): { switches: SwitchesOf[S] | undefined; own: boolean } {
+  const own = character === null ? undefined : (store.get('character', character)?.value[OWN[scope]] as SwitchesOf[S] | undefined);
+  return { switches: own ?? (store.get('settings', SETTINGS_ID)?.value[scope] as SwitchesOf[S] | undefined), own: own !== undefined };
+}
+
+// Only the switches given, merged into the ones a chat of character reads: its own, or else the shared ones. A field
+// given as undefined goes back to its default.
+function setScoped<S extends Scoped>(store: ObjectStore, character: string | null, scope: S, change: Partial<SwitchesOf[S]>): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
+  const fill = FILL[scope] as (saved: SwitchesOf[S] | undefined, change?: Partial<SwitchesOf[S]>) => SwitchesOf[S];
+  const own = OWN[scope];
+  if (character !== null && store.get('character', character)?.value[own]) {
+    return store.update('character', character, (current) => ({ ...current, [own]: fill(current[own] as SwitchesOf[S], change) }));
+  }
+  return store.upsert('settings', (current) => ({ models: {}, ...current, [scope]: fill(current?.[scope] as SwitchesOf[S] | undefined, change) }));
+}
+
+// On starts from the shared switches as they are; off follows them again.
+function setOwnScoped<S extends Scoped>(store: ObjectStore, character: string, scope: S, own: boolean): Promise<ApiResult<Stored<'character'>>> {
+  const fill = FILL[scope] as (saved: SwitchesOf[S] | undefined) => SwitchesOf[S];
+  const copy = fill(store.get('settings', SETTINGS_ID)?.value[scope] as SwitchesOf[S] | undefined);
+  return store.update('character', character, (current) => (own ? { ...current, [OWN[scope]]: copy } : without(current, OWN[scope])));
+}
+
 // The switches in effect for a chat of character. input is off under reverse, whatever is stored, since 반전 모드 sends
-// what the user typed. prompt absent follows the account's default translation prompt. own: the character's own
-// switches (이 캐릭터만 따로) rather than the shared ones.
+// what the user typed. prompt absent follows the account's default translation prompt.
 export type TranslateSetup = typeof TRANSLATE_DEFAULTS & Pick<TranslateSwitches, 'prompt'> & { own: boolean };
 
 export function translateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): TranslateSetup {
-  const own = character === null ? undefined : store.get('character', character)?.value.ownTranslate;
-  const switches = { ...TRANSLATE_DEFAULTS, ...(own ?? store.get('settings', SETTINGS_ID)?.value.translate) };
-  return { ...switches, input: switches.input && !switches.reverse, own: own !== undefined };
+  const { switches: held, own } = scoped(store, character, 'translate');
+  const switches = { ...TRANSLATE_DEFAULTS, ...held };
+  return { ...switches, input: switches.input && !switches.reverse, own };
 }
 
-const stored = (saved: TranslateSwitches | undefined, change: Partial<TranslateSwitches> = {}): TranslateSwitches => ({ replies: TRANSLATE_DEFAULTS.replies, input: TRANSLATE_DEFAULTS.input, ...saved, ...change });
+export const setTranslate = (store: ObjectStore, character: string | null, change: Partial<TranslateSwitches>) => setScoped(store, character, 'translate', change);
 
-// Only the switches given, merged into the ones a chat of character reads: its own, or else the shared ones. prompt
-// given as undefined goes back to the default.
-export function setTranslate(store: ObjectStore, character: string | null, change: Partial<TranslateSwitches>): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
-  if (character !== null && store.get('character', character)?.value.ownTranslate) {
-    return store.update('character', character, (current) => ({ ...current, ownTranslate: stored(current.ownTranslate, change) }));
-  }
-  return store.upsert('settings', (current) => ({ models: {}, ...current, translate: stored(current?.translate, change) }));
-}
+export const setOwnTranslate = (store: ObjectStore, character: string, own: boolean) => setOwnScoped(store, character, 'translate', own);
 
-// 이 캐릭터만 따로: on starts from the shared switches as they are; off follows them again.
-export function setOwnTranslate(store: ObjectStore, character: string, own: boolean): Promise<ApiResult<Stored<'character'>>> {
-  const shared = store.get('settings', SETTINGS_ID)?.value.translate;
-  return store.update('character', character, (current) => (own ? { ...current, ownTranslate: stored(shared) } : without(current, 'ownTranslate')));
-}
-
-// 삽화's switches for a chat of character, or with character null for 캐릭터 없이's. Absent auto is off.
-export type IllustrateSetup = Omit<IllustrateSwitches, 'auto'> & { auto: boolean };
+// Absent auto is off.
+export type IllustrateSetup = Omit<IllustrateSwitches, 'auto'> & { auto: boolean; own: boolean };
 
 export function illustrateSwitches(store: Pick<ObjectStore, 'get'>, character: string | null): IllustrateSetup {
-  const switches = character === null ? store.get('settings', SETTINGS_ID)?.value.illustrate : store.get('character', character)?.value.illustrate;
-  return { ...switches, auto: switches?.auto ?? false };
+  const { switches, own } = scoped(store, character, 'illustrate');
+  return { ...switches, auto: switches?.auto ?? false, own };
 }
 
-// Only the switches given are merged in; prompt or model given as undefined goes back to the default.
-export function setIllustrate(store: ObjectStore, character: string | null, change: Partial<IllustrateSwitches>): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
-  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, illustrate: { ...current?.illustrate, ...change } }));
-  return store.update('character', character, (current) => ({ ...current, illustrate: { ...current.illustrate, ...change } }));
-}
+export const setIllustrate = (store: ObjectStore, character: string | null, change: Partial<IllustrateSwitches>) => setScoped(store, character, 'illustrate', change);
+
+export const setOwnIllustrate = (store: ObjectStore, character: string, own: boolean) => setOwnScoped(store, character, 'illustrate', own);
 
 // Until 2026-10-06 every character kept its own switches in translate; the shared ones replaced them (design §6.3), and
 // each session drops any left, so a device still on the old code that writes one loses it at the next load. Delete

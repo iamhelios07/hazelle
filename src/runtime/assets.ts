@@ -1,4 +1,5 @@
 import { ChangeSignal } from '../change-signal';
+import { pictureRef, type PictureKind, type PictureUrl } from '../engine/assets';
 import { toBase64 } from '../vault/aead';
 import type { Files } from './files';
 import type { ObjectStore } from './store';
@@ -6,14 +7,17 @@ import type { ObjectStore } from './store';
 const PERMANENT = new Set(['not-found', 'unreadable']);
 const INACTIVE_BYTES = 32 * 1024 * 1024;
 type Cached = { url: string | null; bytes: number; owners: Set<string>; removed: boolean };
-// url is undefined until read, and for an asset that is gone or unreadable.
-export type AssetView = { url: (id: string) => string | undefined; hold: () => () => void };
+// url is undefined until read, and for a picture that is gone or unreadable.
+export type AssetView = { url: PictureUrl; hold: () => () => void };
+
+const KINDS = new Set<string>(['asset', 'illustration'] satisfies PictureKind[]);
 
 // Mounted views pin their pictures. Only inactive URLs compete for the byte-bounded LRU; a large currently visible
 // picture must never disappear just because another picture was read. The session still owns final cleanup.
 export class AssetUrls {
   // Null while reading, and for a permanent failure. A transient failure is forgotten so the next draw retries it.
   private readonly urls = new Map<string, Cached>();
+  // By pictureRef: the file each stored picture showed.
   private readonly sources = new Map<string, string>();
   private readonly pins = new Map<string, number>();
   private readonly inactive = new Map<string, Cached>();
@@ -31,12 +35,13 @@ export class AssetUrls {
     this.unsubscribe = store.subscribe((changes) => {
       let changed = false;
       for (const { kind, id } of changes) {
-        if (kind !== 'asset') continue;
-        const file = this.sources.get(id);
-        if (!file || store.get('asset', id)?.value.file.id === file) continue;
-        this.sources.delete(id);
+        if (!KINDS.has(kind)) continue;
+        const ref = pictureRef(kind as PictureKind, id);
+        const file = this.sources.get(ref);
+        if (!file || store.get(kind as PictureKind, id)?.value.file.id === file) continue;
+        this.sources.delete(ref);
         const cached = this.urls.get(file)!;
-        cached.owners.delete(id);
+        cached.owners.delete(ref);
         if (!cached.owners.size) {
           cached.removed = true;
           // Removal invalidates new lookups immediately, but a mounted view keeps its old URL until it leaves.
@@ -58,7 +63,7 @@ export class AssetUrls {
     const files = new Set<string>();
     let held = false;
     return {
-      url: (id) => this.lookup(id, (file) => {
+      url: (kind, id) => this.lookup(kind, id, (file) => {
         if (files.has(file)) return;
         files.add(file);
         if (held) this.pin(file);
@@ -77,11 +82,12 @@ export class AssetUrls {
     };
   }
 
-  private lookup(id: string, named: (file: string) => void): string | undefined {
+  private lookup(kind: PictureKind, id: string, named: (file: string) => void): string | undefined {
     if (this.closed) return undefined;
-    const asset = this.store.get('asset', id)?.value;
-    if (!asset) return undefined;
-    const { file, type } = asset;
+    const picture = this.store.get(kind, id)?.value;
+    if (!picture) return undefined;
+    const { file, type } = picture;
+    const ref = pictureRef(kind, id);
     named(file.id);
     let cached = this.urls.get(file.id);
     if (!cached) {
@@ -101,8 +107,8 @@ export class AssetUrls {
       });
     }
     cached.removed = false;
-    cached.owners.add(id);
-    this.sources.set(id, file.id);
+    cached.owners.add(ref);
+    this.sources.set(ref, file.id);
     if (this.inactive.delete(file.id)) this.inactive.set(file.id, cached);
     return cached.url ?? undefined;
   }
@@ -143,7 +149,7 @@ export class AssetUrls {
   private evict(file: string, cached: Cached) {
     this.wake(file);
     this.urls.delete(file);
-    for (const id of cached.owners) if (this.sources.get(id) === file) this.sources.delete(id);
+    for (const ref of cached.owners) if (this.sources.get(ref) === file) this.sources.delete(ref);
     if (cached.url) URL.revokeObjectURL(cached.url);
   }
 
@@ -161,14 +167,15 @@ export class AssetUrls {
   }
 }
 
-// Each asset's file as a data: URL, for a page that outlives this one's blob: URLs. missing: assets gone or unreadable.
-export async function assetDataUrls(store: Pick<ObjectStore, 'get'>, files: Pick<Files, 'read'>, ids: Iterable<string>): Promise<{ urls: Map<string, string>; missing: number }> {
+// Each picture's file as a data: URL by its pictureRef, for a page that outlives this one's blob: URLs. missing: pictures
+// gone or unreadable.
+export async function assetDataUrls(store: Pick<ObjectStore, 'get'>, files: Pick<Files, 'read'>, pictures: Iterable<{ kind: PictureKind; id: string }>): Promise<{ urls: Map<string, string>; missing: number }> {
   const urls = new Map<string, string>();
   let missing = 0;
-  for (const id of ids) {
-    const asset = store.get('asset', id)?.value;
-    const read = asset && (await files.read(asset.file));
-    if (asset && read?.ok) urls.set(id, `data:${asset.type};base64,${toBase64(read.data)}`);
+  for (const { kind, id } of pictures) {
+    const picture = store.get(kind, id)?.value;
+    const read = picture && (await files.read(picture.file));
+    if (picture && read?.ok) urls.set(pictureRef(kind, id), `data:${picture.type};base64,${toBase64(read.data)}`);
     else missing++;
   }
   return { urls, missing };

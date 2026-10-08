@@ -48,6 +48,7 @@ const DROPPED: Record<keyof Dropped, (count: number) => string> = {
   persona: () => '페르소나',
   cast: (count) => `${CAST} ${count}명`,
   models: (count) => `모델 ${count}개`,
+  pictures: (count) => `삽화 ${count}개`,
 };
 
 export const chatMissed = (dropped: Dropped): string[] => (Object.keys(DROPPED) as (keyof Dropped)[]).flatMap((kind) => (dropped[kind] ? [DROPPED[kind](dropped[kind])] : []));

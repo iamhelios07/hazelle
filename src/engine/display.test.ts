@@ -136,7 +136,7 @@ describe('asset tags', () => {
 
   it('take the picture’s URL once the chat has it, and nothing before', () => {
     const shown = `<img src="asset:${smile}"><div style="background: url(asset:${wave})">`;
-    expect(resolveAssets(shown, (id) => (id === smile ? 'blob:smile' : undefined))).toBe('<img src="blob:smile"><div style="background: url()">');
+    expect(resolveAssets(shown, (_, id) => (id === smile ? 'blob:smile' : undefined))).toBe('<img src="blob:smile"><div style="background: url()">');
   });
 });
 

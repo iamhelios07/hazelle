@@ -1,5 +1,6 @@
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
+import type { IllustrateFailure } from '../../runtime/illustrate';
 import type { MemoryFailure } from '../../runtime/memory';
 import type { AddFailure } from '../../runtime/connections';
 import type { ReplyError } from '../../runtime/generate';
@@ -244,5 +245,50 @@ export function describeMemoryFailure(failure: MemoryFailure): string {
       return INVALID[failure.reason];
     case 'unsaved':
       return `기억을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+  }
+}
+
+const SCENE_INVALID = {
+  unreadable: '모델 응답의 형식이 맞지 않아요.',
+  fields: '모델 응답에 빠진 항목이 있어요.',
+  paragraph: '모델이 메시지에 없는 문단을 골랐어요.',
+} as const;
+
+export function describeIllustrateFailure(failure: IllustrateFailure): string {
+  switch (failure.kind) {
+    case 'no-model':
+      return `장면 모델이 지정되지 않았어요. 삽화 프롬프트나 ${inSettings('models')}에서 선택해 주세요.`;
+    case 'model-gone':
+      return `장면 모델이 즐겨찾기에 없어요. 삽화 프롬프트나 ${inSettings('models')}에서 다시 선택해 주세요.`;
+    case 'image-only':
+      return `장면 모델은 이미지만 만들어요. 삽화 프롬프트나 ${inSettings('models')}에서 다른 모델을 선택해 주세요.`;
+    case 'prompt-missing':
+      return failure.own ? '선택한 삽화 프롬프트가 삭제됐어요. 채팅의 삽화 메뉴에서 다른 프롬프트를 선택해 주세요.' : `기본 삽화 프롬프트가 없어요. ${inSettings('prompts')}에서 삽화 프롬프트 하나를 기본으로 지정해 주세요.`;
+    case 'profile-missing':
+      return failure.own ? `장면 모델의 설정이 삭제됐어요. ${inSettings('models')}에서 다른 설정을 선택해 주세요.` : `기본 설정이 없어요. ${inSettings('models')}에서 설정 하나를 기본으로 지정해 주세요.`;
+    case 'tokenizer':
+      return '토큰 수를 계산하지 못했어요. 새로고침한 뒤 다시 시도해 주세요.';
+    case 'runaway':
+      return runaway('장면을 정하기 전에');
+    case 'failed':
+      return failure.receipt.error ? describeReplyError(failure.receipt.error) : '모델이 빈 응답을 보냈어요.';
+    case 'invalid':
+      return SCENE_INVALID[failure.reason];
+    case 'no-image-model':
+      return `이미지 모델이 없어요. ${inSettings('connections')}에서 NovelAI를 연결해 주세요.`;
+    case 'image-model-gone':
+      return '선택한 이미지 모델이 즐겨찾기에 없어요. 채팅의 삽화 메뉴에서 다시 선택해 주세요.';
+    case 'undrawn':
+      return describeReplyError(failure.error);
+    case 'not-a-picture':
+      return '이미지가 아닌 응답이 왔어요.';
+    case 'file-refused':
+      return '서버가 이미지 저장을 거절했어요.';
+    case 'gone':
+      return '메시지가 삭제됐어요.';
+    case 'empty':
+      return '내용이 없는 메시지예요.';
+    case 'unsaved':
+      return `삽화를 저장하지 못했어요. ${describeFailure(failure.failure)}`;
   }
 }

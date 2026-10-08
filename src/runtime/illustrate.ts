@@ -19,6 +19,7 @@ import { modelProfile } from './profiles';
 import { illustrationPrompt } from './prompts';
 import { relayBytes } from './relay';
 import type { Session } from './session';
+import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
 import { receiptOf } from './talk';
 
@@ -26,6 +27,10 @@ import { receiptOf } from './talk';
 // prompt's own) and one image call. The only writer of `illustration` objects but a backup's restore and a chat's copies.
 
 export type ImageRoute = Route & { draws: Draws };
+
+// 삭제: the picture goes at once, and 되돌리기 writes it back under its id.
+export const removeIllustration = (store: ObjectStore, id: string) => store.take('illustration', id);
+export const restoreIllustration = (store: ObjectStore, removed: Stored<'illustration'>) => store.restore(removed);
 
 // The starred models that draw: their output holds an image and their connection's type fills draws. The first is the
 // image model of a chat whose switches name none.
@@ -121,6 +126,11 @@ export class Illustrator {
         this.aborts.delete(message);
         lease.release();
       });
+  }
+
+  // 닫기 on a failure; a run under way has none to close.
+  dismiss(message: string) {
+    if (this.state.get(message)?.stage === 'failed') this.change(message, null);
   }
 
   close() {

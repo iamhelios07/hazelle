@@ -82,7 +82,7 @@ export type ReceiptError =
 // language a message sent translated went out in, as the English name its prompt read; a reply's translation has none.
 export type Translation = { text: string; receipt: Receipt | null; at: number; sentIn?: string };
 
-// Per character, or for every 캐릭터 없이 chat: replies translates each chat's latest reply, reverse (반전 모드) sends the
+// Shared by every chat, or a character's own (Character.ownTranslate): replies translates each chat's latest reply, reverse (반전 모드) sends the
 // model each version's translation in place of its text. replyLanguage and inputLanguage are what replies and the
 // user's messages are translated into, each as the English name the prompt reads. Absent fields are read through
 // runtime/characters translateSwitches, the one place that knows their defaults.

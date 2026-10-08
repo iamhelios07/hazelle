@@ -1,9 +1,12 @@
-import { Bot, Copy, GitBranch, Info, Languages, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
-import { memo, useMemo, type KeyboardEvent } from 'react';
-import { resolveAssets } from '../../engine/assets';
+import { Bot, Copy, GitBranch, ImagePlus, Info, Languages, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
+import { memo, useMemo, useState, type KeyboardEvent } from 'react';
+import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
 import type { Box } from '../../engine/regex/scripts';
 import { firstLine, shown } from '../../model/chat';
+import { placeMark, withMarks, withoutMarks } from '../../model/illustration';
+import type { Stored } from '../../model/kinds';
+import type { Drawing } from '../../runtime/illustrate';
 import type { Shown } from '../../runtime/talk';
 import type { Translating } from '../../runtime/translate';
 import { describeReplyError, describeTranslateFailure } from '../common/failure';
@@ -11,6 +14,7 @@ import { languageLabel, withRo } from '../common/languages';
 import { timeOfDay } from '../common/time';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMenuOpener, Waiting, type MenuHandle } from '../ui';
+import { ChatPicture, slotOf } from './ChatPicture';
 import type { ChatActions } from './useChat';
 import { seenText } from './search';
 import { useReveal } from './useReveal';
@@ -19,7 +23,12 @@ type Props = {
   message: Shown;
   // Editing starts from the stored text.
   text: string;
-  decor: { bot: boolean; css: string; url: (id: string) => string | undefined; buttons: 'live' | 'inert' };
+  // text with its 삽화's marks as the display left them, null for none (runtime/read-model ChatScreen).
+  placed: string | null;
+  // The shown version's pictures, oldest first, and its 삽화 run, if any.
+  pictures: Stored<'illustration'>[];
+  drawing: Drawing | null;
+  decor: { bot: boolean; css: string; url: PictureUrl; buttons: 'live' | 'inert' };
   hosted: (Box & { id: string })[];
   offered: { id: string; name: string; marked: boolean }[];
   translating: Translating;
@@ -58,7 +67,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -70,7 +79,15 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const text = seenText(original, translation?.text ?? null, translatingText, flipped);
   const pending = !translatingText && (awaited || translatingText === '');
   const reveal = useReveal(version.id, text, live && !message.whole);
-  const html = useMemo(() => shownHtml(reveal.text, decor), [reveal.text, decor.bot, decor.url]);
+  // null follows the newest picture.
+  const [page, setPage] = useState<string | null>(null);
+  const slot = slotOf(drawing, pictures.find(({ id }) => id === page) ?? pictures.at(-1) ?? null);
+  const paragraph = slot?.scene?.paragraph ?? null;
+  // A translation never goes through the display, so it takes its mark here, by the same paragraph.
+  const originalShown = text === original;
+  const storyText = paragraph === null ? reveal.text : originalShown ? withoutMarks(placed ?? original, paragraph) : withMarks(text, new Set([paragraph]));
+  const html = useMemo(() => shownHtml(storyText, decor), [storyText, decor.bot, decor.url]);
+  const running = drawing !== null && drawing.stage !== 'failed';
   const failed = receipt?.state === 'failed';
   const empty = original === '';
   // An edited reply is the user's text now; its cut no longer applies.
@@ -153,7 +170,18 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       <>
         {hosted.filter(({ at }) => at === 'top').map(box)}
         {/* A message may be all box: a status window's script took every word of it. */}
-        {!empty && <Story html={html} css={decor.css} buttons={decor.buttons} onPress={actions.press} term={term} tone={pending ? 'faded' : 'plain'} cursor={live || reveal.revealing || (translatingText !== null && !flipped)} />}
+        {!empty && (
+          <Story
+            html={html}
+            css={decor.css}
+            buttons={decor.buttons}
+            onPress={actions.press}
+            term={term}
+            tone={pending ? 'faded' : 'plain'}
+            cursor={live || reveal.revealing || (translatingText !== null && !flipped)}
+            inlay={slot ? { mark: paragraph === null ? null : placeMark(paragraph), node: <ChatPicture slot={slot} message={message} pictures={pictures} onPage={setPage} running={running} url={decor.url} actions={actions} /> } : undefined}
+          />
+        )}
         {hosted.filter(({ at }) => at === 'bottom').map(box)}
       </>
     );
@@ -186,6 +214,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   const after = (
     <>
       {editing === null && translationMark}
+      {drawing?.stage === 'scene' && <Marker reason="illustration" label="장면 정하는 중" />}
       {cut && (
         <Marker
           reason={cut === 'stopped' ? 'stopped' : 'length'}
@@ -247,6 +276,18 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!mine && isLast && !failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 생성" onClick={() => actions.regenerate(message)} />}
       {!mine && failed && !busy && <IconButton icon={RotateCcw} size="xs" label="다시 시도" onClick={() => actions.retry(message)} />}
       {translateTool}
+      {!mine && !empty && !failed && (
+        <IconButton
+          icon={ImagePlus}
+          size="xs"
+          label="삽화"
+          disabled={running}
+          onClick={() => {
+            setPage(null);
+            actions.illustrate(message);
+          }}
+        />
+      )}
       {!failed && <IconButton icon={Pencil} size="xs" label="수정" onClick={() => actions.edit(message)} />}
       {!empty && <IconButton icon={Copy} size="xs" label="복사" onClick={() => actions.copy(text)} />}
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />}

@@ -1,7 +1,8 @@
 import DOMPurify from 'dompurify';
-import { useEffect, useLayoutEffect, useReducer, useRef } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, type ReactNode } from 'react';
 import { useRowState } from '../collections/row-memory';
 import { useVeil, type Veil } from '../foundation/veil';
+import { inlaid } from './inlay';
 import styles from './Story.module.css';
 import shadowCss from './Story.shadow.css?inline';
 
@@ -20,6 +21,8 @@ type Props = {
   term?: string;
   // Every picture open, for a page drawn once where nothing can be tapped open (snapshot).
   whole?: boolean;
+  // The message's 삽화, put where mark stands in html (inlaid), or at the end for a mark null.
+  inlay?: { mark: string | null; node: ReactNode };
 };
 
 const NAMED = '[risu-trigger], [risu-btn]';
@@ -106,6 +109,24 @@ function veilFor(source: string): HTMLButtonElement {
   return button;
 }
 
+// The one mark inlaid left: a paragraph of its own becomes the slot, a mark inside the bot's HTML gives the slot its
+// place; a mark the sanitizer took leaves the slot at the end.
+function placeInlay(fragment: DocumentFragment, mark: string | null) {
+  const slot = document.createElement('slot');
+  slot.name = 'inlay';
+  const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode() as Text | null; node && mark; node = walker.nextNode() as Text | null) {
+    const at = node.data.indexOf(mark);
+    if (at === -1) continue;
+    const block = node.parentElement;
+    if (block?.tagName === 'P' && block.textContent === mark) return block.replaceWith(slot);
+    const rest = node.splitText(at);
+    rest.data = rest.data.slice(mark.length);
+    return rest.before(slot);
+  }
+  fragment.append(slot);
+}
+
 function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFragment {
   const fragment = DOMPurify.sanitize(html.replace(STYLE_ATTRIBUTE, `$1${SET_ASIDE}`), CONFIG);
   for (const element of fragment.querySelectorAll<HTMLElement | SVGElement>(`[${SET_ASIDE}]`)) {
@@ -173,7 +194,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
 }
 
 // A message's text, drawn in a shadow root so a bot's HTML and CSS can never restyle or cover the app.
-export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false }: Props) {
+export function Story({ html, css = '', cursor = false, tone = 'plain', buttons = 'inert', onPress, term = '', whole = false, inlay }: Props) {
   const pictures = useRowState(PICTURES, () => new Set<string>());
   const veil = useVeil();
   // A tapped veil changes only veil.revealed, which no render sees.
@@ -181,13 +202,17 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
   const host = useRef<HTMLDivElement>(null);
   const root = () => host.current!.shadowRoot ?? host.current!.attachShadow({ mode: 'open' });
 
+  const placed = inlay !== undefined;
+  const mark = inlay?.mark ?? null;
   useLayoutEffect(() => {
-    const fragment = sanitize(html, cursor, veil);
+    const fragment = sanitize(mark ? inlaid(html, mark, mark) : html, cursor, veil);
     for (const picture of fragment.querySelectorAll(`[${PICTURE}]`)) {
       if (whole || pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
     }
+    // After the cursor, which would otherwise go into the slot.
+    if (placed) placeInlay(fragment, mark);
     root().replaceChildren(fragment);
-  }, [html, cursor, pictures, veil, reveals, whole]);
+  }, [html, cursor, pictures, veil, reveals, whole, placed, mark]);
 
   // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
   useEffect(() => {
@@ -199,7 +224,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     return () => {
       for (const range of ranges) lit.delete(range);
     };
-  }, [html, cursor, pictures, veil, reveals, term]);
+  }, [html, cursor, pictures, veil, reveals, term, placed, mark]);
 
   useLayoutEffect(() => {
     if (!base) (base = new CSSStyleSheet()).replaceSync(shadowCss);
@@ -209,6 +234,8 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
   useEffect(() => {
     const shadow = root();
     const press = (event: Event) => {
+      // The inlay's own controls are the app's, slotted in from outside the root, and never a bot's button.
+      if (!shadow.contains(event.target as Node)) return;
       const veiled = (event.target as Element).closest(`[${VEILED}]`);
       if (veiled && veil) {
         veil.revealed.add(veiled.getAttribute(VEILED)!);
@@ -249,7 +276,10 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
 
   return (
     <div className={tone === 'faded' ? `${styles.story} ${styles.faded}` : styles.story}>
-      <div ref={host} data-buttons={buttons}>{cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}</div>
+      <div ref={host} data-buttons={buttons}>
+        {cursor && <span slot="cursor" className={styles.cursor} aria-hidden />}
+        {inlay && <div slot="inlay">{inlay.node}</div>}
+      </div>
     </div>
   );
 }

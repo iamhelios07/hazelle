@@ -6,6 +6,7 @@ import { SHORTCUTS, titled } from '../shortcuts';
 import { Button, Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
 import { ChatCache } from './ChatCache';
+import { ChatIllustrate } from './ChatIllustrate';
 import { ChatNote } from './ChatNote';
 import { ChatPersonaPicker } from './ChatPersonaPicker';
 import { ChatTranslate } from './ChatTranslate';
@@ -80,6 +81,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
             <ChatPersonaPicker chat={chat} />
             <ChatNote chat={chat} />
             <ChatTranslate chat={chat} />
+            <ChatIllustrate chat={chat} />
           </>
         }
         actions={

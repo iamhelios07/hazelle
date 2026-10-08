@@ -1,14 +1,12 @@
 import { Languages } from 'lucide-react';
-import { ofSort, translationPrompt } from '../../runtime/prompts';
 import { sendsNotes } from '../../runtime/translate';
 import { describeTranslateFailure } from '../common/failure';
 import { IntoLanguage } from '../common/IntoLanguage';
-import { follows, inSettings, NOTE_UNSENT, noteLines, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
-import { useSession, useSettings, usePrompts } from '../session';
-import { Button, ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Stack, Switch, Tag, Text, ToolButton } from '../ui';
+import { inSettings, NOTE_UNSENT, noteLines, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
+import { useSettings } from '../session';
+import { Button, Divider, Menu, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
+import { appliesTo, TaskPromptMenu } from './ChatTaskPrompt';
 import type { OpenChat } from './useChat';
-
-const appliesTo = (card: OpenChat['card'], own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '캐릭터별 설정이 없는 모든 채팅에 적용돼요.');
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
   const { translate, translation, card, actions } = chat;
@@ -43,7 +41,11 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
         />
         <Divider variant="menu" />
         <NoteRow chat={chat} />
-        <SettingRow place="panel" label="번역 프롬프트" control={<PromptMenu chat={chat} />} />
+        <SettingRow
+          place="panel"
+          label="번역 프롬프트"
+          control={<TaskPromptMenu task="translate" chosen={translate.prompt} heading={appliesTo(card, translate.own)} onPick={(prompt) => actions.setTranslate({ prompt })} chat={chat} />}
+        />
         <SettingRow
           place="panel"
           label="번역 모델"
@@ -91,41 +93,5 @@ function NoteRow({ chat }: { chat: OpenChat }) {
         )
       }
     />
-  );
-}
-
-// Without its own choice the switches follow the default translation prompt live, and a deleted one shows as
-// missing, never as another prompt.
-function PromptMenu({ chat }: { chat: OpenChat }) {
-  const { translate, card, actions } = chat;
-  const { store } = useSession();
-  const settings = useSettings();
-  const prompts = usePrompts()
-    .filter((each) => ofSort(each, 'translate'))
-    .sort((a, b) => a.value.name.localeCompare(b.value.name, 'ko'));
-  const choice = translationPrompt(store, translate.prompt);
-  const fallback = prompts.find(({ id }) => id === settings.translatePrompt);
-  const label = choice.kind === 'prompt' ? choice.prompt.value.name : choice.own ? '삭제된 프롬프트' : '기본 번역 프롬프트 없음';
-  return (
-    <Menu
-      place="above-end"
-      label="번역 프롬프트"
-      trigger={(opener) => <ChipButton variant="field" opens="up" label={label} title="번역 프롬프트" tone={choice.kind === 'missing' ? 'warn' : 'default'} {...opener} />}
-    >
-      <MenuHeading>{appliesTo(card, translate.own)}</MenuHeading>
-      <MenuItem label={follows('기본 번역 프롬프트')} sub={fallback?.value.name ?? '기본 번역 프롬프트 없음'} checked={translate.prompt === undefined} onClick={() => actions.setTranslate({ prompt: undefined })} />
-      {prompts.map((item) => (
-        <MenuItem
-          key={item.id}
-          label={item.value.name}
-          tag={item.id === settings.translatePrompt ? <Tag tone="accent">기본</Tag> : undefined}
-          checked={item.id === translate.prompt}
-          onClick={() => actions.setTranslate({ prompt: item.id })}
-        />
-      ))}
-      <Divider variant="menu" />
-      {choice.kind === 'prompt' && <MenuItem label="이 프롬프트 편집…" onClick={() => actions.side({ kind: 'prompts', id: choice.prompt.id, pane: null })} />}
-      <MenuItem label="프롬프트 관리…" onClick={() => actions.side({ kind: 'prompts', id: null, pane: null })} />
-    </Menu>
   );
 }

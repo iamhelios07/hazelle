@@ -249,7 +249,7 @@ describe("the display with the bot's Lua", () => {
       const lua = luaDisplays();
       const release = lua.hold();
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, opening);
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       expect(screen.snapshot().pending).toBe(true);
@@ -266,7 +266,7 @@ describe("the display with the bot's Lua", () => {
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `listenEdit('editDisplay', function(id, value) return value .. ' <' .. getGlobalVar(id, 'toggle_hard') .. '>' end)`, 'hard=어렵게');
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, opening);
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <0>']);
@@ -291,7 +291,7 @@ describe("the display with the bot's Lua", () => {
         return shown;
       });
       const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-      const screen = session.read.screen(chat, session.talk, opening);
+      const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       await vi.waitFor(() => expect(passed).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [-1, 0]]));
@@ -308,7 +308,7 @@ describe("the display with the bot's Lua", () => {
       const open = async (script: string | Trigger[]) => {
         const { chat, messages } = await chatWith(session, script);
         const opening = { chat: session.store.get('chat', chat)!.value, messages: messages() };
-        const screen = session.read.screen(chat, session.talk, opening);
+        const screen = session.read.screen(chat, session.talk, session.illustrator, opening);
         const leave = screen.subscribe(() => {});
         screen.setInputs(opening, { width: 1200, height: 800 });
         return { texts: () => screen.snapshot().display.texts, again: () => screen.setInputs(opening, { width: 800, height: 800 }), leave };

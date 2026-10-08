@@ -4,8 +4,10 @@ import { fold, shown } from '../model/chat';
 import { setIllustrate } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import type { Session } from './session';
-import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
+import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
+import { placeMark } from '../model/illustration';
 import { takeTurn } from './turn';
+import { removeIllustration, restoreIllustration } from './illustrate';
 
 const { PAINTER } = vi.hoisted(() => {
   const PAINTER: ConnectionType = {
@@ -34,6 +36,7 @@ const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
 const picture = () => new Response(PNG, { headers: { 'x-relay': 'upstream', 'content-type': 'image/png' } });
 const scene = { after: 2, shape: 'portrait', setting: '1girl, indoors, night', framing: 'cowboy shot', characters: [{ name: 'Ari', look: 'girl, silver hair', outfit: 'white dress', action: 'smile', x: 0.5, y: 0.5 }] };
 const REPLY = 'She opened the door.\nThe room was dark.\n\nShe smiled.';
+const SCENE = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
 
 async function painted(session: Session, starred = true) {
   await answerable(session);
@@ -78,5 +81,55 @@ describe('Illustrator', () => {
       session.illustrator.draw(chat, reply.id, shown(reply).id);
       await vi.waitFor(() => expect(session.illustrator.snapshot().get(reply.id)).toMatchObject({ stage: 'failed', failure: { kind: 'no-image-model' }, scene: null }));
       expect(log).toHaveLength(1);
+      session.illustrator.dismiss(reply.id);
+      expect(session.illustrator.snapshot().has(reply.id)).toBe(false);
+    }));
+
+  it('marks a picture’s paragraph in the text the screen displays, keeps the mark out of its texts, and loses it with a script that drops the line', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      const merging = { id: 'merge', name: 'merge', find: 'dark\\.\\n.*', replace: 'dark.', stage: 'display' as const, flags: null };
+      const shownOn = async (regex: (typeof merging)[]) => {
+        const made = await session.store.create('character', { card: { ...testCard('Ari'), regex }, folder: null, loreFolders: [] });
+        if (!made.ok) throw new Error(made.error);
+        const chat = crypto.randomUUID();
+        await server.hold(session.store, chat);
+        const opened = { title: null, character: made.data.id, models: {} };
+        await startChat(session.store, chat, opened, null);
+        await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'Go on' });
+        stubRelay(inTurn([saying(REPLY)]));
+        await takeTurn(session, chat, { kind: 'answer' });
+        const reply = fold(session.store.children('entry', chat))[1]!;
+        const file = await session.files.save([PNG]);
+        const sent = { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
+        await session.store.create('illustration', { message: reply.id, version: shown(reply).id, scene: { ...SCENE, paragraph: 1 }, receipt: null, model: { connection: 'c', model: 'm' }, sent, file: file.ok ? file.data[0]! : { id: '', key: '' }, type: 'image/png', size: 1, at: 1 }, { parent: chat });
+        const read = session.read.screen(chat, session.talk, session.illustrator, { chat: opened, messages: [] });
+        const leave = read.subscribe(() => {});
+        await vi.waitFor(() => expect(read.snapshot().display.texts[1]).toContain('She'));
+        leave();
+        return read.snapshot();
+      };
+
+      const plain = await shownOn([]);
+      expect(plain.display.texts).toEqual(['Go on', REPLY]);
+      expect(plain.placed).toEqual(new Map([[1, `She opened the door.\nThe room was dark.\n${placeMark(1)}\n\nShe smiled.`]]));
+      const merged = await shownOn([merging]);
+      expect([merged.display.texts[1], merged.placed.size]).toEqual(['She opened the door.\nThe room was dark.\n\nShe smiled.', 0]);
+    }));
+
+  it('deletes a picture at once and 되돌리기 brings it back under its id', () =>
+    server.withSession(async (session) => {
+      const chat = await painted(session);
+      const saved = await session.files.save([PNG]);
+      const file = saved.ok ? saved.data[0]! : { id: '', key: '' };
+      const scene = { paragraph: 0, shape: 'square' as const, setting: '', framing: '', characters: [] };
+      const sent = { prompt: '', negative: '', characters: [], width: 1024, height: 1024, seed: 1 };
+      const made = await session.store.create('illustration', { message: 'm', version: 'v', scene, receipt: null, model: { connection: 'c', model: 'm' }, sent, file, type: 'image/png', size: PNG.byteLength, at: 1 }, { parent: chat });
+      if (!made.ok) throw new Error(made.error);
+      const removed = await removeIllustration(session.store, made.data.id);
+      expect(session.store.children('illustration', chat)).toEqual([]);
+      if (!removed.ok) throw new Error(removed.error);
+      await restoreIllustration(session.store, removed.data);
+      expect(session.store.children('illustration', chat).map(({ id, value }) => [id, value.file])).toEqual([[made.data.id, file]]);
     }));
 });

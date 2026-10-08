@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
+import type { PictureUrl } from '../engine/assets';
 import type { ChatScope } from '../engine/render';
 import { binned, live } from '../model/library';
 import type { Kind, Stored } from '../model/kinds';
@@ -63,14 +64,14 @@ export const useIllustrator = (): Illustrator => useSession().illustrator;
 
 // The function is a new one when a picture has
 // loaded, so what shows pictures renders again.
-export function useAssetUrl(): (id: string) => string | undefined {
+export function useAssetUrl(): PictureUrl {
   const { assets } = useSession();
   // Page keys ChatScreen by chat id (including an unsaved chat), so leaving releases this view's story, CSS and
   // status pictures together. Saving the same chat keeps its key and must not revoke its mounted pictures.
   const view = useMemo(() => assets.view(), [assets]);
   useLayoutEffect(view.hold, [view]);
   const version = useSyncExternalStore(assets.subscribe, assets.snapshot);
-  return useCallback((id: string) => view.url(id), [view, version]);
+  return useCallback<PictureUrl>((kind, id) => view.url(kind, id), [view, version]);
 }
 
 // Every snapshot below is held until its own inputs change: fresh selector arrays would make React re-render forever.
@@ -144,11 +145,13 @@ export function useBin() {
   const profiles = useKind('profile');
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
+const NO_CHILDREN: never[] = [];
 // The array is held until one of
 // them changes, since a fresh array on every read would make React re-render forever. Subscribing reads it anew, so
 // a change between the render and the subscription is not missed.
-// illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again.
-export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K, parent: string): Stored<K>[] {
+// illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again; parent null is a
+// chat not saved yet, which has none.
+export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K, parent: string | null): Stored<K>[] {
   const store = useStore();
   const model = useMemo(() => {
     let held: Stored<K>[] | null = null;
@@ -161,7 +164,7 @@ export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K
           listener();
         });
       },
-      snapshot: () => (held ??= store.children(kind, parent)),
+      snapshot: () => (held ??= parent === null ? NO_CHILDREN : store.children(kind, parent)),
     };
   }, [store, kind, parent]);
   return useSyncExternalStore(model.subscribe, model.snapshot);
@@ -191,8 +194,8 @@ export function useStored<K extends Kind>(kind: K, id: string | null): Stored<K>
 }
 
 export function useChatDisplay(id: string, opening: Opening, screen: ChatScope['screen']) {
-  const { read, talk } = useSession();
-  const model = useMemo(() => read.screen(id, talk, opening), [read, talk, id]);
+  const { read, talk, illustrator } = useSession();
+  const model = useMemo(() => read.screen(id, talk, illustrator, opening), [read, talk, illustrator, id]);
   // The first layout installs viewport/greeting inputs before the external-store subscription; evaluation publishes asynchronously.
   useLayoutEffect(() => {
     model.setInputs(opening, screen);
