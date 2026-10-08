@@ -2,11 +2,6 @@ import { monthDay, timeOfDay } from '../common/time';
 
 export const moment = (at: number) => `${monthDay(at)} ${timeOfDay(at)}`;
 
-// Call counts are kept per UTC day, so their dates read in UTC whatever this device's zone.
-export const utcDay = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', timeZone: 'UTC' }).format;
-
-export const times = (count: number) => `${count.toLocaleString('ko-KR')}회`;
-
 export const TIME_FORMAT = '2026-10-01 15:30';
 
 // A time typed as TIME_FORMAT, on this device's clock; undefined for anything else, such as 2월 30일.

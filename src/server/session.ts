@@ -5,7 +5,6 @@ import { createMiddleware } from 'hono/factory';
 import type { AccountState } from '../contracts/admin';
 import { ACCOUNT_HEADER } from '../contracts/http';
 import { CAP } from './caps';
-import { countCall } from './call-counts';
 import type { Db } from './db/service-db';
 import { fail, hex, sha256Hex, type Account, type AppEnv } from './http';
 
@@ -49,12 +48,7 @@ export const requireOwnSession = sessionGuard(sessionAccount);
 export const canWrite = createMiddleware<AppEnv>(async (c, next) => (c.get('account').suspended ? fail(c, 403, 'suspended') : next()));
 
 // Throttling only, per account; a bot's own calls have a narrower key (streams.ts).
-const throttle = createMiddleware<AppEnv>(async (c, next) => {
-  const { id, incarnation } = c.get('account');
-  if (c.env.limits.calls.limit(id).success) return next();
-  await countCall(c.env.db, incarnation, 'refused');
-  return fail(c, 429, 'too-many-calls');
-});
+const throttle = createMiddleware<AppEnv>(async (c, next) => (c.env.limits.calls.limit(c.get('account').id).success ? next() : fail(c, 429, 'too-many-calls')));
 
 export const canCall = every(canWrite, throttle);
 

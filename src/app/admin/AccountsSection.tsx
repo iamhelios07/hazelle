@@ -1,4 +1,4 @@
-import { Activity, Ban, HardDrive, History, MoreHorizontal, RotateCcw, Send, Trash2 } from 'lucide-react';
+import { Ban, HardDrive, History, MoreHorizontal, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { AccountState } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
@@ -10,7 +10,6 @@ import { NOTICES } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
 import { Button, Callout, ConfirmDialog, IconButton, List, ListItem, Menu, MenuItem, Section } from '../ui';
-import { CallsDialog } from './CallsDialog';
 import { CapsDialog } from './CapsDialog';
 import { NoticeDialog } from './NoticeDialog';
 import type { useAccounts } from './useAccounts';
@@ -29,7 +28,6 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
   const { data, failure, reload } = loaded;
   const [removing, setRemoving] = useState<AdminAccount | null>(null);
   const [capping, setCapping] = useState<AdminAccount | null>(null);
-  const [calling, setCalling] = useState<AdminAccount | null>(null);
   const [writing, setWriting] = useState<{ account: AdminAccount; suspend: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -77,7 +75,6 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
                       <>
                         <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
                         <MenuItem icon={History} label="복원 기록" onClick={() => onRestores(account)} />
-                        <MenuItem icon={Activity} label="호출 기록" onClick={() => setCalling(account)} />
                         {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
                         {others &&
                           (account.suspended ? (
@@ -105,7 +102,6 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
           }}
         />
       )}
-      {calling && <CallsDialog account={calling} onClose={() => setCalling(null)} />}
       {writing &&
         (writing.suspend ? (
           <NoticeDialog

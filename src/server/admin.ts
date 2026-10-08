@@ -1,7 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { type AccountState, type RestorePhase, MAX_REPORT_LENGTH, MAX_NOTICE_LENGTH } from '../contracts/admin';
-import { accountCalls, firstDay, KEEP_DAYS, topCallers } from './call-counts';
 import { RETENTION_MS, StoreUnavailable } from './db/account-db';
 import { fileBlocks } from './files';
 import type { Db, SqlValue, Statement } from './db/service-db';
@@ -16,13 +15,8 @@ const PAGE_ROWS = 100;
 const KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
 export async function forgetOldRecords(db: Db): Promise<void> {
-  const now = Date.now();
-  const before = now - KEEP_MS;
-  await db.batch([
-    db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before),
-    db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before),
-    db.prepare('DELETE FROM call_counts WHERE day < ?').bind(firstDay(KEEP_DAYS, now)),
-  ]);
+  const before = Date.now() - KEEP_MS;
+  await db.batch([db.prepare('DELETE FROM reports WHERE resolved_at < ?').bind(before), db.prepare('DELETE FROM admin_log WHERE at < ?').bind(before)]);
 }
 
 // What any account, a suspended one too, sends the operator.
@@ -189,15 +183,6 @@ admin.get('/accounts/:id', async (c) => {
   const usage = row ? (await accountUsage(c.env, [row]))[0]! : null;
   return c.json({ account: row ? shownAccount(row, usage) : null });
 });
-
-// On demand only: the account row shows no count.
-admin.get('/accounts/:id/calls', async (c) => {
-  const id = c.req.param('id');
-  if (!ID.test(id)) return fail(c, 400, 'bad-input');
-  return c.json({ calls: await accountCalls(c.env.db, id, Date.now()) });
-});
-
-admin.get('/calls', async (c) => c.json(await topCallers(c.env.db, Date.now())));
 
 async function accountUsage(env: Services, rows: Pick<AccountRow, 'state' | 'incarnation'>[]): Promise<Usage[]> {
   const answers = await readAll(

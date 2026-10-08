@@ -1,13 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { migrate } from './migrate';
 import { placeholders, serviceDb, type Db } from './service-db';
+
+const BASELINE = readFileSync('migrations/0001_baseline.sql', 'utf8');
 
 function fresh(): { db: Db; raw: DatabaseSync } {
   const raw = new DatabaseSync(':memory:');
   raw.exec('PRAGMA foreign_keys = ON');
-  migrate(raw, 'migrations');
+  raw.exec(BASELINE);
   return { db: serviceDb(raw), raw };
 }
 
@@ -104,7 +105,7 @@ describe('the service adapter', () => {
     expect(raw.prepare('SELECT COUNT(*) AS n FROM file_blocks').get()).toMatchObject({ n: 0 });
   });
 
-  it("keeps the server's own statements to one placeholder style each, and compiles the uninterpolated ones against the migrated schema", () => {
+  it("keeps the server's own statements to one placeholder style each, and compiles the uninterpolated ones against the baseline", () => {
     const statements = corpus();
     expect(statements.length).toBeGreaterThan(60);
     const { raw } = fresh();
