@@ -2,6 +2,7 @@ import type { Stored } from '../../model/kinds';
 import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { aliased } from '../common/alias';
 import { LoreEditor } from '../common/LoreEditor';
+import { ScriptsEditor } from '../common/ScriptsEditor';
 import { ALWAYS, BIN_KEEPS, moduleName, promptName } from '../common/words';
 import { useLibrary, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
@@ -73,6 +74,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
         )}
       </Section>
       <LoreEditor owner={{ kind: 'module', id }} folders={value.loreFolders} />
+      <ScriptsEditor owner={{ kind: 'module', id }} pack={value} drill={!wide} />
       <Row kind="actions">
         <Button variant="danger" size="sm" onClick={remove}>
           이 모듈 삭제

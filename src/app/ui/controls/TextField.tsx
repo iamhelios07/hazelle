@@ -6,7 +6,7 @@ const KINDS = {
   text: { type: 'text' },
   username: { type: 'text', autoComplete: 'username', autoCapitalize: 'none', spellCheck: false },
   code: { type: 'text', autoComplete: 'off', autoCapitalize: 'characters', spellCheck: false },
-  // API keys and addresses: shown as typed, in the mono face, never saved by the browser.
+  // API keys, addresses and a script's code: shown as typed, in the mono face, never saved by the browser.
   key: { type: 'text', autoComplete: 'off', autoCapitalize: 'none', spellCheck: false },
   'new-password': { type: 'password', autoComplete: 'new-password' },
   'current-password': { type: 'password', autoComplete: 'current-password' },
@@ -30,6 +30,8 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
+  const { type, ...typed } = KINDS[kind];
+  const look = kind === 'key' ? `${styles.input} ${styles.mono}` : styles.input;
   const shared = {
     id,
     value,
@@ -51,9 +53,9 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
         {action}
       </div>
       {lines ? (
-        <textarea className={`${styles.input} ${styles.area}`} rows={lines} {...shared} />
+        <textarea className={`${look} ${styles.area}`} rows={lines} {...typed} {...shared} />
       ) : (
-        <input className={kind === 'key' ? `${styles.input} ${styles.mono}` : styles.input} {...KINDS[kind]} {...shared} />
+        <input className={look} type={type} {...typed} {...shared} />
       )}
       {note && (
         <p id={noteId} className={error ? styles.error : styles.hint}>
