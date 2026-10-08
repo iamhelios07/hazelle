@@ -120,7 +120,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, answered, reply === 'stay');
   const memory = useChatMemory(id);
   const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy);
-  const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | null>(null);
+  const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
   // 토글, 장기 기억 and the prompt list take the same place beside the story, so one closes another.
@@ -352,6 +352,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     notUsed: card && describeUnused(unused(card)),
     messages,
     texts,
+    view,
     decor: { bot, css: bot ? resolveAssets(css, url) : '', url, buttons: scripted ? ('live' as const) : ('inert' as const) },
     ...status,
     infoPick,
@@ -408,7 +409,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       memory: (record: string | null) => setPanel({ kind: 'memory', record }),
       side: (open: Side) => setPanel(open),
       closePanel: () => setPanel(null),
-      openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt') => setDialog(which),
+      openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt' | 'export') => setDialog(which),
       closeDialog: () => setDialog(null),
       pickModel,
       setOwn,

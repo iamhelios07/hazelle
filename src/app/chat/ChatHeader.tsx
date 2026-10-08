@@ -1,12 +1,13 @@
 import { MoreHorizontal, SlidersHorizontal } from 'lucide-react';
 import { NameDialog } from '../common/NameDialog';
-import { CAST, NO_CHARACTER } from '../common/words';
+import { CAST, EXPORT, NO_CHARACTER } from '../common/words';
 import { useDisplay } from '../display';
 import { useRemembering } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
 import { ChatTitle, Divider, IconButton, Menu, MenuItem, ToolButton, useMenuOpener, useWide } from '../ui';
 import { ChatCastMenu } from './ChatCastMenu';
+import { ChatExport } from './ChatExport';
 import { ChatModelMenu } from './ChatModelMenu';
 import { PersonaDialog } from './ChatPersonaPicker';
 import { ChatPromptPicker, PromptDialog } from './ChatPromptPicker';
@@ -54,6 +55,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />
         <MenuItem label="이미지 가리기" checked={display.hidePictures} multiple onClick={() => changeDisplay({ hidePictures: !display.hidePictures })} />
         <MenuItem label="검색" onClick={actions.openSearch} />
+        {item && <MenuItem label={EXPORT} onClick={() => actions.openDialog('export')} />}
         <MenuItem label="단축키" onClick={() => runShortcut('shortcutList')} />
         {item && (
           <>
@@ -73,6 +75,7 @@ export function ChatDialogs({ chat }: { chat: OpenChat }) {
   if (dialog === 'persona') return <PersonaDialog chat={chat} />;
   if (dialog === 'prompt') return <PromptDialog chat={chat} />;
   if (dialog === 'reading') return <ReadingDialog onClose={actions.closeDialog} />;
+  if (dialog === 'export' && item) return <ChatExport chat={chat} item={item} />;
   if (dialog === 'rename' && item) {
     return <NameDialog title="채팅 이름 바꾸기" value={item.title} hint="비워 두면 첫 메시지로 표시돼요." onSave={actions.rename} onClose={actions.closeDialog} />;
   }

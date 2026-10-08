@@ -67,3 +67,9 @@ export const CAST = '등장인물';
 
 // The chats with no character: their shelf, and the choice that puts a chat there.
 export const NO_CHARACTER = '캐릭터 없이';
+
+// The chat ⋯ item and its dialog. A 채팅 파일 is one chat as JSON, which 채팅 가져오기 brings back as a new chat.
+export const EXPORT = '내보내기';
+export const CHAT_FILE = '채팅 파일';
+export const IMPORT_CHATS = '채팅 가져오기';
+export const ARCA_LOG = '아카라이브용 HTML';
