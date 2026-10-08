@@ -69,15 +69,10 @@ function statusIds(value: Record<string, unknown>) {
   return { ...value, statusScripts: [...new Set(ids)] };
 }
 
-// An upgrade can reach every character and module, and each write is a request of its own, so they go a group at a
-// time. In process, 16 at a time took as long as all at once (469 characters, about 2 s); in a browser it is unmeasured.
-const WRITE_GROUP = 16;
-
 // The stored copies of what the store upgraded as it read them, written back once, so the old shape leaves the
 // account. Each is written as it is held then, so a change another device made meanwhile is kept.
 export async function saveUpgraded(store: ObjectStore): Promise<void> {
-  const upgraded = store.takeUpgraded();
-  for (let at = 0; at < upgraded.length; at += WRITE_GROUP) await Promise.all(upgraded.slice(at, at + WRITE_GROUP).map(({ id, kind }) => resave(store, kind, id)));
+  await Promise.all(store.takeUpgraded().map(({ id, kind }) => resave(store, kind, id)));
 }
 
 // upgradeValue upgrades these three kinds only.

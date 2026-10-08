@@ -125,12 +125,13 @@ export const evaluateChat = async (reader: { store: Reader['store'] & Pick<Objec
   (await reader.store.evaluation.display(`headless:${id}`, { ...scopeOf(reader, id, chat, messages), screen }, pinned(reader, chat), signal)).display;
 
 // 상태창 지정's scripts at their places among a chat's scripts, which the engine knows them by. The character's pack
-// comes first (packsOf), so a place in card.regex is the same place there. An id that names no script marks nothing.
+// comes first (packsOf), so a place in card.regex is the same place there. An id that names no script marks nothing,
+// nor does one turned off, which never draws; its mark is kept for when it is turned on.
 export type StatusScript = { id: string; place: number };
 export const statusPlaces = (card: Pick<Card, 'regex'>, ids: readonly string[]): StatusScript[] =>
   ids.flatMap((id) => {
     const place = card.regex.findIndex((script) => script.id === id);
-    return place === -1 ? [] : [{ id, place }];
+    return place === -1 || card.regex[place]!.off ? [] : [{ id, place }];
   });
 
 // The status window's scripts (상태창 지정), whose boxes leave every message and what is translated of it, unless

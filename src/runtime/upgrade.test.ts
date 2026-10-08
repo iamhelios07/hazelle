@@ -67,4 +67,18 @@ describe('upgradeValue', () => {
     expect(third.get('connection', created.data.id)?.value).toEqual(upgraded);
     expect(third.takeUpgraded()).toEqual([]);
   });
+
+  it('writes a module whose scripts had no ids back once, with them', async () => {
+    const { store, open } = await server.account();
+    const old = { name: 'Bell', description: '', namespace: null, regex: [{ name: 'a', find: 'a', replace: '', stage: 'display', flags: null }], triggers: [], toggles: '', loreFolders: [] };
+    const created = await store.create('module', old as never);
+    if (!created.ok) throw new Error(created.error);
+    const other = await open();
+    await other.pull();
+    await saveUpgraded(other);
+    const third = await open();
+    await third.pull();
+    expect(third.get('module', created.data.id)?.value.regex).toEqual([{ ...old.regex[0], id: 'regex-0' }]);
+    expect(third.takeUpgraded()).toEqual([]);
+  });
 });

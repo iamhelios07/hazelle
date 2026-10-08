@@ -9,7 +9,7 @@ import type { Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer, upstream } from './testing';
 import type { Shown } from './talk';
 import { autoContinue, takeTurn } from './turn';
-import { statusBoxes } from './chat-context';
+import { statusBoxes, statusPlaces } from './chat-context';
 import { wouldSend } from './turn-context';
 
 const server = testServer();
@@ -260,5 +260,10 @@ describe('상태', () => {
       { id: 'a', place: 0, drawn: { script: 0, html: 'second', at: 'top', message: 1 } },
       { id: 'b', place: 2, drawn: null },
     ]);
+  });
+
+  it('marks nothing with a status script that is gone or turned off', () => {
+    const script = (id: string, off?: true) => ({ id, name: '', find: 'x', replace: '', stage: 'display' as const, flags: null, ...(off && { off }) });
+    expect(statusPlaces({ regex: [script('a'), script('b', true), script('c')] }, ['c', 'b', 'gone'])).toEqual([{ id: 'c', place: 2 }]);
   });
 });
