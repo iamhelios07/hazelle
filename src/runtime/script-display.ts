@@ -161,8 +161,8 @@ export class ScriptDisplay {
           pass.view = { texts, drawn, boxes, css: patch.css, pass: patch.pass, stopped: patch.stopped };
           await this.tell(chat, this.told(chat, pass.view));
         } catch (error) {
-          // A stuck patch judged the chat, which the composer says.
-          if (!(error instanceof EvaluationStopped || error instanceof EvaluationStuck)) { this.report(chat, error); break; }
+          // A stuck patch whose chat was judged is said by the composer; a chat not saved yet cannot be judged from here.
+          if (!(error instanceof EvaluationStopped || (error instanceof EvaluationStuck && this.store.projections.verdict(chat) !== null))) { this.report(chat, error); break; }
         }
         if (!pass.remaining) {
           pass.items = [];

@@ -626,14 +626,14 @@ describe('per-chat read models', () => {
     const displayed = vi.spyOn(read.open, 'display').mockImplementation(async (...args) => {
       if (stalled || !args[3]) return display(...args);
       stalled = true;
-      throw new EvaluationStuck('stuck');
+      throw new EvaluationStuck('stuck', true);
     });
     const leave = screen.subscribe(() => {});
     screen.setInputs(opening, { width: 800, height: 600 });
     await vi.waitFor(() => expect(screen.snapshot()).toMatchObject({ stuck: true }));
     expect(screen.snapshot().error).toBeUndefined();
     expect(displayed).toHaveBeenCalledTimes(3);
-    store.projections.clear('n');
+    screen.retryRegex();
     await vi.waitFor(() => expect(screen.snapshot()).toMatchObject({ stuck: false }));
     leave();
     read.close();

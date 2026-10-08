@@ -10,8 +10,14 @@ import workerUrl from './evaluation-worker?worker&url';
 
 export class EvaluationStopped extends Error {}
 export class EvaluationFailed extends Error {}
-// A started job that went STUCK_MS without a sign of life: a bot's script that does not end. Only that job fails.
-export class EvaluationStuck extends EvaluationFailed {}
+// A bot's script that does not end: the started job that went STUCK_MS without a sign of life, which alone fails, or a
+// passive job refused unposted because its chat is judged. regex: the job ran with the bot's regex, so a run without it
+// may land.
+export class EvaluationStuck extends EvaluationFailed {
+  constructor(message: string, readonly regex: boolean) {
+    super(message);
+  }
+}
 
 export function evaluationFailure(error: unknown): ApiFailure {
   if (error instanceof EvaluationStopped) return { ok: false, error: 'stopped' };
@@ -48,7 +54,7 @@ export type Lane<A extends Asker = Asker> = { asker: A; chat: string };
 export type Verdicts = { verdict(chat: string): boolean; judged(chat: string): void };
 
 type LooseJob = { kind: 'patch'; owner: string; revision: number; generation: number; items: LuaResult[] } | { kind: 'count'; texts: string[] };
-type Work = { key: string; on: { chat: string; gate: (typeof GATES)[Asker] } | null; scope: ChatScope | null; job: EvaluationJob | LooseJob; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
+type Work = { key: string; on: { chat: string; gate: (typeof GATES)[Asker] } | null; scope: ChatScope | null; regex: boolean; job: EvaluationJob | LooseJob; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
 
 const keyOf = ({ asker, chat }: Lane) => `${asker}:${chat}`;
 const onChat = ({ asker, chat }: Lane): Work['on'] => ({ chat, gate: GATES[asker] });
@@ -144,7 +150,7 @@ export class Evaluation {
         if (this.waiting.get(key) === work) this.waiting.delete(key);
         reject(new EvaluationStopped());
       };
-      const work: Work = { key, on, scope, job, resolve, reject, signal, stop: () => signal?.removeEventListener('abort', abort) };
+      const work: Work = { key, on, scope, regex: true, job, resolve, reject, signal, stop: () => signal?.removeEventListener('abort', abort) };
       signal?.addEventListener('abort', abort, { once: true });
       this.waiting.set(key, work);
       this.dispatch();
@@ -192,9 +198,9 @@ export class Evaluation {
       this.waiting.delete(work.key);
       if (!work.on || !this.verdicts.verdict(work.on.chat)) return work;
       if (work.on.gate === 'press') return work;
-      if (work.on.gate === 'display') return work.scope ? { ...work, scope: bare(work.scope) } : work;
+      if (work.on.gate === 'display') return work.scope ? { ...work, scope: bare(work.scope), regex: false } : work;
       work.stop();
-      work.reject(new EvaluationStuck('refused under a verdict'));
+      work.reject(new EvaluationStuck('refused under a verdict', false));
     }
   }
 
@@ -232,7 +238,7 @@ export class Evaluation {
     this.histories.clear();
     this.active = null;
     active.work.stop();
-    active.work.reject(new EvaluationStuck('Evaluation worker stuck'));
+    active.work.reject(new EvaluationStuck('Evaluation worker stuck', active.work.regex));
     if (active.work.on) this.verdicts.judged(active.work.on.chat);
     this.dispatch();
   }

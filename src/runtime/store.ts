@@ -604,26 +604,29 @@ export class ObjectStore {
   // signal: the caller's stop, which lets the chat go at once, ending its opening and a summary write waiting on the
   // connection; what run does with the chat after that ends as stopped (ChatProjections.save).
   withChat<T>(chat: string, run: () => Promise<ApiResult<T>>, signal?: AbortSignal): Promise<ApiResult<T>> {
-    return this.withChats([chat], (readable) => (readable.length ? run() : Promise.resolve({ ok: false, error: 'unreadable' })), { signal });
+    return this.withChats([chat], (_, [passed]) => (passed ? Promise.resolve(passed) : run()), { signal });
   }
 
-  // Several chats held together and opened at once, for run. One whose history cannot be read is left out of what run
-  // gets, since its screen says so and a pass over many (saveSummaries) passes it over; any other failure to open ends
-  // the whole. signal: as withChat, for every chat. summarize: as retainChat.
-  async withChats<T>(chats: string[], run: (readable: string[]) => Promise<ApiResult<T>>, { signal, summarize = true }: { signal?: AbortSignal; summarize?: boolean } = {}): Promise<ApiResult<T>> {
+  // Several chats held together and opened at once, for run. One whose history cannot be read, or whose bot does not end
+  // even without its regex, is left out of what run gets (passed, its failure), since its screen says so and a pass over
+  // many (saveSummaries) passes it over; any other failure to open ends the whole. signal: as withChat, for every chat.
+  // summarize: as retainChat.
+  async withChats<T>(chats: string[], run: (readable: string[], passed: ApiFailure[]) => Promise<ApiResult<T>>, { signal, summarize = true }: { signal?: AbortSignal; summarize?: boolean } = {}): Promise<ApiResult<T>> {
     if (signal?.aborted) return { ok: false, error: 'stopped' };
     const leases = chats.map((chat) => this.retainChat(chat, { summarize }));
     const release = () => { for (const lease of leases) lease.release(); };
     signal?.addEventListener('abort', release, { once: true });
     try {
       const readable: string[] = [];
+      const passed: ApiFailure[] = [];
       for (const [index, lease] of leases.entries()) {
         const failure = await lease.ready;
         if (signal?.aborted) return { ok: false, error: 'stopped' };
         if (!failure) readable.push(chats[index]!);
-        else if (failure.error !== 'unreadable') return failure;
+        else if (failure.error === 'unreadable' || failure.error === 'bot-stuck') passed.push(failure);
+        else return failure;
       }
-      return await run(readable);
+      return await run(readable, passed);
     } finally { signal?.removeEventListener('abort', release); release(); }
   }
 

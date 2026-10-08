@@ -133,7 +133,7 @@ it('kills only a started job that goes silent, judges its chat before the next i
   const old = workers[0]!;
   old.receive({ id: jobs(old)[0]!.id, result: await engine.run(jobs(old)[0]!.input, () => {}) });
   await before;
-  const stuck = expect(evaluation.display({ asker: 'projection', chat: 'c' }, scope, new Set())).rejects.toBeInstanceOf(EvaluationStuck);
+  const stuck = expect(evaluation.display({ asker: 'projection', chat: 'c' }, scope, new Set())).rejects.toMatchObject({ constructor: EvaluationStuck, regex: true });
   old.receive({ started: jobs(old)[1]!.id });
   const next = { ...scope, messages: [...messages, message('c', 'three')] };
   const waiting = evaluation.display(screen('d'), next, new Set());
@@ -152,6 +152,34 @@ it('kills only a started job that goes silent, judges its chat before the next i
   expect(fresh.ended).toBe(false);
   fresh.receive({ id: job.id, result: await new Evaluator().run(job.input, () => {}) });
   expect((await waiting).display.texts).toEqual(['one', 'two', 'three']);
+  evaluation.close();
+});
+
+it('judges a started job that goes silent in a hidden tab, whose every beat comes late', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('document', { visibilityState: 'hidden' });
+  const { workers, jobs } = fakeWorkers();
+  const evaluation = new Evaluation(none);
+  const running = expect(evaluation.display(screen(), scope, new Set())).rejects.toBeInstanceOf(EvaluationStuck);
+  const worker = workers[0]!;
+  worker.receive({ started: jobs(worker)[0]!.id });
+  await vi.advanceTimersByTimeAsync(1_000);
+  vi.setSystemTime(Date.now() + 60_000);
+  await vi.advanceTimersByTimeAsync(1_000);
+  await running;
+  expect(worker.ended).toBe(true);
+  evaluation.close();
+});
+
+it('says a display that went silent without the regex ran without it', async () => {
+  vi.useFakeTimers();
+  const { workers, jobs } = fakeWorkers();
+  const evaluation = new Evaluation({ verdict: () => true, judged: () => {} });
+  const running = expect(evaluation.display({ asker: 'projection', chat: 'c' }, scope, new Set())).rejects.toMatchObject({ constructor: EvaluationStuck, regex: false });
+  const worker = workers[0]!;
+  worker.receive({ started: jobs(worker)[0]!.id });
+  await vi.advanceTimersByTimeAsync(5_000);
+  await running;
   evaluation.close();
 });
 

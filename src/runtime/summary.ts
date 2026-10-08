@@ -28,7 +28,9 @@ type Source = Pick<ObjectStore, 'get' | 'children' | 'capture' | 'revision' | 'f
 type Scope = { signal: AbortSignal; state: ScopeState; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
 type SummaryWrite = { type: 'restore'; id: string; kind: 'summary'; parent: string; value: Summary };
 // cleared: 다시 시도 asked for the bot's regex again; the summary written next drops the stored verdict.
-type Verdict = { state: 'judged'; dependencies: SummaryRead[] } | { state: 'cleared' };
+// over: the revision of the chat's stored summary it was set against. Once a summary is written, by this device or
+// another, the stored one is the verdict: a held entry never writes itself back over another device's.
+type Verdict = { over: number } & ({ state: 'judged'; dependencies: SummaryRead[] } | { state: 'cleared' });
 type Lifecycle = {
   epoch(): number;
   ending(): AbortSignal;
@@ -82,22 +84,27 @@ export class ChatProjections {
   // device, until 다시 시도 clears it.
   verdict(chat: string): SummaryRead[] | null {
     const held = this.verdicts.get(chat);
-    const dependencies = held ? (held.state === 'judged' ? held.dependencies : null) : (this.source.get('summary', summaryId(chat))?.value.stuck?.dependencies ?? null);
+    const dependencies = held?.over === this.summaryRev(chat) ? (held.state === 'judged' ? held.dependencies : null) : (this.source.get('summary', summaryId(chat))?.value.stuck?.dependencies ?? null);
     return dependencies && readsCurrent(this.source, dependencies) ? dependencies : null;
   }
 
   // reads: what a chat not saved yet was displayed from; a saved one is judged on its basis.
   judge(chat: string, reads?: StoreRead[]) {
     const stored = live(this.source.get('chat', chat));
-    const dependencies = reads ? revised(this.source, reads) : stored && this.basis(chat, stored.value, []).dependencies;
+    // The chat's own prompt, persona and cast are handed to its basis as a value, not read: its record stands for them.
+    const dependencies = reads ? revised(this.source, reads) : stored && [...this.basis(chat, stored.value, []).dependencies, ...revised(this.source, [{ kind: 'chat', id: chat }])];
     if (!dependencies) return;
-    this.verdicts.set(chat, { state: 'judged', dependencies });
+    this.verdicts.set(chat, { state: 'judged', dependencies, over: this.summaryRev(chat) });
     this.changedVerdict(chat);
   }
 
   clear(chat: string) {
-    this.verdicts.set(chat, { state: 'cleared' });
+    this.verdicts.set(chat, { state: 'cleared', over: this.summaryRev(chat) });
     this.changedVerdict(chat);
+  }
+
+  private summaryRev(chat: string) {
+    return this.source.revision({ kind: 'summary', id: summaryId(chat) });
   }
 
   private changedVerdict(chat: string) {
@@ -247,13 +254,12 @@ export class ChatProjections {
     const rendered = { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     const { scope, take, dependencies } = this.basis(id, stored.value, messages);
     const lane = { asker: 'projection', chat: id } as const;
-    const judged = this.verdict(id) !== null;
     // A run that stuck with the bot's regex judged the chat, so it is run once more without; one that stuck without it
     // fails the chat.
     let display: Display;
     try { ({ display } = await this.evaluation.display(lane, { ...scope, clock: rendered }, take, signal)); }
     catch (error) {
-      if (judged || !(error instanceof EvaluationStuck)) throw error;
+      if (!(error instanceof EvaluationStuck && error.regex)) throw error;
       ({ display } = await this.evaluation.display(lane, { ...scope, clock: rendered }, take, signal));
     }
     const verdict = this.verdict(id);
@@ -283,7 +289,8 @@ export class ChatProjections {
 // SUMMARY_WINDOW chats held at a time, opened together and summarized in one request (ChatProjections.saveMany), so
 // a pass over a whole account never holds more than that many histories. A chat with a summary is passed over: what
 // rewrites a summary its chat outgrew is opening that chat (ObjectStore.retainChat), and a stopped restore carries on
-// from the first window it did not finish. An unreadable chat is passed over too; its screen says so.
+// from the first window it did not finish. An unreadable chat is passed over too, as is one whose bot does not end;
+// its screen says so.
 export const SUMMARY_WINDOW = 16;
 export async function saveSummaries(store: ObjectStore, chats: Iterable<string>, signal = new AbortController().signal, progress: (done: number, total: number) => void = () => {}): Promise<ApiFailure | null> {
   const due = [...chats].filter((id) => !store.get('summary', summaryId(id)));

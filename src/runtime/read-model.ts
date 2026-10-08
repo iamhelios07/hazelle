@@ -307,6 +307,11 @@ export class ChatScreenRead {
     return this.models.store.projections.verdict(this.id) !== null;
   }
 
+  // 다시 시도 on a chat judged stuck: the verdict's publish displays it again with the bot's regex.
+  retryRegex() {
+    this.models.store.projections.clear(this.id);
+  }
+
   refresh() {
     this.evaluation?.abort();
     const evaluation = new AbortController();
@@ -324,7 +329,7 @@ export class ChatScreenRead {
       if (evaluation.signal.aborted || revision !== this.revision || error instanceof EvaluationStopped) return;
       // The worker judged a saved chat itself; one not saved yet is judged here, on what it was displayed from. The
       // verdict's publish displays it again without the bot's regex, and a display that sticks even so fails.
-      if (error instanceof EvaluationStuck && !judged && !this.models.store.get('chat', this.id)) return this.models.store.projections.judge(this.id, this.reads);
+      if (error instanceof EvaluationStuck && error.regex && !this.models.store.get('chat', this.id)) return this.models.store.projections.judge(this.id, this.reads);
       this.state.set({ ...this.state.snapshot(), error });
     });
   }
