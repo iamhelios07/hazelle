@@ -9,7 +9,7 @@ import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, SearchField, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
 import { matches, noResults, SEARCH_FROM } from './search';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
-import { scriptName, SCRIPTS, STAGES } from './words';
+import { COMMAND, scriptName, SCRIPTS, STAGES } from './words';
 
 type Lua = Extract<Trigger, { kind: 'lua' }>;
 type Blocks = Extract<Trigger, { kind: 'blocks' }>;
@@ -84,7 +84,7 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
             const staged = pack.regex.filter((script) => script.stage === stage);
             return (
               staged.length > 0 && (
-                <Section key={stage} level={3} title={label} note={`${staged.length}개`}>
+                <Section key={stage} level={3} title={label} note={staged.length < pack.regex.length ? `${staged.length}개` : undefined}>
                   <List box label={`${label} ${SCRIPTS.regex}`}>{staged.map(({ id }) => item('regex', id, false))}</List>
                 </Section>
               )
@@ -213,7 +213,7 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
       <Disclosure label="시험해 보기">
         <Stack gap="related">
           <TextField label="예시 텍스트" lines={3} value={sample} onChange={setSample} />
-          <TextField label="결과" kind="key" lines={3} readOnly value={sample && (tried ?? '')} onChange={() => {}} error={sample && tried === null ? '결과를 내지 못했어요.' : undefined} />
+          <TextField label="결과" kind="key" lines={3} readOnly help={`${COMMAND}는 채팅에서 값으로 바뀌어요.`} value={sample && (tried ?? '')} onChange={() => {}} error={sample && tried === null ? '결과를 내지 못했어요.' : undefined} />
         </Stack>
       </Disclosure>
       {actions(save.status)}

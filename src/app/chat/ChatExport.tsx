@@ -9,7 +9,7 @@ import { useCopyHtml } from '../common/useCopy';
 import { ARCA_LOG, CHAT_FILE, EXPORT } from '../common/words';
 import { useDisplay } from '../display';
 import { useFiles, useStore } from '../session';
-import { Button, Callout, ChoiceGroup, Dialog, LogExport, NumberInput, Progress, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
+import { Button, Callout, ChoiceGroup, Dialog, Hint, LogExport, NumberInput, Progress, SettingRow, snapshotPage, Stack, Switch, Text, type LogRow } from '../ui';
 import { speakers } from './ChatLog';
 import { logDraft, resolveLog, type LogChoices, type LogText } from './exportLog';
 import type { OpenChat } from './useChat';
@@ -73,7 +73,6 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
   const typed = (edge: 'from' | 'to') => Number(range[edge]) === choices[edge];
 
   const ready = form === 'file' || prepared !== null;
-  const lost = prepared && [prepared.missing > 0 && `이미지 ${prepared.missing}개`, prepared.rules > 0 && `스타일 ${prepared.rules}개`].filter(Boolean).join(' · ');
   return (
     <Dialog
       title={EXPORT}
@@ -105,7 +104,17 @@ export function ChatExport({ chat, item }: { chat: OpenChat; item: ChatItem }) {
             ) : prepared ? (
               <>
                 <Text variant="note">{`크기 ${prepared.size}`}</Text>
-                {lost && <Callout tone="warn">{`빠진 것: ${lost}`}</Callout>}
+                {(prepared.missing > 0 || prepared.rules > 0) && (
+                  <Callout tone="warn">
+                    {prepared.missing > 0 && `이미지 ${prepared.missing}개는 빠져요. `}
+                    {prepared.rules > 0 && (
+                      <>
+                        {`아카라이브에서 지원하지 않는 스타일 ${prepared.rules}개는 빠져요.`}
+                        <Hint label="빠지는 스타일">마우스를 올렸을 때의 효과, 애니메이션, 화면 크기별 스타일, 글꼴 같은 거예요.</Hint>
+                      </>
+                    )}
+                  </Callout>
+                )}
               </>
             ) : (
               <Progress steps={[{ label: '준비하는 중' }]} />

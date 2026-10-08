@@ -107,9 +107,9 @@
 }
 
 /* The box, not the screen, decides: in a narrow list column on a wide screen, a field chip beside the words squeezes
-   them to a syllable a line. */
+   them to a syllable a line. A switch is narrow enough to stay beside them. */
 @container (max-width: 440px) {
-  .row {
+  .row:not(:has(> .control > [role='switch']:only-child)) {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-8);
   }
