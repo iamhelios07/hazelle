@@ -106,7 +106,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   // route's character, else where the user picks.
   async function saveChats(file: string, read: ChatsRead, target: Target, place: ModulePlace | null, choose: (name: string | null, fallback: string | null) => Promise<string | null>): Promise<Result> {
     const named = 'chat' in read ? read.chat.character : null;
-    const routed = place?.kind === 'character' ? place.id : null;
+    const routed = place?.kind === 'character' && live(store.get('character', place.id)) ? place.id : null;
     const character =
       target !== undefined ? target : named === null ? (routed ?? (await choose(null, null))) : live(store.get('character', named.id)) ? named.id : await choose(named.name, routed);
     const shown = character === null ? null : store.get('character', character)!.value;
