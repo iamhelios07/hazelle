@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { calls, fold, shown, type Chat, type ChatItem, type Message, type Receipt } from '../model/chat';
 import { memoryId, type MemoryRecord } from '../model/memory';
-import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, removeMessage, setCast, startChat } from './chat-log';
+import { chatFile, readChatFile } from './chat-file';
+import { appendCost, appendReply, appendScripted, appendTranslation, appendUserMessage, branchChat, editMessage, importChat, removeMessage, selectVersion, setCast, startChat } from './chat-log';
+import { summaryId } from './summary';
 import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
 import { evaluateChat } from './chat-context';
@@ -170,5 +172,43 @@ describe('branchChat', () => {
     expect(memory.records.map(({ id, sources }) => [id, sources])).toEqual([['before', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);
     expect(memory.state.map(({ field, value, record }) => [field, value, record])).toEqual([['mood', 'calm', 'before'], ['name', 'Jin', null], ['place', 'home', 'before']]);
     expect(memory.threads.map(({ text, opened }) => [text, opened])).toEqual([['The user’s own', null], ['A vow', 'before']]);
+  });
+});
+
+describe('importChat', () => {
+  it('copies a chat file under new ids, folding as the source does, with its memory remapped and what is not here left out and counted', async () => {
+    const { store } = await server.account();
+    const source = crypto.randomUUID();
+    await server.hold(store, source);
+    const chat: Chat = { title: '기숙사의 밤', character: null, models: {}, note: '노트', prompt: crypto.randomUUID() };
+    const receipt: Receipt = { id: 'call', connection: 'c1', source: 'OpenRouter', model: 'm1', modelName: 'Model One', state: 'done', cut: null, error: null, finishReason: 'stop', usage: null, cost: null, replyId: null, firstTextMs: 100, totalMs: 900, cache: null };
+    await startChat(store, source, chat, projectGreetings(['하나', '둘', '셋'], [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()], 1));
+    const said = crypto.randomUUID();
+    await appendUserMessage(store, source, { id: said, text: '안녕' });
+    await editMessage(store, source, fold(store.children('entry', source)).find((message) => message.id === said)!, '안녕하세요', null);
+    const reply = crypto.randomUUID();
+    await appendReply(store, source, { id: reply, message: null, replaces: null, at: 1, text: '답', receipt });
+    await appendReply(store, source, { id: crypto.randomUUID(), message: reply, replaces: null, at: 2, text: '다른 답', receipt });
+    await selectVersion(store, source, reply, reply);
+    await appendTranslation(store, source, reply, { text: 'A reply', receipt: null, at: 3 }, crypto.randomUUID());
+    const messages = fold(store.children('entry', source));
+    const sources = messages.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }));
+    await store.create('memory', { records: [{ id: 'r', sources, print: 'p', when: null, where: null, who: [], what: 'w', lines: [], outcome: '', receipt: null, at: 0, state: [], opens: [], closes: [] }], state: [], threads: [] }, { id: memoryId(source), parent: source });
+
+    const read = readChatFile(JSON.parse(chatFile(store, source)));
+    if (!read.ok) throw new Error(read.error);
+    const imported = await importChat(store, read.file, null);
+    if (!imported.ok) throw new Error(imported.error);
+    const { id, dropped } = imported.data;
+    expect(dropped).toEqual({ prompt: 1, persona: 0, cast: 0, models: 0 });
+    expect(store.get('summary', summaryId(id))).not.toBeNull();
+    await server.hold(store, id);
+    const copy = fold(store.children('entry', id));
+    const seen = (folded: Message[]) => folded.map((message) => [message.selected, message.versions.map(({ text, translation, greeting, edited }) => [text, translation?.text, greeting, edited])]);
+    expect(seen(copy)).toEqual(seen(messages));
+    const before = new Set(store.children('entry', source).map((entry) => entry.id));
+    expect(store.children('entry', id).some((entry) => before.has(entry.id))).toBe(false);
+    expect(store.get('chat', id)!.value).toEqual({ title: '기숙사의 밤', character: null, models: {}, note: '노트', seed: source });
+    expect(store.get('memory', memoryId(id))!.value.records[0]!.sources).toEqual(copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id })));
   });
 });

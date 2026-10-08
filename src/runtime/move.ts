@@ -5,7 +5,7 @@ import type { MemorySettings } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { createFolder, importCharacter, saveAssets, type Progress } from './characters';
-import { chatWrites } from './chat-log';
+import { chatWrites, saveNewChats } from './chat-log';
 import type { Files } from './files';
 import { projectGreetings, startingGreetings } from './greetings';
 import { defaultMemory } from './memory-read';
@@ -114,9 +114,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     if (folder && !folder.ok) return folder;
     const avatar = await character.avatar();
     const id = crypto.randomUUID();
-    // Moved chats start with long-term memory off: on, opening a long one would summarize its whole past at once (user,
-    // 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
-    const memory = { ...defaultMemory(store), on: false };
+    const memory = movedMemory(store);
     // A character's chats are held together from their entries, which go in one batch, to their summaries, which read
     // the published character and go in one request: the source holds the whole character already, so this holds no
     // more than it. Nothing is pulled: what the leases hold is what this device wrote.
@@ -149,6 +147,10 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
 
 const lastTalk = (chat: RisuChat) => chat.messages.at(-1)?.at ?? 0;
 
+// Moved chats start with long-term memory off: on, opening a long one would summarize its whole past at once (user,
+// 2026-10-01: 옮겨 온 대화는 꺼진 채로). Turning it on in the chat summarizes it then.
+const movedMemory = (store: ObjectStore): MemorySettings => ({ ...defaultMemory(store), on: false });
+
 async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<string>> {
   const held = store.list('folder').find(({ value }) => value.parent === undefined && value.name === name);
   if (held) return { ok: true, data: held.id };
@@ -156,10 +158,20 @@ async function folderNamed(store: ObjectStore, name: string): Promise<ApiResult<
   return made.ok ? { ok: true, data: made.data.id } : made;
 }
 
+// Chats Risu saved to a file of their own, to character. They start as moved chats do: memory off, the current persona.
+export async function importRisuChats(store: ObjectStore, character: string | null, chats: RisuChat[]): Promise<ApiResult<string[]>> {
+  const card = character === null ? null : (store.get('character', character)?.value.card ?? null);
+  const current = store.get('settings', SETTINGS_ID)?.value.persona;
+  const made = [...chats].sort((a, b) => lastTalk(a) - lastTalk(b)).map((chat) => chatOf(crypto.randomUUID(), character, card, chat, new Map(), current, movedMemory(store)));
+  const failure = await saveNewChats(store, made.map(({ root }) => root.id), made.flatMap(({ entries, root }) => [...entries, root]));
+  return failure ?? { ok: true, data: made.map(({ root }) => root.id) };
+}
+
 // A chat Risu bound to no persona, or to one not brought, holds the current persona, as a chat saved here would.
-function chatOf(id: string, character: string, card: Card, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, current: string | undefined, memory: MemorySettings): ReturnType<typeof chatWrites> {
+function chatOf(id: string, character: string | null, card: Card | null, { title, note, persona, greeting, variables, messages }: RisuChat, personaIds: ReadonlyMap<string, string>, current: string | undefined, memory: MemorySettings): ReturnType<typeof chatWrites> {
   // The chat opens on the greeting Risu showed; a blank one shown leaves the chat without one, as Risu showed none.
-  const greetings = startingGreetings(projectGreetings(card.greetings, card.greetings.map(() => crypto.randomUUID()), greeting));
+  // One past the card's greetings opens on its last, as Risu shows it; projectGreetings would take the first.
+  const greetings = card && startingGreetings(projectGreetings(card.greetings, card.greetings.map(() => crypto.randomUUID()), Math.min(greeting, Math.max(card.greetings.length - 1, 0))));
   const own = (persona === null ? undefined : personaIds.get(persona)) ?? current;
   const chat: Chat = { title: title.trim() || null, character, models: {}, memory, ...(note !== null && { note }), ...(own && { persona: own }), ...(variables.length > 0 && { variables }) };
   return chatWrites(id, chat, greetings, messages);

@@ -248,7 +248,7 @@ function replay(entries: Stored<'entry'>[]): { messages: Message[]; deleted: Set
 
 type EntryIndex = { group: string | null; reference?: string; cost?: string; rev: number; pending?: number; at: number };
 type FoldedMessage = { entries: Set<string>; costs: Set<string>; message: Message | null; deleted: boolean };
-const entryOrder = (a: { rev: number; pending?: number }, b: { rev: number; pending?: number }) => (a.pending ?? 0) - (b.pending ?? 0) || a.rev - b.rev;
+export const entryOrder = (a: { rev: number; pending?: number }, b: { rev: number; pending?: number }) => (a.pending ?? 0) - (b.pending ?? 0) || a.rev - b.rev;
 
 // Only indexes and the projection live here. Values, including pending writes, are always read from the store.
 export class ChatFold {

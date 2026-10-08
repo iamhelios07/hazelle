@@ -1,5 +1,6 @@
 import type { ImportReport, MoveUnsupported, MoveUnsupportedKind, UnsupportedKind } from '../../engine/import/types';
-import { COMMAND } from '../common/words';
+import type { Dropped } from '../../runtime/chat-log';
+import { CAST, COMMAND } from '../common/words';
 
 const UNSUPPORTED: Record<UnsupportedKind, (count: number) => string> = {
   asset: (count) => `에셋 ${count}개`,
@@ -41,3 +42,12 @@ export function moduleMissed(unsupported: Unsupported, skipped: number): string[
 export const cardMissed = (report: ImportReport, skipped: number, faceless: boolean): string[] => [...(faceless ? ['이미지: 읽지 못함'] : []), ...moduleMissed(report.unsupported, skipped)];
 
 export const moveMissed = (items: MoveUnsupported[]): string[] => items.map((item) => MOVE_UNSUPPORTED[item.kind](item.count));
+
+const DROPPED: Record<keyof Dropped, (count: number) => string> = {
+  prompt: () => '프롬프트',
+  persona: () => '페르소나',
+  cast: (count) => `${CAST} ${count}명`,
+  models: (count) => `모델 ${count}개`,
+};
+
+export const chatMissed = (dropped: Dropped): string[] => (Object.keys(DROPPED) as (keyof Dropped)[]).flatMap((kind) => (dropped[kind] ? [DROPPED[kind](dropped[kind])] : []));

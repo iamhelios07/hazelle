@@ -1,5 +1,6 @@
 import { CONNECTION_TYPES } from '../connectors/registry';
 import { isRecord } from '../connectors/values';
+import { KINDS, isValue, type Kind, type Stored } from '../model/kinds';
 import { firstTurns } from '../model/turns';
 import type { ObjectStore } from './store';
 
@@ -14,6 +15,15 @@ export function upgradeValue(kind: string, value: unknown): Record<string, unkno
   if (kind === 'connection') return upgradeConnection(value);
   if (kind === 'character') return upgradeCharacter(value);
   return null;
+}
+
+// A row from outside, a backup's line or a chat file's, upgraded and checked; null for one that is not a stored object.
+export function readRow(line: unknown): Stored<Kind> | null {
+  if (!isRecord(line) || typeof line.kind !== 'string' || !Object.hasOwn(KINDS, line.kind)) return null;
+  const value = upgradeValue(line.kind, line.value) ?? line.value;
+  const { id, parent, rev } = line;
+  if (typeof id !== 'string' || (parent !== null && typeof parent !== 'string') || typeof rev !== 'number' || !Number.isFinite(rev) || !isValue(line.kind as Kind, value)) return null;
+  return { ...line, id, kind: line.kind as Kind, parent, rev, value };
 }
 
 // A connection saved before pools held one secret, and the name of who signed in.

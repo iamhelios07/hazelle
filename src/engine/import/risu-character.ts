@@ -2,7 +2,7 @@ import { splitThoughts } from '../../connectors/thoughts';
 import { isRecord, list } from '../../connectors/values';
 import { assemble, imageType, type Resolve } from './card';
 import { add, convert, counted, type Tally } from './convert';
-import { MOVE_UNSUPPORTED_KINDS, type MoveUnsupportedKind, type Picture, type RisuCharacter, type RisuChat } from './types';
+import { MOVE_UNSUPPORTED_KINDS, type MoveUnsupported, type MoveUnsupportedKind, type Picture, type RisuCharacter, type RisuChat } from './types';
 
 type Json = Record<string, unknown>;
 export type Read = () => Promise<Uint8Array<ArrayBuffer>>;
@@ -53,7 +53,6 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
 
   const page = Number.isInteger(char.chatPage) && chats[char.chatPage as number] ? (char.chatPage as number) : 0;
   const fmIndex = number(char.firstMsgIndex) ?? -1;
-  const greetings = imported.card.greetings.length;
   // Risu turns a module on for one chat too, a place this app does not have: a chat's are on for its character
   // (design §6.5). Only a chat that comes brings its own.
   const modules = new Set(list(char.modules).filter((id) => typeof id === 'string'));
@@ -66,7 +65,7 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
     for (const id of list(chat.modules)) if (typeof id === 'string') modules.add(id);
     // Risu moves the old post-history text into the open chat's note when the character is next opened.
     const note = index === page && text(char.postHistoryInstructions) ? `${text(chat.note)}\n${text(char.postHistoryInstructions)}`.trim() : text(chat.note);
-    return [risuChat(chat, note, fmIndex, greetings, missed)];
+    return [risuChat(chat, note, fmIndex, missed)];
   });
   add(missed, 'chat-folder', list(char.chatFolders).length);
 
@@ -81,7 +80,16 @@ export function risuCharacter(char: Json, chats: (Json | null)[], folder: string
   };
 }
 
-function risuChat(chat: Json, note: string, fmIndex: number, greetings: number, missed: Tally<MoveUnsupportedKind>): RisuChat {
+// Risu's export of one chat (risuChat) or of a character's every chat (risuAllChats); null for any other JSON. Risu
+// reads data as a list or as one chat at either version, and so does this.
+export function risuChatFile(json: unknown): { chats: RisuChat[]; missed: MoveUnsupported[] } | null {
+  if (!isRecord(json) || (json.type !== 'risuChat' && json.type !== 'risuAllChats') || (json.ver !== 1 && json.ver !== 2)) return null;
+  const missed: Tally<MoveUnsupportedKind> = new Map();
+  const chats = (Array.isArray(json.data) ? json.data : [json.data]).filter(isRecord).map((chat) => risuChat(chat, text(chat.note), -1, missed));
+  return { chats, missed: counted(MOVE_UNSUPPORTED_KINDS, missed) };
+}
+
+function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveUnsupportedKind>): RisuChat {
   const messages = list(chat.message).filter(isRecord);
   let at = number(chat.lastDate) ?? 0;
   // 'allBefore' leaves it and every message before it out of the prompt.
@@ -97,7 +105,7 @@ function risuChat(chat: Json, note: string, fmIndex: number, greetings: number, 
     title: text(chat.name),
     note: note.trim() ? note : null,
     persona: text(chat.bindedPersona) || null,
-    greeting: Math.min(Math.max((number(chat.fmIndex) ?? fmIndex) + 1, 0), Math.max(greetings - 1, 0)),
+    greeting: Math.max((number(chat.fmIndex) ?? fmIndex) + 1, 0),
     variables: Object.entries(record(chat.scriptstate)).flatMap(([key, value]): [string, string][] =>
       key.startsWith('$') && value !== undefined ? [[key.slice(1), typeof value === 'string' ? value : JSON.stringify(value)]] : [],
     ),
