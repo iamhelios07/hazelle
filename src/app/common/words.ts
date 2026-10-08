@@ -18,6 +18,7 @@ export const AUX_HELP = '번역, 장기 기억 정리처럼 대화 밖의 작업
 // 캐릭터 편집's switch for a bot whose script calls a model, and what the card that asks it in the chat says first.
 export const BOT_MODELS = '봇의 모델 호출';
 export const BOT_MODELS_HELP = '봇 스크립트가 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
+export const BOT_STUCK = '봇 스크립트가 끝나지 않아 멈췄어요';
 
 export const SETTINGS = '설정';
 

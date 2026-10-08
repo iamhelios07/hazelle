@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { live } from '../../model/library';
 import { aliased } from '../common/alias';
 import { RUNAWAY_FIX } from '../common/failure';
-import { MODEL_ROLES, MODULE_VOICE } from '../common/words';
+import { BOT_STUCK, MODEL_ROLES, MODULE_VOICE } from '../common/words';
 import { useScripts, useSession } from '../session';
 import { useToast } from '../toast';
 
@@ -29,13 +29,13 @@ export function BotNotes() {
           break;
         }
         case 'failed':
-          toast.error('봇의 스크립트가 오류로 멈췄어요', { detail: note.message });
+          toast.error('봇 스크립트가 오류로 멈췄어요', { detail: note.message });
           break;
         case 'missing':
           toast.show('이 봇이 쓰는 기능 중 지원하지 않는 게 있어요', { detail: note.names.join(', ') });
           break;
         case 'stuck':
-          toast.error('봇의 스크립트가 끝나지 않아 멈췄어요');
+          toast.error(BOT_STUCK);
           break;
         case 'runaway':
           toast.error('봇의 명령어가 텍스트를 너무 많이 만들어서 멈췄어요', { detail: RUNAWAY_FIX });
