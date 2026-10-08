@@ -33,7 +33,7 @@ function Days({ calls: { since, today, days } }: { calls: AccountCalls }) {
     <Section
       level={3}
       title="날짜별 호출"
-      note={`${times(sum(false))}${refused ? ` · 거절 ${times(refused)}` : ''}`}
+      note={`호출 ${times(sum(false))}${refused ? ` · 거절 ${times(refused)}` : ''}`}
       hint={`날짜는 ${timeOfDay(today)}에 바뀌고, 기타는 모델 목록이나 사용량 조회 같은 호출이에요.`}
     >
       <List label="날짜별 호출">
