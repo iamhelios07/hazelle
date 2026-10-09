@@ -1,0 +1,29 @@
+import { expect, test } from '@playwright/test';
+
+test('session loading and retry stay visible without downloading the workspace', async ({ page }) => {
+  let respond = () => {};
+  let attempts = 0;
+  const scripts: string[] = [];
+  const errors: string[] = [];
+  page.on('request', (request) => { if (request.resourceType() === 'script') scripts.push(request.url()); });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  await page.route('**/api/session', async (route) => {
+    const attempt = ++attempts;
+    await new Promise<void>((resolve) => { respond = resolve; });
+    await route.fulfill({ status: attempt === 1 ? 500 : 200, json: attempt === 1 ? { error: 'server-error' } : { session: null, signupOpen: false } });
+  });
+
+  await page.goto('/');
+  const progress = page.getByRole('progressbar', { name: '계정 확인', exact: true });
+  await expect(progress).toBeVisible();
+  await expect.poll(() => attempts).toBe(1);
+  respond();
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click();
+  await expect(progress).toBeVisible();
+  await expect.poll(() => attempts).toBe(2);
+  respond();
+  await expect(page.getByRole('button', { name: '로그인', exact: true })).toBeVisible();
+  await expect(progress).toHaveCount(0);
+  expect(scripts.some((url) => /\/(Workspace|AdminScreen|ChatScreen|PromptScreen)-/.test(url))).toBe(false);
+  expect(errors).toEqual([]);
+});

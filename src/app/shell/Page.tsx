@@ -1,44 +1,47 @@
-import { ToolPageScreen } from '../modules/ToolPageScreen';
 import { MessageSquarePlus } from 'lucide-react';
-import { useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { lazy, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
 import { binsChat, isBinned, live } from '../../model/library';
-import { AdminScreen } from '../admin/AdminScreen';
-import { ChatScreen, type SideAt } from '../chat/ChatScreen';
+import type { SideAt } from '../chat/ChatScreen';
 import { describeFailure } from '../common/failure';
 import { Missing, type Absent } from '../common/Missing';
+import { ScreenLoad } from '../common/ScreenLoad';
 import { findStarred } from '../common/RolePicker';
-import { ConnectionAddScreen } from '../connections/ConnectionAddScreen';
-import { ConnectionDirectScreen } from '../connections/ConnectionDirectScreen';
-import { ConnectionKeyScreen } from '../connections/ConnectionKeyScreen';
-import { ConnectionModelsScreen } from '../connections/ConnectionModelsScreen';
-import { ConnectionSignInScreen } from '../connections/ConnectionSignInScreen';
-import { ConnectionsScreen } from '../connections/ConnectionsScreen';
-import { CharacterEditScreen } from '../library/CharacterEditScreen';
-import { GalleryScreen } from '../library/gallery/GalleryScreen';
-import { HomeScreen } from '../library/HomeScreen';
 import { useImport } from '../library/ImportFlow';
-import { ModelScreen } from '../models/ModelScreen';
-import { ProfileScreen } from '../models/ProfileScreen';
-import { ModelsScreen } from '../models/ModelsScreen';
-import { ModuleScreen } from '../modules/ModuleScreen';
-import { ModulesScreen } from '../modules/ModulesScreen';
-import { PersonaScreen } from '../personas/PersonaScreen';
-import { PersonasScreen } from '../personas/PersonasScreen';
-import { PromptScreen } from '../prompts/PromptScreen';
-import { PromptsScreen } from '../prompts/PromptsScreen';
 import { useAccount, useCharacter, useChatModel, useChatSummary, useConnections, useSession, useSettings, useStored } from '../session';
-import { AccountScreen } from '../settings/AccountScreen';
-import { ChatSettingsScreen } from '../settings/ChatSettingsScreen';
-import { DisplayScreen } from '../settings/DisplayScreen';
-import { TranslatorScreen } from '../settings/TranslatorScreen';
 import { Button, Empty, Intro, ListDetail, NavBar, Progress, Screen, Text, useSplit, useWide } from '../ui';
-import { ChatSide } from './ChatSide';
 import { backBar, navigate } from './router';
 import { backTo, listOf, up, upFromMissing, type Back, type Below, type Route } from './routes';
 import { SettingsList } from './settings/SettingsNav';
 
-const side = (at: SideAt) => <ChatSide {...at} />;
+const ToolPageScreen = lazy(() => import('../modules/ToolPageScreen').then(({ ToolPageScreen }) => ({ default: ToolPageScreen })));
+const AdminScreen = lazy(() => import('../admin/AdminScreen').then(({ AdminScreen }) => ({ default: AdminScreen })));
+const ChatScreen = lazy(() => import('../chat/ChatScreen').then(({ ChatScreen }) => ({ default: ChatScreen })));
+const ConnectionAddScreen = lazy(() => import('../connections/ConnectionAddScreen').then(({ ConnectionAddScreen }) => ({ default: ConnectionAddScreen })));
+const ConnectionDirectScreen = lazy(() => import('../connections/ConnectionDirectScreen').then(({ ConnectionDirectScreen }) => ({ default: ConnectionDirectScreen })));
+const ConnectionKeyScreen = lazy(() => import('../connections/ConnectionKeyScreen').then(({ ConnectionKeyScreen }) => ({ default: ConnectionKeyScreen })));
+const ConnectionModelsScreen = lazy(() => import('../connections/ConnectionModelsScreen').then(({ ConnectionModelsScreen }) => ({ default: ConnectionModelsScreen })));
+const ConnectionSignInScreen = lazy(() => import('../connections/ConnectionSignInScreen').then(({ ConnectionSignInScreen }) => ({ default: ConnectionSignInScreen })));
+const ConnectionsScreen = lazy(() => import('../connections/ConnectionsScreen').then(({ ConnectionsScreen }) => ({ default: ConnectionsScreen })));
+const CharacterEditScreen = lazy(() => import('../library/CharacterEditScreen').then(({ CharacterEditScreen }) => ({ default: CharacterEditScreen })));
+const GalleryScreen = lazy(() => import('../library/gallery/GalleryScreen').then(({ GalleryScreen }) => ({ default: GalleryScreen })));
+const HomeScreen = lazy(() => import('../library/HomeScreen').then(({ HomeScreen }) => ({ default: HomeScreen })));
+const ModelScreen = lazy(() => import('../models/ModelScreen').then(({ ModelScreen }) => ({ default: ModelScreen })));
+const ProfileScreen = lazy(() => import('../models/ProfileScreen').then(({ ProfileScreen }) => ({ default: ProfileScreen })));
+const ModelsScreen = lazy(() => import('../models/ModelsScreen').then(({ ModelsScreen }) => ({ default: ModelsScreen })));
+const ModuleScreen = lazy(() => import('../modules/ModuleScreen').then(({ ModuleScreen }) => ({ default: ModuleScreen })));
+const ModulesScreen = lazy(() => import('../modules/ModulesScreen').then(({ ModulesScreen }) => ({ default: ModulesScreen })));
+const PersonaScreen = lazy(() => import('../personas/PersonaScreen').then(({ PersonaScreen }) => ({ default: PersonaScreen })));
+const PersonasScreen = lazy(() => import('../personas/PersonasScreen').then(({ PersonasScreen }) => ({ default: PersonasScreen })));
+const PromptScreen = lazy(() => import('../prompts/PromptScreen').then(({ PromptScreen }) => ({ default: PromptScreen })));
+const PromptsScreen = lazy(() => import('../prompts/PromptsScreen').then(({ PromptsScreen }) => ({ default: PromptsScreen })));
+const AccountScreen = lazy(() => import('../settings/AccountScreen').then(({ AccountScreen }) => ({ default: AccountScreen })));
+const ChatSettingsScreen = lazy(() => import('../settings/ChatSettingsScreen').then(({ ChatSettingsScreen }) => ({ default: ChatSettingsScreen })));
+const DisplayScreen = lazy(() => import('../settings/DisplayScreen').then(({ DisplayScreen }) => ({ default: DisplayScreen })));
+const TranslatorScreen = lazy(() => import('../settings/TranslatorScreen').then(({ TranslatorScreen }) => ({ default: TranslatorScreen })));
+const ChatSide = lazy(() => import('./ChatSide').then(({ ChatSide }) => ({ default: ChatSide })));
+
+const side = (at: SideAt) => <ScreenLoad><ChatSide {...at} /></ScreenLoad>;
 type At<K extends Route['kind']> = Extract<Route, { kind: K }>;
 const missing = (at: Route, what: Absent, wide: boolean) => <Missing what={what} back={backTo(upFromMissing(at), wide)} />;
 type ItemKind = 'character' | 'prompt' | 'persona' | 'module' | 'profile';
@@ -124,11 +127,11 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
   }
 
   const list = listOf(route);
-  if (!list) return screen(route);
+  if (!list) return <ScreenLoad>{screen(route)}</ScreenLoad>;
   const detail = route.kind === list.kind ? null : screen(route);
   const empty = list.kind === 'models' ? <ModelsLanding /> : <Empty variant="pane">{EMPTY[list.kind]}</Empty>;
-  if (split) return <ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={screen(list)} detail={detail ?? empty} />;
-  return detail ?? screen(list);
+  if (split) return <ListDetail variant={list.kind === 'personas' ? 'grid' : 'list'} list={<ScreenLoad>{screen(list)}</ScreenLoad>} detail={<ScreenLoad>{detail ?? empty}</ScreenLoad>} />;
+  return <ScreenLoad>{detail ?? screen(list)}</ScreenLoad>;
 }
 
 // Beside its list, 모델 opens on the 대화 모델: the pane stays empty only while none is set. Replaced before paint, so the
