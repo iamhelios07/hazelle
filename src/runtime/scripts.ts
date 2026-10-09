@@ -49,7 +49,8 @@ type Note =
   | { kind: 'unsaved'; failure: ApiFailure }
   | { kind: 'runaway' };
 export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
-// Consent is saved on the spender, not the chat's character. A dismissal leaves it to be asked again.
+// Consent is saved on the spender, not the chat's character: 'yes' allows it and 'no' refuses it.
+// A dismissal leaves it to be asked again.
 export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } };
 export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
