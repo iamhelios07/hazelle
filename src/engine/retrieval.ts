@@ -8,9 +8,10 @@ import { recalledText, recordText, type ChatRead, type Standing } from './memory
 const RETRIEVAL_SHARE = 0.2;
 export const retrievalRoom = (budget: number) => Math.floor(budget * RETRIEVAL_SHARE);
 
-// The floor is unmeasured (2026-10-09): a record is near enough when its similarity beats the median of the chat's
-// records by GAP, read only once LEAST records have vectors, since the median of fewer says nothing. The most that
-// ride at once is MOST.
+// Measured 2026-10-10 on voyage-4 (docs/research/memory-eval-2026-10.md): a record is near enough when its similarity
+// beats the median of the chat's records by GAP, read only once LEAST records have vectors, since the median of fewer
+// says nothing. At 0.1 about half the asked-for records ride and one plain send in five retrieves; 0.075 trades one
+// send in three for a few more hits. The most that ride at once is MOST.
 const MOST = 3;
 const LEAST = 4;
 const GAP = 0.1;
