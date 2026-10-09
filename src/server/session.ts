@@ -66,7 +66,9 @@ export function setSessionCookie(c: Context, token: string) {
   setCookie(c, 'session', token, {
     prefix: 'host',
     httpOnly: true,
-    // Tool pages can make same-origin cross-site GETs. Strict keeps those requests unauthenticated.
+    // A tool page can navigate its frame to this origin. Strict keeps that GET unauthenticated in Chromium and Firefox,
+    // but WebKit sends the cookie (docs sandbox-spike.md): a signed-in GET must stay free of side effects and never
+    // answer with something a browser runs.
     sameSite: 'Strict',
     maxAge: 400 * 24 * 60 * 60,
   });
