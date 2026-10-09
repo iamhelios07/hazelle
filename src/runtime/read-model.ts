@@ -291,9 +291,6 @@ export class ChatScreenRead {
   readonly snapshot = () => this.state.snapshot();
   readonly subscribe = (listener: () => void) => {
     if (!this.leave) {
-      // The tokenizer is loaded when a chat opens rather than with the page, a new chat not saved yet included, so a
-      // first send never waits for it.
-      this.models.store.evaluation.warm();
       const lease = this.models.store.retainChat(this.id);
       const store = this.models.store.subscribe((changes) => {
         const model = this.models.chat(this.id).snapshot();
@@ -374,6 +371,8 @@ export class ChatScreenRead {
     return value.then((display) => {
       if (evaluation.signal.aborted || revision !== this.revision) return;
       this.state.set({ chat, messages, ...placing(display), stuck: judged });
+      // Only a visible screen's completed display may prefetch the tokenizer; account projections must not load it.
+      if (this.listeners.size) store.evaluation.warm();
     }, (error: unknown) => {
       if (evaluation.signal.aborted || revision !== this.revision || error instanceof EvaluationStopped) return;
       // The worker judged a saved chat itself; one not saved yet is judged here, on what it was displayed from. The

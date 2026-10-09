@@ -33,6 +33,8 @@ export function evaluationFailure(error: unknown): ApiFailure {
 // answer at all is ended, after LOAD_MS.
 const STUCK_MS = 3_000;
 const LOAD_MS = 20_000;
+// Give the completed screen a paint before prefetching; a requested count loads immediately, without this delay.
+const WARM_MS = 250;
 
 // What a verdict on a job's chat (ChatProjections.verdict) does to it: a display runs without the bot's regex, a
 // passive job is refused before it is posted, and a press runs as asked.
@@ -69,6 +71,8 @@ const bare = (scope: ChatScope): ChatScope => ({ ...scope, packs: scope.packs.ma
 
 export class Evaluation {
   private worker: Worker | null = null;
+  private warming: ReturnType<typeof setTimeout> | null = null;
+  private warmed: Worker | null = null;
   private active: { id: number; work: Work; started: boolean } | null = null;
   private readonly waiting = new Map<string, Work>();
   private readonly histories = new Map<string, ChatScope['messages']>();
@@ -134,7 +138,14 @@ export class Evaluation {
   }
 
   warm() {
-    if (!this.closed) this.open().postMessage({ warm: true } satisfies EvaluationDown);
+    const worker = this.worker;
+    if (this.closed || !worker || this.warmed === worker || this.warming !== null) return;
+    this.warming = setTimeout(() => {
+      this.warming = null;
+      if (this.worker !== worker) return;
+      this.warmed = worker;
+      worker.postMessage({ warm: true } satisfies EvaluationDown);
+    }, WARM_MS);
   }
 
   forget(lane: Lane) {
@@ -256,6 +267,7 @@ export class Evaluation {
     if (!active?.started) return this.end(new EvaluationFailed('Evaluation worker stuck'));
     this.worker?.terminate();
     this.worker = null;
+    this.cancelWarm();
     this.heart.rest();
     this.histories.clear();
     this.active = null;
@@ -268,11 +280,18 @@ export class Evaluation {
   private end(error: Error) {
     this.worker?.terminate();
     this.worker = null;
+    this.cancelWarm();
     this.heart.rest();
     const work = [...this.waiting.values(), ...(this.active ? [this.active.work] : [])];
     this.waiting.clear();
     this.active = null;
     this.histories.clear();
     for (const each of work) { each.stop(); each.reject(error); }
+  }
+
+  private cancelWarm() {
+    if (this.warming !== null) clearTimeout(this.warming);
+    this.warming = null;
+    this.warmed = null;
   }
 }

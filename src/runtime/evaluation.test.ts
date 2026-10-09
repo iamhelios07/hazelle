@@ -34,6 +34,35 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it('defers tokenizer warming until a worker exists, warms once, and cancels on close', async () => {
+  vi.useFakeTimers();
+  const { workers, jobs } = fakeWorkers();
+  const evaluation = new Evaluation(none);
+  evaluation.warm();
+  expect(workers).toHaveLength(0);
+  const showing = evaluation.display(screen(), scope, new Set());
+  const worker = workers[0]!;
+  const job = jobs(worker)[0]!;
+  worker.receive({ id: job.id, result: await new Evaluator().run(job.input, () => {}) });
+  await showing;
+  evaluation.warm();
+  evaluation.warm();
+  expect(worker.posted.filter((message) => 'warm' in message)).toHaveLength(0);
+  await vi.advanceTimersByTimeAsync(250);
+  evaluation.warm();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(worker.posted.filter((message) => 'warm' in message)).toHaveLength(1);
+  evaluation.close();
+
+  const abandoned = new Evaluation(none);
+  const waiting = expect(abandoned.display(screen(), scope, new Set())).rejects.toBeInstanceOf(EvaluationStopped);
+  abandoned.warm();
+  abandoned.close();
+  await waiting;
+  await vi.advanceTimersByTimeAsync(250);
+  expect(workers[1]!.posted.some((message) => 'warm' in message)).toBe(false);
+});
+
 it('replays old tail reads and forward variables after a history delta, and matches the engine', async () => {
   const evaluation = new Evaluation(none);
   const first = { ...scope, messages: [message('old', '{{setvar::hp::7}}tail={{lastmessage}}'), message('tail', '{{getvar::hp}} old')] };
