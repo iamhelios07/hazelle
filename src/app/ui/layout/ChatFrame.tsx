@@ -24,8 +24,8 @@ const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: sty
 // The reading settings on the element a story sits in: the chat's column, or an exported log (LogExport).
 export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[font]} ${LEADING[leading]} ${WIDTH[width]}`, style: { '--reading-size': `${size}px` } as CSSProperties });
 
-// Whether the story stands at the page's left with a stage on its right at least half its text's width: a message's
-// 삽화 stands there (MarginPicture), not in the text. Outside a chat there is no stage.
+// Whether the story stands left of a stage at least half its text's width: a message's 삽화 stands there
+// (MarginPicture), not in the text. Outside a chat there is no stage.
 const MarginRoom = createContext(false);
 export const useMarginRoom = () => useContext(MarginRoom);
 
@@ -60,7 +60,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
   const [space, setSpace] = useState(0);
   const [scrollbar, setScrollbar] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [room, setRoom] = useState({ stage: 0, text: 0 });
+  const [room, setRoom] = useState({ stage: 0, lead: 0, text: 0 });
   const staged = stage && room.stage >= room.text / 2;
 
   useLayoutEffect(() => {
@@ -87,11 +87,14 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
     const content = contentRef.current!;
     const measure = () => {
       setScrollbar(element.offsetWidth - element.clientWidth);
-      // From the story's right edge, as it stands with a stage, to the page's, less a gap there and SidePeek's tab.
+      // The stage is at most as wide as the story, so the two stand centred together where the page has room; where
+      // it has not, the story keeps its least lead and the stage ends a gap and SidePeek's tab short of the page's edge.
       const style = getComputedStyle(content);
       const px = (name: string) => parseFloat(style.getPropertyValue(name));
-      const width = element.clientWidth - px('--story-stage-lead') - content.offsetWidth - px('--space-16') - px('--peek-tab-width');
-      setRoom({ stage: Math.max(0, width), text: content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) });
+      const least = px('--read-stage-least');
+      const stage = Math.max(0, Math.min(content.offsetWidth, element.clientWidth - content.offsetWidth - least - px('--space-16') - px('--peek-tab-width')));
+      const lead = Math.max(least, (element.clientWidth - content.offsetWidth - stage) / 2);
+      setRoom({ stage, lead, text: content.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -121,6 +124,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, panel
             '--footer-space': `${space}px`,
             '--story-scrollbar': `${scrollbar}px`,
             '--story-margin': `${room.stage}px`,
+            '--story-stage-lead': `${room.lead}px`,
             '--story-picture-peek': pictures?.fold === false ? 'none' : pictures?.peek && `${pictures.peek}vh`,
             '--story-picture-most': pictures?.most && `${pictures.most}vh`,
           } as CSSProperties

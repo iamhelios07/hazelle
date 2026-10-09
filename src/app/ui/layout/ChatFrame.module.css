@@ -12,15 +12,15 @@
   flex-direction: column;
   /* A SidePeek's drawer waits past the page's edge, where it draws nothing. */
   overflow-x: clip;
-  /* The story's left edge: centred, or with a stage (ChatFrame.tsx) near the page's left edge. */
+  /* The story's left edge: centred alone, or centred with its stage (ChatFrame.tsx), never nearer the page's edge than
+     --read-stage-least. */
   --story-lead: max(0px, calc((100% - var(--read-width)) / 2));
-  --story-stage-lead: var(--space-24);
   /* A 삽화's most height (StoryPicture): what the screen shows between the header and the composer, less its foot row,
      so a picture stuck under the header (MarginPicture) ends above the composer. */
   --story-illustration-most: calc(100dvh - var(--header-height) - var(--footer-space) - var(--control-tool) - 3 * var(--space-8));
 }
 
-/* The stage's width, --story-margin, is measured in ChatFrame.tsx. */
+/* The stage's width, --story-margin, and the story's lead beside it, --story-stage-lead, are measured in ChatFrame.tsx. */
 .staged {
   --story-lead: var(--story-stage-lead);
 }
