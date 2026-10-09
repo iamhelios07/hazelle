@@ -144,7 +144,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const draft = useDraft(id, chat.character);
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, answered, reply === 'stay');
   const memory = useChatMemory(id);
-  const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy || displayPending);
+  const { cache, leaving } = useSendNotes(id, chat, messages, memory, draft.text, busy || displayPending === true);
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();

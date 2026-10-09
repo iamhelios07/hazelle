@@ -73,6 +73,7 @@ function watched(hook: (what: string) => void | Promise<void>) {
     } as unknown as Statement;
   };
   const db: Db = {
+    ...t.env.db,
     prepare: (sql) => statement(t.env.db.prepare(sql), sql),
     // The service runs a batch through the real statements' own handle, which the wrappers do not carry.
     batch: async (list) => {

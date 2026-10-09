@@ -108,7 +108,7 @@ describe('the server process', () => {
     const port = await freePort();
     const server = start(join(dir, 'data-disconnected'), port);
     await server.listening;
-    const sending = request({ host: '127.0.0.1', port, path: '/api/nowhere', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': 2 } });
+    const sending = request({ host: '127.0.0.1', port, path: '/api/signup', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': 2 } });
     sending.on('error', () => {});
     sending.write('{');
     await new Promise((resolve) => setTimeout(resolve, 50));
