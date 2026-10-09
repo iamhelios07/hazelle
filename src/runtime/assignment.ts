@@ -1,4 +1,5 @@
 import { resolveRole, type Assignment, type ModelRef, type Role } from '../connectors/assignment';
+import { embedRoute } from '../connectors/registry';
 import type { Model } from '../connectors/types';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
@@ -25,6 +26,15 @@ export function chatModel(store: Pick<ObjectStore, 'get'>, chat: Chat, role: Rol
   const prompt = chatPrompt(store, chat);
   const ref = resolveRole(role, [chat.models, ...(prompt.kind === 'prompt' ? [prompt.prompt.value.models] : []), store.get('settings', SETTINGS_ID)?.value.models ?? {}]);
   return ref ? writes(routeOf(store, ref)) : { kind: 'no-model' };
+}
+
+// 임베딩 모델 is set in 기본값 alone (connectors/assignment ROLES). A model whose connection serves no embeddings is gone
+// for this role, as an unstarred one is.
+export function embedModel(store: Pick<ObjectStore, 'get'>): Route | RouteFailure {
+  const ref = store.get('settings', SETTINGS_ID)?.value.models.embed;
+  if (!ref) return { kind: 'no-model' };
+  const route = routeOf(store, ref);
+  return 'kind' in route || embedRoute(route.connection.value, route.model) ? route : { kind: 'model-gone' };
 }
 
 export function taskModel(store: Pick<ObjectStore, 'get'>, chat: Chat, own: ModelRef | undefined): Route | RouteFailure {

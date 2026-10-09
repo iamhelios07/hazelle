@@ -7,7 +7,7 @@ import { fail, type AppEnv } from './http';
 import { BATCH_LIMITS, objects } from './objects';
 import { prices } from './prices';
 import { createRelay } from './relay';
-import { canCall, requireSession } from './session';
+import { canCall, relayBot, requireSession } from './session';
 import { streams } from './streams';
 import { vaults } from './vaults';
 
@@ -73,7 +73,7 @@ app.route('/reports', reports);
 app.route('/notices', notices);
 app.route('/admin', admin);
 app.route('/prices', prices);
-app.post('/relay', requireSession, canCall, (c) => createRelay(c.env.outbound)(c.req.raw));
+app.post('/relay', requireSession, canCall, relayBot, (c) => createRelay(c.env.outbound)(c.req.raw));
 app.route('/streams', streams);
 app.notFound((c) => fail(c, 404, 'not-found'));
 

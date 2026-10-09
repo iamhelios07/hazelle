@@ -3,10 +3,10 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { every } from 'hono/combine';
 import { createMiddleware } from 'hono/factory';
 import type { AccountState } from '../contracts/admin';
-import { ACCOUNT_HEADER } from '../contracts/http';
+import { ACCOUNT_HEADER, BOT_HEADER } from '../contracts/http';
 import { CAP } from './caps';
 import type { Db } from './db/service-db';
-import { fail, hex, sha256Hex, type Account, type AppEnv } from './http';
+import { fail, hex, ID, sha256Hex, type Account, type AppEnv } from './http';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIFETIME_MS = 30 * DAY_MS;
@@ -47,10 +47,23 @@ export const requireOwnSession = sessionGuard(sessionAccount);
 // the routes that write objects or upload files, canCall on the ones that call a provider.
 export const canWrite = createMiddleware<AppEnv>(async (c, next) => (c.get('account').suspended ? fail(c, 403, 'suspended') : next()));
 
-// Throttling only, per account; a bot's own calls have a narrower key (streams.ts).
+// Throttling only, per account; a bot's own calls have a narrower key (botCalls).
 const throttle = createMiddleware<AppEnv>(async (c, next) => (c.env.limits.calls.limit(c.get('account').id).success ? next() : fail(c, 429, 'too-many-calls')));
 
 export const canCall = every(canWrite, throttle);
+
+// bot: the chat whose bot's script makes the call, as the page states it; a script cannot change what the page sends.
+// The limit stops a script in a loop from spending the user's money unseen. false: the chat's minute is spent.
+export const botCalls = (c: Context<AppEnv>, bot: string) => c.env.limits.botCalls.limit(`${c.get('account').id}:${bot}`).success;
+
+// A relayed call states its chat in BOT_HEADER. The relay builds the upstream request from the body alone (server/relay),
+// so the header goes no further.
+export const relayBot = createMiddleware<AppEnv>(async (c, next) => {
+  const bot = c.req.header(BOT_HEADER);
+  if (bot === undefined) return next();
+  if (!ID.test(bot)) return fail(c, 400, 'bad-input');
+  return botCalls(c, bot) ? next() : fail(c, 429, 'too-many-bot-calls');
+});
 
 // gated: the insert happens only if the statement before it in the batch wrote a row (signup's account and vault).
 export async function startSession(db: Db, accountId: string, gated = false) {

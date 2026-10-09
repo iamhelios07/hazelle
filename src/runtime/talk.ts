@@ -305,7 +305,7 @@ export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
 }
 
 // Field by field, never the error itself: whatever a network error gains must not reach saved chats.
-function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
+export function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
   switch (error.kind) {
     case 'refused':
     case 'relay':

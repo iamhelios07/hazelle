@@ -327,6 +327,23 @@ describe('guards', () => {
     expect((await start()).status).toBe(400);
   });
 
+  it('counts a relayed call that states its chat in that chat’s bot cap, and never sends the header upstream', async () => {
+    const body = signupBody();
+    const cookie = sessionCookie(await post('signup', body));
+    const chat = crypto.randomUUID();
+    const sent: Headers[] = [];
+    upstream = async (_url, init) => { sent.push(init.headers); return Response.json({ data: [] }); };
+    const call = (bot: string) => t.raw('relay', { method: 'POST', headers: { 'content-type': 'application/json', cookie, 'x-account': body.accountId, 'x-hazelle-bot': bot }, body: JSON.stringify({ url: 'https://api.example.com/embeddings', method: 'POST', headers: {}, body: '{}' }) });
+    expect((await call(chat)).status).toBe(200);
+    expect([...sent[0]!.keys()].some((key) => key.toLowerCase() === 'x-hazelle-bot')).toBe(false);
+    for (let i = 0; i < 19; i++) t.env.limits.botCalls.limit(`${body.accountId}:${chat}`);
+    const refused = await call(chat);
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: 'too-many-bot-calls' });
+    expect((await call(crypto.randomUUID())).status).toBe(200);
+    expect((await call('not an id')).status).toBe(400);
+  });
+
   it('answers the relay without a session with a 401 that carries no x-relay header', async () => {
     const response = await post('relay', { url: 'https://api.example.com/', method: 'GET', headers: {}, body: null });
     expect(response.status).toBe(401);

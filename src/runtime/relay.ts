@@ -1,4 +1,4 @@
-import { RELAY_HEADER } from '../contracts/http';
+import { BOT_HEADER, RELAY_HEADER } from '../contracts/http';
 import { HEAD, DATA, END, PING } from '../contracts/streams';
 import { providerMessage } from '../connectors/errors';
 import { isRecord } from '../connectors/values';
@@ -20,13 +20,13 @@ export type JsonAnswer = { ok: true; data: unknown } | { ok: false; failure: Rel
 
 const lost = (signal?: AbortSignal): RelayFailure => (signal?.aborted ? { kind: 'stopped' } : { kind: 'offline' });
 
-// The provider's answer, whatever its status.
-async function send(request: HttpRequest, signal?: AbortSignal): Promise<Response | RelayFailure> {
+// The provider's answer, whatever its status. bot: the chat whose bot's script makes the call (BOT_HEADER).
+async function send(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
   let response: Response;
   try {
     response = await fetchApi('relay', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(bot !== undefined && { [BOT_HEADER]: bot }) },
       body: JSON.stringify(request),
       signal,
     });
@@ -53,12 +53,12 @@ async function answered(response: Response | RelayFailure): Promise<Response | R
   return { kind: 'provider', status: response.status, detail: providerMessage(await response.text().catch(() => '')) };
 }
 
-export async function relay(request: HttpRequest, signal?: AbortSignal): Promise<Response | RelayFailure> {
-  return answered(await send(request, signal));
+export async function relay(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<Response | RelayFailure> {
+  return answered(await send(request, signal, bot));
 }
 
-export async function relayJson(request: HttpRequest, signal?: AbortSignal): Promise<JsonAnswer> {
-  return readJson(await relay(request, signal), signal);
+export async function relayJson(request: HttpRequest, signal?: AbortSignal, bot?: string): Promise<JsonAnswer> {
+  return readJson(await relay(request, signal, bot), signal);
 }
 
 export type BytesAnswer = { ok: true; bytes: Uint8Array<ArrayBuffer>; type: string | null } | { ok: false; failure: RelayFailure };
