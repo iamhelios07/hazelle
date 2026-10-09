@@ -144,13 +144,15 @@ Local development needs no secrets.
 | `npm run check` | Type checks, ESLint, stylelint and Vitest |
 | `npm test` | Vitest only |
 | `npm run e2e` | A build, then Playwright against the built server on a fresh data directory |
-| `npm run build` | The client, the server bundle and the source archive |
+| `npm run build` | The client, server and worker bundles, and the source archive |
 
 Styling rules are in [`src/app/ui/README.md`](src/app/ui/README.md): design values live only in `tokens.css`, and only `src/app/ui` styles elements. `eslint/boundaries.js` lists which layer may import which. The server's storage layout is in [`src/server/db/README.md`](src/server/db/README.md).
 
 The public HTTP listener runs in `frontend-worker.ts`, serving client files independently of the API's SQLite thread.
 It forwards API bodies and responses as streams to a loopback-only listener; `PORT`, the image and the external routes
 are unchanged. Shutdown drains the public requests before closing the API listener and databases.
+Client builds also write Brotli and gzip representations of compressible files; the file server negotiates these
+without compressing on the request thread. Webfonts and already-compressed downloads are left as they are.
 
 For slow loads, inspect `Server-Timing`: `static` measures the file handler, while `api_wait` measures the wait for API
 response headers, including forwarding an upload. A CDN cache hit can carry the timing of the cached response, not a

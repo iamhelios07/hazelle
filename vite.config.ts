@@ -1,9 +1,10 @@
 import { sandbox } from './scripts/sandbox';
+import { compressedAssets } from './scripts/compress';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [react(), sandbox()],
+  plugins: [react(), sandbox(), compressedAssets()],
   // The server (src/server/node.ts) answers /api; in development Vite proxies it to `npm run server`.
   server: { proxy: { '/api': 'http://localhost:8080' } },
   // Inlined assets become data: URLs, which the CSP refuses (the CSP constant the server sends); every asset ships as a file.

@@ -16,13 +16,14 @@ export function clientFiles(clientDir: string) {
     const started = performance.now();
     await next();
     c.res.headers.set('Server-Timing', `static;dur=${(performance.now() - started).toFixed(1)}`);
+    if (c.res.ok && /^(?:text\/|application\/(?:javascript|json|wasm)|image\/svg\+xml)/.test(c.res.headers.get('Content-Type') ?? '')) c.res.headers.set('Vary', 'Accept-Encoding');
   });
-  const sandbox = serveStatic({ root: clientDir, path: 'sandbox.html' });
+  const sandbox = serveStatic({ root: clientDir, path: 'sandbox.html', precompressed: true });
   client.get('/sandbox.html', async (c) => {
     for (const [name, value] of Object.entries(SANDBOX_HEADERS)) c.header(name, value);
     return (await sandbox(c, async () => {})) || c.notFound();
   });
-  const page = serveStatic({ root: clientDir, path: 'index.html' });
+  const page = serveStatic({ root: clientDir, path: 'index.html', precompressed: true });
   client.use(async (c, next) => {
     await next();
     for (const [name, value] of Object.entries(HEADERS)) c.res.headers.set(name, value);
@@ -31,7 +32,7 @@ export function clientFiles(clientDir: string) {
     // A tool page's origin is opaque, so its stylesheet and fonts arrive as CORS fetches. Assets are public build files.
     if (c.res.ok && c.req.path.startsWith('/assets/')) c.res.headers.set('Access-Control-Allow-Origin', '*');
   });
-  client.get('*', serveStatic({ root: clientDir }));
+  client.get('*', serveStatic({ root: clientDir, precompressed: true }));
   // A path that is no file is a client route, whatever it looks like: model ids carry dots
   // (/models/<connection>/vendor/model-4.5). Only a page load gets the page; a missing asset is a real 404.
   client.get('*', async (c, next) => {
