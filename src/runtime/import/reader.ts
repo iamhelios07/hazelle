@@ -1,3 +1,4 @@
+import { readTool, TOOL_FILE_BYTES } from '../../engine/import/tool';
 import { readBackup } from '../../engine/import/backup';
 import { importCard } from '../../engine/import/card';
 import { risuChatFile } from '../../engine/import/risu-character';
@@ -46,7 +47,10 @@ export class ImportReader {
       case 'card': {
         this.clear();
         this.backup = null;
+        const tool = request.file.name.toLowerCase().endsWith('.js');
+        if (tool && request.file.size > TOOL_FILE_BYTES) return { ok: false, failure: { kind: 'unreadable', detail: 'tool-too-large' } };
         const bytes = new Uint8Array(await request.file.arrayBuffer());
+        if (tool) return readTool(bytes);
         const chats = request.file.name.toLowerCase().endsWith('.json') ? chatsOf(bytes) : null;
         if (chats) return chats;
         const result = importCard(request.file.name, bytes);

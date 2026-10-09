@@ -1,3 +1,4 @@
+import type { ImportedTool } from '../../engine/import/tool';
 import type { BackupCatalog, BackupFailure, Imported, ImportedModule, ImportFailure, MoveUnsupported, Picture, RisuCharacter, RisuChat, RisuMessage, RisuPersona, RisuPreset } from '../../engine/import/types';
 import type { ChatFile } from '../chat-file';
 
@@ -24,7 +25,7 @@ type Inputs = {
 };
 export type Replies = {
   backup: { ok: true; catalog: BackupCatalog } | { ok: false; failure: BackupFailure };
-  card: { ok: true; card: CardData } | { ok: true; module: ModuleData } | ChatsRead | { ok: false; failure: ImportFailure };
+  card: { ok: true; tool: ImportedTool } | { ok: true; card: CardData } | { ok: true; module: ModuleData } | ChatsRead | { ok: false; failure: ImportFailure };
   character: CharacterData;
   persona: PersonaData;
   preset: RisuPreset;

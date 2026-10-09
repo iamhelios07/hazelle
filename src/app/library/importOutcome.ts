@@ -1,3 +1,5 @@
+import type { ToolManifest } from '../../tool-api/manifest';
+import type { ToolImport } from '../../runtime/tools/store';
 import type { Imported, ImportedModule } from '../../engine/import/types';
 import { unused } from '../../engine/pipeline';
 import type { ImportedCharacter } from '../../runtime/characters';
@@ -32,9 +34,7 @@ export function moduleOutcome(file: string, module: ImportedModule, id: string, 
   return {
     kind: 'module', file, id, title: `모듈 · ${module.name}`,
     holds: packHolds(module.pack, module.lore.length, module.assets.length - skipped),
-    placed: at === null
-      ? { text: `어디에도 켜지 않았어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
-      : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true },
+    placed: modulePlacement({ at, failure }),
     missed: moduleMissed(module.unsupported, skipped), unused: null,
   };
 }
@@ -42,4 +42,16 @@ export function moduleOutcome(file: string, module: ImportedModule, id: string, 
 // character: the name of the one they went to, null for 캐릭터 없이.
 export function chatOutcome(file: string, ids: string[], character: string | null, missed: string[]): ImportOutcome {
   return { kind: 'chat', file, id: ids.length === 1 ? ids[0]! : null, title: file, holds: `채팅 ${ids.length}개`, placed: { text: character === null ? `${NO_CHARACTER} 넣었어요.` : `${character}에 넣었어요.`, failed: false }, missed, unused: null };
+}
+
+const modulePlacement = ({ at, failure }: Placement): ImportOutcome['placed'] => at === null
+      ? { text: `어디에도 켜지 않았어요. ${inSettings('modules')}에서 켤 수 있어요.`, failed: false }
+      : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true };
+
+export function toolOutcome(file: string, manifest: ToolManifest, saved: ToolImport, placement: Placement): ImportOutcome {
+  return {
+    kind: 'module', file, id: saved.id, title: `모듈 · ${manifest.displayName}`,
+    holds: saved.previous ? `버전 ${saved.previous.manifest.version} → ${manifest.version}로 바꿨어요` : `도구 · ${manifest.version}`,
+    placed: saved.previous ? null : modulePlacement(placement), missed: [], unused: null,
+  };
 }

@@ -170,3 +170,13 @@ describe('ImportReader', () => {
     }
   });
 });
+
+it('reads .js as a tool without evaluating it and rejects oversized files before reading bytes', async () => {
+  const reader = new ImportReader();
+  const file = new File(['//@api 1\n//@name notes\n//@author jin\nthrow new Error("not executed");'], 'notes.JS');
+  expect(await ask(reader, { kind: 'card', file })).toMatchObject({ ok: true, tool: { manifest: { name: 'notes', author: 'jin' } } });
+  const large = new File([new Uint8Array(8 * 1024 * 1024 + 1)], 'large.js');
+  const whole = vi.spyOn(large, 'arrayBuffer');
+  expect(await ask(reader, { kind: 'card', file: large })).toMatchObject({ ok: false, failure: { detail: 'tool-too-large' } });
+  expect(whole).not.toHaveBeenCalled();
+});

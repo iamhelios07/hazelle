@@ -26,7 +26,7 @@ const AREAS = {
   engine: {
     paths: ['src/engine'],
     imports: ['connectors'],
-    types: ['model'],
+    types: ['model', 'toolApi'],
     why: 'the engine stays free of UI, network, storage and server code so its golden tests run in node, and takes only types from the model.',
   },
   model: {

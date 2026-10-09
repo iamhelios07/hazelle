@@ -1,3 +1,5 @@
+import { importTool, undoToolImport } from '../../runtime/tools/store';
+import { useToast } from '../toast';
 import { Check, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ImportFailure } from '../../engine/import/types';
@@ -19,13 +21,13 @@ import { useFiles, useLibrary, useSettings, useStore } from '../session';
 import { navigate, useRoute } from '../shell/router';
 import type { Route } from '../shell/routes';
 import { Avatar, Button, Callout, ConfirmDialog, Dialog, DropOverlay, Menu, MenuItem, Progress, Row, SearchField, Section, Stack, Text, useFileDrop, type ProgressStep } from '../ui';
-import { characterOutcome, chatOutcome, moduleOutcome, type ImportOutcome } from './importOutcome';
+import { characterOutcome, chatOutcome, moduleOutcome, toolOutcome, type ImportOutcome } from './importOutcome';
 import { assetsMissed, chatMissed, moveMissed } from './missed';
 import { MoveDialog } from './MoveDialog';
 import { MoveFlow } from './MoveFlow';
 import { stepOf } from './saving';
 
-const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin';
+const ACCEPT = '.png,.charx,.jpg,.jpeg,.json,.risum,.bin,.js';
 
 type Filled = { kind: 'filled'; file: string; name: string; kept: number; missed: string[] };
 type Result = ImportOutcome | Filled | { kind: 'failed'; file: string; failure: string };
@@ -81,6 +83,7 @@ function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
 export function ImportProvider({ children }: { children: ReactNode }) {
   const store = useStore();
   const files = useFiles();
+  const toast = useToast();
   const route = useRoute();
   const noticed = useSettings().importNotice === true;
   const [notice, setNotice] = useState<(() => void) | null>(null);
@@ -127,6 +130,17 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       const parsed = await reader.card(file);
       if (!parsed.ok) return { kind: 'failed', file: file.name, failure: FAILURE[parsed.failure.kind] };
       if ('chat' in parsed || 'risuChats' in parsed) return await saveChats(file.name, parsed, target, place, choose);
+      if ('tool' in parsed) {
+        const saved = await importTool(store, files, parsed.tool);
+        if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
+        const previous = saved.data.previous;
+        const placed = !previous && place && (await setModuleAt(store, place, saved.data.id, true));
+        const outcome = toolOutcome(file.name, parsed.tool.manifest, saved.data, { at: place?.kind ?? null, failure: placed && !placed.ok ? describeFailure(placed) : null });
+        if (previous) toast.undoable(outcome.holds, () => {
+          void undoToolImport(store, saved.data.id, previous).then((result) => { if (!result.ok) toast.failed(result); });
+        });
+        return outcome;
+      }
       if ('module' in parsed) {
         const saved = await importModule(store, files, parsed.module, (step) => progress(stepOf(step)));
         if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };

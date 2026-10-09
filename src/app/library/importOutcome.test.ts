@@ -1,7 +1,8 @@
+import { readTool } from '../../engine/import/tool';
 import { expect, it } from 'vitest';
 import { importCard } from '../../engine/import/card';
 import type { ImportedModule } from '../../engine/import/types';
-import { characterOutcome, moduleOutcome, type Placement } from './importOutcome';
+import { characterOutcome, moduleOutcome, toolOutcome, type Placement } from './importOutcome';
 
 it('keeps completed card and module reports as detached text without asset readers or source bytes', () => {
   const parsed = importCard('card.json', new TextEncoder().encode(JSON.stringify({ spec: 'chara_card_v3', data: { name: 'Mira', first_mes: 'Hi' } })));
@@ -25,4 +26,20 @@ it('says where a module was turned on, and that it was not when that failed', ()
   const placed = (at: Placement['at'], failure: string | null = null) => moduleOutcome('bell.risum', module, 'module', 0, { at, failure }).placed;
   expect([placed('character'), placed('prompt'), placed('always')].map((each) => each?.text)).toEqual(['이 캐릭터에 켰어요.', '이 프롬프트에 켰어요.', '항상 켰어요.']);
   expect(placed('character', '없어진 캐릭터예요.')).toEqual({ text: '이 캐릭터에 켜지 못했어요. 없어진 캐릭터예요.', failed: true });
+});
+
+
+it('reports a tool import or a version replacement without retaining the code', () => {
+  const read = readTool(new TextEncoder().encode('//@api 1\n//@name notes\n//@author jin\n//@version 1.1'));
+  if (!read.ok) throw new Error('fixture');
+  const { manifest } = read.tool;
+  const placement = { at: 'always' as const, failure: null };
+  const fresh = toolOutcome('notes.js', manifest, { id: 'm', previous: null }, placement);
+  expect(fresh).toMatchObject({ kind: 'module', holds: '도구 · 1.1', placed: { text: '항상 켰어요.' } });
+  const previous = { manifest: { ...manifest, version: '1.0' }, file: { id: 'f', key: 'k' }, size: 10, settings: {} };
+  const updated = toolOutcome('notes.js', manifest, { id: 'm', previous }, placement);
+  expect(updated.holds).toBe('버전 1.0 → 1.1로 바꿨어요');
+  expect(updated.placed).toBeNull();
+  expect(structuredClone(updated)).toEqual(updated);
+  expect(updated).not.toHaveProperty('bytes');
 });
