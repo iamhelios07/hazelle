@@ -1,0 +1,56 @@
+/* A tool page's starting look (design §6.10): the app's fonts, tokens and theme, so a tool that brings no styles of
+ * its own still looks like Hazelle. Tool styles override any of it. */
+@import './global.css';
+
+body {
+  padding: var(--space-16);
+}
+
+h1 {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+h2,
+h3 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+label {
+  display: block;
+  margin-block: var(--space-12) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  max-width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  width: auto;
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  padding: var(--space-8) var(--space-16);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+button:hover {
+  background: var(--color-surface-hover);
+}

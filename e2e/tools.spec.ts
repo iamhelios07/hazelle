@@ -105,7 +105,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
 
   await test.step('import the reference notepad in settings and capture its tool section', async () => {
     await importModule(page, 'notepad');
-    await expect(page.getByLabel('메모 제목', { exact: true })).toHaveValue('메모장');
+    await expect(page.getByRole('textbox', { name: '메모 제목', exact: true })).toHaveValue('메모장');
     await expect(page.getByRole('heading', { name: '도구', exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath('module-tool-section.png'), fullPage: true });
   });

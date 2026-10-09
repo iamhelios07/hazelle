@@ -31,10 +31,12 @@ import { receiptOf } from './talk';
 import { packsOf, scopeOf } from './chat-context';
 import type { Blocked, TurnContext } from './turn-context';
 
-// said: the bot's own words (alertNormal, alertError, showAlert). The others are the app's about the bot.
-// no-model: the spender called a role the chat has none for. flood: calls exceeded the per-chat cap (server/streams).
-// unsaved: what a run did to the chat could not be saved. runaway: the bot's commands were stopped for making too much
-// text.
+// said: the script's own words (alertNormal, alertError, showAlert, a tool's say). The others are the app's about it.
+// no-model: a script called a model of a role the chat has none for. flood: it called models faster than the server
+// lets a chat's scripts (server/streams). late: a tool missed the prompt deadline and the turn went without its slot.
+// stuck: disabled once a tool stalled too often, until reload.
+// unsaved: what a run did to the chat could not be saved. runaway: the script's commands were stopped for making too
+// much text.
 type Note =
   | { kind: 'said'; tone: 'normal' | 'error'; text: string }
   | { kind: 'failed'; message: string }
@@ -422,7 +424,9 @@ export class Scripts {
     });
   }
 
-  // Risu's answer shape stays at the Lua binding. The reason also lets the tool binding answer without parsing text.
+  // A script's own model call (design §6.8, §6.10): only for a spender the user allowed, to the chat's model of the
+  // role, with a receipt kept on the last message shown so usage and cost count it. Risu's answer shape stays at the
+  // Lua binding. The reason also lets the tool binding answer without parsing text.
   private async model(chat: string, role: Role, messages: ModelMessage[], from: PackOwner, signal?: AbortSignal): Promise<ModelResult> {
     const { store, credentials, costs } = this.session;
     const refused = (reason: ModelRefusal, why: string): ModelResult => ({ success: false, reason, result: `Error: ${why}` });

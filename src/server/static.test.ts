@@ -11,7 +11,7 @@ beforeAll(() => {
   mkdirSync(join(dir, 'assets'));
   for (const [name, body] of [
     ['index.html', '<!doctype html>page'],
-    ['sandbox.html', readFileSync('public/sandbox.html', 'utf8')],
+    ['sandbox.html', readFileSync('sandbox.html', 'utf8')],
     ['assets/main-h1.js', 'main'],
     ['assets/evaluation-worker-h2.js', 'worker'],
     ['assets/tokenizer-h3.wasm', 'wasm'],
@@ -43,6 +43,7 @@ describe('the client files', () => {
       expect(response.headers.get('content-security-policy')).toBe(CSP);
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
       expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(response.headers.get('access-control-allow-origin')).toBe(path.startsWith('/assets/') ? '*' : null);
     }
   });
 

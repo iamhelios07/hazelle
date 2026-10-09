@@ -24,6 +24,7 @@ addEventListener('message', (event: MessageEvent) => {
   Reflect.deleteProperty(globalThis, 'webkitRTCPeerConnection');
   connectApi(port, (code, api) => {
     Object.defineProperty(globalThis, 'hazelle', { value: api });
+    if (api.page?.theme === 'light') document.documentElement.dataset.theme = 'light';
     return (0, eval)(code) as void | Promise<void>;
   });
 });
