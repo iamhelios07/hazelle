@@ -39,7 +39,7 @@ type Note =
   | { kind: 'said'; tone: 'normal' | 'error'; text: string }
   | { kind: 'failed'; message: string }
   | { kind: 'missing'; names: string[] }
-  | { kind: 'stuck' }
+  | { kind: 'stuck'; disabled?: true }
   | { kind: 'no-model'; role: Role }
   | { kind: 'late' }
   | { kind: 'flood' }
@@ -372,7 +372,8 @@ export class Scripts {
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown, from: PackOwner | null = null) {
     if (result instanceof ToolStopped) return;
     if (result instanceof ToolLate) return this.tell(chat, 'late', { kind: 'late' }, from);
-    if (result instanceof LuaStuck || result instanceof ToolStuck || result instanceof EvaluationStuck) return this.note(chat, { kind: 'stuck' }, from);
+    if (result instanceof ToolStuck) return this.note(chat, { kind: 'stuck', ...(result.disabled && { disabled: true }) }, from);
+    if (result instanceof LuaStuck || result instanceof EvaluationStuck) return this.note(chat, { kind: 'stuck' }, from);
     if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' }, from);
     if (result instanceof Error) return this.tell(chat, `failed:${result.message}`, { kind: 'failed', message: result.message }, from);
     const { errors, missing } = result as Pick<Outcome, 'errors' | 'missing'>;
@@ -386,8 +387,8 @@ export class Scripts {
   private host(chat: string, scope: ChatScope, signal?: AbortSignal): Host {
     return {
       say: (tone, text, from) => { if (!signal?.aborted) this.note(chat, { kind: 'said', tone, text }, from); },
-      ask: (question, from) => this.ask(chat, question, from, signal),
-      model: (role, messages, from) => this.model(chat, role, messages, from, signal),
+      ask: (question, from, callSignal) => this.ask(chat, question, from, callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal),
+      model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal),
       tokens: async (text) => {
         const counted = await this.session.store.evaluation.count([text]);
         if ('kind' in counted) throw new Error('tokenizer');

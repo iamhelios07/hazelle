@@ -2,8 +2,8 @@ import { LuaFactory, type LuaEngine } from 'wasmoon';
 import { runBlocks, type Blocks } from './blocks';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
-import { add, cbs, read, text, UNSET, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
-import type { Host, ModelMessage, Event, Outcome, ScriptError, Failure, EditStage, ScriptUnit } from '../script-api';
+import { add, cbs, read, text, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
+import { UNSET, type Host, type ModelMessage, type Event, type Outcome, type ScriptError, type Failure, type EditStage, type ScriptUnit } from '../script-api';
 
 // name is for error messages only.
 export type Script = Pick<Extract<ScriptUnit, { kind: 'lua' }>, 'kind' | 'name' | 'code' | 'owner'>;

@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { clientFiles, CSP } from './static';
+import { clientFiles, CSP, SANDBOX_CSP } from './static';
 
 let dir: string;
 let client: ReturnType<typeof clientFiles>;
@@ -11,6 +11,7 @@ beforeAll(() => {
   mkdirSync(join(dir, 'assets'));
   for (const [name, body] of [
     ['index.html', '<!doctype html>page'],
+    ['sandbox.html', readFileSync('public/sandbox.html', 'utf8')],
     ['assets/main-h1.js', 'main'],
     ['assets/evaluation-worker-h2.js', 'worker'],
     ['assets/tokenizer-h3.wasm', 'wasm'],
@@ -64,4 +65,23 @@ describe('the client files', () => {
       expect(response.headers.get('content-security-policy')).toBe(CSP);
     }
   });
+});
+
+
+it('serves the opaque tool document with a classic script and its own CSP, never the app policy', async () => {
+  const response = await client.request('/sandbox.html?role=background', { headers: PAGE });
+  const html = await response.text();
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-security-policy')).toBe(SANDBOX_CSP);
+  expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+  expect(response.headers.get('cache-control')).toBe('no-cache');
+  expect(html).toContain('<script src="/sandbox/host.js"></script>');
+  expect(html).not.toMatch(/type\s*=\s*['"]module['"]/i);
+  expect(SANDBOX_CSP).toContain('sandbox allow-scripts');
+  expect(SANDBOX_CSP).toContain("connect-src 'none'");
+  expect(SANDBOX_CSP).toContain("frame-src 'none'");
+  expect(CSP).toContain("frame-src 'self'");
+  expect(CSP).not.toContain('sandbox allow-scripts');
+  expect((await client.request('/', { headers: PAGE })).headers.get('content-security-policy')).toBe(CSP);
 });

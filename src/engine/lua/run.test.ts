@@ -312,7 +312,7 @@ describe('block triggers', () => {
 
 it('passes the owner of each Lua and block script through its host calls', async () => {
   const module = { kind: 'module', id: 'module' } as const;
-  const model = vi.fn(async () => ({ success: true, result: 'answer' }));
+  const model = vi.fn<Host['model']>(async () => ({ success: true, result: 'answer' }));
   const say = vi.fn();
   const ask = vi.fn(async () => null);
   const outcome = await lua.run('owners', [

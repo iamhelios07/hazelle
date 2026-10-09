@@ -3,7 +3,7 @@ import type { Trigger } from './import/types';
 
 export type ScriptUnit = Trigger & { owner: PackOwner };
 export type ModelRefusal = 'not-allowed' | 'not-declared' | 'no-model' | 'flood' | 'failed';
-export type ModelResult = { success: boolean; result: string; reason?: ModelRefusal };
+export type ModelResult = { success: true; result: string } | { success: false; result: string; reason: ModelRefusal };
 
 export type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; options: string[] };
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -12,8 +12,8 @@ export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: str
 export type Host = {
   say(kind: 'normal' | 'error', text: string, from: PackOwner): void;
   // input: the text typed; confirm: 'yes'; select: the option's index. null: dismissed.
-  ask(question: Question, from: PackOwner): Promise<string | null>;
-  model(role: 'main' | 'aux', messages: ModelMessage[], spender: PackOwner): Promise<ModelResult>;
+  ask(question: Question, from: PackOwner, signal?: AbortSignal): Promise<string | null>;
+  model(role: 'main' | 'aux', messages: ModelMessage[], spender: PackOwner, signal?: AbortSignal): Promise<ModelResult>;
   tokens(text: string): Promise<number>;
   // The lorebook entries a prompt built now would hold, each as sent, while their tokens fit within the model's
   // context less reserve; all of them when reserve is no number, as Risu's sum then never passes its limit.
@@ -52,3 +52,5 @@ export type Outcome = {
   missing: string[];
 };
 
+
+export const UNSET = 'null';

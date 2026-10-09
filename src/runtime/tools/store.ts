@@ -17,10 +17,9 @@ export const TOOL_DATA_BYTES = 4 * 1024 * 1024;
 const jsonBytes = (value: Json) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
 export function toolSettings(manifest: ToolManifest, values: Settings): Settings {
-  return Object.fromEntries(manifest.settings.flatMap((field) => {
-    const value = Object.hasOwn(values, field.key) && fieldValue(field, values[field.key]) ? values[field.key] : field.default;
-    return value === undefined ? [] : [[field.key, value]];
-  }));
+  const defaults = Object.fromEntries(manifest.settings.flatMap((field) => field.default === undefined ? [] : [[field.key, field.default]]));
+  // Values survive a version that removes or changes a field; reverting code must not discard the user's settings.
+  return { ...defaults, ...values };
 }
 
 export async function importTool(store: ObjectStore, files: Files, { manifest, bytes }: ImportedTool): Promise<ApiResult<ToolImport>> {
@@ -31,7 +30,7 @@ export async function importTool(store: ObjectStore, files: Files, { manifest, b
   const uploaded = await files.save([bytes]);
   if (!uploaded.ok) return uploaded;
   const file = uploaded.data[0];
-  if (!file) return { ok: false, error: 'files-full' };
+  if (!file) return { ok: false, error: 'tool-file-refused' };
   const id = existing?.parent ?? crypto.randomUUID();
   const previous = existing?.value ?? null;
   const value: Tool = { manifest, file, size: bytes.byteLength, settings: toolSettings(manifest, previous?.settings ?? {}) };
@@ -55,7 +54,7 @@ export const undoToolImport = (store: ObjectStore, module: string, previous: Too
   store.update('tool', toolId(module), (current) => live(store.get('module', module)) ? { ...previous, settings: toolSettings(previous.manifest, current.settings) } : null);
 
 export async function setToolSettings({ store, tools }: Pick<Session, 'store' | 'tools'>, module: string, change: Settings): Promise<ApiResult<unknown>> {
-  const saved = await store.update('tool', toolId(module), (current) => live(store.get('module', module)) ? { ...current, settings: toolSettings(current.manifest, { ...current.settings, ...change }) } : null);
+  const saved = await store.update('tool', toolId(module), (current) => live(store.get('module', module)) ? { ...current, settings: { ...current.settings, ...Object.fromEntries(current.manifest.settings.flatMap((field) => Object.hasOwn(change, field.key) && fieldValue(field, change[field.key]) ? [[field.key, change[field.key]!]] : [])) } } : null);
   if (saved.ok) tools.settingsChanged(module);
   return saved;
 }
@@ -93,3 +92,73 @@ export const toolsOf = (store: ObjectStore, chat: Chat): ToolUnit[] => packsOf(s
   const tool = module && store.get('tool', toolId(id));
   return tool ? [{ module: id, tool: tool.value }] : [];
 });
+
+type PendingData = { value: Json | undefined; waiting: { resolve(): void; reject(error: Error): void }[] };
+type DataQueue = { pending: Map<string, PendingData>; timer: ReturnType<typeof setTimeout> | null; running: boolean; sent: number[] };
+
+export class ToolWrites {
+  private readonly queues = new Map<string, DataQueue>();
+  private closed = false;
+  constructor(private readonly store: ObjectStore) {}
+
+  write(module: string, key: string, value: Json | undefined): Promise<void> {
+    if (this.closed) return Promise.reject(new Error('closed'));
+    if (value !== undefined && jsonBytes(value) > TOOL_VALUE_BYTES) return Promise.reject(new Error('too-large'));
+    const queue = this.queues.get(module) ?? { pending: new Map(), timer: null, running: false, sent: [] };
+    this.queues.set(module, queue);
+    const promise = new Promise<void>((resolve, reject) => {
+      const pending = queue.pending.get(key);
+      if (pending) { pending.value = value; pending.waiting.push({ resolve, reject }); }
+      else queue.pending.set(key, { value, waiting: [{ resolve, reject }] });
+    });
+    this.schedule(module, queue);
+    return promise;
+  }
+
+  cancel(module: string) {
+    const queue = this.queues.get(module);
+    if (!queue) return;
+    if (queue.timer) clearTimeout(queue.timer);
+    queue.timer = null;
+    for (const pending of queue.pending.values()) for (const waiter of pending.waiting) waiter.reject(new Error('closed'));
+    queue.pending.clear();
+    // Rate history survives restarts and reimports of the same module.
+  }
+
+  close() {
+    this.closed = true;
+    for (const module of this.queues.keys()) this.cancel(module);
+  }
+
+  private schedule(module: string, queue: DataQueue) {
+    if (this.closed || queue.timer || queue.running || !queue.pending.size) return;
+    queue.timer = setTimeout(() => {
+      queue.timer = null;
+      void this.flush(module, queue);
+    }, 1000);
+  }
+
+  private async flush(module: string, queue: DataQueue) {
+    queue.running = true;
+    const pending = [...queue.pending];
+    queue.pending.clear();
+    try {
+      for (const [key, { value, waiting }] of pending) {
+        try {
+          if (this.closed) throw new Error('closed');
+          queue.sent = queue.sent.filter((at) => Date.now() - at < 60_000);
+          if (queue.sent.length >= 30) throw new Error('too-many-writes');
+          queue.sent.push(Date.now());
+          const result = value === undefined ? await deleteToolData(this.store, module, key) : await setToolData(this.store, module, key, value);
+          if (!result.ok) throw new Error(result.error);
+          for (const waiter of waiting) waiter.resolve();
+        } catch (error) {
+          for (const waiter of waiting) waiter.reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+    } finally {
+      queue.running = false;
+      this.schedule(module, queue);
+    }
+  }
+}

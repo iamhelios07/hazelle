@@ -20,3 +20,5 @@ export type Up =
   | { kind: 'failed'; id: number; message: string }
   | { kind: 'call'; call: number; event?: number; method: Method; args: unknown[] }
   | { kind: 'pong' };
+
+export type Port = Pick<MessagePort, 'onmessage' | 'postMessage' | 'start' | 'close'>;

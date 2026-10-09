@@ -30,7 +30,7 @@ export function BotNotes() {
           toast.show('이 봇이 쓰는 기능 중 지원하지 않는 게 있어요', { detail: note.names.join(', ') });
           break;
         case 'stuck':
-          toast.error(BOT_STUCK, { detail: from?.name });
+          toast.error(note.disabled ? '도구가 세 번 멈춰서 껐어요. 새로고침하면 다시 켜져요' : BOT_STUCK, { detail: from?.name });
           break;
         case 'runaway':
           toast.error('봇의 명령어가 텍스트를 너무 많이 만들어서 멈췄어요', { detail: RUNAWAY_FIX });

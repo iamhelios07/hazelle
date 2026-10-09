@@ -46,7 +46,7 @@ const AREAS = {
     tests: ['harness'],
     why: 'the runtime is below the UI and reaches the server over HTTP only; only its tests run the server, through the harness.',
   },
-  harness: { paths: ['src/runtime/testing'], imports: ['runtime', 'server', ...RUNTIME_IMPORTS], why: 'the runtime tests\' harness is below the UI.' },
+  harness: { paths: ['src/runtime/testing'], imports: ['runtime', 'server', 'sandbox', ...RUNTIME_IMPORTS], why: 'the runtime tests\' harness is below the UI.' },
   ui: { paths: ['src/app/ui'], imports: ['changeSignal'], why: 'the kit imports only the argument-free change signal outside src/app/ui, so a component never reaches the session, router, toasts, a screen or the layers below.' },
   routes: { paths: ['src/app/shell/routes', 'src/app/shell/router'], imports: BELOW_APP, why: 'the route table and router are what features take from the shell, so they compose nothing.' },
   shell: {

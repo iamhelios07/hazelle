@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   suspended: `정지된 계정이라 저장하거나 모델을 호출할 수 없어요. 백업은 ${inSettings('account')}에서 받을 수 있어요.`,
   'too-many-calls': '모델 호출이 너무 잦아요. 잠시 후 다시 시도해 주세요.',
   'storage-full': `저장 공간이 가득 찼어요. ${BIN}에서 영구 삭제하면 공간이 생겨요.`,
+  'tool-file-refused': '도구 파일을 저장하지 못했어요. 파일 한도나 차단 여부를 확인해 주세요.',
   'file-blocked': '운영자가 차단한 파일이라 올리거나 열 수 없어요.',
   'too-many-reports': '운영자가 확인하지 않은 알림이 많아서 더 보낼 수 없어요.',
   'not-admin': '운영자 계정에서만 할 수 있어요.',

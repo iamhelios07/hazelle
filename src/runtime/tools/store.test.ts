@@ -40,6 +40,13 @@ describe('tool storage', () => {
     expect(store.get('tool', toolId(module))!.value.manifest.version).toBe('1.0');
     expect(await files.read(store.get('tool', toolId(module))!.value.file)).toEqual({ ok: true, data: source().bytes });
     expect(store.get('tool', toolId(module))!.value.settings.title).toBe('mine');
+    const next = source('3');
+    next.manifest.settings = [{ key: 'new', type: 'switch', label: 'New', default: true }];
+    const replaced = await importTool(store, files, next);
+    if (!replaced.ok) throw new Error(replaced.error);
+    expect(store.get('tool', toolId(module))!.value.settings).toEqual({ title: 'mine', new: true });
+    await undoToolImport(store, module, replaced.data.previous!);
+    expect(store.get('tool', toolId(module))!.value.settings.title).toBe('mine');
   });
 
   it('does not revive a binned identity and purges both child kinds', async () => {

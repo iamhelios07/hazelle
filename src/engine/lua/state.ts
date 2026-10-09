@@ -1,5 +1,5 @@
 import type { PackOwner } from '../../model/library';
-import type { Host } from '../script-api';
+import { UNSET, type Host } from '../script-api';
 import { unescapeCbs } from '../cbs/escape';
 import { evaluate, Runaway } from '../cbs/evaluate';
 import { TOGGLE_GLOBAL } from '../cbs/tags';
@@ -44,8 +44,6 @@ export type Run = {
   ranAway: boolean;
 };
 export type Acting = Run & { host: Host; owner: PackOwner };
-
-export const UNSET = 'null';
 
 export const working = (snapshot: Snapshot): Working[] => snapshot.messages.map((message, origin) => ({ ...message, origin, first: message.data }));
 

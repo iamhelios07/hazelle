@@ -66,6 +66,7 @@ export function setSessionCookie(c: Context, token: string) {
   setCookie(c, 'session', token, {
     prefix: 'host',
     httpOnly: true,
+    // Tool pages can make same-origin cross-site GETs. Strict keeps those requests unauthenticated.
     sameSite: 'Strict',
     maxAge: 400 * 24 * 60 * 60,
   });
