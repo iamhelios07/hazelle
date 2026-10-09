@@ -52,7 +52,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
           />
           <RolePicker
             role="embed"
-            help="장기 기억 도구가 비슷한 내용을 찾을 때 써요. 바꾸면 도구가 기억을 다시 만들 수 있어요."
+            help="장기 기억이 지금 대화와 관련된 지난 기록을 찾을 때, 도구가 비슷한 내용을 찾을 때 써요. 바꾸면 기록을 다시 준비해요."
             own={settings.models.embed}
             follow="정하지 않음"
             connections={connections}

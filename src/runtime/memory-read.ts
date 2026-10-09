@@ -35,5 +35,5 @@ export function memoryOwner(store: ObjectStore, chat: Chat): MemoryOwner {
 export function memoryFill(store: ObjectStore, id: string, chat: Chat, messages: Message[]): MemoryFill | null {
   const owner = memoryOwner(store, chat);
   if (owner?.kind === 'tool') return { kind: 'tool', name: owner.unit.tool.manifest.displayName, text: '', through: -1 };
-  return owner && { kind: 'built-in', memory: chatMemory(store, id), budget: owner.setup.budget, shown: sourcesOf(messages) };
+  return owner && { kind: 'built-in', memory: chatMemory(store, id), budget: owner.setup.budget, shown: sourcesOf(messages), found: [] };
 }

@@ -61,7 +61,7 @@ test('tools keep a notepad across reload and put versioned aux summaries into th
       if ((await picker.innerText()).includes(FAKE_MODEL)) continue;
       await picker.click();
       const saved = saving(page);
-      await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();
+      await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).first().click();
       await saved;
       await expect(picker).toContainText(FAKE_MODEL);
     }
@@ -177,7 +177,7 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
       if ((await picker.innerText()).includes(FAKE_MODEL)) continue;
       await picker.click();
       const saved = saving(page);
-      await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).click();
+      await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_MODEL}`) }).first().click();
       await saved;
       await expect(picker).toContainText(FAKE_MODEL);
     }

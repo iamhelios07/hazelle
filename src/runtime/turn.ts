@@ -14,6 +14,7 @@ import type { Ask, TalkFailure } from './talk';
 import { EvaluationFailed, EvaluationStopped, evaluationFailure } from './evaluation';
 import { endCall, type CallTarget } from './streams';
 import { resumeTranslation, translate, type TranslateFailure, type TranslateInput } from './translate';
+import { findRecords } from './retrieval';
 
 // A turn also stops before sending on a new chat that was not saved, a pull that failed, a chat or message another
 // device deleted, a user's message that was not translated, a tokenizer that did not load, or a prompt over the
@@ -173,7 +174,8 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in prompted) return prompted;
   if (signal.aborted) return { kind: 'halted' };
   const { turn, tools } = prompted;
-  const { route, settings, scope, budget, memory, said, reply } = turn;
+  const { route, settings, scope, budget, said, reply } = turn;
+  const memory = turn.memory?.kind === 'built-in' ? { ...turn.memory, found: await findRecords(session, chat, scope.messages, signal) } : turn.memory;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
   const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };

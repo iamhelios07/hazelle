@@ -96,7 +96,7 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const illustrator = new Illustrator({ store, credentials, files });
   const tools = (bindings.tools ?? createTools)({ store, files }, () => scripts);
   const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, { lua: machine, tools });
-  const memory = new Rememberer({ store, read, credentials, scripts }, reading);
+  const memory = new Rememberer({ store, read, credentials, costs, scripts }, reading);
   const talk = new Talk(
     store,
     credentials,

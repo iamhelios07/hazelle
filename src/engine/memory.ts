@@ -7,7 +7,7 @@ import type { MemoryPrompt } from '../model/prompt';
 // leave out. missing: how many of those went with no memory standing for them (stale, over the budget, forgotten, or
 // the slot did not reach the request). slot: whether the prompt holds 장기 기억 where it reaches the request, whatever
 // memory holds.
-export type MemorySent = ({ by: null; sent: string[] } | { by: string; text: string }) & { covered: number; missing: number; slot: boolean };
+export type MemorySent = ({ by: null; sent: string[]; found: string[] } | { by: string; text: string }) & { covered: number; missing: number; slot: boolean };
 
 // A record's or a chapter's. stale: its messages render differently now, so it waits (design §6.2, When the source
 // changes). chaptered: a record whose chapter is sent in its place. recall-over: a recalled record whose messages do
@@ -26,7 +26,9 @@ export type ChatRead = { shown: Source[]; roles: ('user' | 'assistant')[]; speak
 export const speakersOf = ({ messages, persona, card }: { messages: readonly { role: 'user' | 'assistant' }[]; persona: { name: string } | null; card: { name: string } | null }) =>
   messages.map(({ role }) => (role === 'user' ? (persona?.name ?? 'User') : (card?.name ?? 'Assistant')));
 
-export type MemoryInput = { memory: Memory; budget: number; shown: Source[] };
+// found: the records retrieval ranked nearest the latest message, nearest first (engine/retrieval), none when nothing
+// could be found.
+export type MemoryInput = { memory: Memory; budget: number; shown: Source[]; found: string[] };
 
 // Memory takes at most this share of what the model can take, so a budget set for a larger model shrinks for this
 // request; the setting itself is untouched.
@@ -328,12 +330,12 @@ function memoryText(state: Fact[], threads: string[], items: string[], heading =
 
 const headOf = ({ when, where, who }: Written) => `[${[`When: ${when ?? 'unknown'}`, `Where: ${where ?? 'unknown'}`, ...(who.length ? [`Present: ${who.join(', ')}`] : [])].join(' · ')}]`;
 
-function recordText(item: Written): string {
+export function recordText(item: Written): string {
   const { what, lines, outcome } = item;
   return [headOf(item), what, ...lines.map(({ speaker, text }) => `${speaker}: "${text}"`), ...(outcome ? [`Outcome: ${outcome}`] : [])].join('\n');
 }
 
-function recalledText(record: MemoryRecord, chat: ChatRead, places: ReadonlyMap<string, number>): string {
+export function recalledText(record: MemoryRecord, chat: ChatRead, places: ReadonlyMap<string, number>): string {
   const said = record.sources.flatMap(({ message }) => {
     const at = places.get(message);
     return at === undefined ? [] : [`${chat.speakers[at]}: ${chat.texts[at]!.trim()}`];

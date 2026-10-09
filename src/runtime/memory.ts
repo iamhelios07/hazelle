@@ -24,6 +24,7 @@ import { callOf, endCall, newCall, type CallTarget } from './streams';
 import { receiptOf } from './talk';
 import { budgetOf, promptBudget, sentSettings } from './chat-context';
 import { wouldSend } from './turn-context';
+import { indexRecords, unembedded, type Indexed } from './retrieval';
 
 export type { RecordStatus } from '../engine/memory';
 
@@ -235,11 +236,13 @@ export type MemoryFailure =
   | { kind: 'failed'; receipt: Receipt }
   | { kind: 'invalid'; receipt: Receipt; reason: Invalid }
   | { kind: 'unsaved'; failure: ApiFailure }
+  | { kind: 'embed'; reason: Extract<Indexed, { ok: false }>['reason']; receipt: Receipt | null }
   | RanAway;
 
 // failed: why a chat's last summary did not enter memory, kept for the session so it is not tried again on its own.
-// chapterFailed: why its last chapter did not; records go on being summarized meanwhile.
-export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure>; chapterFailed: ReadonlyMap<string, MemoryFailure> };
+// chapterFailed: why its last chapter did not; records go on being summarized meanwhile. indexing: how many records are
+// being embedded for retrieval; indexFailed: why the last pass stopped, which the next 다시 시도 or chat open tries again.
+export type Remembering = { running: ReadonlyMap<string, { model: string; left: number }>; failed: ReadonlyMap<string, MemoryFailure>; chapterFailed: ReadonlyMap<string, MemoryFailure>; indexing: ReadonlyMap<string, number>; indexFailed: ReadonlyMap<string, MemoryFailure> };
 
 type Planned = { job: Job; sent: ChatSent; from: number; to: number; memory: Memory; before: Written | null; chapter: { target: number } | null; left: number } & Tools;
 
@@ -254,7 +257,7 @@ type Outcome = 'done' | 'moved' | 'stopped' | MemoryFailure;
 // one before it left. It never blocks or cancels a send.
 export class Rememberer {
   private closed = false;
-  private state: Remembering = { running: new Map(), failed: new Map(), chapterFailed: new Map() };
+  private state: Remembering = { running: new Map(), failed: new Map(), chapterFailed: new Map(), indexing: new Map(), indexFailed: new Map() };
   private readonly changes = new ChangeSignal();
   // The chats with a job running, and of those the ones that may summarize new messages too, not only stale records.
   private readonly working = new Set<string>();
@@ -274,7 +277,7 @@ export class Rememberer {
   private readonly stop: () => void;
 
   constructor(
-    private readonly session: Pick<Session, 'store' | 'read' | 'credentials' | 'scripts'>,
+    private readonly session: Pick<Session, 'store' | 'read' | 'credentials' | 'costs' | 'scripts'>,
     // The calls this page reads (runtime/streams), shared with Talk, Translator and Streams.
     private readonly reading: Set<string>,
   ) {
@@ -289,13 +292,15 @@ export class Rememberer {
 
   readonly snapshot = () => this.state;
 
+  // Opening a chat tries a failed index pass again; a failed summary waits for 다시 시도.
   check(chat: string) {
+    this.change(chat, { indexFailed: null });
     this.start(chat, true);
   }
 
   retry(chat: string) {
     this.unchaptered.delete(chat);
-    this.change(chat, { failed: null, chapterFailed: null });
+    this.change(chat, { failed: null, chapterFailed: null, indexFailed: null });
     this.start(chat, true);
   }
 
@@ -331,14 +336,18 @@ export class Rememberer {
     for (const abort of this.aborts) abort.abort();
   }
 
-  private change(chat: string, change: { running?: { model: string; left: number } | null; failed?: MemoryFailure | null; chapterFailed?: MemoryFailure | null }) {
-    const next = { running: new Map(this.state.running), failed: new Map(this.state.failed), chapterFailed: new Map(this.state.chapterFailed) };
+  private change(chat: string, change: { running?: { model: string; left: number } | null; failed?: MemoryFailure | null; chapterFailed?: MemoryFailure | null; indexing?: number | null; indexFailed?: MemoryFailure | null }) {
+    const next = { running: new Map(this.state.running), failed: new Map(this.state.failed), chapterFailed: new Map(this.state.chapterFailed), indexing: new Map(this.state.indexing), indexFailed: new Map(this.state.indexFailed) };
     if (change.running === null) next.running.delete(chat);
     else if (change.running) next.running.set(chat, change.running);
     if (change.failed === null) next.failed.delete(chat);
     else if (change.failed) next.failed.set(chat, change.failed);
     if (change.chapterFailed === null) next.chapterFailed.delete(chat);
     else if (change.chapterFailed) next.chapterFailed.set(chat, change.chapterFailed);
+    if (change.indexing === null) next.indexing.delete(chat);
+    else if (change.indexing !== undefined) next.indexing.set(chat, change.indexing);
+    if (change.indexFailed === null) next.indexFailed.delete(chat);
+    else if (change.indexFailed) next.indexFailed.set(chat, change.indexFailed);
     this.state = next;
     this.changes.notify();
   }
@@ -355,7 +364,7 @@ export class Rememberer {
     if (!stored || memoryOwner(this.session.store, stored.value)?.kind !== 'built-in' || (!full && !chatMemory(this.session.store, chat).records.length)) return;
     if (full) this.full.add(chat);
     this.working.add(chat);
-    void this.hold(chat, () => this.work(chat)).finally(() => this.done(chat));
+    void this.hold(chat, () => this.work(chat).then(() => this.index(chat))).finally(() => this.done(chat));
   }
 
   private async hold(chat: string, work: () => Promise<unknown>) {
@@ -389,6 +398,23 @@ export class Rememberer {
       if (!planned.job.chapter) return this.change(chat, { failed: outcome });
       this.unchapter(chat, planned.job.chapter, outcome);
     }
+  }
+
+  // Retrieval's vectors follow the records (runtime/retrieval): embedded once the summarizing pass is done. A failure
+  // here stops nothing else, and waits for the next chat open or 다시 시도.
+  private async index(chat: string) {
+    const missing = unembedded(this.session.store, chat);
+    if (!missing || (!missing.records.length && !missing.stale) || this.state.indexFailed.has(chat)) return;
+    this.change(chat, { indexing: missing.records.length });
+    const control = new AbortController();
+    this.aborts.add(control);
+    try {
+      const done = await indexRecords(this.session, chat, control.signal);
+      this.change(chat, { indexing: null, indexFailed: done.ok ? null : { kind: 'embed', reason: done.reason, receipt: done.receipt } });
+    } catch (error) {
+      const failure = evaluationFailure(error);
+      this.change(chat, { indexing: null, indexFailed: failure.error === 'stopped' ? null : { kind: 'unsaved', failure } });
+    } finally { this.aborts.delete(control); }
   }
 
   // A chapter is optional: its failure stops no record from being made.

@@ -8,6 +8,7 @@ import type { Card } from './import/types';
 import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation } from './lorebook/activate';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
 import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, recordsTarget, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
+import { retrieval, retrievalRoom } from './retrieval';
 import { numbered } from './illustrate';
 import type { TranslationRequest } from './translate';
 
@@ -51,6 +52,7 @@ export type From =
   | { kind: 'lore'; name: string; slot: 'lorebook' | 'postEverything' }
   | { kind: 'depth'; name: string; depth: number }
   | { kind: 'continue' }
+  | { kind: 'retrieval' }
   | { kind: 'script' }
   | { kind: 'tool'; name: string };
 
@@ -266,10 +268,14 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   const tokens = remembered(countTokens);
   const laid = lay(scope, scope.messages, chat.variables, seed, tokens, null);
   const { activation, named } = laid;
-  const recalled = memory?.kind === 'built-in' ? standing(memory.memory, { shown: memory.shown, roles: scope.messages.map(({ role }) => role), speakers: speakersOf(scope), texts: chat.texts }, memoryBudget(memory.budget, budget), tokens) : null;
+  const built = memory?.kind === 'built-in' ? memory : null;
+  const read = built && { shown: built.shown, roles: scope.messages.map(({ role }) => role), speakers: speakersOf(scope), texts: chat.texts };
+  const recalled = built && standing(built.memory, read!, memoryBudget(built.budget, budget), tokens);
   const told = memory?.kind === 'tool' ? memory : null;
 
   const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: told?.text ?? recalled?.text ?? '', tools });
+  // Retrieval rides only where memory does, before the latest user message so it follows the last cache point.
+  const found = built && slot ? retrieval(built.memory, built.found, recalled!, read!, retrievalRoom(memoryBudget(built.budget, budget)), tokens) : null;
   // A tool's text stands for its messages only where it reaches the request: without it there, none leave.
   const covered = told ? (slot && told.text.trim() ? told.through + 1 : 0) : (recalled?.covered ?? 0);
   const hasToolSlot = prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'tool');
@@ -283,7 +289,10 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
     .slice(covered)
     .map((text, offset) => ({ role: scope.messages[covered + offset]!.role, content: text.trim() }))
     .filter(({ content }) => content !== '');
-  const atDepth = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: { kind: 'depth', name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
+  const atDepth: { depth: number; sent: Sent }[] = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: { kind: 'depth', name: named(entry.id), depth: entry.depth } } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
+  const lastUser = messages.findLastIndex(({ role }) => role === 'user');
+  const retrieved = found && lastUser !== -1 ? found : null;
+  if (retrieved) atDepth.push({ depth: messages.length - lastUser, sent: { message: { role: 'user', content: retrieved.text }, from: { kind: 'retrieval' } } });
   const fill = (kept: ChatMessage[]) => {
     // An entry at @@depth N goes before the message N from the end, wherever that message is.
     const before = new Map<number, Sent[]>();
@@ -300,7 +309,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
-      memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, covered, missing: slot ? covered - recalled.held : covered, slot },
+      memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
     };
   };
@@ -475,7 +484,9 @@ function cachePoints(parts: (Sent | CachePart)[]): Sent[] {
     if (!('cache' in part)) sent.push(part);
     else if (sent.length) point(sent.length - 1);
   }
-  const role = ({ from }: Sent) => (from.kind === 'depth' ? 'depth' : from.kind === 'block' && (from.slot === 'chat' || from.slot === 'memory') ? from.slot : null);
+  // Retrieval sits among the chat's messages and changes with them, so it counts as the chat's: first in a short chat, it
+  // must not take the point meant for the memory block's end.
+  const role = ({ from }: Sent) => (from.kind === 'depth' ? 'depth' : from.kind === 'retrieval' ? 'chat' : from.kind === 'block' && (from.slot === 'chat' || from.slot === 'memory') ? from.slot : null);
   for (const index of autoCachePoints(sent.map(role))) point(index);
   return sent;
 }

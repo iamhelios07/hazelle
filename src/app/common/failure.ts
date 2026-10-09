@@ -246,8 +246,15 @@ export function describeMemoryFailure(failure: MemoryFailure): string {
       return INVALID[failure.reason];
     case 'unsaved':
       return `기억을 저장하지 못했어요. ${describeFailure(failure.failure)}`;
+    case 'embed':
+      return EMBED[failure.reason] ?? (failure.receipt?.error ? describeReplyError(failure.receipt.error) : '임베딩 모델을 호출하지 못했어요.');
   }
 }
+
+const EMBED: Partial<Record<Extract<MemoryFailure, { kind: 'embed' }>['reason'], string>> = {
+  'too-large': '기록이 임베딩 모델의 한도보다 길어요.',
+  flood: '이 채팅의 모델 호출이 너무 잦아요. 잠시 뒤 다시 시도해 주세요.',
+};
 
 const SCENE_INVALID = {
   unreadable: '모델 응답의 형식이 맞지 않아요.',

@@ -62,3 +62,13 @@ export const emptyMemory = (): Memory => ({ records: [], chapters: [], state: []
 // The chat's id with its first group's hex digits inverted: a UUID no device makes at random, the same on every
 // device, so two devices creating a chat's memory at once meet in a version conflict instead of making two.
 export const memoryId = (chat: string) => chat.replace(/^[0-9a-f]{8}/, (group) => [...group].map((digit) => (15 - parseInt(digit, 16)).toString(16)).join(''));
+
+// The records' embeddings, one object per chat at vectorsId(chat), a view of the memory any device can make again
+// (design §6.2, Retrieval): model is the 임베딩 모델 that wrote every vector, since vectors from two models cannot be
+// compared, and each item is keyed by its record's id and holds the at it embedded, so an edited or remade record reads
+// as missing. A vector is unit length, quantized to one signed byte a dimension (data, base64) at scale.
+export type Vector = { at: number; scale: number; data: string };
+export type Vectors = { model: string; items: Record<string, Vector> };
+
+// The chat's id with its last group's hex digits inverted, as memoryId inverts the first.
+export const vectorsId = (chat: string) => chat.replace(/[0-9a-f]{12}$/, (group) => [...group].map((digit) => (15 - parseInt(digit, 16)).toString(16)).join(''));

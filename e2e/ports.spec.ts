@@ -48,7 +48,7 @@ test('the HypaPlus port summarizes chunks, holds the memory slot, recalls after 
       if ((await picker.innerText()).includes(model)) continue;
       await picker.click();
       const saved = saving(page);
-      await page.getByRole('menuitemradio', { name: new RegExp(`^${model}`) }).click();
+      await page.getByRole('menuitemradio', { name: new RegExp(`^${model}`) }).first().click();
       await saved;
       await expect(picker).toContainText(model);
     }

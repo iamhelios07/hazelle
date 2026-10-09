@@ -1,6 +1,7 @@
 import { MoreHorizontal, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
+import { embedModel } from '../../runtime/assignment';
 import { memoryOwner, memorySetup } from '../../runtime/memory-read';
 import { memoryView, type MemoryView } from '../../runtime/memory-view';
 import { removeFact, removeThread, setChatMemory, setFact, setThread } from '../../runtime/memory';
@@ -46,7 +47,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const memory = useChatMemory(id) ?? NO_MEMORY;
   const settings = useSettings();
   const prompts = usePrompts();
-  const { running, failed, chapterFailed } = useRemembering();
+  const { running, failed, chapterFailed, indexing, indexFailed } = useRemembering();
   const { item, messages, prompt, busy, actions } = chat;
   const [messagePositions] = useState(() => new MessagePositions());
   const positions = messagePositions.read(messages);
@@ -77,6 +78,9 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const writing = running.get(id);
   const failure = failed.get(id);
   const unchaptered = chapterFailed.get(id);
+  const embedding = indexing.get(id);
+  const unindexed = indexFailed.get(id);
+  const embeds = !('kind' in embedModel(store));
   const rows = memoryRows(memory);
   const more = (
     <Menu place="below-end" label="장기 기억 더 보기" trigger={(opener) => <IconButton icon={MoreHorizontal} label="장기 기억 더 보기" size="sm" {...opener} />}>
@@ -106,6 +110,13 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
           {`${CHAPTER}를 만들지 못했어요. ${describeMemoryFailure(unchaptered)}`}
         </Callout>
       )}
+      {embedding !== undefined && <Text variant="note">{`검색 준비 중 · 기록 ${embedding}개`}</Text>}
+      {embedding === undefined && unindexed && (
+        <Callout tone="warn" action={{ label: '다시 시도', onClick: () => session.memory.retry(id) }}>
+          {`검색할 기록을 준비하지 못했어요. ${describeMemoryFailure(unindexed)}`}
+        </Callout>
+      )}
+      {owner?.kind === 'built-in' && !embeds && <Text variant="note">{`임베딩 모델을 고르면 지금 대화와 관련된 지난 기록을 찾아 넣어요. ${inSettings('models')}에서 고를 수 있어요.`}</Text>}
       {!owner && <Text variant="note">이 채팅은 장기 기억을 쓰지 않아요.</Text>}
       {owner && view && !view.slot && (
         <Callout tone="warn" action={prompt.kind === 'prompt' ? { label: '프롬프트 열기', onClick: () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null }) } : undefined}>

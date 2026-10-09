@@ -7,6 +7,7 @@ import type { HistoryMessage } from './history';
 import type { Card, LoreEntry, RegexScript } from './import/types';
 import { assemble, rewritten, unused, type Assembled, type From, type PromptInput } from './pipeline';
 import { printOf, speakersOf, type ChatRead } from './memory';
+import { RETRIEVED_HEADING } from './retrieval';
 import { renderChat } from './render';
 
 // The user's own Risu preset "🏓 핑퐁 간소화" (design §4.2), block for block: its wrappers and marks as written,
@@ -331,20 +332,30 @@ describe('assemble with memory', () => {
     ...over,
   });
   const memoryOf = (records: MemoryRecord[]): Memory => ({ records, chapters: [], state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
-  const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}): Assembled =>
-    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: { kind: 'built-in', memory, budget, shown } }));
+  const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}, found: string[] = []): Assembled =>
+    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: { kind: 'built-in', memory, budget, shown, found } }));
   const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
   const memoryOfSent = (result: Assembled) => result.messages.find((_, index) => (result.parts[index]!.from as { slot?: string }).slot === 'memory');
 
   it('sends the covered messages as memory in its slot, leaves them out of the chat but replays their variables, and anchors a cache point before it', () => {
     const result = withMemory(memoryOf([record('r1', [0, 1], 'jin and Luna reach the lighthouse.'), record('r2', [2, 3], 'jin promises to come back.')]));
-    expect(result.memory).toEqual({ by: null, sent: ['r1', 'r2'], covered: 4, missing: 0, slot: true });
+    expect(result.memory).toEqual({ by: null, sent: ['r1', 'r2'], covered: 4, missing: 0, slot: true, found: [] });
     expect(chatOf(result)).toEqual(['Morning comes.', 'Luna is calm.']);
     const sent = memoryOfSent(result)!;
     expect(sent.content).toContain('- Luna, mood: wary');
     expect(sent.content.indexOf('jin and Luna reach')).toBeLessThan(sent.content.indexOf('jin promises'));
     const at = result.messages.indexOf(sent);
     expect(result.messages[at - 1]).toEqual({ role: 'system', content: '# Material 3: Past Events/Prelude Summary', cache: true });
+  });
+
+  it('puts the records retrieval found before the latest user message, a sent one as its messages word for word, and nothing when none was found', () => {
+    const memory = memoryOf([record('r1', [0, 1], 'jin and Luna reach the lighthouse.'), record('r2', [2, 3], 'jin promises to come back.')]);
+    const result = withMemory(memory, 25_000, {}, ['r2']);
+    expect(result.memory).toEqual({ by: null, sent: ['r1', 'r2'], found: ['r2'], covered: 4, missing: 0, slot: true });
+    const at = result.parts.findIndex(({ from }) => from.kind === 'retrieval');
+    expect(result.messages[at]).toEqual({ role: 'user', content: `${RETRIEVED_HEADING}\n\n[When: unknown · Where: the lighthouse · Present: Luna, jin]\nThe messages, word for word:\njin: I promise to come back.\nLuna: Luna nods.` });
+    expect(result.messages.slice(at + 1).map(({ content }) => content)).toEqual(['Morning comes.', 'Luna is calm.']);
+    expect(withMemory(memory, 25_000, {}, []).parts.some(({ from }) => from.kind === 'retrieval')).toBe(false);
   });
 
   it('sends the same memory text on the next turn while nothing is committed, so the cache before and through it holds', () => {
@@ -371,7 +382,7 @@ describe('assemble with memory', () => {
       ]),
       400,
     );
-    expect(result.memory).toEqual({ by: null, sent: ['r1', 'r5'], covered: 5, missing: 3, slot: true });
+    expect(result.memory).toEqual({ by: null, sent: ['r1', 'r5'], covered: 5, missing: 3, slot: true, found: [] });
     expect(chatOf(result)).toEqual(['Luna is calm.']);
     expect(memoryOfSent(result)!.content).toMatch(/^Current state:\n- Luna, mood: wary\n\nOpen threads:\n- jin will come back\./);
     const pinned = withMemory(memoryOf([record('r1', [0], 'They arrive.', { print: 'rendered before', pinned: true })]));
@@ -381,16 +392,16 @@ describe('assemble with memory', () => {
   it('counts every covered message as missing when the prompt has no 장기 기억 slot or a toggle leaves it out, and sends nothing for an empty memory', () => {
     const memory = memoryOf([record('r1', [0, 1], 'They arrive.')]);
     const without = withMemory(memory, 25_000, { prompt: { ...starter, blocks: starter.blocks.filter(({ id }) => id !== 'memory') } });
-    expect(without.memory).toEqual({ by: null, sent: ['r1'], covered: 2, missing: 2, slot: false });
+    expect(without.memory).toEqual({ by: null, sent: ['r1'], covered: 2, missing: 2, slot: false, found: [] });
     expect(chatOf(without)).toHaveLength(4);
     const toggled = {
       ...starter,
       blocks: starter.blocks.map((block) => (block.id === 'memory' ? { ...block, wrapper: '{{#if {{getglobalvar::toggle_sims}}}}{{slot}}{{/if}}' } : block)),
     } as Prompt & { task?: never };
     const off = withMemory(memory, 25_000, { prompt: toggled, toggles: new Map([['sims', '0']]) });
-    expect([off.memory, memoryOfSent(off)]).toEqual([{ by: null, sent: ['r1'], covered: 2, missing: 2, slot: false }, undefined]);
+    expect([off.memory, memoryOfSent(off)]).toEqual([{ by: null, sent: ['r1'], covered: 2, missing: 2, slot: false, found: [] }, undefined]);
     const empty = withMemory({ records: [], chapters: [], state: [], threads: [] });
-    expect([empty.memory, memoryOfSent(empty), chatOf(empty)]).toEqual([{ by: null, sent: [], covered: 0, missing: 0, slot: true }, undefined, messages.map(() => expect.any(String))]);
+    expect([empty.memory, memoryOfSent(empty), chatOf(empty)]).toEqual([{ by: null, sent: [], covered: 0, missing: 0, slot: true, found: [] }, undefined, messages.map(() => expect.any(String))]);
   });
 
   it("sends a tool's memory in the slot's own place, leaves out the messages through the one it names, and cuts nothing where the slot does not reach", () => {

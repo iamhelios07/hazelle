@@ -2,7 +2,7 @@ import type { Connection } from '../connectors/types';
 import type { Chat, Entry, Summary } from './chat';
 import type { Asset, Avatar, Character, Folder, Lore, Module } from './library';
 import type { Illustration } from './illustration';
-import type { Memory } from './memory';
+import type { Memory, Vectors } from './memory';
 import type { Persona } from './persona';
 import type { Profile } from './profile';
 import type { Prompt } from './prompt';
@@ -25,6 +25,7 @@ export type Values = {
   summary: Summary;
   stream: Stream;
   memory: Memory;
+  vectors: Vectors;
   illustration: Illustration;
   connection: Connection;
   settings: Settings;
@@ -60,6 +61,7 @@ export const KINDS = {
   summary: { parent: 'chat' },
   stream: { parent: 'chat' },
   memory: { parent: 'chat' },
+  vectors: { parent: 'chat' },
   illustration: { parent: 'chat', file: true },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
@@ -144,6 +146,7 @@ const SHAPES = {
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
   stream: shape({ key: isRecord, call: shape(all(str, 'connection', 'source', 'model', 'modelName')), at: num, result: str, for: shape({ kind: str }) }),
+  vectors: shape({ model: str, items: isRecord }),
   memory: shape({ records: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, state: listOf(isRecord), opens: listOf(str), closes: listOf(str) })), chapters: listOf(shape({ id: str, sources: listOf(isRecord), print: str, what: str, records: listOf(shape({ id: str, at: num })) })), state: listOf(shape(all(str, 'about', 'field', 'value'))), threads: listOf(shape({ id: str, text: str })) }),
   illustration: shape({
     ...all(str, 'message', 'version', 'type'),

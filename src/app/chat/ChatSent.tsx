@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Assembled, From } from '../../engine/pipeline';
 import type { Receipt } from '../../model/chat';
 import { isChapter } from '../../engine/memory';
-import type { Memory } from '../../model/memory';
+import type { Chapter, Memory, MemoryRecord } from '../../model/memory';
 import type { Role } from '../../model/prompt';
 import type { Sent } from '../../runtime/talk';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
@@ -23,6 +23,8 @@ export function partName(from: From, role: Role): string {
       return `${SLOT_NAMES.lorebook} · ${loreName(from.name)} · @@depth ${from.depth}`;
     case 'continue':
       return '이어 쓰기 지시';
+    case 'retrieval':
+      return `${SLOT_NAMES.memory} · 찾은 기록`;
     case 'tool':
       return `${SLOT_NAMES.tool} · ${from.name}`;
     case 'script':
@@ -154,26 +156,32 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
         variant="tiles"
         items={[
           { label: '보낸 기록', value: `${used.sent.length}개` },
+          { label: '찾아 넣은 기록', value: `${used.found.length}개` },
           { label: '기억에 담긴 메시지', value: `${used.covered}개` },
           { label: '기억에 없는 메시지', value: `${used.missing}개`, tone: used.missing ? 'warn' : undefined },
           cut,
         ]}
       />
-      {used.sent.length > 0 && (
-        <Section level={3} title="보낸 기록" note={`${used.sent.length}개`}>
-          <List label="보낸 기록">
-            {used.sent.map((id) => {
-              const record = records.get(id);
-              return record ? (
-                <ListItem key={id} title={recordTitle(record)} description={recordScene(record) || undefined} tags={isChapter(record) ? [CHAPTER] : undefined} onClick={() => onRecord(id)} />
-              ) : (
-                <ListItem key={id} title="지금은 없는 기록" />
-              );
-            })}
-          </List>
-        </Section>
-      )}
+      {used.sent.length > 0 && <SentRecords title="보낸 기록" ids={used.sent} records={records} onRecord={onRecord} />}
+      {used.found.length > 0 && <SentRecords title="찾아 넣은 기록" ids={used.found} records={records} onRecord={onRecord} />}
     </>
+  );
+}
+
+function SentRecords({ title, ids, records, onRecord }: { title: string; ids: string[]; records: ReadonlyMap<string, MemoryRecord | Chapter>; onRecord: (record: string) => void }) {
+  return (
+    <Section level={3} title={title} note={`${ids.length}개`}>
+      <List label={title}>
+        {ids.map((id) => {
+          const record = records.get(id);
+          return record ? (
+            <ListItem key={id} title={recordTitle(record)} description={recordScene(record) || undefined} tags={isChapter(record) ? [CHAPTER] : undefined} onClick={() => onRecord(id)} />
+          ) : (
+            <ListItem key={id} title="지금은 없는 기록" />
+          );
+        })}
+      </List>
+    </Section>
   );
 }
 
