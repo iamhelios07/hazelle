@@ -5,7 +5,9 @@ import type { Host } from '../../engine/script-api';
 import { renderChat, type ChatScope } from '../../engine/render';
 import { luaSnapshot, luaStanding } from './snapshot';
 
-export type ScriptOutcome = Omit<Outcome, 'edits'> & { edits: (Outcome['edits'][number] & { wrote: [string, string][] })[] };
+// tool: what a tool's run did to its own data for the chat, and to its badges by message index (runtime/tools/store
+// saveToolChat); Lua has neither.
+export type ScriptOutcome = Omit<Outcome, 'edits'> & { edits: (Outcome['edits'][number] & { wrote: [string, string][] })[]; tool?: { data: [string, Hazelle.Json | undefined][]; badges: { index: number; text: string | null }[] } };
 
 export async function runEvent(machine: Lua, owner: string, triggers: ScriptUnit[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> {
   const { staged, wrote, variables } = renderChat('prompt', scope);

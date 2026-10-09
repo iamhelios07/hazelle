@@ -24,7 +24,7 @@ const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
     ...value,
   },
 });
-const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
+const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, message: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
 const run = (entries: LoreEntries, history: HistoryMessage[], more: Partial<LoreTurn> & { settings?: Card['loreSettings'] } = {}) =>
   prepareLore(entries, more.settings ?? NULLS).activate({ history, turn: history.length, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, ...more });
 const order = (activation: Activation) => activation.placed.map(({ id }) => id);

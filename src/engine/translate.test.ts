@@ -27,7 +27,7 @@ const card: Card = {
   regex: [{ id: 'regex-0', name: 'shout', find: 'lamp', replace: 'LAMP', stage: 'display', flags: null }],
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
-const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
+const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, message: id, seed: id, role, text, time: null });
 const scope: ChatScope = {
   card,
   cast: [],

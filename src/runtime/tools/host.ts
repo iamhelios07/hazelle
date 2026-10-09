@@ -17,9 +17,10 @@ import { Heartbeat } from '../worker';
 import type { ToolMenu, ToolPage, Tools } from './facade';
 import { toolFrame, type Connection, type OpenFrame } from './frame';
 import { decodeState, encodeState } from './state';
-import { toolData, toolKeys, toolsOf, ToolWrites } from './store';
+import { toolChatData, toolChatKeys, toolData, toolKeys, toolsOf, ToolWrites } from './store';
 
-type Context = { chat: string; scope: ChatScope; host: Host; signal: AbortSignal; state?: Promise<ToolState> };
+// event: absent for a page's own calls and writes.
+type Context = { chat: string; scope: ChatScope; host: Host; signal: AbortSignal; state?: Promise<ToolState>; event?: ToolEvent['kind'] };
 type Pending = Context & { cancel: AbortController; resolve(outcome: ScriptOutcome): void; reject(error: Error): void; stop(): void };
 type Frame = {
   id: number; entry: Entry; connection: Connection; page?: ToolPage; closing: AbortController; heart: Heartbeat;
@@ -28,7 +29,7 @@ type Frame = {
   reading: Promise<unknown>; lanes: Set<string>; release(): void;
 };
 type Entry = { module: string; tool: Tool; settings: string; background: Frame | null; pages: Set<Frame>; chats: Set<string>; idle: ReturnType<typeof setTimeout> | null; data: Map<string, { key: string; json: string }> };
-const EVENTS = new Set<EventName>(['reply', 'prompt', 'menu', 'settings', 'message']);
+const EVENTS = new Set<EventName>(['reply', 'prompt', 'change', 'branch', 'menu', 'action', 'settings', 'message']);
 const IDLE_MS = 10 * 60_000;
 const STUCK_MS = 8000;
 const describe = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -67,12 +68,29 @@ function isQuestion(value: unknown): value is Question {
 function isModelMessages(value: unknown): value is ModelMessage[] {
   return Array.isArray(value) && value.every((message) => isRecord(message) && (message.role === 'system' || message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string');
 }
-function isOutcome(value: unknown): value is ToolOutcome {
-  return isRecord(value) && (value.value === undefined || value.value === null || typeof value.value === 'string')
-    && Array.isArray(value.writes) && value.writes.every((pair) => Array.isArray(pair) && pair.length === 2 && typeof pair[0] === 'string' && (pair[1] === undefined || isJson(pair[1])))
-    && Array.isArray(value.edits) && value.edits.every((edit) => isRecord(edit) && Number.isInteger(edit.index) && typeof edit.text === 'string')
-    && Array.isArray(value.added) && value.added.every((item) => isRecord(item) && (item.role === 'user' || item.role === 'char') && typeof item.text === 'string');
+const isPairs = (value: unknown) => Array.isArray(value) && value.every((pair) => Array.isArray(pair) && pair.length === 2 && typeof pair[0] === 'string' && (pair[1] === undefined || isJson(pair[1])));
+const isText = (value: unknown) => value === undefined || value === null || typeof value === 'string';
+function isAnswer(value: unknown): value is Hazelle.PromptAnswer | undefined {
+  if (isText(value)) return true;
+  if (!isRecord(value) || !isText(value.tool)) return false;
+  return value.memory === undefined || (isRecord(value.memory) && typeof value.memory.text === 'string' && (value.memory.through === null || typeof value.memory.through === 'string'));
 }
+function isOutcome(value: unknown): value is ToolOutcome {
+  return isRecord(value) && isAnswer(value.value) && isPairs(value.writes) && isPairs(value.data)
+    && Array.isArray(value.edits) && value.edits.every((edit) => isRecord(edit) && Number.isInteger(edit.index) && typeof edit.text === 'string')
+    && Array.isArray(value.added) && value.added.every((item) => isRecord(item) && (item.role === 'user' || item.role === 'char') && typeof item.text === 'string')
+    && Array.isArray(value.badges) && value.badges.every((badge) => isRecord(badge) && Number.isInteger(badge.index) && (badge.text === null || typeof badge.text === 'string'));
+}
+const eventFields = (event: ToolEvent): Partial<Extract<Down, { kind: 'event' }>> => {
+  switch (event.kind) {
+    case 'reply': return { reply: event.reply };
+    case 'prompt': return { turn: event.turn };
+    case 'change': return { change: event.change };
+    case 'branch': return { from: event.from };
+    case 'menu': return { item: event.item };
+    case 'action': return { item: event.item, message: event.message };
+  }
+};
 const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
 
 export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
@@ -115,9 +133,9 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     return new Promise<ScriptOutcome>((resolve, reject) => {
       const abort = () => { frame.pending.delete(id); reject(aborted(stop)); this.idle(entry); };
       stop.addEventListener('abort', abort, { once: true });
-      frame.pending.set(id, { chat, scope, host, signal: stop, cancel, resolve, reject, stop: () => stop.removeEventListener('abort', abort) });
+      frame.pending.set(id, { chat, scope, host, signal: stop, cancel, resolve, reject, stop: () => stop.removeEventListener('abort', abort), event: event.kind });
       this.idle(entry);
-      this.send(frame, { kind: 'event', id, event: event.kind, chat: header(chat, scope), ...(event.kind === 'reply' && { reply: { id: event.id, index: event.index } }), ...(event.kind === 'menu' && { item: event.item }) });
+      this.send(frame, { kind: 'event', id, event: event.kind, chat: header(chat, scope), ...eventFields(event) });
     });
   }
 
@@ -313,12 +331,18 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
         if (method === 'chat.messages') {
           const state = await this.state(frame, context);
           const greeting = context.scope.greeting === null ? 0 : 1;
-          const messages: Message[] = context.scope.messages.slice(greeting).map((message, index) => ({ index, id: message.id, role: message.role === 'user' ? 'user' : 'char', text: state.texts[index + greeting]!, time: message.time ?? 0 }));
-          const tail = changedTail(frame.messages, messages, (a, b) => a.id === b.id && a.role === b.role && a.text === b.text && a.time === b.time);
+          const messages: Message[] = context.scope.messages.slice(greeting).map((message, index) => ({ index, id: message.message, version: message.id, role: message.role === 'user' ? 'user' : 'char', text: state.texts[index + greeting]!, time: message.time ?? 0 }));
+          const tail = changedTail(frame.messages, messages, (a, b) => a.id === b.id && a.version === b.version && a.role === b.role && a.text === b.text && a.time === b.time);
           frame.messages = messages;
           return tail;
         }
         if (method === 'chat.state.get' && typeof first === 'string') return decodeState(new Map((await this.state(frame, context)).variables).get(toolVar(entry.tool.manifest, first)));
+        if (method === 'chat.data.get' && typeof first === 'string') return toolChatData(this.session.store, entry.module, context.chat, first);
+        if (method === 'chat.data.keys') return toolChatKeys(this.session.store, entry.module, context.chat);
+        if (method === 'embed' && Array.isArray(first) && first.every((text) => typeof text === 'string') && (second === null || second === 'query' || second === 'document')) {
+          if (!entry.tool.manifest.uses.includes('embed')) return { ok: false, reason: 'not-declared' };
+          return context.host.embed(first as string[], second, owner, context.signal);
+        }
         if (method === 'model' && (first === 'main' || first === 'aux') && isModelMessages(second)) {
           if (!entry.tool.manifest.uses.includes('model')) return { ok: false, reason: 'not-declared' };
           const result = await context.host.model(first, second.map(({ role, content }) => ({ role, content })), owner, context.signal);
@@ -353,7 +377,13 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     const greeting = context.scope.greeting === null ? 0 : 1;
     const edits = value.edits.filter(({ index }) => index >= 0 && index < context.scope.messages.length - greeting);
     const state = edits.length ? await this.state(frame, context) : null;
-    return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, data]) => [toolVar(frame.entry.tool.manifest, key), encodeState(data)]), edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added };
+    const data = [...new Map(value.data)];
+    const badges = [...new Map(value.badges.map(({ index, text }) => [index, text]))].map(([index, text]) => ({ index, text }));
+    // A page's write takes its share of the write rate before it is converted (pageWrite).
+    if (context.event && (data.length || badges.length)) this.writes.take(frame.entry.module);
+    // The sandbox refuses these in an event about the user's own change; a page that posts its own outcome is not trusted to.
+    const story = context.event === 'change' || context.event === 'branch' ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added };
+    return { ...noOutcome(), value: value.value, handled: true, writes: [...new Map(value.writes)].map(([key, json]) => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...story, tool: { data, badges } };
   }
 
   private async pageWrite(frame: Frame, value: unknown) {

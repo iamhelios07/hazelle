@@ -6,7 +6,7 @@ export type ScriptUnit = Trigger & { owner: PackOwner };
 export type ModelRefusal = Hazelle.ModelRefusal;
 export type ModelResult = { success: true; result: string } | { success: false; result: string; reason: ModelRefusal };
 
-export type EmbedResult = { ok: true; model: string; vectors: number[][] } | { ok: false; reason: ModelRefusal | 'too-large' };
+export type EmbedResult = Hazelle.EmbedAnswer;
 
 export type Question = Hazelle.Question;
 export type ModelMessage = Hazelle.ModelMessage;
@@ -27,9 +27,12 @@ export type Host = {
 
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
 export type ToolEvent =
-  | { kind: 'reply'; index: number; id: string }
-  | { kind: 'prompt' }
-  | { kind: 'menu'; item: string };
+  | { kind: 'reply'; reply: Hazelle.At }
+  | { kind: 'prompt'; turn: Hazelle.Turn }
+  | { kind: 'change'; change: Hazelle.Change }
+  | { kind: 'branch'; from: Hazelle.Branched }
+  | { kind: 'menu'; item: string }
+  | { kind: 'action'; item: string; message: Hazelle.At };
 export type Event =
   | ToolEvent
   | { kind: 'input' | 'start' | 'output' }

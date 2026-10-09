@@ -6,7 +6,7 @@ import { Evaluator, type EvaluationDown, type EvaluationUp } from './evaluation-
 import { changedTail, sameHistory } from './history-delta';
 
 const scope: ChatScope = { card: null, cast: [], packs: [], persona: null, prompt: null, note: null, lore: [], messages: [], variables: [], greeting: null, toggles: new Map(), model: null, clock: { now: 0, timeZone: 'UTC' }, assets: [], modules: [], faces: { char: null, user: null }, screen: null, pick: '' };
-const message = (id: string, text: string) => ({ id, seed: id, role: 'user' as const, text, time: 0 });
+const message = (id: string, text: string) => ({ id, message: id, seed: id, role: 'user' as const, text, time: 0 });
 const none: Verdicts = { verdict: () => false, judged: () => {} };
 const screen = (chat = 'c') => ({ asker: 'screen', chat }) as const;
 

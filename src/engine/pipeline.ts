@@ -366,7 +366,7 @@ function translation({ scope, take, prompt, translations, notes, request, langua
   const { texts, variables } = renderChat('display', scope, take);
   const before = request.kind === 'message' ? request.index : texts.length;
   const source = request.kind === 'message' ? texts[request.index]! : request.text;
-  const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, seed, role: 'user' as const, text: request.text, time: null }];
+  const history = request.kind === 'message' ? scope.messages.slice(0, request.index + 1) : [...scope.messages, { id: seed, message: seed, seed, role: 'user' as const, text: request.text, time: null }];
   const laid = lay(scope, history, variables, seed, remembered(countTokens), language);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'translate', note: notes, recent: recentOf(scope, texts, before, translations), source });
   return { source, messages: cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message) };

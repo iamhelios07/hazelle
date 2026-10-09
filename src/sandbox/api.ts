@@ -2,9 +2,15 @@ import type { Json, Settings } from '../tool-api/manifest';
 import type { ChatHeader, Down, EventName, Message, Method, Port, ToolOutcome, Up } from '../tool-api/protocol';
 
 type Load = Extract<Down, { kind: 'load' }>;
-type Buffer = { writes: Map<string, Json | undefined>; edits: Map<number, string>; added: ToolOutcome['added'] };
-const buffer = (): Buffer => ({ writes: new Map(), edits: new Map(), added: [] });
-const outcome = (pending: Buffer, value?: string | null): ToolOutcome => ({ value, writes: [...pending.writes], edits: [...pending.edits].map(([index, text]) => ({ index, text })), added: pending.added });
+type Buffer = { writes: Map<string, Json | undefined>; edits: Map<number, string>; added: ToolOutcome['added']; data: Map<string, Json | undefined>; badges: Map<number, string | null> };
+const buffer = (): Buffer => ({ writes: new Map(), edits: new Map(), added: [], data: new Map(), badges: new Map() });
+const empty = (pending: Buffer) => !pending.writes.size && !pending.edits.size && !pending.added.length && !pending.data.size && !pending.badges.size;
+const outcome = (pending: Buffer, value?: Hazelle.PromptAnswer): ToolOutcome => ({
+  value, writes: [...pending.writes], edits: [...pending.edits].map(([index, text]) => ({ index, text })), added: pending.added,
+  data: [...pending.data], badges: [...pending.badges].map(([index, text]) => ({ index, text })),
+});
+// An event about the user's own change must not rewrite the story under them.
+const STORY_LOCKED = new Set<EventName>(['change', 'branch']);
 const describe = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api) => void | Promise<void>): () => void {
@@ -34,16 +40,17 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
     pageFlush = true;
     queueMicrotask(() => {
       pageFlush = false;
-      if (!pageWrites.writes.size && !pageWrites.edits.size && !pageWrites.added.length) return;
+      if (empty(pageWrites)) return;
       const pending = pageSent = pageWrites;
       pageWrites = buffer();
       send({ kind: 'done', id: 0, outcome: outcome(pending) });
     });
   };
 
-  const chatOf = (header: ChatHeader, event?: number, writes = buffer()): Hazelle.Chat => {
+  const chatOf = (header: ChatHeader, event?: number, writes = buffer(), locked = false): Hazelle.Chat => {
     const pending = () => event === undefined ? pageWrites : writes;
     const changed = () => { if (event === undefined) flushPage(); };
+    const story = () => { if (locked) throw new Error('The story cannot be changed while handling the user\'s own change'); };
     return {
       ...header,
       messages: async (from, to) => {
@@ -61,9 +68,31 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
         set: (key, value) => { pending().writes.set(key, value); changed(); },
         delete: (key) => { pending().writes.set(key, undefined); changed(); },
       },
-      edit: (index, text) => { pending().edits.set(index, text); changed(); },
-      add: (role, text) => { pending().added.push({ role, text }); changed(); },
+      data: {
+        get: async <T extends Json>(key: string): Promise<T | undefined> => {
+          const current = pending().data;
+          if (current.has(key)) return current.get(key) as T | undefined;
+          if (event === undefined && pageSent?.data.has(key)) return pageSent.data.get(key) as T | undefined;
+          return call<T | undefined>('chat.data.get', [key], event);
+        },
+        set: (key, value) => { pending().data.set(key, value); changed(); },
+        delete: (key) => { pending().data.set(key, undefined); changed(); },
+        keys: async () => {
+          const keys = new Set(await call<string[]>('chat.data.keys', [], event));
+          for (const layer of [...(event === undefined && pageSent ? [pageSent.data] : []), pending().data]) {
+            for (const [key, value] of layer) {
+              if (value === undefined) keys.delete(key);
+              else keys.add(key);
+            }
+          }
+          return [...keys];
+        },
+      },
+      edit: (index, text) => { story(); pending().edits.set(index, text); changed(); },
+      add: (role, text) => { story(); pending().added.push({ role, text }); changed(); },
       model: (role, messages) => call('model', [role, messages], event),
+      embed: (texts, as) => call('embed', [texts, as ?? null], event),
+      badge: (index, text) => { pending().badges.set(index, text); changed(); },
       tokens: (text) => call('tokens', [text], event),
       lore: (reserve) => call('lore', [reserve ?? null], event),
       ask: (question) => call('ask', [question], event),
@@ -135,9 +164,10 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
     if (data.kind === 'settings') { void dispatch('settings', [data.values]).catch((error: unknown) => failed(0, error)); return; }
     if (data.kind === 'event') {
       const pending = buffer();
-      const chat = data.chat && chatOf(data.chat, data.id, pending);
-      const args = data.event === 'reply' ? [chat, data.reply] : data.event === 'menu' ? [chat, data.item] : [chat];
-      void dispatch(data.event, args).then((value) => send({ kind: 'done', id: data.id, outcome: outcome(pending, typeof value === 'string' ? value : null) }), (error: unknown) => failed(data.id, error));
+      const chat = data.chat && chatOf(data.chat, data.id, pending, STORY_LOCKED.has(data.event));
+      const args = { reply: [chat, data.reply], prompt: [chat, data.turn], change: [chat, data.change], branch: [chat, data.from], menu: [chat, data.item], action: [chat, data.item, data.message] }[data.event as string] ?? [chat];
+      // The host checks the answer's shape; one the port cannot carry fails the event here.
+      void dispatch(data.event, args).then((value) => send({ kind: 'done', id: data.id, outcome: outcome(pending, data.event === 'prompt' ? (value as Hazelle.PromptAnswer | undefined) ?? null : undefined) })).catch((error: unknown) => failed(data.id, error));
     }
   };
   port.start();

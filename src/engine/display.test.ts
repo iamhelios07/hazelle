@@ -33,7 +33,7 @@ const card: Card = {
   background: '<style>.hp::after { content: "{{getvar::hp}}" }',
   loreSettings: { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null },
 };
-const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, seed: id, role, text, time: null });
+const message = (id: string, role: HistoryMessage['role'], text: string): HistoryMessage => ({ id, message: id, seed: id, role, text, time: null });
 const scope: ChatScope = {
   card,
   cast: [],

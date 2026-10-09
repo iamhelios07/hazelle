@@ -11,11 +11,9 @@ import { chatModel, setChatModel } from '../../runtime/assignment';
 import { illustrateSwitches, resetToggles, setIllustrate, setOwnIllustrate, setOwnTranslate, setToggle, setTranslate, translateSwitches } from '../../runtime/characters';
 import { removeIllustration, restoreIllustration, type Drawing } from '../../runtime/illustrate';
 import {
-  branchChat,
   removeChat,
   renameChat,
   restoreChat,
-  selectVersion,
   setCast,
   setChatNote,
   setChatPersona,
@@ -24,6 +22,7 @@ import {
   withCast,
 } from '../../runtime/chat-log';
 import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
+import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { chatPersona, pinPersona, setCurrentPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
@@ -254,7 +253,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function select(message: Shown, index: number) {
     if (!id) return;
-    void selectVersion(store, id, message.id, message.versions[index]!.id).then((saved) => saved.ok || toast.failed(saved));
+    void pickVersion(session, id, message, index).then((saved) => saved.ok || toast.failed(saved));
   }
 
   // The versions go round: ← on the first lands on the last (user, 2026-10-04). → past a reply's last asks for a new one;
@@ -317,7 +316,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     if (!item || branching) return;
     setBranching(true);
     toast.show('채팅 분기 중…');
-    const made = await branchChat(store, item, message.id);
+    const made = await branchFrom(session, item, message.id);
     setBranching(false);
     if (!made.ok) return toast.failed(made, '채팅을 분기하지 못했어요.');
     navigate({ kind: 'chat', id: made.data });

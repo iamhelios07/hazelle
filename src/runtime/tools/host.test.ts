@@ -3,7 +3,8 @@ import { readTool } from '../../engine/import/tool';
 import type { Host } from '../../engine/script-api';
 import { toolId } from '../../model/tool';
 import type { Down, Up } from '../../tool-api/protocol';
-import { appendUserMessage, startChat } from '../chat-log';
+import { shown } from '../../model/chat';
+import { appendUserMessage, editMessage, startChat } from '../chat-log';
 import { setModuleAlways, setModuleDeleted } from '../modules';
 import { ToolLate, ToolStuck } from '../script-binding';
 import type { Session } from '../session';
@@ -57,7 +58,7 @@ it('handshakes once, memoizes event reads, and sends only changed message tails'
   const states = vi.spyOn(session.store.evaluation, 'state');
   try {
     await host.warm(f.chat);
-    const run = async () => { const context = f.context(); return host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host); };
+    const run = async () => { const context = f.context(); return host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, context.host); };
     expect(await run()).toMatchObject({ value: 'hello', writes: [['tool:jin/test:summary', ' null']] });
     expect(states).toHaveBeenCalledTimes(1);
     expect(await run()).toMatchObject({ value: 'hello' });
@@ -65,6 +66,23 @@ it('handshakes once, memoizes event reads, and sends only changed message tails'
     expect(reads).toHaveBeenCalledTimes(1);
     const answers = (transport.frames[0]!.host.sent as Down[]).filter((message) => message.kind === 'answer' && typeof message.value === 'object' && message.value !== null && 'items' in message.value);
     expect(answers.map((message) => (message as Extract<Down, { kind: 'answer' }>).value)).toEqual([{ from: 0, items: [expect.objectContaining({ text: 'hello' })] }, { from: 1, items: [] }]);
+  } finally { host.close(); }
+}));
+
+it('names each message by its own id and the version shown', () => withTools(async (session, connect) => {
+  const f = await fixture(session);
+  const said = session.store.foldedChat(f.chat).messages[0]!;
+  await editMessage(session.store, f.chat, said, 'edited', null);
+  await session.store.projections.evaluate(f.chat);
+  let read: Hazelle.Message[] = [];
+  const transport = inProcessTools((api) => { api.on('prompt', async (chat) => { read = await chat.messages(); return null; }); });
+  const host = connect(transport.open);
+  try {
+    const context = f.context();
+    await host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, context.host);
+    const edited = shown(session.store.foldedChat(f.chat).messages[0]!).id;
+    expect(edited).not.toBe(said.id);
+    expect(read).toEqual([expect.objectContaining({ index: 0, id: said.id, version: edited, text: 'edited' })]);
   } finally { host.close(); }
 }));
 
@@ -76,7 +94,7 @@ it('refuses undeclared spending and forged event contexts, and isolates module s
   try {
     const context = f.context();
     const model = vi.fn<Host['model']>();
-    await host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, { ...context.host, model });
+    await host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, { ...context.host, model });
     expect(answer).toEqual({ ok: false, reason: 'not-declared' });
     expect(model).not.toHaveBeenCalled();
     const frame = transport.frames[0]!;
@@ -104,7 +122,7 @@ it('times out a prompt without applying its late outcome, while model waits stil
     await host.warm(f.chat);
     vi.useFakeTimers();
     const abort = new AbortController();
-    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, { ...context.host, model }, abort.signal);
+    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, { ...context.host, model }, abort.signal);
     const refused = expect(running).rejects.toBeInstanceOf(ToolLate);
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(10_000);
@@ -129,7 +147,7 @@ it('resets stalls after loading, then disables three consecutive stalled loads a
   vi.spyOn(session.files, 'read').mockResolvedValue({ ok: true, data: source().bytes });
   const stall = async () => {
     const context = f.context();
-    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host);
+    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, context.host);
     const refused = expect(running).rejects.toBeInstanceOf(ToolStuck);
     await vi.advanceTimersByTimeAsync(8001);
     await refused;
@@ -152,7 +170,7 @@ it('resets stalls after loading, then disables three consecutive stalled loads a
     expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'stuck' && note.disabled)).toHaveLength(1);
     expect(transport.frames).toHaveLength(5);
     const context = f.context();
-    await expect(host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host)).rejects.toMatchObject({ disabled: true });
+    await expect(host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, context.host)).rejects.toMatchObject({ disabled: true });
   } finally { vi.useRealTimers(); host.close(); }
 }));
 
@@ -270,7 +288,7 @@ it('ignores malformed outcomes and all messages from a frame after it has closed
   const host = connect(transport.open);
   try {
     const context = f.context();
-    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host);
+    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, context.host);
     const refused = expect(running).rejects.toThrow('Invalid tool outcome');
     await vi.waitFor(() => expect(release).toBeDefined());
     const frame = transport.frames[0]!;
@@ -357,7 +375,7 @@ it('shares the write budget with forged page outcomes and bounds tool notices ac
     await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
     const frame = transport.frames[0]!;
     await expect(frame.api!.storage.set('x'.repeat(257), null)).rejects.toThrow('key-too-long');
-    for (let i = 0; i < 1000; i++) frame.emit({ kind: 'done', id: 0, outcome: { writes: [], edits: [], added: [{ role: 'char', text: 'flood' }] } });
+    for (let i = 0; i < 1000; i++) frame.emit({ kind: 'done', id: 0, outcome: { writes: [], edits: [], added: [{ role: 'char', text: 'flood' }], data: [], badges: [] } });
     await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(30));
     expect(frame.host.sent).toContainEqual(expect.objectContaining({ kind: 'answer', call: 0, ok: false, value: 'too-many-writes' }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

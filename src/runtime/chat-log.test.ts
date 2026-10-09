@@ -76,11 +76,11 @@ describe('branchChat', () => {
     const item: ChatItem = { id: source, chat, messages: folded(), count: 2, title: '', preview: '', at: null, order: 0 };
     const branched = await branchChat(store, item, folded()[1]!.id);
     if (!branched.ok) throw new Error(branched.error);
-    await server.hold(store, branched.data);
-    const copy = fold(store.children('entry', branched.data));
+    await server.hold(store, branched.data.id);
+    const copy = fold(store.children('entry', branched.data.id));
     expect(held(copy)).toEqual(held(folded()));
-    expect(toolChatData(store, module, branched.data, 'index')).toEqual({ node: said });
-    expect(toolBadges(store, module, branched.data)).toEqual(Object.fromEntries(copy.map((message, index) => [message.id, { version: shown(message).id, text: ['요약됨', '마지막'][index]! }])));
+    expect(toolChatData(store, module, branched.data.id, 'index')).toEqual({ node: said });
+    expect(toolBadges(store, module, branched.data.id)).toEqual(Object.fromEntries(copy.map((message, index) => [message.id, { version: shown(message).id, text: ['요약됨', '마지막'][index]! }])));
   });
 
   it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {
@@ -123,23 +123,23 @@ describe('branchChat', () => {
     const requests = vi.spyOn(globalThis, 'fetch');
     const branched = await branchChat(store, item, split);
     if (!branched.ok) throw new Error(branched.error);
-    await server.hold(store, branched.data);
-    const entries = store.children('entry', branched.data);
+    await server.hold(store, branched.data.id);
+    const entries = store.children('entry', branched.data.id);
     expect(entries.length).toBeGreaterThan(BATCH_LIMITS.items);
     const batches = requests.mock.calls.filter(([url]) => url === '/api/objects/batch').map(([, init]) => (JSON.parse(init!.body as string) as { writes: { id: string; kind: string }[] }).writes.filter(({ kind }) => kind !== 'summary')).filter((writes) => writes.length);
     expect(batches.flat()).toHaveLength(entries.length + 1);
     expect(batches.every((batch) => batch.length <= BATCH_LIMITS.items)).toBe(true);
-    expect(batches.at(-1)!.at(-1)!.id).toBe(branched.data);
+    expect(batches.at(-1)!.at(-1)!.id).toBe(branched.data.id);
     const copy = fold(entries);
     const withoutIds = (messages: Message[]) =>
       messages.map(({ role, at, selected, versions }) => ({ role, at, selected, versions: versions.map(({ seed, text, receipt, edited, at: written, translation, greeting }) => ({ seed, text, receipt, edited, written, translation, greeting })) }));
     expect(withoutIds(copy)).toEqual(withoutIds(item.messages.slice(0, -1)));
     expect([copy[0]!.versions.length, shown(copy[1]!).text, shown(copy[1]!).edited]).toEqual([3, '안녕하세요', true]);
     expect([shown(copy[2]!).text, copy[2]!.versions.length, calls(shown(copy[2]!).receipt!).map((call) => call.cost)]).toEqual(['답장', 1, [{ unit: 'usd', amount: 0.01, source: 'reported' }, null]]);
-    const stored = store.get('chat', branched.data)!;
+    const stored = store.get('chat', branched.data.id)!;
     expect(stored.value).toEqual({ ...chat, title: null, origin: { id: source, name: '기숙사의 밤', after: copy.at(-1)!.id }, seed: source });
     const reader = { store, username: 'jin' };
-    expect(await evaluateChat(reader, branched.data, stored.value, copy)).toEqual(await evaluateChat(reader, source, chat, item.messages.slice(0, -1)));
+    expect(await evaluateChat(reader, branched.data.id, stored.value, copy)).toEqual(await evaluateChat(reader, source, chat, item.messages.slice(0, -1)));
     expect(stored.rev).toBeGreaterThan(Math.max(...entries.map((entry) => entry.rev)));
   }, 15_000);
   it('carries the memory records whose every message lies before the split, their sources remapped, with the facts and threads as they stood before a later record changed them, and a chapter only with all its records and messages', async () => {
@@ -178,9 +178,9 @@ describe('branchChat', () => {
     const item: ChatItem = { id: source, chat, messages, count: messages.length, title: '', preview: '', at: null, order: 0 };
     const branched = await branchChat(store, item, ids[2]!);
     if (!branched.ok) throw new Error(branched.error);
-    await server.hold(store, branched.data);
-    const copy = fold(store.children('entry', branched.data));
-    const memory = store.get('memory', memoryId(branched.data))!.value;
+    await server.hold(store, branched.data.id);
+    const copy = fold(store.children('entry', branched.data.id));
+    const memory = store.get('memory', memoryId(branched.data.id))!.value;
     expect(memory.records.map(({ id, sources }) => [id, sources])).toEqual([['before', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);
     expect(memory.chapters.map(({ id, sources }) => [id, sources])).toEqual([['kept', copy.slice(0, 2).map((message) => ({ message: message.id, version: shown(message).id }))]]);
     expect(memory.state.map(({ field, value, record }) => [field, value, record])).toEqual([['mood', 'calm', 'before'], ['name', 'Jin', null], ['place', 'home', 'before']]);

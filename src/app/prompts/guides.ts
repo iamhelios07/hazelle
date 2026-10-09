@@ -7,7 +7,7 @@ export type GuideId = 'basics' | 'when' | 'vars' | 'lists' | 'func' | 'random' |
 export type Example = { written: string; result: string; inMessage?: true };
 export type Guide = { title: string; steps: readonly { text: string; example?: Example }[] };
 
-const messages: CbsContext['messages'] = [{ id: 'm1', seed: 'm1', role: 'user', text: '안녕', time: null }];
+const messages: CbsContext['messages'] = [{ id: 'm1', message: 'm1', seed: 'm1', role: 'user', text: '안녕', time: null }];
 
 // The chat every example runs in, which SAMPLE_NOTE describes to the reader. Its seed and clock are fixed, so an example
 // gives the result written beside it; guides.test.ts runs every one.

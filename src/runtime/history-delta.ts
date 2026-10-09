@@ -14,6 +14,6 @@ const sameWrites = (a: [string, string][] | undefined, b: [string, string][] | u
 const same = <T>(a: T, b: T) => a === b;
 // Every field of HistoryMessage, which the type holds to the message's: one left out would keep a stale message in a
 // lane's retained history.
-const FIELDS: { [K in keyof HistoryMessage]-?: (a: HistoryMessage[K], b: HistoryMessage[K]) => boolean } = { id: same, seed: same, role: same, text: same, time: same, staged: same, before: sameWrites, after: sameWrites };
+const FIELDS: { [K in keyof HistoryMessage]-?: (a: HistoryMessage[K], b: HistoryMessage[K]) => boolean } = { id: same, message: same, seed: same, role: same, text: same, time: same, staged: same, before: sameWrites, after: sameWrites };
 const compared = Object.entries(FIELDS) as [keyof HistoryMessage, (a: unknown, b: unknown) => boolean][];
 export const sameHistory = (a: HistoryMessage, b: HistoryMessage) => a === b || compared.every(([key, equal]) => equal(a[key], b[key]));

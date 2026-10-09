@@ -9,7 +9,7 @@ const snapshot: Snapshot = {
   messages: [{ role: 'user', data: 'first', time: 0 }, { role: 'char', data: 'last', time: 1 }], variables: [], globals: [],
   character: { name: '', description: '', firstMessage: '' }, persona: { name: '', description: '' }, note: '',
   scope: { card: null, persona: null, prompt: null, note: null, lore: [], variables: [], greeting: null, model: null, clock: { now: 0, timeZone: 'UTC' }, assets: [], modules: [], faces: { char: null, user: null }, screen: null, pick: 'chat', messages: [
-    { id: 'a', seed: 'a', role: 'user', text: 'first', time: 0 }, { id: 'b', seed: 'b', role: 'assistant', text: 'last', time: 1 },
+    { id: 'a', message: 'a', seed: 'a', role: 'user', text: 'first', time: 0 }, { id: 'b', message: 'b', seed: 'b', role: 'assistant', text: 'last', time: 1 },
   ] },
 };
 

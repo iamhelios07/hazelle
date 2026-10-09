@@ -59,8 +59,8 @@ function greetingWrites(chat: string, { choices, selected }: Greetings, at: numb
 }
 
 // The spread takes the original's own choices; nothing links the two chats but origin, so deleting either leaves the
-// other whole.
-export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<string>> {
+// other whole. messages, versions: each copy's id by the original's.
+export async function branchChat(store: ObjectStore, item: ChatItem, message: string): Promise<ApiResult<Hazelle.Branched & { id: string }>> {
   return store.withChat(item.id, async () => {
     const current = store.projections.get(item.id)?.model;
     if (!current) return { ok: false, error: 'gone' };
@@ -74,7 +74,7 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
     writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
     const created = await store.batch(writes);
-    return created.ok ? { ok: true, data: id } : created;
+    return created.ok ? { ok: true, data: { id, from: item.id, messages: Object.fromEntries(messages), versions: Object.fromEntries(versions) } } : created;
   });
 }
 
@@ -320,6 +320,8 @@ export const appendTranslation = (store: ObjectStore, chat: string, version: str
 export const savedElsewhere = (store: ObjectStore, chat: string, id: string, failure: ApiFailure) =>
   failure.error === 'conflict' && store.children('entry', chat).some((entry) => entry.id === id);
 
+// The user's own acts go through runtime/message-acts, which tells the chat's tools once they are saved; editMessage
+// and branchChat above are its writes too.
 export const selectVersion = (store: ObjectStore, chat: string, message: string, version: string) => append(store, chat, { type: 'select', message, version, at: Date.now() });
 
 export const removeMessage = (store: ObjectStore, chat: string, message: string) => append(store, chat, { type: 'delete', message, at: Date.now() });

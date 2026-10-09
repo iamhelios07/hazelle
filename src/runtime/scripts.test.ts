@@ -1,5 +1,6 @@
 import { importModule, setModuleAlways } from './modules';
-import { importTool } from './tools/store';
+import { importTool, toolBadges, toolChatData } from './tools/store';
+import { editShown } from './message-acts';
 import { readTool } from '../engine/import/tool';
 import { toolVar, type ToolUnit } from '../model/tool';
 import { noOutcome, type Binding } from './script-binding';
@@ -356,7 +357,7 @@ describe("the display with the bot's Lua", () => {
 
 async function toolChat(session: Session) {
   await answerable(session);
-  const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name notes\n//@author jin\n//@display-name 메모\n//@uses model\n//@menu now 지금 정리'));
+  const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name notes\n//@author jin\n//@display-name 메모\n//@uses model\n//@menu now 지금 정리\n//@action redo 다시 정리'));
   if (!parsed.ok) throw new Error('fixture');
   const added = await importTool(session.store, session.files, parsed.tool);
   if (!added.ok) throw new Error(added.error);
@@ -428,6 +429,37 @@ describe('tool events through Scripts', () => {
       expect(shown(f.messages().at(-1)!).text).toBe(advance ? 'newer' : 'added');
       expect(session.store.children('entry', f.chat).some(({ value }) => value.type === 'vars' && value.set.some(([key]) => key === f.variable))).toBe(true);
       expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'stale-reply')).toHaveLength(advance ? 1 : 0);
+    }, binding);
+  });
+
+  it('runs a change after the pending reply on the tool lane, keeps its data and badges, and never holds a send behind an action', async () => {
+    const heard: string[] = [];
+    let finishReply!: (outcome: ScriptOutcome) => void;
+    const binding: Binding<ToolUnit> = { run: async (_chat, _units, _scope, event) => {
+      heard.push(event.kind === 'change' ? `change:${event.change.kind}:${event.change.index}` : event.kind);
+      if (event.kind === 'reply' && heard.filter((kind) => kind === 'reply').length === 1) return new Promise((resolve) => { finishReply = resolve; });
+      if (event.kind === 'action') return new Promise(() => {});
+      if (event.kind === 'change') return { ...noOutcome(), tool: { data: [['index', { stale: event.change.id }]], badges: [{ index: event.change.index, text: '고침' }] } };
+      return noOutcome();
+    }, close: () => {} };
+    await server.withSession(async (session) => {
+      const f = await toolChat(session);
+      stubRelay(() => saying('reply'));
+      await takeTurn(session, f.chat, { kind: 'send', text: 'hello' });
+      await expect.poll(() => heard).toContain('reply');
+      const said = f.messages()[0]!;
+      expect((await editShown(session, f.chat, said, 'hello again', null)).ok).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(heard.filter((kind) => kind.startsWith('change'))).toEqual([]);
+      finishReply(noOutcome());
+      await expect.poll(() => toolChatData(session.store, f.module, f.chat, 'index')).toEqual({ stale: said.id });
+      expect(heard).toEqual(['prompt', 'reply', 'change:edit:0']);
+      expect(toolBadges(session.store, f.module, f.chat)).toEqual({ [said.id]: { version: shown(f.messages()[0]!).id, text: '고침' } });
+
+      void session.scripts.action(f.chat, f.module, 'redo', said.id);
+      await expect.poll(() => heard).toContain('action');
+      expect(await takeTurn(session, f.chat, { kind: 'send', text: 'not held' })).toBeNull();
+      await expect.poll(() => f.messages().length).toBe(4);
     }, binding);
   });
 

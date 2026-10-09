@@ -2,7 +2,7 @@ import { noOutcome, ToolLate, ToolStopped, ToolStuck, type Binding, type LuaRunn
 import { live, type PackOwner } from '../model/library';
 import { toolId, type ToolUnit } from '../model/tool';
 import type { PromptInput } from '../engine/pipeline';
-import { toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
+import { saveToolChat, toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
 import { ChangeSignal } from '../change-signal';
 import { Runaway } from '../engine/cbs/evaluate';
 import type { Role } from '../connectors/assignment';
@@ -67,6 +67,12 @@ export const triggersOf = (packs: ReturnType<typeof packsOf>): ScriptUnit[] => p
     ...trigger, ...(trigger.kind === 'lua' && { name: trigger.name || 'Lua' }), owner: { kind: module ? 'module' as const : 'character' as const, id },
   })),
 );
+// index counts from the first message after the greeting, as a tool reads it.
+const atOf = (scope: ChatScope, message: string): Hazelle.At | null => {
+  const index = scope.messages.findIndex((each) => each.message === message);
+  return index === -1 ? null : { index: index - (scope.greeting === null ? 0 : 1), id: message, version: scope.messages[index]!.id };
+};
+
 export const scriptsOf = (packs: ReturnType<typeof packsOf>) => triggersOf(packs).filter((trigger): trigger is Extract<ScriptUnit, { kind: 'lua' }> => trigger.kind === 'lua');
 
 type Units = { lua: ScriptUnit[]; event: Event } | { tool: ToolUnit; event: ToolEvent };
@@ -86,7 +92,7 @@ export class Scripts {
   private readonly closing = new AbortController();
   private ids = 0;
   private readonly consents = new Map<string, Promise<boolean>>();
-  private readonly replies = new Map<string, Promise<void>>();
+  private readonly lanes = new Map<string, Promise<void>>();
   private readonly notices = new ToolRate(TOOL_NOTICES_PER_MINUTE);
   private readonly unsubscribe: () => void;
   private readonly lastTools = new Map<string, Map<string, string>>();
@@ -253,7 +259,7 @@ export class Scripts {
         const timer = setTimeout(() => deadline.abort(new ToolLate()), 5000);
         try {
           const scope = { ...turn.scope, pending: [...(first.scope.pending ?? []), ...writes] };
-          const { outcome, changed } = await this.dispatch(chat, { tool: unit, event: { kind: 'prompt' } }, scope, null, stop, () => clearTimeout(timer));
+          const { outcome, changed } = await this.dispatch(chat, { tool: unit, event: { kind: 'prompt', turn: { memory: false } } }, scope, null, stop, () => clearTimeout(timer));
           writes.push(...outcome.writes);
           if (stop.aborted) { this.lastTools.get(chat)?.delete(`${unit.module}:${unit.tool.file.id}`); continue; }
           if (changed) {
@@ -272,15 +278,64 @@ export class Scripts {
     });
   }
 
+  // A //@menu item: its writes stay with the last message, whichever version it shows.
   menu(chat: string, module: string, item: string): Promise<void> {
-    return this.queued(chat, async () => {
-      const context = this.pageContext(chat, module);
-      if (!context) return;
-      const tool = toolsOf(this.session.store, this.session.store.get('chat', chat)!.value).find((unit) => unit.module === module);
-      if (!tool || !tool.tool.manifest.menu.some((each) => each.id === item)) return;
-      const last = context.scope.messages.at(-1)?.id;
-      await this.dispatch(chat, { tool, event: { kind: 'menu', item } }, context.scope, last ? { version: last, stays: true } : null, this.closing.signal);
+    const unit = this.unit(chat, module);
+    if (!unit?.tool.manifest.menu.some((each) => each.id === item)) return Promise.resolve();
+    return this.lane(chat, unit, async () => {
+      const scope = this.scope(chat);
+      const last = scope.messages.at(-1)?.id;
+      await this.dispatch(chat, { tool: unit, event: { kind: 'menu', item } }, scope, last ? { version: last, stays: true } : null, this.closing.signal);
     });
+  }
+
+  // A //@action item pressed on message: its writes stay with that message, whichever version it shows.
+  action(chat: string, module: string, item: string, message: string): Promise<void> {
+    const unit = this.unit(chat, module);
+    if (!unit?.tool.manifest.actions?.some((each) => each.id === item)) return Promise.resolve();
+    return this.lane(chat, unit, async () => {
+      const scope = this.scope(chat);
+      const at = atOf(scope, message);
+      if (at) await this.dispatch(chat, { tool: unit, event: { kind: 'action', item, message: at } }, scope, { version: at.version, stays: true }, this.closing.signal);
+    });
+  }
+
+  // Where message stands in the chat now; null once it is gone. For runtime/message-acts, which reads a deleted message
+  // before its deletion.
+  at(chat: string, message: string): Hazelle.At | null {
+    return live(this.session.store.get('chat', chat)) && atOf(this.scope(chat), message);
+  }
+
+  // The user's own change to a message, once saved (runtime/message-acts). What the tools write answering it is the
+  // user's act, not a version's: it stays with the last message, so 다시 생성 does not undo it.
+  changed(chat: string, change: Hazelle.Change) {
+    this.toTools(chat, { kind: 'change', change });
+  }
+
+  // chat: the new branch, once saved, with the ids its copies took.
+  branched(chat: string, from: Hazelle.Branched) {
+    this.toTools(chat, { kind: 'branch', from });
+  }
+
+  private toTools(chat: string, event: Extract<ToolEvent, { kind: 'change' | 'branch' }>) {
+    const stored = live(this.session.store.get('chat', chat));
+    if (!stored || this.closing.signal.aborted) return;
+    for (const unit of toolsOf(this.session.store, stored.value)) {
+      void this.lane(chat, unit, async () => {
+        const scope = this.scope(chat);
+        const last = scope.messages.at(-1)?.id;
+        await this.dispatch(chat, { tool: unit, event }, scope, last ? { version: last, stays: true } : null, this.closing.signal);
+      });
+    }
+  }
+
+  private unit(chat: string, module: string): ToolUnit | null {
+    const stored = live(this.session.store.get('chat', chat));
+    return (stored && toolsOf(this.session.store, stored.value).find((unit) => unit.module === module)) ?? null;
+  }
+
+  private scope(chat: string): ChatScope {
+    return scopeOf(this.session, chat, this.session.store.get('chat', chat)!.value, this.session.store.foldedChat(chat).messages);
   }
 
   pageContext(chat: string, module: string, signal?: AbortSignal): { scope: ChatScope; host: Host } | null {
@@ -300,29 +355,35 @@ export class Scripts {
   }
 
   private replyTools(chat: string, reply: Written) {
-    const { store } = this.session;
-    const stored = live(store.get('chat', chat));
+    const stored = live(this.session.store.get('chat', chat));
     if (!stored || this.closing.signal.aborted) return;
-    const units = toolsOf(store, stored.value);
+    const units = toolsOf(this.session.store, stored.value);
     if (!units.length) return;
-    const messages = store.foldedChat(chat).messages;
-    const scope = scopeOf(this.session, chat, stored.value, messages);
-    const index = messages.findIndex((message) => message.id === (reply.message ?? reply.id)) - (scope.greeting === null ? 0 : 1);
-    for (const unit of units) {
-      const key = `${chat}:${unit.module}`;
-      const lease = store.retainChat(chat);
-      // The saved reply's snapshot and anchor travel with this job, even if another version is shown before it runs.
-      const next = (this.replies.get(key) ?? Promise.resolve()).then(async () => {
-        if (await lease.ready || this.closing.signal.aborted) return;
-        if (!toolsOf(store, store.get('chat', chat)!.value).some((current) => current.module === unit.module && current.tool.file.id === unit.tool.file.id)) return;
-        for (const { id, chat: asked } of this.state.questions) if (asked === chat) this.answer(id, null);
-        await this.dispatch(chat, { tool: unit, event: { kind: 'reply', index, id: reply.id } }, scope, { version: reply.id }, this.closing.signal);
-      }).catch((error: unknown) => this.report(chat, error, { kind: 'module', id: unit.module })).finally(() => {
-        lease.release();
-        if (this.replies.get(key) === next) this.replies.delete(key);
-      });
-      this.replies.set(key, next);
-    }
+    const scope = this.scope(chat);
+    const at = atOf(scope, reply.message ?? reply.id);
+    // The saved reply's snapshot and anchor travel with this job, even if another version is shown before it runs.
+    if (at) for (const unit of units) void this.lane(chat, unit, () => this.dispatch(chat, { tool: unit, event: { kind: 'reply', reply: { ...at, version: reply.id } } }, scope, { version: reply.id }, this.closing.signal));
+  }
+
+  // One chain per chat and tool, off the send queue: a tool hears reply, change, branch, menu and action in the order
+  // they came, and a send never waits for them. Each job runs with the chat held, only while the same tool is on in it,
+  // and dismisses the chat's open question first, as a send does.
+  private lane(chat: string, unit: ToolUnit, job: () => Promise<unknown>): Promise<void> {
+    const { store } = this.session;
+    const key = `${chat}:${unit.module}`;
+    const lease = store.retainChat(chat);
+    const next = (this.lanes.get(key) ?? Promise.resolve()).then(async () => {
+      if (await lease.ready || this.closing.signal.aborted) return;
+      const stored = live(store.get('chat', chat));
+      if (!stored || !toolsOf(store, stored.value).some((current) => current.module === unit.module && current.tool.file.id === unit.tool.file.id)) return;
+      for (const { id, chat: asked } of this.state.questions) if (asked === chat) this.answer(id, null);
+      await job();
+    }).catch((error: unknown) => this.report(chat, error, { kind: 'module', id: unit.module })).finally(() => {
+      lease.release();
+      if (this.lanes.get(key) === next) this.lanes.delete(key);
+    });
+    this.lanes.set(key, next);
+    return next;
   }
 
   // A press on a bot's button, whose writes stay with the last message whichever version it shows. false: no script
@@ -346,7 +407,7 @@ export class Scripts {
 
   private async dispatch(chat: string, units: Units, scope: ChatScope, anchor: Anchor | null, signal?: AbortSignal, finished?: () => void) {
     const outcome = await this.run(chat, units, scope, signal).finally(finished);
-    return this.event(chat, scope, outcome, anchor, ownerOf(units), units.event.kind === 'reply' ? units.event.id : undefined);
+    return this.event(chat, scope, outcome, anchor, ownerOf(units), units.event.kind === 'reply' ? units.event.reply.version : undefined);
   }
 
   // anchor: where its writes stand; null leaves them to the caller.
@@ -368,6 +429,15 @@ export class Scripts {
     const added = (stale ? [] : outcome.added).map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
     if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved }, from);
+    if (outcome.tool && from?.kind === 'module' && (outcome.tool.data.length || outcome.tool.badges.length)) {
+      // A badge stands on the version shown when it lands. A delayed reply job's badges, as its edits, mark only its reply.
+      const badges = outcome.tool.badges.flatMap(({ index, text }) => {
+        const message = at(index);
+        return message && (!stale || shown(message).id === reply) ? [{ message: message.id, version: shown(message).id, text }] : [];
+      });
+      const kept = await saveToolChat(this.session.store, from.id, chat, outcome.tool.data, badges);
+      if (!kept.ok) this.note(chat, { kind: 'unsaved', failure: kept }, from);
+    }
     if (outcome.reload) this.session.display.stale(chat);
     return { outcome, changed: edits.length + removed.length + added.length > 0 };
   }

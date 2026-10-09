@@ -169,7 +169,7 @@ export const checkScript = (script: Pick<Script, 'find' | 'replace' | 'flags'>):
 
 // One script over one text at its own stage, as a chat's first message, with no CBS run.
 export function trySample(script: Script, text: string): string {
-  return new Scripts([{ ...script, off: undefined }], [{ id: '', seed: '', role: 'assistant', text, time: null }]).apply(script.stage, text, { index: 0, cbs: (each) => each }).text;
+  return new Scripts([{ ...script, off: undefined }], [{ id: '', message: '', seed: '', role: 'assistant', text, time: null }]).apply(script.stage, text, { index: 0, cbs: (each) => each }).text;
 }
 
 function compile(source: string, flags: string): Pattern | null {
