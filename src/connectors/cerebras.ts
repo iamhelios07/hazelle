@@ -7,5 +7,6 @@ export const cerebras: ConnectionType = {
   description: '여러 회사의 공개 모델을 Cerebras 서버에서 실행해요.',
   keyPage: 'https://cloud.cerebras.ai',
   endpoint: { baseUrl: 'https://api.cerebras.ai/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: /^csk-/, host: 'api.cerebras.ai' },
 };

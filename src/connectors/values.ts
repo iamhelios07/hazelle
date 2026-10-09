@@ -1,9 +1,10 @@
 import type { Modality } from './types';
 
-const MODALITIES = new Set<Modality>(['text', 'image', 'audio', 'video', 'file']);
+// OpenRouter names an embedding model's output embeddings.
+const MODALITIES: Partial<Record<string, Modality>> = { text: 'text', image: 'image', audio: 'audio', video: 'video', file: 'file', embedding: 'embedding', embeddings: 'embedding' };
 
 export function modalities(value: unknown): Modality[] | null {
-  return Array.isArray(value) ? value.filter((item): item is Modality => MODALITIES.has(item as Modality)) : null;
+  return Array.isArray(value) ? value.flatMap((item) => MODALITIES[String(item)] ?? []) : null;
 }
 
 export function flag(value: unknown): boolean | null {

@@ -1,6 +1,7 @@
 import { streamError } from './errors';
 import type { Reasoning } from './settings';
-import type { ChatMessage, Codec, Model, Phase, StreamFacts, Terminal } from './types';
+import { embedUsage } from './chat-completions';
+import type { ChatMessage, Codec, EmbedPurpose, Model, Phase, StreamFacts, Terminal } from './types';
 import { count, isRecord, list } from './values';
 
 // The Gemini API (generateContent), checked against ai.google.dev/api on 2026-10-04.
@@ -69,6 +70,8 @@ function terminal(event: unknown): Terminal | null {
   return refused === null ? null : { state: 'failed', error: refused };
 }
 
+const TASKS: Record<EmbedPurpose, string> = { query: 'RETRIEVAL_QUERY', document: 'RETRIEVAL_DOCUMENT' };
+
 export const gemini: Codec = {
   authHeaders: (secret) => ({ 'x-goog-api-key': secret }),
 
@@ -78,19 +81,23 @@ export const gemini: Codec = {
   systemFirst: true,
 
   // Google's JSON leaves out a field at its default, so a model without thinking has no thinking key: absent is false.
-  // The list says nothing about input modalities, tools, or which request settings or thinking controls a model takes.
+  // The list says nothing about input modalities, tools, or which request settings or thinking controls a model takes;
+  // its methods tell an embedding model from one that writes.
   parseModels(payload) {
     if (!isRecord(payload) || !Array.isArray(payload.models)) return null;
     return payload.models.flatMap((raw): Model[] => {
       if (!isRecord(raw) || typeof raw.name !== 'string' || !raw.name.startsWith('models/')) return [];
-      if (!list(raw.supportedGenerationMethods).includes('generateContent')) return [];
+      const methods = list(raw.supportedGenerationMethods);
+      const chats = methods.includes('generateContent');
+      const embeds = !chats && methods.includes('embedContent');
+      if (!chats && !embeds) return [];
       const id = raw.name.slice('models/'.length);
       return [
         {
           id,
           name: typeof raw.displayName === 'string' && raw.displayName ? raw.displayName : id,
           input: null,
-          output: null,
+          output: embeds ? ['embedding'] : null,
           contextLength: count(raw.inputTokenLimit) || null,
           maxOutput: count(raw.outputTokenLimit) || null,
           reasoning: raw.thinking === true,
@@ -176,5 +183,22 @@ export const gemini: Codec = {
       reasoningTokens: thoughts,
     };
   },
-  embeds: null,
+  embeds: {
+    request: (endpoint, model, texts, as, fields) => ({
+      url: `${endpoint.baseUrl}/models/${model.id}:batchEmbedContents`,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        requests: texts.map((text) => ({ model: `models/${model.id}`, content: { parts: [{ text }] }, ...(as && { embedContentConfig: { taskType: TASKS[as] } }) })),
+        ...fields,
+      }),
+    }),
+    parse(payload, expected) {
+      if (!isRecord(payload) || !Array.isArray(payload.embeddings) || payload.embeddings.length !== expected) return null;
+      const vectors = payload.embeddings.map((embedding) => (isRecord(embedding) && Array.isArray(embedding.values) && embedding.values.length > 0 && embedding.values.every((value) => typeof value === 'number' && Number.isFinite(value)) ? (embedding.values as number[]) : null));
+      if (vectors.some((values) => values === null)) return null;
+      const usage = isRecord(payload.usageMetadata) ? payload.usageMetadata : {};
+      return { vectors: vectors as number[][], usage: embedUsage(count(usage.promptTokenCount)), raw: usage };
+    },
+  },
 };

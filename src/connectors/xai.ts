@@ -10,6 +10,7 @@ export const xai: ConnectionType = {
   description: 'xAI API로 Grok을 사용해요.',
   keyPage: 'https://console.x.ai/team/default/api-keys',
   endpoint: { baseUrl: 'https://api.x.ai/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: /^xai-/, host: 'api.x.ai' },
 
   parseModels: (payload) =>

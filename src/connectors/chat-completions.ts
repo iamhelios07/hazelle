@@ -1,7 +1,7 @@
 import { streamError } from './errors';
 import type { Cache, NumberSetting, Reasoning, Setting } from './settings';
 import { ephemeral, wireMessage } from './anthropic-messages';
-import type { CacheMark, ChatMessage, Codec, Model } from './types';
+import type { CacheMark, ChatMessage, Codec, Embeds, Model, Usage } from './types';
 import { count, isRecord, list, modelEntries } from './values';
 
 // OpenRouter's and Vercel's catalogs name the same fields in supported_parameters. max_tokens rather than
@@ -74,6 +74,32 @@ function reasoningOf(part: Record<string, unknown>) {
   const reasoning = [part.reasoning_content, part.reasoning, part.reasoning_text].find((value) => typeof value === 'string' && value);
   return typeof reasoning === 'string' ? reasoning : null;
 }
+
+const vector = (value: unknown): value is number[] => Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'number' && Number.isFinite(item));
+
+// An embedding writes nothing, so its output is a measured zero: a price-list cost can be worked out from the input.
+export const embedUsage = (inputTokens: number | null): Usage => ({ inputTokens, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 0, reasoningTokens: null });
+
+// OpenAI's /embeddings, which the responses format shares. Voyage states only total_tokens, which for an embedding is all
+// input.
+export const openAiEmbeds: Embeds = {
+  request: (endpoint, model, texts, _as, fields) => ({
+    url: `${endpoint.baseUrl}/embeddings`,
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model: model.id, input: texts, ...fields }),
+  }),
+  parse(payload, expected) {
+    if (!isRecord(payload) || !Array.isArray(payload.data) || payload.data.length !== expected) return null;
+    const vectors: number[][] = [];
+    for (const item of payload.data) {
+      if (!isRecord(item) || !vector(item.embedding) || typeof item.index !== 'number' || !Number.isInteger(item.index) || item.index < 0 || item.index >= expected || vectors[item.index]) return null;
+      vectors[item.index] = item.embedding;
+    }
+    const usage = isRecord(payload.usage) ? payload.usage : {};
+    return { vectors, usage: embedUsage(count(usage.prompt_tokens) ?? count(usage.total_tokens)), raw: usage };
+  },
+};
 
 export const chatCompletions: Codec = {
   authHeaders: (secret): Record<string, string> => (secret ? { authorization: `Bearer ${secret}` } : {}),
@@ -174,5 +200,5 @@ export const chatCompletions: Codec = {
       reasoningTokens: count(completion.reasoning_tokens),
     };
   },
-  embeds: null,
+  embeds: openAiEmbeds,
 };

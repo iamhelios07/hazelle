@@ -9,5 +9,6 @@ export const perplexity: ConnectionType = {
   // The Router: its OpenAI-compatible chat and model list both live under /router/v1. The Sonar API at the bare host
   // has no model list.
   endpoint: { baseUrl: 'https://api.perplexity.ai/router/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: /^pplx-/, host: 'api.perplexity.ai' },
 };

@@ -26,8 +26,11 @@ import { fit, settingsSchema, type Cache, type Carries, type ModelSettings, type
 import { together } from './together';
 import { upstage } from './upstage';
 import { vercel } from './vercel';
+import { voyage } from './voyage';
 import { xai } from './xai';
-import { ConnectorError, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Endpoint, type HttpRequest, type Model } from './types';
+import { PRICE_LISTS } from './price-list';
+import { priceCost } from './pricing';
+import { ConnectorError, type CacheWay, type ChatMessage, type ChatRequest, type Codec, type Connection, type ConnectionType, type Cost, type EmbedPurpose, type Endpoint, type HttpRequest, type Model, type Usage } from './types';
 
 // Adding a provider means adding its connection type here. Nothing else names one. The order is the screen's, 주요 too.
 export const CONNECTION_TYPES: readonly ConnectionType[] = [
@@ -52,6 +55,7 @@ export const CONNECTION_TYPES: readonly ConnectionType[] = [
   mistral,
   moonshot,
   upstage,
+  voyage,
   novelai,
   copilot,
 ];
@@ -92,6 +96,39 @@ export function resolveModel(resolved: Resolved, model: Model): Route {
 
 export function parseCatalog({ type, codec }: Route, payload: unknown): Model[] | null {
   return (type?.parseModels ?? codec.parseModels)(payload);
+}
+
+export const costUnit = (type: ConnectionType | null): Cost['unit'] => (type && PRICE_LISTS[type.id]?.credit ? 'credit' : 'usd');
+
+// The type answers whether it serves its format's embeddings; a generic connection serves its codec's.
+export const embedsOf = ({ type, codec }: Route) => (type?.embeds === null ? null : codec.embeds);
+
+// The route a model's embeddings take; null where the connection serves none in the model's format.
+export function embedRoute(connection: Connection, model: Model): Route | null {
+  const resolved = resolveConnection(connection);
+  if (!resolved?.codec) return null;
+  try {
+    const route = resolveModel(resolved, model);
+    return embedsOf(route) ? route : null;
+  } catch (error) {
+    if (error instanceof ConnectorError) return null;
+    throw error;
+  }
+}
+
+export function embedRequest(route: Route, model: Model, texts: string[], as: EmbedPurpose | null): HttpRequest {
+  const embeds = embedsOf(route);
+  if (!embeds) throw new ConnectorError('no-embeddings');
+  return embeds.request(route.endpoint, model, texts, as, route.type?.embedPurpose?.(as) ?? {});
+}
+
+// null for a body that is not the format's embedding answer for this many texts.
+export function embedAnswer(route: Route, model: Model, payload: unknown, count: number): { vectors: number[][]; usage: Usage; cost: Cost | null } | null {
+  const parsed = embedsOf(route)?.parse(payload, count);
+  if (!parsed) return null;
+  const { vectors, usage, raw } = parsed;
+  const cost = route.type?.cost?.({ facts: { rawUsage: raw, finishReason: null, id: null }, usage, model }) ?? (model.price ? priceCost(model.price, usage, costUnit(route.type)) : null);
+  return { vectors, usage, cost };
 }
 
 const cacheWay = ({ type, codec }: Route, model: Model): CacheWay | null => codec.cache ?? type?.cachePoints?.(model) ?? null;

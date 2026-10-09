@@ -9,6 +9,7 @@ export const groq: ConnectionType = {
   description: '여러 회사의 공개 모델을 Groq 서버에서 실행해요.',
   keyPage: 'https://console.groq.com/keys',
   endpoint: { baseUrl: 'https://api.groq.com/openai/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: /^gsk_/, host: 'api.groq.com' },
   parseModels: (payload) => modelEntries(payload)?.map((raw) => ({ ...bareModel(raw.id), contextLength: count(raw.context_window) })) ?? null,
 };

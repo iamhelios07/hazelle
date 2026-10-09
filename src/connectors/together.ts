@@ -9,6 +9,7 @@ export const together: ConnectionType = {
   description: '여러 회사의 공개 모델을 Together 서버에서 실행해요.',
   keyPage: 'https://api.together.ai/settings/projects/~current/api-keys',
   endpoint: { baseUrl: 'https://api.together.ai/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: null, host: 'api.together.ai' },
 
   // GET /models answers a bare array, not the standard { data } list, and it holds image, embedding and rerank models

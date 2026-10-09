@@ -10,6 +10,7 @@ export const deepseek: ConnectionType = {
   description: 'DeepSeek API에 연결해요.',
   keyPage: 'https://platform.deepseek.com/api_keys',
   endpoint: { baseUrl: 'https://api.deepseek.com', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: null, host: 'api.deepseek.com' },
 
   // Its chat takes reasoning_effort none to turn thinking off, which supported_levels leaves out.

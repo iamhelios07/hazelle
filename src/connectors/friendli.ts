@@ -25,6 +25,7 @@ export const friendli: ConnectionType = {
   description: '여러 회사의 공개 모델을 Friendli 서버에서 실행해요.',
   keyPage: 'https://friendli.ai/suite/~/setting/keys',
   endpoint: { baseUrl: 'https://api.friendli.ai/serverless/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: /^flp_/, host: 'api.friendli.ai' },
   parseModels: (payload) =>
     modelEntries(payload)?.map((raw): Model => ({

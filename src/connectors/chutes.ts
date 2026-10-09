@@ -9,6 +9,7 @@ export const chutes: ConnectionType = {
   description: '여러 회사의 공개 모델을 Chutes의 분산 서버에서 실행해요.',
   keyPage: 'https://chutes.ai/app',
   endpoint: { baseUrl: 'https://llm.chutes.ai/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: /^cpk_/, host: 'llm.chutes.ai' },
   // context_length is what Chutes serves; max_model_len is the model's own and can be larger.
   parseModels: (payload) =>

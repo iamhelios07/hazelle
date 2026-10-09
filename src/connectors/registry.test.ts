@@ -14,6 +14,9 @@ import {
   chatRequest,
   CONNECTION_TYPES,
   detect,
+  embedAnswer,
+  embedRequest,
+  embedRoute,
   normalizeBaseUrl,
   parseCatalog,
   resolveConnection,
@@ -166,7 +169,7 @@ describe('catalogs', () => {
     ]);
   });
 
-  it('reads Vercel language models only, with PDF input as a file and capabilities from tags', () => {
+  it('reads Vercel language and embedding models, with PDF input as a file and capabilities from tags', () => {
     expect(parseCatalog(connection('vercel'), vercelModels)).toEqual([
       {
         id: 'anthropic/claude-fable-5',
@@ -185,6 +188,7 @@ describe('catalogs', () => {
         price: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, tiers: [], asOf: null },
       },
       expect.objectContaining({ id: 'alibaba/qwen3-coder', input: ['text'], reasoning: false, tools: true, price: undefined }),
+      expect.objectContaining({ id: 'alibaba/qwen3-embedding-0.6b', output: ['embedding'], price: { input: 0.01, output: 0, cacheRead: null, cacheWrite: null, tiers: [], asOf: null } }),
     ]);
     const [, bare] = vercelModels.data;
     expect(parseCatalog(connection('vercel'), { data: [{ ...bare, tags: undefined, modalities: undefined }] })).toEqual([
@@ -488,5 +492,51 @@ describe('copilot', () => {
     expect(copilot.exchange!.parse({ message: 'Not Found' })).toBeNull();
     expect(copilot.signIn!.account.parse({ login: 'jiniill', id: 1 })).toBe('jiniill');
     expect(copilot.signIn!.account.parse({ login: '' })).toBeNull();
+  });
+});
+
+describe('embeddings', () => {
+  const answer = (usage: Record<string, unknown>) => ({ object: 'list', data: [{ object: 'embedding', index: 1, embedding: [0.3, 0.4] }, { object: 'embedding', index: 0, embedding: [0.1, 0.2] }], usage });
+  const generic: Connection = { type: 'generic', label: '직접 연결', baseUrl: 'https://example.com/v1', protocol: 'chat-completions', accounts: [{ id: 'key', secret: 'key' }], turns: null, starred: [] };
+
+  it('posts OpenAI’s /embeddings without the purpose, and reads the vectors in input order with input tokens only', () => {
+    const route = connection('openai');
+    const request = embedRequest(route, model({ id: 'text-embedding-3-small' }), ['밤', '아침'], 'query');
+    expect(request).toMatchObject({ url: 'https://api.openai.com/v1/embeddings', method: 'POST' });
+    expect(JSON.parse(request.body!)).toEqual({ model: 'text-embedding-3-small', input: ['밤', '아침'] });
+    const priced = model({ price: { input: 0.02, output: 0, cacheRead: null, cacheWrite: null, tiers: [], asOf: 1 } });
+    expect(embedAnswer(route, priced, answer({ prompt_tokens: 1_000_000, total_tokens: 1_000_000 }), 2)).toEqual({
+      vectors: [[0.1, 0.2], [0.3, 0.4]],
+      usage: { inputTokens: 1_000_000, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 0, reasoningTokens: null },
+      cost: { unit: 'usd', amount: 0.02, source: 'price-list', asOf: 1 },
+    });
+    expect(embedAnswer(route, priced, answer({}), 3)).toBeNull();
+    expect(embedAnswer(route, priced, { data: [{ index: 0, embedding: 'AAAA' }] }, 1)).toBeNull();
+  });
+
+  it('gives Voyage its purpose and fixed models, reads its total as input, and takes OpenRouter’s reported cost', () => {
+    const voyage = connection('voyage');
+    expect(voyage.type!.models!.map(({ id, output }) => [id, output])).toEqual([['voyage-4-lite', ['embedding']], ['voyage-4', ['embedding']], ['voyage-4-large', ['embedding']]]);
+    expect(JSON.parse(embedRequest(voyage, voyage.type!.models![0]!, ['밤'], 'document').body!)).toEqual({ model: 'voyage-4-lite', input: ['밤'], input_type: 'document' });
+    expect(JSON.parse(embedRequest(voyage, voyage.type!.models![0]!, ['밤'], null).body!)).toMatchObject({ input_type: null });
+    expect(embedAnswer(voyage, voyage.type!.models![0]!, answer({ total_tokens: 7 }), 2)?.usage.inputTokens).toBe(7);
+    expect(detect('pa-abc')).toMatchObject({ kind: 'key', type: { id: 'voyage' } });
+    expect(embedAnswer(connection('openrouter'), model(), answer({ prompt_tokens: 7, cost: 0.0001 }), 2)?.cost).toEqual({ unit: 'usd', amount: 0.0001, source: 'reported' });
+  });
+
+  it('refuses before the network where the type serves none, and lets a generic connection serve its codec’s', () => {
+    expect(embedRoute({ ...generic, type: 'groq' }, model())).toBeNull();
+    expect(embedRoute({ ...generic, type: 'anthropic' }, model())).toBeNull();
+    expect(embedRoute({ ...generic, type: 'novelai' }, model())).toBeNull();
+    expect(() => embedRequest(connection('groq'), model(), ['밤'], null)).toThrow(ConnectorError);
+    expect(embedRoute(generic, model())).toMatchObject({ endpoint: { baseUrl: 'https://example.com/v1' } });
+    expect(embedRoute({ ...generic, type: 'mistral' }, model())).not.toBeNull();
+  });
+
+  it('lists OpenRouter’s embedding models from their own list', () => {
+    const route = connection('openrouter');
+    expect(route.type!.embeddingModels!(route.endpoint).url).toBe('https://openrouter.ai/api/v1/embeddings/models');
+    const listed = { data: [{ id: 'liquid/lfm-2.5-embedding-350m:free', name: 'LiquidAI: LFM2.5-Embedding-350M (free)', context_length: 512, architecture: { input_modalities: ['text'], output_modalities: ['embeddings'] }, pricing: { prompt: '0', completion: '0' }, supported_parameters: [] }] };
+    expect(parseCatalog(route, listed)).toEqual([expect.objectContaining({ id: 'liquid/lfm-2.5-embedding-350m:free', output: ['embedding'] })]);
   });
 });

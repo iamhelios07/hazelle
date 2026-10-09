@@ -1,4 +1,4 @@
-import { chatCompletions, promptCacheKey } from './chat-completions';
+import { chatCompletions, openAiEmbeds, promptCacheKey } from './chat-completions';
 import { streamError } from './errors';
 import type { Reasoning } from './settings';
 import type { Codec, Phase, StreamFacts } from './types';
@@ -128,5 +128,5 @@ export const responses: Codec = {
       reasoningTokens: count(output.reasoning_tokens),
     };
   },
-  embeds: null,
+  embeds: openAiEmbeds,
 };

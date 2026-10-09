@@ -78,6 +78,7 @@ export const openRouter: ConnectionType = {
   detect: { key: /^sk-or-/, host: 'openrouter.ai' },
 
   parseModels: openRouterModels,
+  embeddingModels: (endpoint) => ({ url: `${endpoint.baseUrl}/embeddings/models`, method: 'GET', headers: {}, body: null }),
 
   reasoningBudget: (tokens) => ({ reasoning: { max_tokens: tokens } }),
 

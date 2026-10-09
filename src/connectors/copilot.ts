@@ -102,6 +102,8 @@ export const copilot: ConnectionType = {
   major: true,
   description: 'GitHub Copilot 구독으로 Claude, GPT 같은 모델을 써요.',
   endpoint: { baseUrl: API, protocol: 'chat-completions' },
+  // Off (design §4): its plan is for chat in the editor, and its pool switches only on an exhausted allowance.
+  embeds: null,
   routes: { 'anthropic-messages': `${API}/v1`, responses: API },
 
   signIn: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import recorded from './fixtures/gemini.json';
-import { chatRequest, detect, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
+import { chatRequest, detect, embedAnswer, embedRequest, parseCatalog, resolveConnection, withCredential, type Route } from './registry';
 import { decodeStream } from './stream';
 import type { Phase } from './types';
 
@@ -18,9 +18,9 @@ async function decode(text: string, media = 'text/event-stream') {
 const sse = (...events: unknown[]) => events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
 
 describe('Gemini', () => {
-  it('is found by its key and lists only models that generate content', () => {
+  it('is found by its key and lists the models that generate content or embed', () => {
     expect(detect(`AIza${'x'.repeat(35)}`)).toMatchObject({ kind: 'key', type: { id: 'google' } });
-    expect(parseCatalog(google, recorded.models)!.map((model) => model.id)).toEqual(['gemini-3.5-flash', 'gemini-2.0-flash']);
+    expect(parseCatalog(google, recorded.models)!.map(({ id, output }) => [id, output])).toEqual([['gemini-3.5-flash', null], ['gemini-2.0-flash', null], ['gemini-embedding-001', ['embedding']]]);
     expect(flash).toMatchObject({ name: 'Gemini 3.5 Flash', contextLength: 1048576, maxOutput: 65536, reasoning: true });
     expect(old!.reasoning).toBe(false);
   });
@@ -65,5 +65,22 @@ describe('Gemini', () => {
     const safety = { candidates: [{ content: { parts: [], role: 'model' }, finishReason: 'SAFETY', finishMessage: 'blocked' }] };
     expect((await decode(sse(safety))).outcome).toMatchObject({ state: 'failed', error: { detail: 'SAFETY: blocked' } });
     expect((await decode(sse(recorded.error))).outcome).toMatchObject({ state: 'failed', error: { kind: 'provider', detail: 'Resource has been exhausted (e.g. check quota).' } });
+  });
+
+  it('embeds in one batch with the purpose as its task type, and reads the vectors in order', () => {
+    const embedder = parseCatalog(google, recorded.models)!.at(-1)!;
+    const request = embedRequest(google, embedder, ['밤', '아침'], 'query');
+    expect(request.url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents');
+    expect(JSON.parse(request.body!)).toEqual({ requests: [
+      { model: 'models/gemini-embedding-001', content: { parts: [{ text: '밤' }] }, embedContentConfig: { taskType: 'RETRIEVAL_QUERY' } },
+      { model: 'models/gemini-embedding-001', content: { parts: [{ text: '아침' }] }, embedContentConfig: { taskType: 'RETRIEVAL_QUERY' } },
+    ] });
+    expect(JSON.parse(embedRequest(google, embedder, ['밤'], null).body!).requests[0]).not.toHaveProperty('embedContentConfig');
+    expect(embedAnswer(google, embedder, { embeddings: [{ values: [0.1, 0.2] }, { values: [0.3, 0.4] }], usageMetadata: { promptTokenCount: 4 } }, 2)).toEqual({
+      vectors: [[0.1, 0.2], [0.3, 0.4]],
+      usage: { inputTokens: 4, cachedInputTokens: null, cacheWriteInputTokens: null, outputTokens: 0, reasoningTokens: null },
+      cost: null,
+    });
+    expect(embedAnswer(google, embedder, { embeddings: [{ values: [0.1] }] }, 2)).toBeNull();
   });
 });

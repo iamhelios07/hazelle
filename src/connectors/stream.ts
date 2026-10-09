@@ -1,6 +1,5 @@
-import { PRICE_LISTS } from './price-list';
 import { priceCost } from './pricing';
-import type { Route } from './registry';
+import { costUnit, type Route } from './registry';
 import { SseParser } from './sse';
 import { thoughts } from './thoughts';
 import type { Codec, Cost, Model, Phase, StreamFacts, Terminal, Usage } from './types';
@@ -30,7 +29,7 @@ export async function decodeStream({ type, codec }: Route, model: Model, respons
   const scanner = inline.keep ? null : thoughts(onText, inline.takeBack ?? (() => {}));
   const append = (phase: Phase, text: string) => text && (scanner ? scanner.push(phase, text) : onText(phase, text));
 
-  const unit = type && PRICE_LISTS[type.id]?.credit ? 'credit' : 'usd';
+  const unit = costUnit(type);
   const finish = (state: Outcome['state'], cut: Outcome['cut'], error: Outcome['error']): Outcome => {
     scanner?.end(state === 'done');
     const usage = Object.keys(facts.rawUsage).length ? codec.usage(facts.rawUsage) : null;

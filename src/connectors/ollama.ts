@@ -9,6 +9,7 @@ export const ollama: ConnectionType = {
   description: '여러 회사의 공개 모델을 Ollama 서버에서 실행해요.',
   keyPage: 'https://ollama.com/settings/keys',
   endpoint: { baseUrl: 'https://ollama.com/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: null, host: 'ollama.com' },
   // No usage API and no rate-limit headers (checked with a real key, 2026-10-04): this page is all there is.
   usagePage: 'https://ollama.com/settings/usage',

@@ -27,10 +27,11 @@ function reasoningTakes(options: unknown[]): ReasoningTakes {
   };
 }
 
-// A model priced by tiers is left to models.dev, which states them by context size as this app reads them.
-function price(value: unknown): Price | undefined {
+// A model priced by tiers is left to models.dev, which states them by context size as this app reads them. An embedding
+// model is priced by its input alone: it writes nothing.
+function price(value: unknown, embeds: boolean): Price | undefined {
   if (!isRecord(value) || Object.keys(value).some((field) => field.endsWith('_tiers'))) return undefined;
-  return statedPrice(perMillion(value.input), perMillion(value.output), perMillion(value.input_cache_read), perMillion(value.input_cache_write));
+  return statedPrice(perMillion(value.input), embeds ? 0 : perMillion(value.output), perMillion(value.input_cache_read), perMillion(value.input_cache_write));
 }
 
 const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
@@ -44,20 +45,21 @@ export const vercel: ConnectionType = {
   endpoint: { baseUrl: API, protocol: 'chat-completions' },
   detect: { key: /^vck_/, host: 'ai-gateway.vercel.sh' },
 
-  // The list also holds image, video, embedding and speech models; only language models chat.
+  // The list also holds image, video and speech models; only language models chat, and embedding models embed.
   parseModels(payload) {
     const entries = modelEntries(payload);
     if (!entries) return null;
     return entries
-      .filter((raw) => raw.type === 'language')
+      .filter((raw) => raw.type === 'language' || raw.type === 'embedding')
       .map((raw) => {
+        const embeds = raw.type === 'embedding';
         const kinds = isRecord(raw.modalities) ? raw.modalities : {};
         const tags = Array.isArray(raw.tags) ? raw.tags : null;
         return {
           id: raw.id,
           name: nameOf(raw, 'name'),
           input: modalities(kinds.input),
-          output: modalities(kinds.output),
+          output: embeds ? ['embedding' as const] : modalities(kinds.output),
           contextLength: count(raw.context_window),
           maxOutput: count(raw.max_tokens),
           reasoning: tags ? tags.includes('reasoning') : null,
@@ -67,7 +69,7 @@ export const vercel: ConnectionType = {
             settings: Array.isArray(raw.supported_parameters) ? listedSettings(raw.supported_parameters) : null,
             reasoning: Array.isArray(raw.reasoning_options) ? reasoningTakes(raw.reasoning_options) : null,
           },
-          price: price(raw.pricing),
+          price: price(raw.pricing, embeds),
         };
       });
   },

@@ -10,6 +10,7 @@ export const moonshot: ConnectionType = {
   keyPage: 'https://platform.kimi.ai/console/api-keys',
   // The international host; api.moonshot.cn is the mainland one.
   endpoint: { baseUrl: 'https://api.moonshot.ai/v1', protocol: 'chat-completions' },
+  embeds: null,
   detect: { key: null, host: 'api.moonshot.ai' },
 
   parseModels: (payload) =>

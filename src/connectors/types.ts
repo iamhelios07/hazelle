@@ -139,17 +139,18 @@ export type Codec = {
 export type EmbedPurpose = 'query' | 'document';
 
 // Built from the format; whether a connection type serves it is the type's (ConnectionType embeds). as: what the texts
-// are for, which retrieval-tuned models embed differently; a format with no such field drops it. parse answers null
-// for a body that is not this format's embedding answer, else a vector per text, in order.
+// are for, which retrieval-tuned models embed differently; a format with no such field drops it, and fields, the
+// connection type's own (ConnectionType embedPurpose), are laid over the body. parse answers null for a body that is not
+// this format's embedding answer, else a vector per text, in order; raw is the usage as sent, which a type's cost reads.
 export type Embeds = {
-  request(endpoint: Endpoint, model: Model, texts: string[], as: EmbedPurpose | null): HttpRequest;
-  parse(payload: unknown, count: number): { vectors: number[][]; usage: Usage } | null;
+  request(endpoint: Endpoint, model: Model, texts: string[], as: EmbedPurpose | null, fields: Record<string, unknown>): HttpRequest;
+  parse(payload: unknown, count: number): { vectors: number[][]; usage: Usage; raw: Record<string, unknown> } | null;
 };
 
 // Every hook is optional: without one, the codec's default answers, exactly as for a connection described by hand.
-// A type that speaks no chat format has no endpoint: its models only draw, and models is its whole list, since there is
-// none to fetch.
-export type ConnectionType = TypeHooks & ({ endpoint: Endpoint; models?: never } | { endpoint?: never; models: Model[] });
+// models: the type's whole list, for a provider with none to fetch (Voyage AI). A type that speaks no chat format has no
+// endpoint, and its models only draw.
+export type ConnectionType = TypeHooks & ({ endpoint: Endpoint; models?: Model[] } | { endpoint?: never; models: Model[] });
 
 type TypeHooks = {
   id: string;
@@ -169,6 +170,8 @@ type TypeHooks = {
   exchange?: { request(secret: string): HttpRequest; parse(payload: unknown): Token | null };
   headers?: (credential: string) => Record<string, string>;
   parseModels?: (payload: unknown) => Model[] | null;
+  // A second list, read by the same parser, for the embedding models the model list leaves out (OpenRouter).
+  embeddingModels?: (endpoint: Endpoint) => HttpRequest;
   // Reasoning by a token budget, in a field of the provider's own where its codec has none. Its
   // parseModels says which models take one.
   reasoningBudget?: (tokens: number) => Record<string, unknown>;
@@ -187,8 +190,11 @@ type TypeHooks = {
   // the lookup answers 404.
   settle?: { request(secret: string, id: string): HttpRequest; parse(payload: unknown): Cost | null };
   draws?: Draws;
-  // null: the type serves no embeddings, or its codec's embeddings were not verified against it (design §4).
+  // null: the type serves no embeddings, or its codec's embeddings were not verified against it (design §4,
+  // docs research/embeddings-spike.md).
   embeds?: null;
+  // An embedding call's purpose in a field of the provider's own, where its format has none (Voyage's input_type).
+  embedPurpose?: (as: EmbedPurpose | null) => Record<string, unknown>;
 };
 
 // center: where a character stands, 0–1 from the top left. A model that places no one gets the characters' prompts
