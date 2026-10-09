@@ -99,6 +99,8 @@ export const FAKE_PROVIDER = '127.0.0.1:4419';
 export const FAKE_ADDRESS = `http://${FAKE_PROVIDER}/v1`;
 
 const REPLY = ['{{char}} smiles. ', '[[bow]]'];
+export type FakeChatRequest = { model: string; messages: { role: string; content: string }[]; stream?: boolean };
+let reply: (request: FakeChatRequest) => readonly string[] = () => REPLY;
 let heard: unknown[] = [];
 let listening: Promise<void> | null = null;
 
@@ -109,8 +111,11 @@ function upstream(): Promise<void> {
       for await (const chunk of request) chunks.push(chunk as Buffer);
       if (request.url === '/v1/models') return response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: FAKE_MODEL }] }));
       if (request.url !== '/v1/chat/completions') return response.writeHead(404).end();
-      heard.push(JSON.parse(Buffer.concat(chunks).toString()));
-      const events = [...REPLY.map((content) => ({ choices: [{ delta: { content } }] })), { choices: [{ delta: {}, finish_reason: 'stop' }] }];
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as FakeChatRequest;
+      heard.push(body);
+      const parts = reply(body);
+      if (body.stream === false) return response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: parts.join('') }, finish_reason: 'stop' }] }));
+      const events = [...parts.map((content) => ({ choices: [{ delta: { content } }] })), { choices: [{ delta: {}, finish_reason: 'stop' }] }];
       response.writeHead(200, { 'content-type': 'text/event-stream' });
       response.end([...events.map((event) => JSON.stringify(event)), '[DONE]'].map((data) => `data: ${data}\n\n`).join(''));
     });
@@ -121,9 +126,10 @@ function upstream(): Promise<void> {
   return listening;
 }
 
-export async function fakeProvider(): Promise<unknown[]> {
+export async function fakeProvider(answer: (request: FakeChatRequest) => readonly string[] = () => REPLY): Promise<unknown[]> {
   await upstream();
   heard = [];
+  reply = answer;
   return heard;
 }
 
