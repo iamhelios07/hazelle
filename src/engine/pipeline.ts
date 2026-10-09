@@ -268,12 +268,9 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: recalled?.text ?? '', tools });
   const placed = prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'tool') ? 'slot' : 'implicit';
   const toolText = joined(tools.map(({ text }) => text));
-  if (placed === 'implicit' && toolText.trim()) {
-    const at = template.findIndex((part) => 'range' in part);
-    template.splice(at === -1 ? template.length : at, 0, { message: { role: 'system', content: toolText }, from: toolFrom(tools) });
-  }
   const out = (...parts: Sent[]) => template.push(...filled(parts));
   if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
+  if (placed === 'implicit' && toolText.trim()) out({ message: { role: 'system', content: toolText }, from: toolFrom(tools) });
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
 
   const messages = chat.texts

@@ -484,12 +484,17 @@ describe('tool prompt text', () => {
     expect(built.tools).toEqual({ placed: 'slot' });
   });
 
-  it('places one implicit system message immediately before the first chat slot', () => {
+  it('places implicit text after the template, preserving the history prefix across tool changes', () => {
     const base = input();
     const prompt = { ...base.scope.prompt, blocks: [{ id: 'top', name: null, kind: 'text' as const, role: 'system' as const, text: 'top', mark: null }, chat, { ...chat, id: 'again' }] };
     const built = assembledOf(assemble({ ...base, scope: { ...base.scope, prompt }, tools }));
     expect(built.messages[0]!.content).toBe('top');
-    expect(built.messages[1]).toMatchObject({ role: 'system', content: 'one {{getvar::untouched}}\n\ntwo' });
+    expect(built.messages.at(-1)).toMatchObject({ role: 'system', content: 'one {{getvar::untouched}}\n\ntwo' });
+    const next = assembledOf(assemble({ ...base, scope: { ...base.scope, prompt }, tools: [{ ...tools[0]!, text: 'new turn' }] }));
+    expect(next.messages.slice(0, -1)).toEqual(built.messages.slice(0, -1));
+    const continued = assembledOf(assemble({ ...base, scope: { ...base.scope, prompt }, tools, continuing: true }));
+    expect(continued.messages.at(-2)).toEqual(built.messages.at(-1));
+    expect(continued.parts.at(-1)!.from).toEqual({ kind: 'continue' });
     expect(built.parts.filter(({ from }) => from.kind === 'tool')).toHaveLength(1);
     expect(built.tools).toEqual({ placed: 'implicit' });
   });

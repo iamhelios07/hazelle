@@ -104,6 +104,15 @@ describe('addDefaults', () => {
 });
 
 describe('prompts', () => {
+  it('keeps memory last in the pre-chat context and changing tool text after history', async () => {
+    const { store } = await server.account();
+    const made = await addPrompt(store, 'New conversation', 'conversation');
+    if (!made.ok) throw new Error(made.error);
+    expect(made.data.value.blocks.map((block) => block.kind === 'slot' ? block.slot : block.kind)).toEqual([
+      'text', 'description', 'persona', 'lorebook', 'memory', 'chat', 'tool', 'text', 'authorNote', 'postEverything',
+    ]);
+  });
+
   it('copies a prompt as the user’s own, remembering its origin', async () => {
     const { store } = await server.account();
     const imported = await importPrompt(store, 'starter.risup', bytes);
