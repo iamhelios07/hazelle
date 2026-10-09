@@ -1,12 +1,13 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, renameSync, rmSync, statSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { createReadStream, createWriteStream, existsSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { backup, DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
-import { createGunzip, createGzip } from 'node:zlib';
+import { createGunzip } from 'node:zlib';
 import { StoreRules, type SqlValue, type StoreDb, type StoreReads, type Unavailable } from '../account-store';
 import { digest, fsyncPath, makeDirs } from './durable';
 import { openDatabase, type Db } from './service-db';
+import { archiveSnapshot } from './snapshot';
 import { transaction } from './transaction';
 
 // One account's database file, accounts/<incarnation>.sqlite, behind StoreRules (account-store.ts), and the registry
@@ -198,32 +199,15 @@ export class AccountDb implements StoreDb {
       const plain = join(dir, `.tmp-${id}.sqlite`);
       const gz = join(dir, `.tmp-${id}.sqlite.gz`);
       const rev = this.exec<{ rev: number }>('SELECT rev FROM head')[0]!.rev;
-      // VACUUM INTO takes a literal path and runs outside any transaction; the registry's queue keeps writers out.
-      this.db().exec(`VACUUM INTO '${plain.replaceAll("'", "''")}'`);
       try {
-        const copy = new DatabaseSync(plain, { readOnly: true });
-        try {
-          const [check] = copy.prepare('PRAGMA quick_check').all() as { quick_check: string }[];
-          if (check?.quick_check !== 'ok') throw new Error(`snapshot of ${this.incarnation} failed quick_check: ${check?.quick_check}`);
-        } finally {
-          copy.close();
-        }
-        const hash = createHash('sha256');
-        const { size: expanded } = statSync(plain);
-        let bytes = 0;
-        await pipeline(createReadStream(plain), createGzip(), async function* (chunks) {
-          for await (const chunk of chunks as AsyncIterable<Buffer>) {
-            hash.update(chunk);
-            bytes += chunk.length;
-            yield chunk;
-          }
-        }, createWriteStream(gz));
-        fsyncPath(gz);
+        // The registry keeps this account's writers queued until the copy and its catalog row are both complete.
+        await backup(this.db(), plain);
+        const { bytes, expanded, sha256 } = await archiveSnapshot(plain, gz);
         renameSync(gz, snapshotPath(this.dataDir, this.incarnation, id));
         fsyncPath(dir);
         await this.service
           .prepare('INSERT INTO snapshots (id, incarnation, kind, operation, taken_at, rev, bytes, expanded, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, hash.digest('hex'))
+          .bind(id, this.incarnation, kind, operation, takenAt, rev, bytes, expanded, sha256)
           .run();
       } finally {
         rmSync(plain, { force: true });

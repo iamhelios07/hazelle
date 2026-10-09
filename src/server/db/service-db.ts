@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { backup, DatabaseSync } from 'node:sqlite';
 import { transaction } from './transaction';
 
 // The service database (accounts, sessions, vaults, restores, snapshots, ...) behind the statement surface the route
@@ -20,6 +20,7 @@ export type Statement = {
 
 export type Db = {
   prepare(sql: string): Statement;
+  snapshot(path: string): Promise<void>;
   // One BEGIN IMMEDIATE … COMMIT, synchronous from the first statement to the commit: a statement's changes() is what
   // the statement before it did, which the signup, the reservation and the deletion chains gate on.
   batch<T = Row>(statements: Statement[]): Promise<Result<T>[]>;
@@ -65,6 +66,7 @@ export function serviceDb(db: DatabaseSync): Db {
   };
   return {
     prepare: (sql) => statement(sql, []),
+    snapshot: async (path) => { await backup(db, path); },
     batch: async <T>(statements: Statement[]) => transaction(db, () => statements.map((s) => (s as Internal)[EXECUTE]<T>())),
   };
 }

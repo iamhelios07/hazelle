@@ -27,7 +27,7 @@ beforeAll(() => {
   client = join(dir, 'client');
   mkdirSync(client);
   writeFileSync(join(client, 'index.html'), 'page');
-  buildSync({ entryPoints: ['src/server/node.ts', 'src/server/frontend-worker.ts'], bundle: true, platform: 'node', format: 'esm', target: 'node24', outdir: dirname(bundle), external: ['undici'], logLevel: 'silent' });
+  buildSync({ entryPoints: ['src/server/node.ts', 'src/server/frontend-worker.ts', 'src/server/db/snapshot-worker.ts'], bundle: true, platform: 'node', format: 'esm', target: 'node24', outdir: dirname(bundle), entryNames: '[name]', external: ['undici'], logLevel: 'silent' });
 }, 60_000);
 afterAll(() => {
   for (const child of children) child.kill('SIGKILL');
@@ -161,7 +161,7 @@ describe('the server process', () => {
       return false;
     };
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(await captured()).toBe(true);
+    expect(await captured(), server.log()).toBe(true);
     // The line follows the manifest by the listing the handler makes for the id.
     for (let attempt = 0; attempt < 100 && !server.log().includes('backup finished'); attempt++) await new Promise((resolve) => setTimeout(resolve, 20));
     expect(server.log()).toMatch(/"event":"backup finished","snapshots":"ok","generation":"ok","id":"\d+-/);

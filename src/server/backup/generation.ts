@@ -1,13 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { copyFile, link, open, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { copyFile, link, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { pipeline } from 'node:stream/promises';
-import { createGzip } from 'node:zlib';
 import type { AccountState, RestorePhase } from '../../contracts/admin';
 import { ACCOUNT_SCHEMA_VERSION, RETENTION_MS, snapshotPath } from '../db/account-db';
-import { digest, fsyncPath, makeDirs } from '../db/durable';
+import { fsyncPath, makeDirs } from '../db/durable';
+import { archiveSnapshot, type SnapshotArchive } from '../db/snapshot';
 import type { Services } from '../http';
 import { DAY_MS, pass, PINNED, staleBaselines, takeBaselines } from './snapshots';
 
@@ -24,7 +22,7 @@ const GENERATION = /^(\d+)-[0-9a-f]{8}$/;
 
 // bytes: the gzip on disk. expanded: what it gunzips to, measured on the plain file before it was gzipped (the gzip
 // trailer holds that only modulo 4 GiB).
-export type Artifact = { path: string; bytes: number; sha256: string; expanded: number };
+export type Artifact = { path: string } & SnapshotArchive;
 // accounts: every account the service snapshot holds, with the baseline its file is restored from; null only for a
 // leaving one, whose deletion a restore finishes. pictureBytes: the sizes of its stored pictures, which a restore copies
 // into every account that holds one. snapshots: those baselines, and every snapshot an operation pins. operations:
@@ -132,7 +130,7 @@ export async function captureGeneration(
     // An older baseline would restore the account as it was before its last rewind.
     const { failed } = await takeBaselines(env, await staleBaselines(env, clock(), 0));
     if (failed.length) throw new Error(`generation: ${failed.length} accounts could not be brought up to their last rewind`);
-    await env.db.prepare(`VACUUM INTO '${plain.replaceAll("'", "''")}'`).run();
+    await env.db.snapshot(plain);
     const { named, sources } = readNamed(plain, clock());
     const dirs = new Set<string>([pool]);
     for (const snapshot of named.snapshots) {
@@ -149,15 +147,13 @@ export async function captureGeneration(
     return named;
   });
   const compressed = `${plain}.gz`;
-  await pipeline(createReadStream(plain), createGzip(), createWriteStream(compressed));
-  fsyncPath(compressed);
-  const { size: expanded } = await stat(plain);
+  const artifact = await archiveSnapshot(plain, compressed);
   await rm(plain);
   const manifest: Manifest = {
     version: 1,
     id,
     capturedAt: now,
-    service: { path: 'service.sqlite.gz', ...(await digest(compressed)), expanded },
+    service: { path: 'service.sqlite.gz', ...artifact },
     accountSchema: ACCOUNT_SCHEMA_VERSION,
     ...named,
     snapshots: named.snapshots,

@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Statement } from '../db/service-db';
 import type { Services } from '../http';
 import { beginRestore, runRestore } from '../lifecycle';
 import { proof, sessionCookie, signupBody, testApp } from '../testing';
@@ -66,7 +65,7 @@ function serviceOf(manifest: Manifest) {
 }
 
 // env whose service snapshot waits until released: the gate is held from before it until after the links.
-function pausedAtVacuum() {
+function pausedAtSnapshot() {
   let reach = () => {};
   let release = () => {};
   const reached = new Promise<void>((resolve) => (reach = resolve));
@@ -75,11 +74,7 @@ function pausedAtVacuum() {
     ...t.env,
     db: {
       ...t.env.db,
-      prepare: (sql) => {
-        const real = t.env.db.prepare(sql);
-        if (!sql.startsWith('VACUUM INTO')) return real;
-        return { ...real, run: async () => (reach(), await released, real.run()) } as Statement;
-      },
+      snapshot: async (path) => { reach(); await released; await t.env.db.snapshot(path); },
     },
   };
   return { env, reached, release };
@@ -99,7 +94,7 @@ describe('a backup generation', () => {
     expect((await t.post('reports', { text: 'restore' }, rewinder.cookie)).status).toBe(204);
     const report = (await t.env.db.prepare('SELECT id FROM reports').first<number>('id'))!;
 
-    const paused = pausedAtVacuum();
+    const paused = pausedAtSnapshot();
     const now = Date.now();
     const capturing = t.env.backups.daily(paused.env, now);
     await paused.reached;

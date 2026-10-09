@@ -20,8 +20,9 @@ costs one fsync per commit and buys that an acknowledged commit survives power l
 account's deletion and relies on it.
 
 A file is durable before any row says so. A picture: write `.tmp-<random>`, fsync it, rename, fsync the directory, then the service
-commit that sets `stored = 1`. A snapshot: `VACUUM INTO` a temp copy, `quick_check`, gzip to a second temp file, fsync, rename, fsync the
-directory, then the `snapshots` row. An account file at signup: schema and `head` written, checkpointed, fsynced, directory fsynced, then
+commit that sets `stored = 1`. A snapshot: SQLite's asynchronous online backup makes a temp copy while the account queue holds its
+writers; an archive worker compacts that private copy, runs `quick_check`, gzips it and fsyncs the gzip. The owner then renames it,
+fsyncs the directory and writes the `snapshots` row. An account file at signup: schema and `head` written, checkpointed, fsynced, directory fsynced, then
 the account's row. A directory made on the way is synced into its parent too (`makeDirs`, `durable.ts`). Deletion is the reverse: the service commit first, then the files. A crash between the two leaves a file with no row,
 which the hourly reconciliation (`reconcile.ts`) removes once it is an hour old; it never leaves a row with no file.
 
@@ -48,9 +49,9 @@ and the install check the snapshot's size and SHA-256 against its row, and a mis
 
 Backup generations (`src/server/backup/generation.ts`), captured by the daily job after the baselines: while a gate keeps signup,
 deletion and every rewind step out (ordinary writes go on), every active account with no current baseline gets one, as does one
-restoring before its checkpoint whose current baseline is from before today unless its file is unchanged since, `VACUUM INTO` copies the service, and what that copy names is hard-linked (copied across filesystems) into
+restoring before its checkpoint whose current baseline is from before today unless its file is unchanged since, `Db.snapshot` makes an online copy of the service, and what that copy names is hard-linked (copied across filesystems) into
 the generation: each account's newest baseline, every pinned snapshot, every picture whose `account_files` row says `stored = 1`
-into the pool. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The service copy is then gzipped and `manifest.json` written last (temp,
+into the pool. Across filesystems the copy goes to a `.tmp-*` name, is synced and renamed, so a name in the pool is always whole. The gate's length is `backup_runs.gate_ms`. The archive worker then compacts, checks and gzips the service copy, and `manifest.json` is written last (temp,
 fsync, rename, directory fsync); it lists every artifact with its SHA-256 (a picture's id is its SHA-256) and a database's size gzipped and gunzipped, each account's stored picture bytes, the migrations applied,
 the account schema version, and every operation not done or not yet seen ending. A directory without a manifest is cut off and goes
 after a day; a generation goes at 7 days, then every pooled picture no remaining manifest names.
