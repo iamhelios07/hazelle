@@ -10,9 +10,17 @@ import type { Session } from '../session';
 import { answerable, testServer } from '../testing';
 import { inProcessTools } from '../testing/tool-transport';
 import { ToolHost } from './host';
+import type { OpenFrame } from './frame';
 import { importTool, setToolData, setToolSettings, toolData, toolDataId } from './store';
 
 const server = testServer();
+function withTools(test: (session: Session, connect: (open: OpenFrame) => ToolHost) => Promise<void>) {
+  let open!: OpenFrame;
+  return server.withSession((session) => test(session, (transport) => {
+    open = transport;
+    return session.tools as ToolHost;
+  }), (session, scripts) => new ToolHost(session, scripts, (page) => open(page)));
+}
 const source = (version = '1', uses = '//@uses model\n') => {
   const result = readTool(new TextEncoder().encode(`//@api 1\n//@name test\n//@author jin\n//@version ${version}\n${uses}//@page Open\n//@menu now Now\n//@setting {"key":"title","type":"text","label":"Title","default":"A"}`));
   if (!result.ok) throw new Error('fixture');
@@ -34,7 +42,7 @@ async function fixture(session: Session, uses?: string) {
 }
 const page = (chat: string | null = null) => ({ window: {} as Window, chat, theme: 'dark' as const, close: vi.fn() });
 
-it('handshakes once, memoizes event reads, and sends only changed message tails', () => server.withSession(async (session) => {
+it('handshakes once, memoizes event reads, and sends only changed message tails', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools((api) => {
     api.on('prompt', async (chat) => {
@@ -44,12 +52,12 @@ it('handshakes once, memoizes event reads, and sends only changed message tails'
       return messages.at(-1)!.text;
     });
   });
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   const reads = vi.spyOn(session.files, 'read');
   const states = vi.spyOn(session.store.evaluation, 'state');
   try {
     await host.warm(f.chat);
-    const run = async () => { const context = f.context(); return host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, context.host); };
+    const run = async () => { const context = f.context(); return host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host); };
     expect(await run()).toMatchObject({ value: 'hello', writes: [['tool:jin/test:summary', ' null']] });
     expect(states).toHaveBeenCalledTimes(1);
     expect(await run()).toMatchObject({ value: 'hello' });
@@ -60,15 +68,15 @@ it('handshakes once, memoizes event reads, and sends only changed message tails'
   } finally { host.close(); }
 }));
 
-it('refuses undeclared spending and forged event contexts, and isolates module storage', () => server.withSession(async (session) => {
+it('refuses undeclared spending and forged event contexts, and isolates module storage', () => withTools(async (session, connect) => {
   const f = await fixture(session, '');
   let answer: Hazelle.ModelAnswer | null = null;
   const transport = inProcessTools((api) => api.on('prompt', async (chat) => { answer = await chat.model('aux', [{ role: 'user', content: 'hi' }]); return null; }));
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   try {
     const context = f.context();
     const model = vi.fn<Host['model']>();
-    await host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, { ...context.host, model });
+    await host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, { ...context.host, model });
     expect(answer).toEqual({ ok: false, reason: 'not-declared' });
     expect(model).not.toHaveBeenCalled();
     const frame = transport.frames[0]!;
@@ -81,7 +89,7 @@ it('refuses undeclared spending and forged event contexts, and isolates module s
   } finally { host.close(); }
 }));
 
-it('times out a prompt without applying its late outcome, while model waits still answer pings', () => server.withSession(async (session) => {
+it('times out a prompt without applying its late outcome, while model waits still answer pings', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   let finish!: (value: Hazelle.ModelAnswer) => void;
   const transport = inProcessTools((api) => api.on('prompt', async (chat) => {
@@ -89,14 +97,14 @@ it('times out a prompt without applying its late outcome, while model waits stil
     chat.state.set('late', true);
     return 'late';
   }));
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   const context = f.context();
   const model = vi.fn<Host['model']>(() => new Promise((resolve) => { finish = (value) => resolve(value.ok ? { success: true, result: value.text } : { success: false, result: '', reason: value.reason }); }));
   try {
     await host.warm(f.chat);
     vi.useFakeTimers();
     const abort = new AbortController();
-    const running = host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, { ...context.host, model }, abort.signal);
+    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, { ...context.host, model }, abort.signal);
     const refused = expect(running).rejects.toBeInstanceOf(ToolLate);
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(10_000);
@@ -109,11 +117,11 @@ it('times out a prompt without applying its late outcome, while model waits stil
   } finally { vi.useRealTimers(); host.close(); }
 }));
 
-it('resets stalls after loading, then disables three consecutive stalled loads and tells once', () => server.withSession(async (session) => {
+it('resets stalls after loading, then disables three consecutive stalled loads and tells once', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools((api) => api.on('prompt', () => 'ready'));
   let silent = true;
-  const host = new ToolHost(session, () => session.scripts, (page) => {
+  const host = connect((page) => {
     const connection = transport.open(page);
     transport.frames.at(-1)!.sandbox.silent = silent;
     return connection;
@@ -121,7 +129,7 @@ it('resets stalls after loading, then disables three consecutive stalled loads a
   vi.spyOn(session.files, 'read').mockResolvedValue({ ok: true, data: source().bytes });
   const stall = async () => {
     const context = f.context();
-    const running = host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, context.host);
+    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host);
     const refused = expect(running).rejects.toBeInstanceOf(ToolStuck);
     await vi.advanceTimersByTimeAsync(8001);
     await refused;
@@ -144,11 +152,11 @@ it('resets stalls after loading, then disables three consecutive stalled loads a
     expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'stuck' && note.disabled)).toHaveLength(1);
     expect(transport.frames).toHaveLength(5);
     const context = f.context();
-    await expect(host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, context.host)).rejects.toMatchObject({ disabled: true });
+    await expect(host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host)).rejects.toMatchObject({ disabled: true });
   } finally { vi.useRealTimers(); host.close(); }
 }));
 
-it('waits for slow code and page chat reads before starting the load watchdog, and passes a missing persona as null', () => server.withSession(async (session) => {
+it('waits for slow code and page chat reads before starting the load watchdog, and passes a missing persona as null', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   let read!: () => void;
   vi.spyOn(session.files, 'read').mockImplementation(() => new Promise((resolve) => { read = () => resolve({ ok: true, data: source().bytes }); }));
@@ -161,7 +169,7 @@ it('waits for slow code and page chat reads before starting the load watchdog, a
   const context = f.context();
   vi.spyOn(session.scripts, 'pageContext').mockReturnValue({ ...context, scope: { ...context.scope, persona: null } });
   const transport = inProcessTools(() => {});
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   try {
     vi.useFakeTimers();
     host.page(f.module, page(f.chat));
@@ -178,7 +186,7 @@ it('waits for slow code and page chat reads before starting the load watchdog, a
 }));
 
 describe('tool storage transport', () => {
-  it('merges writes by key, fans out changes from both frames and other devices, and sends new settings', () => server.withSession(async (session) => {
+  it('merges writes by key, fans out changes from both frames and other devices, and sends new settings', () => withTools(async (session, connect) => {
     const f = await fixture(session);
     const changes: string[][] = [];
     const settings: Hazelle.Settings[] = [];
@@ -186,7 +194,7 @@ describe('tool storage transport', () => {
       api.storage.onChange((keys) => changes.push(keys));
       if (api.context === 'background') api.on('settings', (values) => { settings.push(values); });
     });
-    const host = new ToolHost(session, () => session.scripts, transport.open);
+    const host = connect(transport.open);
     const close = host.page(f.module, page());
     try {
       await host.warm(f.chat);
@@ -207,15 +215,15 @@ describe('tool storage transport', () => {
       await session.store.update('tooldata', object, () => ({ key: 'note', value: 'another device' }));
       await vi.waitFor(() => expect(changes).toHaveLength(4));
       expect(await a!.storage.get('note')).toBe('another device');
-      await setToolSettings({ store: session.store, tools: host }, f.module, { title: 'B' });
+      await setToolSettings(session, f.module, { title: 'B' });
       await vi.waitFor(() => expect(settings).toEqual([{ title: 'B' }]));
     } finally { vi.useRealTimers(); close(); host.close(); }
   }));
 
-  it('permits at most thirty store writes per minute per tool', () => server.withSession(async (session) => {
+  it('permits at most thirty store writes per minute per tool', () => withTools(async (session, connect) => {
     const f = await fixture(session);
     const transport = inProcessTools(() => {});
-    const host = new ToolHost(session, () => session.scripts, transport.open);
+    const host = connect(transport.open);
     try {
       await host.warm(f.chat);
       const api = transport.frames[0]!.api!;
@@ -232,10 +240,10 @@ describe('tool storage transport', () => {
   }));
 });
 
-it('restarts changed code, closes on deletion, idles without a page, and retains the file cache', () => server.withSession(async (session) => {
+it('restarts changed code, closes on deletion, idles without a page, and retains the file cache', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   const read = vi.spyOn(session.files, 'read');
   try {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -255,14 +263,14 @@ it('restarts changed code, closes on deletion, idles without a page, and retains
   } finally { vi.useRealTimers(); host.close(); }
 }));
 
-it('ignores malformed outcomes and all messages from a frame after it has closed', () => server.withSession(async (session) => {
+it('ignores malformed outcomes and all messages from a frame after it has closed', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   let release!: () => void;
   const transport = inProcessTools((api) => api.on('prompt', () => new Promise<string>((resolve) => { release = () => resolve('late'); })));
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   try {
     const context = f.context();
-    const running = host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, context.host);
+    const running = host.run(f.chat, f.tool(), context.scope, { kind: 'prompt' }, context.host);
     const refused = expect(running).rejects.toThrow('Invalid tool outcome');
     await vi.waitFor(() => expect(release).toBeDefined());
     const frame = transport.frames[0]!;
@@ -299,10 +307,10 @@ it('notifies a running tool after pulling a data change written on another devic
   } finally { host.close(); }
 });
 
-it('applies page chat writes through Scripts, distinguishes null and deletion, and keeps the page alive while open', () => server.withSession(async (session) => {
+it('applies page chat writes through Scripts, distinguishes null and deletion, and keeps the page alive while open', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   const descriptor = page(f.chat);
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const close = host.page(f.module, descriptor);
@@ -324,10 +332,10 @@ it('applies page chat writes through Scripts, distinguishes null and deletion, a
   } finally { vi.useRealTimers(); close(); host.close(); }
 }));
 
-it('allows a standalone page storage but refuses chat calls with no chat capability', () => server.withSession(async (session) => {
+it('allows a standalone page storage but refuses chat calls with no chat capability', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   const close = host.page(f.module, page());
   try {
     await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
@@ -339,10 +347,10 @@ it('allows a standalone page storage but refuses chat calls with no chat capabil
   } finally { close(); host.close(); }
 }));
 
-it('shares the write budget with forged page outcomes and bounds tool notices across ids', () => server.withSession(async (session) => {
+it('shares the write budget with forged page outcomes and bounds tool notices across ids', () => withTools(async (session, connect) => {
   const f = await fixture(session);
   const transport = inProcessTools(() => {});
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const host = connect(transport.open);
   const apply = vi.spyOn(session.scripts, 'pageWrite').mockResolvedValue();
   const close = host.page(f.module, page(f.chat));
   try {

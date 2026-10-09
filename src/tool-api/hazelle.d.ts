@@ -5,7 +5,8 @@ declare namespace Hazelle {
   // index: place after the greeting (index 0 = first message after it), as Lua counts. text: as the prompt reads it.
   interface Message { index: number; id: string; role: Role; text: string; time: number }
   interface ModelMessage { role: 'system' | 'user' | 'assistant'; content: string }
-  type ModelAnswer = { ok: true; text: string } | { ok: false; reason: 'not-allowed' | 'not-declared' | 'no-model' | 'flood' | 'failed' };
+  type ModelRefusal = 'not-allowed' | 'not-declared' | 'no-model' | 'flood' | 'failed';
+  type ModelAnswer = { ok: true; text: string } | { ok: false; reason: ModelRefusal };
   type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; options: string[] };
   type Settings = Record<string, string | number | boolean>;
 

@@ -2,11 +2,11 @@ import type { PackOwner } from '../model/library';
 import type { Trigger } from './import/types';
 
 export type ScriptUnit = Trigger & { owner: PackOwner };
-export type ModelRefusal = 'not-allowed' | 'not-declared' | 'no-model' | 'flood' | 'failed';
+export type ModelRefusal = Hazelle.ModelRefusal;
 export type ModelResult = { success: true; result: string } | { success: false; result: string; reason: ModelRefusal };
 
-export type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; options: string[] };
-export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+export type Question = Hazelle.Question;
+export type ModelMessage = Hazelle.ModelMessage;
 
 // What a script reaches outside its run, each of which may take as long as the user or a provider does.
 export type Host = {
@@ -21,10 +21,13 @@ export type Host = {
 };
 
 export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
-export type Event =
+export type ToolEvent =
   | { kind: 'reply'; index: number; id: string }
-  | { kind: 'prompt' | 'settings' }
-  | { kind: 'menu'; item: string }
+  | { kind: 'prompt' }
+  | { kind: 'menu'; item: string };
+export type Event =
+  | ToolEvent
+  | { kind: 'settings' }
   | { kind: 'input' | 'start' | 'output' }
   | { kind: 'button'; data: string }
   // A press on risu-trigger: each Lua script's own global function of that name, and each block trigger of that name

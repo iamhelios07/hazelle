@@ -1,3 +1,5 @@
+import type { ToolEvent } from '../engine/script-api';
+import type { createTools } from './tools/host';
 import type { Binding } from './script-binding';
 import type { ToolUnit } from '../model/tool';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
@@ -162,11 +164,11 @@ export function testServer() {
     wipe: () => app.reset(),
     // A session on an account of its own, closed when test ends. keepSynced listens on the window and
     // pulls only while the tab is visible, so a hidden one never pulls on its own.
-    async withSession(test: (session: Session) => Promise<void>, tools?: Binding<ToolUnit>) {
+    async withSession(test: (session: Session) => Promise<void>, tools?: Binding<ToolUnit, ToolEvent> | typeof createTools) {
       vi.stubGlobal('window', new EventTarget());
       vi.stubGlobal('document', { visibilityState: 'hidden' });
       const { accountId, vaultKey } = await harness.account();
-      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { tools, lua: async () => {
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { tools: typeof tools === 'function' ? tools : tools && (() => ({ ...tools, warm: async () => {}, menus: () => [], page: () => () => {} })), lua: async () => {
         const machine = await lua;
         return { run: (chat, units, scope, event, host) => runEvent(machine, chat, units, scope, event, host), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
       } });

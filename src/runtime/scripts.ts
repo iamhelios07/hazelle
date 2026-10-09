@@ -8,7 +8,7 @@ import { Runaway } from '../engine/cbs/evaluate';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { Event, Outcome, ScriptUnit, ModelResult, ModelRefusal } from '../engine/script-api';
+import type { Event, ToolEvent, Outcome, ScriptUnit, ModelResult, ModelRefusal } from '../engine/script-api';
 import type { Host, ModelMessage, Question } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Writes } from '../model/chat';
@@ -68,9 +68,9 @@ export const triggersOf = (packs: ReturnType<typeof packsOf>): ScriptUnit[] => p
 );
 export const scriptsOf = (packs: ReturnType<typeof packsOf>) => triggersOf(packs).filter((trigger): trigger is Extract<ScriptUnit, { kind: 'lua' }> => trigger.kind === 'lua');
 
-type Units = { lua: ScriptUnit[] } | { tools: ToolUnit[] } | { page: { module: string; outcome: ScriptOutcome } };
+type Units = { lua: ScriptUnit[]; event: Event } | { tool: ToolUnit; event: ToolEvent };
 
-const ownerOf = (units: Units): PackOwner | null => 'tools' in units ? { kind: 'module', id: units.tools[0]!.module } : 'page' in units ? { kind: 'module', id: units.page.module } : null;
+const ownerOf = (units: Units): PackOwner | null => 'tool' in units ? { kind: 'module', id: units.tool.module } : null;
 
 type Anchor = { version: string; stays?: true };
 
@@ -92,7 +92,7 @@ export class Scripts {
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; display: Pick<ScriptDisplay, 'stale'> },
-    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit> },
+    private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> },
   ) {
     this.unsubscribe = session.store.subscribe(() => {
       for (const [chat, last] of this.lastTools) {
@@ -152,7 +152,7 @@ export class Scripts {
       const { said } = first;
       if (said) {
         const history = (): ChatScope => ({ ...turn.scope, messages: turn.scope.messages.slice(0, -1) });
-        const input = await this.event(chat, { lua: scripts }, history(), { kind: 'input' }, null);
+        const input = await this.dispatch(chat, { lua: scripts, event: { kind: 'input' } }, history(), null);
         let { stop, writes: before } = input.outcome;
         let text = said.text;
         // A stop ends the turn where it is called: what would have run after it does not, and the message is saved
@@ -162,7 +162,7 @@ export class Scripts {
             const failed = await regather(false);
             if (failed) return failed;
           }
-          const edited = await this.event(chat, { lua: scripts }, { ...history(), pending: before }, { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } }, null);
+          const edited = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editInput', value: text, meta: { index: -1 } } }, { ...history(), pending: before }, null);
           before = [...before, ...edited.outcome.writes];
           if (typeof edited.outcome.value === 'string') text = edited.outcome.value;
           stop = edited.outcome.stop;
@@ -174,7 +174,7 @@ export class Scripts {
         if (failed) return failed;
       }
       if (signal.aborted) return halted;
-      const start = await this.event(chat, { lua: scripts }, turn.scope, { kind: 'start' }, null);
+      const start = await this.dispatch(chat, { lua: scripts, event: { kind: 'start' } }, turn.scope, null);
       if (start.outcome.stop) {
         const last = turn.scope.messages.at(-1);
         const saved = last && (await appendScripted(this.session.store, chat, { edits: [], removed: [], added: [], vars: { version: last.id, set: start.outcome.writes } }));
@@ -198,7 +198,7 @@ export class Scripts {
     const scripts = scriptsOf(packsOf(this.session.store, turn.chat));
     if (scripts.length === 0) return { messages, writes: [] };
     return this.queued(chat, async () => {
-      const { outcome } = await this.event(chat, { lua: scripts }, turn.scope, { kind: 'edit', stage: 'editRequest', value: messages, meta: {} }, null);
+      const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editRequest', value: messages, meta: {} } }, turn.scope, null);
       if (!outcome.handled) return { messages, writes: outcome.writes };
       const edited = Array.isArray(outcome.value) ? outcome.value.flatMap((message: unknown): ChatMessage[] => {
         if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
@@ -216,7 +216,7 @@ export class Scripts {
       const messages = this.session.read.chat(chat).snapshot()?.messages ?? [];
       const at = reply.message === null ? -1 : messages.findIndex((message) => message.id === reply.message);
       const scope = { ...scopeOf(this.session, chat, stored.value, at === -1 ? messages : messages.slice(0, at)), pending: reply.before ?? [] };
-      const { outcome } = await this.event(chat, { lua: scripts }, scope, { kind: 'edit', stage: 'editOutput', value: reply.text, meta: { index: -1 } }, null);
+      const { outcome } = await this.dispatch(chat, { lua: scripts, event: { kind: 'edit', stage: 'editOutput', value: reply.text, meta: { index: -1 } } }, scope, null);
       const before = [...(reply.before ?? []), ...outcome.writes];
       return { ...reply, text: typeof outcome.value === 'string' ? outcome.value : reply.text, ...(before.length > 0 && { before }) };
     });
@@ -252,7 +252,7 @@ export class Scripts {
         const timer = setTimeout(() => deadline.abort(new ToolLate()), 5000);
         try {
           const scope = { ...turn.scope, pending: [...(first.scope.pending ?? []), ...writes] };
-          const { outcome, changed } = await this.event(chat, { tools: [unit] }, scope, { kind: 'prompt' }, null, stop, () => clearTimeout(timer));
+          const { outcome, changed } = await this.dispatch(chat, { tool: unit, event: { kind: 'prompt' } }, scope, null, stop, () => clearTimeout(timer));
           writes.push(...outcome.writes);
           if (stop.aborted) { this.lastTools.get(chat)?.delete(`${unit.module}:${unit.tool.file.id}`); continue; }
           if (changed) {
@@ -278,7 +278,7 @@ export class Scripts {
       const tool = toolsOf(this.session.store, this.session.store.get('chat', chat)!.value).find((unit) => unit.module === module);
       if (!tool || !tool.tool.manifest.menu.some((each) => each.id === item)) return;
       const last = context.scope.messages.at(-1)?.id;
-      await this.event(chat, { tools: [tool] }, context.scope, { kind: 'menu', item }, last ? { version: last, stays: true } : null, this.closing.signal);
+      await this.dispatch(chat, { tool, event: { kind: 'menu', item } }, context.scope, last ? { version: last, stays: true } : null, this.closing.signal);
     });
   }
 
@@ -294,7 +294,7 @@ export class Scripts {
       const context = this.pageContext(chat, module);
       if (!context) return;
       const last = context.scope.messages.at(-1)?.id;
-      await this.event(chat, { page: { module, outcome } }, context.scope, { kind: 'menu', item: '' }, last ? { version: last, stays: true } : null);
+      await this.event(chat, context.scope, outcome, last ? { version: last, stays: true } : null, { kind: 'module', id: module });
     });
   }
 
@@ -315,7 +315,7 @@ export class Scripts {
         if (await lease.ready || this.closing.signal.aborted) return;
         if (!toolsOf(store, store.get('chat', chat)!.value).some((current) => current.module === unit.module && current.tool.file.id === unit.tool.file.id)) return;
         for (const { id, chat: asked } of this.state.questions) if (asked === chat) this.answer(id, null);
-        await this.event(chat, { tools: [unit] }, scope, { kind: 'reply', index, id: reply.id }, { version: reply.id }, this.closing.signal);
+        await this.dispatch(chat, { tool: unit, event: { kind: 'reply', index, id: reply.id } }, scope, { version: reply.id }, this.closing.signal);
       }).catch((error: unknown) => this.report(chat, error, { kind: 'module', id: unit.module })).finally(() => {
         lease.release();
         if (this.replies.get(key) === next) this.replies.delete(key);
@@ -338,37 +338,42 @@ export class Scripts {
     if (!stored || scripts.length === 0) return Promise.resolve(null);
     return this.queued(chat, async () => {
       const scope = scopeOf(this.session, chat, stored.value, this.session.read.chat(chat).snapshot()?.messages ?? []);
-      const { outcome } = await this.event(chat, { lua: scripts }, scope, event, anchor(scope.messages.at(-1)?.id ?? null));
+      const { outcome } = await this.dispatch(chat, { lua: scripts, event }, scope, anchor(scope.messages.at(-1)?.id ?? null));
       return outcome.handled;
     });
   }
 
+  private async dispatch(chat: string, units: Units, scope: ChatScope, anchor: Anchor | null, signal?: AbortSignal, finished?: () => void) {
+    const outcome = await this.run(chat, units, scope, signal).finally(finished);
+    return this.event(chat, scope, outcome, anchor, ownerOf(units), units.event.kind === 'reply' ? units.event.id : undefined);
+  }
+
   // anchor: where its writes stand; null leaves them to the caller.
-  private async event(chat: string, units: Units, scope: ChatScope, event: Event, anchor: Anchor | null, signal?: AbortSignal, finished?: () => void): Promise<{ outcome: Outcome; changed: boolean }> {
-    const outcome = await this.run(chat, units, scope, event, signal).finally(finished);
+  private async event(chat: string, scope: ChatScope, outcome: ScriptOutcome, anchor: Anchor | null, from: PackOwner | null, reply?: string): Promise<{ outcome: Outcome; changed: boolean }> {
     const greeting = scope.greeting === null ? 0 : 1;
     const current = this.session.read.chat(chat).snapshot()?.messages ?? [];
     const messages = new Map(current.map((message) => [shown(message).id, message]));
     const latest = current.at(-1);
-    const stale = event.kind === 'reply' && (!latest || shown(latest).id !== event.id);
+    const stale = reply !== undefined && (!latest || shown(latest).id !== reply);
     // A reply handler may always keep state/storage and edit its own shown reply. Adds and other edits
     // land only while that reply is still the latest shown version; a delayed job cannot rewrite a newer story.
-    if (stale && (outcome.added.length || outcome.edits.some(({ index }) => scope.messages[index + greeting]?.id !== event.id))) this.tell(chat, 'stale-reply', { kind: 'stale-reply' }, ownerOf(units));
+    if (stale && (outcome.added.length || outcome.edits.some(({ index }) => scope.messages[index + greeting]?.id !== reply))) this.tell(chat, 'stale-reply', { kind: 'stale-reply' }, from);
     const at = (index: number) => messages.get(scope.messages[index + greeting]?.id ?? '');
     const edits = outcome.edits.flatMap(({ index, text, wrote }) => {
       const message = at(index);
-      return message && (!stale || event.kind === 'reply' && shown(message).id === event.id) ? [{ message, wrote, text }] : [];
+      return message && (!stale || shown(message).id === reply) ? [{ message, wrote, text }] : [];
     });
     const removed = outcome.removed.flatMap((index) => at(index)?.id ?? []);
     const added = (stale ? [] : outcome.added).map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
-    if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved }, ownerOf(units));
+    if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved }, from);
     if (outcome.reload) this.session.display.stale(chat);
     return { outcome, changed: edits.length + removed.length + added.length > 0 };
   }
 
   // A run that cannot be made (a worker that would not start, a script that held it) leaves the chat as it was.
-  private async run(chat: string, units: Units, scope: ChatScope, event: Event, signal?: AbortSignal): Promise<ScriptOutcome> {
+  private async run(chat: string, units: Units, scope: ChatScope, signal?: AbortSignal): Promise<ScriptOutcome> {
+    const { event } = units;
     const nothing = { ...noOutcome(), value: event.kind === 'edit' ? event.value : undefined };
     if (this.closing.signal.aborted || signal?.aborted) return nothing;
     const from = ownerOf(units);
@@ -376,7 +381,7 @@ export class Scripts {
       const host = this.host(chat, scope, signal);
       const running = 'lua' in units
         ? this.bindings.lua().then((runner) => runner.run(chat, units.lua, scope, event, host))
-        : 'tools' in units ? this.bindings.tools.run(chat, units.tools, scope, event, host, signal) : Promise.resolve(units.page.outcome);
+        : this.bindings.tools.run(chat, units.tool, scope, units.event, host, signal);
       let stop = () => {};
       const stopped = new Promise<never>((_, reject) => {
         stop = () => reject(signal?.reason instanceof ToolLate ? signal.reason : new ToolStopped());

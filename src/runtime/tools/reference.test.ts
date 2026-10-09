@@ -3,11 +3,9 @@ import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
 import { readTool } from '../../engine/import/tool';
 import { fold, shown } from '../../model/chat';
-import type { ToolUnit } from '../../model/tool';
 import { appendUserMessage, selectVersion, startChat } from '../chat-log';
 import { setDefaultModel } from '../assignment';
 import { setModuleAlways } from '../modules';
-import type { Binding } from '../script-binding';
 import type { Session } from '../session';
 import { answerable, saying, stubRelay, testServer } from '../testing';
 import { inProcessTools } from '../testing/tool-transport';
@@ -48,10 +46,8 @@ it('runs the reference notepad page and background, saves through merged storage
     if (api.context === 'page') pages.push(document);
     runInNewContext(code, { hazelle: api, document }, { timeout: 1000 });
   });
-  let host!: ToolHost;
-  const binding: Binding<ToolUnit> = { run: (...args) => host.run(...args), close: () => host.close() };
   await server.withSession(async (session) => {
-    host = new ToolHost(session, () => session.scripts, transport.open);
+    const host = session.tools;
     const module = await imported(session, 'notepad');
     const chat = await chatOf(session);
     await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
@@ -64,22 +60,19 @@ it('runs the reference notepad page and background, saves through merged storage
       note.dispatchEvent(new Event('input'));
       await vi.waitFor(() => expect(toolData(session.store, module, 'note')).toBe(note.value), { timeout: 3000 });
       await vi.waitFor(() => expect(pages[0]!.body.children.at(-1)!.textContent).toBe('저장했어요'));
-      await setToolSettings({ store: session.store, tools: host }, module, { title: 'My notes' });
+      await setToolSettings(session, module, { title: 'My notes' });
       await vi.waitFor(() => expect(pages[0]!.body.children[0]!.textContent).toBe('My notes'));
       close();
       close = open();
       await vi.waitFor(() => expect(pages[1]?.body.children.find(({ tag }) => tag === 'textarea')?.value).toBe('A note kept in the vault'));
       expect(transport.frames.filter(({ page }) => !page)).toHaveLength(1);
     } finally { close(); }
-  }, binding);
+  }, (session, scripts) => new ToolHost(session, scripts, transport.open));
 });
 
 it('runs reference memory through real Scripts, the aux connection, the tool slot, and version replay', async () => {
   const transport = inProcessTools((api, code) => { runInNewContext(code, { hazelle: api }, { timeout: 1000 }); });
-  let host!: ToolHost;
-  const binding: Binding<ToolUnit> = { run: (...args) => host.run(...args), close: () => host.close() };
   await server.withSession(async (session) => {
-    host = new ToolHost(session, () => session.scripts, transport.open);
     await answerable(session);
     const connection = session.store.list('connection')[0]!.id;
     await setDefaultModel(session.store, 'aux', { connection, model: 'm' });
@@ -113,5 +106,5 @@ it('runs reference memory through real Scripts, the aux connection, the tool slo
     expect(session.talk.sent(replacement)!.prompt.messages.some(({ content }) => content === 'summary 2')).toBe(false);
     await selectVersion(session.store, chat, messages()[3]!.id, original);
     expect(JSON.parse(shown(messages()[3]!).after!.find(([name]) => name === key)![1])).toBe('summary 2');
-  }, binding);
+  }, (session, scripts) => new ToolHost(session, scripts, transport.open));
 });

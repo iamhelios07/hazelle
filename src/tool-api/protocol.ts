@@ -1,8 +1,8 @@
 import type { Json, Settings, ToolManifest } from './manifest';
 
-export type EventName = 'reply' | 'prompt' | 'menu' | 'settings' | 'message';
-export type ChatHeader = { id: string; character: { name: string; description: string } | null; persona: { name: string; description: string } | null; length: number };
-export type Message = { index: number; id: string; role: 'user' | 'char'; text: string; time: number };
+export type EventName = keyof Hazelle.Events;
+export type ChatHeader = Pick<Hazelle.Chat, 'id' | 'character' | 'persona' | 'length'>;
+export type Message = Hazelle.Message;
 export type ToolOutcome = { value?: string | null; writes: [string, Json | undefined][]; edits: { index: number; text: string }[]; added: { role: 'user' | 'char'; text: string }[] };
 export type Method = 'chat.messages' | 'chat.state.get' | 'model' | 'ask' | 'say' | 'tokens' | 'lore' | 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'settings' | 'post' | 'page.close';
 export type Down =

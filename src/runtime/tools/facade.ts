@@ -6,5 +6,4 @@ export type Tools = {
   warm(chat: string): Promise<void>;
   menus(chat: string): ToolMenu[];
   page(module: string, page: ToolPage): () => void;
-  settingsChanged(module: string): void;
 };

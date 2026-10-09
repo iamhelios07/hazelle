@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { readTool } from '../../engine/import/tool';
 import { toolId } from '../../model/tool';
 import { setModuleDeleted } from '../modules';
@@ -20,10 +20,7 @@ describe('tool storage', () => {
     const added = await importTool(store, files, source());
     if (!added.ok) throw new Error(added.error);
     const module = added.data.id;
-    const changed = vi.fn();
-    const tools = { warm: async () => {}, menus: () => [], page: () => () => {}, settingsChanged: changed };
-    expect((await setToolSettings({ store, tools }, module, { title: 'mine' })).ok).toBe(true);
-    expect(changed).toHaveBeenCalledWith(module);
+    expect((await setToolSettings({ store }, module, { title: 'mine' })).ok).toBe(true);
     await setToolData(store, module, 'note', { text: 'hello' });
     await store.update('module', module, (current) => ({ ...current, botModels: true }));
     const updated = await importTool(store, files, source('1.1', '//@uses model\n'));
@@ -68,6 +65,7 @@ describe('tool storage', () => {
     const added = await importTool(store, files, source());
     if (!added.ok) throw new Error(added.error);
     const module = added.data.id;
+    expect(toolId('01234567-89ab-4def-8123-456789abcdef')).toBe('fedcba98-89ab-4def-8123-456789abcdef');
     expect(await toolDataId(module, 'a')).toBe(await toolDataId(module, 'a'));
     expect(await toolDataId(module, 'a')).not.toBe(await toolDataId(module, 'b'));
     expect((await setToolData(store, module, 'a', 1)).ok).toBe(true);

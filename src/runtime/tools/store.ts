@@ -73,10 +73,8 @@ export async function importTool(store: ObjectStore, files: Files, { manifest, b
 export const undoToolImport = (store: ObjectStore, module: string, previous: Tool) =>
   store.update('tool', toolId(module), (current) => live(store.get('module', module)) ? { ...previous, settings: toolSettings(previous.manifest, current.settings) } : null);
 
-export async function setToolSettings({ store, tools }: Pick<Session, 'store' | 'tools'>, module: string, change: Settings): Promise<ApiResult<unknown>> {
-  const saved = await store.update('tool', toolId(module), (current) => live(store.get('module', module)) ? { ...current, settings: { ...current.settings, ...Object.fromEntries(current.manifest.settings.flatMap((field) => Object.hasOwn(change, field.key) && fieldValue(field, change[field.key]) ? [[field.key, change[field.key]!]] : [])) } } : null);
-  if (saved.ok) tools.settingsChanged(module);
-  return saved;
+export async function setToolSettings({ store }: Pick<Session, 'store'>, module: string, change: Settings): Promise<ApiResult<unknown>> {
+  return store.update('tool', toolId(module), (current) => live(store.get('module', module)) ? { ...current, settings: { ...current.settings, ...Object.fromEntries(current.manifest.settings.flatMap((field) => Object.hasOwn(change, field.key) && fieldValue(field, change[field.key]) ? [[field.key, change[field.key]!]] : [])) } } : null);
 }
 
 // Every device addresses the same key. The module separates equal key names owned by different tools.

@@ -1,7 +1,7 @@
 import { isRecord } from '../../connectors/values';
 import { TOOL_FILE_BYTES } from '../../engine/import/tool';
 import { Runaway } from '../../engine/cbs/evaluate';
-import type { Event, Host, ModelMessage, Question } from '../../engine/script-api';
+import type { ToolEvent, Host, ModelMessage, Question } from '../../engine/script-api';
 import type { ChatScope } from '../../engine/render';
 import { live } from '../../model/library';
 import { toolId, toolVar, type Tool, type ToolUnit } from '../../model/tool';
@@ -76,7 +76,7 @@ function isOutcome(value: unknown): value is ToolOutcome {
 }
 const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
 
-export class ToolHost implements Tools, Binding<ToolUnit> {
+export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   private readonly entries = new Map<string, Entry>();
   private readonly code = new Map<string, Promise<string>>();
   private readonly stalls = new Map<string, number>();
@@ -102,7 +102,7 @@ export class ToolHost implements Tools, Binding<ToolUnit> {
     }));
   }
 
-  async run(chat: string, [unit]: ToolUnit[], scope: ChatScope, event: Event, host: Host, signal?: AbortSignal): Promise<ScriptOutcome> {
+  async run(chat: string, unit: ToolUnit, scope: ChatScope, event: ToolEvent, host: Host, signal?: AbortSignal): Promise<ScriptOutcome> {
     if (!unit || (event.kind !== 'reply' && event.kind !== 'prompt' && event.kind !== 'menu')) return noOutcome();
     const entry = this.entry(unit.module);
     if (entry.tool.file.id !== unit.tool.file.id || !this.allowed(chat, entry.module)) throw new ToolStopped();
@@ -141,7 +141,7 @@ export class ToolHost implements Tools, Binding<ToolUnit> {
     return () => { this.endFrame(frame, new ToolStopped()); this.idle(frame.entry); };
   }
 
-  settingsChanged(module: string) {
+  private settingsChanged(module: string) {
     const entry = this.entries.get(module);
     const tool = this.session.store.get('tool', toolId(module))?.value;
     if (!entry || !tool) return;
@@ -436,4 +436,4 @@ export class ToolHost implements Tools, Binding<ToolUnit> {
   }
 }
 
-export const createTools = (session: Pick<Session, 'store' | 'files'>, scripts: () => Scripts): Tools & Binding<ToolUnit> => new ToolHost(session, scripts);
+export const createTools = (session: Pick<Session, 'store' | 'files'>, scripts: () => Scripts): Tools & Binding<ToolUnit, ToolEvent> => new ToolHost(session, scripts);
