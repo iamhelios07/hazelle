@@ -325,3 +325,14 @@ it('passes the owner of each Lua and block script through its host calls', async
   expect(say).toHaveBeenCalledWith('normal', 'module', module);
   expect(ask).toHaveBeenCalledWith({ kind: 'input', text: 'ask' }, module);
 });
+
+it('ranks similarity’s values by likeness to its source, the source embedded as a search, and answers nil when refused', async () => {
+  const vectors: Record<string, number[]> = { 비: [1, 0], 맑음: [0, 1], 소나기: [0.9, 0.1], 흐림: [0.5, 0.5] };
+  const embed = vi.fn<Host['embed']>(async (texts) => ({ ok: true, model: 'm', vectors: texts.map((each) => vectors[each]!) }));
+  const code = (name: string) => `onStart = async(function(id) local ranked = similarity(id, '비', {'맑음', '흐림', '소나기'}):await() setChatVar(id, '${name}', ranked and table.concat(ranked, ',') or 'nil') end)`;
+  const ranked = await run(code('ranked'), { kind: 'start' }, { embed });
+  expect(ranked).toMatchObject({ errors: [], missing: [], writes: [['ranked', '소나기,흐림,맑음']] });
+  expect(embed.mock.calls.map(([texts, as, spender]) => [texts, as, spender])).toEqual([[['비'], 'query', OWNER], [['맑음', '흐림', '소나기'], 'document', OWNER]]);
+  const refused = await run(code('refused'), { kind: 'start' }, { embed: async () => ({ ok: false, reason: 'not-allowed' }) });
+  expect(refused.writes).toEqual([['refused', 'nil']]);
+});

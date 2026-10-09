@@ -23,7 +23,7 @@ const KEY = 'lua';
 const DEAF = Symbol('no listener');
 
 const UNSUPPORTED = [
-  'setChatRole', 'insertChat', 'similarity', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
+  'setChatRole', 'insertChat', 'request', 'generateImage', 'getCharacterImage', 'getCharacterImageMain',
   'getPersonaImage', 'getPersonaImageMain', 'setName', 'setDescription', 'setCharacterFirstMessage', 'getBackgroundEmbedding', 'setBackgroundEmbedding',
   'upsertLocalLoreBook',
 ];
@@ -372,11 +372,36 @@ export class Lua {
     act('sleep', (_run, time: number) => new Promise((resolve) => setTimeout(() => resolve(true), time)));
     act('LLMMain', model('main'));
     act('axLLMMain', model('aux'));
+    // Risu's: the values, most alike to source first, the source embedded as a search and the values as what is searched,
+    // as Risu's own memory embeds them. nil when a call is refused or fails, as Risu answers a script it does not let call.
+    act('similarity', async (run, source: unknown, values: unknown) => {
+      const documents = Object.values((values ?? {}) as Record<string, unknown>).map(text);
+      const query = await run.host.embed([text(source)], 'query', run.owner);
+      if (!query.ok) return undefined;
+      const stored = await run.host.embed(documents, 'document', run.owner);
+      if (!stored.ok) return undefined;
+      const scores = stored.vectors.map((vector) => cosine(query.vectors[0]!, vector));
+      return documents.map((value, index) => ({ value, score: scores[index]! })).sort((a, b) => b.score - a.score).map(({ value }) => value);
+    });
 
     set('hash', async (_run, value: unknown) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text(value))))].map((byte) => byte.toString(16).padStart(2, '0')).join(''));
     engine.lua.global.set('logMain', () => {});
     for (const name of UNSUPPORTED) set(name, (run) => void run.missing.add(name));
   }
+}
+
+// Risu ranks by the dot product, which equals this for the normalized vectors most models answer; for the others
+// (Perplexity's) the dot product ranks by length too.
+function cosine(a: number[], b: number[]): number {
+  let dot = 0;
+  let left = 0;
+  let right = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * (b[i] ?? 0);
+    left += a[i]! * a[i]!;
+  }
+  for (const value of b) right += value * value;
+  return left && right ? dot / Math.sqrt(left * right) : 0;
 }
 
 // Closed once what it is running has ended.
