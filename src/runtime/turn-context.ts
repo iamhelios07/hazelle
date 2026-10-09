@@ -7,7 +7,7 @@ import type { CacheSend } from './cache';
 import { asSent, budgetOf, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
 import { cacheViewOf } from './generate';
-import { memoryInput } from './memory-read';
+import { memoryFill } from './memory-read';
 import { chatPersona, type PersonaSource } from './personas';
 import { modelProfile } from './profiles';
 import type { Session } from './session';
@@ -81,7 +81,7 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
     settings,
     scope,
     budget: budgetOf(route.model, sentSettings(session.store, route)),
-    memory: memoryInput(session.store, chat, stored.value, history),
+    memory: memoryFill(session.store, chat, stored.value, history),
     said,
     reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, continues },
   };
@@ -102,7 +102,7 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scrip
     const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
     const revisions = reads.map((read) => session.store.revision(read));
     if (turn === null || 'kind' in turn) return null;
-    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, tools: session.scripts.cachedTools(chat), continuing: false, memory: turn.memory }, signal);
+    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, ...session.scripts.cachedPrompt(chat, turn), continuing: false }, signal);
     if (signal?.aborted) return null;
     if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? null : { turn, prompt };
   }

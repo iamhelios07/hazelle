@@ -132,10 +132,24 @@ export function SentMemory({ sent, memory, onRecord }: { sent: Sent | null; memo
       </>
     );
   }
+  const unsent = !used.slot && <Text variant="note">프롬프트에 장기 기억 블록이 없거나 꺼져 있어서 기억을 보내지 않았어요.</Text>;
+  if (used.by !== null) {
+    return (
+      <>
+        {unsent}
+        <Facts variant="tiles" items={[{ label: '기억을 맡은 도구', value: used.by }, { label: '기억에 담긴 메시지', value: `${used.covered}개` }, cut]} />
+        {used.slot && used.text.trim() && (
+          <Section level={3} title="보낸 기억">
+            <CodeBlock variant="prose">{used.text}</CodeBlock>
+          </Section>
+        )}
+      </>
+    );
+  }
   const records = new Map([...(memory?.records ?? []), ...(memory?.chapters ?? [])].map((record) => [record.id, record]));
   return (
     <>
-      {!used.slot && <Text variant="note">프롬프트에 장기 기억 블록이 없거나 꺼져 있어서 기억을 보내지 않았어요.</Text>}
+      {unsent}
       <Facts
         variant="tiles"
         items={[

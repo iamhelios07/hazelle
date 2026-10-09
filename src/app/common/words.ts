@@ -25,6 +25,8 @@ export const TOOL = '도구';
 export const MODULE_MODELS = '모델 호출';
 export const MODULE_MODELS_HELP = '이 모듈이 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
 export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 따로 부르려고 해요' };
+export const MEMORY_CLAIM = '이 모듈이 장기 기억을 대신 맡으려고 해요';
+export const MEMORY_CLAIM_HELP = '허용하면 이 모듈을 쓰는 채팅에서는 기본 장기 기억이 쉬어요. 기록은 지우지 않아요.';
 export const TOOL_LATE = '도구가 늦어서 이번엔 빼고 보냈어요';
 export const TOOL_STALE = '다음 응답이 나와서 도구가 바꾼 내용은 넣지 않았어요';
 export const toolVersion = (version: string) => version || '알 수 없음';

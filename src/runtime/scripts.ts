@@ -1,7 +1,7 @@
 import { noOutcome, ToolLate, ToolStopped, ToolStuck, type Binding, type LuaRunner } from './script-binding';
 import { live, type PackOwner } from '../model/library';
 import { toolId, type ToolUnit } from '../model/tool';
-import type { PromptInput } from '../engine/pipeline';
+import type { MemoryFill, PromptInput } from '../engine/pipeline';
 import { saveToolChat, toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
 import { ChangeSignal } from '../change-signal';
 import { Runaway } from '../engine/cbs/evaluate';
@@ -14,7 +14,8 @@ import type { ChatScope } from '../engine/render';
 import { shown, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
 import { chatModel } from './assignment';
-import { setModels } from './pack';
+import { setModels, setTakesMemory } from './pack';
+import { memoryOwner } from './memory-read';
 import { appendCall, appendScripted, appendUserMessage, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
@@ -34,7 +35,8 @@ import type { Blocked, TurnContext } from './turn-context';
 // said: the script's own words (alertNormal, alertError, showAlert, a tool's say). The others are the app's about it.
 // no-model: a script called a model of a role the chat has none for. flood: it called models faster than the server
 // lets a chat's scripts (server/streams). late: a tool missed the prompt deadline and the turn went without its slot.
-// stuck: disabled once a tool stalled too often, until reload.
+// stuck: disabled once a tool stalled too often, until reload. memory-held: a tool the user let take the memory slot
+// cannot, since another tool before it in the chat holds it.
 // unsaved: what a run did to the chat could not be saved. runaway: the script's commands were stopped for making too
 // much text.
 type Note =
@@ -44,14 +46,15 @@ type Note =
   | { kind: 'stuck'; disabled?: true }
   | { kind: 'no-model'; role: Role }
   | { kind: 'late' }
+  | { kind: 'memory-held'; by: string }
   | { kind: 'stale-reply' }
   | { kind: 'flood' }
   | { kind: 'unsaved'; failure: ApiFailure }
   | { kind: 'runaway' };
 export type ScriptNote = { id: number; chat: string; from: PackOwner | null } & Note;
 // Consent is saved on the spender, not the chat's character: 'yes' allows it and 'no' refuses it.
-// A dismissal leaves it to be asked again.
-export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } };
+// A dismissal leaves it to be asked again. memory: a tool's claim on the memory slot, saved on its module.
+export type ScriptQuestion = { id: number; chat: string; from: PackOwner; question: Question | { kind: 'model' } | { kind: 'memory' } };
 export type ScriptsState = { notes: ScriptNote[]; questions: ScriptQuestion[] };
 
 export type Halted = { kind: 'halted' };
@@ -81,6 +84,9 @@ const ownerOf = (units: Units): PackOwner | null => 'tool' in units ? { kind: 'm
 
 type Anchor = { version: string; stays?: true };
 
+// A tool's last prompt answer in this session: its slot text, and its memory with the id it stands through.
+type Answered = { tool: string; memory: { text: string; through: string | null } | null };
+
 // The bot's scripts in the life of a chat (design §6.8). The only place that turns what a run did into entries.
 export class Scripts {
   private state: ScriptsState = { notes: [], questions: [] };
@@ -95,19 +101,19 @@ export class Scripts {
   private readonly lanes = new Map<string, Promise<void>>();
   private readonly notices = new ToolRate(TOOL_NOTICES_PER_MINUTE);
   private readonly unsubscribe: () => void;
-  private readonly lastTools = new Map<string, Map<string, string>>();
+  private readonly lastPrompt = new Map<string, Map<string, Answered>>();
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; display: Pick<ScriptDisplay, 'stale'> },
     private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit, ToolEvent> },
   ) {
     this.unsubscribe = session.store.subscribe(() => {
-      for (const [chat, last] of this.lastTools) {
+      for (const [chat, last] of this.lastPrompt) {
         const stored = live(session.store.get('chat', chat));
-        if (!stored || session.store.scopeState(chat) === 'unloaded') { this.lastTools.delete(chat); continue; }
+        if (!stored || session.store.scopeState(chat) === 'unloaded') { this.lastPrompt.delete(chat); continue; }
         const active = new Set(toolsOf(session.store, stored.value).map(({ module, tool }) => `${module}:${tool.file.id}`));
         for (const key of last.keys()) if (!active.has(key)) last.delete(key);
-        if (!last.size) this.lastTools.delete(chat);
+        if (!last.size) this.lastPrompt.delete(chat);
       }
     });
   }
@@ -128,7 +134,7 @@ export class Scripts {
   close() {
     this.closing.abort();
     this.unsubscribe();
-    this.lastTools.clear();
+    this.lastPrompt.clear();
     for (const { id } of this.state.questions) this.answer(id, null);
   }
 
@@ -236,46 +242,98 @@ export class Scripts {
     this.replyTools(chat, reply);
   }
 
-  cachedTools(chat: string): PromptInput['tools'] {
+  // What a send now would hold from the chat's tools, by their last answers in this session: the forecast's.
+  cachedPrompt(chat: string, turn: Pick<TurnContext, 'scope' | 'memory'>): Pick<PromptInput, 'tools' | 'memory'> {
     const stored = live(this.session.store.get('chat', chat));
-    if (!stored) return [];
-    return toolsOf(this.session.store, stored.value).flatMap(({ module, tool }) => {
-      const text = this.lastTools.get(chat)?.get(`${module}:${tool.file.id}`);
-      return text?.trim() ? [{ module, name: tool.manifest.displayName, text }] : [];
+    if (!stored) return { tools: [], memory: turn.memory };
+    const last = (unit: ToolUnit) => this.lastPrompt.get(chat)?.get(`${unit.module}:${unit.tool.file.id}`);
+    const tools = toolsOf(this.session.store, stored.value).flatMap((unit) => {
+      const text = last(unit)?.tool;
+      return text?.trim() ? [{ module: unit.module, name: unit.tool.manifest.displayName, text }] : [];
     });
+    const owner = memoryOwner(this.session.store, stored.value);
+    const memory = owner?.kind === 'tool' && last(owner.unit)?.memory;
+    return { tools, memory: memory ? this.memoryOf(chat, owner.unit, turn.scope, memory) : turn.memory };
   }
 
+  // Each tool's prompt event, in pack order, under a deadline: its slot text after the history, and for the one holding
+  // the memory slot, its memory in the slot's own place (design §6.10).
   async prompting(chat: string, first: TurnContext, again: () => ReturnType<Parameters<Scripts['starting']>[2]>, signal: AbortSignal): Promise<Started & { tools: PromptInput['tools'] }> {
     const units = toolsOf(this.session.store, first.chat);
     if (units.length === 0) return { turn: first, tools: [] };
+    const owner = memoryOwner(this.session.store, first.chat);
+    const holder = owner?.kind === 'tool' ? owner.unit : null;
     return this.queued(chat, async () => {
       const tools: PromptInput['tools'] = [];
       const writes: Writes = [];
       let turn = first;
+      let remembered: Answered['memory'] = null;
       for (const unit of units) {
         if (signal.aborted || this.closing.signal.aborted) break;
+        const from = { kind: 'module', id: unit.module } as const;
+        const holds = unit.module === holder?.module;
+        if (!holds && holder && unit.tool.manifest.uses.includes('memory') && this.session.store.get('module', unit.module)?.value.takesMemory) this.tell(chat, 'memory-held', { kind: 'memory-held', by: holder.tool.manifest.displayName }, from);
+        const key = `${unit.module}:${unit.tool.file.id}`;
+        const last = this.lastPrompt.get(chat) ?? new Map<string, Answered>();
+        this.lastPrompt.set(chat, last);
         const deadline = new AbortController();
         const stop = AbortSignal.any([signal, this.closing.signal, deadline.signal]);
         const timer = setTimeout(() => deadline.abort(new ToolLate()), 5000);
         try {
           const scope = { ...turn.scope, pending: [...(first.scope.pending ?? []), ...writes] };
-          const { outcome, changed } = await this.dispatch(chat, { tool: unit, event: { kind: 'prompt', turn: { memory: false } } }, scope, null, stop, () => clearTimeout(timer));
+          const { outcome, changed } = await this.dispatch(chat, { tool: unit, event: { kind: 'prompt', turn: { memory: holds } } }, scope, null, stop, () => clearTimeout(timer));
           writes.push(...outcome.writes);
-          if (stop.aborted) { this.lastTools.get(chat)?.delete(`${unit.module}:${unit.tool.file.id}`); continue; }
+          if (stop.aborted) {
+            // The memory it last gave still stands, as memory changes only at a boundary; recall is of the turn.
+            const kept = last.get(key)?.memory ?? null;
+            if (holds) remembered = kept;
+            if (kept) last.set(key, { tool: '', memory: kept });
+            else last.delete(key);
+            continue;
+          }
           if (changed) {
             const next = await again();
             if (!next) return { kind: 'gone' as const, tools };
             if ('kind' in next) return { ...next, tools };
             turn = next;
           }
-          const text = typeof outcome.value === 'string' ? outcome.value : '';
-          const last = this.lastTools.get(chat) ?? new Map<string, string>();
-          this.lastTools.set(chat, last.set(`${unit.module}:${unit.tool.file.id}`, text));
+          const answer = outcome.value as Hazelle.PromptAnswer | undefined;
+          const text = (typeof answer === 'object' && answer !== null ? answer.tool : answer) ?? '';
+          const memory = holds && typeof answer === 'object' && answer?.memory ? answer.memory : null;
+          if (holds) remembered = memory;
+          last.set(key, { tool: text, memory });
           if (text.trim()) tools.push({ module: unit.module, name: unit.tool.manifest.displayName, text });
         } finally { clearTimeout(timer); }
       }
-      return { tools, turn: { ...turn, scope: { ...turn.scope, pending: [...(first.scope.pending ?? []), ...writes] }, reply: { ...turn.reply, before: [...(first.reply.before ?? []), ...writes] } } };
+      const memory = holder && remembered ? this.memoryOf(chat, holder, turn.scope, remembered, true) : turn.memory;
+      return { tools, turn: { ...turn, memory, scope: { ...turn.scope, pending: [...(first.scope.pending ?? []), ...writes] }, reply: { ...turn.reply, before: [...(first.reply.before ?? []), ...writes] } } };
     });
+  }
+
+  // The last message a request always sends as it is (design §6.2), and one the chat does not hold, stand for nothing:
+  // the text goes, and no message leaves for it.
+  private memoryOf(chat: string, unit: ToolUnit, scope: ChatScope, memory: NonNullable<Answered['memory']>, tell = false): MemoryFill {
+    const at = memory.through === null ? -1 : scope.messages.findIndex((message) => message.message === memory.through);
+    const through = at === scope.messages.length - 1 ? -1 : at;
+    if (tell && memory.through !== null && through === -1) this.tell(chat, 'memory-through', { kind: 'failed', message: 'memory.through names no message before the last' }, { kind: 'module', id: unit.module });
+    return { kind: 'tool', name: unit.tool.manifest.displayName, text: memory.text, through };
+  }
+
+  // The memory claims of the chat's tools that the user has not answered, each asked once per module (design §6.10).
+  claims(chat: string) {
+    const { store } = this.session;
+    const stored = live(store.get('chat', chat));
+    if (!stored || this.closing.signal.aborted) return;
+    for (const { module, tool } of toolsOf(store, stored.value)) {
+      const key = `memory:${module}`;
+      if (!tool.manifest.uses.includes('memory') || store.get('module', module)?.value.takesMemory !== undefined || this.consents.has(key)) continue;
+      const deciding = this.ask(chat, { kind: 'memory' }, { kind: 'module', id: module }).then(async (answer) => {
+        if (answer === null) return false;
+        const saved = await setTakesMemory(store, module, answer === 'yes');
+        return saved.ok && answer === 'yes';
+      }).finally(() => this.consents.delete(key));
+      this.consents.set(key, deciding);
+    }
   }
 
   // A //@menu item: its writes stay with the last message, whichever version it shows.

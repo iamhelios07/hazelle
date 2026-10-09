@@ -2,10 +2,12 @@ import { isRecord } from '../connectors/values';
 import type { Change, Chapter, Fact, Line, Memory, MemoryRecord, Source, Thread, Written } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 
-// sent: the records and chapters sent. covered: the leading messages memory covers, which the chat slots leave out.
-// missing: how many of those went with no memory standing for them (stale, over the budget, forgotten, or the slot did
-// not reach the request). slot: whether the prompt holds 장기 기억 where it reaches the request, whatever memory holds.
-export type MemorySent = { sent: string[]; covered: number; missing: number; slot: boolean };
+// by: the tool that held the slot (design §6.10), null for the built-in memory. sent: the built-in memory's records and
+// chapters sent; text: what the tool's memory said. covered: the leading messages memory covers, which the chat slots
+// leave out. missing: how many of those went with no memory standing for them (stale, over the budget, forgotten, or
+// the slot did not reach the request). slot: whether the prompt holds 장기 기억 where it reaches the request, whatever
+// memory holds.
+export type MemorySent = ({ by: null; sent: string[] } | { by: string; text: string }) & { covered: number; missing: number; slot: boolean };
 
 // A record's or a chapter's. stale: its messages render differently now, so it waits (design §6.2, When the source
 // changes). chaptered: a record whose chapter is sent in its place. recall-over: a recalled record whose messages do

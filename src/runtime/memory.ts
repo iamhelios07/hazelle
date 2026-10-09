@@ -1,5 +1,5 @@
 import { ChangeSignal } from '../change-signal';
-import { chatMemory, memorySetup, sourcesOf } from './memory-read';
+import { chatMemory, memoryOwner, memorySetup, sourcesOf } from './memory-read';
 import { chatSent, type ChatSent } from './memory-view';
 import type { ModelSettings } from '../connectors/settings';
 import type { Phase } from '../connectors/types';
@@ -350,7 +350,9 @@ export class Rememberer {
       return;
     }
     const stored = live(this.session.store.get('chat', chat));
-    if (!stored || !memorySetup(this.session.store, stored.value).on || (!full && !chatMemory(this.session.store, chat).records.length)) return;
+    // A chat whose memory slot a tool holds keeps its records as they are, unsummarized, until the slot is the built-in
+    // memory's again (design §6.10).
+    if (!stored || memoryOwner(this.session.store, stored.value)?.kind !== 'built-in' || (!full && !chatMemory(this.session.store, chat).records.length)) return;
     if (full) this.full.add(chat);
     this.working.add(chat);
     void this.hold(chat, () => this.work(chat)).finally(() => this.done(chat));
@@ -403,8 +405,9 @@ export class Rememberer {
     const memory = chatMemory(store, chat);
     const sent = await chatSent(this.session, chat, 'memory', memory);
     if (!sent || 'kind' in sent) return sent;
-    const setup = memorySetup(store, sent.chat);
-    if (!setup.on) return null;
+    const owner = memoryOwner(store, sent.chat);
+    if (owner?.kind !== 'built-in') return null;
+    const { setup } = owner;
     const held = sent.standing!;
     const places = placesOf(sent.read.shown);
     const asked = [...memory.records, ...memory.chapters].find(({ id }) => id === this.asked.get(chat));

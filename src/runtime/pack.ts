@@ -111,6 +111,9 @@ export const sampleScript = (store: ObjectStore, owner: PackOwner, script: Regex
   store.evaluation.sample(`sample:${owner.id}:${script.id}`, script, text, signal).then((data) => ({ ok: true, data }), evaluationFailure);
 
 
+export const setTakesMemory = (store: ObjectStore, module: string, takesMemory: boolean): Promise<ApiResult<unknown>> =>
+  store.update('module', module, (current) => current.deleted === undefined ? { ...current, takesMemory } : null);
+
 export const setModels = (store: ObjectStore, { kind, id }: PackOwner, botModels: boolean): Promise<ApiResult<unknown>> =>
   kind === 'character'
     ? store.update('character', id, (current) => current.deleted === undefined ? { ...current, botModels } : null)

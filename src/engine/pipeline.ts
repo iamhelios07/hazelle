@@ -23,8 +23,12 @@ export type PromptInput = {
   // 이어 쓰기: the chat's messages end with the cut reply, and the continue instruction goes last.
   continuing: boolean;
   // null while the chat's memory is off.
-  memory: MemoryInput | null;
+  memory: MemoryFill | null;
 };
+
+// What fills the memory slot: the built-in memory, or the text the tool holding the slot gave (design §6.10). through:
+// the place in scope.messages of the last message the text stands for, −1 for none.
+export type MemoryFill = ({ kind: 'built-in' } & MemoryInput) | { kind: 'tool'; name: string; text: string; through: number };
 
 // Even the last message alone leaves the prompt over its budget.
 export type TooLong = { kind: 'too-long'; tokens: number; budget: number };
@@ -262,10 +266,12 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   const tokens = remembered(countTokens);
   const laid = lay(scope, scope.messages, chat.variables, seed, tokens, null);
   const { activation, named } = laid;
-  const recalled = memory && standing(memory.memory, { shown: memory.shown, roles: scope.messages.map(({ role }) => role), speakers: speakersOf(scope), texts: chat.texts }, memoryBudget(memory.budget, budget), tokens);
-  const covered = recalled?.covered ?? 0;
+  const recalled = memory?.kind === 'built-in' ? standing(memory.memory, { shown: memory.shown, roles: scope.messages.map(({ role }) => role), speakers: speakersOf(scope), texts: chat.texts }, memoryBudget(memory.budget, budget), tokens) : null;
+  const told = memory?.kind === 'tool' ? memory : null;
 
-  const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: recalled?.text ?? '', tools });
+  const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: told?.text ?? recalled?.text ?? '', tools });
+  // A tool's text stands for its messages only where it reaches the request: without it there, none leave.
+  const covered = told ? (slot && told.text.trim() ? told.through + 1 : 0) : (recalled?.covered ?? 0);
   const hasToolSlot = prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'tool');
   const toolText = joined(tools.map(({ text }) => text));
   const out = (...parts: Sent[]) => template.push(...filled(parts));
@@ -294,7 +300,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
-      memory: recalled && { sent: recalled.sent, covered, missing: slot ? covered - recalled.held : covered, slot },
+      memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
     };
   };

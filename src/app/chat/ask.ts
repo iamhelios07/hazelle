@@ -1,10 +1,10 @@
 import type { PackOwner } from '../../model/library';
 import type { ScriptQuestion } from '../../runtime/scripts';
-import { BOT_MODELS_HELP, MODEL_CONSENT, MODULE_MODELS_HELP } from '../common/words';
+import { BOT_MODELS_HELP, MEMORY_CLAIM, MEMORY_CLAIM_HELP, MODEL_CONSENT, MODULE_MODELS_HELP } from '../common/words';
 import type { AskAnswer } from '../ui';
 
 // Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
-// option's index, and for a model call 'yes' or 'no'.
+// option's index, and for a model call or a memory claim 'yes' or 'no'.
 export function asking(question: ScriptQuestion['question'], owner: PackOwner['kind']): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {
     case 'input':
@@ -19,5 +19,7 @@ export function asking(question: ScriptQuestion['question'], owner: PackOwner['k
         help: owner === 'module' ? MODULE_MODELS_HELP : BOT_MODELS_HELP,
         answer: { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] },
       };
+    case 'memory':
+      return { text: MEMORY_CLAIM, help: MEMORY_CLAIM_HELP, answer: { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] } };
   }
 }

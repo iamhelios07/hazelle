@@ -85,7 +85,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const copy = useCopy();
   const id = item ? chatId : null;
   const tools = useChatTools(id);
-  useEffect(() => { if (id) void session.tools.warm(id); }, [id, tools]);
+  useEffect(() => {
+    if (!id) return;
+    void session.tools.warm(id);
+    session.scripts.claims(id);
+  }, [id, tools]);
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
   const chat: Chat = useMemo(() => item ? item.chat : { title: null, character: shelf?.id ?? null, ...unsaved }, [item?.chat, shelf?.id, unsaved]);
   const route = chatModel(store, chat, 'main');

@@ -332,13 +332,13 @@ describe('assemble with memory', () => {
   });
   const memoryOf = (records: MemoryRecord[]): Memory => ({ records, chapters: [], state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
   const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}): Assembled =>
-    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: { memory, budget, shown } }));
+    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: { kind: 'built-in', memory, budget, shown } }));
   const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
   const memoryOfSent = (result: Assembled) => result.messages.find((_, index) => (result.parts[index]!.from as { slot?: string }).slot === 'memory');
 
   it('sends the covered messages as memory in its slot, leaves them out of the chat but replays their variables, and anchors a cache point before it', () => {
     const result = withMemory(memoryOf([record('r1', [0, 1], 'jin and Luna reach the lighthouse.'), record('r2', [2, 3], 'jin promises to come back.')]));
-    expect(result.memory).toEqual({ sent: ['r1', 'r2'], covered: 4, missing: 0, slot: true });
+    expect(result.memory).toEqual({ by: null, sent: ['r1', 'r2'], covered: 4, missing: 0, slot: true });
     expect(chatOf(result)).toEqual(['Morning comes.', 'Luna is calm.']);
     const sent = memoryOfSent(result)!;
     expect(sent.content).toContain('- Luna, mood: wary');
@@ -371,7 +371,7 @@ describe('assemble with memory', () => {
       ]),
       400,
     );
-    expect(result.memory).toEqual({ sent: ['r1', 'r5'], covered: 5, missing: 3, slot: true });
+    expect(result.memory).toEqual({ by: null, sent: ['r1', 'r5'], covered: 5, missing: 3, slot: true });
     expect(chatOf(result)).toEqual(['Luna is calm.']);
     expect(memoryOfSent(result)!.content).toMatch(/^Current state:\n- Luna, mood: wary\n\nOpen threads:\n- jin will come back\./);
     const pinned = withMemory(memoryOf([record('r1', [0], 'They arrive.', { print: 'rendered before', pinned: true })]));
@@ -381,16 +381,30 @@ describe('assemble with memory', () => {
   it('counts every covered message as missing when the prompt has no 장기 기억 slot or a toggle leaves it out, and sends nothing for an empty memory', () => {
     const memory = memoryOf([record('r1', [0, 1], 'They arrive.')]);
     const without = withMemory(memory, 25_000, { prompt: { ...starter, blocks: starter.blocks.filter(({ id }) => id !== 'memory') } });
-    expect(without.memory).toEqual({ sent: ['r1'], covered: 2, missing: 2, slot: false });
+    expect(without.memory).toEqual({ by: null, sent: ['r1'], covered: 2, missing: 2, slot: false });
     expect(chatOf(without)).toHaveLength(4);
     const toggled = {
       ...starter,
       blocks: starter.blocks.map((block) => (block.id === 'memory' ? { ...block, wrapper: '{{#if {{getglobalvar::toggle_sims}}}}{{slot}}{{/if}}' } : block)),
     } as Prompt & { task?: never };
     const off = withMemory(memory, 25_000, { prompt: toggled, toggles: new Map([['sims', '0']]) });
-    expect([off.memory, memoryOfSent(off)]).toEqual([{ sent: ['r1'], covered: 2, missing: 2, slot: false }, undefined]);
+    expect([off.memory, memoryOfSent(off)]).toEqual([{ by: null, sent: ['r1'], covered: 2, missing: 2, slot: false }, undefined]);
     const empty = withMemory({ records: [], chapters: [], state: [], threads: [] });
-    expect([empty.memory, memoryOfSent(empty), chatOf(empty)]).toEqual([{ sent: [], covered: 0, missing: 0, slot: true }, undefined, messages.map(() => expect.any(String))]);
+    expect([empty.memory, memoryOfSent(empty), chatOf(empty)]).toEqual([{ by: null, sent: [], covered: 0, missing: 0, slot: true }, undefined, messages.map(() => expect.any(String))]);
+  });
+
+  it("sends a tool's memory in the slot's own place, leaves out the messages through the one it names, and cuts nothing where the slot does not reach", () => {
+    const told = (text: string, through: number, over: Partial<PromptInput['scope']> = {}) =>
+      assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (each) => each.length, budget: null, tools: [], continuing: false, memory: { kind: 'tool', name: '기억', text, through } }));
+    const result = told('Luna waits at the lighthouse.', 3);
+    expect(result.memory).toEqual({ by: '기억', text: 'Luna waits at the lighthouse.', covered: 4, missing: 0, slot: true });
+    expect(chatOf(result)).toEqual(['Morning comes.', 'Luna is calm.']);
+    const sent = memoryOfSent(result)!;
+    expect(sent.content).toBe('Luna waits at the lighthouse.');
+    expect(result.messages[result.messages.indexOf(sent) - 1]!.cache).toBe(true);
+    const without = told('Luna waits.', 3, { prompt: { ...starter, blocks: starter.blocks.filter(({ id }) => id !== 'memory') } });
+    expect([without.memory, memoryOfSent(without), chatOf(without)]).toEqual([{ by: '기억', text: 'Luna waits.', covered: 0, missing: 0, slot: false }, undefined, messages.map(() => expect.any(String))]);
+    expect(chatOf(told('', 3))).toHaveLength(messages.length);
   });
 });
 

@@ -11,6 +11,10 @@ import { ObjectStore } from './store';
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { takeTurn } from './turn';
+import { readTool } from '../engine/import/tool';
+import { setModuleAlways } from './modules';
+import { noOutcome } from './script-binding';
+import { importTool } from './tools/store';
 
 const server = testServer();
 
@@ -99,6 +103,28 @@ describe('Rememberer', () => {
       expect(log).toHaveLength(1);
       expect(chatMemory(session.store, chat).records).toEqual([]);
     }));
+  it('summarizes nothing in a chat whose memory slot a tool holds', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      await setDefaultMemory(session.store, { window: 1, batch: 1 });
+      const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name keeper\n//@author jin\n//@uses memory'));
+      if (!parsed.ok) throw new Error('fixture');
+      const added = await importTool(session.store, session.files, parsed.tool);
+      if (!added.ok) throw new Error(added.error);
+      await setModuleAlways(session.store, added.data.id, true);
+      await session.store.update('module', added.data.id, (current) => ({ ...current, takesMemory: true }));
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'We meet at the pier.' });
+      const log = stubRelay(inTurn([saying('Luna waves.')]));
+      expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
+      session.memory.check(chat);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(log).toHaveLength(1);
+      expect(chatMemory(session.store, chat).records).toEqual([]);
+    }, { run: async () => noOutcome(), close: () => {} }));
+
   it("leaves a stale record as it is while the chat's prompt holds no 장기 기억 slot, and still summarizes it again when the user asks", () =>
     server.withSession(async (session) => {
       await answerable(session);

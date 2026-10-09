@@ -42,6 +42,9 @@ export function BotNotes() {
         case 'late':
           toast.show(TOOL_LATE, { detail: from?.name });
           break;
+        case 'memory-held':
+          toast.show(`장기 기억은 ${note.by} 도구가 맡고 있어요`, { detail: from?.name });
+          break;
         case 'stale-reply':
           toast.show(TOOL_STALE, { detail: from?.name });
           break;
