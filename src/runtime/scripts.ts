@@ -1,8 +1,8 @@
 import { noOutcome, ToolLate, ToolStopped, ToolStuck, type Binding, type LuaRunner } from './script-binding';
 import { live, type PackOwner } from '../model/library';
-import type { ToolUnit } from '../model/tool';
+import { toolId, type ToolUnit } from '../model/tool';
 import type { PromptInput } from '../engine/pipeline';
-import { toolsOf } from './tools/store';
+import { toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tools/store';
 import { ChangeSignal } from '../change-signal';
 import { Runaway } from '../engine/cbs/evaluate';
 import type { Role } from '../connectors/assignment';
@@ -85,6 +85,7 @@ export class Scripts {
   private ids = 0;
   private readonly consents = new Map<string, Promise<boolean>>();
   private readonly replies = new Map<string, Promise<void>>();
+  private readonly notices = new ToolRate(TOOL_NOTICES_PER_MINUTE);
   private readonly lastTools = new Map<string, Map<string, string>>();
 
   constructor(
@@ -504,6 +505,7 @@ export class Scripts {
   }
 
   private note(chat: string, note: Note, from: PackOwner | null = null) {
+    if ((note.kind === 'said' || note.kind === 'failed') && from?.kind === 'module' && this.session.store.get('tool', toolId(from.id)) && !this.notices.take(`${chat}:${from.id}`)) return;
     this.set({ ...this.state, notes: [...this.state.notes, { id: ++this.ids, chat, from, ...note }] });
   }
 

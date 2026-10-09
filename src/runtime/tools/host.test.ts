@@ -294,3 +294,28 @@ it('allows a standalone page storage but refuses chat calls with no chat capabil
     expect(session.scripts.snapshot().questions).toEqual([]);
   } finally { close(); host.close(); }
 }));
+
+it('shares the write budget with forged page outcomes and bounds tool notices across ids', () => server.withSession(async (session) => {
+  const f = await fixture(session);
+  const transport = inProcessTools(() => {});
+  const host = new ToolHost(session, () => session.scripts, transport.open);
+  const apply = vi.spyOn(session.scripts, 'pageWrite').mockResolvedValue();
+  const close = host.page(f.module, page(f.chat));
+  try {
+    await vi.waitFor(() => expect(transport.frames[0]!.api).not.toBeNull());
+    const frame = transport.frames[0]!;
+    await expect(frame.api!.storage.set('x'.repeat(257), null)).rejects.toThrow('key-too-long');
+    for (let i = 0; i < 1000; i++) frame.emit({ kind: 'done', id: 0, outcome: { writes: [], edits: [], added: [{ role: 'char', text: 'flood' }] } });
+    await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(30));
+    expect(frame.host.sent).toContainEqual(expect.objectContaining({ kind: 'answer', call: 0, ok: false, value: 'too-many-writes' }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const write = expect(frame.api!.storage.set('over-budget', true)).rejects.toThrow('too-many-writes');
+    await vi.advanceTimersByTimeAsync(1001);
+    await write;
+    vi.useRealTimers();
+    for (let i = 0; i < 10; i++) frame.emit({ kind: 'failed', id: 0, message: 'same failure' });
+    for (let i = 0; i < 10; i++) frame.emit({ kind: 'call', call: 100 + i, method: 'say', args: ['normal', `notice ${i}`] });
+    await vi.waitFor(() => expect(session.scripts.snapshot().notes).toHaveLength(3));
+    expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'failed')).toHaveLength(1);
+  } finally { vi.useRealTimers(); close(); host.close(); }
+}));

@@ -5,7 +5,7 @@ import { setModuleDeleted } from '../modules';
 import { purgeNow } from '../removal';
 import { exportBackup, readBackup, restoreBackup } from '../testing/backup';
 import { testServer } from '../testing';
-import { deleteToolData, importTool, setToolData, setToolSettings, toolData, toolDataId, toolKeys, TOOL_DATA_BYTES, TOOL_VALUE_BYTES, undoToolImport } from './store';
+import { deleteToolData, importTool, setToolData, setToolSettings, toolData, toolDataId, toolKeys, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_VALUE_BYTES, undoToolImport } from './store';
 
 const server = testServer();
 const source = (version = '1.0', uses = '') => {
@@ -77,7 +77,9 @@ describe('tool storage', () => {
     await deleteToolData(store, module, 'a');
     expect(toolData(store, module, 'a')).toBeUndefined();
     expect((await setToolData(store, module, 'a', '가'.repeat(TOOL_VALUE_BYTES / 3))).ok).toBe(false);
-    const value = 'x'.repeat(TOOL_VALUE_BYTES - 2);
+    expect(await setToolData(store, module, 'k'.repeat(TOOL_KEY_CHARS + 1), 1)).toEqual({ ok: false, error: 'key-too-long' });
+    expect(await setToolData(store, module, '가'.repeat(TOOL_KEY_CHARS), 'x'.repeat(TOOL_VALUE_BYTES - 2))).toEqual({ ok: false, error: 'too-large' });
+    const value = 'x'.repeat(TOOL_VALUE_BYTES - 3);
     for (let i = 0; i < TOOL_DATA_BYTES / TOOL_VALUE_BYTES; i++) expect((await setToolData(store, module, String(i), value)).ok).toBe(true);
     expect(await setToolData(store, module, 'extra', 1)).toEqual({ ok: false, error: 'too-large' });
     expect((await setToolData(store, module, '0', 1)).ok).toBe(true);

@@ -14,7 +14,27 @@ import type { ObjectStore } from '../store';
 export type ToolImport = { id: string; previous: Tool | null };
 export const TOOL_VALUE_BYTES = 512 * 1024;
 export const TOOL_DATA_BYTES = 4 * 1024 * 1024;
+export const TOOL_KEY_CHARS = 256;
+export const TOOL_WRITES_PER_MINUTE = 30;
+export const TOOL_NOTICES_PER_MINUTE = 3;
+const WRITE_PAUSE_MS = 1000;
+const RATE_WINDOW_MS = 60_000;
 const jsonBytes = (value: Json) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+const dataBytes = (key: string, value: Json) => new TextEncoder().encode(key).byteLength + jsonBytes(value);
+
+export class ToolRate {
+  private readonly sent = new Map<string, number[]>();
+  constructor(private readonly limit: number) {}
+
+  take(key: string): boolean {
+    const recent = (this.sent.get(key) ?? []).filter((at) => Date.now() - at < RATE_WINDOW_MS);
+    this.sent.set(key, recent);
+    if (recent.length >= this.limit) return false;
+    recent.push(Date.now());
+    return true;
+  }
+}
 
 export function toolSettings(manifest: ToolManifest, values: Settings): Settings {
   const defaults = Object.fromEntries(manifest.settings.flatMap((field) => field.default === undefined ? [] : [[field.key, field.default]]));
@@ -72,8 +92,9 @@ export const toolKeys = (store: ObjectStore, module: string): string[] => store.
 
 export async function setToolData(store: ObjectStore, module: string, key: string, value: Json): Promise<ApiResult<unknown>> {
   if (!live(store.get('module', module))) return { ok: false, error: 'gone' };
-  const bytes = jsonBytes(value);
-  if (bytes > TOOL_VALUE_BYTES || bytes + store.children('tooldata', module).reduce((sum, row) => sum + (row.value.key === key ? 0 : jsonBytes(row.value.value)), 0) > TOOL_DATA_BYTES) return { ok: false, error: 'too-large' };
+  if (key.length > TOOL_KEY_CHARS) return { ok: false, error: 'key-too-long' };
+  const bytes = dataBytes(key, value);
+  if (bytes > TOOL_VALUE_BYTES || bytes + store.children('tooldata', module).reduce((sum, row) => sum + (row.value.key === key ? 0 : dataBytes(row.value.key, row.value.value)), 0) > TOOL_DATA_BYTES) return { ok: false, error: 'too-large' };
   const id = await toolDataId(module, key);
   if (!store.get('tooldata', id)) {
     const created = await store.create('tooldata', { key, value }, { id, parent: module });
@@ -94,11 +115,17 @@ export const toolsOf = (store: ObjectStore, chat: Chat): ToolUnit[] => packsOf(s
 });
 
 type PendingData = { value: Json | undefined; waiting: { resolve(): void; reject(error: Error): void }[] };
-type DataQueue = { pending: Map<string, PendingData>; timer: ReturnType<typeof setTimeout> | null; running: boolean; sent: number[] };
+type DataQueue = { pending: Map<string, PendingData>; timer: ReturnType<typeof setTimeout> | null; running: boolean };
 
 export class ToolWrites {
   private readonly queues = new Map<string, DataQueue>();
   private closed = false;
+  private readonly rate = new ToolRate(TOOL_WRITES_PER_MINUTE);
+
+  take(module: string) {
+    if (this.closed) throw new Error('closed');
+    if (!this.rate.take(module)) throw new Error('too-many-writes');
+  }
   constructor(private readonly store: ObjectStore) {}
 
   async write(module: string, key: string, value: Json | undefined): Promise<void> {
@@ -109,8 +136,9 @@ export class ToolWrites {
 
   private enqueue(module: string, key: string, value: Json | undefined): Promise<void> {
     if (this.closed) return Promise.reject(new Error('closed'));
-    if (value !== undefined && jsonBytes(value) > TOOL_VALUE_BYTES) return Promise.reject(new Error('too-large'));
-    const queue = this.queues.get(module) ?? { pending: new Map(), timer: null, running: false, sent: [] };
+    if (key.length > TOOL_KEY_CHARS) return Promise.reject(new Error('key-too-long'));
+    if (value !== undefined && dataBytes(key, value) > TOOL_VALUE_BYTES) return Promise.reject(new Error('too-large'));
+    const queue = this.queues.get(module) ?? { pending: new Map(), timer: null, running: false };
     this.queues.set(module, queue);
     const promise = new Promise<void>((resolve, reject) => {
       const pending = queue.pending.get(key);
@@ -141,7 +169,7 @@ export class ToolWrites {
     queue.timer = setTimeout(() => {
       queue.timer = null;
       void this.flush(module, queue);
-    }, 1000);
+    }, WRITE_PAUSE_MS);
   }
 
   private async flush(module: string, queue: DataQueue) {
@@ -152,9 +180,7 @@ export class ToolWrites {
       for (const [key, { value, waiting }] of pending) {
         try {
           if (this.closed) throw new Error('closed');
-          queue.sent = queue.sent.filter((at) => Date.now() - at < 60_000);
-          if (queue.sent.length >= 30) throw new Error('too-many-writes');
-          queue.sent.push(Date.now());
+          this.take(module);
           const result = value === undefined ? await deleteToolData(this.store, module, key) : await setToolData(this.store, module, key, value);
           if (!result.ok) throw new Error(result.error);
           for (const waiter of waiting) waiter.resolve();

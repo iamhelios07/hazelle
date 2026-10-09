@@ -357,6 +357,7 @@ export class ToolHost implements Tools, Binding<ToolUnit> {
   }
 
   private async pageWrite(frame: Frame, value: unknown) {
+    this.writes.take(frame.entry.module);
     const context = this.context(frame, undefined);
     const outcome = await this.convert(frame, context, value);
     if (!frame.closing.signal.aborted) await this.scripts().pageWrite(context.chat, frame.entry.module, outcome);
