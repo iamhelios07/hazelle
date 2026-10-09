@@ -18,3 +18,8 @@ createRoot(root).render(
     {legalPage(location.pathname) ?? <AccountFlow>{(unlocked) => <ScreenLoad><Workspace {...unlocked} /></ScreenLoad>}</AccountFlow>}
   </StrictMode>,
 );
+
+// Fonts may replace the system faces after paint, but a slow stylesheet must never hold the first screen.
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  void import('./ui/foundation/fonts.css').catch(() => {});
+}));

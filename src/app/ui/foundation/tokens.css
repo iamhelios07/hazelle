@@ -8,7 +8,7 @@
 @font-face {
   font-family: NanumSquareRound;
   font-weight: 800;
-  font-display: block;
+  font-display: swap;
   src: url('./fonts/NanumSquareRoundEB-hazelle.woff2') format('woff2');
   unicode-range: U+D5E4, U+C774, U+C824;
 }

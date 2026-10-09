@@ -1,6 +1,7 @@
 /* A tool page's starting look (design §6.10): the app's fonts, tokens and theme, so a tool that brings no styles of
  * its own still looks like Hazelle. Tool styles override any of it. */
 @import './global.css';
+@import './fonts.css';
 
 /* The frame has no box of its own: the panel or screen around it shows through. */
 body {

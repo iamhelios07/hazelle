@@ -10,7 +10,9 @@ and only this folder styles elements.**
   color token a light value; `foundation/theme.ts` (`applyTheme`) sets the attribute. A module never
   reads `--palette-*`; a surface that needs the other theme's colors (the toast) reads tokens
   defined per theme.
-- `foundation/global.css` loads fonts and tokens and sets element defaults. `main.tsx` imports it once.
+- `foundation/global.css` loads tokens and sets element defaults. `main.tsx` imports it once, then loads
+  `foundation/fonts.css` after paint; slow or unavailable webfonts leave the system faces usable. The tool
+  stylesheet imports both directly because its document has no application bootstrap.
 - `foundation/media.ts` lists every media query in `MEDIA` and reads them in JavaScript (`useWide`,
   `useSplit`, `useHover`). A stylesheet cannot read it, so it writes the query out in full, and
   `media.test.ts` fails on any `@media` that `MEDIA` does not list.
