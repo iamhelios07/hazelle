@@ -47,12 +47,13 @@ export type From =
   | { kind: 'lore'; name: string; slot: 'lorebook' | 'postEverything' }
   | { kind: 'depth'; name: string; depth: number }
   | { kind: 'continue' }
-  | { kind: 'script' };
+  | { kind: 'script' }
+  | { kind: 'tool'; name: string };
 
 // parts[i] says where messages[i] came from and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
+export type Assembled = { tools: { placed: 'slot' | 'implicit' }; messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
 
 // The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
 // Claude models refuse with 400.
@@ -158,7 +159,7 @@ function placedLore(scope: ChatScope, seed: string, countTokens: (text: string) 
 }
 
 type Filling =
-  | { sort: 'conversation'; note: string; memory: string }
+  | { sort: 'conversation'; note: string; memory: string; tools: PromptInput['tools'] }
   | { sort: 'translate'; note: string; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'illustrate'; recent: (block: RecentSlot) => string; source: string }
   | { sort: 'memory'; memory: string; span: string };
@@ -181,10 +182,10 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
   };
   // Text already rendered, or the user's own, is never evaluated again: only its 감싸는 텍스트 is. {{slot}} survives that
   // evaluation because the slot tag takes an argument (cbs/tags.ts), and one without it stays as written.
-  const verbatim = (block: WrappedSlot, content: string) => {
+  const verbatim = (block: WrappedSlot, content: string, from: From = blockFrom(block)) => {
     const frame = block.wrapper === null ? '{{slot}}' : render(block.wrapper, block.id);
     const text = content.trim();
-    if (text) out({ message: { role: block.role, content: frame.replace('{{slot}}', () => text) }, from: blockFrom(block) });
+    if (text) out({ message: { role: block.role, content: frame.replace('{{slot}}', () => text) }, from });
     return frame.includes('{{slot}}');
   };
   for (const block of blocks) {
@@ -235,6 +236,9 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
         case 'memory':
           if (filling.sort === 'conversation' || filling.sort === 'memory') memory = verbatim(block, filling.memory);
           break;
+        case 'tool':
+          if (filling.sort === 'conversation') verbatim(block, joined(filling.tools.map(({ text }) => text)), toolFrom(filling.tools));
+          break;
         case 'span':
           if (filling.sort === 'memory') verbatim(block, filling.span);
           break;
@@ -249,7 +253,9 @@ function templateOf(blocks: Block[], laid: Laid, persona: ChatScope['persona'], 
 // all) and the lorebook still scans them.
 export const assemble = (input: PromptInput): Assembled | TooLong | RanAway => stoppable(() => conversation(input));
 
-function conversation({ scope, seed, countTokens, budget, continuing, memory }: PromptInput): Assembled | TooLong {
+const toolFrom = (tools: PromptInput['tools']): From => ({ kind: 'tool', name: tools.filter(({ text }) => text.trim()).map(({ name }) => name).join(' · ') });
+
+function conversation({ scope, seed, countTokens, budget, continuing, memory, tools }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const chat = renderChat('prompt', scope);
   if (chat.stopped) throw chat.stopped;
@@ -259,7 +265,13 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory }: 
   const recalled = memory && standing(memory.memory, { shown: memory.shown, roles: scope.messages.map(({ role }) => role), speakers: speakersOf(scope), texts: chat.texts }, memoryBudget(memory.budget, budget), tokens);
   const covered = recalled?.covered ?? 0;
 
-  const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: recalled?.text ?? '' });
+  const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: recalled?.text ?? '', tools });
+  const placed = prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'tool') ? 'slot' : 'implicit';
+  const toolText = joined(tools.map(({ text }) => text));
+  if (placed === 'implicit' && toolText.trim()) {
+    const at = template.findIndex((part) => 'range' in part);
+    template.splice(at === -1 ? template.length : at, 0, { message: { role: 'system', content: toolText }, from: toolFrom(tools) });
+  }
   const out = (...parts: Sent[]) => template.push(...filled(parts));
   if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
@@ -282,6 +294,7 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory }: 
   const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
+      tools: { placed },
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),

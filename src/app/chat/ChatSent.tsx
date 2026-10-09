@@ -23,6 +23,8 @@ export function partName(from: From, role: Role): string {
       return `${SLOT_NAMES.lorebook} · ${loreName(from.name)} · @@depth ${from.depth}`;
     case 'continue':
       return '이어 쓰기 지시';
+    case 'tool':
+      return `${SLOT_NAMES.tool} · ${from.name}`;
     case 'script':
       return '봇의 스크립트';
   }

@@ -1,13 +1,12 @@
 import { LuaFactory, type LuaEngine } from 'wasmoon';
-import type { Trigger } from '../import/types';
 import { runBlocks, type Blocks } from './blocks';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
 import { add, cbs, read, text, UNSET, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
-import type { Host, ModelMessage, Event, Outcome, ScriptError, Failure, EditStage } from '../script-api';
+import type { Host, ModelMessage, Event, Outcome, ScriptError, Failure, EditStage, ScriptUnit } from '../script-api';
 
 // name is for error messages only.
-export type Script = Pick<Extract<Trigger, { kind: 'lua' }>, 'kind' | 'name' | 'code'>;
+export type Script = Pick<Extract<ScriptUnit, { kind: 'lua' }>, 'kind' | 'name' | 'code' | 'owner'>;
 
 // variables: the writes since the item before it, over the snapshot's.
 export type DisplayItem = { index: number; text: string; variables: [string, string][] };
@@ -65,21 +64,22 @@ export class Lua {
   async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
     const workset = this.hold(owner, 'event', triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
     try {
-      const run: Acting = { quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };
+      const run: Run & { host: Host } = { owner: null, quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };
       const errors: ScriptError[] = [];
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
       for (const script of triggers) {
         if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu' || event.kind === 'settings') continue;
+        run.owner = script.owner;
         if (script.kind === 'blocks') {
           if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
           handled = true;
-          await runBlocks(script, run).catch((error: unknown) => errors.push({ script: script.name || script.on, ...failure(run, error) }));
+          await runBlocks(script, run as Acting).catch((error: unknown) => errors.push({ from: script.owner, script: script.name || script.on, ...failure(run, error) }));
           continue;
         }
         const engine = await this.engine(workset, script);
         await this.exclusive(engine, async () => {
-          if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
+          if (engine.failed !== null) return void errors.push({ from: script.owner, script: script.name, message: engine.failed });
           engine.run = run;
           try {
             if (event.kind === 'edit') {
@@ -95,7 +95,7 @@ export class Lua {
             handled = true;
             if ((await this.call(engine, name, KEY, ...(event.kind === 'button' ? [event.data] : []))) === false) run.stop = true;
           } catch (error) {
-            errors.push({ script: script.name, ...failure(run, error) });
+            errors.push({ from: script.owner, script: script.name, ...failure(run, error) });
           } finally {
             engine.run = null;
           }
@@ -159,18 +159,18 @@ export class Lua {
       for (const [place, script] of scripts.entries()) {
         const engine = await this.engine(workset, script);
         await this.exclusive(engine, async () => {
-          if (engine.failed !== null) return void errors.push({ script: script.name, message: engine.failed });
+          if (engine.failed !== null) return void errors.push({ from: script.owner, script: script.name, message: engine.failed });
           const variables = new Map(session.variables);
           for (const [at, item] of items.entries()) {
             for (const [name, value] of item.variables) variables.set(name, value);
-            const run: Run = { quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
+            const run: Run = { owner: script.owner, quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
             engine.run = run;
             try {
               const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });
               if (edited === DEAF) return void (listening[place] = false);
               if (typeof edited === 'string') texts[at] = edited;
             } catch (error) {
-              if (!errors.some((known) => known.script === script.name)) errors.push({ script: script.name, ...failure(run, error) });
+              if (!errors.some((known) => known.script === script.name)) errors.push({ from: script.owner, script: script.name, ...failure(run, error) });
             } finally {
               engine.run = null;
             }
@@ -298,11 +298,11 @@ export class Lua {
   private declare(engine: Engine) {
     const set = (name: string, api: (run: Run, ...args: never[]) => unknown) => engine.lua.global.set(name, (_key: unknown, ...args: never[]) => (engine.run ? api(engine.run, ...args) : undefined));
     // What a run does outside itself, which an editDisplay pass and a script outliving its run do not.
-    const act = (name: string, api: (run: Acting, ...args: never[]) => unknown) => set(name, (run, ...args) => (run.quiet || !run.host ? undefined : api(run as Acting, ...args)));
+    const act = (name: string, api: (run: Acting, ...args: never[]) => unknown) => set(name, (run, ...args) => (run.quiet || !run.host || !run.owner ? undefined : api(run as Acting, ...args)));
     const last = (run: Run, role: Working['role']) => run.messages.findLast((message) => message.role === role)?.data;
     const model = (role: 'main' | 'aux') => (run: Acting, prompt: string) => {
       const messages = (JSON.parse(prompt) as { role?: unknown; content?: unknown }[]).map((message) => ({ role: MODEL_ROLES[text(message.role)] ?? 'assistant', content: text(message.content) }));
-      return run.host.model(role, messages).then((answer) => JSON.stringify(answer));
+      return run.host.model(role, messages, run.owner).then((answer) => JSON.stringify(answer));
     };
 
     set('getChatVar', (run, name: string) => read(run, name));
@@ -361,11 +361,11 @@ export class Lua {
     );
 
     act('stopChat', (run) => void (run.stop = true));
-    act('alertNormal', (run, value: unknown) => run.host.say('normal', text(value)));
-    act('alertError', (run, value: unknown) => run.host.say('error', text(value)));
-    act('alertInput', (run, value: unknown) => run.host.ask({ kind: 'input', text: text(value) }).then((answer) => answer ?? ''));
-    act('alertConfirm', (run, value: unknown) => run.host.ask({ kind: 'confirm', text: text(value) }).then((answer) => answer !== null));
-    act('alertSelect', (run, options: unknown) => run.host.ask({ kind: 'select', options: Object.values((options ?? {}) as Record<string, unknown>).map(text) }).then((answer) => answer ?? ''));
+    act('alertNormal', (run, value: unknown) => run.host.say('normal', text(value), run.owner));
+    act('alertError', (run, value: unknown) => run.host.say('error', text(value), run.owner));
+    act('alertInput', (run, value: unknown) => run.host.ask({ kind: 'input', text: text(value) }, run.owner).then((answer) => answer ?? ''));
+    act('alertConfirm', (run, value: unknown) => run.host.ask({ kind: 'confirm', text: text(value) }, run.owner).then((answer) => answer !== null));
+    act('alertSelect', (run, options: unknown) => run.host.ask({ kind: 'select', options: Object.values((options ?? {}) as Record<string, unknown>).map(text) }, run.owner).then((answer) => answer ?? ''));
     act('reloadDisplay', (run) => void (run.reload = true));
     act('reloadChat', (run) => void (run.reload = true));
     act('getTokens', (run, value: unknown) => run.host.tokens(text(value)));

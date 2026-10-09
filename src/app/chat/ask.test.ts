@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { asking } from './ask';
 
 const values = (question: Parameters<typeof asking>[0]) => {
-  const { answer } = asking(question);
+  const { answer } = asking(question, 'character');
   return answer.kind === 'choices' ? answer.choices.map(({ value }) => value) : answer.kind;
 };
 

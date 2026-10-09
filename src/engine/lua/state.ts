@@ -1,3 +1,4 @@
+import type { PackOwner } from '../../model/library';
 import type { Host } from '../script-api';
 import { unescapeCbs } from '../cbs/escape';
 import { evaluate, Runaway } from '../cbs/evaluate';
@@ -29,6 +30,7 @@ export type Working = { origin: number | null; role: 'user' | 'char'; data: stri
 // over it in written, so a display pass over many messages copies nothing. ranAway: the last cbs() call ran away; the
 // error Lua raises for it reaches the run as another Error, never the Runaway.
 export type Run = {
+  owner: PackOwner | null;
   quiet: boolean;
   snapshot: Snapshot;
   variables: ReadonlyMap<string, string>;
@@ -41,7 +43,7 @@ export type Run = {
   missing: Set<string>;
   ranAway: boolean;
 };
-export type Acting = Run & { host: Host };
+export type Acting = Run & { host: Host; owner: PackOwner };
 
 export const UNSET = 'null';
 

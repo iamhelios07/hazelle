@@ -109,3 +109,9 @@ export const restoreScript = (store: ObjectStore, owner: PackOwner, { list, scri
 // it hangs. A newer sample of the same script takes the place of one still waiting.
 export const sampleScript = (store: ObjectStore, owner: PackOwner, script: RegexScript, text: string, signal: AbortSignal): Promise<ApiResult<string>> =>
   store.evaluation.sample(`sample:${owner.id}:${script.id}`, script, text, signal).then((data) => ({ ok: true, data }), evaluationFailure);
+
+
+export const setModels = (store: ObjectStore, { kind, id }: PackOwner, botModels: boolean): Promise<ApiResult<unknown>> =>
+  kind === 'character'
+    ? store.update('character', id, (current) => current.deleted === undefined ? { ...current, botModels } : null)
+    : store.update('module', id, (current) => current.deleted === undefined ? { ...current, botModels } : null);

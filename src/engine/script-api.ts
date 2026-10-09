@@ -1,12 +1,19 @@
+import type { PackOwner } from '../model/library';
+import type { Trigger } from './import/types';
+
+export type ScriptUnit = Trigger & { owner: PackOwner };
+export type ModelRefusal = 'not-allowed' | 'not-declared' | 'no-model' | 'flood' | 'failed';
+export type ModelResult = { success: boolean; result: string; reason?: ModelRefusal };
+
 export type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; options: string[] };
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
 // What a script reaches outside its run, each of which may take as long as the user or a provider does.
 export type Host = {
-  say(kind: 'normal' | 'error', text: string): void;
+  say(kind: 'normal' | 'error', text: string, from: PackOwner): void;
   // input: the text typed; confirm: 'yes'; select: the option's index. null: dismissed.
-  ask(question: Question): Promise<string | null>;
-  model(role: 'main' | 'aux', messages: ModelMessage[]): Promise<{ success: boolean; result: string }>;
+  ask(question: Question, from: PackOwner): Promise<string | null>;
+  model(role: 'main' | 'aux', messages: ModelMessage[], spender: PackOwner): Promise<ModelResult>;
   tokens(text: string): Promise<number>;
   // The lorebook entries a prompt built now would hold, each as sent, while their tokens fit within the model's
   // context less reserve; all of them when reserve is no number, as Risu's sum then never passes its limit.
@@ -28,7 +35,7 @@ export type Event =
 // runaway: the CBS the script evaluated ran away (cbs/evaluate Runaway), which the app words as its other runaway
 // notices; the message is only what the script itself sees.
 export type Failure = { message: string } | { runaway: true };
-export type ScriptError = { script: string } & Failure;
+export type ScriptError = { script: string; from: PackOwner } & Failure;
 
 // index is a message's place in the snapshot. handled: some script had the function the event calls, or a block
 // trigger answered it. missing: the functions called and the block effects met that this app does not have.

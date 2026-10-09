@@ -169,11 +169,15 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in translated) return translated;
   const started = await session.scripts.starting(chat, translated, again, signal);
   if ('kind' in started) return started;
-  const { route, settings, scope, budget, memory, said, reply } = started.turn;
+  const prompted = await session.scripts.prompting(chat, started.turn, () => again(translated.said !== null && started.turn.said === null), signal);
+  if ('kind' in prompted) return prompted;
+  if (signal.aborted) return { kind: 'halted' };
+  const { turn, tools } = prompted;
+  const { route, settings, scope, budget, memory, said, reply } = turn;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools: [], scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
+  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
-  const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
+  const requested = await session.scripts.requesting(chat, turn, prompt.messages);
   const sent = requested.messages === prompt.messages ? prompt : await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, budget }, signal));
   if ('kind' in sent) return { ...sent, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];

@@ -1,3 +1,8 @@
+import { readTool } from '../engine/import/tool';
+import type { ToolUnit } from '../model/tool';
+import { setModuleAlways } from './modules';
+import { noOutcome, type Binding } from './script-binding';
+import { importTool } from './tools/store';
 import { describe, expect, it, vi } from 'vitest';
 import type { Card } from '../engine/import/types';
 import { fold, shown, type Receipt } from '../model/chat';
@@ -285,4 +290,34 @@ describe('image-only models', () => {
       expect(taskModel(session.store, { title: null, character: null, models: {} }, ref)).toEqual({ kind: 'image-only' });
       expect(log).toEqual([]);
     }));
+});
+
+
+it('runs tool prompts after Lua, regathers tool edits, and places both sets of writes before the reply', async () => {
+  const key = 'tool:jin/test:ready';
+  const binding: Binding<ToolUnit> = { close: () => {}, run: async (_chat, _units, scope, event) => {
+    if (event.kind !== 'prompt') return noOutcome();
+    expect(scope.pending).toContainEqual(['phase', 'lua']);
+    return { ...noOutcome(), value: 'from the tool', writes: [[key, 'true']], edits: [{ index: 0, text: 'edited by tool', wrote: [] }] };
+  } };
+  await server.withSession(async (session) => {
+    await answerable(session);
+    const source = readTool(new TextEncoder().encode('//@api 1\n//@name test\n//@author jin'));
+    if (!source.ok) throw new Error('fixture');
+    const tool = await importTool(session.store, session.files, source.tool);
+    if (!tool.ok) throw new Error(tool.error);
+    await setModuleAlways(session.store, tool.data.id, true);
+    const character = await session.store.create('character', { card: { ...luna, triggers: [{ kind: 'lua', id: 'onStart', name: '', code: 'function onStart(id) setChatVar(id, "phase", "lua") end' }] }, folder: null, loreFolders: [] });
+    if (!character.ok) throw new Error(character.error);
+    const chat = crypto.randomUUID();
+    await server.hold(session.store, chat);
+    await startChat(session.store, chat, { title: null, character: character.data.id, models: {} }, null);
+    await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'earlier' });
+    const log = stubRelay(() => saying('reply'));
+    expect(await takeTurn(session, chat, { kind: 'send', text: 'hello' })).toBeNull();
+    await expect.poll(() => fold(session.store.children('entry', chat)).length).toBe(3);
+    expect(log[0]!.sent.body).toContain('from the tool');
+    expect(log[0]!.sent.body).toContain('edited by tool');
+    expect(shown(fold(session.store.children('entry', chat)).at(-1)!).before).toEqual([['phase', 'lua'], [key, 'true']]);
+  }, binding);
 });

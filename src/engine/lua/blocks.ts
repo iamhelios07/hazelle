@@ -1,8 +1,8 @@
 import type { Comparison, Operand } from '../import/blocks';
-import type { Trigger } from '../import/types';
+import type { ScriptUnit } from '../script-api';
 import { add, cbs as evaluated, read, write, type Acting } from './state';
 
-export type Blocks = Omit<Extract<Trigger, { kind: 'blocks' }>, 'id' | 'off'>;
+export type Blocks = Omit<Extract<ScriptUnit, { kind: 'blocks' }>, 'id' | 'off'>;
 const isTrue = (value: string) => value === 'true' || value === '1';
 const numbers = (left: string, right: string) => !Number.isNaN(Number(left)) && !Number.isNaN(Number(right));
 const same = (left: string, right: string) => (numbers(left, right) ? Number(left) === Number(right) : left === right);
@@ -97,9 +97,9 @@ export async function runBlocks(trigger: Blocks, run: Acting): Promise<void> {
       case 'alert': {
         const value = cbs(effect.value);
         const kind = effect.tone;
-        if (kind === 'normal' || kind === 'error') run.host.say(kind, value);
-        else if (kind === 'input') write(run, cbs(effect.input), (await run.host.ask({ kind, text: value })) ?? '');
-        else if (kind === 'select') write(run, cbs(effect.input), (await run.host.ask({ kind, options: value.split('§') })) ?? '');
+        if (kind === 'normal' || kind === 'error') run.host.say(kind, value, run.owner);
+        else if (kind === 'input') write(run, cbs(effect.input), (await run.host.ask({ kind, text: value }, run.owner)) ?? '');
+        else if (kind === 'select') write(run, cbs(effect.input), (await run.host.ask({ kind, options: value.split('§') }, run.owner)) ?? '');
         break;
       }
       case 'stop': run.stop = true; break;

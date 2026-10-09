@@ -1,5 +1,7 @@
-import { pendingTools, type Tools } from './tools/facade';
-import type { LuaRunner } from './script-binding';
+import type { Tools } from './tools/facade';
+import { createTools } from './tools/host';
+import type { ToolUnit } from '../model/tool';
+import type { Binding, LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
 import { api, type ApiResult } from './api';
 import { AssetUrls } from './assets';
@@ -57,7 +59,7 @@ export type Session = {
 const luaWorker = (): Promise<LuaRunner> => Promise.resolve(new LuaWorker());
 
 // An open given up while it loads (signal) starts nothing. A cached opening never waits for the network.
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), lua: () => Promise<LuaRunner> = luaWorker): Promise<ApiResult<Session>> {
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), bindings: { lua?: () => Promise<LuaRunner>; tools?: Binding<ToolUnit> } = {}): Promise<ApiResult<Session>> {
   const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
   if (signal.aborted) {
     store.close();
@@ -89,12 +91,13 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const translator = new Translator(store, credentials, costs, reading);
   let runner: Promise<LuaRunner> | null = null;
   // Asked for once the session has closed, it makes none: nothing would be left to end it.
-  const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= lua()));
+  const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= (bindings.lua ?? luaWorker)()));
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
   const read = new ReadModels(store, display);
-  const memory = new Rememberer({ store, read, credentials }, reading);
   const illustrator = new Illustrator({ store, credentials, files });
-  const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, machine);
+  const tools = createTools({ store, files }, () => scripts);
+  const scripts: Scripts = new Scripts({ store, read, credentials, costs, display }, { lua: machine, tools: bindings.tools ?? tools });
+  const memory = new Rememberer({ store, read, credentials, scripts }, reading);
   const talk = new Talk(
     store,
     credentials,
@@ -145,6 +148,8 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     streams.close();
     talk.close();
     scripts.close();
+    tools.close();
+    bindings.tools?.close();
     // One still being made is ended as it is made.
     void runner?.then((made) => made.close());
     translator.close();
@@ -158,6 +163,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { tools: pendingTools(), username, store, files, assets, talk, costs, usage, translator, memory, illustrator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools, username, store, files, assets, talk, costs, usage, translator, memory, illustrator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

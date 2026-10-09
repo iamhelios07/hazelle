@@ -8,5 +8,3 @@ export type Tools = {
   page(module: string, page: ToolPage): () => void;
   settingsChanged(module: string): void;
 };
-
-export const pendingTools = (): Tools => ({ warm: () => Promise.resolve(), menus: () => [], page: () => () => {}, settingsChanged: () => {} });

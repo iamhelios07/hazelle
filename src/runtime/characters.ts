@@ -136,10 +136,6 @@ export function setDecor(store: ObjectStore, id: string, decor: boolean): Promis
   return store.update('character', id, (current) => ({ ...current, decor }));
 }
 
-export function setBotModels(store: ObjectStore, id: string, botModels: boolean): Promise<ApiResult<Stored<'character'>>> {
-  return store.update('character', id, (current) => ({ ...current, botModels }));
-}
-
 export function setStatusScript(store: ObjectStore, id: string, script: string, on: boolean): Promise<ApiResult<Stored<'character'>>> {
   return store.update('character', id, (current) => {
     const rest = (current.statusScripts ?? []).filter((each) => each !== script);

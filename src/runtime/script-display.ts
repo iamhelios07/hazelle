@@ -9,7 +9,7 @@ import { EvaluationStopped, EvaluationStuck } from './evaluation';
 import { luaSnapshot, luaStanding } from './lua/snapshot';
 import { scriptsOf } from './scripts';
 import type { ObjectStore } from './store';
-import { pinned, scopeOf } from './chat-context';
+import { packsOf, pinned, scopeOf } from './chat-context';
 
 type Pass = { revision: number; generation: number; scripts: Script[]; snapshot: Snapshot; items: Missed[]; remaining: number; installed: boolean; view: Display; signal?: AbortSignal };
 // generation: the number its passes are stamped with, new whenever the basis is or reloadDisplay asks, and never used
@@ -74,7 +74,7 @@ export class ScriptDisplay {
     const reader = { store: this.store };
     const scope = { ...scopeOf(reader, id, chat, messages), screen };
     const take = pinned(reader, chat);
-    const all = scriptsOf(scope.packs);
+    const all = scriptsOf(packsOf(this.store, chat));
     const scripts = all.filter(({ code }) => this.listens.get(code) !== false);
     if (!scripts.length) {
       const previous = this.passes.get(id);

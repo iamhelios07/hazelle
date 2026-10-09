@@ -4,7 +4,7 @@ import type { RegexScript } from '../engine/import/types';
 import type { assembleIllustration, assembleMemory, assembleTranslation, IllustrationInput, MemoryTaskInput, PromptInput, RanAway, TranslationInput } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
 import type { ApiFailure } from './api';
-import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult } from './evaluation-core';
+import type { ChatTexts, Counted, DisplayEvaluation, EvaluatedPrompt, EvaluationDown, EvaluationInput, EvaluationJob, EvaluationResult, EvaluationUp, LuaResult, ToolState } from './evaluation-core';
 import { changedTail, sameHistory } from './history-delta';
 import { Heartbeat, moduleWorker } from './worker';
 import workerUrl from './evaluation-worker?worker&url';
@@ -49,11 +49,12 @@ const GATES = {
   translation: 'press',
   illustration: 'press',
   lore: 'press',
+  tool: 'press',
 } as const;
 type Asker = keyof typeof GATES;
 // Who asks, for which chat, saved or not yet. A lane holds one job: a newer one on the same lane stops the one waiting
 // or running. Its history is kept until it is forgotten, so its next job sends the worker only what changed.
-export type Lane<A extends Asker = Asker> = { asker: A; chat: string };
+export type Lane<A extends Asker = Asker> = { asker: A; chat: string; tool?: string };
 export type Verdicts = { verdict(chat: string): boolean; judged(chat: string): void };
 
 type LooseJob =
@@ -62,7 +63,7 @@ type LooseJob =
   | { kind: 'sample'; script: Omit<RegexScript, 'id'>; text: string };
 type Work = { key: string; on: { chat: string; gate: (typeof GATES)[Asker] } | null; scope: ChatScope | null; regex: boolean; job: EvaluationJob | LooseJob; resolve: (result: EvaluationResult) => void; reject: (error: Error) => void; stop: () => void; signal?: AbortSignal };
 
-const keyOf = ({ asker, chat }: Lane) => `${asker}:${chat}`;
+const keyOf = ({ asker, chat, tool }: Lane) => `${asker}:${chat}${tool === undefined ? '' : `:${tool}`}`;
 const onChat = ({ asker, chat }: Lane): Work['on'] => ({ chat, gate: GATES[asker] });
 const bare = (scope: ChatScope): ChatScope => ({ ...scope, packs: scope.packs.map((pack) => ({ ...pack, regex: [] })) });
 
@@ -101,6 +102,10 @@ export class Evaluation {
 
   read(lane: Lane<'memory' | 'view'>, scope: ChatScope, memory: Extract<EvaluationJob, { kind: 'read' }>['memory']): Promise<Counted<ChatTexts>> {
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'read', memory }) as Promise<Counted<ChatTexts>>;
+  }
+
+  state(lane: Lane<'tool'>, scope: ChatScope, prefix: string, signal?: AbortSignal): Promise<ToolState | RanAway> {
+    return this.run(keyOf(lane), onChat(lane), scope, { kind: 'state', prefix }, signal) as Promise<ToolState | RanAway>;
   }
 
   // A translation's, and a bot's lorebook read, may run beside others of the same chat: each has a lane of its own,

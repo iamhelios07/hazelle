@@ -1,10 +1,12 @@
+import { setModels } from '../../runtime/pack';
+import type { ObjectStore } from '../../runtime/store';
 import { BookOpen, Braces, ChevronRight, Copy, Eye, IdCard, Languages, MessageSquareQuote, MoreHorizontal, Package, ScrollText, Square, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
 import { PICTURE_PERCENT, type CharacterShelf, type Pictures } from '../../model/library';
-import { editCharacter, setBotModels, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
+import { editCharacter, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
 import { aliased } from '../common/alias';
@@ -36,7 +38,7 @@ const readHeight = (draft: string) => {
   const value = Number(draft);
   return Number.isInteger(value) && value >= PICTURE_PERCENT.min && value <= PICTURE_PERCENT.max ? value : null;
 };
-const SWITCHES = { decor: setDecor, botModels: setBotModels, keepThoughts: setKeepThoughts };
+const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
 const merged = (...statuses: (keyof typeof SAVE_STATUS | null)[]) =>
   statuses.find((each) => each === 'failed') ?? statuses.find((each) => each === 'saving') ?? statuses.find((each) => each !== null) ?? null;
@@ -304,7 +306,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
             help="<Thoughts> 같은 추론 블록을 숨기지 않고 본문에 보여 줘요."
             control={<Switch label="추론을 본문에 표시" checked={keepThoughts} onChange={(on) => flip('keepThoughts', on)} />}
           />
-          {scriptsOf(packsOf(store, { character: id }).map(({ pack }) => pack)).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}
+          {scriptsOf(packsOf(store, { character: id })).length > 0 && <SettingRow label={BOT_MODELS} help={BOT_MODELS_HELP} control={<Switch label={BOT_MODELS} checked={botModels} onChange={(on) => flip('botModels', on)} />} />}
         </SettingGroup>
         {decor && (
           <Disclosure label="이미지 크기">

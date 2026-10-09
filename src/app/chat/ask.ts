@@ -1,10 +1,11 @@
+import type { PackOwner } from '../../model/library';
 import type { ScriptQuestion } from '../../runtime/scripts';
 import { BOT_MODELS_HELP } from '../common/words';
 import type { AskAnswer } from '../ui';
 
 // Each value is what Scripts.answer takes for that kind (runtime/scripts): the line typed, 'yes' or a dismissal, an
 // option's index, and for a model call 'yes' or 'no'.
-export function asking(question: ScriptQuestion['question']): { text?: string; help?: string; answer: AskAnswer } {
+export function asking(question: ScriptQuestion['question'], owner: PackOwner['kind']): { text?: string; help?: string; answer: AskAnswer } {
   switch (question.kind) {
     case 'input':
       return { text: question.text, answer: { kind: 'line' } };
@@ -14,7 +15,7 @@ export function asking(question: ScriptQuestion['question']): { text?: string; h
       return { answer: { kind: 'choices', choices: question.options.map((label, index) => ({ label, value: String(index) })) } };
     case 'model':
       return {
-        text: '이 봇이 모델을 추가로 호출하려고 해요',
+        text: owner === 'module' ? '이 모듈이 모델을 따로 부르려고 해요' : '이 봇이 모델을 추가로 호출하려고 해요',
         help: BOT_MODELS_HELP,
         answer: { kind: 'choices', choices: [{ label: '허용', value: 'yes', primary: true }, { label: '안 함', value: 'no' }] },
       };

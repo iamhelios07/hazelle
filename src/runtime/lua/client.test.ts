@@ -97,18 +97,18 @@ it('keeps each pending host until completion and ignores old replies after a cra
     const worker = made[0]!;
     worker.receive({ kind: 'failed', id: 1, message: 'script failed' });
     await expect(first).rejects.toThrow('script failed');
-    worker.receive({ kind: 'say', id: 1, args: ['normal', 'late'] });
-    worker.receive({ kind: 'say', id: 2, args: ['normal', 'still running'] });
+    worker.receive({ kind: 'say', id: 1, args: ['normal', 'late', { kind: 'character', id: 'c' }] });
+    worker.receive({ kind: 'say', id: 2, args: ['normal', 'still running', { kind: 'character', id: 'c' }] });
     expect(host.say).not.toHaveBeenCalled();
-    expect(other.say).toHaveBeenCalledExactlyOnceWith('normal', 'still running');
+    expect(other.say).toHaveBeenCalledExactlyOnceWith('normal', 'still running', { kind: 'character', id: 'c' });
     worker.onerror!();
     await expect(second).rejects.toThrow('crashed');
     const restarted = runner.run('third', [], scope, { kind: 'start' }, host);
     worker.receive({ kind: 'done', id: 2, result: null });
     const next = made[1]!;
     expect(next.postMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run', id: 3 }));
-    next.receive({ kind: 'say', id: 3, args: ['normal', 'new run'] });
-    expect(host.say).toHaveBeenCalledExactlyOnceWith('normal', 'new run');
+    next.receive({ kind: 'say', id: 3, args: ['normal', 'new run', { kind: 'character', id: 'c' }] });
+    expect(host.say).toHaveBeenCalledExactlyOnceWith('normal', 'new run', { kind: 'character', id: 'c' });
     next.receive({ kind: 'failed', id: 3, message: 'new failure' });
     await expect(restarted).rejects.toThrow('new failure');
   } finally { runner.close(); }

@@ -18,7 +18,8 @@ export type EvaluationJob =
   | { kind: 'memory'; input: Omit<MemoryTaskInput, 'scope' | 'countTokens'> }
   | { kind: 'illustration'; input: Omit<IllustrationInput, 'scope' | 'countTokens'> }
   | { kind: 'read'; memory: { memory: Memory; shown: Source[]; budget: number } | null }
-  | { kind: 'lore'; seed: string; limit: number };
+  | { kind: 'lore'; seed: string; limit: number }
+  | { kind: 'state'; prefix: string };
 export type LuaResult = LuaText & { version: string };
 export type EvaluationInput =
   | { lane: string; scope: ChatBasis; history: Tail<ChatScope['messages'][number]>; job: EvaluationJob }
@@ -30,7 +31,9 @@ export type DisplayEvaluation = { display: Display; work: DisplayWork | null };
 export type Counted<T> = T | { kind: 'tokenizer' };
 export type EvaluatedPrompt = Counted<ReturnType<typeof assemble>>;
 export type ChatTexts = { texts: string[]; tokens: number[]; standing: Standing | null };
+export type ToolState = { texts: string[]; variables: [string, string][]; wrote: [string, string][][] };
 export type EvaluationResult =
+  | ToolState
   | DisplayEvaluation
   | DisplayPatch
   | EvaluatedPrompt
@@ -75,6 +78,12 @@ export class Evaluator {
     const messages = applyTail(this.histories.get(lane) ?? [], history);
     this.histories.set(lane, messages);
     const scope: ChatScope = { ...data, messages };
+    if (job.kind === 'state') {
+      started();
+      const { texts, variables, wrote, stopped } = renderChat('prompt', scope);
+      if (stopped) return { kind: 'runaway' };
+      return { texts, variables: [...variables].filter(([key]) => key.startsWith(job.prefix)), wrote };
+    }
     if (job.kind !== 'display') {
       const countTokens = await tokenizer().catch(() => null);
       if (!countTokens) return { kind: 'tokenizer' };

@@ -1,3 +1,6 @@
+import type { Chat } from '../../model/chat';
+import type { ToolUnit } from '../../model/tool';
+import { packsOf } from '../chat-context';
 import { fieldValue, TOOL_FILE_BYTES, type ImportedTool } from '../../engine/import/tool';
 import { without } from '../../model/fields';
 import { live } from '../../model/library';
@@ -84,3 +87,9 @@ export async function deleteToolData(store: ObjectStore, module: string, key: st
   const id = await toolDataId(module, key);
   return store.get('tooldata', id) ? store.remove(id) : { ok: true, data: null };
 }
+
+
+export const toolsOf = (store: ObjectStore, chat: Chat): ToolUnit[] => packsOf(store, chat).flatMap(({ id, module }) => {
+  const tool = module && store.get('tool', toolId(id));
+  return tool ? [{ module: id, tool: tool.value }] : [];
+});

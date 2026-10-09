@@ -93,7 +93,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const toggles = toggleRows(togglesOf(store, chat, prompt), prompt.kind === 'prompt' ? prompt.prompt.value.toggles.length : 0);
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
-  const scripted = triggersOf(packsOf(store, chat).map(({ pack }) => pack)).length > 0;
+  const scripted = triggersOf(packsOf(store, chat)).length > 0;
   const [openedAt] = useState(() => Date.now());
   const greetings = card?.greetings ?? [];
   const [picked, setGreeting] = useState<number | null>(null);

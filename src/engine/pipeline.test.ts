@@ -459,7 +459,7 @@ describe('a request a script rewrote', () => {
     { role: 'assistant', content: 'first reply' },
     { role: 'user', content: 'second hello' },
   ];
-  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, memory: null, dropped: 2 };
+  const prompt: Assembled = { tools: { placed: 'implicit' }, messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, memory: null, dropped: 2 };
   const note: ChatMessage = { role: 'system', content: 'from the script' };
   const count = (text: string) => text.length;
 
@@ -468,5 +468,36 @@ describe('a request a script rewrote', () => {
     expect(rewritten(prompt, edited, count, null)).toEqual({ ...prompt, messages: edited, parts: [prompt.parts[0], prompt.parts[1], { from: { kind: 'script' }, tokens: 15 }, prompt.parts[2], prompt.parts[3]] });
     expect(rewritten(prompt, edited, count, 50)).toMatchObject({ messages: [built[0], note, built[2], built[3]], dropped: 3 });
     expect(rewritten(prompt, edited, count, 30)).toEqual({ kind: 'too-long', tokens: 38, budget: 30 });
+  });
+});
+
+describe('tool prompt text', () => {
+  const tools = [{ module: 'a', name: 'Notes', text: 'one {{getvar::untouched}}' }, { module: 'b', name: 'Memory', text: 'two' }];
+  const chat = { id: 'chat', name: null, kind: 'slot' as const, slot: 'chat' as const, range: { from: 0, to: null } };
+
+  it('fills an explicit slot in pack order with provenance and without evaluating tool text', () => {
+    const base = input();
+    const prompt = { ...base.scope.prompt, blocks: [{ id: 'tool', name: null, kind: 'slot' as const, slot: 'tool' as const, role: 'system' as const, wrapper: '<tools>{{slot}}</tools>' }, chat] };
+    const built = assembledOf(assemble({ ...base, scope: { ...base.scope, prompt }, tools }));
+    expect(built.messages[0]).toMatchObject({ role: 'system', content: '<tools>one {{getvar::untouched}}\n\ntwo</tools>' });
+    expect(built.parts[0]!.from).toEqual({ kind: 'tool', name: 'Notes · Memory' });
+    expect(built.tools).toEqual({ placed: 'slot' });
+  });
+
+  it('places one implicit system message immediately before the first chat slot', () => {
+    const base = input();
+    const prompt = { ...base.scope.prompt, blocks: [{ id: 'top', name: null, kind: 'text' as const, role: 'system' as const, text: 'top', mark: null }, chat, { ...chat, id: 'again' }] };
+    const built = assembledOf(assemble({ ...base, scope: { ...base.scope, prompt }, tools }));
+    expect(built.messages[0]!.content).toBe('top');
+    expect(built.messages[1]).toMatchObject({ role: 'system', content: 'one {{getvar::untouched}}\n\ntwo' });
+    expect(built.parts.filter(({ from }) => from.kind === 'tool')).toHaveLength(1);
+    expect(built.tools).toEqual({ placed: 'implicit' });
+  });
+
+  it('adds no message for blank tool answers', () => {
+    const base = input();
+    const built = assembledOf(assemble({ ...base, tools: [{ module: 'a', name: 'empty', text: '  ' }] }));
+    expect(built.messages).toEqual(assembledOf(assemble(base)).messages);
+    expect(built.parts.some(({ from }) => from.kind === 'tool')).toBe(false);
   });
 });

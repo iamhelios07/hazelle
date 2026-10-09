@@ -1,3 +1,5 @@
+import type { Binding } from './script-binding';
+import type { ToolUnit } from '../model/tool';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { RELAY_HEADER } from '../contracts/http';
 import type { Card } from '../engine/import/types';
@@ -160,14 +162,14 @@ export function testServer() {
     wipe: () => app.reset(),
     // A session on an account of its own, closed when test ends. keepSynced listens on the window and
     // pulls only while the tab is visible, so a hidden one never pulls on its own.
-    async withSession(test: (session: Session) => Promise<void>) {
+    async withSession(test: (session: Session) => Promise<void>, tools?: Binding<ToolUnit>) {
       vi.stubGlobal('window', new EventTarget());
       vi.stubGlobal('document', { visibilityState: 'hidden' });
       const { accountId, vaultKey } = await harness.account();
-      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, async () => {
+      const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { tools, lua: async () => {
         const machine = await lua;
-        return { run: (...args) => runEvent(machine, ...args), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
-      });
+        return { run: (chat, units, scope, event, host) => runEvent(machine, chat, units, scope, event, host), installDisplay: (...args) => machine.installDisplay(...args), display: (...args) => machine.display(...args), forgetDisplay: (...args) => machine.forgetDisplay(...args), close: () => machine.close() };
+      } });
       if (!opened.ok) throw new Error(opened.error);
       try {
         await test(opened.data);

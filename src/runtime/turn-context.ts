@@ -93,7 +93,7 @@ export type Sending = { turn: TurnContext; prompt: Assembled };
 // asker: whose forecast this is, each with its own evaluation lane, kept with the chat so a forecast sends the worker
 // only what changed since its last: the composer's, background memory's (Rememberer) and the memory panel's. One lane
 // shared by two would have each cancel the other's.
-export async function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: string, target: Target, signal?: AbortSignal, asker: 'forecast' | 'memory' | 'view' = 'forecast'): Promise<Sending | null> {
+export async function wouldSend(session: Pick<Session, 'store' | 'read' | 'scripts'>, chat: string, target: Target, signal?: AbortSignal, asker: 'forecast' | 'memory' | 'view' = 'forecast'): Promise<Sending | null> {
   // What the prompt reads may change while it is evaluated: it is gathered and evaluated again once, so a save landing
   // mid-flight does not cost memory its round.
   for (let tries = 0; tries < 2; tries++) {
@@ -102,7 +102,7 @@ export async function wouldSend(session: Pick<Session, 'store' | 'read'>, chat: 
     const { value: turn, reads } = session.store.capture(() => gatherTurn(session, chat, target));
     const revisions = reads.map((read) => session.store.revision(read));
     if (turn === null || 'kind' in turn) return null;
-    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, tools: [], continuing: false, memory: turn.memory }, signal);
+    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, tools: session.scripts.cachedTools(chat), continuing: false, memory: turn.memory }, signal);
     if (signal?.aborted) return null;
     if (session.store.loadedHead(chat) === projection.summary.head && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? null : { turn, prompt };
   }

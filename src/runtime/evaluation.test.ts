@@ -214,3 +214,30 @@ it('holds a job to its chat\'s verdict as it is posted: a passive one is refused
   evaluation.close();
   await expect(pressed).rejects.toBeInstanceOf(EvaluationStopped);
 });
+
+it('reads tool state lazily from the prompt replay, filters its namespace, and replays changed tails', async () => {
+  const evaluation = new Evaluation(none);
+  const prefix = 'tool:jin/notes:';
+  const first = { ...scope, messages: [message('a', '{{setvar::tool:jin/notes:count::1}}hello {{getvar::tool:jin/notes:count}}')], variables: [['private', 'secret'], ['tool:other/tool:key', 'hidden']] as [string, string][] };
+  const lane = { asker: 'tool', chat: 'c', tool: 'm' } as const;
+  const read = await evaluation.state(lane, first, prefix);
+  expect(read).toMatchObject({ texts: ['hello 1'], variables: [[`${prefix}count`, '1']] });
+  const next = { ...first, messages: [...first.messages, message('b', '{{setvar::tool:jin/notes:count::2}}next')], pending: [[`${prefix}pending`, '3']] as [string, string][] };
+  expect(await evaluation.state(lane, next, prefix)).toMatchObject({ texts: ['hello 1', 'next'], variables: [[`${prefix}count`, '2'], [`${prefix}pending`, '3']] });
+  evaluation.close();
+});
+
+it('logs state read timing over a 1000-message history without asserting a wall-clock budget', async () => {
+  const evaluation = new Evaluation(none);
+  const history = { ...scope, messages: Array.from({ length: 1000 }, (_, index) => message(String(index), `Message ${index}. {{setvar::tool:jin/memory:turn::${index}}} ${'A traveler walks toward the old lighthouse. '.repeat(12)}`)) };
+  const lane = { asker: 'tool', chat: 'timing', tool: 'memory' } as const;
+  const samples: number[] = [];
+  for (let read = 0; read < 15; read++) {
+    const start = performance.now();
+    await evaluation.state(lane, history, 'tool:jin/memory:');
+    samples.push(performance.now() - start);
+  }
+  samples.sort((a, b) => a - b);
+  console.info(JSON.stringify({ measurement: 'tool-state', fixture: 'synthetic-1000-message-CBS-history', messages: history.messages.length, reads: samples.length, p50Ms: samples[7], p95Ms: samples[14] }));
+  evaluation.close();
+});

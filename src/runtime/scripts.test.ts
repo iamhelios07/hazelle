@@ -1,3 +1,10 @@
+import { importModule, setModuleAlways } from './modules';
+import { importTool } from './tools/store';
+import { readTool } from '../engine/import/tool';
+import { toolVar, type ToolUnit } from '../model/tool';
+import { noOutcome, type Binding } from './script-binding';
+import type { ScriptOutcome } from './lua/event';
+import { gatherTurn, wouldSend } from './turn-context';
 import type { LuaRunner } from './script-binding';
 import { describe, expect, it, vi } from 'vitest';
 import { fetchApi } from './api';
@@ -5,7 +12,7 @@ import type { Trigger } from '../engine/import/types';
 import { Lua } from '../engine/lua/run';
 import { fold, modelUsage, shown, usageCalls } from '../model/chat';
 import { setToggle } from './characters';
-import { appendUserMessage, startChat } from './chat-log';
+import { appendUserMessage, selectVersion, startChat } from './chat-log';
 import { EvaluationFailed, EvaluationStuck } from './evaluation';
 import { projectGreetings } from './greetings';
 
@@ -35,7 +42,7 @@ async function chatWith(session: Session, script: string | Trigger[], toggles = 
 describe('triggersOf', () => {
   it('leaves out a trigger turned off and a Lua one with no code', () => {
     const lua = (id: string, code: string, off?: true): Trigger => ({ kind: 'lua', id, name: id, code, ...(off && { off }) });
-    expect(triggersOf([{ regex: [], triggers: [lua('a', 'x()'), lua('b', ' \n'), lua('c', 'y()', true)], toggles: '' }]).map(({ id }) => id)).toEqual(['a']);
+    expect(triggersOf([{ id: 'c', module: null, pack: { regex: [], triggers: [lua('a', 'x()'), lua('b', ' \n'), lua('c', 'y()', true)], toggles: '' } }]).map(({ id }) => id)).toEqual(['a']);
   });
 });
 
@@ -207,7 +214,7 @@ describe("the bot scripts' machine", () => {
     const { accountId, vaultKey } = await server.account();
     let made!: (runner: LuaRunner) => void;
     const lua = vi.fn(() => new Promise<LuaRunner>((resolve) => (made = resolve)));
-    const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, lua);
+    const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { lua });
     if (!opened.ok) throw new Error(opened.error);
     const { chat } = await chatWith(opened.data, `function open(id) end`);
     const pressed = opened.data.scripts.press(chat, { trigger: 'open' });
@@ -344,4 +351,114 @@ describe("the display with the bot's Lua", () => {
       mixed.leave();
       display.mockRestore();
     }));
+});
+
+
+async function toolChat(session: Session) {
+  await answerable(session);
+  const parsed = readTool(new TextEncoder().encode('//@api 1\n//@name notes\n//@author jin\n//@display-name 메모\n//@uses model\n//@menu now 지금 정리'));
+  if (!parsed.ok) throw new Error('fixture');
+  const added = await importTool(session.store, session.files, parsed.tool);
+  if (!added.ok) throw new Error(added.error);
+  await setModuleAlways(session.store, added.data.id, true);
+  const chat = crypto.randomUUID();
+  await server.hold(session.store, chat);
+  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  return { chat, module: added.data.id, variable: toolVar(parsed.tool.manifest, 'summary'), messages: () => fold(session.store.children('entry', chat)) };
+}
+
+describe('tool events through Scripts', () => {
+  it('adds live slot text and before writes to a turn, reuses its forecast, and never starts Lua', async () => {
+    let variable = '';
+    const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, _units, _scope, event) => ({ ...noOutcome(), ...(event.kind === 'prompt' && { value: 'tool summary', writes: [[variable, '"prepared"']] as [string, string][] }) }));
+    const binding = { run, close: () => {} };
+    await server.withSession(async (session) => {
+      const fixture = await toolChat(session);
+      variable = fixture.variable;
+      const lua = vi.spyOn(Lua.prototype, 'run');
+      const log = stubRelay(() => saying('reply'));
+      expect(await takeTurn(session, fixture.chat, { kind: 'send', text: 'hello' })).toBeNull();
+      await expect.poll(() => fixture.messages().length).toBe(2);
+      expect(shown(fixture.messages()[1]!).before).toEqual([[variable, '"prepared"']]);
+      expect(log[0]!.sent.body).toContain('tool summary');
+      expect(session.talk.sent(shown(fixture.messages()[1]!).id)!.prompt.parts).toContainEqual(expect.objectContaining({ from: { kind: 'tool', name: '메모' } }));
+      const prompts = () => run.mock.calls.filter((args) => args[3].kind === 'prompt').length;
+      expect(prompts()).toBe(1);
+      expect((await wouldSend(session, fixture.chat, { kind: 'answer' }))!.prompt.messages.some(({ content }) => content === 'tool summary')).toBe(true);
+      expect(prompts()).toBe(1);
+      expect(lua).not.toHaveBeenCalled();
+    }, binding);
+  });
+
+  it('anchors a delayed reply write to its saved version across regeneration', async () => {
+    let finish!: (outcome: ScriptOutcome) => void;
+    let replies = 0;
+    const binding: Binding<ToolUnit> = { run: async (_chat, _units, _scope, event) => {
+      if (event.kind === 'reply' && replies++ === 0) return new Promise<ScriptOutcome>((resolve) => { finish = resolve; });
+      return noOutcome();
+    }, close: () => {} };
+    await server.withSession(async (session) => {
+      const fixture = await toolChat(session);
+      stubRelay(() => saying('reply'));
+      await takeTurn(session, fixture.chat, { kind: 'send', text: 'hello' });
+      await expect.poll(() => replies).toBe(1);
+      const original = shown(fixture.messages()[1]!).id;
+      await takeTurn(session, fixture.chat, { kind: 'regenerate', message: fixture.messages()[1]!.id });
+      await expect.poll(() => fixture.messages()[1]!.versions.length).toBe(2);
+      finish({ ...noOutcome(), writes: [[fixture.variable, '"old summary"']] });
+      await expect.poll(() => session.store.children('entry', fixture.chat).some(({ value }) => value.type === 'vars' && value.version === original)).toBe(true);
+      expect(shown(fixture.messages()[1]!).after ?? []).toEqual([]);
+      await selectVersion(session.store, fixture.chat, fixture.messages()[1]!.id, original);
+      expect(shown(fixture.messages()[1]!).after).toEqual([[fixture.variable, '"old summary"']]);
+    }, binding);
+  });
+
+  it('skips a prompt after its deadline, drops late writes, and notes that tool only once', async () => {
+    const finish: ((outcome: ScriptOutcome) => void)[] = [];
+    const run = vi.fn<Binding<ToolUnit>['run']>(() => new Promise((resolve) => finish.push(resolve)));
+    await server.withSession(async (session) => {
+      const fixture = await toolChat(session);
+      await appendUserMessage(session.store, fixture.chat, { id: crypto.randomUUID(), text: 'hello' });
+      await session.store.projections.evaluate(fixture.chat);
+      const gather = () => gatherTurn(session, fixture.chat, { kind: 'answer' });
+      const turn = gather();
+      if (!turn || 'kind' in turn) throw new Error('fixture');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const prompt = session.scripts.prompting(fixture.chat, turn, async () => gather(), new AbortController().signal);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(run).toHaveBeenCalledTimes(attempt + 1);
+          await vi.advanceTimersByTimeAsync(5001);
+          expect(await prompt).toMatchObject({ tools: [], turn: { reply: { before: [] } } });
+          finish[attempt]!({ ...noOutcome(), value: 'too late', writes: [[fixture.variable, 'late']] });
+        }
+        expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'late')).toMatchObject([{ from: { kind: 'module', id: fixture.module } }]);
+        expect(session.store.children('entry', fixture.chat).filter(({ value }) => value.type === 'vars')).toEqual([]);
+      } finally { vi.useRealTimers(); for (const resolve of finish) resolve(noOutcome()); }
+    }, { run, close: () => {} });
+  });
+
+  it('asks module Lua on its own behalf even with no character, and remembers it in another chat', () => server.withSession(async (session) => {
+    await answerable(session);
+    const added = await importModule(session.store, session.files, { name: 'module', description: '', namespace: null, risu: null, pack: { regex: [], toggles: '', triggers: [{ kind: 'lua', id: 'lua', name: 'model', code: 'askModel = async(function(id) LLM(id, {{role="user", content="summarize"}}) end)' }] }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
+    if (!added.ok) throw new Error(added.error);
+    await setModuleAlways(session.store, added.data.id, true);
+    const log = stubRelay(() => saying('summary'));
+    for (let index = 0; index < 2; index++) {
+      const chat = crypto.randomUUID();
+      await server.hold(session.store, chat);
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
+      const pressed = session.scripts.press(chat, { trigger: 'askModel' });
+      if (!index) {
+        await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: added.data.id }, question: { kind: 'model' } }]);
+        session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');
+      }
+      await pressed;
+      expect(session.store.get('module', added.data.id)!.value.botModels).toBe(true);
+      expect(session.scripts.snapshot().questions).toEqual([]);
+    }
+    expect(log).toHaveLength(2);
+  }));
 });

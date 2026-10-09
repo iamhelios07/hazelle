@@ -274,7 +274,7 @@ export class Rememberer {
   private readonly stop: () => void;
 
   constructor(
-    private readonly session: Pick<Session, 'store' | 'read' | 'credentials'>,
+    private readonly session: Pick<Session, 'store' | 'read' | 'credentials' | 'scripts'>,
     // The calls this page reads (runtime/streams), shared with Talk, Translator and Streams.
     private readonly reading: Set<string>,
   ) {
