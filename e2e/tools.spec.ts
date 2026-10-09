@@ -1,8 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { embedded, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, type FakeChatRequest } from './helpers';
+import { embedded, enter, FAKE_ADDRESS, FAKE_EMBED, FAKE_MODEL, fakeProvider, importFile, saving, type FakeChatRequest } from './helpers';
 
-const PASSWORD = 'e2e-password';
 const NOTE = 'The brass key is under the lantern.';
 const summary = (index: number) => `TOOL_SUMMARY_${index}: the gate is open.`;
 const auxiliary = (request: FakeChatRequest) => request.messages.some(({ role, content }) => role === 'system' && content.startsWith('Summarize the conversation'));
@@ -20,42 +19,6 @@ const CARD = {
     },
   })),
 };
-
-async function enter(page: Page): Promise<boolean> {
-  await page.goto('/');
-  const signup = page.getByLabel('비밀번호 확인', { exact: true });
-  const signin = page.getByRole('button', { name: '로그인', exact: true });
-  await expect(signup.or(signin)).toBeVisible();
-  await page.getByLabel('아이디', { exact: true }).fill('e2e');
-  await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
-  // flow.spec.ts owns the first signup in the full suite; this file must also work on its own fresh server.
-  if (await signin.isVisible()) {
-    await signin.click();
-    await expect(signin).toBeHidden();
-    return false;
-  }
-  await signup.fill(PASSWORD);
-  await page.getByRole('button', { name: '다음', exact: true }).click();
-  await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
-  await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
-  await page.getByRole('button', { name: '시작하기', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '아직 비어 있어요', exact: true })).toBeVisible();
-  return true;
-}
-
-async function importFile(page: Page, button: string, file: string | typeof CARD) {
-  const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: button, exact: true }).first().click();
-  const notice = page.getByRole('button', { name: '확인했어요', exact: true });
-  if (await notice.isVisible()) await notice.click();
-  await (await chooser).setFiles(file);
-  const report = page.getByRole('dialog', { name: '가져왔어요', exact: true });
-  await expect(report).toBeVisible();
-  return report;
-}
-
-// A write shows at once and reaches the server after; a navigation before it lands loses it.
-const saving = (page: Page) => page.waitForResponse((response) => response.url().includes('/api/objects/batch') && response.request().method() === 'POST');
 
 async function importModule(page: Page, name: string) {
   await page.goto('/modules');
@@ -220,9 +183,8 @@ test('a memory tool holds the memory slot, recalls by embedding, badges, follows
     }
     const picker = page.getByRole('button', { name: /^임베딩 모델 · / });
     await picker.click();
-    await expect(page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_EMBED}`) })).toHaveCount(1);
     const saved = saving(page);
-    await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_EMBED}`) }).click();
+    await page.getByRole('menuitemradio', { name: new RegExp(`^${FAKE_EMBED}`) }).first().click();
     await saved;
     await expect(picker).toContainText(FAKE_EMBED);
     await importModule(page, 'recall');

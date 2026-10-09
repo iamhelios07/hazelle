@@ -1,3 +1,4 @@
+import { expect, type Page } from '@playwright/test';
 import { createServer } from 'node:http';
 import { unpack } from '../src/engine/import/risum';
 
@@ -187,3 +188,42 @@ export const MODULE = {
     ],
   }),
 };
+
+const E2E_PASSWORD = 'e2e-password';
+
+// true when it signed up.
+export async function enter(page: Page): Promise<boolean> {
+  await page.goto('/');
+  const signup = page.getByLabel('비밀번호 확인', { exact: true });
+  const signin = page.getByRole('button', { name: '로그인', exact: true });
+  await expect(signup.or(signin)).toBeVisible();
+  await page.getByLabel('아이디', { exact: true }).fill('e2e');
+  await page.getByLabel('비밀번호', { exact: true }).fill(E2E_PASSWORD);
+  // flow.spec.ts owns the first signup in the full suite; a spec run alone signs up on its own fresh server.
+  if (await signin.isVisible()) {
+    await signin.click();
+    await expect(signin).toBeHidden();
+    return false;
+  }
+  await signup.fill(E2E_PASSWORD);
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
+  await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
+  await page.getByRole('button', { name: '시작하기', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '아직 비어 있어요', exact: true })).toBeVisible();
+  return true;
+}
+
+export async function importFile(page: Page, button: string, file: string | typeof CARD) {
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: button, exact: true }).first().click();
+  const notice = page.getByRole('button', { name: '확인했어요', exact: true });
+  if (await notice.isVisible()) await notice.click();
+  await (await chooser).setFiles(file);
+  const report = page.getByRole('dialog', { name: '가져왔어요', exact: true });
+  await expect(report).toBeVisible();
+  return report;
+}
+
+// A write shows at once and reaches the server after; a navigation before it lands loses it.
+export const saving = (page: Page) => page.waitForResponse((response) => response.url().includes('/api/objects/batch') && response.request().method() === 'POST');
