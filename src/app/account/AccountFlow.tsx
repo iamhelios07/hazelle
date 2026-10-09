@@ -6,6 +6,7 @@ import { lockVault, recallVault, rememberVault } from '../../vault/device';
 import { canonicalUsername, createVault, openVault, passwordCredential, wrapWithPassword, type Credential, type VaultKey } from '../../vault/keys';
 import { describeFailure, wrongSecret } from '../common/failure';
 import type { Account } from '../session';
+import { Brand, Progress, Screen } from '../ui';
 import { PasswordScreen } from './PasswordScreen';
 import { RecoveryKeyScreen } from './RecoveryKeyScreen';
 import { SignInScreen } from './SignInScreen';
@@ -94,9 +95,13 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
 
   switch (state.kind) {
     case 'loading':
-      return null;
+      return (
+        <Screen top={<Brand />} align="center">
+          <Progress hero title="불러오는 중" steps={[{ label: '계정 확인' }]} />
+        </Screen>
+      );
     case 'unreachable':
-      return <UnreachableScreen message={state.message} onRetry={reload} />;
+      return <UnreachableScreen message={state.message} onRetry={() => reload()} />;
     case 'signup': {
       const { draft, step } = state;
       if (step === 'recovery') {
