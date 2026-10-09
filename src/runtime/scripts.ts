@@ -8,12 +8,14 @@ import { Runaway } from '../engine/cbs/evaluate';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { Event, ToolEvent, Outcome, ScriptUnit, ModelResult, ModelRefusal } from '../engine/script-api';
+import type { EmbedResult, Event, ToolEvent, Outcome, ScriptUnit, ModelResult, ModelRefusal } from '../engine/script-api';
+import type { EmbedPurpose } from '../connectors/types';
 import type { Host, ModelMessage, Question } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
-import { shown, type Writes } from '../model/chat';
+import { shown, type Receipt, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
-import { chatModel } from './assignment';
+import { chatModel, embedModel } from './assignment';
+import { embedTexts } from './embed';
 import { setModels, setTakesMemory } from './pack';
 import { memoryOwner } from './memory-read';
 import { appendCall, appendScripted, appendUserMessage, type Written } from './chat-log';
@@ -507,7 +509,7 @@ export class Scripts {
     if (this.closing.signal.aborted || signal?.aborted) return nothing;
     const from = ownerOf(units);
     try {
-      const host = this.host(chat, scope, signal);
+      const host = this.host(chat, scope, signal, event.kind === 'prompt');
       const running = 'lua' in units
         ? this.bindings.lua().then((runner) => runner.run(chat, units.lua, scope, event, host))
         : this.bindings.tools.run(chat, units.tool, scope, units.event, host, signal);
@@ -541,12 +543,14 @@ export class Scripts {
     if (missing.length > 0) this.tell(chat, `missing:${missing.join()}`, { kind: 'missing', names: missing }, from);
   }
 
-  private host(chat: string, scope: ChatScope, signal?: AbortSignal): Host {
+  // deadline: the run answers the prompt event, whose deadline would dismiss a card before anyone read it.
+  private host(chat: string, scope: ChatScope, signal?: AbortSignal, deadline = false): Host {
+    const either = (callSignal?: AbortSignal) => (callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal);
     return {
       say: (tone, text, from) => { if (!signal?.aborted) this.note(chat, { kind: 'said', tone, text }, from); },
-      ask: (question, from, callSignal) => this.ask(chat, question, from, callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal),
-      model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal),
-      embed: async () => ({ ok: false, reason: 'no-model' }),
+      ask: (question, from, callSignal) => this.ask(chat, question, from, either(callSignal)),
+      model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, deadline, either(callSignal)),
+      embed: (texts, as, from, callSignal) => this.embed(chat, texts, as, from, deadline, either(callSignal)),
       tokens: async (text) => {
         const counted = await this.session.store.evaluation.count([text]);
         if ('kind' in counted) throw new Error('tokenizer');
@@ -580,31 +584,37 @@ export class Scripts {
     });
   }
 
+  // Whether spender may call models, embeddings included (design §6.8, §6.10): asked once per spender and kept on it.
+  // Under a deadline an unanswered one is no, without a card; the next run with time to wait asks.
+  private async allowed(chat: string, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<boolean> {
+    const { store } = this.session;
+    const spender = live(store.get(from.kind, from.id));
+    if (!spender) return false;
+    if (spender.value.botModels !== undefined) return spender.value.botModels;
+    if (deadline) return false;
+    const key = `${from.kind}:${from.id}`;
+    let deciding = this.consents.get(key);
+    if (!deciding) {
+      deciding = this.ask(chat, { kind: 'model' }, from, signal).then(async (answer) => {
+        if (answer === null) return false;
+        const saved = await setModels(store, from, answer === 'yes');
+        return saved.ok && answer === 'yes';
+      }).finally(() => this.consents.delete(key));
+      this.consents.set(key, deciding);
+    }
+    return deciding;
+  }
+
   // A script's own model call (design §6.8, §6.10): only for a spender the user allowed, to the chat's model of the
   // role, with a receipt kept on the last message shown so usage and cost count it. Risu's answer shape stays at the
   // Lua binding. The reason also lets the tool binding answer without parsing text.
-  private async model(chat: string, role: Role, messages: ModelMessage[], from: PackOwner, signal?: AbortSignal): Promise<ModelResult> {
-    const { store, credentials, costs } = this.session;
+  private async model(chat: string, role: Role, messages: ModelMessage[], from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<ModelResult> {
+    const { store, credentials } = this.session;
     const refused = (reason: ModelRefusal, why: string): ModelResult => ({ success: false, reason, result: `Error: ${why}` });
     if (signal?.aborted || this.closing.signal.aborted) return refused('failed', 'stopped');
     const stored = live(store.get('chat', chat));
-    const spender = live(store.get(from.kind, from.id));
-    if (!stored || !spender) return refused('failed', 'the chat or spender is gone');
-    let allowed = spender.value.botModels;
-    if (allowed === undefined) {
-      const key = `${from.kind}:${from.id}`;
-      let deciding = this.consents.get(key);
-      if (!deciding) {
-        deciding = this.ask(chat, { kind: 'model' }, from, signal).then(async (answer) => {
-          if (answer === null) return false;
-          const saved = await setModels(store, from, answer === 'yes');
-          return saved.ok && answer === 'yes';
-        }).finally(() => this.consents.delete(key));
-        this.consents.set(key, deciding);
-      }
-      allowed = await deciding;
-    }
-    if (!allowed) return refused('not-allowed', 'the user has not allowed this script to call models');
+    if (!stored || !live(store.get(from.kind, from.id))) return refused('failed', 'the chat or spender is gone');
+    if (!(await this.allowed(chat, from, deadline, signal))) return refused('not-allowed', 'the user has not allowed this script to call models');
     if (signal?.aborted || !live(store.get(from.kind, from.id))) return refused('failed', 'stopped');
 
     const route = chatModel(store, stored.value, role);
@@ -630,13 +640,38 @@ export class Scripts {
       this.tell(chat, 'flood', { kind: 'flood' }, from);
       return refused('flood', 'too many model calls in a minute');
     }
-    const receipt = receiptOf(callOf(route), answer);
-    const last = this.session.read.chat(chat).snapshot()?.messages.at(-1);
-    if (last) {
-      const saved = await appendCall(store, chat, shown(last).id, receipt);
-      if (saved.ok) costs.settle(chat, receipt);
-    }
+    await this.keep(chat, receiptOf(callOf(route), answer));
     return answer.state === 'failed' ? refused('failed', answer.error?.kind ?? 'failed') : { success: true, result: text };
+  }
+
+  // With the account's 임베딩 모델, under the spender's one answer for model calls.
+  private async embed(chat: string, texts: string[], as: EmbedPurpose | null, from: PackOwner, deadline: boolean, signal?: AbortSignal): Promise<EmbedResult> {
+    const { store, credentials } = this.session;
+    if (signal?.aborted || this.closing.signal.aborted || !live(store.get('chat', chat)) || !live(store.get(from.kind, from.id))) return { ok: false, reason: 'failed' };
+    if (!(await this.allowed(chat, from, deadline, signal))) return { ok: false, reason: 'not-allowed' };
+    if (signal?.aborted || !live(store.get(from.kind, from.id))) return { ok: false, reason: 'failed' };
+    const route = embedModel(store);
+    if ('kind' in route) {
+      this.tell(chat, 'no-model:embed', { kind: 'no-model', role: 'embed' }, from);
+      return { ok: false, reason: 'no-model' };
+    }
+    const count = async (each: string[]) => {
+      const counted = await store.evaluation.count(each);
+      if ('kind' in counted) throw new Error('tokenizer');
+      return counted;
+    };
+    const { answer, receipt } = await embedTexts({ credentials, count }, route, texts, as, chat, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
+    if (receipt) await this.keep(chat, receipt);
+    if (!answer.ok && answer.reason === 'flood') this.tell(chat, 'flood', { kind: 'flood' }, from);
+    return answer;
+  }
+
+  // On the last message shown, so usage and cost count the call.
+  private async keep(chat: string, receipt: Receipt) {
+    const last = this.session.read.chat(chat).snapshot()?.messages.at(-1);
+    if (!last) return;
+    const saved = await appendCall(this.session.store, chat, shown(last).id, receipt);
+    if (saved.ok) this.session.costs.settle(chat, receipt);
   }
 
   // One run at a time per chat, each reading the chat as the one before left it: a write returns before its chat's
