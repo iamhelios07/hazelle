@@ -8,7 +8,7 @@ export type ToolOutcome = {
   value?: Hazelle.PromptAnswer; writes: [string, Json | undefined][]; edits: { index: number; text: string }[]; added: { role: 'user' | 'char'; text: string }[];
   data: [string, Json | undefined][]; badges: { index: number; text: string | null }[];
 };
-export type Method = 'chat.messages' | 'chat.state.get' | 'chat.data.get' | 'chat.data.keys' | 'model' | 'embed' | 'ask' | 'say' | 'tokens' | 'lore' | 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'settings' | 'post' | 'page.close';
+export type Method = 'chat.messages' | 'chat.greeting' | 'chat.state.get' | 'chat.data.get' | 'chat.data.keys' | 'model' | 'embed' | 'ask' | 'say' | 'tokens' | 'lore' | 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'settings' | 'post' | 'page.close';
 export type Down =
   | { kind: 'load'; api: 1; role: 'background' | 'page'; code: string; manifest: ToolManifest; settings: Settings; chat: ChatHeader | null; theme: 'dark' | 'light' }
   | { kind: 'event'; id: number; event: EventName; chat: ChatHeader | null; reply?: Hazelle.At; turn?: Hazelle.Turn; change?: Hazelle.Change; from?: Hazelle.Branched; item?: string; message?: Hazelle.At }

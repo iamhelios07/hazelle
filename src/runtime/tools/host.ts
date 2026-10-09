@@ -336,6 +336,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
           frame.messages = messages;
           return tail;
         }
+        if (method === 'chat.greeting') return context.scope.greeting === null ? null : (await this.state(frame, context)).texts[0]!;
         if (method === 'chat.state.get' && typeof first === 'string') return decodeState(new Map((await this.state(frame, context)).variables).get(toolVar(entry.tool.manifest, first)));
         if (method === 'chat.data.get' && typeof first === 'string') return toolChatData(this.session.store, entry.module, context.chat, first);
         if (method === 'chat.data.keys') return toolChatKeys(this.session.store, entry.module, context.chat);

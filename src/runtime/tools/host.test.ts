@@ -8,7 +8,8 @@ import { appendUserMessage, editMessage, startChat } from '../chat-log';
 import { setModuleAlways, setModuleDeleted } from '../modules';
 import { ToolLate, ToolStuck } from '../script-binding';
 import type { Session } from '../session';
-import { answerable, testServer } from '../testing';
+import { answerable, testCard, testServer } from '../testing';
+import { projectGreetings } from '../greetings';
 import { inProcessTools } from '../testing/tool-transport';
 import { ToolHost } from './host';
 import type { OpenFrame } from './frame';
@@ -27,14 +28,16 @@ const source = (version = '1', uses = '//@uses model\n') => {
   if (!result.ok) throw new Error('fixture');
   return result.tool;
 };
-async function fixture(session: Session, uses?: string) {
+async function fixture(session: Session, uses?: string, greeting?: string) {
   await answerable(session);
   const added = await importTool(session.store, session.files, source('1', uses));
   if (!added.ok) throw new Error(added.error);
   await setModuleAlways(session.store, added.data.id, true);
   const chat = crypto.randomUUID();
   await server.hold(session.store, chat);
-  await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+  const card = greeting === undefined ? null : await session.store.create('character', { card: { ...testCard('Mira'), greetings: [greeting] }, folder: null, loreFolders: [] });
+  if (card && !card.ok) throw new Error(card.error);
+  await startChat(session.store, chat, { title: null, character: card?.data.id ?? null, models: {} }, card && projectGreetings([greeting!], [crypto.randomUUID()], 0));
   await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
   await session.store.projections.evaluate(chat);
   const tool = () => ({ module: added.data.id, tool: session.store.get('tool', toolId(added.data.id))!.value });
@@ -83,6 +86,18 @@ it('names each message by its own id and the version shown', () => withTools(asy
     const edited = shown(session.store.foldedChat(f.chat).messages[0]!).id;
     expect(edited).not.toBe(said.id);
     expect(read).toEqual([expect.objectContaining({ index: 0, id: said.id, version: edited, text: 'edited' })]);
+  } finally { host.close(); }
+}));
+
+it('reads the greeting apart from the messages, which count from after it', () => withTools(async (session, connect) => {
+  const f = await fixture(session, '', 'Welcome, {{user}}.');
+  let read: { greeting: string | null; messages: Hazelle.Message[] } | null = null;
+  const transport = inProcessTools((api) => { api.on('prompt', async (chat) => { read = { greeting: await chat.greeting(), messages: await chat.messages() }; return null; }); });
+  const host = connect(transport.open);
+  try {
+    const context = f.context();
+    await host.run(f.chat, f.tool(), context.scope, { kind: 'prompt', turn: { memory: false } }, context.host);
+    expect(read).toEqual({ greeting: expect.stringMatching(/^Welcome, (?!\{\{)/), messages: [expect.objectContaining({ index: 0, text: 'hello' })] });
   } finally { host.close(); }
 }));
 

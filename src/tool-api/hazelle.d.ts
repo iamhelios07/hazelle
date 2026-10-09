@@ -34,6 +34,7 @@ declare namespace Hazelle {
     readonly persona: { name: string; description: string } | null;
     readonly length: number;
     messages(from?: number, to?: number): Promise<Message[]>;
+    greeting(): Promise<string | null>;         // the character's opening message, before index 0
     readonly state: ChatState;
     readonly data: ChatData;
     edit(index: number, text: string): void;    // a new version, as Lua's setChat; throws in change and branch
@@ -58,7 +59,8 @@ declare namespace Hazelle {
   type Turn = { memory: boolean };
   // memory goes in the memory slot, before the history, and should change only when a chunk closes: a text that
   // changes every turn re-sends the cached history every turn. Per-turn recall goes in tool, after the history.
-  // through: the id of the last message memory stands for; it and every message before it leave the request.
+  // through: the id of the last message memory stands for; it and every message before it, the greeting included,
+  // leave the request.
   type PromptAnswer = string | null | { tool?: string | null; memory?: { text: string; through: string | null } };
   type Change = At & { kind: 'edit' | 'select' | 'delete' | 'restore' };
   type Branched = { from: string; messages: Record<string, string>; versions: Record<string, string> };   // old id → new

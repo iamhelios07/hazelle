@@ -58,6 +58,7 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
         history = [...history.slice(0, tail.from), ...tail.items];
         return history.slice(from, to);
       },
+      greeting: () => call<string | null>('chat.greeting', [], event),
       state: {
         get: async <T extends Json>(key: string): Promise<T | undefined> => {
           const current = pending().writes;
