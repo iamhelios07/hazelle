@@ -3,6 +3,7 @@ import type { Stored, Values } from '../model/kinds';
 import { daysLeft, REMOVABLE, type Mark, type Removable } from '../model/library';
 import { KINDS, parentKinds, type Kind, type Rule } from '../model/kinds';
 import type { ApiResult } from './api';
+import { SCOPED } from './object-cache';
 import type { ObjectRow, ObjectStore, Pin } from './store';
 
 const KIND_NAMES = Object.keys(KINDS) as Kind[];
@@ -26,7 +27,11 @@ export async function planRemoval(store: ObjectStore, root: { kind: Kind; id: st
       const rule: Rule = KINDS[kind];
       if (rule.owner?.kind !== object.kind) continue;
       const field = rule.owner.field;
-      children.push(...store.list(kind).filter(({ value }) => (value as Record<string, unknown>)[field] === object.id));
+      const owned = (value: unknown) => (value as Record<string, unknown> | undefined)?.[field] === object.id;
+      // A chat's own kinds are held only while the chat is open: the feed is asked for every one of the kind.
+      const scanned = SCOPED.has(kind) ? await store.scan({ kind }, (row, value) => { if (owned(value)) children.push(row); }, pin) : null;
+      if (scanned) return scanned;
+      if (!SCOPED.has(kind)) children.push(...store.list(kind).filter(({ value }) => owned(value)));
     }
     let round = 0;
     for (const child of children) {

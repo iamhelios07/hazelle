@@ -9,7 +9,7 @@ export type Refused = { refused: 'restoring' | 'leaving' | 'gone' } | Unavailabl
 export type Write = { id: string; kind: string; parent: string | null; body: string | null; baseRev: number | null };
 export type Change = { id: string; kind: string; parent: string | null; rev: number; body?: string | null; omitted?: true };
 // count: the first page of a bootstrap asks how many changes the whole bootstrap holds, for a bar.
-export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null; count: boolean };
+export type FeedQuery = { timeline: string | null; since: number; known: number; until: number | null; bootstrap: boolean; metadata: boolean; excluded: string[]; parent: string | null; kind: string | null; count: boolean };
 export type FeedPage = { timeline: string; bytes: number; until: number | null; changes: Change[]; cursor: number; more: boolean; total?: number };
 type WrongPhase = { wrongPhase: true };
 
@@ -108,12 +108,14 @@ export class StoreRules {
                CASE WHEN kind NOT IN (SELECT value FROM json_each(?)) AND ${query.metadata ? 0 : 1} THEN body END AS body
              FROM objects WHERE rev > ?
                ${query.parent === null ? '' : 'AND parent_id = ?'}
+               ${query.kind === null ? '' : 'AND kind = ?'}
                ${until === null ? '' : 'AND kind NOT IN (SELECT value FROM json_each(?)) AND rev <= ?'}
              ORDER BY rev LIMIT ?
            ))
          ) ORDER BY rev`,
         ...[PAGE_BODY_BYTES, PAGE_BODY_BYTES, excluded, excluded, query.since],
         ...(query.parent === null ? [] : [query.parent]),
+        ...(query.kind === null ? [] : [query.kind]),
         ...(until === null ? [] : [excluded, until]),
         pageRows + 1,
       );
@@ -124,8 +126,8 @@ export class StoreRules {
       }
       const total = query.count && until !== null
         ? this.db.exec<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM objects WHERE rev > ? AND rev <= ? AND kind NOT IN (SELECT value FROM json_each(?))${query.parent === null ? '' : ' AND parent_id = ?'}`,
-          query.since, until, excluded, ...(query.parent === null ? [] : [query.parent]),
+          `SELECT COUNT(*) AS n FROM objects WHERE rev > ? AND rev <= ? AND kind NOT IN (SELECT value FROM json_each(?))${query.parent === null ? '' : ' AND parent_id = ?'}${query.kind === null ? '' : ' AND kind = ?'}`,
+          query.since, until, excluded, ...(query.parent === null ? [] : [query.parent]), ...(query.kind === null ? [] : [query.kind]),
         )[0]!.n
         : undefined;
       return {

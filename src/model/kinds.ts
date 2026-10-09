@@ -7,7 +7,7 @@ import type { Persona } from './persona';
 import type { Profile } from './profile';
 import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
-import type { Tool, ToolData } from './tool';
+import type { Tool, ToolChatData, ToolData } from './tool';
 import type { Stream } from './stream';
 
 export type Values = {
@@ -15,6 +15,7 @@ export type Values = {
   module: Module;
   tool: Tool;
   tooldata: ToolData;
+  toolchat: ToolChatData;
   folder: Folder;
   lore: Lore;
   avatar: Avatar;
@@ -49,6 +50,7 @@ export const KINDS = {
   module: { parent: null },
   tool: { parent: 'module', file: true },
   tooldata: { parent: 'module' },
+  toolchat: { parent: 'chat', owner: { field: 'module', kind: 'module' } },
   folder: { parent: null },
   lore: { parent: ['character', 'module'] },
   avatar: { parent: 'character', file: true },
@@ -123,6 +125,7 @@ const SHAPES = {
   module: shape({ name: str, description: str, namespace: orNull(str), regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: str, loreFolders: listOf(shape({ id: str, name: str })) }),
   tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model' || value === 'embed' || value === 'memory'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
   tooldata: shape({ key: str, value: (value) => value !== undefined }),
+  toolchat: shape({ module: str, key: orNull(str), value: (value) => value !== undefined }),
   folder: shape({ name: str }),
   lore: shape({
     ...all(bool, 'enabled', 'constant', 'selective', 'useRegex', 'caseSensitive'),

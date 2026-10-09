@@ -4,16 +4,17 @@ import { packsOf } from '../chat-context';
 import { fieldValue, type ImportedTool } from '../../engine/import/tool';
 import { without } from '../../model/fields';
 import { live } from '../../model/library';
-import { toolId, type Tool } from '../../model/tool';
+import { toolId, type Badges, type Tool } from '../../model/tool';
 import type { Json, Settings, ToolManifest } from '../../tool-api/manifest';
 import type { ApiResult } from '../api';
 import type { Files } from '../files';
 import type { Session } from '../session';
-import type { ObjectStore } from '../store';
+import type { ObjectStore, Write } from '../store';
 
 export type ToolImport = { id: string; previous: Tool | null };
 export const TOOL_VALUE_BYTES = 512 * 1024;
 export const TOOL_DATA_BYTES = 4 * 1024 * 1024;
+export const TOOL_CHAT_BYTES = 8 * 1024 * 1024;
 export const TOOL_KEY_CHARS = 256;
 export const TOOL_WRITES_PER_MINUTE = 30;
 export const TOOL_NOTICES_PER_MINUTE = 3;
@@ -54,9 +55,12 @@ export async function importTool(store: ObjectStore, files: Files, { manifest, b
   const previous = existing?.value ?? null;
   const value: Tool = { manifest, file, size: bytes.byteLength, settings: toolSettings(manifest, previous?.settings ?? {}) };
   if (existing) {
-    // Reset before the new code is visible; a failure can ask again but never grant a new capability silently.
-    if (manifest.uses.some((use) => !existing.value.manifest.uses.includes(use))) {
-      const reset = await store.update('module', id, (current) => current.deleted === undefined ? without(current, 'botModels') : null);
+    // Reset before the new code is visible; a failure can ask again but never grant a new capability silently. Each
+    // answer is asked again only for a use it covers: a version that only adds the memory claim keeps 모델 호출.
+    const added = manifest.uses.filter((use) => !existing.value.manifest.uses.includes(use));
+    const answers = [...(added.includes('model') || added.includes('embed') ? ['botModels' as const] : []), ...(added.includes('memory') ? ['takesMemory' as const] : [])];
+    if (answers.length) {
+      const reset = await store.update('module', id, (current) => current.deleted === undefined ? answers.reduce((module, answer) => without(module, answer), current) : null);
       if (!reset.ok) return reset;
     }
     const saved = await store.update('tool', existing.id, (current) => live(store.get('module', id)) ? { ...value, settings: toolSettings(manifest, current.settings) } : null);
@@ -76,12 +80,16 @@ export async function setToolSettings({ store }: Pick<Session, 'store'>, module:
   return store.update('tool', toolId(module), (current) => live(store.get('module', module)) ? { ...current, settings: { ...current.settings, ...Object.fromEntries(current.manifest.settings.flatMap((field) => Object.hasOwn(change, field.key) && fieldValue(field, change[field.key]) ? [[field.key, change[field.key]!]] : [])) } } : null);
 }
 
-// Every device addresses the same key. The module separates equal key names owned by different tools.
-export async function toolDataId(module: string, key: string): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${module}\0${key}`)));
+async function keyId(text: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
   const hex = [...digest.slice(0, 16)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+
+// Every device addresses the same key. The module separates equal key names owned by different tools; a chat's badge
+// record has one part fewer, so no key a tool names reaches its id.
+export const toolDataId = (module: string, key: string) => keyId(`${module}\0${key}`);
+export const toolChatId = (module: string, chat: string, key: string | null) => keyId(key === null ? `${module}\0${chat}` : `${module}\0${chat}\0${key}`);
 
 export const toolData = (store: ObjectStore, module: string, key: string): Json | undefined =>
   store.children('tooldata', module).find(({ value }) => value.key === key)?.value.value;
@@ -104,7 +112,44 @@ export async function deleteToolData(store: ObjectStore, module: string, key: st
   const id = await toolDataId(module, key);
   return store.get('tooldata', id) ? store.remove(id) : { ok: true, data: null };
 }
+;
 
+const chatRows = (store: ObjectStore, module: string, chat: string) => store.children('toolchat', chat).filter(({ value }) => value.module === module);
+export const toolChatData = (store: ObjectStore, module: string, chat: string, key: string): Json | undefined => chatRows(store, module, chat).find(({ value }) => value.key === key)?.value.value;
+export const toolChatKeys = (store: ObjectStore, module: string, chat: string): string[] => chatRows(store, module, chat).flatMap(({ value }) => (value.key === null ? [] : [value.key]));
+export const toolBadges = (store: ObjectStore, module: string, chat: string): Badges => (chatRows(store, module, chat).find(({ value }) => value.key === null)?.value.value ?? {}) as Badges;
+
+// One event's data for one chat, and its badges by message, null clearing one, as one batch: a tool indexing a long
+// chat key by key spends one write of its rate, not one per key.
+export async function saveToolChat(store: ObjectStore, module: string, chat: string, data: [string, Json | undefined][], badges: { message: string; version: string; text: string | null }[]): Promise<ApiResult<null>> {
+  if (!live(store.get('module', module))) return { ok: false, error: 'gone' };
+  const stored = new Map(chatRows(store, module, chat).map((row) => [row.value.key, row.id]));
+  const rows = new Map(chatRows(store, module, chat).map((row) => [row.value.key, row.value.value]));
+  const changed = new Map<string | null, Json | undefined>(data);
+  if (data.some(([key]) => key.length > TOOL_KEY_CHARS)) return { ok: false, error: 'key-too-long' };
+  if (data.some(([key, value]) => value !== undefined && dataBytes(key, value) > TOOL_VALUE_BYTES)) return { ok: false, error: 'too-large' };
+  if (badges.length) {
+    const held: Badges = { ...(rows.get(null) as Badges | undefined) };
+    for (const { message, version, text } of badges) {
+      if (text === null) delete held[message];
+      else held[message] = { version, text };
+    }
+    changed.set(null, Object.keys(held).length ? held : undefined);
+  }
+  for (const [key, value] of changed) {
+    if (value === undefined) rows.delete(key);
+    else rows.set(key, value);
+  }
+  if ([...rows].reduce((sum, [key, value]) => sum + dataBytes(key ?? '', value), 0) > TOOL_CHAT_BYTES) return { ok: false, error: 'too-large' };
+  const writes: Write[] = [];
+  for (const [key, value] of changed) {
+    const id = await toolChatId(module, chat, key);
+    // restore writes over a held or deleted row alike, and creates one never written.
+    if (value !== undefined) writes.push({ type: 'restore', kind: 'toolchat', id, parent: chat, value: { module, key, value } });
+    else if (stored.has(key)) writes.push({ type: 'remove', id: stored.get(key)! });
+  }
+  return writes.length ? store.batch(writes) : { ok: true, data: null };
+}
 
 export const toolsOf = (store: ObjectStore, chat: Chat): ToolUnit[] => packsOf(store, chat).flatMap(({ id, module }) => {
   const tool = module && store.get('tool', toolId(id));

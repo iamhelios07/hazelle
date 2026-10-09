@@ -6,6 +6,7 @@ import type { Stored } from '../model/kinds';
 import type { Illustration } from '../model/illustration';
 import { live } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
+import type { Badges } from '../model/tool';
 import type { ApiFailure, ApiResult } from './api';
 import { routeOf } from './assignment';
 import type { ChatFile } from './chat-file';
@@ -13,6 +14,7 @@ import type { Session } from './session';
 import { markDeleted } from './removal';
 import type { Greetings } from './greetings';
 import { withPersona } from './personas';
+import { toolChatId } from './tools/store';
 import { without } from '../model/fields';
 import type { ObjectStore, Write } from './store';
 
@@ -68,7 +70,8 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const id = crypto.randomUUID();
     const memory = store.children('memory', item.id).find((entry) => entry.id === memoryId(item.id))?.value;
     const illustrations = store.children('illustration', item.id).map(({ value }) => value);
-    const { writes, after } = copyWrites(id, item.messages.slice(0, upTo + 1), memory, illustrations);
+    const { writes, after, messages, versions } = copyWrites(id, item.messages.slice(0, upTo + 1), memory, illustrations);
+    writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
     writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
     const created = await store.batch(writes);
     return created.ok ? { ok: true, data: id } : created;
@@ -146,8 +149,8 @@ export async function saveNewChats(
 }
 
 // Each message copied to the chat id, with the memory that still applies and the illustrations of the versions copied.
-// messages: each copy's id by the original's. after: the last copy's id.
-function copyWrites(id: string, source: Message[], memory: Memory | undefined, illustrations: Illustration[]): { writes: Write[]; messages: Map<string, string>; after: string } {
+// messages, versions: each copy's id by the original's. after: the last copy's id.
+function copyWrites(id: string, source: Message[], memory: Memory | undefined, illustrations: Illustration[]): { writes: Write[]; messages: Map<string, string>; versions: Map<string, string>; after: string } {
   let after = '';
   const writes: Write[] = [];
   const messages = new Map<string, string>();
@@ -167,7 +170,18 @@ function copyWrites(id: string, source: Message[], memory: Memory | undefined, i
     const [message, version] = [messages.get(illustration.message), versions.get(illustration.version)];
     if (message && version) writes.push({ type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: id, value: { ...illustration, message, version } });
   }
-  return { writes, messages, after };
+  return { writes, messages, versions, after };
+}
+
+// The tools' data for the chat goes with a branch as it stands, each key at the branch's own address. The badges the
+// host keeps follow their messages; references inside a tool's own data are the tool's to remap (its branch event).
+// A chat file carries none: its modules are another account's.
+async function branchToolData(store: ObjectStore, from: string, to: string, messages: ReadonlyMap<string, string>, versions: ReadonlyMap<string, string>): Promise<Write[]> {
+  return Promise.all(store.children('toolchat', from).flatMap(({ value: { module, key, value } }) => {
+    const badges = key === null && Object.entries(value as Badges).flatMap(([message, { version, text }]) => (messages.has(message) ? [[messages.get(message)!, { version: versions.get(version) ?? version, text }]] : []));
+    if (badges && !badges.length) return [];
+    return [toolChatId(module, to, key).then((id): Write => ({ type: 'create', kind: 'toolchat', id, parent: to, value: { module, key, value: badges ? Object.fromEntries(badges) : value } }))];
+  }));
 }
 
 // The records whose every message lies before the split, their sources remapped to the branch's messages and versions
@@ -187,7 +201,8 @@ function branchMemory(memory: Memory, messages: ReadonlyMap<string, string>, ver
 // version again in its own place when it is an edit or came later than the message, which a message entry cannot
 // hold; the other versions; and a select when the one shown is not the last, since adding a version selects it.
 // versions: each version's id in the branch, by its id here.
-// A field added to versions or messages must be written here too, or a branch drops it. The calls the bot's Lua made
+// A field added to versions or messages must be written here too, or a branch drops it, as must a kind a chat holds
+// (copyWrites, branchToolData). The calls the bot's Lua made
 // (Version.calls) are dropped on purpose: usage counts a call where it was made.
 function copied(id: string, { role, at, versions, selected, after }: Message): { entries: [string, Entry][]; versions: Map<string, string> } {
   const ids = versions.map((_, index) => (index === 0 ? id : crypto.randomUUID()));

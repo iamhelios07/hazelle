@@ -63,7 +63,7 @@ afterEach(() => {
 
 const put = (id: string, input: Partial<Write> = {}): Write => ({ id, kind: 'chat', parent: null, body: 'x', baseRev: null, ...input });
 const write = (input: Write | Write[], cap: number | null = null, timeline = 't1') => store().batch(INC, timeline, Array.isArray(input) ? input : [input], cap);
-const query = (input: Partial<FeedQuery> = {}): FeedQuery => ({ timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, count: false, ...input });
+const query = (input: Partial<FeedQuery> = {}): FeedQuery => ({ timeline: 't1', since: 0, known: 0, until: null, bootstrap: false, metadata: false, excluded: [], parent: null, kind: null, count: false, ...input });
 const feed = (input: Partial<FeedQuery> = {}) => store().feed(INC, query(input));
 const revs = async (input: Partial<FeedQuery> = {}) => ((await feed(input)) as { changes: { rev: number }[] }).changes.map(({ rev }) => rev);
 
@@ -85,7 +85,7 @@ describe('feed', () => {
     expect(await feed({ since: 2004 })).toMatchObject({ changes: [], cursor: 2004, more: false });
   });
 
-  it('bootstraps up to until without scoped kinds, feeds omitted and deleted rows, and reads only the asked parent', async () => {
+  it('bootstraps up to until without scoped kinds, feeds omitted and deleted rows, and reads only the asked parent or kind', async () => {
     const [D, E, F] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
     await write(put(A, { body: 'chat-a' }));
     await write(put(B, { kind: 'entry', parent: A, body: 'entry-a' }));
@@ -113,6 +113,7 @@ describe('feed', () => {
     ] });
     expect(JSON.stringify(later)).not.toContain('new-entry');
     expect(await feed({ parent: A })).toMatchObject({ changes: [{ id: B, body: 'new-entry' }, { id: C, body: null }, { id: F, body: 'new-summary' }] });
+    expect(await feed({ kind: 'entry' })).toMatchObject({ changes: [{ id: E, body: 'entry-b' }, { id: B, body: 'new-entry' }] });
     expect(await feed({ metadata: true, since: 7 })).toMatchObject({ changes: [{ id: F, omitted: true }] });
   });
 

@@ -676,13 +676,13 @@ export class ObjectStore {
   // An explicit account/parent walk; it never fills the held chat scopes. Backup and ownership walks run on their
   // workflow's pin (pinned); usage reads on a bare pin, since it writes nothing. No row is visited once the pin's epoch
   // has ended.
-  async scan(options: { parent?: string; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>, pin: Pin, signal?: AbortSignal): Promise<ApiFailure | null> {
+  async scan(options: { parent?: string; kind?: Kind; metadata?: boolean }, visit: (row: ObjectRow, value: unknown) => void | Promise<void>, pin: Pin, signal?: AbortSignal): Promise<ApiFailure | null> {
     const stop = AbortSignal.any([this.closing.signal, this.ended.signal, ...(signal ? [signal] : [])]);
     let cursor = 0;
     let more = true;
     while (more) {
       if (pin.epoch !== this.epoch || stop.aborted) return this.halted(pin.epoch);
-      const result = await this.request<Page>('GET', `objects?since=${cursor}${options.parent ? `&parent=${encodeURIComponent(options.parent)}` : ''}${options.metadata ? '&metadata=1' : ''}&timeline=${encodeURIComponent(pin.timeline)}`, undefined, stop);
+      const result = await this.request<Page>('GET', `objects?since=${cursor}${options.parent ? `&parent=${encodeURIComponent(options.parent)}` : ''}${options.kind ? `&kind=${options.kind}` : ''}${options.metadata ? '&metadata=1' : ''}&timeline=${encodeURIComponent(pin.timeline)}`, undefined, stop);
       // An answer to a request sent before a reset is of the old timeline, a refusal too: it never resets the new one.
       if (pin.epoch !== this.epoch) return changed();
       if (!result.ok) {

@@ -35,7 +35,7 @@ export interface DeviceCache {
   forget(): Promise<void>;
 }
 
-export const SCOPED = new Set<string>(['entry', 'memory', 'illustration']);
+export const SCOPED = new Set<string>(['entry', 'memory', 'illustration', 'toolchat']);
 export const cacheScope = (row: SealedChange) => SCOPED.has(row.kind) ? row.parent! : '';
 // A newer omission invalidates the old body; a same-revision echo must not erase a body already cached.
 export const cacheNewer = (old: SealedChange | undefined, row: SealedChange) => !old || row.rev > old.rev || (row.rev === old.rev && old.omitted && !row.omitted);

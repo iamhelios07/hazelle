@@ -23,6 +23,23 @@ describe('tool header', () => {
     expect(read(source)).toMatchObject({ ok: false, failure: { kind: 'unreadable' } });
   });
 
+  it('reads every use, message actions and the composer item with its fields', () => {
+    const result = read(`${header}//@uses model\n//@uses embed\n//@uses memory\n//@uses embed\n//@action redo 이 부분 다시 정리\n//@composer 기억\n//@setting {"key":"chunk","type":"number","label":"요약 단위","default":30,"composer":true}`);
+    expect(result).toMatchObject({ ok: true, tool: { manifest: { uses: ['model', 'embed', 'memory'], actions: [{ id: 'redo', label: '이 부분 다시 정리' }], composer: { label: '기억' }, settings: [{ key: 'chunk', composer: true }] } } });
+    expect(read(header)).toMatchObject({ ok: true, tool: { manifest: { actions: [], composer: null } } });
+  });
+
+  it.each([
+    ['a fourth action', '//@action a A\n//@action b B\n//@action c C\n//@action d D', 'tool-action'],
+    ['a long action label', '//@action a 열일곱글자열일곱글자열일곱글자열일곱글', 'tool-action'],
+    ['a repeated action', '//@action a A\n//@action a B', 'tool-action'],
+    ['a long composer label', '//@composer 아홉글자아홉글자아홉', 'tool-composer'],
+    ['a second composer', '//@composer 기억\n//@composer 메모', 'tool-composer'],
+    ['a composer field without the item', '//@setting {"key":"x","type":"switch","label":"X","composer":true}', 'tool-composer'],
+  ])('refuses %s', (_, lines, detail) => {
+    expect(read(`${header}${lines}`)).toMatchObject({ ok: false, failure: { detail } });
+  });
+
   it('refuses duplicate settings and menus and files over the byte cap', () => {
     const field = '//@setting {"key":"x","type":"text","label":"X"}\n';
     expect(read(header + field + field).ok).toBe(false);

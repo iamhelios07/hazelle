@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readTool } from '../../engine/import/tool';
 import { toolId } from '../../model/tool';
 import { setModuleDeleted } from '../modules';
 import { purgeNow } from '../removal';
 import { exportBackup, readBackup, restoreBackup } from '../testing/backup';
 import { testServer } from '../testing';
-import { deleteToolData, importTool, setToolData, setToolSettings, toolData, toolDataId, toolKeys, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_VALUE_BYTES, undoToolImport } from './store';
+import { deleteToolData, importTool, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_VALUE_BYTES, undoToolImport } from './store';
 
 const server = testServer();
 const source = (version = '1.0', uses = '') => {
@@ -33,6 +33,14 @@ describe('tool storage', () => {
     await store.update('module', module, (current) => ({ ...current, botModels: false }));
     await importTool(store, files, source('1.2', '//@uses model\n'));
     expect(store.get('module', module)!.value.botModels).toBe(false);
+    await store.update('module', module, (current) => ({ ...current, botModels: true, takesMemory: false }));
+    await importTool(store, files, source('1.3', '//@uses model\n//@uses memory\n'));
+    expect(store.get('module', module)!.value).toMatchObject({ botModels: true });
+    expect(store.get('module', module)!.value.takesMemory).toBeUndefined();
+    await store.update('module', module, (current) => ({ ...current, takesMemory: true }));
+    await importTool(store, files, source('1.4', '//@uses model\n//@uses memory\n//@uses embed\n'));
+    expect(store.get('module', module)!.value.botModels).toBeUndefined();
+    expect(store.get('module', module)!.value.takesMemory).toBe(true);
     await undoToolImport(store, module, updated.data.previous!);
     expect(store.get('tool', toolId(module))!.value.manifest.version).toBe('1.0');
     expect(await files.read(store.get('tool', toolId(module))!.value.file)).toEqual({ ok: true, data: source().bytes });
@@ -84,12 +92,52 @@ describe('tool storage', () => {
     expect((await setToolData(store, module, 'extra', 1)).ok).toBe(true);
   });
 
-  it('round trips tool code, settings and data through an account backup', async () => {
+  it('keeps per-chat data and badges in one batch per event, within the per-chat limit, and purges them in a chat never opened', async () => {
+    const { store, files, open } = await server.account();
+    const added = await importTool(store, files, source());
+    if (!added.ok) throw new Error(added.error);
+    const module = added.data.id;
+    const chat = crypto.randomUUID();
+    await store.create('chat', { title: null, character: null, models: {} }, { id: chat });
+    const lease = store.retainChat(chat, { created: true });
+    await lease.ready;
+    const batch = vi.spyOn(store, 'batch');
+    expect((await saveToolChat(store, module, chat, [['a', 1], ['b', [2]]], [{ message: 'm1', version: 'v1', text: '요약됨' }])).ok).toBe(true);
+    expect(batch).toHaveBeenCalledOnce();
+    expect(toolChatData(store, module, chat, 'b')).toEqual([2]);
+    expect(toolChatKeys(store, module, chat).sort()).toEqual(['a', 'b']);
+    expect(toolBadges(store, module, chat)).toEqual({ m1: { version: 'v1', text: '요약됨' } });
+    expect((await saveToolChat(store, module, chat, [['a', undefined]], [{ message: 'm1', version: 'v1', text: null }])).ok).toBe(true);
+    expect(toolChatKeys(store, module, chat)).toEqual(['b']);
+    expect(toolBadges(store, module, chat)).toEqual({});
+    const value = 'x'.repeat(TOOL_VALUE_BYTES - 3);
+    const full = Array.from({ length: TOOL_CHAT_BYTES / TOOL_VALUE_BYTES }, (_, i): [string, string] => [String(i), value]);
+    expect(await saveToolChat(store, module, chat, full, [])).toEqual({ ok: false, error: 'too-large' });
+    expect(await saveToolChat(store, module, chat, [['k'.repeat(TOOL_KEY_CHARS + 1), 1]], [])).toEqual({ ok: false, error: 'key-too-long' });
+    lease.release();
+
+    const fresh = await open();
+    expect(fresh.scopeState(chat)).toBe('unloaded');
+    await setModuleDeleted(fresh, module, Date.now());
+    expect((await purgeNow(fresh, 'module', module, () => {})).ok).toBe(true);
+    const reopened = fresh.retainChat(chat);
+    await reopened.ready;
+    expect(fresh.children('toolchat', chat)).toEqual([]);
+    reopened.release();
+  });
+
+  it('round trips tool code, settings, data and per-chat data through an account backup', async () => {
     const old = await server.account();
     const imported = source();
     const added = await importTool(old.store, old.files, imported);
     if (!added.ok) throw new Error(added.error);
     await setToolData(old.store, added.data.id, 'note', 'backup note');
+    const chat = crypto.randomUUID();
+    await old.store.create('chat', { title: null, character: null, models: {} }, { id: chat });
+    const lease = old.store.retainChat(chat, { created: true });
+    await lease.ready;
+    await saveToolChat(old.store, added.data.id, chat, [['index', 'chat note']], []);
+    lease.release();
     const parts: BlobPart[] = [];
     expect((await exportBackup(old.store, old.files, { write: async (bytes) => { parts.push(bytes); }, close: async () => {}, abort: async () => {} })).ok).toBe(true);
     const read = await readBackup(new Blob(parts));
@@ -102,5 +150,9 @@ describe('tool storage', () => {
     expect(tool.settings).toEqual({ title: '메모' });
     expect(await restored.files.read(tool.file)).toEqual({ ok: true, data: imported.bytes });
     expect(toolData(restored.store, added.data.id, 'note')).toBe('backup note');
+    const reopened = restored.store.retainChat(chat);
+    await reopened.ready;
+    expect(toolChatData(restored.store, added.data.id, chat, 'index')).toBe('chat note');
+    reopened.release();
   });
 });

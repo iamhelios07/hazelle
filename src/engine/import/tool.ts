@@ -1,8 +1,13 @@
 import { isRecord } from '../../connectors/values';
-import type { Settings, ToolField, ToolManifest } from '../../tool-api/manifest';
+import type { Settings, ToolField, ToolManifest, ToolUse } from '../../tool-api/manifest';
 import type { ImportFailure } from './types';
 
 export const TOOL_FILE_BYTES = 8 * 1024 * 1024;
+// What a tool may draw in the chat, which the app draws for it (design §6.10, phase 2 D5).
+export const TOOL_ACTIONS = 3;
+export const TOOL_ACTION_CHARS = 16;
+export const TOOL_COMPOSER_CHARS = 8;
+const USES: readonly ToolUse[] = ['model', 'embed', 'memory'];
 export type ImportedTool = { manifest: ToolManifest; bytes: Uint8Array<ArrayBuffer> };
 export type ToolRead = { ok: true; tool: ImportedTool } | { ok: false; failure: ImportFailure };
 const identity = (value: string) => /^[\p{L}\p{N}_.-]+$/u.test(value);
@@ -20,7 +25,8 @@ function fieldOf(value: unknown): ToolField | null {
   if (!isRecord(value) || typeof value.key !== 'string' || !identity(value.key) || typeof value.label !== 'string' || !value.label.trim()) return null;
   if (value.type !== 'text' && value.type !== 'number' && value.type !== 'switch' && value.type !== 'choice') return null;
   if (value.type === 'choice' && (!Array.isArray(value.options) || value.options.length === 0 || !value.options.every((option) => typeof option === 'string'))) return null;
-  const field: ToolField = { key: value.key, label: value.label, type: value.type, ...(value.type === 'choice' && { options: value.options as string[] }) };
+  if (value.composer !== undefined && value.composer !== true) return null;
+  const field: ToolField = { key: value.key, label: value.label, type: value.type, ...(value.type === 'choice' && { options: value.options as string[] }), ...(value.composer === true && { composer: true }) };
   if (value.default !== undefined) {
     if (!fieldValue(field, value.default)) return null;
     field.default = value.default;
@@ -35,7 +41,8 @@ export function readTool(bytes: Uint8Array<ArrayBuffer>): ToolRead {
   try { code = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
   catch { return failed('tool-encoding'); }
   const header = new Map<string, string>();
-  const manifest: ToolManifest = { api: 1, name: '', author: '', displayName: '', version: '', description: '', uses: [], page: null, menu: [], settings: [] };
+  const manifest: ToolManifest = { api: 1, name: '', author: '', displayName: '', version: '', description: '', uses: [], page: null, menu: [], settings: [], actions: [], composer: null };
+  const actions = manifest.actions!;
   for (const line of code.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const match = /^\s*\/\/@([\w-]+)(?:\s+(.*))?$/.exec(line);
@@ -52,11 +59,20 @@ export function readTool(bytes: Uint8Array<ArrayBuffer>): ToolRead {
       const item = /^(\S+)\s+(.+)$/.exec(value);
       if (!item || !identity(item[1]!) || manifest.menu.some((each) => each.id === item[1])) return failed('tool-menu');
       manifest.menu.push({ id: item[1]!, label: item[2]! });
+    } else if (key === 'action') {
+      const item = /^(\S+)\s+(.+)$/.exec(value);
+      if (!item || !identity(item[1]!) || [...item[2]!].length > TOOL_ACTION_CHARS || actions.length === TOOL_ACTIONS || actions.some((each) => each.id === item[1])) return failed('tool-action');
+      actions.push({ id: item[1]!, label: item[2]! });
+    } else if (key === 'composer') {
+      if (!value || [...value].length > TOOL_COMPOSER_CHARS || manifest.composer) return failed('tool-composer');
+      manifest.composer = { label: value };
     } else if (key === 'uses') {
-      if (value !== 'model') return failed('tool-uses');
-      manifest.uses = ['model'];
+      const use = USES.find((each) => each === value);
+      if (!use) return failed('tool-uses');
+      if (!manifest.uses.includes(use)) manifest.uses.push(use);
     } else header.set(key!, value);
   }
+  if (!manifest.composer && manifest.settings.some((field) => field.composer)) return failed('tool-composer');
   if (header.get('api') !== '1') return failed('tool-api');
   const name = header.get('name') ?? '';
   const author = header.get('author') ?? '';

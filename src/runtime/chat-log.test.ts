@@ -8,6 +8,7 @@ import { summaryId } from './summary';
 import { greetingPreview, projectGreetings } from './greetings';
 import { BATCH_LIMITS, testServer } from './testing';
 import { evaluateChat } from './chat-context';
+import { saveToolChat, toolBadges, toolChatData } from './tools/store';
 
 const server = testServer();
 
@@ -53,7 +54,7 @@ describe('setCast', () => {
 });
 
 describe('branchChat', () => {
-  it("carries what the bot's Lua wrote and the texts it staged", async () => {
+  it("carries what the bot's Lua wrote, the texts it staged and the tools' data, badges on the branch's messages", async () => {
     const { store } = await server.account();
     const source = crypto.randomUUID();
     await server.hold(store, source);
@@ -67,11 +68,19 @@ describe('branchChat', () => {
     const held = (messages: Message[]) => messages.map((message) => [shown(message).text, shown(message).staged, shown(message).before, shown(message).after, message.after]);
     expect(held(folded())).toEqual([['안녕!', true, [['order', 'input'], ['typed', '1']], [['hp', '9']], [['door', 'open']]], ['narration', true, undefined, undefined, undefined]]);
 
+    const module = crypto.randomUUID();
+    await store.create('module', { name: '기억', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: '' }, { id: module });
+    const narration = folded()[1]!;
+    await saveToolChat(store, module, source, [['index', { node: said }]], [{ message: said, version: shown(folded()[0]!).id, text: '요약됨' }, { message: narration.id, version: shown(narration).id, text: '마지막' }]);
+
     const item: ChatItem = { id: source, chat, messages: folded(), count: 2, title: '', preview: '', at: null, order: 0 };
     const branched = await branchChat(store, item, folded()[1]!.id);
     if (!branched.ok) throw new Error(branched.error);
     await server.hold(store, branched.data);
-    expect(held(fold(store.children('entry', branched.data)))).toEqual(held(folded()));
+    const copy = fold(store.children('entry', branched.data));
+    expect(held(copy)).toEqual(held(folded()));
+    expect(toolChatData(store, module, branched.data, 'index')).toEqual({ node: said });
+    expect(toolBadges(store, module, branched.data)).toEqual(Object.fromEntries(copy.map((message, index) => [message.id, { version: shown(message).id, text: ['요약됨', '마지막'][index]! }])));
   });
 
   it('copies the messages up to the split as they fold, rolling the same, without the deleted one, and saves the chat after them', async () => {

@@ -26,13 +26,14 @@ objects.get('/', async (c) => {
   const until = untilAsked === undefined ? null : count(untilAsked);
   const excluded = c.req.query('exclude')?.split(',') ?? [];
   const parent = c.req.query('parent') ?? null;
+  const kind = c.req.query('kind') ?? null;
   const timeline = c.req.query('timeline') ?? null;
   const bootstrap = c.req.query('bootstrap') === '1';
   if (since === null || known === null || (untilAsked !== undefined && (until === null || until < since))) return fail(c, 400, 'bad-input');
-  if (excluded.length > 32 || excluded.some((kind) => !KIND.test(kind)) || (parent !== null && !ID.test(parent)) || (timeline !== null && !TIMELINE.test(timeline))) {
+  if (excluded.length > 32 || excluded.some((kind) => !KIND.test(kind)) || (parent !== null && !ID.test(parent)) || (kind !== null && !KIND.test(kind)) || (timeline !== null && !TIMELINE.test(timeline))) {
     return fail(c, 400, 'bad-input');
   }
-  const query: FeedQuery = { timeline, since, known, until, bootstrap, metadata: c.req.query('metadata') === '1', excluded, parent, count: c.req.query('count') === '1' };
+  const query: FeedQuery = { timeline, since, known, until, bootstrap, metadata: c.req.query('metadata') === '1', excluded, parent, kind, count: c.req.query('count') === '1' };
   const account = c.get('account');
   const asked = Date.now();
   const page = await store(c.env, account.incarnation).feed(account.incarnation, query);
