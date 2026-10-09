@@ -121,9 +121,10 @@ export class Talk {
 
   readonly writing = (): ReadonlySet<string> => this.writingChats;
 
-  // null: its chat was released, it was not written by this page, or it was written as another version (an edit).
-  sent(version: string): Sent | null {
-    return this.sentBy.get(version)?.sent ?? null;
+  // By the call's id, which its receipt keeps through an edit, a branch and a continuation (model/chat Receipt). null:
+  // its chat was released, or this page did not make the call.
+  sent(call: string): Sent | null {
+    return this.sentBy.get(call)?.sent ?? null;
   }
 
   // 멈추기: the call ends on the server too, and the text so far is saved as cut. Reading stops first, so the server's
@@ -239,7 +240,7 @@ export class Talk {
     const answer = await replying;
     if (this.closed) return null;
     // Kept before the save, whose store change is what shows the reply's 정보.
-    this.sentBy.set(reply.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
+    this.sentBy.set(call.id, { chat, sent: { request: answer.request, cache: answer.cache, prompt } });
     return await this.save(chat, await this.ended(chat, this.written(held, reply, callOf(route), answer, Date.now())), call.id);
   }
 

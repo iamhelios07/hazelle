@@ -47,7 +47,7 @@ describe('lastCache', () => {
   const reply = (at: number, value: Receipt): Message => ({ id: `m${at}`, role: 'assistant', at, versions: [{ id: `v${at}`, seed: 's', text: 't', receipt: value, edited: false, at }], selected: 0 });
 
   it('keeps what the latest call cached for its TTL from the call’s start, and nothing when it cached none', () => {
-    expect(lastCache([reply(10_000, receipt({ cache: '1h' })), reply(20_000, receipt({}))])).toEqual({ version: 'v20000', connection: 'c1', account: null, until: 16_000 + 300_000 });
+    expect(lastCache([reply(10_000, receipt({ cache: '1h' })), reply(20_000, receipt({}))])).toEqual({ call: 'call', connection: 'c1', account: null, until: 16_000 + 300_000 });
     expect(lastCache([reply(10_000, receipt({})), reply(20_000, receipt({ usage: { inputTokens: 100, outputTokens: 1, reasoningTokens: null, cachedInputTokens: 0, cacheWriteInputTokens: 0 } }))])).toBeNull();
   });
 });

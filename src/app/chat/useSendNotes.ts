@@ -13,7 +13,7 @@ const SETTLE_MS = 400;
 export function useSendNotes(id: string | null, chat: Chat, messages: Shown[], memory: Memory | null, text: string, busy: boolean) {
   const session = useSession();
   const last = useMemo(() => lastCache(messages), [messages]);
-  const sent = last && session.talk.sent(last.version);
+  const sent = last && session.talk.sent(last.call);
   const [read, setRead] = useState<Forecast | null>(null);
   const [left, setLeft] = useState<number | null>(null);
 

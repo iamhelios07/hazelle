@@ -7,20 +7,20 @@ import type { Role } from '../model/prompt';
 const TTL: Record<Cache, number> = { '5m': 5 * 60_000, '1h': 60 * 60_000 };
 
 // account: the connection's account that wrote the cache, which a provider holds the cache for; null where unknown.
-export type LastCache = { version: string; connection: string; account: string | null; until: number };
+export type LastCache = { call: string; connection: string; account: string | null; until: number };
 
 // A provider keeps a cache for the call's TTL from the call's start, and a read renews it as a write does. null when the
 // chat's latest call that reported its counts sent no cache point, or reported reading and writing none (a prompt
 // shorter than the model caches, or a provider that ignores points).
 export function lastCache(messages: Message[]): LastCache | null {
-  let latest: { id: string; at: number; receipt: NonNullable<Message['versions'][number]['receipt']> } | null = null;
+  let latest: { at: number; receipt: NonNullable<Message['versions'][number]['receipt']> } | null = null;
   for (const message of messages) {
-    for (const { id, at, receipt } of message.versions) if (receipt?.usage && (!latest || at > latest.at)) latest = { id, at, receipt };
+    for (const { at, receipt } of message.versions) if (receipt?.usage && (!latest || at > latest.at)) latest = { at, receipt };
   }
   if (!latest) return null;
   const { cache, usage, totalMs, connection, account } = latest.receipt;
   if (!cache || !((usage!.cachedInputTokens ?? 0) > 0 || (usage!.cacheWriteInputTokens ?? 0) > 0)) return null;
-  return { version: latest.id, connection, account: account ?? null, until: latest.at - totalMs + TTL[cache] };
+  return { call: latest.receipt.id, connection, account: account ?? null, until: latest.at - totalMs + TTL[cache] };
 }
 
 // account: the account it was, or would be, sent with; null where unknown, which claims no change of account.

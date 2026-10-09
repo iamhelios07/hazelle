@@ -80,7 +80,7 @@ describe("a turn with the bot's Lua", () => {
       expect(JSON.stringify(log[0]!.sent.body)).toContain('turn 1:안녕 [input]');
       expect(JSON.stringify(log[0]!.sent.body)).toContain('narration');
       expect((JSON.parse(log[0]!.sent.body!) as { messages: unknown[] }).messages.at(-1)).toEqual({ role: 'system', content: 'from lua' });
-      const { prompt } = session.talk.sent(reply!.id)!;
+      const { prompt } = session.talk.sent(shown(reply!).receipt!.id)!;
       expect(prompt.parts).toHaveLength(prompt.messages.length);
       expect(prompt.parts.at(-1)).toMatchObject({ from: { kind: 'script' } });
     }));
@@ -386,7 +386,7 @@ describe('tool events through Scripts', () => {
       await expect.poll(() => fixture.messages().length).toBe(2);
       expect(shown(fixture.messages()[1]!).before).toEqual([[variable, '"prepared"']]);
       expect(log[0]!.sent.body).toContain('tool summary');
-      expect(session.talk.sent(shown(fixture.messages()[1]!).id)!.prompt.parts).toContainEqual(expect.objectContaining({ from: { kind: 'tool', name: '메모' } }));
+      expect(session.talk.sent(shown(fixture.messages()[1]!).receipt!.id)!.prompt.parts).toContainEqual(expect.objectContaining({ from: { kind: 'tool', name: '메모' } }));
       const prompts = () => run.mock.calls.filter((args) => args[3].kind === 'prompt').length;
       expect(prompts()).toBe(1);
       expect((await wouldSend(session, fixture.chat, { kind: 'answer' }))!.prompt.messages.some(({ content }) => content === 'tool summary')).toBe(true);

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fold, shown } from '../model/chat';
-import { appendUserMessage, startChat } from './chat-log';
+import { appendUserMessage, editMessage, startChat } from './chat-log';
 import { answerable, inTurn, saying, stubRelay, testServer } from './testing';
 import { withTurn } from './talk';
 import { takeTurn } from './turn';
@@ -98,7 +98,7 @@ describe('Talk', () => {
       expect(fold(session.store.children('entry', chat)).map((message) => shown(message).text)).toEqual(['안녕']);
     }));
 
-  it('keeps what each reply sent, its address and body and never its headers, while its chat is held', () =>
+  it('keeps what each call sent, its address and body and never its headers, through an edit and while its chat is held', () =>
     server.withSession(async (session) => {
       await answerable(session);
       const chat = crypto.randomUUID();
@@ -109,11 +109,17 @@ describe('Talk', () => {
       stubRelay(() => saying('반가워요'));
 
       await takeTurn(session, chat, { kind: 'answer' });
-      const reply = shown(fold(session.store.children('entry', chat))[1]!);
-      expect(session.talk.sent(reply.id)?.request).toEqual({ url: 'https://openrouter.ai/api/v1/chat/completions', body: expect.stringContaining('"content":"안녕"') });
+      const message = () => fold(session.store.children('entry', chat))[1]!;
+      const call = shown(message()).receipt!.id;
+      expect(session.talk.sent(call)?.request).toEqual({ url: 'https://openrouter.ai/api/v1/chat/completions', body: expect.stringContaining('"content":"안녕"') });
+      // An edit (a person's, or a bot's onOutput) is a version of its own that keeps the call's receipt.
+      await editMessage(session.store, chat, message(), '반가워요!', null);
+      expect(shown(message()).id).not.toBe(call);
+      expect(shown(message()).receipt!.id).toBe(call);
+      expect(session.talk.sent(call)).not.toBeNull();
       lease.release();
       await vi.waitFor(() => expect(session.store.scopeState(chat)).toBe('unloaded'));
-      expect(session.talk.sent(reply.id)).toBeNull();
+      expect(session.talk.sent(call)).toBeNull();
     }));
 
   it('saves what the model thought beside the reply, never inside its text', () =>

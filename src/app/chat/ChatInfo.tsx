@@ -87,7 +87,7 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
   }
   else {
     const earlier = calls(receipt).slice(0, -1);
-    const sent = talk.sent(version.id);
+    const sent = talk.sent(receipt.id);
     body = (
       <>
         <Tabs label="응답 정보">
