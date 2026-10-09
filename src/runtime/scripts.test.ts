@@ -413,9 +413,59 @@ describe('tool events through Scripts', () => {
     }, binding);
   });
 
+  it.each([false, true])('guards delayed reply edits and adds when the story advances: %s', async (advance) => {
+    let finish!: (outcome: ScriptOutcome) => void;
+    const binding: Binding<ToolUnit> = { run: async (_chat, _units, _scope, event) => event.kind === 'reply' ? new Promise((resolve) => { finish = resolve; }) : noOutcome(), close: () => {} };
+    await server.withSession(async (session) => {
+      const f = await toolChat(session);
+      stubRelay(() => saying('reply'));
+      await takeTurn(session, f.chat, { kind: 'send', text: 'hello' });
+      await expect.poll(() => finish).toBeDefined();
+      if (advance) await appendUserMessage(session.store, f.chat, { id: crypto.randomUUID(), text: 'newer' });
+      finish({ ...noOutcome(), writes: [[f.variable, '"saved"']], edits: [{ index: 0, text: 'changed user', wrote: [] }, { index: 1, text: 'changed reply', wrote: [] }], added: [{ role: 'char', text: 'added' }] });
+      await expect.poll(() => shown(f.messages()[1]!).text).toBe('changed reply');
+      expect(shown(f.messages()[0]!).text).toBe(advance ? 'hello' : 'changed user');
+      expect(shown(f.messages().at(-1)!).text).toBe(advance ? 'newer' : 'added');
+      expect(session.store.children('entry', f.chat).some(({ value }) => value.type === 'vars' && value.set.some(([key]) => key === f.variable))).toBe(true);
+      expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'stale-reply')).toHaveLength(advance ? 1 : 0);
+    }, binding);
+  });
+
+  it('forgets forecast text when a tool leaves or a chat unloads', async () => {
+    const binding: Binding<ToolUnit> = { run: async () => ({ ...noOutcome(), value: 'cached' }), close: () => {} };
+    await server.withSession(async (session) => {
+      const f = await toolChat(session);
+      const chat = crypto.randomUUID();
+      let lease = session.store.retainChat(chat);
+      await lease.ready;
+      await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
+      await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
+      const cache = async () => {
+        await session.store.projections.evaluate(chat);
+        const gather = () => gatherTurn(session, chat, { kind: 'answer' });
+        const turn = gather();
+        if (!turn || 'kind' in turn) throw new Error('fixture');
+        await session.scripts.prompting(chat, turn, async () => gather(), new AbortController().signal);
+        expect(session.scripts.cachedTools(chat)).toHaveLength(1);
+      };
+      try {
+        await cache();
+        await setModuleAlways(session.store, f.module, false);
+        await setModuleAlways(session.store, f.module, true);
+        expect(session.scripts.cachedTools(chat)).toEqual([]);
+        await cache();
+        lease.release();
+        await expect.poll(() => session.store.scopeState(chat)).toBe('unloaded');
+        lease = session.store.retainChat(chat);
+        await lease.ready;
+        expect(session.scripts.cachedTools(chat)).toEqual([]);
+      } finally { lease.release(); }
+    }, binding);
+  });
+
   it('skips a prompt after its deadline, drops late writes, and notes that tool only once', async () => {
     const finish: ((outcome: ScriptOutcome) => void)[] = [];
-    const run = vi.fn<Binding<ToolUnit>['run']>(() => new Promise((resolve) => finish.push(resolve)));
+    const run = vi.fn<Binding<ToolUnit>['run']>(() => new Promise((resolve) => finish.push(resolve))).mockResolvedValueOnce({ ...noOutcome(), value: 'previous summary' });
     await server.withSession(async (session) => {
       const fixture = await toolChat(session);
       await appendUserMessage(session.store, fixture.chat, { id: crypto.randomUUID(), text: 'hello' });
@@ -423,14 +473,17 @@ describe('tool events through Scripts', () => {
       const gather = () => gatherTurn(session, fixture.chat, { kind: 'answer' });
       const turn = gather();
       if (!turn || 'kind' in turn) throw new Error('fixture');
+      await session.scripts.prompting(fixture.chat, turn, async () => gather(), new AbortController().signal);
+      expect(session.scripts.cachedTools(fixture.chat)).toHaveLength(1);
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
           const prompt = session.scripts.prompting(fixture.chat, turn, async () => gather(), new AbortController().signal);
           await vi.advanceTimersByTimeAsync(0);
-          expect(run).toHaveBeenCalledTimes(attempt + 1);
+          expect(run).toHaveBeenCalledTimes(attempt + 2);
           await vi.advanceTimersByTimeAsync(5001);
           expect(await prompt).toMatchObject({ tools: [], turn: { reply: { before: [] } } });
+          expect(session.scripts.cachedTools(fixture.chat)).toEqual([]);
           finish[attempt]!({ ...noOutcome(), value: 'too late', writes: [[fixture.variable, 'late']] });
         }
         expect(session.scripts.snapshot().notes.filter(({ kind }) => kind === 'late')).toMatchObject([{ from: { kind: 'module', id: fixture.module } }]);

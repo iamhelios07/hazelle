@@ -17,7 +17,7 @@ declare namespace Hazelle {
   interface Chat {
     readonly id: string;
     readonly character: { name: string; description: string } | null;
-    readonly persona: { name: string; description: string };
+    readonly persona: { name: string; description: string } | null;
     readonly length: number;
     messages(from?: number, to?: number): Promise<Message[]>;
     readonly state: ChatState;

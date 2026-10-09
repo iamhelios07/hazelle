@@ -109,27 +109,71 @@ it('times out a prompt without applying its late outcome, while model waits stil
   } finally { vi.useRealTimers(); host.close(); }
 }));
 
-it('cuts off a silent frame, restarts on the next event, and stays off after three stalls', () => server.withSession(async (session) => {
+it('resets stalls after loading, then disables three consecutive stalled loads and tells once', () => server.withSession(async (session) => {
   const f = await fixture(session);
   const transport = inProcessTools((api) => api.on('prompt', () => 'ready'));
-  const host = new ToolHost(session, () => session.scripts, transport.open);
+  let silent = true;
+  const host = new ToolHost(session, () => session.scripts, (page) => {
+    const connection = transport.open(page);
+    transport.frames.at(-1)!.sandbox.silent = silent;
+    return connection;
+  });
+  vi.spyOn(session.files, 'read').mockResolvedValue({ ok: true, data: source().bytes });
+  const stall = async () => {
+    const context = f.context();
+    const running = host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, context.host);
+    const refused = expect(running).rejects.toBeInstanceOf(ToolStuck);
+    await vi.advanceTimersByTimeAsync(8001);
+    await refused;
+    expect(transport.frames.at(-1)!.host.closed).toBe(true);
+  };
   try {
-    for (let stalled = 0; stalled < 3; stalled++) {
-      vi.useFakeTimers();
-      await host.warm(f.chat);
-      const frame = transport.frames.at(-1)!;
-      frame.sandbox.silent = true;
-      const context = f.context();
-      const running = host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, context.host);
-      const refused = expect(running).rejects.toBeInstanceOf(ToolStuck);
-      await vi.advanceTimersByTimeAsync(10_001);
-      await refused;
-      expect(frame.host.closed).toBe(true);
-      vi.useRealTimers();
-    }
+    vi.useFakeTimers();
+    await stall();
+    await stall();
+    silent = false;
+    await host.warm(f.chat);
+    transport.frames.at(-1)!.sandbox.silent = true;
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(transport.frames.at(-1)!.host.closed).toBe(true);
+    silent = true;
+    await stall();
+    await stall();
+    await host.warm(f.chat);
+    await host.warm(f.chat);
+    expect(session.scripts.snapshot().notes.filter((note) => note.kind === 'stuck' && note.disabled)).toHaveLength(1);
+    expect(transport.frames).toHaveLength(5);
     const context = f.context();
     await expect(host.run(f.chat, [f.tool()], context.scope, { kind: 'prompt' }, context.host)).rejects.toMatchObject({ disabled: true });
-    expect(transport.frames).toHaveLength(3);
+  } finally { vi.useRealTimers(); host.close(); }
+}));
+
+it('waits for slow code and page chat reads before starting the load watchdog, and passes a missing persona as null', () => server.withSession(async (session) => {
+  const f = await fixture(session);
+  let read!: () => void;
+  vi.spyOn(session.files, 'read').mockImplementation(() => new Promise((resolve) => { read = () => resolve({ ok: true, data: source().bytes }); }));
+  const retain = session.store.retainChat.bind(session.store);
+  let loaded!: () => void;
+  vi.spyOn(session.store, 'retainChat').mockImplementation((chat) => {
+    const lease = retain(chat);
+    return { ...lease, ready: lease.ready.then(() => new Promise<null>((resolve) => { loaded = () => resolve(null); })) };
+  });
+  const context = f.context();
+  vi.spyOn(session.scripts, 'pageContext').mockReturnValue({ ...context, scope: { ...context.scope, persona: null } });
+  const transport = inProcessTools(() => {});
+  const host = new ToolHost(session, () => session.scripts, transport.open);
+  try {
+    vi.useFakeTimers();
+    host.page(f.module, page(f.chat));
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(transport.frames[0]!.host.closed).toBe(false);
+    read();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(transport.frames[0]!.host.sent).not.toContainEqual(expect.objectContaining({ kind: 'load' }));
+    loaded();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(transport.frames[0]!.api!.page!.chat!.persona).toBeNull();
+    expect(session.scripts.snapshot().notes).toEqual([]);
   } finally { vi.useRealTimers(); host.close(); }
 }));
 

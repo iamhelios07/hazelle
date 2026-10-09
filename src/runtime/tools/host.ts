@@ -24,7 +24,7 @@ type Context = { chat: string; scope: ChatScope; host: Host; signal: AbortSignal
 type Pending = Context & { cancel: AbortController; resolve(outcome: ScriptOutcome): void; reject(error: Error): void; stop(): void };
 type Frame = {
   id: number; entry: Entry; connection: Connection; page?: ToolPage; closing: AbortController; heart: Heartbeat;
-  loaded: boolean; ready: Promise<void>; resolve(): void; reject(error: Error): void; loadTimer: ReturnType<typeof setTimeout>;
+  loaded: boolean; ready: Promise<void>; resolve(): void; reject(error: Error): void; loadTimer: ReturnType<typeof setTimeout> | null;
   listens: Set<EventName>; pending: Map<number, Pending>; calls: Set<number>; messages: Message[];
   reading: Promise<unknown>; lanes: Set<string>; release(): void;
 };
@@ -74,7 +74,7 @@ function isOutcome(value: unknown): value is ToolOutcome {
     && Array.isArray(value.edits) && value.edits.every((edit) => isRecord(edit) && Number.isInteger(edit.index) && typeof edit.text === 'string')
     && Array.isArray(value.added) && value.added.every((item) => isRecord(item) && (item.role === 'user' || item.role === 'char') && typeof item.text === 'string');
 }
-const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona ?? { name: '', description: '' }, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
+const header = (chat: string, scope: ChatScope): ChatHeader => ({ id: chat, character: scope.card && { name: scope.card.name, description: scope.card.description }, persona: scope.persona, length: scope.messages.length - (scope.greeting === null ? 0 : 1) });
 
 export class ToolHost implements Tools, Binding<ToolUnit> {
   private readonly entries = new Map<string, Entry>();
@@ -194,17 +194,18 @@ export class ToolHost implements Tools, Binding<ToolUnit> {
     const frame: Frame = {
       id: ++this.ids, entry, connection, page, closing: new AbortController(),
       heart: new Heartbeat(() => this.send(frame, { kind: 'ping' }), () => this.stalled(frame)),
-      loaded: false, ready, resolve, reject, loadTimer: setTimeout(() => this.stalled(frame), STUCK_MS),
+      loaded: false, ready, resolve, reject, loadTimer: null,
       listens: new Set(), pending: new Map(), calls: new Set(), messages: [], reading: Promise.resolve(), lanes: new Set(), release: () => lease?.release(),
     };
     connection.port.onmessage = ({ data }: MessageEvent<unknown>) => this.receive(frame, data);
     connection.port.start();
-    frame.heart.start(STUCK_MS);
     void Promise.all([connection.ready, this.source(entry.tool), lease?.ready]).then(([, code, failure]) => {
       if (failure) throw new Error(failure.error);
       if (frame.closing.signal.aborted) return;
       const context = page?.chat ? this.scripts().pageContext(page.chat, entry.module, frame.closing.signal) : null;
       if (page?.chat && !context) throw new ToolStopped();
+      frame.loadTimer = setTimeout(() => this.stalled(frame), STUCK_MS);
+      frame.heart.start(STUCK_MS);
       this.send(frame, { kind: 'load', api: 1, role: page ? 'page' : 'background', code, manifest: entry.tool.manifest, settings: entry.tool.settings, chat: context ? header(page!.chat!, context.scope) : null, theme: page?.theme ?? 'dark' });
     }).catch((error: unknown) => this.endFrame(frame, error instanceof Error ? error : new Error(String(error)), true));
     return frame;
@@ -225,10 +226,12 @@ export class ToolHost implements Tools, Binding<ToolUnit> {
   private receive(frame: Frame, data: unknown) {
     if (frame.closing.signal.aborted || !isRecord(data)) return;
     if (data.kind === 'pong') { frame.heart.answered(); return; }
-    if (data.kind === 'loaded' && Array.isArray(data.listens) && data.listens.every((event) => EVENTS.has(event as EventName))) {
+    if (data.kind === 'loaded' && !frame.loaded && frame.loadTimer !== null && Array.isArray(data.listens) && data.listens.every((event) => EVENTS.has(event as EventName))) {
       frame.listens = new Set(data.listens as EventName[]);
       frame.loaded = true;
       clearTimeout(frame.loadTimer);
+      frame.loadTimer = null;
+      this.stalls.delete(frame.entry.module);
       frame.resolve();
       this.idle(frame.entry);
       return;
@@ -383,7 +386,7 @@ export class ToolHost implements Tools, Binding<ToolUnit> {
   private endFrame(frame: Frame, error: Error, closePage = false) {
     if (frame.closing.signal.aborted) return;
     frame.closing.abort(error);
-    clearTimeout(frame.loadTimer);
+    if (frame.loadTimer !== null) clearTimeout(frame.loadTimer);
     frame.heart.rest();
     frame.connection.port.onmessage = null;
     frame.connection.close();

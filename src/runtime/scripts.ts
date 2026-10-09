@@ -44,6 +44,7 @@ type Note =
   | { kind: 'stuck'; disabled?: true }
   | { kind: 'no-model'; role: Role }
   | { kind: 'late' }
+  | { kind: 'stale-reply' }
   | { kind: 'flood' }
   | { kind: 'unsaved'; failure: ApiFailure }
   | { kind: 'runaway' };
@@ -86,12 +87,23 @@ export class Scripts {
   private readonly consents = new Map<string, Promise<boolean>>();
   private readonly replies = new Map<string, Promise<void>>();
   private readonly notices = new ToolRate(TOOL_NOTICES_PER_MINUTE);
+  private readonly unsubscribe: () => void;
   private readonly lastTools = new Map<string, Map<string, string>>();
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; display: Pick<ScriptDisplay, 'stale'> },
     private readonly bindings: { lua: () => Promise<LuaRunner>; tools: Binding<ToolUnit> },
-  ) {}
+  ) {
+    this.unsubscribe = session.store.subscribe(() => {
+      for (const [chat, last] of this.lastTools) {
+        const stored = live(session.store.get('chat', chat));
+        if (!stored || session.store.scopeState(chat) === 'unloaded') { this.lastTools.delete(chat); continue; }
+        const active = new Set(toolsOf(session.store, stored.value).map(({ module, tool }) => `${module}:${tool.file.id}`));
+        for (const key of last.keys()) if (!active.has(key)) last.delete(key);
+        if (!last.size) this.lastTools.delete(chat);
+      }
+    });
+  }
 
   readonly subscribe = this.changes.subscribe;
 
@@ -108,6 +120,8 @@ export class Scripts {
 
   close() {
     this.closing.abort();
+    this.unsubscribe();
+    this.lastTools.clear();
     for (const { id } of this.state.questions) this.answer(id, null);
   }
 
@@ -240,7 +254,7 @@ export class Scripts {
           const scope = { ...turn.scope, pending: [...(first.scope.pending ?? []), ...writes] };
           const { outcome, changed } = await this.event(chat, { tools: [unit] }, scope, { kind: 'prompt' }, null, stop, () => clearTimeout(timer));
           writes.push(...outcome.writes);
-          if (stop.aborted) continue;
+          if (stop.aborted) { this.lastTools.get(chat)?.delete(`${unit.module}:${unit.tool.file.id}`); continue; }
           if (changed) {
             const next = await again();
             if (!next) return { kind: 'gone' as const, tools };
@@ -333,14 +347,20 @@ export class Scripts {
   private async event(chat: string, units: Units, scope: ChatScope, event: Event, anchor: Anchor | null, signal?: AbortSignal, finished?: () => void): Promise<{ outcome: Outcome; changed: boolean }> {
     const outcome = await this.run(chat, units, scope, event, signal).finally(finished);
     const greeting = scope.greeting === null ? 0 : 1;
-    const messages = new Map((this.session.read.chat(chat).snapshot()?.messages ?? []).map((message) => [shown(message).id, message]));
+    const current = this.session.read.chat(chat).snapshot()?.messages ?? [];
+    const messages = new Map(current.map((message) => [shown(message).id, message]));
+    const latest = current.at(-1);
+    const stale = event.kind === 'reply' && (!latest || shown(latest).id !== event.id);
+    // A reply handler may always keep state/storage and edit its own shown reply. Adds and other edits
+    // land only while that reply is still the latest shown version; a delayed job cannot rewrite a newer story.
+    if (stale && (outcome.added.length || outcome.edits.some(({ index }) => scope.messages[index + greeting]?.id !== event.id))) this.tell(chat, 'stale-reply', { kind: 'stale-reply' }, ownerOf(units));
     const at = (index: number) => messages.get(scope.messages[index + greeting]?.id ?? '');
     const edits = outcome.edits.flatMap(({ index, text, wrote }) => {
       const message = at(index);
-      return message ? [{ message, wrote, text }] : [];
+      return message && (!stale || event.kind === 'reply' && shown(message).id === event.id) ? [{ message, wrote, text }] : [];
     });
     const removed = outcome.removed.flatMap((index) => at(index)?.id ?? []);
-    const added = outcome.added.map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
+    const added = (stale ? [] : outcome.added).map(({ role, text }) => ({ role: role === 'user' ? ('user' as const) : ('assistant' as const), text }));
     const saved = await appendScripted(this.session.store, chat, { edits, removed, added, vars: anchor && { ...anchor, set: outcome.writes } });
     if (!saved.ok) this.note(chat, { kind: 'unsaved', failure: saved }, ownerOf(units));
     if (outcome.reload) this.session.display.stale(chat);
@@ -375,7 +395,7 @@ export class Scripts {
   report(chat: string, result: Pick<Outcome, 'errors' | 'missing'> | unknown, from: PackOwner | null = null) {
     if (result instanceof ToolStopped) return;
     if (result instanceof ToolLate) return this.tell(chat, 'late', { kind: 'late' }, from);
-    if (result instanceof ToolStuck) return this.note(chat, { kind: 'stuck', ...(result.disabled && { disabled: true }) }, from);
+    if (result instanceof ToolStuck) return result.disabled ? this.tell(chat, 'disabled', { kind: 'stuck', disabled: true }, from) : this.note(chat, { kind: 'stuck' }, from);
     if (result instanceof LuaStuck || result instanceof EvaluationStuck) return this.note(chat, { kind: 'stuck' }, from);
     if (result instanceof Runaway) return this.tell(chat, 'runaway', { kind: 'runaway' }, from);
     if (result instanceof Error) return this.tell(chat, `failed:${result.message}`, { kind: 'failed', message: result.message }, from);
