@@ -69,7 +69,7 @@ export class Lua {
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
       for (const script of triggers) {
-        if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu' || event.kind === 'settings') continue;
+        if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu') continue;
         run.owner = script.owner;
         if (script.kind === 'blocks') {
           if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;

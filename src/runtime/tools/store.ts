@@ -1,7 +1,7 @@
 import type { Chat } from '../../model/chat';
 import type { ToolUnit } from '../../model/tool';
 import { packsOf } from '../chat-context';
-import { fieldValue, TOOL_FILE_BYTES, type ImportedTool } from '../../engine/import/tool';
+import { fieldValue, type ImportedTool } from '../../engine/import/tool';
 import { without } from '../../model/fields';
 import { live } from '../../model/library';
 import { toolId, type Tool } from '../../model/tool';
@@ -43,7 +43,6 @@ export function toolSettings(manifest: ToolManifest, values: Settings): Settings
 }
 
 export async function importTool(store: ObjectStore, files: Files, { manifest, bytes }: ImportedTool): Promise<ApiResult<ToolImport>> {
-  if (bytes.byteLength > TOOL_FILE_BYTES) return { ok: false, error: 'too-large' };
   const existing = store.list('tool').find(({ value }) => value.manifest.name === manifest.name && value.manifest.author === manifest.author);
   // Reimport never revives a binned identity or leaves a second live copy beside it.
   if (existing && !live(store.get('module', existing.parent!))) return { ok: false, error: 'gone' };

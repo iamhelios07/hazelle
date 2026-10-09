@@ -1,5 +1,4 @@
 import { isRecord } from '../../connectors/values';
-import { TOOL_FILE_BYTES } from '../../engine/import/tool';
 import { Runaway } from '../../engine/cbs/evaluate';
 import type { ToolEvent, Host, ModelMessage, Question } from '../../engine/script-api';
 import type { ChatScope } from '../../engine/render';
@@ -103,7 +102,6 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   }
 
   async run(chat: string, unit: ToolUnit, scope: ChatScope, event: ToolEvent, host: Host, signal?: AbortSignal): Promise<ScriptOutcome> {
-    if (!unit || (event.kind !== 'reply' && event.kind !== 'prompt' && event.kind !== 'menu')) return noOutcome();
     const entry = this.entry(unit.module);
     if (entry.tool.file.id !== unit.tool.file.id || !this.allowed(chat, entry.module)) throw new ToolStopped();
     entry.chats.add(chat);
@@ -168,7 +166,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
 
   private entry(module: string): Entry {
     if (this.closing.signal.aborted) throw new ToolStopped();
-    if ((this.stalls.get(module) ?? 0) >= 3) throw new ToolStuck('Reload to restart this tool', true);
+    if ((this.stalls.get(module) ?? 0) >= 3) throw new ToolStuck(true);
     const { store } = this.session;
     const tool = store.get('tool', toolId(module))?.value;
     if (!tool || !live(store.get('module', module))) throw new ToolStopped();
@@ -216,7 +214,6 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
     if (held) return held;
     const reading = this.session.files.read(tool.file, { signal: this.closing.signal }).then((read) => {
       if (!read.ok) throw new Error(`Tool file: ${read.error}`);
-      if (read.data.byteLength > TOOL_FILE_BYTES) throw new Error('Tool file exceeds 8 MB');
       return new TextDecoder('utf-8', { fatal: true }).decode(read.data);
     }).catch((error: unknown) => { this.code.delete(tool.file.id); throw error; });
     this.code.set(tool.file.id, reading);
@@ -378,7 +375,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent> {
   private stalled(frame: Frame) {
     if (frame.closing.signal.aborted) return;
     this.stalls.set(frame.entry.module, (this.stalls.get(frame.entry.module) ?? 0) + 1);
-    const error = new ToolStuck('Tool stopped answering', this.stalls.get(frame.entry.module)! >= 3);
+    const error = new ToolStuck(this.stalls.get(frame.entry.module)! >= 3);
     if (frame.loaded && !framesOf(frame.entry).some((each) => each.pending.size)) this.scripts().report([...frame.entry.chats].at(-1) ?? '', error, { kind: 'module', id: frame.entry.module });
     this.end(frame.entry, error);
   }

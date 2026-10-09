@@ -8,7 +8,7 @@ export type Binding<U, E extends Event = Event> = { run(chat: string, units: U, 
 export type LuaRunner = Binding<ScriptUnit[]> & Pick<Lua, 'installDisplay' | 'display' | 'forgetDisplay'>;
 
 export class ToolStuck extends Error {
-  constructor(message: string, readonly disabled = false) { super(message); }
+  constructor(readonly disabled = false) { super(); }
 }
 export class ToolLate extends Error {}
 export class ToolStopped extends Error {}

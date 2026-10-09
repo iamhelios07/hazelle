@@ -53,7 +53,7 @@ export type From =
 // parts[i] says where messages[i] came from and what it counts in o200k_base, an estimate for any other
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first.
-export type Assembled = { tools: { placed: 'slot' | 'implicit' }; messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number }[]; lore: (Fired & { name: string })[] | null; memory: MemorySent | null; dropped: number };
 
 // The app's own sentence, not a prompt's. A trailing user message rather than an assistant prefill, which current
 // Claude models refuse with 400.
@@ -266,11 +266,11 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   const covered = recalled?.covered ?? 0;
 
   const { parts: template, memory: slot } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'conversation', note: authorNote(scope.note, prompt), memory: recalled?.text ?? '', tools });
-  const placed = prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'tool') ? 'slot' : 'implicit';
+  const hasToolSlot = prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'tool');
   const toolText = joined(tools.map(({ text }) => text));
   const out = (...parts: Sent[]) => template.push(...filled(parts));
   if (!prompt.blocks.some((block) => block.kind === 'slot' && block.slot === 'postEverything')) out(...throughSlot(laid, laid.last, 'postEverything'));
-  if (placed === 'implicit' && toolText.trim()) out({ message: { role: 'system', content: toolText }, from: toolFrom(tools) });
+  if (!hasToolSlot && toolText.trim()) out({ message: { role: 'system', content: toolText }, from: toolFrom(tools) });
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
 
   const messages = chat.texts
@@ -291,7 +291,6 @@ function conversation({ scope, seed, countTokens, budget, continuing, memory, to
   const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
-      tools: { placed },
       messages: sent.map(({ message }) => message),
     parts: sent.map(({ message, from }) => ({ from, tokens: tokens(message.content) })),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),

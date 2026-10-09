@@ -27,7 +27,6 @@ export type ToolEvent =
   | { kind: 'menu'; item: string };
 export type Event =
   | ToolEvent
-  | { kind: 'settings' }
   | { kind: 'input' | 'start' | 'output' }
   | { kind: 'button'; data: string }
   // A press on risu-trigger: each Lua script's own global function of that name, and each block trigger of that name

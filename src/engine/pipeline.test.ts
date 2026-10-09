@@ -459,7 +459,7 @@ describe('a request a script rewrote', () => {
     { role: 'assistant', content: 'first reply' },
     { role: 'user', content: 'second hello' },
   ];
-  const prompt: Assembled = { tools: { placed: 'implicit' }, messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, memory: null, dropped: 2 };
+  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, memory: null, dropped: 2 };
   const note: ChatMessage = { role: 'system', content: 'from the script' };
   const count = (text: string) => text.length;
 
@@ -481,7 +481,6 @@ describe('tool prompt text', () => {
     const built = assembledOf(assemble({ ...base, scope: { ...base.scope, prompt }, tools }));
     expect(built.messages[0]).toMatchObject({ role: 'system', content: '<tools>one {{getvar::untouched}}\n\ntwo</tools>' });
     expect(built.parts[0]!.from).toEqual({ kind: 'tool', name: 'Notes · Memory' });
-    expect(built.tools).toEqual({ placed: 'slot' });
   });
 
   it('places implicit text after the template, preserving the history prefix across tool changes', () => {
@@ -496,7 +495,6 @@ describe('tool prompt text', () => {
     expect(continued.messages.at(-2)).toEqual(built.messages.at(-1));
     expect(continued.parts.at(-1)!.from).toEqual({ kind: 'continue' });
     expect(built.parts.filter(({ from }) => from.kind === 'tool')).toHaveLength(1);
-    expect(built.tools).toEqual({ placed: 'implicit' });
   });
 
   it('adds no message for blank tool answers', () => {
