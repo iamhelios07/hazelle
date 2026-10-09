@@ -40,7 +40,7 @@ const SNAPSHOT: Snapshot = {
 
 const host = (over: Partial<Host> = {}): Host & { said: string[] } => {
   const said: string[] = [];
-  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), tokens: async (text) => text.length, lore: async () => [{ role: 'assistant', text: 'active' }], ...over };
+  return { said, say: (kind, text) => void said.push(`${kind}:${text}`), ask: async () => null, model: async () => ({ success: true, result: 'made' }), embed: async () => ({ ok: false, reason: 'no-model' }), tokens: async (text) => text.length, lore: async () => [{ role: 'assistant', text: 'active' }], ...over };
 };
 
 const lua = await Lua.create({ sliceMs: 300 });

@@ -176,4 +176,5 @@ export const gemini: Codec = {
       reasoningTokens: thoughts,
     };
   },
+  embeds: null,
 };

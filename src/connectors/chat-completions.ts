@@ -174,4 +174,5 @@ export const chatCompletions: Codec = {
       reasoningTokens: count(completion.reasoning_tokens),
     };
   },
+  embeds: null,
 };

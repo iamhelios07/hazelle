@@ -25,6 +25,7 @@ const host = (id: number): Host => {
     say: (...args) => scope.postMessage({ kind: 'say', id, args }),
     ask: (...args) => asked((call) => ({ kind: 'ask', id, call, args })),
     model: (...args) => asked((call) => ({ kind: 'model', id, call, args })),
+    embed: (...args) => asked((call) => ({ kind: 'embed', id, call, args })),
     tokens: (...args) => asked((call) => ({ kind: 'tokens', id, call, args })),
     lore: (...args) => asked((call) => ({ kind: 'lore', id, call, args })),
   };

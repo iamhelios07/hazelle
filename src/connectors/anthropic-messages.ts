@@ -190,4 +190,5 @@ export const anthropicMessages: Codec = {
       reasoningTokens: null,
     };
   },
+  embeds: null,
 };

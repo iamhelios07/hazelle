@@ -1,9 +1,12 @@
+import type { EmbedPurpose } from '../connectors/types';
 import type { PackOwner } from '../model/library';
 import type { Trigger } from './import/types';
 
 export type ScriptUnit = Trigger & { owner: PackOwner };
 export type ModelRefusal = Hazelle.ModelRefusal;
 export type ModelResult = { success: true; result: string } | { success: false; result: string; reason: ModelRefusal };
+
+export type EmbedResult = { ok: true; model: string; vectors: number[][] } | { ok: false; reason: ModelRefusal | 'too-large' };
 
 export type Question = Hazelle.Question;
 export type ModelMessage = Hazelle.ModelMessage;
@@ -14,6 +17,8 @@ export type Host = {
   // input: the text typed; confirm: 'yes'; select: the option's index. null: dismissed.
   ask(question: Question, from: PackOwner, signal?: AbortSignal): Promise<string | null>;
   model(role: 'main' | 'aux', messages: ModelMessage[], spender: PackOwner, signal?: AbortSignal): Promise<ModelResult>;
+  // With the account's 임베딩 모델, under the same answer as model.
+  embed(texts: string[], as: EmbedPurpose | null, spender: PackOwner, signal?: AbortSignal): Promise<EmbedResult>;
   tokens(text: string): Promise<number>;
   // The lorebook entries a prompt built now would hold, each as sent, while their tokens fit within the model's
   // context less reserve; all of them when reserve is no number, as Risu's sum then never passes its limit.

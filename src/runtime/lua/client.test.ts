@@ -62,7 +62,7 @@ it('sends event history tails in order across edits, truncation, chat switches a
     terminate() {}
   });
   const runner = new LuaWorker();
-  const host: Host = { say() {}, ask: async () => null, model: async () => ({ success: true, result: '' }), tokens: async () => 0, lore: async () => [] };
+  const host: Host = { say() {}, ask: async () => null, model: async () => ({ success: true, result: '' }), embed: async () => ({ ok: false, reason: 'no-model' }), tokens: async () => 0, lore: async () => [] };
   const scope: ChatScope = { ...snapshot.scope, cast: [], packs: [], toggles: new Map() };
   const changed = { ...scope, messages: [scope.messages[0]!, { ...scope.messages[1]!, text: 'edited', after: [['turn', '2']] as [string, string][] }] };
   const shorter = { ...changed, messages: changed.messages.slice(0, 1) };
@@ -88,7 +88,7 @@ it('keeps each pending host until completion and ignores old replies after a cra
   }
   vi.stubGlobal('Worker', FakeWorker);
   const runner = new LuaWorker();
-  const host: Host = { say: vi.fn(), ask: async () => null, model: async () => ({ success: true, result: '' }), tokens: async () => 0, lore: async () => [] };
+  const host: Host = { say: vi.fn(), ask: async () => null, model: async () => ({ success: true, result: '' }), embed: async () => ({ ok: false, reason: 'no-model' }), tokens: async () => 0, lore: async () => [] };
   const other = { ...host, say: vi.fn() };
   const scope: ChatScope = { ...snapshot.scope, cast: [], packs: [], toggles: new Map() };
   try {

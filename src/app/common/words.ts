@@ -9,7 +9,7 @@ import { KEEP_DAYS } from '../../model/library';
 // one. 컨텍스트 길이 is the model's own, 컨텍스트 한도 the setting. 원문 is what a translation came from, 요청 원문
 // the request a reply was asked with. 사용 중 marks what is in use, 생성 중 a reply being written.
 
-export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '보조 모델' };
+export const MODEL_ROLES: Record<Role, string> = { main: '대화 모델', aux: '보조 모델', embed: '임베딩 모델' };
 
 // Where a translation's model comes from, said beside the model wherever it shows.
 export const TRANSLATION_MODEL_HELP = `번역 프롬프트에서 선택하지 않으면 ${MODEL_ROLES.aux}을 사용해요.`;

@@ -128,4 +128,5 @@ export const responses: Codec = {
       reasoningTokens: count(output.reasoning_tokens),
     };
   },
+  embeds: null,
 };

@@ -36,7 +36,7 @@ export type Group = { id: string; name: string; accounts: string[] };
 
 export type HttpRequest = { url: string; method: 'GET' | 'POST'; headers: Record<string, string>; body: string | null };
 
-export type Modality = 'text' | 'image' | 'audio' | 'video' | 'file';
+export type Modality = 'text' | 'image' | 'audio' | 'video' | 'file' | 'embedding';
 
 // null means the catalog does not say. It is shown as unknown, never as "no".
 export type Model = {
@@ -132,6 +132,18 @@ export type Codec = {
   whole(payload: unknown, facts: StreamFacts, append: (phase: Phase, text: string) => void): Terminal | null;
   truncated(finishReason: string): boolean;
   usage(raw: Record<string, unknown>): Usage;
+  // null for a format with no embeddings.
+  embeds: Embeds | null;
+};
+
+export type EmbedPurpose = 'query' | 'document';
+
+// Built from the format; whether a connection type serves it is the type's (ConnectionType embeds). as: what the texts
+// are for, which retrieval-tuned models embed differently; a format with no such field drops it. parse answers null
+// for a body that is not this format's embedding answer, else a vector per text, in order.
+export type Embeds = {
+  request(endpoint: Endpoint, model: Model, texts: string[], as: EmbedPurpose | null): HttpRequest;
+  parse(payload: unknown, count: number): { vectors: number[][]; usage: Usage } | null;
 };
 
 // Every hook is optional: without one, the codec's default answers, exactly as for a connection described by hand.
@@ -175,6 +187,8 @@ type TypeHooks = {
   // the lookup answers 404.
   settle?: { request(secret: string, id: string): HttpRequest; parse(payload: unknown): Cost | null };
   draws?: Draws;
+  // null: the type serves no embeddings, or its codec's embeddings were not verified against it (design §4).
+  embeds?: null;
 };
 
 // center: where a character stands, 0–1 from the top left. A model that places no one gets the characters' prompts

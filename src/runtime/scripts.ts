@@ -418,6 +418,7 @@ export class Scripts {
       say: (tone, text, from) => { if (!signal?.aborted) this.note(chat, { kind: 'said', tone, text }, from); },
       ask: (question, from, callSignal) => this.ask(chat, question, from, callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal),
       model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, callSignal ? AbortSignal.any([...(signal ? [signal] : []), callSignal]) : signal),
+      embed: async () => ({ ok: false, reason: 'no-model' }),
       tokens: async (text) => {
         const counted = await this.session.store.evaluation.count([text]);
         if ('kind' in counted) throw new Error('tokenizer');

@@ -18,7 +18,7 @@ import { Button, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row,
 import { changeWords, defaultFirst, NOT_CALLABLE, valueWords } from './settingWords';
 import { count } from '../common/typedNumber';
 
-const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일' };
+const MODALITY: Record<Modality, string> = { text: '텍스트', image: '이미지', audio: '오디오', video: '영상', file: '파일', embedding: '임베딩' };
 
 // What the catalog said when the model was starred. null is unknown, never 안 됨.
 const can = (value: boolean | null) => (value === null ? UNKNOWN : value ? '됨' : '안 됨');
