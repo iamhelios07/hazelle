@@ -171,7 +171,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if ('kind' in started) return started;
   const { route, settings, scope, budget, memory, said, reply } = started.turn;
   const kept = translated.said !== null && said === null ? { kept: true as const } : {};
-  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
+  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools: [], scope, seed: reply.id, budget, continuing: reply.continues !== null, memory }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scripts.requesting(chat, started.turn, prompt.messages);
   const sent = requested.messages === prompt.messages ? prompt : await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, budget }, signal));

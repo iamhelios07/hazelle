@@ -4,7 +4,7 @@ import type { Stored } from '../../model/kinds';
 import type { Lore, LoreFolder } from '../../model/library';
 import { loreGroups } from '../../model/lore';
 import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from '../../runtime/lore';
-import type { PackOwner } from '../../runtime/pack';
+import type { PackOwner } from '../../model/library';
 import { useChildren, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, NumberInput, PhraseField, Row, SearchField, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';

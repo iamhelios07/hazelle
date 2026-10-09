@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RegexScript } from '../engine/import/types';
-import { addLua, editRegex, moveScript, removeScript, restoreScript, setScriptOff, type PackOwner } from './pack';
+import { addLua, editRegex, moveScript, removeScript, restoreScript, setScriptOff } from './pack';
+import type { PackOwner } from '../model/library';
 import type { ObjectStore } from './store';
 import { testCard, testServer } from './testing';
 

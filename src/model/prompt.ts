@@ -8,6 +8,7 @@ export type PromptSort = 'conversation' | 'translate' | 'memory' | 'illustrate';
 // A feature that brings something new to the prompt adds a row. wrapped: the slot takes a role and a 감싸는 텍스트 with
 // {{slot}} where its content goes.
 export const SLOTS = {
+  tool: { wrapped: true, repeats: false, sorts: ['conversation'] },
   description: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
   persona: { wrapped: true, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },
   lorebook: { wrapped: false, repeats: false, sorts: ['conversation', 'translate', 'memory', 'illustrate'] },

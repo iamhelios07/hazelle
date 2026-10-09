@@ -4,7 +4,7 @@ import path from 'node:path';
 // without its extension, relative to the repo root (the folder above this one), and a test file belongs where the module
 // it tests does. An area imports itself, the areas in `imports`, with `import type` those in `types`, and from its test
 // files those in `tests`. A module in no area fails lint until this table places it.
-const RUNTIME_IMPORTS = ['changeSignal', 'contracts', 'model', 'engine', 'connectors', 'priceLists', 'vault'];
+const RUNTIME_IMPORTS = ['toolApi', 'changeSignal', 'contracts', 'model', 'engine', 'connectors', 'priceLists', 'vault'];
 const BELOW_APP = ['runtime', ...RUNTIME_IMPORTS];
 const FEATURES = ['account', 'admin', 'library', 'chat', 'connections', 'models', 'prompts', 'personas', 'modules', 'settings'];
 const FEATURE = {
@@ -12,6 +12,8 @@ const FEATURE = {
   why: 'a feature folder imports no other feature folder and nothing from the shell but routes and router (only the shell and main.tsx compose features), and reaches the server over HTTP only.',
 };
 const AREAS = {
+  toolApi: { paths: ['src/tool-api'], why: 'the public tool contract imports no application code.' },
+  sandbox: { paths: ['src/sandbox'], imports: ['toolApi'], why: 'the sandbox reaches only the public tool contract.' },
   changeSignal: { paths: ['src/change-signal'], why: 'argument-free change notifications import no application or environment code.' },
   contracts: { paths: ['src/contracts'], why: 'wire values shared by the server and client import no other layer.' },
   connectors: {
@@ -29,7 +31,7 @@ const AREAS = {
   },
   model: {
     paths: ['src/model'],
-    types: ['connectors', 'engine', 'vault'],
+    types: ['toolApi', 'connectors', 'engine', 'vault'],
     why: 'the model is pure domain, saved values and what is computed from them with no I/O, and takes only types from connectors, the engine and the vault (a stored file\'s reference).',
   },
   vault: { paths: ['src/vault'], why: 'the vault is crypto and device storage only; it never reaches the network.' },

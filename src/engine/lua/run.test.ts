@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { LuaFactory } from 'wasmoon';
 import { blockConditions, blockEffects } from '../import/blocks';
 import type { Blocks } from './blocks';
-import { Lua, type Event, type Script } from './run';
-import type { Host, Snapshot } from './state';
+import { Lua, type Script } from './run';
+import type { Event } from '../script-api';
+import type { Snapshot } from './state';
+import type { Host } from '../script-api';
 
 const SNAPSHOT: Snapshot = {
   messages: [

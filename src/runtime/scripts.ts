@@ -1,11 +1,12 @@
+import type { LuaRunner } from './script-binding';
 import { ChangeSignal } from '../change-signal';
 import { Runaway } from '../engine/cbs/evaluate';
 import type { Pack, Trigger } from '../engine/import/types';
 import type { Role } from '../connectors/assignment';
 import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { Event, Outcome } from '../engine/lua/run';
-import type { Host, ModelMessage, Question } from '../engine/lua/state';
+import type { Event, Outcome } from '../engine/script-api';
+import type { Host, ModelMessage, Question } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
@@ -17,7 +18,7 @@ import type { Credentials } from './credential';
 import { evaluationFailure, EvaluationStuck } from './evaluation';
 import { generate } from './generate';
 import type { ScriptOutcome } from './lua/event';
-import { LuaStuck, type Runner } from './lua/client';
+import { LuaStuck } from './lua/client';
 import { modelProfile } from './profiles';
 import type { ReadModels } from './read-model';
 import type { ScriptDisplay } from './script-display';
@@ -79,7 +80,7 @@ export class Scripts {
 
   constructor(
     private readonly session: { store: ObjectStore; read: ReadModels; credentials: Credentials; costs: Costs; display: Pick<ScriptDisplay, 'stale'> },
-    private readonly open: () => Promise<Runner>,
+    private readonly open: () => Promise<LuaRunner>,
   ) {}
 
   readonly subscribe = this.changes.subscribe;

@@ -1,3 +1,5 @@
+import { pendingTools, type Tools } from './tools/facade';
+import type { LuaRunner } from './script-binding';
 import type { VaultKey } from '../vault/keys';
 import { api, type ApiResult } from './api';
 import { AssetUrls } from './assets';
@@ -19,7 +21,7 @@ import { keepSynced, ObjectStore, type PullProgress } from './store';
 import { Talk } from './talk';
 import { Translator } from './translate';
 import { Usage } from './usage';
-import { LuaStuck, LuaWorker, type Runner } from './lua/client';
+import { LuaStuck, LuaWorker } from './lua/client';
 import { ReadModels } from './read-model';
 import { ScriptDisplay } from './script-display';
 import { Scripts } from './scripts';
@@ -42,6 +44,7 @@ export type Session = {
   drafts: Drafts;
   streams: Streams;
   scripts: Scripts;
+  tools: Tools;
   credentials: Credentials;
   catalogs: Catalogs;
   read: ReadModels;
@@ -51,10 +54,10 @@ export type Session = {
 };
 
 // Its worker starts, and the VM loads, when a chat's bot first runs Lua, never with the page.
-const luaWorker = (): Promise<Runner> => Promise.resolve(new LuaWorker());
+const luaWorker = (): Promise<LuaRunner> => Promise.resolve(new LuaWorker());
 
 // An open given up while it loads (signal) starts nothing. A cached opening never waits for the network.
-export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), lua: () => Promise<Runner> = luaWorker): Promise<ApiResult<Session>> {
+export async function openSession(accountId: string, vaultKey: VaultKey, username: string, signal: AbortSignal, progress?: (progress: PullProgress) => void, cache: DeviceCache = deviceCache(accountId), lua: () => Promise<LuaRunner> = luaWorker): Promise<ApiResult<Session>> {
   const store = await ObjectStore.open(accountId, vaultKey, api, cache, signal);
   if (signal.aborted) {
     store.close();
@@ -84,9 +87,9 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
   const drafts = new Drafts();
   const reading = new Set<string>();
   const translator = new Translator(store, credentials, costs, reading);
-  let runner: Promise<Runner> | null = null;
+  let runner: Promise<LuaRunner> | null = null;
   // Asked for once the session has closed, it makes none: nothing would be left to end it.
-  const machine = () => (closing.signal.aborted ? Promise.reject<Runner>(new LuaStuck('closed')) : (runner ??= lua()));
+  const machine = () => (closing.signal.aborted ? Promise.reject<LuaRunner>(new LuaStuck('closed')) : (runner ??= lua()));
   const display: ScriptDisplay = new ScriptDisplay(store, machine, (chat, result) => scripts.report(chat, result));
   const read = new ReadModels(store, display);
   const memory = new Rememberer({ store, read, credentials }, reading);
@@ -155,6 +158,6 @@ export async function openSession(accountId: string, vaultKey: VaultKey, usernam
     assets.close();
     store.close();
   };
-  const session: Session = { username, store, files, assets, talk, costs, usage, translator, memory, illustrator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
+  const session: Session = { tools: pendingTools(), username, store, files, assets, talk, costs, usage, translator, memory, illustrator, drafts, streams, scripts, credentials, catalogs, read, close, startBackground };
   return { ok: true, data: session };
 }

@@ -1,6 +1,9 @@
+import type { LuaRunner } from '../script-binding';
 import type { Trigger } from '../../engine/import/types';
-import type { DisplayBatch, DisplayItem, Event, Lua, Script } from '../../engine/lua/run';
-import type { Host, LuaMessage, Snapshot } from '../../engine/lua/state';
+import type { DisplayBatch, DisplayItem, Script } from '../../engine/lua/run';
+import type { Event } from '../../engine/script-api';
+import type { LuaMessage, Snapshot } from '../../engine/lua/state';
+import type { Host } from '../../engine/script-api';
 import type { ChatBasis, ChatScope } from '../../engine/render';
 import type { ScriptOutcome } from './event';
 import { changedTail, sameHistory, type Tail } from '../history-delta';
@@ -8,7 +11,6 @@ import { PendingRequests } from '../pending-requests';
 import { Heartbeat, moduleWorker } from '../worker';
 import workerUrl from './worker?worker&url';
 
-export type Runner = Pick<Lua, 'installDisplay' | 'display' | 'forgetDisplay' | 'close'> & { run(owner: string, triggers: Trigger[], scope: ChatScope, event: Event, host: Host): Promise<ScriptOutcome> };
 export type EventInput = { scope: ChatBasis; history: Tail<ChatScope['messages'][number]> };
 
 export type DisplayInstall = { revision: number; scripts: Script[]; snapshot: Omit<Snapshot, 'messages' | 'scope'> & { scope: Omit<Snapshot['scope'], 'messages'> }; messages: Tail<LuaMessage>; history: Tail<Snapshot['scope']['messages'][number]>; items: DisplayItem[] };
@@ -36,7 +38,7 @@ const STUCK_MS = 8000;
 
 export class LuaStuck extends Error {}
 
-export class LuaWorker implements Runner {
+export class LuaWorker implements LuaRunner {
   private worker: Worker | null = null;
   private readonly pending = new PendingRequests<ScriptOutcome | DisplayBatch | null, Host | null>();
   private readonly displays = new Map<string, { revision: number; snapshot: Snapshot }>();

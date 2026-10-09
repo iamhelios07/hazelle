@@ -4,7 +4,7 @@ import type { ApiResult } from './api';
 import { evaluationFailure } from './evaluation';
 import type { ObjectStore } from './store';
 
-export type PackOwner = { kind: 'character' | 'module'; id: string };
+import type { PackOwner } from '../model/library';
 export type ScriptList = 'regex' | 'triggers';
 type Scripts = Pick<Pack, ScriptList>;
 

@@ -12,6 +12,7 @@ import { numbered } from './illustrate';
 import type { TranslationRequest } from './translate';
 
 export type PromptInput = {
+  tools: { module: string; name: string; text: string }[];
   scope: ChatScope & { prompt: ConversationPrompt; persona: NonNullable<ChatScope['persona']> };
   // The id of the reply being written. It rolls this request's random tags outside messages and its lorebook
   // probabilities, as each earlier reply's id rolled its own.

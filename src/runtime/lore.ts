@@ -3,7 +3,7 @@ import type { Stored } from '../model/kinds';
 import type { Lore, LoreFolder } from '../model/library';
 import type { ApiResult } from './api';
 import { allWritten } from './api';
-import type { PackOwner } from './pack';
+import type { PackOwner } from '../model/library';
 import type { ObjectStore } from './store';
 
 export const newLore = (siblings: Lore[], folder: string | null): Lore => ({

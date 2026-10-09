@@ -1,10 +1,11 @@
+import type { LuaRunner } from './script-binding';
 import type { Display } from '../engine/display';
 import type { DisplayBatch, Displayed, Script } from '../engine/lua/run';
 import type { Snapshot } from '../engine/lua/state';
 import type { ChatScope, Missed } from '../engine/render';
 import type { Chat, Message } from '../model/chat';
 import { EvaluationStopped, EvaluationStuck } from './evaluation';
-import type { Runner } from './lua/client';
+
 import { luaSnapshot, luaStanding } from './lua/snapshot';
 import { scriptsOf } from './scripts';
 import type { ObjectStore } from './store';
@@ -29,7 +30,7 @@ export class ScriptDisplay {
   private readonly wanted = new Map<string, number>();
   private readonly running = new Set<string>();
   private readonly bases = new Map<string, Basis>();
-  private runner: Promise<Runner> | null = null;
+  private runner: Promise<LuaRunner> | null = null;
   private revisions = 0;
   private generations = 0;
   // Whether each script, by its code, holds an editDisplay listener, as its engine said when a pass asked. Only the
@@ -38,7 +39,7 @@ export class ScriptDisplay {
 
   constructor(
     private readonly store: ObjectStore,
-    private readonly open: () => Promise<Runner>,
+    private readonly open: () => Promise<LuaRunner>,
     private readonly report: (chat: string, result: Displayed | unknown) => void,
   ) {}
 

@@ -7,6 +7,7 @@ import type { OutlineKind } from '../ui';
 import { toggleUses } from './rekey';
 
 export const SLOT = {
+  tool: { name: SLOT_NAMES.tool, hint: '도구가 보탠 내용', line: '켜 둔 도구가 이번 대화에 보탠 내용이 들어가요.', kind: 'note', icon: NotebookPen },
   description: { name: SLOT_NAMES.description, hint: '카드의 설명 · 성격 · 상황 · 예시 대화', line: '캐릭터 카드의 설명, 성격, 상황, 예시 대화가 여기에 들어가요.', kind: 'char', icon: IdCard },
   persona: { name: SLOT_NAMES.persona, hint: '이 채팅에서 쓰는 페르소나의 설명', line: '이 채팅의 페르소나 설명이 여기에 들어가요.', kind: 'char', icon: UserRound },
   lorebook: {

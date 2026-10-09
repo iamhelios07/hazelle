@@ -1,3 +1,4 @@
+export type PackOwner = { kind: 'character' | 'module'; id: string };
 import type { FileRef } from '../vault/files';
 import type { Card, LoreEntry, Pack } from '../engine/import/types';
 import type { Translation, TranslateSwitches } from './chat';
@@ -50,6 +51,7 @@ export type Character = Mark & {
 // namespace: Risu's, which {{moduleenabled::…}} asks by. loreFolders only group its lorebook on screen.
 // risu: the Risu id of one brought from a Risu backup, which a move skips.
 export type Module = Pack & Mark & {
+  botModels?: boolean;
   name: string;
   description: string;
   namespace: string | null;

@@ -27,6 +27,7 @@ export function newBlock(kind: NewBlock): Block {
     case 'persona':
     case 'authorNote':
     case 'note':
+    case 'tool':
     case 'memory':
       return { ...named, kind: 'slot', slot: kind.slot, role: 'system', wrapper: null };
     case 'span':

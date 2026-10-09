@@ -3,39 +3,11 @@ import type { Trigger } from '../import/types';
 import { runBlocks, type Blocks } from './blocks';
 import JSON_LUA from './json.lua?raw';
 import PRELUDE from './prelude.lua?raw';
-import { add, cbs, read, text, UNSET, working, write, type Acting, type Host, type ModelMessage, type Run, type Snapshot, type Working } from './state';
+import { add, cbs, read, text, UNSET, working, write, type Acting, type Run, type Snapshot, type Working } from './state';
+import type { Host, ModelMessage, Event, Outcome, ScriptError, Failure, EditStage } from '../script-api';
 
 // name is for error messages only.
 export type Script = Pick<Extract<Trigger, { kind: 'lua' }>, 'kind' | 'name' | 'code'>;
-
-export type EditStage = 'editInput' | 'editOutput' | 'editRequest';
-export type Event =
-  | { kind: 'input' | 'start' | 'output' }
-  | { kind: 'button'; data: string }
-  // A press on risu-trigger: each Lua script's own global function of that name, and each block trigger of that name
-  // whatever its type, as Risu runs both.
-  | { kind: 'call'; name: string }
-  | { kind: 'edit'; stage: EditStage; value: unknown; meta: Record<string, unknown> };
-
-// runaway: the CBS the script evaluated ran away (cbs/evaluate Runaway), which the app words as its other runaway
-// notices; the message is only what the script itself sees.
-type Failure = { message: string } | { runaway: true };
-export type ScriptError = { script: string } & Failure;
-
-// index is a message's place in the snapshot. handled: some script had the function the event calls, or a block
-// trigger answered it. missing: the functions called and the block effects met that this app does not have.
-export type Outcome = {
-  value: unknown;
-  stop: boolean;
-  handled: boolean;
-  writes: [string, string][];
-  edits: { index: number; text: string }[];
-  removed: number[];
-  added: { role: 'user' | 'char'; text: string }[];
-  reload: boolean;
-  errors: ScriptError[];
-  missing: string[];
-};
 
 // variables: the writes since the item before it, over the snapshot's.
 export type DisplayItem = { index: number; text: string; variables: [string, string][] };
@@ -98,6 +70,7 @@ export class Lua {
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
       for (const script of triggers) {
+        if (event.kind === 'reply' || event.kind === 'prompt' || event.kind === 'menu' || event.kind === 'settings') continue;
         if (script.kind === 'blocks') {
           if (event.kind === 'call' ? script.name !== event.name : (event.kind !== 'start' && event.kind !== 'input' && event.kind !== 'output') || script.on !== event.kind) continue;
           handled = true;

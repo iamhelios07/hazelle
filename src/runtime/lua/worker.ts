@@ -1,6 +1,7 @@
 import wasm from 'wasmoon/dist/glue.wasm?url';
 import { Lua, type DisplayBatch } from '../../engine/lua/run';
-import type { Host, Snapshot } from '../../engine/lua/state';
+import type { Snapshot } from '../../engine/lua/state';
+import type { Host } from '../../engine/script-api';
 import type { ChatScope } from '../../engine/render';
 import { runEvent, type ScriptOutcome } from './event';
 import { applyTail } from '../history-delta';

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_ORDER } from '../engine/import/convert';
 import type { Character } from '../model/library';
 import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from './lore';
-import type { PackOwner } from './pack';
+import type { PackOwner } from '../model/library';
 import type { ObjectStore } from './store';
 import { testCard, testServer } from './testing';
 

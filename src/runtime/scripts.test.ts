@@ -1,3 +1,4 @@
+import type { LuaRunner } from './script-binding';
 import { describe, expect, it, vi } from 'vitest';
 import { fetchApi } from './api';
 import type { Trigger } from '../engine/import/types';
@@ -7,7 +8,7 @@ import { setToggle } from './characters';
 import { appendUserMessage, startChat } from './chat-log';
 import { EvaluationFailed, EvaluationStuck } from './evaluation';
 import { projectGreetings } from './greetings';
-import type { Runner } from './lua/client';
+
 import { openSession, type Session } from './session';
 import { answerable, inTurn, saying, stubRelay, testCard, testServer } from './testing';
 import { evaluateChat } from './chat-context';
@@ -204,8 +205,8 @@ describe("the bot scripts' machine", () => {
     vi.stubGlobal('window', new EventTarget());
     vi.stubGlobal('document', { visibilityState: 'hidden' });
     const { accountId, vaultKey } = await server.account();
-    let made!: (runner: Runner) => void;
-    const lua = vi.fn(() => new Promise<Runner>((resolve) => (made = resolve)));
+    let made!: (runner: LuaRunner) => void;
+    const lua = vi.fn(() => new Promise<LuaRunner>((resolve) => (made = resolve)));
     const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, lua);
     if (!opened.ok) throw new Error(opened.error);
     const { chat } = await chatWith(opened.data, `function open(id) end`);

@@ -110,7 +110,7 @@ const assembledOf = (result: ReturnType<typeof assemble>) => {
   return result;
 };
 const sentOf = (result: ReturnType<typeof assemble>) => assembledOf(result).messages;
-const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: null });
+const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: null });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
 describe('assemble', () => {
@@ -280,7 +280,7 @@ describe('assemble', () => {
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));
-    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, continuing: false, memory: null };
+    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, tools: [], continuing: false, memory: null };
     const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
     const inChat = ({ content }: ChatMessage) => content.startsWith('Message ');
     const whole = sentOf(assemble({ ...input, budget: null }));
@@ -332,7 +332,7 @@ describe('assemble with memory', () => {
   });
   const memoryOf = (records: MemoryRecord[]): Memory => ({ records, chapters: [], state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
   const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}): Assembled =>
-    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, continuing: false, memory: { memory, budget, shown } }));
+    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, memory: { memory, budget, shown } }));
   const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
   const memoryOfSent = (result: Assembled) => result.messages.find((_, index) => (result.parts[index]!.from as { slot?: string }).slot === 'memory');
 

@@ -1,6 +1,7 @@
 import type { Trigger } from '../../engine/import/types';
-import type { Event, Lua, Outcome } from '../../engine/lua/run';
-import type { Host } from '../../engine/lua/state';
+import type { Lua } from '../../engine/lua/run';
+import type { Event, Outcome } from '../../engine/script-api';
+import type { Host } from '../../engine/script-api';
 import { renderChat, type ChatScope } from '../../engine/render';
 import { luaSnapshot, luaStanding } from './snapshot';
 

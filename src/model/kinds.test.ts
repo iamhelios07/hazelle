@@ -16,3 +16,15 @@ it('accepts an illustration as the run stores it, and refuses one whose scene lo
   expect(isValue('illustration', illustration)).toBe(true);
   expect(isValue('illustration', { ...illustration, scene: { ...scene, framing: undefined } })).toBe(false);
 });
+
+
+it('accepts tool files and per-key data without changing existing module shapes', () => {
+  const manifest = { api: 1, name: 'notes', author: 'jin', displayName: 'Notes', version: '1', description: '', uses: [], page: null, menu: [], settings: [] };
+  const tool = { manifest, file: { id: 'f', key: 'k' }, size: 30, settings: {} };
+  expect(isValue('tool', tool)).toBe(true);
+  expect(isValue('tool', { ...tool, file: {} })).toBe(false);
+  expect(isValue('tool', { ...tool, manifest: { ...manifest, api: 2 } })).toBe(false);
+  expect(isValue('tooldata', { key: 'note', value: { text: 'hello' } })).toBe(true);
+  expect(isValue('tooldata', { key: 'note', value: null })).toBe(true);
+  expect(isValue('tooldata', { key: 'note' })).toBe(false);
+});

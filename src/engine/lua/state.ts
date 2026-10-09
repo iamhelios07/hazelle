@@ -1,3 +1,4 @@
+import type { Host } from '../script-api';
 import { unescapeCbs } from '../cbs/escape';
 import { evaluate, Runaway } from '../cbs/evaluate';
 import { TOGGLE_GLOBAL } from '../cbs/tags';
@@ -19,21 +20,6 @@ export type Snapshot = {
   character: { name: string; description: string; firstMessage: string };
   persona: { name: string; description: string };
   note: string;
-};
-
-export type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; options: string[] };
-export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-
-// What a script reaches outside its run, each of which may take as long as the user or a provider does.
-export type Host = {
-  say(kind: 'normal' | 'error', text: string): void;
-  // input: the text typed; confirm: 'yes'; select: the option's index. null: dismissed.
-  ask(question: Question): Promise<string | null>;
-  model(role: 'main' | 'aux', messages: ModelMessage[]): Promise<{ success: boolean; result: string }>;
-  tokens(text: string): Promise<number>;
-  // The lorebook entries a prompt built now would hold, each as sent, while their tokens fit within the model's
-  // context less reserve; all of them when reserve is no number, as Risu's sum then never passes its limit.
-  lore(reserve: number | null): Promise<{ role: 'system' | 'user' | 'assistant'; text: string }[]>;
 };
 
 export type Working = { origin: number | null; role: 'user' | 'char'; data: string; time: number; first: string };

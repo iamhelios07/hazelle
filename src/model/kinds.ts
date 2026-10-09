@@ -7,11 +7,14 @@ import type { Persona } from './persona';
 import type { Profile } from './profile';
 import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
+import type { Tool, ToolData } from './tool';
 import type { Stream } from './stream';
 
 export type Values = {
   character: Character;
   module: Module;
+  tool: Tool;
+  tooldata: ToolData;
   folder: Folder;
   lore: Lore;
   avatar: Avatar;
@@ -44,6 +47,8 @@ type Link<K extends Kind> = { [F in keyof Values[K]]-?: Values[K][F] extends str
 export const KINDS = {
   character: { parent: null },
   module: { parent: null },
+  tool: { parent: 'module', file: true },
+  tooldata: { parent: 'module' },
   folder: { parent: null },
   lore: { parent: ['character', 'module'] },
   avatar: { parent: 'character', file: true },
@@ -116,6 +121,8 @@ const SHAPES = {
     loreFolders: listOf(shape({ id: str, name: str })),
   }),
   module: shape({ name: str, description: str, namespace: orNull(str), regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: str, loreFolders: listOf(shape({ id: str, name: str })) }),
+  tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
+  tooldata: shape({ key: str, value: (value) => value !== undefined }),
   folder: shape({ name: str }),
   lore: shape({
     ...all(bool, 'enabled', 'constant', 'selective', 'useRegex', 'caseSensitive'),
