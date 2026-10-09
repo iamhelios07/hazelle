@@ -248,6 +248,11 @@ export function standing(memory: Memory, chat: ChatRead, budget: number, countTo
 const HIGH = 0.9;
 const LOW = 0.5;
 const CHAPTER_SHARE = 4;
+// Left to the model, Gemini 3.8 Flash wrote one ~1,000-token record for 49 messages (~13k tokens) and lost four facts
+// of nine (measured 2026-10-09); records are told to take about 1 / RECORD_SHARE of their messages, within a quarter of
+// the budget a batch.
+const RECORD_SHARE = 5;
+export const recordsTarget = (spanTokens: number, budget: number) => Math.min(Math.ceil(spanTokens / RECORD_SHARE), Math.ceil(budget / 4));
 
 export const chapterTarget = (costs: number[]) => Math.ceil(costs.reduce((sum, cost) => sum + cost, 0) / CHAPTER_SHARE);
 
@@ -380,11 +385,12 @@ export const chapterBefore = (before: Written | null) => memoryText([], [], befo
 export const spanText = (messages: { speaker: string; text: string }[]) => messages.map(({ speaker, text }, index) => `[#${index + 1} ${speaker}]\n${text}`).join('\n\n');
 
 // The app's own sentence after a memory prompt, not a prompt's: the parser below depends on every word of it.
-export const memoryFormat = (count: number) =>
+export const memoryFormat = (count: number, target: number) =>
   [
     'Answer with one JSON object and nothing else: {"records": [...]}.',
+    `The records are about ${target} tokens long in all, so a scene keeps its detail: who did what, what was agreed, what was said.`,
     `The records cover the numbered messages in order, without gaps: each record's "to" is the number of its last message, and the last record's "to" is ${count}. Start a new record only at a scene break.`,
-    'Every record has every field: "to" (a number); "when" and "where" (text, or null when the messages do not say); "who" (the names of those present); "what" (what happened); "lines" (key lines, each {"speaker": name, "text": the line copied word for word from the messages}); "outcome" (text); "state" (only the facts this record changes, each {"about": name, "field": what it is, "value": its new value, or null when the fact no longer holds, such as a healed injury, an item given away or a place left}; one value per field, so merge duplicates of the same about and field into one); "opens" (new unresolved promises, foreshadowing or events, as text); "closes" (the labels of the open threads it resolves, such as "T-1a2b3c4d").',
+    'Every record has every field: "to" (a number); "when" and "where" (text, or null when the messages do not say); "who" (a list of the names of those present, one spelling per person); "what" (what happened); "lines" (key lines, each {"speaker": who says the line in the text, not always the author of the message, "text": the line copied word for word from the messages}); "outcome" (text); "state" (only the facts this record changes, each {"about": name, "field": what it is, "value": its new value, or null when the fact no longer holds, such as a healed injury, an item given away or a place left}; one value per field, so merge duplicates of the same about and field into one); "opens" (new unresolved promises, foreshadowing or events, as text); "closes" (the labels of the open threads it resolves, such as "T-1a2b3c4d").',
   ].join('\n');
 
 // The app's own sentence after a memory prompt for a chapter, which overrides what the prompt asks of records:
@@ -393,22 +399,41 @@ export const chapterFormat = (count: number, target: number) =>
   [
     'Answer with one JSON object and nothing else: {"chapter": {...}}.',
     `The chapter is one summary of all ${count} numbered messages, about ${target} tokens long. Write no state and no threads, whatever the instructions above ask.`,
-    'It has every field: "when" and "where" (text, or null when the messages do not say); "who" (the names of those present); "what" (what happened); "lines" (key lines, each {"speaker": name, "text": the line copied word for word from the messages}); "outcome" (text).',
+    'It has every field: "when" and "where" (text, or null when the messages do not say); "who" (a list of the names of those present); "what" (what happened); "lines" (key lines, each {"speaker": name, "text": the line copied word for word from the messages}); "outcome" (text).',
   ].join('\n');
 
 export type Scene = Pick<Written, 'when' | 'where' | 'who' | 'what' | 'lines' | 'outcome'>;
 // closes: the labels of the threads it closes (threadLabel).
 export type Drafted = Scene & Pick<MemoryRecord, 'state' | 'opens'> & { to: number; closes: string[] };
-export type Invalid = 'unreadable' | 'fields' | 'lines';
+export type Invalid = 'unreadable' | 'fields';
 
 const isText = (value: unknown): value is string => typeof value === 'string';
 const textOrNull = (value: unknown): value is string | null => value === null || isText(value);
 const textsOf = (value: unknown): value is string[] => Array.isArray(value) && value.every(isText);
 const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
 
+// A key line as a model quotes it: quote marks and punctuation set aside, so `bleachers,"` reads as `bleachers.`, and
+// each sentence found in order in the record's own messages, since a model joins the sentences of one speech that
+// narration separates. A line not said there is left out, never the record: a model alters a word in about one line
+// of five (measured 2026-10-09, Gemini 3.8 Flash), and a batch refused for one line would never land.
+const plain = (text: string) => text.replace(/["'“”‘’«»「」『』]/g, '').replace(/[.,!?…;:~、。，！？]+/g, ' ').replace(/\s+/g, ' ').trim();
+const sentencesOf = (text: string) => text.split(/(?<=[.!?…。！？])\s+/).map(plain).filter(Boolean);
+export function linesSaid(lines: Line[], source: string): Line[] {
+  const said = plain(source);
+  return lines.filter(({ text }) => {
+    let at = 0;
+    for (const sentence of sentencesOf(text)) {
+      const found = said.indexOf(sentence, at);
+      if (found < 0) return false;
+      at = found + sentence.length;
+    }
+    return true;
+  });
+}
+
 // A memory task's answer (design §6.2, Validation): JSON in memoryFormat's shape, its records covering span (the
-// messages' texts as the prompt rendered them) exactly, every field present, and every key line found word for word in
-// its own record's messages, spacing aside.
+// messages' texts as the prompt rendered them) exactly and every field present, with the key lines its own messages
+// say (linesSaid).
 export function parseRecords(answer: string, span: string[]): { ok: true; records: Drafted[] } | { ok: false; reason: Invalid } {
   const parsed = jsonOf(answer);
   if (parsed === undefined) return { ok: false, reason: 'unreadable' };
@@ -418,9 +443,7 @@ export function parseRecords(answer: string, span: string[]): { ok: true; record
   for (const item of parsed.records as unknown[]) {
     const record = drafted(item);
     if (!record || !Number.isInteger(record.to) || record.to <= from || record.to > span.length) return { ok: false, reason: 'fields' };
-    const source = flat(span.slice(from, record.to).join('\n'));
-    if (!record.lines.every(({ text }) => source.includes(flat(text)))) return { ok: false, reason: 'lines' };
-    records.push(record);
+    records.push({ ...record, lines: linesSaid(record.lines, span.slice(from, record.to).join('\n')) });
     from = record.to;
   }
   return from === span.length ? { ok: true, records } : { ok: false, reason: 'fields' };
@@ -432,8 +455,7 @@ export function parseChapter(answer: string, span: string[]): { ok: true; chapte
   if (parsed === undefined) return { ok: false, reason: 'unreadable' };
   const chapter = isRecord(parsed) ? sceneOf(parsed.chapter) : null;
   if (!chapter) return { ok: false, reason: 'fields' };
-  const source = flat(span.join('\n'));
-  return chapter.lines.every(({ text }) => source.includes(flat(text))) ? { ok: true, chapter } : { ok: false, reason: 'lines' };
+  return { ok: true, chapter: { ...chapter, lines: linesSaid(chapter.lines, span.join('\n')) } };
 }
 
 function jsonOf(answer: string): unknown {
@@ -446,7 +468,9 @@ function jsonOf(answer: string): unknown {
 
 function sceneOf(item: unknown): Scene | null {
   if (!isRecord(item)) return null;
-  const { when, where, who, what, lines, outcome } = item;
+  const { when, where, what, lines, outcome } = item;
+  // Asked for a list, a model still writes "Milina, Steve".
+  const who = typeof item.who === 'string' ? item.who.split(',').map((name) => name.trim()).filter(Boolean) : item.who;
   const line = (value: unknown): value is Line => isRecord(value) && isText(value.speaker) && isText(value.text) && flat(value.text) !== '';
   if (!textOrNull(when) || !textOrNull(where) || !textsOf(who) || !isText(what) || !flat(what) || !isText(outcome) || !Array.isArray(lines) || !lines.every(line)) return null;
   return { when, where, who, what, lines: lines.map(({ speaker, text }) => ({ speaker, text })), outcome };

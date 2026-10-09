@@ -197,7 +197,7 @@ function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], sp
   let from = 0;
   const open = [...memory.threads];
   const made = drafts.map(({ to, when, where, who, what, lines, outcome, state, opens, closes }, index): MemoryRecord => {
-    const closed = open.filter((thread) => closes.includes(threadLabel(thread))).map(({ text }) => text);
+    const closed = open.filter((thread) => closesThread(closes, thread)).map(({ text }) => text);
     const record = { id: index === 0 ? first : crypto.randomUUID(), sources: sources.slice(from, to), print: fingerprint(span.slice(from, to)), when, where, who, what, lines, outcome, state, opens, closes: closed, receipt, at };
     from = to;
     return record;
@@ -216,7 +216,7 @@ function committed(memory: Memory, { sources, redo }: Job, drafts: Drafted[], sp
       if (value === null) state = state.filter((fact) => fact !== held);
       else state = at === -1 ? [...state, { about, field, value, record }] : state.with(at, { about, field, value, record });
     }
-    const kept = threads.filter((thread) => !draft.closes.includes(threadLabel(thread)));
+    const kept = threads.filter((thread) => !closesThread(draft.closes, thread));
     const known = new Set(kept.map(({ text }) => sameText(text)));
     threads = [...kept, ...draft.opens.filter((text) => !known.has(sameText(text))).map((text) => ({ id: crypto.randomUUID(), text, opened: record }))];
   });
@@ -545,6 +545,9 @@ export class Rememberer {
 }
 
 const sameText = (text: string) => text.replace(/\s+/g, ' ').trim();
+// Asked for a label, a model writes "T-6f7734a1: <the thread>" or the thread's text alone (measured 2026-10-09, Gemini
+// 3.8 Flash); matched on the label alone, no thread ever closed.
+const closesThread = (closes: string[], thread: Thread) => closes.some((text) => text.includes(threadLabel(thread)) || sameText(text) === sameText(thread.text));
 
 const readKey = (sources: Source[]) => sources.map(({ message, version }) => `${message}/${version}`).join(' ');
 

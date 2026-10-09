@@ -55,7 +55,7 @@ describe('Rememberer', () => {
       await vi.waitFor(() => expect(session.store.list('stream')).toEqual([]));
       expect(session.store.get('memory', memoryId(chat))?.parent).toBe(chat);
     }));
-  it('removes a fact that no longer holds and closes a thread as changes the new record keeps, never by a silent cut', () =>
+  it('removes a fact that no longer holds and closes threads named by label and text or by text alone, as changes the new record keeps, never by a silent cut', () =>
     server.withSession(async (session) => {
       await answerable(session);
       await setDefaultMemory(session.store, { window: 1, batch: 1 });
@@ -67,14 +67,15 @@ describe('Rememberer', () => {
       await appendUserMessage(session.store, chat, { id: said, text });
       const earlier = { id: 'r0', sources: [{ message: said, version: said }], print: fingerprint([{ role: 'user', text }]), when: null, where: 'the pier', who: ['Luna'], what: 'Luna waits.', lines: [], outcome: '', state: [], opens: ['Luna waits for jin.'], closes: [], receipt: null, at: 0 };
       const thread = { id: crypto.randomUUID(), text: 'Luna waits for jin.', opened: 'r0' };
+      const lamp = { id: crypto.randomUUID(), text: 'Luna wants a new lamp.', opened: 'r0' };
       await session.store.create(
         'memory',
-        { records: [earlier], chapters: [], state: [{ about: 'Luna', field: 'place', value: 'the pier', record: 'r0' }, { about: 'Luna', field: 'mood', value: 'calm', record: 'r0' }], threads: [thread] },
+        { records: [earlier], chapters: [], state: [{ about: 'Luna', field: 'place', value: 'the pier', record: 'r0' }, { about: 'Luna', field: 'mood', value: 'calm', record: 'r0' }], threads: [thread, lamp] },
         { id: memoryId(chat), parent: chat },
       );
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'jin arrives, and they leave the pier together.' });
       const answer = JSON.stringify({
-        records: [{ to: 1, when: null, where: 'the pier', who: ['Luna', 'jin'], what: 'jin arrives and they leave together.', lines: [], outcome: '', state: [{ about: 'Luna', field: 'place', value: null }], opens: [], closes: [`T-${thread.id.slice(0, 8)}`] }],
+        records: [{ to: 1, when: null, where: 'the pier', who: ['Luna', 'jin'], what: 'jin arrives and they leave together.', lines: [], outcome: '', state: [{ about: 'Luna', field: 'place', value: null }], opens: [], closes: [`T-${thread.id.slice(0, 8)}: Luna waits for jin.`, 'Luna wants a new lamp.'] }],
       });
       stubRelay(inTurn([saying('Luna smiles.'), saying(answer)]));
       expect(await takeTurn(session, chat, { kind: 'answer' })).toBeNull();
@@ -82,7 +83,7 @@ describe('Rememberer', () => {
       const memory = chatMemory(session.store, chat);
       expect(memory.state).toEqual([{ about: 'Luna', field: 'mood', value: 'calm', record: 'r0' }]);
       expect(memory.threads).toEqual([]);
-      expect(memory.records[1]).toMatchObject({ state: [{ about: 'Luna', field: 'place', value: null }], closes: ['Luna waits for jin.'] });
+      expect(memory.records[1]).toMatchObject({ state: [{ about: 'Luna', field: 'place', value: null }], closes: ['Luna waits for jin.', 'Luna wants a new lamp.'] });
     }));
   it("summarizes nothing while the chat's prompt holds no 장기 기억 slot, so no message leaves the request for a memory never sent", () =>
     server.withSession(async (session) => {

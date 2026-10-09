@@ -7,7 +7,7 @@ import type { HistoryMessage } from './history';
 import type { Card } from './import/types';
 import { prepareLore, merge, type Activation, type Fired, type LoreBook, type LoreTurn, type Operation } from './lorebook/activate';
 import { authorNote, contexts, renderChat, type ChatScope } from './render';
-import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
+import { chapterBefore, chapterFormat, memoryBefore, memoryBudget, memoryFormat, recordsTarget, spanText, speakersOf, standing, stateLimit, type MemoryInput, type MemorySent } from './memory';
 import { numbered } from './illustrate';
 import type { TranslationRequest } from './translate';
 
@@ -447,7 +447,8 @@ function memoryTask({ scope, prompt, memory, before, budget, span: { from, to },
   const held = chapter ? chapterBefore(before) : memoryBefore(memory, before, stateLimit(budget), countTokens);
   const { parts } = templateOf(prompt.blocks, laid, scope.persona, { sort: 'memory', memory: held, span: shown });
   const messages = cachePoints(parts.filter((part): part is Sent | CachePart => !('range' in part))).map(({ message }) => message);
-  return { messages: [...messages, { role: 'user', content: chapter ? chapterFormat(to - from, chapter.target) : memoryFormat(to - from) }], span };
+  const format = chapter ? chapterFormat(to - from, chapter.target) : memoryFormat(to - from, recordsTarget(span.reduce((sum, text) => sum + countTokens(text), 0), budget));
+  return { messages: [...messages, { role: 'user', content: format }], span };
 }
 
 type ChatPart = { range: ChatRange; from: From };

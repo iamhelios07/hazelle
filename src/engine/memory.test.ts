@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Chapter, Memory, MemoryRecord } from '../model/memory';
-import { fingerprint, memoryBefore, memoryBudget, nextChapters, nextSpan, parseChapter, parseRecords, printOf, standing, windowStart, type ChatRead } from './memory';
+import { fingerprint, memoryBefore, memoryBudget, nextChapters, nextSpan, parseChapter, parseRecords, printOf, recordsTarget, standing, windowStart, type ChatRead } from './memory';
 
 const span = ['Luna: "I will  wait\nfor you until spring."', 'jin leaves the lighthouse.', 'Spring comes. Luna lights the lamp.'];
 const record = (to: number, lines: { speaker: string; text: string }[] = []) => ({
@@ -24,13 +24,31 @@ describe('parseRecords', () => {
     expect(parsed).toMatchObject({ ok: true, records: [{ to: 2, lines: [{ speaker: 'Luna' }] }, { to: 3, state: [{ value: null }] }] });
   });
 
-  it('refuses an answer that is not JSON, one with a field missing or a gap left, and a key line the messages never said', () => {
+  it('reads who written as one comma-separated string', () => {
+    expect(parseRecords(answer([{ ...record(3), who: 'Luna, jin' }]), span)).toMatchObject({ ok: true, records: [{ who: ['Luna', 'jin'] }] });
+  });
+
+  it('keeps a key line quoted with other punctuation, or joining the sentences of one speech that narration separates, in order, and leaves out one the messages never said', () => {
+    const said = ['Mira: "Meet me after school by the old bleachers," she says. *She turns.* "You\'re insane. So..." She smirks. "I like it."'];
+    const line = (text: string) => answer([{ ...record(1), lines: [{ speaker: 'Mira', text }] }]);
+    expect(parseRecords(line('Meet me after school by the old bleachers.'), said)).toMatchObject({ ok: true });
+    expect(parseRecords(line("You're insane. So... I like it."), said)).toMatchObject({ ok: true });
+    expect(parseRecords(line("I like it. You're insane."), said)).toMatchObject({ ok: true, records: [{ lines: [] }] });
+  });
+
+  it('refuses an answer that is not JSON, one with a field missing or a gap left, and a key line said by other messages', () => {
     expect(parseRecords('Here is the summary.', span)).toEqual({ ok: false, reason: 'unreadable' });
     expect(parseRecords(answer([[]]), span)).toEqual({ ok: false, reason: 'fields' });
     expect(parseRecords(answer([{ ...record(3), opens: undefined }]), span)).toEqual({ ok: false, reason: 'fields' });
     expect(parseRecords(answer([record(2)]), span)).toEqual({ ok: false, reason: 'fields' });
-    expect(parseRecords(answer([record(3, [{ speaker: 'Luna', text: 'I will always wait for you.' }])]), span)).toEqual({ ok: false, reason: 'lines' });
-    expect(parseRecords(answer([record(1), record(3, [{ speaker: 'Luna', text: 'I will wait for you until spring.' }])]), span)).toEqual({ ok: false, reason: 'lines' });
+    expect(parseRecords(answer([record(1), record(3, [{ speaker: 'Luna', text: 'I will wait for you until spring.' }])]), span)).toMatchObject({ ok: true, records: [{ lines: [] }, { lines: [] }] });
+  });
+});
+
+describe('recordsTarget', () => {
+  it('asks for a fifth of the messages, within a quarter of the budget', () => {
+    expect(recordsTarget(13_000, 25_000)).toBe(2600);
+    expect(recordsTarget(100_000, 25_000)).toBe(6250);
   });
 });
 
@@ -159,6 +177,6 @@ describe('parseChapter', () => {
   it('reads one chapter over the whole span and refuses a missing field or a key line the messages never said', () => {
     expect(parseChapter(JSON.stringify({ chapter: { ...scene, state: [{ about: 'Luna' }] } }), span)).toEqual({ ok: true, chapter: scene });
     expect(parseChapter(JSON.stringify({ chapter: { ...scene, outcome: undefined } }), span)).toEqual({ ok: false, reason: 'fields' });
-    expect(parseChapter(JSON.stringify({ chapter: { ...scene, lines: [{ speaker: 'Luna', text: 'I will always wait.' }] } }), span)).toEqual({ ok: false, reason: 'lines' });
+    expect(parseChapter(JSON.stringify({ chapter: { ...scene, lines: [{ speaker: 'Luna', text: 'I will always wait.' }] } }), span)).toEqual({ ok: true, chapter: { ...scene, lines: [] } });
   });
 });
