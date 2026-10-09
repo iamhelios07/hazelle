@@ -11,7 +11,7 @@
     "server": "HAZELLE_DATA=${HAZELLE_DATA:-.data} tsx watch src/server/node.ts",
     "css-types": "tcm -s -a -p \"src/app/**/*.module.css\"",
     "build": "npm run -s css-types && tsc -b && vite build && npm run -s build:server && scripts/source.sh",
-    "build:server": "esbuild src/server/node.ts src/server/backup/restore-cli.ts --bundle --platform=node --format=esm --target=node24 --outdir=dist/server --entry-names=[name] --external:undici --log-level=warning",
+    "build:server": "esbuild src/server/node.ts src/server/frontend-worker.ts src/server/backup/restore-cli.ts --bundle --platform=node --format=esm --target=node24 --outdir=dist/server --entry-names=[name] --external:undici --log-level=warning",
     "test": "vitest run",
     "check": "npm run -s css-types && tsc -b && eslint . && stylelint \"src/**/*.css\" && vitest run --reporter=dot",
     "brand": "node --experimental-strip-types brand/render.mjs",

@@ -1,7 +1,11 @@
 import { mkdirSync } from 'node:fs';
+import { once } from 'node:events';
+import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { join } from 'node:path';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
+import { Worker } from 'node:worker_threads';
 import { serve } from '@hono/node-server';
 import { Hono, type ExecutionContext } from 'hono';
 import { serviceReads } from './account-store';
@@ -12,12 +16,12 @@ import { accountRegistry } from './db/account-db';
 import { migrate } from './db/migrate';
 import { openDatabase, serviceDb } from './db/service-db';
 import { diskBucket } from './files/disk-bucket';
+import type { FrontendOptions } from './frontend-worker';
 import type { Services } from './http';
 import { tokenBucket } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshPrices } from './prices';
 import { reconcile } from './reconcile';
-import { clientFiles } from './static';
 import { streamRegistry } from './stream-registry';
 import { streamStore } from './db/streams-db';
 import app from './worker';
@@ -102,16 +106,31 @@ root.get('/api/health', async (c) => {
 root.route('/', app);
 // An unknown API path is a real 404, never the page.
 root.all('/api/*', (c) => c.json({ error: 'not-found' }, 404));
-root.route('/', clientFiles(clientDir));
 
-const server = serve({ fetch: (request) => root.fetch(request, services, ctx), port }, () => log('listening', { port, dataDir, migrationsApplied: applied })) as Server;
+const server = serve({ fetch: (request) => root.fetch(request, services, ctx), hostname: '127.0.0.1', port: 0 }) as Server;
+await once(server, 'listening');
+// The public listener owns no databases, so even a synchronous SQL operation cannot hold its asset responses.
+const frontend = new Worker(new URL(import.meta.url.endsWith('.ts') ? './frontend-worker.ts' : './frontend-worker.js', import.meta.url), {
+  workerData: { port, apiPort: (server.address() as AddressInfo).port, clientDir } satisfies FrontendOptions,
+});
+frontend.on('error', (error) => { log('frontend failed', { error: String(error) }); process.exit(1); });
+frontend.on('exit', (code) => { if (!draining) { log('frontend stopped', { code }); process.exit(1); } });
+const frontendClosed = new Promise<void>((resolve) => frontend.on('message', (message: string) => { if (message === 'closed') resolve(); }));
+await once(frontend, 'message');
+log('listening', { port, dataDir, migrationsApplied: applied });
 
 const hourly = () => {
   ctx.waitUntil(refreshPrices(db, outbound));
   ctx.waitUntil(forgetOldRecords(db));
   ctx.waitUntil(reconcile(dataDir, db).then(({ removed }) => removed.length && log('reconciled', { removed })));
 };
+const eventLoop = monitorEventLoopDelay({ resolution: 20 });
+eventLoop.enable();
 const timers = [
+  setInterval(() => {
+    if (eventLoop.max > 250_000_000) log('event loop delayed', { maxMs: Math.round(eventLoop.max / 1e6), p99Ms: Math.round(eventLoop.percentile(99) / 1e6), background: background.size });
+    eventLoop.reset();
+  }, 10_000),
   setInterval(hourly, HOUR_MS),
   setInterval(() => {
     services.stores.evictIdle();
@@ -131,21 +150,24 @@ for (const timer of timers) timer.unref();
 async function shutdown(signal: string) {
   if (draining) return;
   draining = true;
+  const frontendDraining = once(frontend, 'message');
+  frontend.postMessage('drain');
+  await frontendDraining;
   log('draining', { signal, drainMs });
   for (const timer of timers) clearTimeout(timer);
-  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
-  // A keep-alive connection that keeps asking is never idle at one instant; it is closed between its requests.
-  const sweeping = setInterval(() => server.closeIdleConnections(), 100);
+  eventLoop.disable();
   const deadline = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), drainMs).unref());
   const drained = (async () => {
-    await closed;
+    // The public requests must finish proxying before the API listener stops accepting their connections.
+    await frontendClosed;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     // A request answered during the wait may have registered more work, and finished work may have chained some.
     while (background.size) await Promise.allSettled([...background]);
     await services.streams.settled();
   })();
   const outcome = await Promise.race([drained.then(() => 'drained' as const), deadline]);
-  clearInterval(sweeping);
   server.closeAllConnections();
+  await frontend.terminate();
   try {
     services.stores.close();
     services.streams.close();

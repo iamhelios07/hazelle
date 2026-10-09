@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } fro
 import { request } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { buildSync } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -23,16 +23,16 @@ beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'hazelle-node-'));
   // The bundle keeps undici external as build:server does, so it must sit where node_modules resolves.
   mkdirSync('node_modules/.cache', { recursive: true });
-  bundle = join('node_modules', '.cache', `hazelle-node-${process.pid}.js`);
+  bundle = join('node_modules', '.cache', `hazelle-node-${process.pid}`, 'node.js');
   client = join(dir, 'client');
   mkdirSync(client);
   writeFileSync(join(client, 'index.html'), 'page');
-  buildSync({ entryPoints: ['src/server/node.ts'], bundle: true, platform: 'node', format: 'esm', target: 'node24', outfile: bundle, external: ['undici'], logLevel: 'silent' });
+  buildSync({ entryPoints: ['src/server/node.ts', 'src/server/frontend-worker.ts'], bundle: true, platform: 'node', format: 'esm', target: 'node24', outdir: dirname(bundle), external: ['undici'], logLevel: 'silent' });
 }, 60_000);
 afterAll(() => {
   for (const child of children) child.kill('SIGKILL');
   rmSync(dir, { recursive: true, force: true });
-  rmSync(bundle, { force: true });
+  rmSync(dirname(bundle), { recursive: true, force: true });
 });
 
 const freePort = () =>
@@ -74,6 +74,51 @@ function start(dataDir: string, port: number, extra: Record<string, string> = {}
 }
 
 describe('the server process', () => {
+  it('serves the page while an API write waits on a database lock', async () => {
+    const data = join(dir, 'data-blocked-api');
+    const port = await freePort();
+    const server = start(data, port);
+    await server.listening;
+    const origin = `http://127.0.0.1:${port}`;
+    const account = await fetch(`${origin}/api/signup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(signupBody()) });
+    const cookie = sessionCookie(account);
+    const locked = new DatabaseSync(join(data, 'service.sqlite'));
+    locked.exec('BEGIN IMMEDIATE');
+    let finished = false;
+    const logout = fetch(`${origin}/api/logout`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: '{}' }).then((response) => { finished = true; return response; });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const page = await fetch(origin, { headers: { accept: 'text/html' }, signal: AbortSignal.timeout(2_000) });
+      expect(await page.text()).toBe('page');
+      expect(page.headers.get('content-security-policy')).toBe(CSP);
+      expect(page.headers.get('server-timing')).toMatch(/^static;dur=/);
+      expect(finished).toBe(false);
+    } finally {
+      locked.exec('ROLLBACK');
+      locked.close();
+    }
+    const loggedOut = await logout;
+    expect(loggedOut.status).toBe(204);
+    expect(loggedOut.headers.get('server-timing')).toMatch(/api_wait;dur=/);
+    server.child.kill('SIGTERM');
+    expect(await server.exited).toBe(0);
+  }, 30_000);
+
+  it('keeps the public listener alive when an upload is disconnected', async () => {
+    const port = await freePort();
+    const server = start(join(dir, 'data-disconnected'), port);
+    await server.listening;
+    const sending = request({ host: '127.0.0.1', port, path: '/api/nowhere', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': 2 } });
+    sending.on('error', () => {});
+    sending.write('{');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    sending.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect((await fetch(`http://127.0.0.1:${port}/api/health`)).status).toBe(200);
+    server.child.kill('SIGTERM');
+    expect(await server.exited).toBe(0);
+  }, 30_000);
+
   it('starts on an empty directory, migrates, answers health and session, and refuses a second process on the directory', async () => {
     const data = join(dir, 'data');
     const port = await freePort();

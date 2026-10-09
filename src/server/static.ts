@@ -1,7 +1,6 @@
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 
-// The page and its files, the built client under clientDir. node.ts mounts this after every /api route.
 // frame-src is also the tool pages' navigation boundary: adding any host there opens a way out for them.
 export const CSP =
   "default-src 'self'; img-src 'self' data: blob:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'";
@@ -13,6 +12,11 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 export function clientFiles(clientDir: string) {
   const client = new Hono();
+  client.use(async (c, next) => {
+    const started = performance.now();
+    await next();
+    c.res.headers.set('Server-Timing', `static;dur=${(performance.now() - started).toFixed(1)}`);
+  });
   const sandbox = serveStatic({ root: clientDir, path: 'sandbox.html' });
   client.get('/sandbox.html', async (c) => {
     for (const [name, value] of Object.entries(SANDBOX_HEADERS)) c.header(name, value);

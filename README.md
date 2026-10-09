@@ -148,6 +148,15 @@ Local development needs no secrets.
 
 Styling rules are in [`src/app/ui/README.md`](src/app/ui/README.md): design values live only in `tokens.css`, and only `src/app/ui` styles elements. `eslint/boundaries.js` lists which layer may import which. The server's storage layout is in [`src/server/db/README.md`](src/server/db/README.md).
 
+The public HTTP listener runs in `frontend-worker.ts`, serving client files independently of the API's SQLite thread.
+It forwards API bodies and responses as streams to a loopback-only listener; `PORT`, the image and the external routes
+are unchanged. Shutdown drains the public requests before closing the API listener and databases.
+
+For slow loads, inspect `Server-Timing`: `static` measures the file handler, while `api_wait` measures the wait for API
+response headers, including forwarding an upload. A CDN cache hit can carry the timing of the cached response, not a
+new origin request. The API thread logs `event loop delayed` when a 10-second sample contains a delay over 250 ms;
+compare its timestamp with `backup_runs.started_at` and `ended_at` when investigating a backup-time slowdown.
+
 ### Releases and the hosted instance
 
 A `v*` tag runs the checks and, beside them, builds the image for amd64 and arm64 and pushes it to GHCR; once both pass, the GitHub release carries the source archive and the image digest. The hosted instance is one machine described in [`infra/`](infra/README.md) and updated with `scripts/deploy.sh <tag>`; `scripts/release.sh <tag>` tags, waits for the build and deploys in one command.
