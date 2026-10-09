@@ -1,11 +1,13 @@
 import { fitsRole, sameModelRef, type ModelRef, type Role } from '../../connectors/assignment';
+import { embedRoute } from '../../connectors/registry';
 import type { Stored } from '../../model/kinds';
 import { ChipButton, Empty, Menu, MenuItem, SettingRow } from '../ui';
 import { MODEL_ROLES, NOT_STARRED, noStarred } from './words';
 
+// 임베딩 모델 offers only what its connection embeds: the type says so, not the model (design §4).
 export function starredModels(connections: readonly Stored<'connection'>[], role: Role) {
   return connections.flatMap((connection) =>
-    connection.value.starred.filter((model) => fitsRole(model, role)).map((model) => ({ ref: { connection: connection.id, model: model.id }, name: model.name, source: connection.value.label })),
+    connection.value.starred.filter((model) => fitsRole(model, role) && (role !== 'embed' || embedRoute(connection.value, model) !== null)).map((model) => ({ ref: { connection: connection.id, model: model.id }, name: model.name, source: connection.value.label })),
   );
 }
 

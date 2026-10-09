@@ -50,6 +50,18 @@
     color var(--duration-fast);
 }
 
+.badge {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
 .time {
   color: var(--color-text-faint);
   font-size: var(--text-xs);

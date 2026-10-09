@@ -4,7 +4,7 @@ import type { ChatScope } from '../engine/render';
 import type { Chat } from '../model/chat';
 import type { Memory } from '../model/memory';
 import { asSent, promptBudget, scopeOf } from './chat-context';
-import { chatMemory, memoryOwner, memorySetup, sourcesOf, type MemorySetup } from './memory-read';
+import { chatMemory, memorySetup, sourcesOf, type MemorySetup } from './memory-read';
 import type { Session } from './session';
 import { wouldSend } from './turn-context';
 
@@ -28,12 +28,10 @@ export async function chatSent(session: Pick<Session, 'store' | 'read'>, id: str
 // slot: whether the chat's prompt holds 장기 기억 where a request reaches it, false while the chat cannot send. stale: why
 // each stale record is, a record the user edited or pinned included, which stays sent. waiting: messages past the window
 // not summarized yet. tokens: what the slot sends against its budget (shrunk to what the model can take), and the
-// state's share against its limit. holder: the tool that holds the chat's memory slot, whose records here then wait
-// as they are (design §6.10).
+// state's share against its limit.
 export type MemoryView = {
   memory: Memory;
   setup: MemorySetup;
-  holder: { module: string; name: string; page: boolean } | null;
   slot: boolean;
   records: ReadonlyMap<string, RecordStatus>;
   stale: ReadonlyMap<string, Staleness>;
@@ -49,11 +47,9 @@ export async function memoryView(session: Pick<Session, 'store' | 'read' | 'scri
   if (!sent || 'kind' in sent) return null;
   const setup = memorySetup(session.store, sent.chat);
   const held = sent.standing!;
-  const owner = memoryOwner(session.store, sent.chat);
   return {
     memory,
     setup,
-    holder: owner?.kind === 'tool' ? { module: owner.unit.module, name: owner.unit.tool.manifest.displayName, page: owner.unit.tool.manifest.page !== null } : null,
     slot: (await wouldSend(session, chat, { kind: 'answer' }, undefined, 'view'))?.prompt.memory?.slot ?? false,
     records: held.status,
     stale: held.stale,

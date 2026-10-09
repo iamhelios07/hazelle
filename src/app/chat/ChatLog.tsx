@@ -20,9 +20,10 @@ export function speakers({ card, shelf, persona, route }: OpenChat) {
 }
 
 const NO_PICTURES: Stored<'illustration'>[] = [];
+const NO_BADGES: string[] = [];
 
 export function ChatLog({ chat }: { chat: OpenChat }) {
-  const { item, messages, texts, placed, pictures, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, last, card, notUsed, busy, editing, pinned, found, search, branching, modelMenu, actions } = chat;
+  const { item, messages, texts, placed, pictures, badges, messageTools, illustrating, decor, hosted, offered, translating, awaited, flipped, opening, last, card, notUsed, busy, editing, pinned, found, search, branching, modelMenu, actions } = chat;
   // Rows keep event identities while their handlers read the latest screen state, never a skipped render's closure.
   const latestActions = useRef(actions);
   useLayoutEffect(() => { latestActions.current = actions; });
@@ -58,6 +59,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           placed={placed.get(index) ?? null}
           pictures={pictures.get(version) ?? NO_PICTURES}
           drawing={drawing?.version === version ? drawing : null}
+          badges={badges.get(version) ?? NO_BADGES}
+          toolActions={messageTools}
           decor={decor}
           hosted={hosted(index)}
           offered={offered(index)}

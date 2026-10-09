@@ -50,6 +50,14 @@ export function ModelsScreen({ back }: { back: Back | null }) {
             connections={connections}
             onPick={(ref) => pickModel('aux', ref)}
           />
+          <RolePicker
+            role="embed"
+            help="장기 기억 도구가 비슷한 내용을 찾을 때 써요. 바꾸면 도구가 기억을 다시 만들 수 있어요."
+            own={settings.models.embed}
+            follow="정하지 않음"
+            connections={connections}
+            onPick={(ref) => pickModel('embed', ref)}
+          />
         </SettingGroup>
         {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정한 모델이 즐겨찾기에 없어요.`}</Callout>}
       </Section>

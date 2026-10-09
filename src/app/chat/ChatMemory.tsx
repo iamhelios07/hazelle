@@ -1,7 +1,7 @@
 import { MoreHorizontal, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { emptyMemory, type Fact, type MemorySettings, type Thread } from '../../model/memory';
-import { memorySetup } from '../../runtime/memory-read';
+import { memoryOwner, memorySetup } from '../../runtime/memory-read';
 import { memoryView, type MemoryView } from '../../runtime/memory-view';
 import { removeFact, removeThread, setChatMemory, setFact, setThread } from '../../runtime/memory';
 import { describeMemoryFailure } from '../common/failure';
@@ -53,6 +53,9 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   // The panel opens only from a saved chat, whose item is there.
   const own = item!.chat;
   const setup = memorySetup(store, own);
+  // A tool holding the slot leaves these records as they are, readable, until the slot is theirs again (design §6.10).
+  const owner = memoryOwner(store, own);
+  const holder = owner?.kind === 'tool' ? owner.unit : null;
   const view = useView(id, busy, [memory, own, messages, settings, prompts]);
   const [rebuilding, setRebuilding] = useState(false);
   const [resets, setResets] = useState(0);
@@ -82,7 +85,13 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   );
 
   return (
-    <SidePanel title="장기 기억" actions={more} onClose={actions.closePanel}>
+    <SidePanel title="장기 기억" actions={holder ? undefined : more} onClose={actions.closePanel}>
+      {holder && (
+        <Row kind="spread">
+          <Text>{`${holder.tool.manifest.displayName} 도구가 장기 기억을 맡고 있어요.`}</Text>
+          {holder.tool.manifest.page && <Button variant="secondary" size="sm" onClick={() => actions.tool(holder.module)}>도구 열기</Button>}
+        </Row>
+      )}
       {writing ? (
         <Text variant="note">{`기억 정리 중 · ${writing.model} · 남은 호출 ${writing.left}개`}</Text>
       ) : (
@@ -97,13 +106,13 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
           {`${CHAPTER}를 만들지 못했어요. ${describeMemoryFailure(unchaptered)}`}
         </Callout>
       )}
-      {!setup.on && <Text variant="note">이 채팅은 장기 기억을 쓰지 않아요.</Text>}
-      {setup.on && view && !view.slot && (
+      {!owner && <Text variant="note">이 채팅은 장기 기억을 쓰지 않아요.</Text>}
+      {owner && view && !view.slot && (
         <Callout tone="warn" action={prompt.kind === 'prompt' ? { label: '프롬프트 열기', onClick: () => actions.side({ kind: 'prompts', id: prompt.prompt.id, pane: null }) } : undefined}>
           프롬프트에 장기 기억 블록이 없어서 기억을 보내지 않아요.
         </Callout>
       )}
-      {view && (
+      {view && !holder && (
         <Stack gap="related">
           <Facts
             items={[
@@ -142,7 +151,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         )}
       </Section>
 
-      <Section
+      {!holder && <Section
         level={3}
         title="설정"
         note={setup.own ? '이 채팅만' : '기본값'}
@@ -156,7 +165,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         }
       >
         <MemoryFields key={resets} value={{ ...settingsOf(setup), ...save.unsaved }} onChange={save.change} />
-      </Section>
+      </Section>}
 
       {rebuilding && (
         <ConfirmDialog

@@ -23,6 +23,7 @@ import {
 } from '../../runtime/chat-log';
 import { greetingPreview, projectGreetings, startingGreetings } from '../../runtime/greetings';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
+import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
 import { chatPersona, pinPersona, setCurrentPersona } from '../../runtime/personas';
 import { chatPrompt } from '../../runtime/prompts';
 import { triggersOf } from '../../runtime/scripts';
@@ -132,6 +133,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const illustrate = illustrateSwitches(store, chat.character);
   const illustrations = useChildren('illustration', id);
   const pictures = useMemo(() => picturesByVersion(illustrations), [illustrations]);
+  const toolData = useChildren('toolchat', id);
+  const badges = useMemo(() => badgesByVersion(toolData, tools), [toolData, tools]);
+  const messageTools = useMemo(() => toolActions(tools), [tools]);
+  const composerTools = useMemo(() => toolComposer(tools), [tools]);
   const illustrating = useIllustrating();
   // Settled by the switch and the pictures, not by a picture landing, so the story moves aside before one does.
   const stage = illustrate.auto || illustrations.length > 0 || [...illustrating.values()].some((drawing) => drawing.chat === chatId);
@@ -418,6 +423,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     stage,
     pictures,
     illustrating,
+    badges,
+    messageTools,
+    composerTools,
     placed,
     reshaping,
     awaited,
@@ -479,6 +487,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       tool: (module: string) => setPanel((current) => current?.kind === 'tool' && current.module === module ? null : { kind: 'tool', module }),
       toolMenu: (module: string, item: string) => {
         if (id) void session.scripts.menu(id, module, item).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
+      },
+      toolAction: (module: string, item: string, message: string) => {
+        if (id) void session.scripts.action(id, module, item, message).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
       },
       side: (open: Side) => setPanel(open),
       closePanel: () => setPanel(null),

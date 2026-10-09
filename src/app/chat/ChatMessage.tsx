@@ -1,4 +1,4 @@
-import { Bot, Copy, GitBranch, ImagePlus, Info, Languages, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
+import { Bot, Copy, GitBranch, ImagePlus, Info, Languages, Package, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { resolveAssets, type PictureUrl } from '../../engine/assets';
 import { storyHtml } from '../../engine/display';
@@ -15,6 +15,7 @@ import { timeOfDay } from '../common/time';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { Avatar, Button, Divider, EditBox, Failure, IconButton, MarginPicture, Marker, Menu, MenuHeading, MenuItem, pressed, Story, StoryMessage, Switcher, Text, useMarginRoom, useMenuOpener, Waiting, type MenuHandle } from '../ui';
 import { ChatPicture, slotOf } from './ChatPicture';
+import type { ToolActions } from './toolMenu';
 import type { ChatActions } from './useChat';
 import { seenText } from './search';
 import { useReveal } from './useReveal';
@@ -28,6 +29,9 @@ type Props = {
   // The shown version's pictures, oldest first, and its 삽화 run, if any.
   pictures: Stored<'illustration'>[];
   drawing: Drawing | null;
+  // What the chat's tools put on the shown version, and the actions they offer on a message.
+  badges: string[];
+  toolActions: ToolActions[];
   decor: { bot: boolean; css: string; url: PictureUrl; buttons: 'live' | 'inert' };
   hosted: (Box & { id: string })[];
   offered: { id: string; name: string; marked: boolean }[];
@@ -67,7 +71,7 @@ const NO_PERSONA = '페르소나 없음';
 const CUT = { length: '잘림', 'no-terminal': '끊김', stopped: '중단됨' } as const;
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
-  const { message, text: original, placed, pictures, drawing, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
+  const { message, text: original, placed, pictures, drawing, badges, toolActions, decor, hosted, offered, translating, awaited, flipped, isLast, beforeLastReply, character, me, modelName, opening, busy, editing, pinned, found, marked, term, branching, modelMenu, actions } = props;
   const otherModel = useMenuOpener(modelMenu);
   const version = shown(message);
   const receipt = version.receipt;
@@ -297,6 +301,14 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       {!failed && <IconButton icon={GitBranch} size="xs" label="여기서 분기" disabled={branching} onClick={() => void actions.branch(message)} />}
       {!mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />}
       {statusTool}
+      {!failed && toolActions.length > 0 && (
+        <Menu place="below-end" label="도구" trigger={(opener) => <IconButton icon={Package} size="xs" label="도구" {...opener} />}>
+          {toolActions.map((tool) => [
+            <MenuHeading key={tool.module}>{tool.name}</MenuHeading>,
+            ...tool.items.map((item) => <MenuItem key={`${tool.module}:${item.id}`} label={item.label} onClick={() => actions.toolAction(tool.module, item.id, message.id)} />),
+          ])}
+        </Menu>
+      )}
       <Divider variant="tools" />
       <IconButton icon={Trash2} size="xs" label="삭제" onClick={() => actions.remove(message)} />
     </>
@@ -309,6 +321,7 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       time={timeOfDay(version.at)}
       mine={mine && editing === null}
       mark={mark}
+      badges={badges}
       after={after}
       tools={tools}
       pinned={pinned}

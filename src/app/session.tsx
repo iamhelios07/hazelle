@@ -154,7 +154,7 @@ const NO_CHILDREN: never[] = [];
 // a change between the render and the subscription is not missed.
 // illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again; parent null is a
 // chat not saved yet, which has none.
-export function useChildren<K extends 'lore' | 'asset' | 'illustration'>(kind: K, parent: string | null): Stored<K>[] {
+export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'toolchat'>(kind: K, parent: string | null): Stored<K>[] {
   const store = useStore();
   const model = useMemo(() => {
     let held: Stored<K>[] | null = null;

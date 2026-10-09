@@ -8,12 +8,16 @@ import { Menu, MenuItem } from '../overlays/Menu';
 import { RowMemoryContext } from '../collections/row-memory';
 import styles from './StoryMessage.module.css';
 
+const BADGES_SHOWN = 2;
+
 type Props = {
   avatar: ReactNode;
   name: string;
   time: string;
   mine: boolean;
   mark?: { label: string; action: string; onClick: () => void };
+  // Short words tools put on the message, in one look whatever the tool; two show, and the rest count as +N.
+  badges?: string[];
   children: ReactNode;
   after?: ReactNode;
   tools?: ReactNode;
@@ -26,7 +30,7 @@ type Props = {
   marked?: boolean;
 };
 
-export function StoryMessage({ avatar, name, time, mine, mark, children, after, tools, pinned, onTap, found = 0, marked = false }: Props) {
+export function StoryMessage({ avatar, name, time, mine, mark, badges = [], children, after, tools, pinned, onTap, found = 0, marked = false }: Props) {
   const hover = useHover();
   const foundDelay = useMemo(() => `-${Math.max(0, Date.now() - found)}ms`, [found]);
   const memory = useContext(RowMemoryContext);
@@ -49,6 +53,8 @@ export function StoryMessage({ avatar, name, time, mine, mark, children, after, 
               {mark.label}
             </button>
           )}
+          {badges.slice(0, BADGES_SHOWN).map((badge, index) => <span key={index} className={styles.badge}>{badge}</span>)}
+          {badges.length > BADGES_SHOWN && <span className={styles.badge} title={badges.slice(BADGES_SHOWN).join(' · ')}>{`+${badges.length - BADGES_SHOWN}`}</span>}
           <span className={styles.time}>{time}</span>
         </div>
         {mine ? <div className={styles.bubble}>{children}</div> : children}
