@@ -436,7 +436,7 @@ export class Scripts {
       if (await lease.ready || this.closing.signal.aborted) return;
       const stored = live(store.get('chat', chat));
       if (!stored || !toolsOf(store, stored.value).some((current) => current.module === unit.module && current.tool.file.id === unit.tool.file.id)) return;
-      for (const { id, chat: asked } of this.state.questions) if (asked === chat) this.answer(id, null);
+      this.dismiss(chat);
       await job();
     }).catch((error: unknown) => this.report(chat, error, { kind: 'module', id: unit.module })).finally(() => {
       lease.release();
@@ -679,10 +679,15 @@ export class Scripts {
   // (ObjectStore.evaluated). A question still open when the next comes is dismissed, so a card the user passed over
   // never holds up a send.
   private queued<T>(chat: string, task: () => Promise<T>): Promise<T> {
-    for (const { id, chat: asked } of this.state.questions) if (asked === chat) this.answer(id, null);
+    this.dismiss(chat);
     const next = (this.queues.get(chat) ?? Promise.resolve()).then(() => this.session.store.projections.evaluate(chat).catch(evaluationFailure)).then(task);
     this.queues.set(chat, next.catch(() => {}));
     return next;
+  }
+
+  // A memory claim holds up no run, so it stays until the user answers it.
+  private dismiss(chat: string) {
+    for (const { id, chat: asked, question } of this.state.questions) if (asked === chat && question.kind !== 'memory') this.answer(id, null);
   }
 
   private tell(chat: string, key: string, note: Note, from: PackOwner | null = null) {

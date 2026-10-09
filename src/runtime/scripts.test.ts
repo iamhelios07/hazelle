@@ -467,7 +467,7 @@ describe('tool events through Scripts', () => {
     }, binding);
   });
 
-  it('gives the memory slot to the first tool allowed to claim it, maps its through, and keeps its memory past a missed deadline', async () => {
+  it('gives the memory slot to the first tool allowed to claim it, keeps its card past a run, maps its through, and keeps its memory past a missed deadline', async () => {
     const heard: { module: string; memory: boolean }[] = [];
     let mode: 'before-last' | 'last' | 'late' = 'before-last';
     const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, unit, scope, event) => {
@@ -496,6 +496,8 @@ describe('tool events through Scripts', () => {
       session.scripts.claims(chat);
       await expect.poll(() => session.scripts.snapshot().questions).toHaveLength(2);
       expect(session.scripts.snapshot().questions.map(({ question }) => question.kind)).toEqual(['memory', 'memory']);
+      await session.scripts.pageWrite(chat, modules[0]!, noOutcome());
+      expect(session.scripts.snapshot().questions).toHaveLength(2);
       for (const { id } of session.scripts.snapshot().questions) session.scripts.answer(id, 'yes');
       await expect.poll(() => modules.map((module) => session.store.get('module', module)!.value.takesMemory)).toEqual([true, true]);
       await session.store.projections.evaluate(chat);

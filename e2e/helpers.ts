@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { unpack } from '../src/engine/import/risum';
 
 export const FAKE_MODEL = 'fake-model';
+export const FAKE_EMBED = 'fake-embed';
 export const DESCRIPTION = 'Mira keeps the lantern inn at the edge of the marsh.';
 
 export const CARD = {
@@ -94,7 +95,8 @@ export const SCRIPTED = {
 };
 
 // An OpenAI-compatible provider in this process, listed in the server's HAZELLE_LOCAL_PROVIDERS, so 직접 연결 takes its
-// plain http address as a self-hoster's own model server. Every chat request body it hears is kept for the test to read.
+// plain http address as a self-hoster's own model server. Every chat request body it hears is kept for the test to read,
+// and every embedding request in embedded.
 export const FAKE_PROVIDER = '127.0.0.1:4419';
 export const FAKE_ADDRESS = `http://${FAKE_PROVIDER}/v1`;
 
@@ -102,6 +104,20 @@ const REPLY = ['{{char}} smiles. ', '[[bow]]'];
 export type FakeChatRequest = { model: string; messages: { role: string; content: string }[]; stream?: boolean };
 let reply: (request: FakeChatRequest) => readonly string[] = () => REPLY;
 let heard: unknown[] = [];
+export type FakeEmbedRequest = { model: string; input: string[] };
+export const embedded: FakeEmbedRequest[] = [];
+
+// Hashed word counts in 64 dimensions, normalized: texts sharing words are the nearest.
+function vectorOf(text: string): number[] {
+  const vector = Array.from({ length: 64 }, () => 0);
+  for (const word of text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []) {
+    let hash = 0;
+    for (const char of word) hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
+    vector[hash % 64]! += 1;
+  }
+  const length = Math.hypot(...vector) || 1;
+  return vector.map((value) => value / length);
+}
 let listening: Promise<void> | null = null;
 
 function upstream(): Promise<void> {
@@ -109,7 +125,13 @@ function upstream(): Promise<void> {
     const server = createServer(async (request, response) => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(chunk as Buffer);
-      if (request.url === '/v1/models') return response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: FAKE_MODEL }] }));
+      if (request.url === '/v1/models') return response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: FAKE_MODEL }, { id: FAKE_EMBED }] }));
+      if (request.url === '/v1/embeddings') {
+        const asked = JSON.parse(Buffer.concat(chunks).toString()) as FakeEmbedRequest;
+        embedded.push(asked);
+        const data = asked.input.map((text, index) => ({ object: 'embedding', index, embedding: vectorOf(text) }));
+        return response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ object: 'list', data, model: asked.model, usage: { prompt_tokens: asked.input.length, total_tokens: asked.input.length } }));
+      }
       if (request.url !== '/v1/chat/completions') return response.writeHead(404).end();
       const body = JSON.parse(Buffer.concat(chunks).toString()) as FakeChatRequest;
       heard.push(body);
@@ -129,6 +151,7 @@ function upstream(): Promise<void> {
 export async function fakeProvider(answer: (request: FakeChatRequest) => readonly string[] = () => REPLY): Promise<unknown[]> {
   await upstream();
   heard = [];
+  embedded.length = 0;
   reply = answer;
   return heard;
 }
