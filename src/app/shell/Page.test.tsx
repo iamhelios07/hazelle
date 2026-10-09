@@ -1,4 +1,4 @@
-import { act, Profiler, useEffect } from 'react';
+import { act, Profiler, useEffect, type ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Card } from '../../engine/import/types';
 import type { Kind, Stored } from '../../model/kinds';
@@ -20,6 +20,11 @@ vi.mock('../chat/ChatScreen', () => ({ ChatScreen: ({ id }: { id: string }) => {
 } }));
 vi.mock('../prompts/PromptScreen', () => ({ PromptScreen: ({ stored }: { stored: Stored<'prompt'> }) => { seen.prompts.push(stored.value.name); return null; } }));
 vi.mock('../common/Missing', () => ({ Missing: ({ what }: { what: string }) => { seen.missing.push(what); return null; } }));
+// The probe has no DOM to draw the loading screen into; a lazy screen resolves within the render's act.
+vi.mock('../common/ScreenLoad', async () => {
+  const { Suspense } = await import('react');
+  return { ScreenLoad: ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense> };
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -60,7 +65,7 @@ function page(initial: Stored<Kind>[]) {
   return {
     items, models, read, list, retain, release, commits,
     announce: (kind: Kind, id: string) => { for (const listener of listeners) listener([{ kind, id, parent: null }]); },
-    render: (route: Route) => act(() => root.render(<SessionProvider session={session} account={account}><Profiler id="page" onRender={commits}><Page route={route} closeSettings={closeSettings} /></Profiler></SessionProvider>)),
+    render: (route: Route) => act(async () => root.render(<SessionProvider session={session} account={account}><Profiler id="page" onRender={commits}><Page route={route} closeSettings={closeSettings} /></Profiler></SessionProvider>)),
     close: async () => { await act(() => root.unmount()); read.close(); },
   };
 }
@@ -71,13 +76,14 @@ it('subscribes only to the routed item and follows its deleted, purging and rest
     await p.render({ kind: 'prompt', id: 'p', pane: null });
     expect(seen.prompts).toEqual(['선택한 프롬프트']);
     expect(p.list).not.toHaveBeenCalled();
+    p.commits.mockClear();
     await act(() => {
       p.items.set('q', prompt('q', '다른 곳에서 변경'));
       p.announce('prompt', 'q');
       p.announce('persona', 'unrelated');
     });
     expect(seen.prompts).toEqual(['선택한 프롬프트']);
-    expect(p.commits).toHaveBeenCalledOnce();
+    expect(p.commits).not.toHaveBeenCalled();
     expect(p.list).not.toHaveBeenCalled();
 
     await act(() => { p.items.set('p', prompt('p', '바꾼 이름')); p.announce('prompt', 'p'); });
