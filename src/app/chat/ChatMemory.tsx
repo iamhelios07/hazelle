@@ -124,21 +124,21 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         </Stack>
       )}
 
-      <Section
+      {(!holder || memory.state.length > 0) && <Section
         level={3}
         title="상태"
-        note={view ? `약 ${tokens(view.tokens.state)} / ${tokens(view.tokens.stateLimit)} 토큰` : undefined}
+        note={view && !holder ? `약 ${tokens(view.tokens.state)} / ${tokens(view.tokens.stateLimit)} 토큰` : undefined}
         hint="관계, 호칭, 소지품, 부상, 위치 같은 현재 상태예요."
       >
-        {view && view.tokens.state > view.tokens.stateLimit && <Callout tone="warn">상태가 한도를 넘었어요. 필요 없는 상태를 삭제하거나 줄여 주세요.</Callout>}
+        {view && !holder && view.tokens.state > view.tokens.stateLimit && <Callout tone="warn">상태가 한도를 넘었어요. 필요 없는 상태를 삭제하거나 줄여 주세요.</Callout>}
         {factGroups(memory.state).flatMap(({ facts }) => facts.map((fact) => <FactRow key={`${fact.about}\n${fact.field}`} chat={id} fact={fact} />))}
         {memory.state.length === 0 && <Empty variant="section">상태가 없어요.</Empty>}
-        <NewFact chat={id} />
-      </Section>
+        {!holder && <NewFact chat={id} />}
+      </Section>}
 
-      <Threads chat={id} threads={memory.threads} />
+      {(!holder || memory.threads.length > 0) && <Threads chat={id} threads={memory.threads} adding={!holder} />}
 
-      <Section level={3} title="기록" note={`${rows.filter((each) => !each.forgotten).length}개`}>
+      {(!holder || memory.records.length > 0) && <Section level={3} title="기록" note={`${rows.filter((each) => !each.forgotten).length}개`}>
         {view?.crowded && <Callout tone="warn">고정한 기록이 한도를 다 써서 나머지는 보내지 않아요. 고정을 풀거나 한도를 늘려 주세요.</Callout>}
         {memory.records.length ? (
           <List label="기록">
@@ -149,7 +149,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         ) : (
           <Empty variant="section">기록이 없어요.</Empty>
         )}
-      </Section>
+      </Section>}
 
       {!holder && <Section
         level={3}
@@ -254,7 +254,7 @@ function NewFact({ chat }: { chat: string }) {
 
 // One added here is a draft on the page until its first words are saved, and stops being one then: a saved thread
 // deleted later must not come back as the blank it started from.
-function Threads({ chat, threads }: { chat: string; threads: Thread[] }) {
+function Threads({ chat, threads, adding }: { chat: string; threads: Thread[]; adding: boolean }) {
   const [drafts, setDrafts] = useState<Thread[]>([]);
   const unsaved = drafts.filter((draft) => !threads.some(({ id }) => id === draft.id));
   if (unsaved.length !== drafts.length) setDrafts(unsaved);
@@ -271,11 +271,11 @@ function Threads({ chat, threads }: { chat: string; threads: Thread[] }) {
         />
       ))}
       {shown.length === 0 && <Empty variant="section">미해결 사건이 없어요.</Empty>}
-      <Row kind="actions">
+      {adding && <Row kind="actions">
         <Button variant="secondary" size="sm" icon={Plus} onClick={() => setDrafts((current) => [...current, { id: crypto.randomUUID(), text: '', opened: null }])}>
           미해결 사건 추가
         </Button>
-      </Row>
+      </Row>}
     </Section>
   );
 }
