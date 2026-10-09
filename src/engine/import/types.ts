@@ -93,7 +93,8 @@ export type ImportReport = {
   unsupported: { kind: UnsupportedKind; count: number }[];
 };
 
-export type ImportFailure = { kind: 'unknown-format' | 'encrypted' | 'unreadable'; detail?: string };
+// line: the declaration a tool file was refused for, as written.
+export type ImportFailure = { kind: 'unknown-format' | 'encrypted' | 'unreadable'; detail?: string; line?: string };
 
 export type ImportedModule = {
   name: string;

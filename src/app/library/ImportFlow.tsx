@@ -52,6 +52,26 @@ const FAILURE: Record<ImportFailure['kind'], string> = {
   unreadable: '파일을 읽지 못했어요.',
 };
 
+// Keyed by engine/import/tool's failure details; a detail missing here reads as 파일을 읽지 못했어요.
+const TOOL_FAILURE: Record<string, string> = {
+  'tool-too-large': '도구 파일이 너무 커요.',
+  'tool-encoding': 'UTF-8 텍스트 파일이 아니에요.',
+  'tool-api': '헤이젤 도구 파일이 아니에요. 맨 위에 //@api 1이 있어야 해요.',
+  'tool-identity': '//@name과 //@author가 있어야 하고, 글자, 숫자, _ . -로만 쓸 수 있어요.',
+  'tool-setting': '설정 줄을 읽지 못했어요.',
+  'tool-menu': '메뉴 줄을 읽지 못했어요.',
+  'tool-action': '메시지 동작 줄을 읽지 못했어요.',
+  'tool-composer': '입력창 줄을 읽지 못했어요.',
+  'tool-uses': '//@uses에는 model, embed, memory만 쓸 수 있어요.',
+  'tool-unknown': '알 수 없는 줄이에요.',
+};
+
+function describeImportFailure({ kind, detail, line }: ImportFailure): string {
+  const tool = detail && TOOL_FAILURE[detail];
+  if (!tool) return FAILURE[kind];
+  return line ? `${tool} ${line}` : tool;
+}
+
 // Where a module dropped or picked on this route is turned on first (design §6.5): a character's page, editor or chat,
 // a conversation prompt's editor, or 설정 › 모듈 for 항상. A file of chats that names no character goes to the character found here too.
 function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
@@ -129,7 +149,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     readers.current.add(reader);
     try {
       const parsed = await reader.card(file);
-      if (!parsed.ok) return { kind: 'failed', file: file.name, failure: FAILURE[parsed.failure.kind] };
+      if (!parsed.ok) return { kind: 'failed', file: file.name, failure: describeImportFailure(parsed.failure) };
       if ('chat' in parsed || 'risuChats' in parsed) return await saveChats(file.name, parsed, target, place, choose);
       if ('tool' in parsed) {
         const saved = await importTool(store, files, parsed.tool);

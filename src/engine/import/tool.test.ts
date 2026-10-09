@@ -6,7 +6,7 @@ const header = '//@api 1\n//@name notes\n//@author jin\n';
 
 describe('tool header', () => {
   it('reads only the leading declarations and never evaluates the code', () => {
-    const result = read(`\ufeff${header}//@display-name 메모\n//@version 1.0\n//@uses model\n//@page 열기\n//@menu clear 지우기\n//@setting {"key":"count","type":"number","label":"개수","default":3}\n//@future ignored\nthrow new Error('never run');\n//@name wrong`);
+    const result = read(`\ufeff${header}//@display-name 메모\n//@version 1.0\n//@uses model\n//@page 열기\n//@menu clear 지우기\n//@setting {"key":"count","type":"number","label":"개수","default":3}\nthrow new Error('never run');\n//@name wrong`);
     expect(result).toMatchObject({ ok: true, tool: { manifest: { api: 1, name: 'notes', author: 'jin', displayName: '메모', version: '1.0', uses: ['model'], page: { label: '열기' }, menu: [{ id: 'clear', label: '지우기' }], settings: [{ key: 'count', type: 'number', default: 3 }] } } });
   });
 
@@ -38,6 +38,12 @@ describe('tool header', () => {
     ['a composer field without the item', '//@setting {"key":"x","type":"switch","label":"X","composer":true}', 'tool-composer'],
   ])('refuses %s', (_, lines, detail) => {
     expect(read(`${header}${lines}`)).toMatchObject({ ok: false, failure: { detail } });
+  });
+
+  it('refuses an unknown declaration by its line, but a file for another app as not a tool', () => {
+    expect(read(`${header}//@uses model\n//@use memory`)).toMatchObject({ ok: false, failure: { detail: 'tool-unknown', line: '//@use memory' } });
+    expect(read('//@name risu-plugin\n//@api 3.0\n//@arg chunk int Chunk size')).toMatchObject({ ok: false, failure: { detail: 'tool-api' } });
+    expect(read(`${header}//@uses memroy`)).toMatchObject({ ok: false, failure: { detail: 'tool-uses', line: '//@uses memroy' } });
   });
 
   it('refuses duplicate settings and menus and files over the byte cap', () => {

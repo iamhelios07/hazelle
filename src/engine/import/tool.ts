@@ -10,6 +10,7 @@ export const TOOL_COMPOSER_CHARS = 8;
 const USES: readonly ToolUse[] = ['model', 'embed', 'memory'];
 export type ImportedTool = { manifest: ToolManifest; bytes: Uint8Array<ArrayBuffer> };
 export type ToolRead = { ok: true; tool: ImportedTool } | { ok: false; failure: ImportFailure };
+const HEADER_KEYS = new Set(['api', 'name', 'author', 'display-name', 'version', 'description', 'page']);
 const identity = (value: string) => /^[\p{L}\p{N}_.-]+$/u.test(value);
 
 export function fieldValue(field: ToolField, value: unknown): value is Settings[string] {
@@ -35,7 +36,7 @@ function fieldOf(value: unknown): ToolField | null {
 }
 
 export function readTool(bytes: Uint8Array<ArrayBuffer>): ToolRead {
-  const failed = (detail: string): ToolRead => ({ ok: false, failure: { kind: 'unreadable', detail } });
+  const failed = (detail: string, line?: string): ToolRead => ({ ok: false, failure: { kind: 'unreadable', detail, ...(line && { line }) } });
   if (bytes.byteLength > TOOL_FILE_BYTES) return failed('tool-too-large');
   let code: string;
   try { code = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
@@ -43,37 +44,42 @@ export function readTool(bytes: Uint8Array<ArrayBuffer>): ToolRead {
   const header = new Map<string, string>();
   const manifest: ToolManifest = { api: 1, name: '', author: '', displayName: '', version: '', description: '', uses: [], page: null, menu: [], settings: [], actions: [], composer: null };
   const actions = manifest.actions!;
+  let unknown: string | null = null;
   for (const line of code.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const match = /^\s*\/\/@([\w-]+)(?:\s+(.*))?$/.exec(line);
     if (!match) break;
     const [, key, raw] = match;
     const value = raw?.trim() ?? '';
+    const written = line.trim();
     if (key === 'setting') {
       let json: unknown;
-      try { json = JSON.parse(value); } catch { return failed('tool-setting'); }
+      try { json = JSON.parse(value); } catch { return failed('tool-setting', written); }
       const field = fieldOf(json);
-      if (!field || manifest.settings.some((each) => each.key === field.key)) return failed('tool-setting');
+      if (!field || manifest.settings.some((each) => each.key === field.key)) return failed('tool-setting', written);
       manifest.settings.push(field);
     } else if (key === 'menu') {
       const item = /^(\S+)\s+(.+)$/.exec(value);
-      if (!item || !identity(item[1]!) || manifest.menu.some((each) => each.id === item[1])) return failed('tool-menu');
+      if (!item || !identity(item[1]!) || manifest.menu.some((each) => each.id === item[1])) return failed('tool-menu', written);
       manifest.menu.push({ id: item[1]!, label: item[2]! });
     } else if (key === 'action') {
       const item = /^(\S+)\s+(.+)$/.exec(value);
-      if (!item || !identity(item[1]!) || [...item[2]!].length > TOOL_ACTION_CHARS || actions.length === TOOL_ACTIONS || actions.some((each) => each.id === item[1])) return failed('tool-action');
+      if (!item || !identity(item[1]!) || [...item[2]!].length > TOOL_ACTION_CHARS || actions.length === TOOL_ACTIONS || actions.some((each) => each.id === item[1])) return failed('tool-action', written);
       actions.push({ id: item[1]!, label: item[2]! });
     } else if (key === 'composer') {
-      if (!value || [...value].length > TOOL_COMPOSER_CHARS || manifest.composer) return failed('tool-composer');
+      if (!value || [...value].length > TOOL_COMPOSER_CHARS || manifest.composer) return failed('tool-composer', written);
       manifest.composer = { label: value };
     } else if (key === 'uses') {
       const use = USES.find((each) => each === value);
-      if (!use) return failed('tool-uses');
+      if (!use) return failed('tool-uses', written);
       if (!manifest.uses.includes(use)) manifest.uses.push(use);
-    } else header.set(key!, value);
+    } else if (HEADER_KEYS.has(key!)) header.set(key!, value);
+    else unknown ??= written;
   }
   if (!manifest.composer && manifest.settings.some((field) => field.composer)) return failed('tool-composer');
   if (header.get('api') !== '1') return failed('tool-api');
+  // After the api check, so a file for another app (a Risu plugin's //@arg) is told it is not a tool at all.
+  if (unknown) return failed('tool-unknown', unknown);
   const name = header.get('name') ?? '';
   const author = header.get('author') ?? '';
   if (!identity(name) || !identity(author)) return failed('tool-identity');
