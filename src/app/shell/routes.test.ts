@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONNECTION_TYPES } from '../../connectors/registry';
-import { backTo, HOME, href, parseRoute, shelfOf, up, type Route } from './routes';
+import { backTo, HOME, href, listOf, parseRoute, settingsPage, shelfOf, up, type Route } from './routes';
 
 const CHARACTER = '6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
 const CHAT = 'a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d';
@@ -36,6 +36,7 @@ const EXAMPLES = {
   persona: [{ kind: 'persona', id: CHAT }],
   modules: [{ kind: 'modules' }],
   module: [{ kind: 'module', id: CHAT }],
+  'tool-page': [{ kind: 'tool-page', module: CHAT }],
   models: [{ kind: 'models' }],
   profile: [{ kind: 'profile', id: CHAT }],
   model: [
@@ -92,4 +93,14 @@ describe('routes', () => {
   it('sends 뒤로 from a phone’s character page to its chats', () => {
     expect(backTo(up({ kind: 'edit', character: CHARACTER }), false)).toEqual({ to: { kind: 'shelf', character: CHARACTER }, label: '채팅 목록' });
   });
+});
+
+
+it('opens a tool page without a list pane or chat, with its module as the way back', () => {
+  const route = { kind: 'tool-page', module: CHAT } as const;
+  expect(href(route)).toBe(`/modules/${CHAT}/page`);
+  expect(up(route)).toEqual({ kind: 'module', id: CHAT });
+  expect(listOf(route)).toBeNull();
+  expect(settingsPage(route)).toBe('modules');
+  expect(shelfOf(route)).toBeUndefined();
 });

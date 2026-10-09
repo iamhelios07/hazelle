@@ -14,6 +14,7 @@ const KINDS = {
 
 type Props = {
   label: string;
+  showLabel?: boolean;
   kind?: keyof typeof KINDS;
   value: string;
   onChange: (value: string) => void;
@@ -26,7 +27,7 @@ type Props = {
   action?: ReactNode;
 };
 
-export function TextField({ label, kind = 'text', value, onChange, placeholder, hint, help, error, lines, readOnly, action }: Props) {
+export function TextField({ label, showLabel = true, kind = 'text', value, onChange, placeholder, hint, help, error, lines, readOnly, action }: Props) {
   const id = useId();
   const noteId = `${id}-note`;
   const note = error ?? hint;
@@ -34,6 +35,7 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
   const look = kind === 'key' ? `${styles.input} ${styles.mono}` : styles.input;
   const shared = {
     id,
+    'aria-label': showLabel ? undefined : label,
     value,
     onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value),
     placeholder,
@@ -43,7 +45,7 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
   };
   return (
     <div className={styles.field}>
-      <div className={styles.head}>
+      {showLabel && <div className={styles.head}>
         <span className={styles.name}>
           <label className={styles.label} htmlFor={id}>
             {label}
@@ -51,7 +53,7 @@ export function TextField({ label, kind = 'text', value, onChange, placeholder, 
           {help && <Hint label={label}>{help}</Hint>}
         </span>
         {action}
-      </div>
+      </div>}
       {lines ? (
         <textarea className={`${look} ${styles.area}`} rows={lines} {...typed} {...shared} />
       ) : (

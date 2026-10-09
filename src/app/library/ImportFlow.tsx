@@ -71,6 +71,7 @@ function placeOf(store: ObjectStore, route: Route): ModulePlace | null {
     }
     case 'modules':
     case 'module':
+    case 'tool-page':
       return { kind: 'always' };
     default:
       return null;

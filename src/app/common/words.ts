@@ -21,6 +21,15 @@ export const BOT_MODELS = '봇의 모델 호출';
 export const BOT_MODELS_HELP = '봇 스크립트가 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
 export const BOT_STUCK = '봇 스크립트가 끝나지 않아 멈췄어요';
 
+export const TOOL = '도구';
+export const MODULE_MODELS = '모델 호출';
+export const MODULE_MODELS_HELP = '이 모듈이 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
+export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 따로 부르려고 해요' };
+export const TOOL_LATE = '도구가 늦어서 이번엔 빼고 보냈어요';
+export const TOOL_STUCK = '도구가 응답하지 않아 멈췄어요';
+export const TOOL_DISABLED = '도구가 세 번 멈춰서 껐어요. 새로고침하면 다시 켜져요';
+export const TOOL_FIELD_CHANGED = '도구 설정 형식이 바뀌었어요. 값을 다시 선택해 주세요.';
+
 export const SETTINGS = '설정';
 
 // Where what is deleted waits KEEP_DAYS, to be brought back or removed for good: a tab of 캐릭터 둘러보기.
@@ -41,7 +50,6 @@ export const PAGES = { models: '모델', connections: 'API 연결', chat: '채�
 // A module on in every chat: its mark in 설정's 모듈, its switch there (항상 켜기), and what stands in its switch's
 // place in 캐릭터 편집's and a prompt's 모듈 section (항상 켜짐).
 export const ALWAYS = '항상';
-// Who a script's words and questions are from in a chat with no character, where only a module's script runs.
 
 // The layer of the model assignment that 설정's 모델 page holds, under every prompt and chat.
 export const DEFAULT_MODELS = '기본 모델';

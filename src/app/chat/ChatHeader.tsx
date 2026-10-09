@@ -1,3 +1,4 @@
+import { toolMenu } from './toolMenu';
 import { MoreHorizontal, SlidersHorizontal } from 'lucide-react';
 import { NameDialog } from '../common/NameDialog';
 import { CAST, EXPORT, NO_CHARACTER } from '../common/words';
@@ -28,6 +29,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
   const { id, item, shelf, cast, route, toggles, panel, modelMenu, castMenu, actions } = chat;
   const remembering = useRemembering();
   const { display, changeDisplay } = useDisplay();
+  const tools = toolMenu(chat.tools);
   const failed = id !== null && remembering.failed.has(id);
   const toggleMemory = () => (panel?.kind === 'memory' ? actions.closePanel() : actions.memory(null));
   const wide = useWide();
@@ -53,6 +55,11 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         <MenuItem label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />
         {item && <MenuItem label="채팅 이름 바꾸기" onClick={() => actions.openDialog('rename')} />}
         {item && <MenuItem label="장기 기억" sub={failed ? '정리 실패' : undefined} onClick={toggleMemory} />}
+        {tools.length > 0 && <>
+          <Divider variant="menu" />
+          {tools.map((tool) => <MenuItem key={`${tool.module}:${tool.kind === 'page' ? 'page' : `menu:${tool.item}`}`} label={tool.label} sub={tool.name} checked={tool.kind === 'page' ? panel?.kind === 'tool' && panel.module === tool.module : undefined} onClick={() => tool.kind === 'page' ? actions.tool(tool.module) : actions.toolMenu(tool.module, tool.item)} />)}
+          <Divider variant="menu" />
+        </>}
         <MenuItem label="읽기 설정" onClick={() => actions.openDialog('reading')} />
         <MenuItem label="이미지 가리기" checked={display.hidePictures} multiple onClick={() => changeDisplay({ hidePictures: !display.hidePictures })} />
         <MenuItem label="검색" onClick={actions.openSearch} />

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { live } from '../../model/library';
 import { scriptVoice } from '../common/script-voice';
 import { RUNAWAY_FIX } from '../common/failure';
-import { BOT_STUCK, MODEL_ROLES } from '../common/words';
+import { BOT_STUCK, MODEL_ROLES, TOOL_DISABLED, TOOL_LATE, TOOL_STUCK } from '../common/words';
 import { useScripts, useSession } from '../session';
 import { useToast } from '../toast';
 
@@ -30,19 +30,19 @@ export function BotNotes() {
           toast.show('이 봇이 쓰는 기능 중 지원하지 않는 게 있어요', { detail: note.names.join(', ') });
           break;
         case 'stuck':
-          toast.error(note.disabled ? '도구가 세 번 멈춰서 껐어요. 새로고침하면 다시 켜져요' : BOT_STUCK, { detail: from?.name });
+          toast.error(note.disabled ? TOOL_DISABLED : note.from?.kind === 'module' ? TOOL_STUCK : BOT_STUCK, { detail: from?.name });
           break;
         case 'runaway':
           toast.error('봇의 명령어가 텍스트를 너무 많이 만들어서 멈췄어요', { detail: RUNAWAY_FIX });
           break;
         case 'no-model':
-          toast.error(`봇이 호출할 ${MODEL_ROLES[note.role]}이 없어요`);
+          toast.error(`${from?.name ?? '봇'}이 호출할 ${MODEL_ROLES[note.role]}이 없어요`);
           break;
         case 'late':
-          toast.show('도구가 늦어서 이번엔 빼고 보냈어요', { detail: from?.name });
+          toast.show(TOOL_LATE, { detail: from?.name });
           break;
         case 'flood':
-          toast.error('봇이 모델을 너무 자주 호출해서 잠시 막았어요');
+          toast.error(`${from?.name ?? '봇'}이 모델을 너무 자주 호출해서 잠시 막았어요`);
           break;
         case 'unsaved':
           toast.failed(note.failure, '봇이 바꾼 내용을 저장하지 못했어요');

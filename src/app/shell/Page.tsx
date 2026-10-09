@@ -1,3 +1,4 @@
+import { ToolPageScreen } from '../modules/ToolPageScreen';
 import { MessageSquarePlus } from 'lucide-react';
 import { useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
@@ -100,6 +101,8 @@ export function Page({ route, closeSettings }: { route: Route; closeSettings: ()
         return <ModulesPage back={sideBack(at)} />;
       case 'module':
         return <ItemPage at={at} back={back(at)}>{(stored) => <ModuleScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
+      case 'tool-page':
+        return <ItemPage at={{ kind: 'module', id: at.module }} back={backTo({ kind: 'modules' }, wide)}>{(stored) => <ToolPageScreen key={stored.id} stored={stored} back={back(at)} />}</ItemPage>;
       case 'models':
         return <ModelsScreen back={sideBack(at)} />;
       case 'profile':

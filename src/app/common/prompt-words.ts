@@ -1,3 +1,4 @@
+import { TOOL } from './words';
 import type { PromptSort, Role, SlotKind } from '../../model/prompt';
 import { TRANSLATOR_NOTE } from './words';
 
@@ -11,7 +12,7 @@ export const SLOT_NAMES: Record<SlotKind, string> = {
   note: TRANSLATOR_NOTE,
   recent: '이전 메시지',
   source: '원문',
-  tool: '도구',
+  tool: TOOL,
   memory: '장기 기억',
   span: '정리할 메시지',
 };

@@ -26,6 +26,7 @@ export type Route =
   | { kind: 'persona'; id: string }
   | { kind: 'modules' }
   | { kind: 'module'; id: string }
+  | { kind: 'tool-page'; module: string }
   | { kind: 'models' }
   | { kind: 'profile'; id: string }
   // model: a starred model's id, which may hold any character; the path carries it escaped.
@@ -93,9 +94,11 @@ export function parseRoute(at: string): Route {
     if (id === undefined) return { kind: 'personas' };
     return ID.test(id) ? { kind: 'persona', id } : HOME;
   }
-  if (top === 'modules' && sub === undefined) {
+  if (top === 'modules') {
     if (id === undefined) return { kind: 'modules' };
-    return ID.test(id) ? { kind: 'module', id } : HOME;
+    if (!ID.test(id)) return HOME;
+    if (sub === 'page') return { kind: 'tool-page', module: id };
+    return sub === undefined ? { kind: 'module', id } : HOME;
   }
   if (top === 'models') {
     if (id === undefined) return { kind: 'models' };
@@ -157,6 +160,8 @@ export function href(route: Route): string {
       return '/modules';
     case 'module':
       return `/modules/${route.id}`;
+    case 'tool-page':
+      return `/modules/${route.module}/page`;
     case 'models':
       return '/models';
     case 'profile':
@@ -219,6 +224,7 @@ export function settingsPage(route: Route): SettingsPage | 'list' | null {
       return 'personas';
     case 'modules':
     case 'module':
+    case 'tool-page':
       return 'modules';
     case 'models':
     case 'profile':
@@ -299,13 +305,15 @@ export function up(route: Below, chatShelf?: string | null): Route {
       return { kind: 'personas' };
     case 'module':
       return { kind: 'modules' };
+    case 'tool-page':
+      return { kind: 'module', id: route.module };
     case 'profile':
     case 'model':
       return { kind: 'models' };
   }
 }
 
-export const upFromMissing = (route: Route): Route => (route.kind === 'prompt' ? { kind: 'prompts' } : (listOf(route) ?? HOME));
+export const upFromMissing = (route: Route): Route => (route.kind === 'tool-page' ? { kind: 'modules' } : route.kind === 'prompt' ? { kind: 'prompts' } : (listOf(route) ?? HOME));
 
 export type Back = { to: Route; label: string };
 

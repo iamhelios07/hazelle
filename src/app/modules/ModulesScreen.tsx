@@ -2,13 +2,13 @@ import { Import } from 'lucide-react';
 import type { Stored } from '../../model/kinds';
 import { packHolds } from '../common/pack';
 import { ALWAYS, moduleName, PAGES } from '../common/words';
-import { useChildren, useLibrary, useModules, usePrompts, useSettings } from '../session';
+import { useChildren, useLibrary, useModules, usePrompts, useSettings, useTool } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { Button, Empty, List, ListItem, NavBar, Screen } from '../ui';
 
 export function useHolds({ id, value }: Stored<'module'>): string {
-  return packHolds(value, useChildren('lore', id).length, useChildren('asset', id).length);
+  return packHolds(value, useChildren('lore', id).length, useChildren('asset', id).length, useTool(id) !== null);
 }
 
 const counted = (name: string, owners: string[][], id: string) => {

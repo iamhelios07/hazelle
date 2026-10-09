@@ -101,7 +101,13 @@ export class ToolWrites {
   private closed = false;
   constructor(private readonly store: ObjectStore) {}
 
-  write(module: string, key: string, value: Json | undefined): Promise<void> {
+  async write(module: string, key: string, value: Json | undefined): Promise<void> {
+    // The merge pause is part of the write's original timeline, not a new write after an account restore.
+    const result = await this.store.pinned(() => this.enqueue(module, key, value));
+    if (result && !result.ok) throw new Error(result.error);
+  }
+
+  private enqueue(module: string, key: string, value: Json | undefined): Promise<void> {
     if (this.closed) return Promise.reject(new Error('closed'));
     if (value !== undefined && jsonBytes(value) > TOOL_VALUE_BYTES) return Promise.reject(new Error('too-large'));
     const queue = this.queues.get(module) ?? { pending: new Map(), timer: null, running: false, sent: [] };

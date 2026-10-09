@@ -38,7 +38,7 @@ import { languageLabel } from '../common/languages';
 import { describeUnused } from '../common/unused';
 import { useCopy } from '../common/useCopy';
 import { BIN_KEEPS } from '../common/words';
-import { useAssetUrl, useChatDisplay, useChatMemory, useChildren, useIllustrating, useSession, useTranslating, useTurn } from '../session';
+import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useIllustrating, useSession, useTranslating, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
 import { useMenuHandle, useViewport, type BotButton, type Reading } from '../ui';
@@ -85,6 +85,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const toast = useToast();
   const copy = useCopy();
   const id = item ? chatId : null;
+  const tools = useChatTools(id);
+  useEffect(() => { if (id) void session.tools.warm(id); }, [id, tools]);
   const [unsaved, setUnsaved] = useState<Omit<Chat, 'title' | 'character'>>({ models: {} });
   const chat: Chat = useMemo(() => item ? item.chat : { title: null, character: shelf?.id ?? null, ...unsaved }, [item?.chat, shelf?.id, unsaved]);
   const route = chatModel(store, chat, 'main');
@@ -146,8 +148,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const [dialog, setDialog] = useState<'rename' | 'reading' | 'persona' | 'prompt' | 'export' | null>(null);
   const modelMenu = useMenuHandle();
   const castMenu = useMenuHandle();
-  // 토글, 장기 기억 and the prompt list take the same place beside the story, so one closes another.
-  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | Side | null>(null);
+  // Chat-owned panels and editors take the same place beside the story, so one closes another.
+  const [panel, setPanel] = useState<{ kind: 'toggles' } | { kind: 'memory'; record: string | null } | { kind: 'info' } | { kind: 'tool'; module: string } | Side | null>(null);
   // null follows the latest.
   const [infoPick, setInfoPick] = useState<string | null>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
@@ -429,6 +431,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     pinned,
     branching,
     panel,
+    tools,
     dialog,
     modelMenu,
     castMenu,
@@ -470,6 +473,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       pickInfo: setInfoPick,
       flipToggles: () => setPanel((current) => (current?.kind === 'toggles' ? null : { kind: 'toggles' })),
       memory: (record: string | null) => setPanel({ kind: 'memory', record }),
+      tool: (module: string) => setPanel((current) => current?.kind === 'tool' && current.module === module ? null : { kind: 'tool', module }),
+      toolMenu: (module: string, item: string) => {
+        if (id) void session.scripts.menu(id, module, item).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
+      },
       side: (open: Side) => setPanel(open),
       closePanel: () => setPanel(null),
       openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt' | 'export') => setDialog(which),

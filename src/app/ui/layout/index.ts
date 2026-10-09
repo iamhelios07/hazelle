@@ -13,3 +13,4 @@ export { SidePanel } from './SidePanel';
 export { SidePeek, SidePeeks } from './SidePeek';
 export { Stack } from './Stack';
 export { TranslateDesk } from './TranslateDesk';
+export { ToolFrame } from './ToolFrame';

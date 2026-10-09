@@ -1,3 +1,6 @@
+import { toolId } from '../model/tool';
+import type { ToolMenu } from '../runtime/tools/facade';
+import { readsChanged, type StoreRead } from '../runtime/store';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 import type { PictureUrl } from '../engine/assets';
 import type { ChatScope } from '../engine/render';
@@ -244,4 +247,32 @@ export function useScripts(): ScriptsState {
 export function useRemembering(): Remembering {
   const { memory } = useSession();
   return useSyncExternalStore(memory.subscribe, memory.snapshot);
+}
+
+
+export function useTool(module: string | null) {
+  const owner = useStored('module', module);
+  const tool = useStored('tool', module === null ? null : toolId(module));
+  return owner && live(owner) ? tool : null;
+}
+
+export function useChatTools(chat: string | null): ToolMenu[] {
+  const { store, tools } = useSession();
+  const selected = useMemo(() => {
+    let held: ToolMenu[] | null = null;
+    let reads: StoreRead[] = [];
+    return {
+      subscribe: (listener: () => void) => {
+        held = null;
+        return store.subscribe((changes) => { if (readsChanged(reads, changes)) { held = null; listener(); } });
+      },
+      snapshot: () => {
+        if (held) return held;
+        const captured = store.capture(() => chat === null ? [] : tools.menus(chat));
+        reads = captured.reads;
+        return held = captured.value;
+      },
+    };
+  }, [store, tools, chat]);
+  return useSyncExternalStore(selected.subscribe, selected.snapshot);
 }

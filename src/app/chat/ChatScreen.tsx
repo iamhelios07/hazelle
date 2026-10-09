@@ -1,3 +1,4 @@
+import { ChatToolPanel } from './ChatToolPanel';
 import type { ReactNode } from 'react';
 import type { ChatItem, ChatSummary } from '../../model/chat';
 import type { CharacterShelf } from '../../model/library';
@@ -61,6 +62,8 @@ export function ChatScreen({ id: chatId, item, shelf, back, side }: Props) {
           ) : panel?.kind === 'memory' ? (
             // The panel opens only from a saved chat.
             id && <ChatMemory id={id} record={panel.record} chat={chat} />
+          ) : panel?.kind === 'tool' ? (
+            id && <ChatToolPanel key={panel.module} chat={id} module={panel.module} onClose={actions.closePanel} />
           ) : (
             panel && side({ open: panel, inUse: inUse[panel.kind], onOpen: actions.side, onClose: actions.closePanel })
           )

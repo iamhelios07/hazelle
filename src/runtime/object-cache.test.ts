@@ -1,3 +1,4 @@
+import { ToolWrites, toolData } from './tools/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
 import { modelUsage } from '../model/chat';
@@ -574,4 +575,28 @@ it('invalidates session usage on a rewind even when chat IDs and entry heads are
   expect(await usage.read((chats) => modelUsage(chats, { connection: 'c', model: 'm' }), signal)).toMatchObject({ ok: true, data: { calls: 1 } });
   usage.close();
   store.close();
+});
+
+
+it('fences a tool write across the merge pause when the account timeline changes', async () => {
+  const f = await fixture();
+  await f.add('module', 'module', null, { name: 'tool', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: '' });
+  const store = await f.open();
+  await store.pull();
+  const writes = new ToolWrites(store);
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    const pending = writes.write('module', 'note', 'before restore');
+    const refused = expect(pending).rejects.toThrow('timeline-changed');
+    await vi.advanceTimersByTimeAsync(0);
+    f.restore(f.snapshot(), 't1');
+    expect(await store.pull()).toBeNull();
+    await vi.advanceTimersByTimeAsync(1001);
+    await refused;
+    expect(toolData(store, 'module', 'note')).toBeUndefined();
+    const next = writes.write('module', 'note', 'after restore');
+    await vi.advanceTimersByTimeAsync(1001);
+    await next;
+    expect(toolData(store, 'module', 'note')).toBe('after restore');
+  } finally { writes.close(); store.close(); vi.useRealTimers(); }
 });

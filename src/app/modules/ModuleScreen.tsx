@@ -1,3 +1,4 @@
+import { ToolSection } from './ToolSection';
 import type { Stored } from '../../model/kinds';
 import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { aliased } from '../common/alias';
@@ -51,6 +52,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
           control={<Switch label={ALWAYS_ON} checked={always} onChange={(on) => void setAlways(on)} />}
         />
       </SettingGroup>
+      <ToolSection module={stored} />
       <Section title={PROMPTS_USING}>
         {prompts.length > 0 ? (
           <List label={PROMPTS_USING}>
