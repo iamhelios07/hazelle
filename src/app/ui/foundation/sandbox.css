@@ -2,8 +2,10 @@
  * its own still looks like Hazelle. Tool styles override any of it. */
 @import './global.css';
 
+/* The frame has no box of its own: the panel or screen around it shows through. */
 body {
   padding: var(--space-16);
+  background: transparent;
 }
 
 h1 {

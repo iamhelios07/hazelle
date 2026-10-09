@@ -8,11 +8,13 @@ type Props = {
   width?: 'narrow' | 'form' | 'wide';
   actions?: ReactNode;
   stickyActions?: boolean;
+  // One child takes the rest of the window's height and scrolls itself.
+  fill?: boolean;
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   children: ReactNode;
 };
 
-export function Screen({ top, align = 'start', width = 'narrow', actions, stickyActions = false, onSubmit, children }: Props) {
+export function Screen({ top, align = 'start', width = 'narrow', actions, stickyActions = false, fill = false, onSubmit, children }: Props) {
   const pane = usePane();
   // A page has one main landmark; beside a list, a screen is one section of it.
   const Root = pane ? 'section' : 'main';
@@ -24,7 +26,7 @@ export function Screen({ top, align = 'start', width = 'narrow', actions, sticky
     </>
   );
   return (
-    <Root className={[styles.screen, pane && styles.pane, width !== 'narrow' && styles[width]].filter(Boolean).join(' ')}>
+    <Root className={[styles.screen, pane && styles.pane, fill && styles.fill, width !== 'narrow' && styles[width]].filter(Boolean).join(' ')}>
       {top && <header className={styles.top}>{top}</header>}
       {onSubmit ? (
         <form className={content} onSubmit={onSubmit} noValidate>

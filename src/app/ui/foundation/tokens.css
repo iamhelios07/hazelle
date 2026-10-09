@@ -281,8 +281,7 @@
   --sidebar-width: 272px;
   --rail-width: 64px;
   --panel-width: 360px;
-  --tool-frame-height: 32rem;
-  --tool-page-height: 70dvh;
+  --tool-frame-min-height: 16rem;
   --list-pane-width: 400px;
   --pane-max-width: 560px;
   --form-max-width: 688px;

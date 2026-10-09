@@ -8,7 +8,7 @@ import { scriptsOf } from '../../runtime/scripts';
 import { setToolSettings } from '../../runtime/tools/store';
 import { typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { MODULE_MODELS, MODULE_MODELS_HELP, TOOL, TOOL_FIELD_CHANGED } from '../common/words';
+import { MODULE_MODELS, MODULE_MODELS_HELP, TOOL, TOOL_FIELD_CHANGED, toolVersion } from '../common/words';
 import { useSession, useTool } from '../session';
 import { navigate } from '../shell/router';
 import { Button, ChoiceGroup, Facts, NumberInput, Section, SettingGroup, SettingRow, Stack, Switch, TextField } from '../ui';
@@ -25,7 +25,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
       action={manifest.page && <Button variant="secondary" size="sm" icon={ExternalLink} onClick={() => navigate({ kind: 'tool-page', module: module.id })}>열기</Button>}
     >
       <Stack gap="group">
-        <Facts items={[{ label: '버전', value: manifest.version || '알 수 없음' }, { label: '제작자', value: manifest.author }]} />
+        <Facts items={[{ label: '버전', value: toolVersion(manifest.version) }, { label: '제작자', value: manifest.author }]} />
         {(models || manifest.settings.length > 0) && <SettingGroup label={`${TOOL} 설정`}>
           {models && <ModelConsent module={module} />}
           {manifest.settings.map((field) => <ToolSetting key={field.key} module={module.id} field={field} value={settings[field.key]} />)}

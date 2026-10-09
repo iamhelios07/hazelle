@@ -38,7 +38,7 @@ it('reports a tool import or a version replacement without retaining the code', 
   expect(fresh).toMatchObject({ kind: 'module', holds: '도구 · 1.1', placed: { text: '항상 켰어요.' } });
   const previous = { manifest: { ...manifest, version: '1.0' }, file: { id: 'f', key: 'k' }, size: 10, settings: {} };
   const updated = toolOutcome('notes.js', manifest, { id: 'm', previous }, placement);
-  expect(updated.holds).toBe('버전 1.0 → 1.1로 바꿨어요');
+  expect(updated.holds).toBe('버전을 바꿨어요 · 1.0 → 1.1');
   expect(updated.placed).toBeNull();
   expect(structuredClone(updated)).toEqual(updated);
   expect(updated).not.toHaveProperty('bytes');

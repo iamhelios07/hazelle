@@ -7,7 +7,7 @@ export function ChatToolPanel({ chat, module, onClose }: { chat: string; module:
   const stored = useStored('module', module);
   const tool = useTool(module);
   const title = moduleName(stored?.value.name ?? '');
-  return <SidePanel title={title} expandable onClose={onClose}>
-    {tool?.value.manifest.page ? <ToolView module={module} chat={chat} title={title} size="panel" onClose={onClose} /> : <Empty variant="section">도구를 열 수 없어요.</Empty>}
+  return <SidePanel title={title} expandable fill onClose={onClose}>
+    {tool?.value.manifest.page ? <ToolView module={module} chat={chat} title={title} onClose={onClose} /> : <Empty variant="section">도구를 열 수 없어요.</Empty>}
   </SidePanel>;
 }

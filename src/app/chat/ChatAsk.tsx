@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { scriptVoice } from '../common/script-voice';
 import { useScripts, useSession } from '../session';
 import { AskCard } from '../ui';
@@ -9,9 +10,13 @@ import type { OpenChat } from './useChat';
 export function ChatAsk({ chat, onTyped }: { chat: OpenChat; onTyped: () => void }) {
   const { scripts, store } = useSession();
   const asked = useScripts().questions.find((question) => question.chat === chat.id);
-  if (!asked) return null;
-  const from = scriptVoice(store, asked.from);
-  if (!from) return null;
+  const from = asked && scriptVoice(store, asked.from);
+  const orphan = asked && !from ? asked.id : null;
+  // Its asker was deleted while it asked. Dismissed, not just hidden: a hidden one would hold back the questions after it.
+  useEffect(() => {
+    if (orphan !== null) scripts.answer(orphan, null);
+  }, [orphan]);
+  if (!asked || !from) return null;
   return (
     <AskCard
       key={asked.id}

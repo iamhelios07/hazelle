@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { live } from '../../model/library';
 import { scriptVoice } from '../common/script-voice';
 import { RUNAWAY_FIX } from '../common/failure';
-import { BOT_STUCK, MODEL_ROLES, TOOL_DISABLED, TOOL_LATE, TOOL_STUCK } from '../common/words';
+import { BOT_STUCK, MODEL_ROLES, TOOL_DISABLED, TOOL_LATE, TOOL_STALE, TOOL_STUCK } from '../common/words';
 import { useScripts, useSession } from '../session';
 import { useToast } from '../toast';
 
@@ -37,13 +37,16 @@ export function BotNotes() {
           toast.error('봇의 명령어가 텍스트를 너무 많이 만들어서 멈췄어요', { detail: RUNAWAY_FIX });
           break;
         case 'no-model':
-          toast.error(`${from?.name ?? '봇'}이 호출할 ${MODEL_ROLES[note.role]}이 없어요`);
+          toast.error(`호출할 ${MODEL_ROLES[note.role]}이 없어요`, { detail: from?.name });
           break;
         case 'late':
           toast.show(TOOL_LATE, { detail: from?.name });
           break;
+        case 'stale-reply':
+          toast.show(TOOL_STALE, { detail: from?.name });
+          break;
         case 'flood':
-          toast.error(`${from?.name ?? '봇'}이 모델을 너무 자주 호출해서 잠시 막았어요`);
+          toast.error('모델을 너무 자주 호출해서 잠시 막았어요', { detail: from?.name });
           break;
         case 'unsaved':
           toast.failed(note.failure, '봇이 바꾼 내용을 저장하지 못했어요');

@@ -6,12 +6,12 @@ import { useLayer } from '../overlays/layers';
 import styles from './SidePanel.module.css';
 
 // page: the body scrolls back to its top when this changes, as EditorFrame's page does. expandable: beside the page it
-// can widen over the whole page, which stays under it as it was.
-type Props = { title: string; subtitle?: string; top?: ReactNode; page?: string; actions?: ReactNode; footer?: ReactNode; expandable?: boolean; onClose: () => void; children: ReactNode };
+// can widen over the whole page, which stays under it as it was. fill: one child takes the whole body and scrolls itself.
+type Props = { title: string; subtitle?: string; top?: ReactNode; page?: string; actions?: ReactNode; footer?: ReactNode; expandable?: boolean; fill?: boolean; onClose: () => void; children: ReactNode };
 
 // Where the page is too narrow for it, it covers the page, and there Esc or a press on the page closes it (user,
 // 2026-10-02). Beside the page it stays: the page is read with it open, and Esc is the page's own (응답 멈추기).
-export function SidePanel({ title, subtitle, top, page, actions, footer, expandable = false, onClose, children }: Props) {
+export function SidePanel({ title, subtitle, top, page, actions, footer, expandable = false, fill = false, onClose, children }: Props) {
   const covers = usePanelCovers();
   const [expanded, setExpanded] = useState(false);
   const widens = expandable && !covers;
@@ -48,7 +48,7 @@ export function SidePanel({ title, subtitle, top, page, actions, footer, expanda
         {widens && <IconButton icon={expanded ? Minimize2 : Maximize2} label={expanded ? '좁게 보기' : '넓게 보기'} size="sm" onClick={() => setExpanded(!expanded)} />}
         <IconButton icon={X} label={`${title} 닫기`} size="sm" onClick={onClose} />
       </div>
-      <div ref={body} className={styles.body}>
+      <div ref={body} className={fill ? `${styles.body} ${styles.fill}` : styles.body}>
         {children}
       </div>
       {footer && <div className={styles.footer}>{footer}</div>}

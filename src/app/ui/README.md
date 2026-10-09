@@ -61,7 +61,7 @@ and only this folder styles elements.**
 | layout | `SidePanel` | `SidePanel.module.css` | A panel beside the page, covering it where narrow, with an optional footer |
 | layout | `Sidebar` (`Rail`, `FaceButton`, `LayerSidebar`) | `Sidebar.module.css` | The sidebar, the rail of faces beside it; a layer's own sidebar with its title and ×, which Esc closes too |
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
-| layout | `ToolFrame` | `ToolFrame.module.css` | A fixed-size opaque-origin tool page; the caller connects its window, while the kit owns only its border and size |
+| layout | `ToolFrame` | `ToolFrame.module.css` | An opaque-origin tool page that fills the rest of its column (a `fill` Screen or SidePanel); the caller connects its window |
 | layout | `TranslateDesk` | `TranslateDesk.module.css` | 번역기: a bar of choices, then the source and its translation side by side in one box (stacked on a narrow page), each pane with a foot of counts and buttons |
 | controls | `Button` | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |

@@ -26,9 +26,11 @@ export const MODULE_MODELS = '모델 호출';
 export const MODULE_MODELS_HELP = '이 모듈이 응답과 별도로 모델을 호출해요. 그만큼 요금이 더 들 수 있어요.';
 export const MODEL_CONSENT = { character: '이 봇이 모델을 추가로 호출하려고 해요', module: '이 모듈이 모델을 따로 부르려고 해요' };
 export const TOOL_LATE = '도구가 늦어서 이번엔 빼고 보냈어요';
+export const TOOL_STALE = '다음 응답이 나와서 도구가 바꾼 내용은 넣지 않았어요';
+export const toolVersion = (version: string) => version || '알 수 없음';
 export const TOOL_STUCK = '도구가 응답하지 않아 멈췄어요';
 export const TOOL_DISABLED = '도구가 세 번 멈춰서 껐어요. 새로고침하면 다시 켜져요';
-export const TOOL_FIELD_CHANGED = '도구 설정 형식이 바뀌었어요. 값을 다시 선택해 주세요.';
+export const TOOL_FIELD_CHANGED = '도구가 바뀌어서 다시 설정해야 해요.';
 
 export const SETTINGS = '설정';
 

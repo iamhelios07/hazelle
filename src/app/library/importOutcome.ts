@@ -6,7 +6,7 @@ import type { ImportedCharacter } from '../../runtime/characters';
 import type { ModulePlace } from '../../runtime/modules';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
-import { ALWAYS, inSettings, NO_CHARACTER, SCRIPTS } from '../common/words';
+import { ALWAYS, inSettings, NO_CHARACTER, SCRIPTS, TOOL, toolVersion } from '../common/words';
 import { cardMissed, moduleMissed } from './missed';
 
 // Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
@@ -51,7 +51,9 @@ const modulePlacement = ({ at, failure }: Placement): ImportOutcome['placed'] =>
 export function toolOutcome(file: string, manifest: ToolManifest, saved: ToolImport, placement: Placement): ImportOutcome {
   return {
     kind: 'module', file, id: saved.id, title: `모듈 · ${manifest.displayName}`,
-    holds: saved.previous ? `버전 ${saved.previous.manifest.version} → ${manifest.version}로 바꿨어요` : `도구 · ${manifest.version}`,
+    holds: !saved.previous ? [TOOL, manifest.version].filter(Boolean).join(' · ')
+      : saved.previous.manifest.version === manifest.version ? '같은 버전을 다시 가져왔어요'
+      : `버전을 바꿨어요 · ${toolVersion(saved.previous.manifest.version)} → ${toolVersion(manifest.version)}`,
     placed: saved.previous ? null : modulePlacement(placement), missed: [], unused: null,
   };
 }

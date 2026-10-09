@@ -51,6 +51,10 @@
   background: var(--color-bg);
 }
 
+.fill .body {
+  flex-grow: 1;
+}
+
 .wide {
   max-width: var(--gallery-max-width);
 }
@@ -68,6 +72,10 @@
   .screen.wide,
   .screen.form {
     padding-top: var(--space-32);
+  }
+
+  .screen.fill {
+    min-height: 100dvh;
   }
 
   .actions {
