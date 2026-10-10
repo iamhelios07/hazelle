@@ -174,9 +174,9 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       const match = parsed.card.assets.length > 0 ? risuMatch(store, name) : null;
       if (match !== null && (await ask(name))) {
         progress(stepOf({ kind: 'picture' }));
-        const filled = await fillPictures(store, files, match, parsed.card.assets);
+        const filled = await fillPictures(store, files, { kind: 'asset', parent: match }, parsed.card.assets);
         if (!filled.ok) return unsaved(file.name, filled);
-        return { kind: 'filled', file: file.name, name, kept: filled.data.kept, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
+        return { kind: 'filled', file: file.name, name, kept: filled.data.kept.length, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
       }
       const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(stepOf(step)));
       if (!saved.ok) return unsaved(file.name, saved);

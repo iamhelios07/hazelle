@@ -1,19 +1,24 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ACTS, importOf } from '../common/acts';
-import { Button, Dialog, FileButton, Section, Stack, Text } from '../ui';
+import { useCopy } from '../common/useCopy';
+import { Button, Dialog, FileButton, Row, Section, Stack, Text } from '../ui';
+import { INLAY_BOOKMARK, INLAY_EXPORT } from './inlayExport';
 
-// Risu에서 이사: says which Risu backup files to get and takes them, the text's and, for an account user, the full backup
-// that holds the pictures (design F7). onRead gets them in that order; MoveFlow reads them as one.
+// Risu에서 이사: says which Risu files to get and takes them, the text's, for an account user the full backup that holds
+// the pictures (design F7), and the export of the pictures inside messages. That export alone fills the chats already
+// here (메시지 이미지 채우기). MoveFlow tells the files apart by what they hold.
 export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => void; onClose: () => void }) {
+  const copy = useCopy();
   const [text, setText] = useState<File | null>(null);
   const [pictures, setPictures] = useState<File | null>(null);
+  const [inlays, setInlays] = useState<File | null>(null);
   return (
     <Dialog
       title="Risu에서 이사"
       onClose={onClose}
       actions={
-        <Button disabled={text === null} onClick={() => onRead(pictures ? [text!, pictures] : [text!])}>
-          백업 읽기
+        <Button disabled={text === null && inlays === null} onClick={() => onRead(text ? [text, pictures, inlays].filter((file) => file !== null) : [inlays!])}>
+          {text === null && inlays !== null ? '메시지 이미지 채우기' : '백업 읽기'}
         </Button>
       }
     >
@@ -26,16 +31,33 @@ export function MoveDialog({ onRead, onClose }: { onRead: (files: File[]) => voi
           file={pictures}
           onFile={setPictures}
         />
+        <Slot
+          title="메시지 속 이미지"
+          note="Risu 웹에서 F12를 눌러 콘솔에 코드를 붙여 넣으면 risu-inlays.bin을 받아요. 이미 옮긴 채팅에 채울 때는 이 파일만 넣어요."
+          help="콘솔이 붙여 넣기를 막으면 allow pasting을 먼저 입력해요. 북마크로 쓰려면 새 북마크의 URL에 주소를 넣고 Risu 웹에서 눌러요."
+          file={inlays}
+          onFile={setInlays}
+        >
+          <Row kind="toolbar">
+            <Button variant="secondary" size="sm" icon={ACTS.copy.icon} onClick={() => copy(INLAY_EXPORT)}>
+              코드 복사
+            </Button>
+            <Button variant="secondary" size="sm" icon={ACTS.copy.icon} onClick={() => copy(INLAY_BOOKMARK)}>
+              북마크 주소 복사
+            </Button>
+          </Row>
+        </Slot>
       </Stack>
     </Dialog>
   );
 }
 
-function Slot({ title, note, file, onFile }: { title: string; note: string; file: File | null; onFile: (file: File) => void }) {
+function Slot({ title, note, help, file, onFile, children }: { title: string; note: string; help?: string; file: File | null; onFile: (file: File) => void; children?: ReactNode }) {
   return (
-    <Section level={3} title={title}>
+    <Section level={3} title={title} help={help}>
       <Stack gap="related">
         <Text variant="note">{note}</Text>
+        {children}
         <FileButton accept=".bin" size="sm" icon={ACTS.import.icon} onFile={onFile}>
           {file ? file.name : importOf('파일')}
         </FileButton>

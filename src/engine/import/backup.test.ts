@@ -241,14 +241,14 @@ describe('readBackup', () => {
     const backup = await read();
     const characters = await Promise.all(backup.catalog.characters.map(({ key }) => backup.character(key)));
     expect(backup.catalog.characters).toEqual([
-      { key: 2, id: 'sleeper', name: 'Sleeper', chatCount: 1, assetCount: 0, lastTalk: 5 },
-      { key: 1, id: 'mira', name: 'Mira', chatCount: 2, assetCount: 1, lastTalk: 1000 },
+      { key: 2, id: 'sleeper', name: 'Sleeper', chatCount: 1, assetCount: 0, inlayCount: 0, lastTalk: 5 },
+      { key: 1, id: 'mira', name: 'Mira', chatCount: 2, assetCount: 1, inlayCount: 1, lastTalk: 1000 },
     ]);
     expect(characters.map(({ id, folder }) => [id, folder])).toEqual([
       ['sleeper', 'Fav'],
       ['mira', null],
     ]);
-    expect(characters[0]!.chats).toEqual([{ title: 'Nap', note: null, persona: null, greeting: 0, variables: [], messages: [{ role: 'user', text: 'wake', at: 5 }] }]);
+    expect(characters[0]!.chats).toEqual([{ title: 'Nap', note: null, persona: null, greeting: 0, variables: [], inlays: [], messages: [{ role: 'user', text: 'wake', at: 5 }] }]);
     expect(backup.catalog.unsupported).toEqual([
       { kind: 'group-chat', count: 1 },
       { kind: 'cold-missing', count: 1 },
@@ -266,7 +266,7 @@ describe('readBackup', () => {
     expect(await card.assets[0]!.read()).toEqual(PNG);
   });
 
-  it('maps chats and counts what they held that does not come', async () => {
+  it('maps chats, collects the inlay ids each names, and counts what they held that does not come', async () => {
     const backup = await read();
     const card = await backup.character(backup.catalog.characters[1]!.key);
     expect(card.chats).toEqual([
@@ -279,15 +279,16 @@ describe('readBackup', () => {
           ['mood', 'calm'],
           ['count', '3'],
         ],
+        inlays: ['abc'],
         messages: [
           { role: 'user', text: 'hey', at: 1000 },
           { role: 'assistant', text: 'look {{inlay::abc}}', at: 1000, reasoning: 'hmm' },
         ],
       },
-      { title: 'Cold', note: 'n', persona: null, greeting: 0, variables: [['x', '{"a":1}']], messages: [{ role: 'user', text: 'old', at: 10 }] },
+      { title: 'Cold', note: 'n', persona: null, greeting: 0, variables: [['x', '{"a":1}']], inlays: [], messages: [{ role: 'user', text: 'old', at: 10 }] },
     ]);
     expect(card.missed).toEqual(
-      (['chat-lore', 'memory', 'inlay', 'chat-folder', 'bookmark', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
+      (['chat-lore', 'memory', 'chat-folder', 'bookmark', 'hidden-message', 'cold-missing', 'missing-picture'] as const).map((kind) => ({ kind, count: 1 })),
     );
   });
 

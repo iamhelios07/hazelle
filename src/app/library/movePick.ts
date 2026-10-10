@@ -28,9 +28,10 @@ export function toPick(backup: BackupCatalog, ticks: Ticks): MovePick {
 
 export const tickCount = (ticks: Ticks): number => Object.values(ticks).flat().filter(Boolean).length;
 
-// The steps a pick runs, in the move's order (runtime/move): a kind with nothing picked never reports.
-export function stepsOf({ characters, personas, presets, modules }: MovePick): MoveStep['kind'][] {
-  const pictures = [...modules, ...characters].some(({ assetCount }) => assetCount > 0);
+// The steps a pick runs, in the move's order (runtime/move): a kind with nothing picked never reports. inlays: whether
+// the inlay export came with the backups, whose pictures the chats then bring.
+export function stepsOf({ characters, personas, presets, modules }: MovePick, inlays: boolean): MoveStep['kind'][] {
+  const pictures = [...modules, ...characters].some(({ assetCount }) => assetCount > 0) || (inlays && characters.some(({ inlayCount }) => inlayCount > 0));
   return [
     ...(personas.length ? ['personas' as const] : []),
     ...(modules.length ? ['modules' as const] : []),

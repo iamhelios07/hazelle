@@ -1,4 +1,5 @@
 import { isRecord, list } from '../../connectors/values';
+import { imageType } from './card';
 import { add, convertModule, counted, record, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
 import { readMsgpack } from './msgpack';
@@ -11,6 +12,7 @@ import {
   type BackupCatalog,
   type BackupResult,
   type BackupSource,
+  type Imported,
   type ImportedModule,
   type MoveUnsupportedKind,
   type RisuBackup,
@@ -89,6 +91,42 @@ async function index(source: BackupSource, raw: BackupSource): Promise<Map<strin
   return files;
 }
 
+// The file the export run on the Risu page writes (app/library/inlayExport), in the backup's layout: inlay_<id> for
+// each picture and Gemini signature (its stored item as JSON), and first of all inlay_skipped.json, naming the video and
+// audio items left out, which marks the file as this export. null: another file.
+export async function readInlays(source: BackupSource): Promise<Inlays | null> {
+  const ahead = readAhead(source);
+  if (source.size < 4) return null;
+  const nameLength = u32(await ahead.read(0, 4), 0);
+  if (4 + nameLength > source.size || utf8.decode(await ahead.read(4, nameLength)) !== INLAY_SKIPPED) return null;
+  const files = await index(ahead, source);
+  return {
+    assets: (ids) => ids.map((id) => {
+      const span = files.get(`${INLAY}${id}`);
+      return { name: id, read: span ? () => span.source.read(span.offset, span.length) : () => Promise.resolve(null) };
+    }),
+  };
+}
+
+// assets: an entry per id, which reads null for one the file lacks.
+export type Inlays = { assets(ids: string[]): Imported['assets'] };
+
+const INLAY = 'inlay_';
+const INLAY_SKIPPED = `${INLAY}skipped.json`;
+export const SIGNATURE = 'signature';
+
+// A picture's type, or SIGNATURE for a Gemini thought signature's item; only an inlay is stored as either.
+export function inlayType(bytes: Uint8Array): string | null {
+  const type = imageType(bytes);
+  if (type || bytes[0] !== 0x7b) return type;
+  try {
+    const item: unknown = JSON.parse(utf8.decode(bytes));
+    return isRecord(item) && item.type === SIGNATURE ? SIGNATURE : null;
+  } catch {
+    return null;
+  }
+}
+
 const u32 = (bytes: Uint8Array, at: number) => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(at, true);
 
 function decode(bytes: Uint8Array): unknown {
@@ -162,6 +200,7 @@ async function fromDatabase(db: Json, files: Map<string, Span>): Promise<RisuBac
     return {
       key, id: character.id, name: character.card.name, assetCount: character.assets.length,
       chatCount: chats.filter((chat) => chat !== null).length,
+      inlayCount: chats.reduce((sum, chat) => sum + (chat?.inlays ?? 0), 0),
       lastTalk: chats.reduce((latest, chat) => Math.max(latest, chat?.lastTalk ?? 0), 0),
     };
   }));

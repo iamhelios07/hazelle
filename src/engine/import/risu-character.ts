@@ -9,20 +9,31 @@ export type Read = () => Promise<Uint8Array<ArrayBuffer>>;
 export type Entry = (key: string) => Read | null;
 
 const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
-const INLAY = /\{\{inlay(?:ed|eddata)?::/;
+const INLAY = /\{\{inlay(?:ed|eddata)?::(.+?)\}\}/g;
 
-export function chatInfo(chat: Json | null): { lastTalk: number } | null {
+// The ids of Risu's inlay store the texts name, each once, in order.
+export function inlayIds(texts: Iterable<string>): string[] {
+  const ids = new Set<string>();
+  for (const text of texts) for (const [, id] of text.matchAll(INLAY)) ids.add(id!);
+  return [...ids];
+}
+
+const messageTexts = (messages: unknown[]) => messages.filter(isRecord).map((message) => text(message.data));
+
+// inlays: how many of Risu's inlay items the chat's messages name.
+export function chatInfo(chat: Json | null): { lastTalk: number; inlays: number } | null {
   const messages = list(chat?.message);
   if (!messages.length) return null;
+  const inlays = inlayIds(messageTexts(messages)).length;
   let hasMessage = false;
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
     if (!isRecord(message)) continue;
     hasMessage = true;
     const at = number(message.time);
-    if (at !== null) return { lastTalk: at };
+    if (at !== null) return { lastTalk: at, inlays };
   }
-  return { lastTalk: hasMessage ? (number(chat!.lastDate) ?? 0) : 0 };
+  return { lastTalk: hasMessage ? (number(chat!.lastDate) ?? 0) : 0, inlays };
 }
 
 export async function picture(read: Read): Promise<Picture | null> {
@@ -83,6 +94,8 @@ export function risuChatFile(json: unknown): { chats: RisuChat[]; missed: MoveUn
   if (!isRecord(json) || (json.type !== 'risuChat' && json.type !== 'risuAllChats') || (json.ver !== 1 && json.ver !== 2)) return null;
   const missed: Tally<MoveUnsupportedKind> = new Map();
   const chats = (Array.isArray(json.data) ? json.data : [json.data]).filter(isRecord).map((chat) => risuChat(chat, text(chat.note), -1, missed));
+  // A file of chats brings none of their pictures.
+  add(missed, 'inlay', chats.reduce((sum, chat) => sum + chat.inlays.length, 0));
   return { chats, missed: counted(MOVE_UNSUPPORTED_KINDS, missed) };
 }
 
@@ -93,7 +106,6 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
   const cut = messages.findLastIndex((message) => message.disabled === 'allBefore');
   for (const [index, message] of messages.entries()) {
     if (index <= cut || message.disabled === true || message.isComment === true) add(missed, 'hidden-message');
-    if (INLAY.test(text(message.data))) add(missed, 'inlay');
   }
   if (list(chat.localLore).length > 0) add(missed, 'chat-lore');
   if (text(chat.supaMemoryData).trim() || [chat.hypaV2Data, chat.hypaV3Data].some(holdsData)) add(missed, 'memory');
@@ -106,6 +118,7 @@ function risuChat(chat: Json, note: string, fmIndex: number, missed: Tally<MoveU
     variables: Object.entries(record(chat.scriptstate)).flatMap(([key, value]): [string, string][] =>
       key.startsWith('$') && value !== undefined ? [[key.slice(1), typeof value === 'string' ? value : JSON.stringify(value)]] : [],
     ),
+    inlays: inlayIds(messageTexts(messages)),
     messages: messages.map((message) => {
       at = number(message.time) ?? at;
       // Risu keeps a reply's reasoning inside its text as <Thoughts> blocks, and takes them out again before it draws or

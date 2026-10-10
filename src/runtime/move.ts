@@ -1,6 +1,10 @@
-import type { BackupCatalog, Card, Imported, ImportReport, MoveUnsupported, RisuBackup, RisuChat } from '../engine/import/types';
+import { inlayType, readInlays, SIGNATURE, type Inlays } from '../engine/import/backup';
+import { counted } from '../engine/import/convert';
+import { inlayIds } from '../engine/import/risu-character';
+import { MOVE_UNSUPPORTED_KINDS, type BackupCatalog, type BackupSource, type Card, type Imported, type ImportReport, type MoveUnsupported, type RisuBackup, type RisuChat } from '../engine/import/types';
 import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';
+import type { Asset } from '../model/library';
 import type { MemorySettings } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
@@ -38,15 +42,18 @@ const namespacesFromRisu = (store: ObjectStore): Map<string, string> => new Map(
 // Personas first, so the chats bound to one use it, and modules before the prompts and characters they are on for. The
 // first failure stops the rest, and what was saved before it stays. A character already brought is skipped, which is
 // sound because each one lands whole: its chats' entries are written first, and their roots go with the character in its
-// own batch (runtime/characters addCharacter), so a cut leaves only entries no chat names. So is a module: its
+// own batch (runtime/characters addCharacter), so a cut leaves only entries no chat names; a chat's inlays come after
+// its character, so a cut there leaves them to 메시지 이미지 채우기 (fillInlays). So is a module: its
 // 항상 is written before it, under the id it is then saved at, so a move cut between the two leaves only an id that
 // names nothing, which reads as off, and the next run brings the module again. Every write is of the timeline the move
 // began on: an account restored meanwhile stops it.
-export function moveFromRisu(store: ObjectStore, files: Files, backup: RisuBackup, pick: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
-  return store.pinned(() => move(store, files, backup, pick, progress));
+// inlays: the export of Risu's inlay store, when it was dropped with the backups; without it every inlay a chat names is
+// counted as not brought.
+export function moveFromRisu(store: ObjectStore, files: Files, backup: RisuBackup, pick: MovePick, inlays: Inlays | null, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+  return store.pinned(() => move(store, files, backup, pick, inlays, progress));
 }
 
-async function move(store: ObjectStore, files: Files, backup: RisuBackup, { characters, personas, presets, modules }: MovePick, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
+async function move(store: ObjectStore, files: Files, backup: RisuBackup, { characters, personas, presets, modules }: MovePick, inlays: Inlays | null, progress: (step: MoveStep) => void): Promise<ApiResult<Moved>> {
   // A kind's line counts what landed: 0 as its first begins, total once its last did, so it ends whole, not at total - 1.
   const landed = (kind: MoveStep['kind'], done: number, total: number) => progress({ kind, done, total });
   const personaIds = new Map<string, string>();
@@ -66,7 +73,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   const dueModules = modules.filter(({ risu }) => risu === null || !moduleIds.has(risu));
   const brought = broughtFromRisu(store);
   const due = characters.filter(({ id }) => !brought.has(id)).sort((a, b) => a.lastTalk - b.lastTalk);
-  const pictureTotal = [...dueModules, ...due].reduce((sum, { assetCount }) => sum + assetCount, 0);
+  const pictureTotal = [...dueModules, ...due].reduce((sum, { assetCount }) => sum + assetCount, 0) + (inlays ? due.reduce((sum, { inlayCount }) => sum + inlayCount, 0) : 0);
   let picturesDone = 0;
   const uploading: Progress = (step) => {
     if (step.kind === 'assets') progress({ kind: 'pictures', done: picturesDone + step.done, total: pictureTotal });
@@ -118,10 +125,12 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
     // A character's chats are held together from their entries, which go in one batch, to their summaries, which read
     // the published character and go in one request: the source holds the whole character already, so this holds no
     // more than it. Nothing is pulled: what the leases hold is what this device wrote.
-    const chats = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b)).map((chat) => chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, current, memory));
+    const sorted = [...character.chats].sort((a, b) => lastTalk(a) - lastTalk(b));
+    const chats = sorted.map((chat) => chatOf(crypto.randomUUID(), id, character.card, chat, personaIds, current, memory));
     const last = new Set(chats.flatMap(({ entries }) => entries.at(-1)?.id ?? []));
     let staged = 0;
     let saved: ImportedCharacter | undefined;
+    let inlaysMissed = 0;
     const failure = await saveNewChats(store, chats.map(({ root }) => root.id), chats.flatMap(({ entries }) => entries), {
       written: (write) => {
         if (last.has(write.id)) progress({ kind: 'chats', done: chatsDone + ++staged, total: chatTotal });
@@ -131,13 +140,26 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
         const imported = await importCharacter(store, files, character, avatar, uploading, { id, folder: folder?.data ?? null, risu: character.id, modules: character.modules.flatMap((risu) => moduleIds.get(risu) ?? []), chats: chats.map(({ root }) => root) });
         if (!imported.ok) return imported;
         saved = imported.data;
+        picturesDone += character.assets.length;
+        // The chats are still held here, which their inlays, scoped to them, need.
+        for (const [index, { inlays: ids }] of sorted.entries()) {
+          if (!inlays) {
+            inlaysMissed += ids.length;
+            continue;
+          }
+          if (!ids.length) continue;
+          const filled = await fillPictures(store, files, { kind: 'inlay', parent: chats[index]!.root.id }, inlays.assets(ids), uploading);
+          if (!filled.ok) return filled;
+          picturesDone += ids.length;
+          inlaysMissed += filled.data.skipped;
+        }
         return null;
       },
     });
     if (failure) return failure;
-    picturesDone += character.assets.length;
     const { skipped, faceless } = saved!;
-    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed: character.missed, unused: unused(character.card) });
+    const missed = counted(MOVE_UNSUPPORTED_KINDS, new Map([...character.missed.map(({ kind, count }) => [kind, count] as const), ['inlay', inlaysMissed]]));
+    moved.push({ id, risu: character.id, name: character.card.name, chats: character.chats.length, skipped, faceless, report: character.report, missed, unused: unused(character.card) });
   }
   if (due.length) landed('characters', due.length, due.length);
   return { ok: true, data: { characters: moved, personas: personas.length, prompts, modules: movedModules } };
@@ -178,14 +200,67 @@ function chatOf(id: string, character: string | null, card: Card | null, { title
 export const risuMatch = (store: ObjectStore, name: string): string | null =>
   store.list('character').find(({ value }) => value.risu !== undefined && value.deleted === undefined && value.card.name === name)?.id ?? null;
 
-// Only the names the character does not have yet; skipped as in runtime/characters ImportedCharacter, so a name it
-// had is neither kept nor skipped.
-export async function fillPictures(store: ObjectStore, files: Files, character: string, assets: Imported['assets']): Promise<ApiResult<{ kept: number; skipped: number }>> {
-  if (!store.get('character', character)) return { ok: false, error: 'gone' };
-  const had = new Set(store.children('asset', character).map(({ value }) => value.name));
-  const saved = await saveAssets(files, assets.filter(({ name }) => !had.has(name)), () => {});
+// A character's assets, or a chat's inlays (Risu's pictures inside its messages, by their Risu ids), which are scoped to
+// the chat: the caller holds it, from before reading what it has to after the write.
+export type Holder = { kind: 'asset' | 'inlay'; parent: string };
+
+// Only the names the holder does not have yet, so the same pictures given twice add nothing; skipped as in
+// runtime/characters ImportedCharacter, so a name it had is neither kept nor skipped.
+export async function fillPictures(store: ObjectStore, files: Files, { kind, parent }: Holder, assets: Imported['assets'], progress: Progress = () => {}): Promise<ApiResult<{ kept: Asset[]; skipped: number }>> {
+  if (!store.get(kind === 'asset' ? 'character' : 'chat', parent)) return { ok: false, error: 'gone' };
+  const had = new Set(store.children(kind, parent).map(({ value }) => value.name));
+  const saved = await saveAssets(files, assets.filter(({ name }) => !had.has(name)), progress, kind === 'inlay' ? inlayType : undefined);
   if (!saved.ok) return saved;
-  const { kept, skipped } = saved.data;
-  const added = await store.batch(kept.map((value): Write => ({ type: 'create', kind: 'asset', id: crypto.randomUUID(), parent: character, value })));
-  return added.ok ? { ok: true, data: { kept: kept.length, skipped } } : added;
+  const added = await store.batch(saved.data.kept.map((value): Write => ({ type: 'create', kind, id: crypto.randomUUID(), parent, value })), undefined, { unheld: kind === 'inlay' });
+  return added.ok ? saved : added;
+}
+
+// The files dropped for a move apart: Risu backups, and the inlay export, the first one dropped (engine/import readInlays).
+export async function sortRisuFiles(dropped: File[]): Promise<{ backups: File[]; inlays: Inlays | null }> {
+  const backups: File[] = [];
+  let inlays: Inlays | null = null;
+  for (const file of dropped) {
+    const read: Inlays | null = inlays ? null : await readInlays(sourceOf(file));
+    if (read) inlays = read;
+    else backups.push(file);
+  }
+  return { backups, inlays };
+}
+
+const sourceOf = (file: File): BackupSource => ({
+  size: file.size,
+  read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
+});
+
+// chats: those gone through, of total; pictures: inlays added; missed: inlays named but not added (the export lacked
+// them, they are video or audio, or the account's picture cap refused them); unread: chats whose history did not read.
+export type FilledInlays = { chats: number; total: number; pictures: number; missed: number; unread: number };
+
+// 메시지 이미지 채우기: fills every chat, 휴지통's too, with the inlays its messages name, one chat held at a time, so a
+// pass over thousands holds one chat's history and one window of pictures. Run again, it adds nothing (fillPictures).
+export function fillInlays(store: ObjectStore, files: Files, inlays: Inlays, progress: (step: FilledInlays) => void, signal: AbortSignal): Promise<ApiResult<FilledInlays>> {
+  return store.pinned(async () => {
+    const chats = store.list('chat').map(({ id }) => id);
+    const filled: FilledInlays = { chats: 0, total: chats.length, pictures: 0, missed: 0, unread: 0 };
+    for (const chat of chats) {
+      progress({ ...filled });
+      const result = await store.withChats([chat], async (readable): Promise<ApiResult<null>> => {
+        if (!readable.length) {
+          filled.unread++;
+          return { ok: true, data: null };
+        }
+        const ids = inlayIds(store.children('entry', chat).flatMap(({ value }) => (value.type === 'message' || value.type === 'version' ? [value.text, value.reasoning ?? ''] : [])));
+        if (!ids.length) return { ok: true, data: null };
+        const saved = await fillPictures(store, files, { kind: 'inlay', parent: chat }, inlays.assets(ids));
+        if (!saved.ok) return saved;
+        filled.pictures += saved.data.kept.filter(({ type }) => type !== SIGNATURE).length;
+        filled.missed += saved.data.skipped;
+        return { ok: true, data: null };
+      }, { signal, summarize: false });
+      if (!result.ok) return result;
+      filled.chats++;
+    }
+    progress({ ...filled });
+    return { ok: true, data: filled };
+  }, signal);
 }

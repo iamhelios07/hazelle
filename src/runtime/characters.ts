@@ -45,14 +45,15 @@ export async function addCharacter(store: ObjectStore, character: Character, { a
 // Both import entrances use faceless for thumbnail failures and refused uploads, not absent source pictures.
 export type ImportedCharacter = { id: string; skipped: number; faceless: boolean };
 
-export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress): Promise<ApiResult<{ kept: Asset[]; skipped: number }>> {
+// typeOf: what a kept file is, null for one not kept; an inlay alone also keeps a signature (engine/import inlayType).
+export async function saveAssets(files: Files, assets: Imported['assets'], progress: Progress, typeOf: (bytes: Uint8Array) => string | null = imageType): Promise<ApiResult<{ kept: Asset[]; skipped: number }>> {
   const kept: Asset[] = [];
   let skipped = 0;
   for (let start = 0; start < assets.length; start += FILE_WINDOW) {
     progress({ kind: 'assets', done: start, total: assets.length });
     const window = await Promise.all(assets.slice(start, start + FILE_WINDOW).map(async ({ name, read }) => ({ name, bytes: await read() })));
     const read = window.flatMap(({ name, bytes }) => {
-      const type = bytes && imageType(bytes);
+      const type = bytes && typeOf(bytes);
       if (!type) skipped++;
       return type ? [{ name, type, bytes: bytes! }] : [];
     });

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import type { Inlays } from '../../engine/import/backup';
 import type { PresetFailure } from '../../engine/import/preset';
 import type { BackupCatalog, BackupFailure, RisuBackup } from '../../engine/import/types';
 import type { Unused } from '../../engine/pipeline';
 import { ImportWorker } from '../../runtime/import/client';
 import { ImportReadError } from '../../runtime/import/protocol';
-import { broughtFromRisu, modulesFromRisu, moveFromRisu, type Moved, type MoveStep } from '../../runtime/move';
+import { broughtFromRisu, fillInlays, modulesFromRisu, moveFromRisu, sortRisuFiles, type FilledInlays, type Moved, type MoveStep } from '../../runtime/move';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { describeFailure } from '../common/failure';
@@ -36,23 +37,41 @@ type Steps = Partial<Record<MoveStep['kind'], MoveStep>>;
 type Phase =
   | { kind: 'reading' }
   | { kind: 'failed'; message: string; again: (() => void) | null }
-  | { kind: 'picking'; backup: RisuBackup; have: Have; can: Ticks; ticks: Ticks }
+  | { kind: 'picking'; backup: RisuBackup; inlays: Inlays | null; have: Have; can: Ticks; ticks: Ticks }
   | { kind: 'running'; kinds: MoveStep['kind'][]; steps: Steps }
-  | { kind: 'done'; backup: BackupCatalog; moved: Moved };
+  | { kind: 'done'; backup: BackupCatalog; moved: Moved }
+  | { kind: 'filling'; step: FilledInlays | null }
+  | { kind: 'filled'; filled: FilledInlays };
 
-// Risu backups dropped or picked, read as one (design F7). aside: other files dropped with them, which are not
-// imported.
+// Risu backups dropped or picked, read as one (design F7), with the export of the pictures inside messages when it
+// came along; that export alone fills the chats already here instead. aside: other files dropped with them, which are
+// not imported.
 export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; aside: number; onClose: () => void }) {
   const store = useStore();
   const files = useFiles();
   const [phase, setPhase] = useState<Phase>({ kind: 'reading' });
   const reader = useRef<ImportWorker | null>(null);
+  const stop = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let live = true;
     const source = new ImportWorker();
     reader.current = source;
-    void source.backup(dropped).then((read) => {
+    void (async () => {
+      let sorted: Awaited<ReturnType<typeof sortRisuFiles>>;
+      try {
+        sorted = await sortRisuFiles(dropped);
+      } catch {
+        if (live) setPhase({ kind: 'failed', message: '파일을 읽지 못했어요. 다시 가져와 주세요.', again: null });
+        return;
+      }
+      if (!live) return;
+      const { backups, inlays } = sorted;
+      if (backups.length === 0) {
+        source.close();
+        return void fill(inlays!);
+      }
+      const read = await source.backup(backups);
       if (!live) return;
       if (!read.ok) {
         source.close();
@@ -62,8 +81,8 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       const can = tickable(read.backup.catalog, have);
       // Personas and presets carry no Risu id, so once anything was brought they start unticked rather than come twice.
       const ticks = have.characters.size + have.modules.size === 0 ? can : { ...can, personas: can.personas.map(() => false), presets: can.presets.map(() => false) };
-      setPhase({ kind: 'picking', backup: read.backup, have, can, ticks });
-    }).catch((error: unknown) => {
+      setPhase({ kind: 'picking', backup: read.backup, inlays, have, can, ticks });
+    })().catch((error: unknown) => {
       if (!live) return;
       if (!(error instanceof ImportReadError)) throw error;
       source.close();
@@ -73,17 +92,29 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       live = false;
       source.close();
       reader.current = null;
+      stop.current?.abort();
     };
   }, [dropped, store]);
 
-  async function run(backup: RisuBackup, ticks: Ticks) {
+  async function fill(inlays: Inlays) {
+    const controller = new AbortController();
+    stop.current = controller;
+    setPhase({ kind: 'filling', step: null });
+    const filled = await fillInlays(store, files, inlays, (step) => {
+      if (!controller.signal.aborted) setPhase({ kind: 'filling', step });
+    }, controller.signal);
+    if (controller.signal.aborted) return;
+    setPhase(filled.ok ? { kind: 'filled', filled: filled.data } : { kind: 'failed', message: `채우지 못했어요. ${describeFailure(filled)}`, again: () => void fill(inlays) });
+  }
+
+  async function run(backup: RisuBackup, inlays: Inlays | null, ticks: Ticks) {
     const pick = toPick(backup.catalog, ticks);
-    const kinds = stepsOf(pick);
+    const kinds = stepsOf(pick, inlays !== null);
     const source = reader.current!;
     const steps: Steps = {};
     setPhase({ kind: 'running', kinds, steps });
     try {
-      const moved = await moveFromRisu(store, files, backup, pick, (step) => {
+      const moved = await moveFromRisu(store, files, backup, pick, inlays, (step) => {
         steps[step.kind] = step;
         if (reader.current === source) setPhase({ kind: 'running', kinds, steps: { ...steps } });
       });
@@ -100,7 +131,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
         ...(Object.keys(steps).some((kind) => kind !== 'personas') && { personas: ticks.personas.map(() => false) }),
         ...(steps.characters && { presets: ticks.presets.map(() => false) }),
       };
-      setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, rest) });
+      setPhase({ kind: 'failed', message: `저장하지 못했어요. ${describeFailure(moved)}`, again: () => void run(backup, inlays, rest) });
     } catch (error) {
       if (reader.current !== source) return;
       if (!(error instanceof ImportReadError)) throw error;
@@ -117,6 +148,26 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
     </Button>
   );
 
+  if (phase.kind === 'filling') {
+    const { step } = phase;
+    return (
+      <Dialog title="메시지 이미지 채우는 중" note={note} onClose={onClose}>
+        <Progress hero steps={[{ label: '파일 읽기', finished: true }, step ? { label: '대화', done: step.chats, total: step.total } : { label: '대화' }]} />
+      </Dialog>
+    );
+  }
+  if (phase.kind === 'filled') {
+    const { pictures, missed, unread } = phase.filled;
+    const lines = [...(missed ? moveMissed([{ kind: 'inlay', count: missed }]) : []), ...(unread ? [`읽지 못한 대화 ${unread}개`] : [])];
+    return (
+      <Dialog title="채웠어요" note={note} onClose={onClose} actions={close}>
+        <Stack gap="section">
+          <Text>{`이미지 ${pictures}개를 채웠어요`}</Text>
+          {lines.length > 0 && <Callout tone="warn">못 채운 것: {lines.join(' · ')}</Callout>}
+        </Stack>
+      </Dialog>
+    );
+  }
   if (phase.kind === 'reading' || phase.kind === 'running') {
     const stages = phase.kind === 'running' ? phase.kinds.map((kind): ProgressStep => {
       const step = phase.steps[kind];
@@ -158,7 +209,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
     );
   }
 
-  const { backup, have, can, ticks } = phase;
+  const { backup, inlays, have, can, ticks } = phase;
   const { catalog } = backup;
   const count = tickCount(ticks);
   const tick = (part: keyof Ticks, next: boolean[]) => setPhase({ ...phase, ticks: { ...ticks, [part]: next } });
@@ -168,7 +219,7 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
       note={note}
       onClose={onClose}
       actions={
-        <Button disabled={count === 0} onClick={() => void run(backup, ticks)}>
+        <Button disabled={count === 0} onClick={() => void run(backup, inlays, ticks)}>
           {`가져오기 ${count}개`}
         </Button>
       }

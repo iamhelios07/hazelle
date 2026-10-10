@@ -128,6 +128,8 @@ export type RisuChat = {
   greeting: number;
   // Risu's chat variables (scriptstate without its `$`), Lua's state included.
   variables: [string, string][];
+  // The ids of Risu's inlay items its messages name (engine/import/risu-character inlayIds).
+  inlays: string[];
   messages: RisuMessage[];
 };
 export const MOVE_UNSUPPORTED_KINDS = [
@@ -159,9 +161,10 @@ export type RisuCharacter = Omit<Imported, 'avatar'> & {
 export type RisuPersona = { id: string | null; name: string; alias: string; description: string; picture: () => Promise<Picture | null> };
 export type RisuPreset = { name: string; result: PresetResult };
 // pictures: the picture entries the files hold, in all; 0 says the account backup was written without its assets.
+// inlayCount: the inlay items a character's chats name, each chat's counted apart, as each chat holds its own.
 export type BackupCatalog = {
   pictures: number;
-  characters: { key: number; id: string; name: string; chatCount: number; assetCount: number; lastTalk: number }[];
+  characters: { key: number; id: string; name: string; chatCount: number; assetCount: number; inlayCount: number; lastTalk: number }[];
   personas: { key: number; name: string; alias: string }[];
   presets: { key: number; name: string; failure: PresetFailure['kind'] | null }[];
   modules: { key: number; name: string; risu: string | null; assetCount: number }[];
