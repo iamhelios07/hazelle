@@ -1,3 +1,4 @@
+import type { RelayError, ServerError } from '../../contracts/http';
 import type { ApiFailure } from '../../runtime/api';
 import type { CatalogFailure } from '../../runtime/catalog';
 import type { IllustrateFailure } from '../../runtime/illustrate';
@@ -11,7 +12,37 @@ import type { TurnFailure } from '../../runtime/turn';
 import { count } from './typedNumber';
 import { BIN, BOT_STUCK, inSettings, MODEL_ROLES, UNREADABLE_IMAGE } from './words';
 
-const MESSAGES: Record<string, string> = {
+// The server's codes left on the generic fallback, which names the code for the operator. Every other server code needs
+// words in MESSAGES; its remaining keys are codes the runtime makes itself.
+type OnFallback =
+  // Only a broken or outdated client sends these; not-found otherwise answers an operator's page, or a file read that
+  // runtime/assets handles.
+  | 'bad-body'
+  | 'bad-content-type'
+  | 'bad-id'
+  | 'bad-input'
+  | 'bad-key'
+  | 'length-required'
+  | 'not-found'
+  | 'stream-exists'
+  // The server failed or was busy for a moment, which is what the fallback says.
+  | 'busy'
+  | 'server-error'
+  | 'store-unavailable'
+  // Handled before a failure is described: by the screen or runtime path that sent the request, or by describeFailure
+  // from retryAfter, which the server always sends with too-many-attempts.
+  | 'cache-reset'
+  | 'files-full'
+  | 'too-many-attempts'
+  | 'too-many-bot-calls'
+  | 'wrong-login'
+  // Operator-only refusals, worded by the restores dialog.
+  | 'bad-report'
+  | 'bad-time'
+  | 'cannot-cancel'
+  | 'cannot-undo';
+
+const MESSAGES: Record<Exclude<ServerError, OnFallback>, string> & { [code in OnFallback]?: never } & Partial<Record<string, string>> = {
   'bad-username': '아이디는 2~32자의 문자, 숫자, _ . - 로만 만들 수 있어요.',
   'signup-closed': '가입 인원이 다 차서 계정을 만들 수 없어요.',
   // Signup's last step, after the recovery key; the name is set on the step before.
@@ -38,6 +69,8 @@ const MESSAGES: Record<string, string> = {
   'timeline-changed': '계정이 복원되어 작업을 중단했어요. 다시 시도해 주세요.',
   'account-restoring': '계정을 복원하는 중이에요. 잠시 후 다시 시도해 주세요.',
   'account-busy': '운영자가 계정을 복원하는 중이에요. 잠시 후 다시 시도해 주세요.',
+  'sole-operator': '운영자 계정은 탈퇴할 수 없어요.',
+  'account-leaving': '탈퇴 중인 계정이라 로그인할 수 없어요.',
   'stream-gone': '이 응답은 서버에 더 이상 없어요.',
   'stream-lost': '서버가 응답을 받다가 연결이 끊겼어요.',
 };
@@ -52,12 +85,14 @@ export function wrongSecret(method: keyof typeof SECRET, withUsername: boolean):
   return `${withUsername ? '아이디나 ' : ''}${SECRET[method]} 맞지 않아요.`;
 }
 
-export function describeFailure(failure: ApiFailure): string {
+// own: a screen's words for codes it sends, ahead of the shared ones.
+export function describeFailure(failure: ApiFailure, own: Partial<Record<ServerError, string>> = {}): string {
   if (failure.error === 'too-many-attempts' && failure.retryAfter !== undefined) {
     return `시도가 너무 많았어요. ${Math.ceil(failure.retryAfter / 60)}분 후에 다시 시도해 주세요.`;
   }
+  const screen: Partial<Record<string, string>> = own;
   // The code is what to tell the operator: without it a failure no screen expected cannot be told apart.
-  return MESSAGES[failure.error] ?? `${SERVER_TROUBLE} (${failure.error}${failure.status === undefined ? '' : ` ${failure.status}`})`;
+  return screen[failure.error] ?? MESSAGES[failure.error] ?? `${SERVER_TROUBLE} (${failure.error}${failure.status === undefined ? '' : ` ${failure.status}`})`;
 }
 
 const REFUSED: Record<string, string> = {
@@ -74,7 +109,8 @@ const REFUSED: Record<string, string> = {
 // The relay refuses these, and 직접 연결 says so before it tries.
 export const HTTPS_ONLY = 'https 주소만 연결할 수 있어요.';
 
-const RELAY: Record<string, string> = {
+// bad-envelope has no words of its own: only a broken client sends it, and the fallback says the relay refused.
+const RELAY: Record<Exclude<RelayError, 'bad-envelope'>, string> & Partial<Record<string, string>> = {
   'not-https': HTTPS_ONLY,
   'not-public': '공개된 주소만 연결할 수 있어요.',
   'upstream-unreachable': '제공자 서버에 연결하지 못했어요. 주소를 확인하거나 잠시 후 다시 시도해 주세요.',

@@ -1,3 +1,4 @@
+import type { ServerError } from '../contracts/http';
 import { HELLO, HEAD, DATA, END, PING } from '../contracts/streams';
 import { forward, type Upstream } from './relay';
 
@@ -80,7 +81,7 @@ function fromBase64(text: string): Uint8Array<ArrayBuffer> | null {
   }
 }
 
-const json = (status: number, error: string) => Response.json({ error }, { status });
+const json = (status: number, error: ServerError) => Response.json({ error }, { status });
 
 // Memory holds the frames not yet written (from persisted on, in seq order, no gap) and what each reader is sent;
 // storage holds every page before them, however long the answer. idle: the box has no start pending, no call running

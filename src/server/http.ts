@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { AccountState } from '../contracts/admin';
+import type { ServerError } from '../contracts/http';
 import type { Refused } from './account-store';
 import type { Backups } from './backup/backups';
 import type { Stores } from './db/account-db';
@@ -32,7 +33,7 @@ export type Services = {
 
 export type AppEnv = { Bindings: Services; Variables: { account: Account; storeMs?: number } };
 
-export function fail(c: Context, status: ContentfulStatusCode, error: string, detail: Record<string, unknown> = {}) {
+export function fail(c: Context, status: ContentfulStatusCode, error: ServerError, detail: Record<string, unknown> = {}) {
   return c.json({ error, ...detail }, status);
 }
 

@@ -9,3 +9,5 @@ export type AccountState = 'active' | 'restoring' | 'leaving';
 // on a report that account sent. The phases run in order; from armed on, a restore can only go forward.
 export type RestorePhase = 'begun' | 'fenced' | 'checkpointed' | 'targeted' | 'armed' | 'rewound' | 'done' | 'failed' | 'cancelled';
 export type RestoreAction = 'resume' | 'cancel' | 'finalize';
+// Why a restore's run stopped, kept on its row and in the operator's log (server/lifecycle).
+export type RestoreError = 'too-early' | 'store-unavailable' | 'not-rewound' | 'not-verified' | 'stuck';

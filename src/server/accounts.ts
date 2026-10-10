@@ -3,8 +3,8 @@ import { Hono, type Context } from 'hono';
 import { CAP } from './caps';
 import { checkProof, clearFailures, findAccount, hashProof, readMethod, readProof } from './credentials';
 import { VISIBLE } from './admin';
-import { fail, ID, readObject, refused, type Account, type AppEnv } from './http';
-import { leaveAccount, store } from './lifecycle';
+import { fail, ID, readObject, type Account, type AppEnv } from './http';
+import { leaveAccount, refuseLeft, store } from './lifecycle';
 import { currentAccount, dropSessionCookie, endSession, requireOwnSession, setSessionCookie, startSession } from './session';
 import { insertVault, readVault, readWrap } from './vaults';
 
@@ -105,9 +105,7 @@ accounts.delete('/account', requireOwnSession, async (c) => {
   const wrong = await checkProof(c, (await findAccount(c.env.db, 'id', id))!, method, proof);
   if (wrong) return wrong;
   const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, false);
-  if (left === 'busy') return fail(c, 409, 'account-busy');
-  if (left === 'operator') return fail(c, 403, 'sole-operator');
-  if (left === 'unavailable') return refused(c, { unavailable: true });
+  if (left !== 'left') return refuseLeft(c, left);
   dropSessionCookie(c);
   return c.body(null, 204);
 });
