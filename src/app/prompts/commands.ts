@@ -199,6 +199,7 @@ export const COMMANDS: readonly CommandGroup[] = [
     title: '모델',
     commands: [
       { names: ['model'], form: '{{model}}', what: '이 요청을 받는 모델의 id예요.' },
+      { names: ['axmodel'], form: '{{axmodel}}', what: '보조 모델의 id예요. 정하지 않았으면 대화 모델의 id예요.' },
       { names: ['maxcontext'], form: '{{maxcontext}}', what: '모델의 컨텍스트 길이예요.' },
       { names: ['prefillsupported', 'prefill'], form: '{{prefillsupported}}', what: '모델이 AI 역할로 시작한 응답을 이어 쓰면 1이에요.' },
     ],
