@@ -3,7 +3,7 @@ import type { Starred } from '../connectors/types';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { Profile } from '../model/profile';
-import { SETTINGS_ID } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { imageOnly } from './assignment';
 import { markDeleted } from './removal';
@@ -42,7 +42,7 @@ export async function addFirstProfile(store: ObjectStore): Promise<void> {
     const saved = await store.create('profile', { name: '기본', settings: {} }, { id: FIRST_PROFILE_ID });
     if (!saved.ok) return;
   }
-  await store.upsert('settings', (current) => (current?.profile === undefined ? { models: {}, ...current, profile: FIRST_PROFILE_ID } : current));
+  await store.upsert('settings', (current = EMPTY_SETTINGS) => (current.profile === undefined ? { ...current, profile: FIRST_PROFILE_ID } : current));
 }
 
 export const addProfile = (store: ObjectStore, profile: Profile, id?: string) => store.create('profile', profile, { id });
@@ -71,7 +71,7 @@ export async function removeProfile(store: ObjectStore, id: string): Promise<Api
 
 export const restoreProfile = (store: ObjectStore, id: string) => markDeleted(store, 'profile', id, null);
 
-export const setDefaultProfile = (store: ObjectStore, id: string) => store.upsert('settings', (current) => ({ models: {}, ...current, profile: id }));
+export const setDefaultProfile = (store: ObjectStore, id: string) => store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, profile: id }));
 
 // null leaves the model to the default 묶음.
 export function setModelProfile(store: ObjectStore, connection: string, model: string, profile: string | null): Promise<ApiResult<Stored<'connection'>>> {

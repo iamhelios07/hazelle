@@ -22,7 +22,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const limits = { items: 100, bytes: 1_000_000, body: 100_000 };
 const connection = { type: 'openrouter', label: 'cached', baseUrl: null, protocol: null, accounts: [{ id: 'key', secret: 'secret' }], turns: null, starred: [] } satisfies Connection;
 
-// A server as server/objects answers (plan §13), whose timeline a restore replaces: restore(snapshot) rewinds the rows
+// A server as server/objects answers (tech-spec §5), whose timeline a restore replaces: restore(snapshot) rewinds the rows
 // and the head to the snapshot, as a rewind of the account's store does.
 async function fixture() {
   const vault = randomBytes(32);

@@ -2,7 +2,7 @@ import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import type { Persona } from '../model/persona';
-import { SETTINGS_ID } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { markDeleted } from './removal';
 import { without } from '../model/fields';
@@ -59,7 +59,7 @@ export async function addFirstPersona(store: ObjectStore, username: string): Pro
     const saved = await store.create('persona', { name: username, description: '', picture: null }, { id: FIRST_ID });
     if (!saved.ok) return;
   }
-  await store.upsert('settings', (current) => (current?.persona === undefined ? { models: {}, ...current, persona: FIRST_ID } : current));
+  await store.upsert('settings', (current = EMPTY_SETTINGS) => (current.persona === undefined ? { ...current, persona: FIRST_ID } : current));
 }
 
 export const addPersona = (store: ObjectStore, persona: Persona, id?: string) => store.create('persona', persona, { id });
@@ -74,4 +74,4 @@ export async function removePersona(store: ObjectStore, id: string): Promise<Api
 
 export const restorePersona = (store: ObjectStore, id: string) => markDeleted(store, 'persona', id, null);
 
-export const setCurrentPersona = (store: ObjectStore, id: string) => store.upsert('settings', (current) => ({ models: {}, ...current, persona: id }));
+export const setCurrentPersona = (store: ObjectStore, id: string) => store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, persona: id }));

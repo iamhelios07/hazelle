@@ -1,6 +1,7 @@
 import type { ImportedModule } from '../engine/import/types';
 import type { Stored } from '../model/kinds';
 import type { Module } from '../model/library';
+import { EMPTY_SETTINGS } from '../model/settings';
 import type { ApiResult } from './api';
 import { markDeleted } from './removal';
 import { saveAssets, type Progress } from './characters';
@@ -42,7 +43,7 @@ export function editModule(store: ObjectStore, id: string, patch: { name?: strin
 }
 
 export function setModuleAlways(store: ObjectStore, id: string, on: boolean): Promise<ApiResult<Stored<'settings'>>> {
-  return store.upsert('settings', (current) => ({ models: {}, ...current, modules: switched(current?.modules, id, on) }));
+  return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, modules: switched(current.modules, id, on) }));
 }
 
 export function setCharacterModule(store: ObjectStore, character: string, id: string, on: boolean): Promise<ApiResult<Stored<'character'>>> {

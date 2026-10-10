@@ -6,7 +6,7 @@ import { withMarks, withoutMarks } from '../model/illustration';
 import type { Illustrating, Illustrator } from './illustrate';
 import type { Kind, Stored, Values } from '../model/kinds';
 import { indexFolders, isLive, live, nest, shelve, type CharacterShelf, type FolderContents, type FolderTree, type Shelf } from '../model/library';
-import { SETTINGS_ID, type Settings } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
 import { EvaluationStopped, EvaluationStuck } from './evaluation';
 import type { ScriptDisplay } from './script-display';
 import { readsChanged, type ObjectStore, type StoreChange, type StoreRead } from './store';
@@ -42,7 +42,6 @@ const liveShelf = (shelf: CharacterShelf<ChatSummary> | undefined) => (shelf && 
 
 export type OpenDisplay = Pick<ScriptDisplay, 'display' | 'subscribe'>;
 
-const EMPTY_SETTINGS: Settings = { models: {} };
 // store.list answers in the order of the last write, so read as it comes an edited object would drop to the end of
 // its list. The kinds screens list come by name instead.
 const NAMED: { [K in Kind]?: (value: Values[K]) => string } = {

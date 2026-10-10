@@ -4,7 +4,7 @@ import type { Translation, TranslateSwitches } from '../model/chat';
 import type { IllustrateSwitches } from '../model/illustration';
 import type { Stored, Values } from '../model/kinds';
 import { holds, nest, readableTexts, type Asset, type Avatar, type Character, type Lore, type Pictures } from '../model/library';
-import { SETTINGS_ID } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import type { Files } from './files';
 import { thumbnail } from './picture';
@@ -171,7 +171,7 @@ export function setKeepThoughts(store: ObjectStore, id: string, keep: boolean): 
 
 // A toggle's value for a character's chats, or with character null for 캐릭터 없이's.
 export function setToggle(store: ObjectStore, character: string | null, key: string, value: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
-  if (character === null) return store.upsert('settings', (current) => ({ models: {}, ...current, toggles: { ...current?.toggles, [key]: value } }));
+  if (character === null) return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
   return store.update('character', character, (current) => ({ ...current, toggles: { ...current.toggles, [key]: value } }));
 }
 
@@ -202,7 +202,7 @@ function setScoped<S extends Scoped>(store: ObjectStore, character: string | nul
   if (character !== null && store.get('character', character)?.value[own]) {
     return store.update('character', character, (current) => ({ ...current, [own]: fill(current[own] as SwitchesOf[S], change) }));
   }
-  return store.upsert('settings', (current) => ({ models: {}, ...current, [scope]: fill(current?.[scope] as SwitchesOf[S] | undefined, change) }));
+  return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, [scope]: fill(current[scope] as SwitchesOf[S] | undefined, change) }));
 }
 
 // On starts from the shared switches as they are; off follows them again.
@@ -257,7 +257,7 @@ export function translatorNotes(store: ObjectStore, character: string | null): s
 // character null is the 전역 note, unlike setTranslate's null, which is 캐릭터 없이's switches. Blank removes the note.
 export function setTranslatorNote(store: ObjectStore, character: string | null, text: string): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
   const noted = <T extends { translatorNote?: string }>(current: T): T => (text.trim() ? { ...current, translatorNote: text } : without(current, 'translatorNote'));
-  if (character === null) return store.upsert('settings', (current) => noted({ models: {}, ...current }));
+  if (character === null) return store.upsert('settings', (current = EMPTY_SETTINGS) => noted(current));
   return store.update('character', character, noted);
 }
 
@@ -273,7 +273,7 @@ export function setTextTranslation(store: ObjectStore, character: string, source
 }
 
 export function resetToggles(store: ObjectStore, character: string | null): Promise<ApiResult<Stored<'character'> | Stored<'settings'>>> {
-  if (character === null) return store.upsert('settings', (current) => without({ models: {}, ...current }, 'toggles'));
+  if (character === null) return store.upsert('settings', (current = EMPTY_SETTINGS) => without(current, 'toggles'));
   return store.update('character', character, (current) => without(current, 'toggles'));
 }
 

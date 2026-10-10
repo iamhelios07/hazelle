@@ -4,6 +4,7 @@ import { Check, MessageSquare, MessageSquarePlus, Package } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ImportFailure } from '../../engine/import/types';
 import { characterTexts, live } from '../../model/library';
+import { EMPTY_SETTINGS } from '../../model/settings';
 import { importCharacter } from '../../runtime/characters';
 import { importChat } from '../../runtime/chat-log';
 import type { ApiFailure } from '../../runtime/api';
@@ -253,7 +254,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           icon={Check}
           onConfirm={() => {
             setNotice(null);
-            void store.upsert('settings', (current) => ({ models: {}, ...current, importNotice: true }));
+            void store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, importNotice: true }));
             notice();
           }}
           onClose={() => setNotice(null)}

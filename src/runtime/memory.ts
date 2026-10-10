@@ -10,6 +10,7 @@ import { live } from '../model/library';
 import { emptyMemory, memoryId, type Chapter, type Fact, type Memory, type MemoryRecord, type MemorySettings, type Source, type Thread, type Written } from '../model/memory';
 import type { MemoryPrompt } from '../model/prompt';
 import type { Stream } from '../model/stream';
+import { EMPTY_SETTINGS } from '../model/settings';
 import type { ApiFailure, ApiResult } from './api';
 import { evaluationFailure } from './evaluation';
 import { taskModel, type Route, type RouteFailure } from './assignment';
@@ -34,7 +35,7 @@ export const setChatMemory = (store: ObjectStore, chat: string, settings: Memory
   store.update('chat', chat, (current) => (settings === null ? without(current, 'memory') : { ...current, memory: settings }));
 
 export const setDefaultMemory = (store: ObjectStore, change: Partial<MemorySettings>) =>
-  store.upsert('settings', (current) => ({ models: {}, ...current, memory: { ...current?.memory, ...change } }));
+  store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, memory: { ...current.memory, ...change } }));
 
 type Write<T = Stored<'memory'>> = Promise<ApiResult<T>>;
 

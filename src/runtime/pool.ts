@@ -19,7 +19,7 @@ export function allowance(result: MetersResult): Allowance {
 
 export const accountName = (account: Account) => account.name ?? account.id;
 
-const keyOf = (connection: Connection, account: Account) => JSON.stringify([connection.type, connection.baseUrl, account.secret]);
+export const metersKey = (connection: Connection, account: Account) => JSON.stringify([connection.type, connection.baseUrl, account.secret]);
 
 type Known = { at: number; result: Promise<MetersResult>; settled?: MetersResult };
 
@@ -32,7 +32,7 @@ export class Pool {
 
   // null for a type that reports no meters. A read that failed is not kept, so the next asks again.
   meters(connection: Connection, account: Account, { fresh = false } = {}): Promise<MetersResult> | null {
-    const key = keyOf(connection, account);
+    const key = metersKey(connection, account);
     const held = this.known.get(key);
     if (held && !fresh && performance.now() - held.at < FRESH_MS) return held.result;
     const result = loadMeters(connection, account, this.closing.signal);
@@ -71,7 +71,7 @@ export class Pool {
     if (!connection.turns) return connection.accounts[0]!;
     const accounts = onTurn(connection, Date.now());
     for (const account of accounts) {
-      const settled = this.known.get(keyOf(connection, account))?.settled;
+      const settled = this.known.get(metersKey(connection, account))?.settled;
       const state = settled ? allowance(settled) : 'unknown';
       if (state === 'available') return account;
       if (state === 'unknown') return null;
@@ -81,12 +81,12 @@ export class Pool {
 
   // What its meters said when last read, with no network call; null where they were never read.
   held(connection: Connection, account: Account): MetersResult | null {
-    return this.known.get(keyOf(connection, account))?.settled ?? null;
+    return this.known.get(metersKey(connection, account))?.settled ?? null;
   }
 
   // After a reply on it failed, so the next pick reads its meters again.
   stale(connection: Connection, account: Account) {
-    this.known.delete(keyOf(connection, account));
+    this.known.delete(metersKey(connection, account));
   }
 
   close() {

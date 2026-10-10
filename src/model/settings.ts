@@ -7,6 +7,7 @@ import type { ToggleValues } from './prompt';
 // One settings object per account, at a fixed id, so two devices that create it at once meet in a
 // version conflict instead of making two.
 export const SETTINGS_ID = '00000000-0000-4000-8000-000000000000';
+export const EMPTY_SETTINGS: Settings = { models: {} };
 
 // prompt: the default prompt, absent only until the starter prompt is added; translatePrompt the default translation
 // prompt, memoryPrompt the default memory prompt and illustratePrompt the default 삽화 prompt, likewise. persona: the default persona, absent for none. toggles:

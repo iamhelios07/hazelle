@@ -59,7 +59,7 @@ function stubFetch() {
   });
 }
 
-// What ReplyStream calls upstream gets the relay's answers too, so a test says once what the provider answers.
+// What the stream box calls upstream gets the relay's answers too, so a test says once what the provider answers.
 const viaStreams: Upstream = async (url, { method, headers, body, signal }) => {
   // The server's own price fetch leaves through the same outbound; runtime tests price nothing.
   if (url.origin === 'https://models.dev') return Response.json({});

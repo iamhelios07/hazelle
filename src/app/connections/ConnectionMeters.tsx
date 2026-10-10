@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { resolveConnection } from '../../connectors/registry';
 import type { Account, Connection, Meter, MeterReset, MeterUnit } from '../../connectors/types';
 import type { MetersResult } from '../../runtime/meters';
+import { metersKey } from '../../runtime/pool';
 import { pace, verdict } from '../../model/pace';
 import { ACTS } from '../common/acts';
 import { describeMetersFailure } from '../common/failure';
@@ -52,7 +53,7 @@ export function useMeters(connection: Connection, account: Account): { result: M
   const { credentials } = useSession();
   const [result, setResult] = useState<MetersResult | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const key = JSON.stringify([connection.type, connection.baseUrl, account.secret]);
+  const key = metersKey(connection, account);
   useEffect(() => {
     let current = true;
     setResult(null);

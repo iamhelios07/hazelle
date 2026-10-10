@@ -3,7 +3,7 @@ import { embedRoute } from '../connectors/registry';
 import type { Model } from '../connectors/types';
 import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
-import { SETTINGS_ID } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { chatPrompt } from './prompts';
 import { without } from '../model/fields';
@@ -65,5 +65,5 @@ export function setTaskModel(store: ObjectStore, prompt: string, ref: ModelRef |
 }
 
 export function setDefaultModel(store: ObjectStore, role: Role, ref: ModelRef | null): Promise<ApiResult<Stored<'settings'>>> {
-  return store.upsert('settings', (current) => ({ ...current, models: assign(current?.models ?? {}, role, ref) }));
+  return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, models: assign(current.models, role, ref) }));
 }

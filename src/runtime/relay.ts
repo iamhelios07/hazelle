@@ -95,7 +95,7 @@ async function readJson(response: Response | RelayFailure, signal?: AbortSignal)
   }
 }
 
-// A generation call through its ReplyStream on the server (tech-spec §6, Detached replies), which goes on when this
+// A generation call through server/stream-box (tech-spec §6, Detached replies), which goes on when this
 // page stops reading. With a request it starts the call; without one it reads the call already started, from the
 // start. key: the call's private key; public: its public half, to start.
 // started: told once the server holds the call, before any of it is read. bot: the chat whose bot's script makes the

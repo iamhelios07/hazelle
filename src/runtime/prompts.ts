@@ -6,7 +6,7 @@ import type { Chat } from '../model/chat';
 import type { Stored } from '../model/kinds';
 import { live } from '../model/library';
 import { sortOf, type Block, type ConversationPrompt, type PictureSettings, type PictureTags, type Prompt, type PromptOf, type PromptSort, type Toggle } from '../model/prompt';
-import { SETTINGS_ID, type Settings } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
 import { fromBase64 } from '../vault/aead';
 import type { ApiFailure, ApiResult } from './api';
 import { markDeleted } from './removal';
@@ -104,7 +104,7 @@ export async function addDefaults(store: ObjectStore): Promise<void> {
     }),
   );
   if (added.flat().length === 0) return;
-  await store.upsert('settings', (current) => added.flat().reduce((next, { setting, id }) => (next[setting] === undefined ? { ...next, [setting]: id } : next), { models: {}, ...current }));
+  await store.upsert('settings', (current = EMPTY_SETTINGS) => added.flat().reduce((next, { setting, id }) => (next[setting] === undefined ? { ...next, [setting]: id } : next), current));
 }
 
 // The user's own Risu preset "🏓 핑퐁 간소화", through the one preset converter.
@@ -150,5 +150,5 @@ export const isDefaultPrompt = (settings: Settings, prompt: Stored<'prompt'>) =>
 export function setDefaultPrompt(store: ObjectStore, id: string): Promise<ApiResult<Stored<'settings'>>> {
   const prompt = store.get('prompt', id);
   if (!prompt) return Promise.resolve({ ok: false, error: 'gone' });
-  return store.upsert('settings', (current) => ({ models: {}, ...current, [DEFAULTS[sortOf(prompt.value)].setting]: id }));
+  return store.upsert('settings', (current = EMPTY_SETTINGS) => ({ ...current, [DEFAULTS[sortOf(prompt.value)].setting]: id }));
 }
