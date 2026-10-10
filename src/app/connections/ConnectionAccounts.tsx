@@ -40,7 +40,7 @@ export function ConnectionAccounts({ id, connection, signIn }: { id: string; con
     <Section
       title="계정"
       note={next ? `${monthDay(next.startsAt)}에 ${next.group.name} 차례` : undefined}
-      hint={HELP}
+      help={HELP}
       action={
         <Button variant="secondary" size="sm" icon={Plus} onClick={() => setSigning({ for: null })}>
           계정 추가

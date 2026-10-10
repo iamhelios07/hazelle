@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useRef, type ReactNode } from 'react';
+import { ButtonSlot } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
 import { Kbd } from '../foundation/Kbd';
 import { keyCaps, type Chord } from '../foundation/keys';
@@ -32,12 +33,14 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
   const body = actions ? (
     <Stack gap={actionsLayout === 'full' ? 'related' : 'group'}>
       {children}
-      {actionsLayout === 'full' ? actions : <Row kind="actions">{actions}</Row>}
+      <ButtonSlot value="md">{actionsLayout === 'full' ? actions : <Row kind="actions">{actions}</Row>}</ButtonSlot>
     </Stack>
   ) : (
     children
   );
+  // A dialog opened from a button in a head does not take that head's button size.
   return (
+    <ButtonSlot value={null}>
     <div ref={scrim} className={size === 'wide' ? `${styles.scrim} ${styles.sheet}` : styles.scrim}>
       <div ref={box} className={size === 'wide' ? `${styles.dialog} ${styles.wide}` : styles.dialog} role="dialog" aria-modal="true" aria-label={title} onKeyDown={trap}>
         <div className={styles.head}>
@@ -60,9 +63,10 @@ export function Dialog({ title, note, onClose, onSubmit, actions, actionsLayout 
             body
           )}
         </div>
-        {footer && <div className={styles.footer}>{footer}</div>}
+        {footer && <div className={styles.footer}><ButtonSlot value="md">{footer}</ButtonSlot></div>}
       </div>
     </div>
+    </ButtonSlot>
   );
 }
 

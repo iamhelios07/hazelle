@@ -147,7 +147,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
             </Button>
           </Stack>
         )}
-        <Section level={3} title="복원 기록" hint={report ? undefined : '복원은 그 계정이 보낸 알림에서 시작해요.'}>
+        <Section level={3} title="복원 기록" help={report ? undefined : '복원은 그 계정이 보낸 알림에서 시작해요.'}>
           {restores.failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: restores.reload }}>{restores.failure}</Callout>}
           {restores.data && restores.data.length === 0 && <Empty variant="section">복원한 적이 없어요.</Empty>}
           {restores.data && restores.data.length > 0 && (

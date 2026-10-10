@@ -25,7 +25,7 @@ export function FileSection({ onActed }: { onActed: () => void }) {
     });
 
   return (
-    <Section title="파일 차단" hint="차단한 파일은 어느 계정에서도 올리거나 열 수 없어요.">
+    <Section title="파일 차단" help="차단한 파일은 어느 계정에서도 올리거나 열 수 없어요.">
       <Stack gap="related">
         <TextField label="파일 id" kind="key" value={id} onChange={setId} placeholder="64자리 16진수" error={typed && !valid ? '파일 id는 64자리 16진수예요.' : undefined} />
         <Row kind="actions">

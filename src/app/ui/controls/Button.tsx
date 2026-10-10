@@ -1,11 +1,17 @@
 import type { LucideIcon } from 'lucide-react';
-import type { ReactNode, Ref } from 'react';
+import { createContext, useContext, type ReactNode, type Ref } from 'react';
 import { Icon } from '../foundation/Icon';
 import styles from './Button.module.css';
 
+type Size = 'xs' | 'sm' | 'md' | 'lg';
+
+// A slot that holds buttons decides their size, over what a caller passes: a screen's head, a section's head and a
+// dialog's actions each read one size wherever they stand.
+export const ButtonSlot = createContext<Size | null>(null);
+
 type Props = {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'link' | 'danger';
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: Size;
   type?: 'button' | 'submit';
   icon?: LucideIcon;
   // The name read out, when the text leans on the row around it; it must start with the text shown.
@@ -20,7 +26,8 @@ type Props = {
 };
 
 export function Button({ variant = 'primary', size = 'lg', type = 'button', icon, label, busy = false, disabled = false, popup, expanded, ref, onClick, children }: Props) {
-  const classes = [styles.button, styles[variant], styles[size], busy && styles.busy].filter(Boolean).join(' ');
+  const slot = useContext(ButtonSlot);
+  const classes = [styles.button, styles[variant], styles[slot ?? size], busy && styles.busy].filter(Boolean).join(' ');
   return (
     <button
       ref={ref}

@@ -366,7 +366,7 @@ function FillChoice({ ask, onAnswer }: { ask: Extract<Ask, { kind: 'fill' }>; on
     ask.answer(fill);
   };
   return (
-    <Section title={ask.name} hint="기존 캐릭터의 대화와 설정은 두고 이미지만 이 카드에서 가져와요.">
+    <Section title={ask.name} help="기존 캐릭터의 대화와 설정은 두고 이미지만 이 카드에서 가져와요.">
       <Stack gap="related">
         <Text>Risu에서 가져온 같은 이름의 캐릭터가 있어요.</Text>
         <Row kind="actions">

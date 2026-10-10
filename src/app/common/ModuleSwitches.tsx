@@ -22,7 +22,7 @@ export function ModuleSwitches({ owner, own }: { owner: Owner; own: string[] }) 
 
   if (modules.length === 0) return null;
   return (
-    <Section title={PAGES.modules} hint={WORKS[owner.kind]}>
+    <Section title={PAGES.modules} help={WORKS[owner.kind]}>
       <SettingGroup label={PAGES.modules}>
         {modules.map(({ id: module, value }) => (
           <SettingRow

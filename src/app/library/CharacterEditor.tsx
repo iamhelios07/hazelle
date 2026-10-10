@@ -243,7 +243,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       </Section>
     ),
     greetings: (
-      <Section title={PARTS.greetings.label} hint="새 채팅을 열 때 이 중에서 선택할 수 있어요." action={readingSwitch}>
+      <Section title={PARTS.greetings.label} help="새 채팅을 열 때 이 중에서 선택할 수 있어요." action={readingSwitch}>
         {translatorMissing}
         {translated ? (
           card.greetings.map((greeting, index) => translatedField(`첫인사 ${index + 1}`, greeting, 6))

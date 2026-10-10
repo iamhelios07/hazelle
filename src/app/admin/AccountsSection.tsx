@@ -53,7 +53,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
         <Button variant="ghost" size="sm" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>
         <Button variant="ghost" size="sm" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
       </>}
-      hint="텍스트는 계정이 저장한 내용의 크기, 디스크는 그 내용이 서버에서 차지하는 크기예요."
+      help="텍스트는 계정이 저장한 내용의 크기, 디스크는 그 내용이 서버에서 차지하는 크기예요."
     >
       {failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: reload }}>{failure}</Callout>}
       {data && (

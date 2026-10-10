@@ -24,7 +24,7 @@ export function ReportSection() {
     });
 
   return (
-    <Section title="운영자에게 알리기" hint="이 내용은 종단 간 암호화되지 않고, 운영자가 아이디와 함께 확인해요.">
+    <Section title="운영자에게 알리기" help="이 내용은 종단 간 암호화되지 않고, 운영자가 아이디와 함께 확인해요.">
       <Stack gap="related">
         <TextField
           label="알릴 내용"

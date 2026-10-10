@@ -112,7 +112,7 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
     </List>
   );
   return (
-    <Section title="로어북" note={`${entries.length}개`} hint="대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.">
+    <Section title="로어북" note={`${entries.length}개`} help="대화에 키워드가 나오면 그 항목의 내용이 프롬프트에 들어가요.">
       <Stack gap="related">
         {entries.length >= SEARCH_FROM && <SearchField size="sm" label="로어북 검색" value={words} onChange={setWords} />}
         {listed}

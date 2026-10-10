@@ -62,7 +62,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
         {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정한 모델이 즐겨찾기에 없어요.`}</Callout>}
       </Section>
       {ownModels.length > 0 && (
-        <Section title="프롬프트에서 정한 모델" hint="이 프롬프트의 작업에는 보조 모델 대신 이 모델을 사용해요.">
+        <Section title="프롬프트에서 정한 모델" help="이 프롬프트의 작업에는 보조 모델 대신 이 모델을 사용해요.">
           <List label="프롬프트에서 정한 모델">
             {ownModels.map(({ prompt, task, model }) => (
               <ListItem
@@ -76,7 +76,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
           </List>
         </Section>
       )}
-      <Section title="즐겨찾기한 모델" hint="새로 즐겨찾기한 모델은 기본 설정을 사용해요.">
+      <Section title="즐겨찾기한 모델" help="새로 즐겨찾기한 모델은 기본 설정을 사용해요.">
         {models.length > 0 ? (
           <List label="즐겨찾기한 모델">
             {models.map(({ connection, model, choice }) => (

@@ -17,7 +17,7 @@ export function NoticesSection({ seek }: { seek: boolean }) {
     if (newest !== undefined) void markNoticesSeen(newest);
   }, [newest]);
   return (
-    <Section title={NOTICES.from} hint="이 알림은 종단 간 암호화되지 않아요." seek={seek}>
+    <Section title={NOTICES.from} help="이 알림은 종단 간 암호화되지 않아요." seek={seek}>
       {pages.failure && <Callout tone="warn">{pages.failure}</Callout>}
       {rows && rows.length === 0 && <Empty variant="section">{NOTICES.received} 없음</Empty>}
       {rows && rows.length > 0 && (

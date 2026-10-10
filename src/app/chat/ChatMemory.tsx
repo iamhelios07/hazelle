@@ -139,7 +139,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         level={3}
         title="상태"
         note={view && !holder ? `약 ${tokens(view.tokens.state)} / ${tokens(view.tokens.stateLimit)} 토큰` : undefined}
-        hint="관계, 호칭, 소지품, 부상, 위치 같은 현재 상태예요."
+        help="관계, 호칭, 소지품, 부상, 위치 같은 현재 상태예요."
       >
         {view && !holder && view.tokens.state > view.tokens.stateLimit && <Callout tone="warn">상태가 한도를 넘었어요. 필요 없는 상태를 삭제하거나 줄여 주세요.</Callout>}
         {factGroups(memory.state).flatMap(({ facts }) => facts.map((fact) => <FactRow key={`${fact.about}\n${fact.field}`} chat={id} fact={fact} />))}
@@ -166,7 +166,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         level={3}
         title="설정"
         note={setup.own ? '이 채팅만' : '기본값'}
-        hint={`기본값은 ${inSettings('prompts')}에서 바꿀 수 있어요.`}
+        help={`기본값은 ${inSettings('prompts')}에서 바꿀 수 있어요.`}
         action={
           setup.own && (
             <Button variant="link" size="xs" onClick={() => void revert()}>
@@ -271,7 +271,7 @@ function Threads({ chat, threads, adding }: { chat: string; threads: Thread[]; a
   if (unsaved.length !== drafts.length) setDrafts(unsaved);
   const shown = [...threads, ...unsaved];
   return (
-    <Section level={3} title="미해결 사건" note={`${threads.length}개`} hint="약속, 복선처럼 끝나지 않은 일이에요.">
+    <Section level={3} title="미해결 사건" note={`${threads.length}개`} help="약속, 복선처럼 끝나지 않은 일이에요.">
       {shown.map((thread, index) => (
         <ThreadRow
           key={thread.id}

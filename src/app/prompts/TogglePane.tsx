@@ -28,7 +28,7 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
     <Section
       title="토글"
       note={`${toggles.length}개`}
-      hint="채팅에서 켜고 끄면 조건에 따라 보내는 내용이 바뀌어요."
+      help="채팅에서 켜고 끄면 조건에 따라 보내는 내용이 바뀌어요."
       action={
         <Button variant="ghost" size="sm" icon={Plus} onClick={() => onAdding(true)}>
           새 토글

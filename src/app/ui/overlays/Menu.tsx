@@ -2,6 +2,7 @@ import { Check, type LucideIcon } from 'lucide-react';
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { ChangeSignal } from '../../../change-signal';
 import { Item } from '../collections/Item';
+import { ButtonSlot } from '../controls/Button';
 import { Icon } from '../foundation/Icon';
 import { keepOnScreen, useLayer } from './layers';
 import styles from './Menu.module.css';
@@ -100,7 +101,9 @@ export function Menu({ label, trigger, place = 'below-start', size = 'md', kind 
       {open && (
         <div ref={panel} className={`${styles.menu} ${styles[place]} ${styles[size]} ${kind === 'dialog' ? styles.dialog : ''}`} role={kind} aria-label={label}>
           <Holders.Provider value={held}>
-            <CloseMenu.Provider value={() => close(true)}>{children}</CloseMenu.Provider>
+            <CloseMenu.Provider value={() => close(true)}>
+              <ButtonSlot value={null}>{children}</ButtonSlot>
+            </CloseMenu.Provider>
           </Holders.Provider>
         </div>
       )}

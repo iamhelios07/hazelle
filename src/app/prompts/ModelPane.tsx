@@ -27,7 +27,7 @@ export function ModelPane({ models, defaults, connections, onPick }: Props) {
   const follow = (role: Role) => (role === 'main' || defaults.aux ? DEFAULTS : follows(MODEL_ROLES.main));
   const picker = (role: Role, help?: string) => <RolePicker role={role} help={help} own={models[role]} follow={follow(role)} connections={connections} onPick={(ref) => onPick(role, ref)} />;
   return (
-    <Section title="모델" hint={TUNING}>
+    <Section title="모델" help={TUNING}>
       <SettingGroup label="모델">
         {picker('main')}
         {picker('aux', AUX_HELP)}
@@ -43,7 +43,7 @@ type TaskProps = { task: Task; own: ModelRef | undefined; connections: readonly 
 // A task prompt's own model, the one place its task's model is chosen.
 export function TaskModelPane({ task, own, connections, onPick }: TaskProps) {
   return (
-    <Section title="모델" hint={TUNING}>
+    <Section title="모델" help={TUNING}>
       <SettingGroup label="모델">
         <RolePicker role="aux" label={TASK_LABELS[task]} own={own} follow={AUX} connections={connections} onPick={onPick} />
       </SettingGroup>

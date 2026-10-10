@@ -68,7 +68,7 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
       <Section
         title="태그"
         note={tags ? '직접 지정' : '기본값'}
-        hint="모든 삽화에 넣어요. 작가 태그는 맨 앞에, 품질 태그는 장면 뒤에 붙어요. 가중치({강조}, [약화], 1.5::태그::)에 따라 색이 달라져요."
+        help="모든 삽화에 넣어요. 작가 태그는 맨 앞에, 품질 태그는 장면 뒤에 붙어요. 가중치({강조}, [약화], 1.5::태그::)에 따라 색이 달라져요."
         action={
           tags && (
             <Button variant="link" size="xs" onClick={() => onTags(undefined)}>
@@ -85,7 +85,7 @@ export function PicturePane({ tags, picture = {}, onTags, onPicture }: Props) {
           ))}
         </Stack>
       </Section>
-      <Section title="생성" hint="비워 두면 이미지 모델의 원래 값을 써요.">
+      <Section title="생성" help="비워 두면 이미지 모델의 원래 값을 써요.">
         <SettingGroup label="생성">
           <SettingRow label="샘플러" changed={picture.sampler !== undefined} control={<SamplerMenu draws={draws} chosen={picture.sampler} onPick={(sampler) => onPicture({ ...picture, sampler })} />} />
           {numberRow('steps')}

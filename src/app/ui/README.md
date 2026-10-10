@@ -34,6 +34,34 @@ and only this folder styles elements.**
 - The spacing, type and radius scales are short on purpose: pick the step whose role fits, never add a step between
   two for one component. A size several components share, such as a dot or a control's height, takes a size token.
 
+## Patterns
+
+One kind of thing looks and reads one way on every screen. The kit decides what it can; the rest is held here and in
+`common/acts.ts` (one word and one icon per act, lint refuses the icons elsewhere) and `common/words.ts`.
+
+- **Button sizes belong to their slot.** A `NavBar`'s actions and a `Section`'s action are `sm`, a `Dialog`'s actions
+  and footer `md` (`ButtonSlot`); a caller in a slot passes no `size`. Free-standing buttons keep theirs.
+- **A screen's head:** `{noun} 가져오기` (secondary, `ACTS.import`) before `새 {noun}` (secondary, `ACTS.create`);
+  nothing primary. What is done to the thing the screen shows (사본 만들기, 기본으로 정하기, 삭제 in `tone="warn"`)
+  goes in `NavBar` `menu`, a ⋯, never at the foot of the body. A row opened in place (a lorebook entry, a script)
+  keeps `이 {noun} 삭제` (danger) at its own foot, and a row's own ⋯ is `MoreMenu`.
+- **Words:** 새 X makes a thing of its own, X 추가 adds an entry to its owner's list. Files come in with 가져오기 and go out
+  with 내보내기; 불러오는 중 means loading only. A failure offers 다시 시도. Reset is 기본값으로 되돌리기 in the
+  section's action, a `link`. Stopping is 멈추기.
+- **Rename:** an item named only by its name renames in `NavBar` `rename`; one with more identity (a character, a
+  persona: name and alias) keeps its 이름 field. A row renames from its ⋯ (`ACTS.rename`).
+- **Lists:** a list of places (`List places`) shows a › on each row; a list of the user's own things shows none.
+  Contents go in `description`, where it is used in `aside`; an unused thing says nothing there. Counts read
+  `{label} N개`, joined by ` · `. The default is the `badge` 기본.
+- **Search** comes from `common/useSearch`: the field shows from `SEARCH_FROM` items and stays while words are typed;
+  it stands first in the body's toolbar `Row`, sort and filters beside it. Its no-results `Empty` takes the variant
+  of the list's own empty state.
+- **Nothing here** is `Empty`, a sentence: `{noun}이 없어요.` A failure to load is `Callout tone="warn"` with
+  다시 시도. Loading is a note ending in `…`.
+- **Controls:** on/off is a `Switch`; one of up to four short choices is a segmented `ChoiceGroup`, more is a `Menu`
+  behind a `ChipButton`; chips are for filters. Explanations go behind ⓘ (`help`), never as visible prose.
+- **Width:** item editors and settings pages are `form`; a one-step flow (a key, a sign-in) is `narrow`.
+
 ## Components
 
 | Folder | Component (other exports) | Stylesheet | What it styles |
@@ -55,7 +83,7 @@ and only this folder styles elements.**
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
 | layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
-| layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
+| layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide. Its title, section titles and the words in its boxes share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
 | layout | `Section` | `Section.module.css` | A titled group, at level 2 on a screen or 3 in a side panel, with an optional note, ⓘ explanation and action by its title |
@@ -65,7 +93,7 @@ and only this folder styles elements.**
 | layout | `Stack` | `Stack.module.css` | A column with a named gap: related, group or section |
 | layout | `ToolFrame` | `ToolFrame.module.css` | An opaque-origin tool page that fills the rest of its column (a `fill` Screen or SidePanel); the caller connects its window |
 | layout | `TranslateDesk` | `TranslateDesk.module.css` | 번역기: a bar of choices, then the source and its translation side by side in one box (stacked on a narrow page), each pane with a foot of counts and buttons |
-| controls | `Button` | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner |
+| controls | `Button` (`ButtonSlot`, inside the kit only) | `Button.module.css` | Variants (a link and a delete among them), sizes, the busy spinner; the size a slot decides |
 | controls | `Checkbox` | `Checkbox.module.css` | A labeled checkbox, with a note after its label; dimmed when it cannot be ticked |
 | controls | `ChipButton` | `ChipButton.module.css` | A rounded button naming a menu's current choice, shaped like a field for a setting, or borderless in the composer; with a leading icon or face |
 | controls | `ChoiceGroup` | `ChoiceGroup.module.css` | Chips, equal buttons, a segmented strip, or a list with a line under each, for one choice; a shown label sits beside it in a toolbar, and above chips as a field's does |
@@ -94,7 +122,7 @@ and only this folder styles elements.**
 | collections | `FolderRow` (`TreeRow`) | `FolderRow.module.css` | A folder's row and the rows inside it, hung from its guide line |
 | collections | `Item.tsx` (inside the kit only) | `Item.module.css` | Every row picked from a list, which `ItemRow`, `NavRow`, `FolderRow`, `ListItem`, `MenuItem` and `Tab` fill: its leading, title, meta, preview and trailing slots, four densities (chip, compact, regular, tall), the sidebar's, lists' and menus', and tabs' colours, and the hover and current fills (`--color-item-hover`, `--color-item-current`) |
 | collections | `ItemRow` | `ItemRow.module.css` | A character or chat in the sidebar; 쓰는 중 |
-| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them, in a box or not, or, given keys, only the rows near the view; a model id; a figure at a row's end; a control beside a row, something under a row's text such as a gauge, and rows set in under it |
+| collections | `List` (`ListItem`) | `List.module.css` | A list's rows and the lines between them, in a box or not, a › on each row of a list of places, or, given keys, only the rows near the view; a model id; a figure at a row's end; a control beside a row, something under a row's text such as a gauge, and rows set in under it |
 | collections | `NavGroup` | `NavGroup.module.css` | A set of places in the app, spaced apart from the next set, such as 설정's |
 | collections | `NavRow` | — | A place in the app, at the sidebar's foot or in a layer's sidebar; a part of a prompt above its outline, with what it holds at its end |
 | collections | `Outline` | `Outline.module.css` | A prompt's blocks as a subway map: stops by kind, the line colored by section, add, remove, drag and key reordering |
@@ -106,6 +134,7 @@ and only this folder styles elements.**
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
+| overlays | `MoreMenu` | — | The ⋯ that opens what is done to a thing as a whole, in a screen's head (`NavBar` `menu`) or a row |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark, as one choice of several or one of any number checked (`multiple`); a disabled item; a small form opened the same way (kind dialog), and a menu opened inside it |
 | overlays | `Toast` | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys) or error (a warn band, why, where to fix it). Its action's time runs down as a line. Someone else's words, such as a bot's, under their face and name: line breaks kept, four lines until pressed, then whole with a × |

@@ -1,8 +1,9 @@
 import { ArrowLeft, ChevronLeft, X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Button } from '../controls/Button';
+import { Button, ButtonSlot } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
 import { TitleField } from '../controls/TitleField';
+import { MoreMenu } from '../overlays/MoreMenu';
 import { usePane } from './ListDetail';
 import styles from './NavBar.module.css';
 
@@ -13,9 +14,11 @@ export type NavBarProps = {
   subtitle?: ReactNode;
   status?: string;
   actions?: ReactNode;
+  // MenuItems for the thing the screen shows, under a ⋯ after the actions.
+  menu?: { label: string; items: ReactNode };
 } & Back;
 
-export function NavBar({ title, rename, subtitle, status, backLabel, onBack, named = false, close = false, actions }: NavBarProps) {
+export function NavBar({ title, rename, subtitle, status, backLabel, onBack, named = false, close = false, actions, menu }: NavBarProps) {
   const pane = usePane();
   const inPane = named && pane === 'detail';
   const back =
@@ -48,7 +51,8 @@ export function NavBar({ title, rename, subtitle, status, backLabel, onBack, nam
           {status}
         </span>
       )}
-      {actions}
+      <ButtonSlot value="sm">{actions}</ButtonSlot>
+      {menu && <MoreMenu label={menu.label}>{menu.items}</MoreMenu>}
     </div>
   );
 }
