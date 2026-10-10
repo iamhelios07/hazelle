@@ -95,14 +95,17 @@ export function PromptList({ onPick, inUse, frame }: Props) {
 
   const search = useSearch(prompts, '프롬프트 검색', (prompt) => [promptName(prompt.value.name)]);
 
+  const adding = (
+    <Button variant="secondary" icon={ACTS.create.icon} onClick={() => add(shown)}>
+      {NEW_NAME[shown]}
+    </Button>
+  );
   const actions = (
     <Row kind="actions">
       <FileButton accept=".risup,.risupreset" icon={ACTS.import.icon} onFile={(file) => preset.take([file])}>
         Risu 프리셋 가져오기
       </FileButton>
-      <Button variant="secondary" icon={ACTS.create.icon} onClick={() => add(shown)}>
-        {NEW_NAME[shown]}
-      </Button>
+      {adding}
     </Row>
   );
   const body = (
@@ -154,7 +157,9 @@ export function PromptList({ onPick, inUse, frame }: Props) {
       ) : top.length ? (
         <List label={`${current.label} 프롬프트`}>{top.map(row)}</List>
       ) : (
-        <Empty variant="section">{current.none}</Empty>
+        <Empty variant="section" action={adding}>
+          {current.none}
+        </Empty>
       )}
       {preset.view}
     </>

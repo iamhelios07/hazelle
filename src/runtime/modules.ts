@@ -37,6 +37,10 @@ export const modulesOf = (store: Pick<ObjectStore, 'list'>): Stored<'module'>[] 
 
 const switched = (ids: string[] | undefined, id: string, on: boolean) => [...(ids ?? []).filter((each) => each !== id), ...(on ? [id] : [])];
 
+export function editModule(store: ObjectStore, id: string, patch: { name?: string; description?: string }): Promise<ApiResult<Stored<'module'>>> {
+  return store.update('module', id, (current) => ({ ...current, ...patch }));
+}
+
 export function setModuleAlways(store: ObjectStore, id: string, on: boolean): Promise<ApiResult<Stored<'settings'>>> {
   return store.upsert('settings', (current) => ({ models: {}, ...current, modules: switched(current?.modules, id, on) }));
 }

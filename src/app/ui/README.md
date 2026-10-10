@@ -57,7 +57,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 - **Search** comes from `common/useSearch`: the field shows from `SEARCH_FROM` items and stays while words are typed;
   it stands first in the body's toolbar `Row`, sort and filters beside it. Its no-results `Empty` takes the variant
   of the list's own empty state.
-- **Nothing here** is `Empty`, a sentence: `{noun}이 없어요.` A failure to load is `Callout tone="warn"` with
+- **Nothing here** is `Empty`, a sentence: `{noun}이 없어요.` An empty list of one's own things offers its first step as `Empty action` (the head's own 새 X or X 가져오기). A failure to load is `Callout tone="warn"` with
   다시 시도. Loading is a note ending in `…`.
 - **Controls:** on/off is a `Switch`; one of up to four short choices is a segmented `ChoiceGroup`, more is a `Menu`
   behind a `ChipButton`; chips are for filters. Explanations go behind ⓘ (`help`), never as visible prose.
@@ -147,7 +147,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | feedback | `Callout` | `Callout.module.css` | A warning or success note, with an optional action under it |
 | feedback | `CodeBlock` | `CodeBlock.module.css` | Text as a program sent it, such as a request's address and body in 요청 원문; in body letters, what a prompt example gives |
 | feedback | `CodeCard` | `CodeCard.module.css` | A code to copy, such as the recovery key |
-| feedback | `Empty` | `Empty.module.css` | What stands where a list, grid, pane or panel has nothing to show, in the look of where it stands: a body, a section, the story, the pane beside a list, the sidebar or a menu |
+| feedback | `Empty` | `Empty.module.css` | What stands where a list, grid, pane or panel has nothing to show, in the look of where it stands: a body, a section, the story, the pane beside a list, the sidebar or a menu; the first step out of it under the sentence |
 | feedback | `Gauge` | `Gauge.module.css` | How much of an allowance is used, with a mark where an even use would stand by now, a status word, a note and what is left; figures alone where there is nothing to measure against |
 | feedback | `Intro` | `Intro.module.css` | A screen's large title and lead |
 | feedback | `Outcome` | `Outcome.module.css` | What an import brought and did not, a line each with why under it |

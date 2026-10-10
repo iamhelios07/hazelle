@@ -28,20 +28,13 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
     return [`계정 ${connection.accounts.length}개`, ...(serving && left ? [`지금 ${accountName(serving)}`, left] : [starred])].join(' · ');
   }
 
+  const adding = (
+    <Button variant="secondary" icon={ACTS.create.icon} onClick={() => navigate({ kind: 'add-connection' })}>
+      {newOf('연결')}
+    </Button>
+  );
   return (
-    <Screen
-      top={
-        <NavBar
-          title={PAGES.connections}
-          {...backBar(back)}
-          actions={
-            <Button variant="secondary" icon={ACTS.create.icon} onClick={() => navigate({ kind: 'add-connection' })}>
-              {newOf('연결')}
-            </Button>
-          }
-        />
-      }
-    >
+    <Screen top={<NavBar title={PAGES.connections} {...backBar(back)} actions={adding} />}>
       {unreadable > 0 && <Callout tone="warn">암호화 키로 열리지 않는 항목 {unreadable}개는 목록에서 제외했어요.</Callout>}
       {search.field && <Row kind="toolbar">{search.field}</Row>}
       {search.none ? (
@@ -60,7 +53,9 @@ export function ConnectionsScreen({ back }: { back: Back | null }) {
           ))}
         </List>
       ) : (
-        <Empty variant="section">연결한 제공자가 없어요.</Empty>
+        <Empty variant="section" action={adding}>
+          연결한 제공자가 없어요.
+        </Empty>
       )}
     </Screen>
   );

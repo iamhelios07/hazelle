@@ -1,16 +1,17 @@
 import { ToolSection } from './ToolSection';
 import type { Stored } from '../../model/kinds';
-import { setModuleAlways, setModuleDeleted } from '../../runtime/modules';
+import { editModule, setModuleAlways, setModuleDeleted } from '../../runtime/modules';
 import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import { LoreEditor } from '../common/LoreEditor';
 import { ScriptsEditor } from '../common/ScriptsEditor';
+import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { ALWAYS, BIN_KEEPS, moduleName, promptName } from '../common/words';
 import { useLibrary, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import { characterPage, type Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Avatar, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, useWide } from '../ui';
+import { Avatar, Empty, List, ListItem, MenuItem, NavBar, Screen, Section, SettingGroup, SettingRow, Switch, Text, TextField, useWide } from '../ui';
 import { useHolds } from './ModulesScreen';
 
 const ALWAYS_ON = `${ALWAYS} 켜기`;
@@ -26,6 +27,9 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   const users = useLibrary().characters.filter(({ character }) => character.modules?.includes(id));
   const prompts = usePrompts().filter(({ value }) => value.task === undefined && value.modules?.includes(id));
   const holds = useHolds(stored);
+  const autosave = useAutosave<{ name: string; description: string }>(`module:${id}`, (patch) => editModule(store, id, patch));
+  const name = autosave.unsaved.name ?? value.name;
+  const description = autosave.unsaved.description ?? value.description;
 
   async function setAlways(on: boolean) {
     const saved = await setModuleAlways(store, id, on);
@@ -39,7 +43,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
   function remove() {
     mark(Date.now());
     navigate({ kind: 'modules' });
-    toast.undoable(`'${moduleName(value.name)}' 모듈을 삭제했어요.`, () => mark(null), BIN_KEEPS);
+    toast.undoable(`'${moduleName(name)}' 모듈을 삭제했어요.`, () => mark(null), BIN_KEEPS);
   }
 
   return (
@@ -47,13 +51,15 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
       width="form"
       top={
         <NavBar
-          title={moduleName(value.name)}
+          title={name}
+          rename={{ label: '모듈 이름', placeholder: moduleName(''), onChange: (next) => autosave.change({ name: next }) }}
+          status={autosave.status ? SAVE_STATUS[autosave.status] : undefined}
           {...backBar(back)}
           menu={{ of: '모듈', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
         />
       }
     >
-      {value.description.trim() && <Text>{value.description}</Text>}
+      <TextField label="설명" lines={3} value={description} onChange={(next) => autosave.change({ description: next })} />
       <Text variant="note">{holds}</Text>
       <SettingGroup label={ALWAYS_ON}>
         <SettingRow

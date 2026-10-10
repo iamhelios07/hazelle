@@ -25,3 +25,10 @@
 .menu {
   padding: var(--space-12) var(--space-8);
 }
+
+.withAction {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: var(--space-12);
+}

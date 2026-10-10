@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fold } from '../model/chat';
 import { startChat } from './chat-log';
 import { projectGreetings } from './greetings';
-import { importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleDeleted, setPromptModule } from './modules';
+import { editModule, importModule, modulesOf, setCharacterModule, setModuleAlways, setModuleDeleted, setPromptModule } from './modules';
 import { addPrompt, chatPrompt, ofSort } from './prompts';
 import { answerable, saying, stubRelay, testCard, testServer } from './testing';
 import { evaluateChat, packsOf, togglesOf } from './chat-context';
@@ -73,5 +73,13 @@ describe('modules', () => {
     await setPromptModule(store, prompt.data, both, true);
     await setPromptModule(store, prompt.data, always, true);
     expect(packsOf(store, { character: character.data.id, prompt: prompt.data.id }).map(({ id }) => id)).toEqual([character.data.id, always, both, own]);
+  });
+
+  it('renames a module and rewrites its description, keeping its pack', async () => {
+    const { store, files } = await server.account();
+    const added = await importModule(store, files, { name: 'Bell', description: '', namespace: 'bell', risu: null, pack: { regex: [], triggers: [], toggles: '' }, lore: [], loreFolders: [], assets: [], unsupported: [] }, () => {});
+    if (!added.ok) throw new Error(added.error);
+    await editModule(store, added.data.id, { name: '종', description: '울려요' });
+    expect(store.get('module', added.data.id)!.value).toMatchObject({ name: '종', description: '울려요', namespace: 'bell' });
   });
 });

@@ -1,5 +1,5 @@
 import type { Stored } from '../../model/kinds';
-import { ACTS } from '../common/acts';
+import { ACTS, importOf } from '../common/acts';
 import { counted, packHolds } from '../common/pack';
 import { useSearch } from '../common/useSearch';
 import { ALWAYS, moduleName, PAGES } from '../common/words';
@@ -22,21 +22,13 @@ export function ModulesScreen({ back, onImport }: { back: Back | null; onImport:
   const always = useSettings().modules ?? [];
   const where = (id: string) => counted([['프롬프트', holding(prompts, id)], ['캐릭터', holding(characters, id)]]).join(' · ') || undefined;
   const search = useSearch(modules, '모듈 검색', ({ value }) => [moduleName(value.name)]);
+  const importing = (
+    <Button variant="secondary" icon={ACTS.import.icon} onClick={onImport}>
+      {importOf('모듈')}
+    </Button>
+  );
   return (
-    <Screen
-      width="form"
-      top={
-        <NavBar
-          title={PAGES.modules}
-          {...backBar(back)}
-          actions={
-            <Button variant="secondary" icon={ACTS.import.icon} onClick={onImport}>
-              모듈 가져오기
-            </Button>
-          }
-        />
-      }
-    >
+    <Screen width="form" top={<NavBar title={PAGES.modules} {...backBar(back)} actions={importing} />}>
       {search.field && <Row kind="toolbar">{search.field}</Row>}
       {search.none !== null ? (
         <Empty>{search.none}</Empty>
@@ -47,7 +39,7 @@ export function ModulesScreen({ back, onImport }: { back: Back | null; onImport:
           ))}
         </List>
       ) : (
-        <Empty>모듈이 없어요.</Empty>
+        <Empty action={importing}>모듈이 없어요.</Empty>
       )}
     </Screen>
   );
