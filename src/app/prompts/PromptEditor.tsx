@@ -64,8 +64,7 @@ const REDO = { did: '다시 실행했어요', failed: '다시 실행하지 못�
 
 type Props = {
   stored: Stored<'prompt'>;
-  // The caller
-  // decides, since a side panel is narrow on any screen.
+  // The caller decides, since a side panel is narrow on any screen.
   layout: 'split' | 'drill';
   // The 토글 pane is open: a page keeps it in its address, a panel in its own state.
   pane: Pane;

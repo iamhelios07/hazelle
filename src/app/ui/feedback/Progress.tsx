@@ -97,7 +97,6 @@ function Hero({ steps, title, note }: { steps: ProgressStep[]; title?: string; n
 
 type Props = { steps: ProgressStep[]; hero?: boolean; title?: string; note?: string };
 
-// Work under way, plain as rows or hero as the filling mark with stages; the kit README says which shows what.
 export function Progress({ steps, hero = false, title, note }: Props) {
   if (hero) return <Hero steps={steps} title={title} note={note} />;
   const whole = sum(steps);

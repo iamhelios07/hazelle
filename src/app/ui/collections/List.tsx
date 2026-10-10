@@ -44,7 +44,6 @@ type ItemProps = {
   // With onClick the whole row is one button, so trailing must not hold a control then.
   onClick?: () => void;
   control?: ReactNode;
-  // Under the row's text, such as a gauge.
   detail?: ReactNode;
   children?: ReactNode;
   // pressed: one of a set of choices. current: the item open beside the list (ListDetail). expanded: the row opens

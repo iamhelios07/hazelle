@@ -13,7 +13,6 @@ type Props = {
   foot?: ReactNode;
 };
 
-// A picture made for a message (삽화), in its Story's inlay. 이미지 가리기 covers it as it does the story's own.
 export function StoryPicture({ src, label, width, height, status, foot }: Props) {
   const veil = useVeil();
   // A tapped veil changes only veil.revealed, which no render sees.

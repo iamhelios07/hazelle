@@ -41,9 +41,8 @@ export function redoing(history: History, draft: Draft): Turned | null {
   return turned(step, step.redo(draft), { done: [...history.done, step], undone }, { done: history.done, undone });
 }
 
-// Adding is put
-// then take to undo, removing the other way round. joining: the item as it may stand among the others now, under
-// the rules adding one keeps, or why it may not.
+// Adding is put then take to undo, removing the other way round. joining: the item as it may stand among the others
+// now, under the rules adding one keeps, or why it may not.
 function presence<T extends object>(item: T, at: number, same: (a: T, b: T) => boolean, joining: (items: readonly T[], item: T) => T | Refused) {
   let kept = item;
   return {

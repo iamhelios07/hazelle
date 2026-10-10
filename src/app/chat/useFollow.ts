@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { READER_RESIZED, ROWS_RESIZED, type Seek } from '../ui';
 
-// It stays
-// there until it is well above, and comes back only at the very end, so scrolling into the band does not snap it down.
+// The view at the end stays there until it is well above, and comes back only at the very end, so scrolling into the
+// band does not snap it down.
 export const atEnd = (distance: number, was: boolean) => distance < (was ? 48 : 1);
 
 // stay (보낸 자리에 멈추기): a reply starting here puts answered, the message it answers, at the top, and from then on nothing

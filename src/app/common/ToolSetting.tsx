@@ -9,7 +9,6 @@ import { readTyped } from './typedNumber';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
 import { TOOL_FIELD_CHANGED } from './words';
 
-// A tool's //@setting field, on its module's page and, marked composer, in the chat's composer.
 const readNumber = (text: string) => {
   const typed = readTyped(text, false);
   return typed.ok ? typed.value : null;

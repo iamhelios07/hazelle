@@ -2,8 +2,7 @@ import { CONNECTION_TYPES } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import type { Shelf } from '../../model/library';
 
-// These paths are what a reload, a bookmark and
-// the browser's back button land on, so an existing one never changes.
+// These paths are what a reload, a bookmark and the browser's back button land on, so an existing one never changes.
 export type Route =
   | { kind: 'home' }
   | { kind: 'gallery' }
@@ -18,8 +17,7 @@ export type Route =
   // '' when there was none.
   | { kind: 'connect-direct'; address: string }
   | { kind: 'connection'; id: string }
-  // pane opens the editor on its 토글 pane, which the
-  // chat's toggle panel links to.
+  // pane opens the editor on its 토글 pane, which the chat's toggle panel links to.
   | { kind: 'prompts' }
   | { kind: 'prompt'; id: string; pane: 'toggles' | null }
   | { kind: 'personas' }
@@ -212,8 +210,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
 
 export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'translator' | 'account' | 'admin';
 
-// 'list' for 설정's own list, or null outside 설정. While it is not null, the
-// settings layer stands in for the library.
+// 'list' for 설정's own list, or null outside 설정. While it is not null, the settings layer stands in for the library.
 export function settingsPage(route: Route): SettingsPage | 'list' | null {
   switch (route.kind) {
     case 'prompts':
@@ -266,8 +263,8 @@ export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
   return wide && latest ? { kind: 'chat', id: latest.id } : { kind: 'shelf', character: shelf.id };
 }
 
-// On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is
-// the way back), so only phones use their answer.
+// On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is the way back), so only phones
+// use their answer.
 export function up(route: Below, chatShelf?: string | null): Route {
   switch (route.kind) {
     case 'gallery':

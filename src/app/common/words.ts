@@ -2,8 +2,8 @@ import type { Role } from '../../connectors/assignment';
 import type { RegexScript } from '../../engine/import/types';
 import { KEEP_DAYS } from '../../model/library';
 
-// Sentences stay in their
-// screen and are built from these; the phrases these replaced are refused by lint (RETIRED_COPY in eslint.config.js).
+// Sentences stay in their screen and are built from these; the phrases these replaced are refused by lint
+// (RETIRED_COPY in eslint.config.js).
 // Kept apart on purpose, not variants of one word: 빼기 takes out of a list, 삭제 deletes. 편집 opens an item's
 // editor, 수정 changes a message in place. 다시 생성 asks for another reply, 다시 시도 repeats a failed or stopped
 // one. 컨텍스트 길이 is the model's own, 컨텍스트 한도 the setting. 원문 is what a translation came from, 요청 원문

@@ -1,8 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { href, parseRoute, type Back, type Route } from './routes';
 
-// A router
-// library would add nothing for a handful of fixed paths.
+// A router library would add nothing for a handful of fixed paths.
 const NAVIGATED = 'risu-alpha:navigate';
 
 function subscribe(listener: () => void) {
