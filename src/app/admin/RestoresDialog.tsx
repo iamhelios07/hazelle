@@ -164,7 +164,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
                     aside={ago(restore.updatedAt)}
                     trailing={
                       (restore.actions.length > 0 || undoable) && (
-                        <MoreMenu label="복원 관리">
+                        <MoreMenu of="복원">
                           {restore.actions.map((action) => (
                             <MenuItem key={action} icon={action === 'cancel' ? X : Play} label={ACTIONS[action].label} sub={ACTIONS[action].sub} onClick={() => act(restore, action)} />
                           ))}

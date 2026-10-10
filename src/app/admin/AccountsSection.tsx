@@ -68,7 +68,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
                 tags={[...(others ? [] : ['운영자']), ...(state ? [state] : []), ...(account.suspended ? ['정지됨'] : [])]}
                 description={`${monthDay(account.createdAt)} 가입 · ${held('텍스트', account.bytes, account.bytesCap)} · 디스크 ${size(account.disk)} · ${held('이미지', account.fileBytes, account.fileBytesCap)}`}
                 trailing={
-                  <MoreMenu label={`${account.username} 관리`}>
+                  <MoreMenu of={account.username}>
                     {account.state === 'leaving' ? (
                       <MenuItem icon={ACTS.remove.icon} label="탈퇴 마무리" sub="중단된 탈퇴를 완료해요" tone="warn" onClick={() => setRemoving(account)} />
                     ) : (

@@ -161,7 +161,7 @@ function AccountRow({ connection, account, group, at, turn, waiting, change, onS
       description={result ? meterProblem(result) : '사용량 불러오는 중…'}
       detail={result && result.meters.length > 0 && <MeterLines result={result} turn={turn} waiting={waiting} />}
       trailing={
-        <MoreMenu label={`${name} 메뉴`}>
+        <MoreMenu of={name}>
           <MenuItem icon={ArrowUp} label="위로" disabled={at === 0} onClick={() => change((turns) => moveAccountOrder(turns, account.id, -1))} />
           <MenuItem icon={ArrowDown} label="아래로" disabled={at === group.accounts.length - 1} onClick={() => change((turns) => moveAccountOrder(turns, account.id, 1))} />
           {others.map((other) => (
@@ -181,7 +181,7 @@ type GroupMenuProps = { turns: Turns; group: Group; current: boolean; change: (c
 function GroupMenu({ turns, group, current, change, onRename }: GroupMenuProps) {
   const position = schedule(turns, Date.now()).timeline.findIndex((entry) => entry.group.id === group.id);
   return (
-    <MoreMenu label={`${group.name} 메뉴`}>
+    <MoreMenu of={group.name}>
       <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={onRename} />
       <MenuItem label="지금 차례로" disabled={current} onClick={() => change((current) => takeTurn(current, group.id, Date.now()))} />
       <MenuItem icon={ArrowUp} label="앞 차례로" disabled={position < 2} onClick={() => change((current) => moveGroup(current, group.id, -1, Date.now()))} />

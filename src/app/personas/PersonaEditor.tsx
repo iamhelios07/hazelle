@@ -75,6 +75,6 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} />
     </>
   );
-  const menu = settings.persona === id ? undefined : { label: '페르소나 더 보기', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} /> };
+  const menu = settings.persona === id ? undefined : { of: '페르소나', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} /> };
   return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body });
 }

@@ -83,7 +83,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const embeds = !('kind' in embedModel(store));
   const rows = memoryRows(memory);
   const more = (
-    <MoreMenu label="장기 기억 메뉴">
+    <MoreMenu of="장기 기억">
       <MenuItem label="원문에서 전부 다시 만들기" onClick={() => setRebuilding(true)} />
     </MoreMenu>
   );

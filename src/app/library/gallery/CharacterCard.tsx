@@ -27,7 +27,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
   const card = useMenuOpener(handle);
   const shows = picked === null && busy === null;
   const menu = (
-    <MoreMenu handle={handle} label={`${name} 메뉴`}>
+    <MoreMenu handle={handle} of={name}>
       {binned ? (
         <>
           <MenuItem icon={ACTS.restore.icon} label={ACTS.restore.label} onClick={() => actions.restore(binnedCharacter(shelf))} />

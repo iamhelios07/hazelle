@@ -24,7 +24,7 @@ export function BinnedRow({ item, face, description, mark, busy, actions, onPurg
       aside={busy ?? timeLeft(mark)}
       trailing={
         busy === null && (
-          <MoreMenu label={`${item.name} 메뉴`}>
+          <MoreMenu of={item.name}>
             <MenuItem icon={ACTS.restore.icon} label={ACTS.restore.label} onClick={() => actions.restore(item)} />
             <MenuItem icon={ACTS.remove.icon} label="영구 삭제" tone="warn" onClick={onPurge} />
           </MoreMenu>

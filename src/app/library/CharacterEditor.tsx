@@ -333,7 +333,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const subtitle = card.creator ? `제작자 ${card.creator}` : undefined;
   const copying = busy?.id === id ? busy.label : null;
   const menu = {
-    label: '캐릭터 메뉴',
+    of: '캐릭터',
     items: (
       <>
         <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} disabled={busy !== null} onClick={() => void copy(shelf)} />

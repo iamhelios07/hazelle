@@ -49,7 +49,7 @@ export function ModuleScreen({ stored, back }: { stored: Stored<'module'>; back:
         <NavBar
           title={moduleName(value.name)}
           {...backBar(back)}
-          menu={{ label: '모듈 더 보기', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
+          menu={{ of: '모듈', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
         />
       }
     >

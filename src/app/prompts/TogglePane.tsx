@@ -51,7 +51,7 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
                   ) : (
                     <ToggleChoice label={`${toggle.label} 기본값`} options={toggle.options} value={toggle.default} onChange={(value) => onEdit(toggle, { ...toggle, default: value }, 'default')} />
                   )}
-                  <MoreMenu label={`'${toggle.label}' 더 보기`}>
+                  <MoreMenu of={`'${toggle.label}'`}>
                     <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setRenaming({ key: toggle.key, field: 'label' })} />
                     <MenuItem label="키 바꾸기" sub="조건에 쓴 키도 바뀌어요" onClick={() => setRenaming({ key: toggle.key, field: 'key' })} />
                     <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onRemove(toggle.key)} />

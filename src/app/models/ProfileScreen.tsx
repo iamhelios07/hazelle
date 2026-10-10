@@ -296,7 +296,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           {...backBar(back)}
           status={status ? SAVE_STATUS[status] : undefined}
           menu={{
-            label: '설정 더 보기',
+            of: '설정',
             items: (
               <>
                 <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />

@@ -83,7 +83,7 @@ export function BlockPane({ block, sort, index, count, toggles, authorNote, onCh
             </Menu>
           )}
           {block.kind === 'text' && <CommandMenu sort={sort} onInsert={onInsert} />}
-          <MoreMenu label={`'${title}' 더 보기`}>
+          <MoreMenu of={`'${title}'`}>
             {block.kind === 'text' && sort === 'conversation' && (
               <>
                 <MenuHeading>카드 내용으로 대체</MenuHeading>

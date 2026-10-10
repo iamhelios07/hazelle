@@ -410,7 +410,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     backLabel,
     status,
     menu: {
-      label: '프롬프트 더 보기',
+      of: '프롬프트',
       items: (
         <>
           <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />

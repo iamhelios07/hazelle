@@ -137,7 +137,7 @@ export function LoreEditor({ owner, folders }: { owner: PackOwner; folders: Lore
 
 function FolderItem({ name, count, menu, children }: { name: string; count: number; menu: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  return <ListItem title={name} aside={`${count}개`} expanded={open} onClick={() => setOpen(!open)} control={<MoreMenu label={`'${name}' 더 보기`}>{menu}</MoreMenu>} detail={open && <Stack gap="related">{children}</Stack>} />;
+  return <ListItem title={name} aside={`${count}개`} expanded={open} onClick={() => setOpen(!open)} control={<MoreMenu of={`'${name}'`}>{menu}</MoreMenu>} detail={open && <Stack gap="related">{children}</Stack>} />;
 }
 
 type RowProps = { stored: Stored<'lore'>; folders: LoreFolder[]; startOpen: boolean };

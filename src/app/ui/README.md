@@ -137,7 +137,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | overlays | `Dialog` (`Shortcuts`) | `Dialog.module.css` | A small window over the page and its actions; the 단축키 list |
 | overlays | `DropOverlay` | `DropOverlay.module.css` | The drop target while files are dragged in |
 | overlays | `useFileDrop.ts` | — | Whether files are being dragged over the window, and the files dropped; a screen's own drop over the app's |
-| overlays | `MoreMenu` | — | The ⋯ that opens what is done to a thing as a whole, in a screen's head (`NavBar` `menu`) or a row |
+| overlays | `MoreMenu` | — | The ⋯ that opens what is done to a thing as a whole, in a screen's head (`NavBar` `menu`) or a row, named '{of} 메뉴' |
 | overlays | `Hint` | `Hint.module.css` | An ⓘ that shows an explanation: after a moment's hover while the pointer stays, or pinned by a click or tap |
 | overlays | `Menu` (`MenuItem`, `MenuHeading`, `useMenuHandle`, `useMenuOpener`, `useMenuClose`) | `Menu.module.css` | Menus opened from a button, each keeping its own open state; a handle shares it with other buttons that open the menu; a checked item's mark, as one choice of several or one of any number checked (`multiple`); a disabled item; a small form opened the same way (kind dialog), and a menu opened inside it |
 | overlays | `Toast` | `Toast.module.css` | A notice on a light card: plain (message, detail, one action with its keys) or error (a warn band, why, where to fix it). Its action's time runs down as a line. Someone else's words, such as a bot's, under their face and name: line breaks kept, four lines until pressed, then whole with a × |

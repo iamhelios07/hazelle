@@ -44,7 +44,7 @@ export function FolderTabs({ filter, onFilter, folder, onName }: Props) {
         </Tabs>
         {!binned && <IconButton icon={FolderPlus} label="새 폴더" size="sm" onClick={() => onName({ id: null, name: '' })} />}
         {folder && (
-          <MoreMenu label={`${folder.value.name} 폴더 메뉴`}>
+          <MoreMenu of={`${folder.value.name} 폴더`}>
             <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => onName({ id: folder.id, name: folder.value.name })} />
             {folder === top && <MenuItem icon={SubfolderIcon} label={newOf('하위 폴더')} onClick={() => onName({ id: null, name: '', parent: folder })} />}
             <MenuItem icon={ACTS.remove.icon} label="폴더 삭제" tone="warn" onClick={() => drop(folder)} />

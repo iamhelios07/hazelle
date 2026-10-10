@@ -132,7 +132,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           title={connection.label}
           subtitle={subtitle}
           {...backBar(back)}
-          menu={{ label: '연결 더 보기', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
+          menu={{ of: '연결', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
         />
       }
     >

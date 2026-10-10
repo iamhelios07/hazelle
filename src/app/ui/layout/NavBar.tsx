@@ -15,7 +15,7 @@ export type NavBarProps = {
   status?: string;
   actions?: ReactNode;
   // MenuItems for the thing the screen shows, under a ⋯ after the actions.
-  menu?: { label: string; items: ReactNode };
+  menu?: { of: string; items: ReactNode };
 } & Back;
 
 export function NavBar({ title, rename, subtitle, status, backLabel, onBack, named = false, close = false, actions, menu }: NavBarProps) {
@@ -52,7 +52,7 @@ export function NavBar({ title, rename, subtitle, status, backLabel, onBack, nam
         </span>
       )}
       <ButtonSlot value="sm">{actions}</ButtonSlot>
-      {menu && <MoreMenu label={menu.label}>{menu.items}</MoreMenu>}
+      {menu && <MoreMenu of={menu.of}>{menu.items}</MoreMenu>}
     </div>
   );
 }
