@@ -1,7 +1,8 @@
-import { inlayType, readInlays, SIGNATURE, type Inlays } from '../engine/import/backup';
+import { SIGNATURE } from '../engine/assets';
+import { fileSource, inlayType, readInlays, type Inlays } from '../engine/import/backup';
 import { counted } from '../engine/import/convert';
 import { inlayIds } from '../engine/import/risu-character';
-import { MOVE_UNSUPPORTED_KINDS, type BackupCatalog, type BackupSource, type Card, type Imported, type ImportReport, type MoveUnsupported, type RisuBackup, type RisuChat } from '../engine/import/types';
+import { MOVE_UNSUPPORTED_KINDS, type BackupCatalog, type Card, type Imported, type ImportReport, type MoveUnsupported, type RisuBackup, type RisuChat } from '../engine/import/types';
 import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';
 import type { Asset } from '../model/library';
@@ -220,17 +221,12 @@ export async function sortRisuFiles(dropped: File[]): Promise<{ backups: File[];
   const backups: File[] = [];
   let inlays: Inlays | null = null;
   for (const file of dropped) {
-    const read: Inlays | null = inlays ? null : await readInlays(sourceOf(file));
+    const read: Inlays | null = inlays ? null : await readInlays(fileSource(file));
     if (read) inlays = read;
     else backups.push(file);
   }
   return { backups, inlays };
 }
-
-const sourceOf = (file: File): BackupSource => ({
-  size: file.size,
-  read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
-});
 
 // chats: those gone through, of total; pictures: inlays added; missed: inlays named but not added (the export lacked
 // them, they are video or audio, or the account's picture cap refused them); unread: chats whose history did not read.

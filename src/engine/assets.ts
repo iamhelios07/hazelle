@@ -20,6 +20,8 @@ export const resolveAssets = (text: string, url: PictureUrl) => text.replace(PIC
 export const inlayMissing = '<span data-inlay-missing></span>';
 export const inlayPicture = (id: string) => `<img src="${pictureRef('inlay', id)}">`;
 export const inlayBlock = (id: string) => `<div class="risu-inlay-image">${inlayPicture(id)}</div>`;
+// The type of an inlay holding a Gemini thought signature's item, which is no picture.
+export const SIGNATURE = 'signature';
 const pattern = (markup: string) => markup.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('@', ID);
 // Sticky: it matches only where its lastIndex stands. Group 1: the wrapped picture, a block of its own.
 export const INLAY_MARKUP = new RegExp(`${pattern(inlayMissing)}|(${pattern(inlayBlock('@'))})|${pattern(inlayPicture('@'))}`, 'y');

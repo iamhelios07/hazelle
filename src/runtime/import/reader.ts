@@ -1,16 +1,11 @@
 import { readTool, TOOL_FILE_BYTES } from '../../engine/import/tool';
-import { readBackup } from '../../engine/import/backup';
+import { fileSource, readBackup } from '../../engine/import/backup';
 import { importCard } from '../../engine/import/card';
 import { risuChatFile } from '../../engine/import/risu-character';
 import { readChatFile } from '../chat-file';
-import type { BackupSource, Imported, ImportedModule, Picture, RisuBackup, RisuChat } from '../../engine/import/types';
+import type { Imported, ImportedModule, Picture, RisuBackup, RisuChat } from '../../engine/import/types';
 import { MESSAGE_BYTES, MESSAGE_PAGE, type AssetRead, type CardData, type Method, type ModuleData, type Replies, type Request } from './protocol';
 
-// A backup can exceed memory; indexing reads slices, never an arrayBuffer of the whole archive.
-const sourceOf = (file: File): BackupSource => ({
-  size: file.size,
-  read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
-});
 
 // null for a JSON that is no file of chats, which importCard then reads as a card, parsing it again.
 function chatsOf(bytes: Uint8Array<ArrayBuffer>): Replies['card'] | null {
@@ -39,7 +34,7 @@ export class ImportReader {
       case 'backup': {
         this.clear();
         this.backup = null;
-        const result = await readBackup(request.files.map(sourceOf));
+        const result = await readBackup(request.files.map(fileSource));
         if (!result.ok) return result;
         this.backup = result.backup;
         return { ok: true, catalog: result.backup.catalog };

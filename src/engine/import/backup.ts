@@ -1,4 +1,5 @@
 import { isRecord, list } from '../../connectors/values';
+import { SIGNATURE } from '../assets';
 import { imageType } from './card';
 import { add, convertModule, counted, record, text, type Json, type Tally } from './convert';
 import { gunzip } from './inflate';
@@ -109,11 +110,16 @@ export async function readInlays(source: BackupSource): Promise<Inlays | null> {
 }
 
 // assets: an entry per id, which reads null for one the file lacks.
+// A backup can exceed memory; indexing reads slices, never an arrayBuffer of the whole archive.
+export const fileSource = (file: File): BackupSource => ({
+  size: file.size,
+  read: async (offset, length) => new Uint8Array(await file.slice(offset, offset + length).arrayBuffer()),
+});
+
 export type Inlays = { assets(ids: string[]): Imported['assets'] };
 
 const INLAY = 'inlay_';
 const INLAY_SKIPPED = `${INLAY}skipped.json`;
-export const SIGNATURE = 'signature';
 
 // A picture's type, or SIGNATURE for a Gemini thought signature's item; only an inlay is stored as either.
 export function inlayType(bytes: Uint8Array): string | null {

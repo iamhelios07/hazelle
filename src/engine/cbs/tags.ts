@@ -1,5 +1,5 @@
 import { isRecord } from '../../connectors/values';
-import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture } from '../assets';
+import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture, SIGNATURE } from '../assets';
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
@@ -156,7 +156,7 @@ const inlayTag = (render: (id: string) => string): Run => ([id], { context }) =>
   if (context.stage !== 'display') return '';
   const inlay = context.inlays.find(({ name }) => name === id);
   if (!inlay) return inlayMissing;
-  return inlay.type === 'signature' ? '' : render(inlay.id);
+  return inlay.type === SIGNATURE ? '' : render(inlay.id);
 };
 define('inlay', 1, inlayTag(inlayPicture));
 define('inlayed inlayeddata', 1, inlayTag((id) => `${inlayBlock(id)}\n`));
