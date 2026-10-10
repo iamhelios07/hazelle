@@ -33,6 +33,7 @@ export type ChatScope = {
   // declares reads null.
   toggles: ReadonlyMap<string, string | null>;
   model: CbsContext['model'];
+  axModel: CbsContext['axModel'];
   clock: CbsContext['clock'];
   assets: CbsContext['assets'];
   modules: CbsContext['modules'];
@@ -56,7 +57,7 @@ const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prom
 
 // toggles: the bot's Lua reads them from its globals as they stand mid-run.
 export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
-  const { card, persona, prompt, note, messages, greeting, toggles, model, clock, assets, modules, faces, screen, pick } = scope;
+  const { card, persona, prompt, note, messages, greeting, toggles, model, axModel, clock, assets, modules, faces, screen, pick } = scope;
   const fixed = {
     stage,
     card,
@@ -68,6 +69,7 @@ export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles:
     greeting,
     toggle: (key: string) => toggles.get(key) ?? null,
     model,
+    axModel,
     screen: stage === 'display' ? screen : null,
     clock,
     language,

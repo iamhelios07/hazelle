@@ -96,6 +96,7 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   greeting: { index: 0 },
   toggles: new Map([['sims', '1']]),
   model: { id: 'model', maxContext: null, prefill: null },
+  axModel: null,
   clock: { now: Date.UTC(2026, 8, 28), timeZone: 'UTC' },
   assets: [],
   modules: [],

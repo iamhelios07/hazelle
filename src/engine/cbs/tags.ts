@@ -78,9 +78,7 @@ const UNSUPPORTED = new Set([
   'jb',
   'jailbreak',
   'jbtoggled',
-  // Marked N, but nothing to read: CbsContext carries the 대화 모델 alone, never the 보조 모델, and the spec gives the
-  // rest no semantics.
-  'axmodel',
+  // Marked N, and the spec gives them no semantics.
   'metadata',
   'declare',
   'range',
@@ -399,6 +397,7 @@ define('hiddenkey', 1, () => '');
 
 define('language', 0, (_, { context: { language } }) => language);
 define('model', 0, (_, { context: { model } }) => model && model.id);
+define('axmodel', 0, (_, { context: { axModel } }) => axModel);
 define('maxcontext', 0, (_, { context: { model } }) => (model && model.maxContext !== null ? String(model.maxContext) : null));
 define('prefillsupported prefill', 0, (_, { context: { model } }) => (model && model.prefill !== null ? bool(model.prefill) : null));
 define('screenwidth', 0, (_, { context }) => (context.screen ? String(context.screen.width) : null));

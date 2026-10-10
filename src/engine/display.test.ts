@@ -46,6 +46,7 @@ const scope: ChatScope = {
   greeting: null,
   toggles: new Map(),
   model: null,
+  axModel: null,
   clock: { now: 0, timeZone: 'UTC' },
   assets: [],
   modules: [],

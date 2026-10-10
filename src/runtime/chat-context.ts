@@ -51,6 +51,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
   const prompt = chatPrompt(store, chat);
   const persona = chatPersona(store, chat);
   const route = chatModel(store, chat, 'main');
+  const aux = chatModel(store, chat, 'aux');
   const toggles = togglesOf(store, chat, prompt);
   return {
     card,
@@ -69,6 +70,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     greeting: card && greetingOf(messages),
     toggles: new Map(toggles.declared.map(({ key }) => [key, toggles.value(key)])),
     model: 'kind' in route ? null : botModel(route, sentSettings(store, route)),
+    axModel: 'kind' in aux ? null : aux.model.id,
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     assets: owners.flatMap(({ id: owner, module }) => store.children('asset', owner).map(({ id, value }) => ({ id, name: value.name, ...(module && { module: module.namespace }) }))),
     modules: packs.flatMap(({ module }) => module?.namespace ?? []),
