@@ -322,7 +322,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
 
   function dropPicture(picture: Stored<'illustration'>) {
     void removeIllustration(store, picture.id).then((removed) => removed.ok || toast.failed(removed));
-    toast.undoable('삽화를 삭제했어요.', () => void restoreIllustration(store, picture).then((saved) => saved.ok || toast.failed(saved)));
+    toast.undoable('삽화를 삭제했어요.', () => restoreIllustration(store, picture));
   }
 
   async function branch(message: Shown) {
@@ -343,8 +343,9 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     void removeChat(store, dropped).then((removed) => removed.ok || toast.failed(removed));
     navigate({ kind: 'shelf', character: chat.character });
     toast.undoable(`'${title}' 채팅을 삭제했어요.`, () => {
-      void restoreChat(store, dropped).then((saved) => saved.ok || toast.failed(saved));
+      const restored = restoreChat(store, dropped);
       navigate({ kind: 'chat', id: dropped });
+      return restored;
     }, BIN_KEEPS);
   }
 

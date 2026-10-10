@@ -32,7 +32,7 @@ export function useChatStatus(character: string | null, settings: Character | nu
     if (!character) return;
     void setStatusScript(store, character, id, on).then((saved) => saved.ok || toast.failed(saved));
     if (!on && statusScripts.length === 1) hold(false);
-    toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => void setStatusScript(store, character, id, !on), [name, card?.name].filter(Boolean).join(' · '));
+    toast.undoable(on ? '상태창으로 지정했어요' : '상태창 지정을 풀었어요', () => setStatusScript(store, character, id, !on), [name, card?.name].filter(Boolean).join(' · '));
   }
 
   return {

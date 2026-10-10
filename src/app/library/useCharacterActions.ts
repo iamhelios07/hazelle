@@ -34,10 +34,6 @@ export function useCharacterActions() {
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
 
-  function mark(id: string, at: number | null) {
-    void setDeleted(store, id, at).then((saved) => saved.ok || toast.failed(saved));
-  }
-
   async function copy({ id, character }: Shelf) {
     setBusy({ id, label: '사본 만드는 중' });
     const copied = await copyCharacter(store, id, `${character.card.name} (사본)`, (step) => setBusy({ id, label: describeStep(step) }));
@@ -49,8 +45,8 @@ export function useCharacterActions() {
 
   function remove(shelf: Shelf) {
     const { id, character } = shelf;
-    mark(id, Date.now());
-    toast.undoable(`'${character.card.name}' ${withChats(shelf)} 삭제했어요.`, () => mark(id, null), BIN_KEEPS);
+    void setDeleted(store, id, Date.now()).then((saved) => saved.ok || toast.failed(saved));
+    toast.undoable(`'${character.card.name}' ${withChats(shelf)} 삭제했어요.`, () => setDeleted(store, id, null), BIN_KEEPS);
   }
 
   function restore({ kind, id, name }: Binned) {

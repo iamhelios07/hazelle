@@ -159,9 +159,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         const previous = saved.data.previous;
         const placed = !previous && place && (await setModuleAt(store, place, saved.data.id, true));
         const outcome = toolOutcome(file.name, parsed.tool.manifest, saved.data, { at: place?.kind ?? null, failure: placed && !placed.ok ? describeFailure(placed) : null });
-        if (previous) toast.undoable(outcome.holds, () => {
-          void undoToolImport(store, saved.data.id, previous).then((result) => { if (!result.ok) toast.failed(result); });
-        });
+        if (previous) toast.undoable(outcome.holds, () => undoToolImport(store, saved.data.id, previous));
         return outcome;
       }
       if ('module' in parsed) {

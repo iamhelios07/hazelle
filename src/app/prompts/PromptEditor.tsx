@@ -234,9 +234,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     // 삭제 is hidden on the default; 'default' still comes back when another device made it the default meanwhile.
     if (!removed.ok) return removed.error === 'default' ? toast.error(`${words.default}는 삭제할 수 없어요.`) : toast.failed(removed, '삭제하지 못했어요.');
     onErased();
-    toast.undoable(`'${promptName(removed.data.value.name)}' 프롬프트를 삭제했어요.`, () => {
-      void restorePrompt(store, stored.id).then((restored) => restored.ok || toast.failed(restored, '되돌리지 못했어요.'));
-    }, BIN_KEEPS);
+    toast.undoable(`'${promptName(removed.data.value.name)}' 프롬프트를 삭제했어요.`, () => restorePrompt(store, stored.id), BIN_KEEPS);
   };
 
   const cacheAt = (id: string) => {

@@ -54,7 +54,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       return toast.failed(removed, '삭제하지 못했어요.');
     }
     onRemoved();
-    toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => void restorePersona(store, id), BIN_KEEPS);
+    toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => restorePersona(store, id), BIN_KEEPS);
   }
 
   const pinnedBy = library.characters.filter(({ character }) => character.persona === id).map(({ character }) => character.card.name);
