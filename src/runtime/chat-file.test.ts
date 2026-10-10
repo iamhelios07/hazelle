@@ -42,12 +42,12 @@ describe('chat file', () => {
     expect(read.file.memory?.value.state).toEqual([{ about: 'Luna', field: 'mood', value: 'calm', record: null }]);
   });
 
-  it('refuses another format or version, a row that is not stored, a second chat, and a row of another chat', async () => {
+  it('refuses another format or version, a file without pictures, a row that is not stored, a second chat, and a row of another chat', async () => {
     const file = await written(await savedChat());
     const [chat, entry] = file.rows;
     expect(readChatFile({ ...file, format: 'risu-alpha-backup' })).toEqual({ ok: false, error: 'not-chat-file' });
-    expect(readChatFile({ ...file, version: 3 })).toEqual({ ok: false, error: 'other-version' });
-    expect(readChatFile({ ...file, version: 1 }).ok).toBe(true);
+    expect(readChatFile({ ...file, version: 2 })).toEqual({ ok: false, error: 'other-version' });
+    expect(readChatFile({ ...file, pictures: undefined })).toEqual({ ok: false, error: 'not-chat-file' });
     expect(readChatFile({ ...file, rows: [...file.rows, { ...entry, rev: 'one' }] })).toEqual({ ok: false, error: 'not-chat-file' });
     expect(readChatFile({ ...file, rows: [...file.rows, { ...chat, id: crypto.randomUUID() }] })).toEqual({ ok: false, error: 'not-chat-file' });
     expect(readChatFile({ ...file, rows: [...file.rows, { ...entry, id: crypto.randomUUID(), parent: crypto.randomUUID() }] })).toEqual({ ok: false, error: 'not-chat-file' });

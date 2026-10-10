@@ -15,8 +15,10 @@ import { ownershipDepth } from './removal';
 import { readRow } from './upgrade';
 import type { ObjectRow, ObjectStore, Pin, Write } from './store';
 
-// version is the file format's one version key: a file of any other version is refused, never read as this one.
-const FORMAT = { format: 'risu-alpha-backup', version: 2 };
+// version is the file format's one version key: a file of any other version is refused, never read as this one. Version
+// 3 and every later file stays readable: a new stored shape adds a step in runtime/upgrade.ts, never a version bump that
+// refuses older files (user ruling 2026-10-10).
+const FORMAT = { format: 'risu-alpha-backup', version: 3 };
 const MANIFEST = 'manifest.json';
 const OBJECTS = 'objects.jsonl';
 const FILES = 'files/';
