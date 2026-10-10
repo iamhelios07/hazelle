@@ -67,6 +67,31 @@ export async function saveAssets(files: Files, assets: Imported['assets'], progr
   return { ok: true, data: { kept, skipped } };
 }
 
+// A picture whose thumbnail cannot be made, and one the server refuses: too large, blocked, or past the account's
+// picture cap (runtime/files Files.save).
+const FACELESS = new Set(['picture-unreadable', 'picture-refused']);
+
+async function savedAvatar(files: Files, picture: Picture): Promise<ApiResult<Avatar>> {
+  const thumb = await thumbnail(picture).catch(() => null);
+  if (thumb === null) return { ok: false, error: 'picture-unreadable' };
+  const saved = await files.save([picture.bytes]);
+  if (!saved.ok) return saved;
+  const [file] = saved.data;
+  return file ? { ok: true, data: { type: picture.type, size: picture.bytes.length, thumb, file } } : { ok: false, error: 'picture-refused' };
+}
+
+// The old file stays stored: nothing removes a file while its account lives, since a copy (copyCharacter) or a backup
+// may still name it.
+export async function setAvatar(store: ObjectStore, files: Files, id: string, bytes: Uint8Array<ArrayBuffer>): Promise<ApiResult<Stored<'avatar'>>> {
+  if (!store.get('character', id)) return { ok: false, error: 'gone' };
+  const type = imageType(bytes);
+  if (!type) return { ok: false, error: 'picture-unreadable' };
+  const saved = await savedAvatar(files, { bytes, type });
+  if (!saved.ok) return saved;
+  const held = store.children('avatar', id)[0];
+  return held ? store.update('avatar', held.id, () => saved.data) : store.create('avatar', saved.data, { parent: id });
+}
+
 // A moved character's id is already named by its staged entries; chats: their roots (runtime/chat-log chatWrites).
 export type Brought = { id: string; folder: string | null; risu: string; modules: string[]; chats: Write[] };
 
@@ -81,13 +106,9 @@ export async function importCharacter(
   let avatar: Avatar | null = null;
   if (picture) {
     progress({ kind: 'picture' });
-    const thumb = await thumbnail(picture).catch(() => null);
-    if (thumb !== null) {
-      const saved = await files.save([picture.bytes]);
-      if (!saved.ok) return saved;
-      const [file] = saved.data;
-      if (file) avatar = { type: picture.type, size: picture.bytes.length, thumb, file };
-    }
+    const saved = await savedAvatar(files, picture);
+    if (!saved.ok && !FACELESS.has(saved.error)) return saved;
+    if (saved.ok) avatar = saved.data;
   }
   const stored = await saveAssets(files, assets, progress);
   if (!stored.ok) return stored;

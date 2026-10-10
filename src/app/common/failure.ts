@@ -8,7 +8,7 @@ import type { MetersFailure } from '../../runtime/meters';
 import type { SignInFailure } from '../../runtime/sign-in';
 import type { TranslateFailure, TranslatorFailure } from '../../runtime/translate';
 import type { TurnFailure } from '../../runtime/turn';
-import { BIN, BOT_STUCK, inSettings, MODEL_ROLES } from './words';
+import { BIN, BOT_STUCK, inSettings, MODEL_ROLES, UNREADABLE_IMAGE } from './words';
 
 const MESSAGES: Record<string, string> = {
   'bad-username': '아이디는 2~32자의 문자, 숫자, _ . - 로만 만들 수 있어요.',
@@ -20,6 +20,8 @@ const MESSAGES: Record<string, string> = {
   'too-many-calls': '모델 호출이 너무 잦아요. 잠시 후 다시 시도해 주세요.',
   'storage-full': `저장 공간이 가득 찼어요. ${BIN}에서 영구 삭제하면 공간이 생겨요.`,
   'tool-file-refused': '도구 파일을 저장하지 못했어요. 파일 한도나 차단 여부를 확인해 주세요.',
+  'picture-unreadable': UNREADABLE_IMAGE,
+  'picture-refused': '이미지가 너무 크거나, 차단됐거나, 파일 한도를 넘었어요.',
   'file-blocked': '운영자가 차단한 파일이라 올리거나 열 수 없어요.',
   'too-many-reports': '운영자가 확인하지 않은 알림이 많아서 더 보낼 수 없어요.',
   'not-admin': '운영자 계정에서만 할 수 있어요.',

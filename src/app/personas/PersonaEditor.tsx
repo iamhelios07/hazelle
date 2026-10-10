@@ -10,7 +10,7 @@ import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS } from '../common/words';
+import { BIN_KEEPS, CHANGE_IMAGE, UNREADABLE_IMAGE } from '../common/words';
 import { useToast } from '../toast';
 import { Avatar, FaceRow, Facts, FileButton, MenuItem, TextField } from '../ui';
 
@@ -41,7 +41,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
 
   async function picture(file: File) {
     const made = await thumbnail({ bytes: new Uint8Array(await file.arrayBuffer()), type: file.type }).catch(() => null);
-    if (made === null) return toast.error('이 이미지는 열 수 없어요.');
+    if (made === null) return toast.error(UNREADABLE_IMAGE);
     await autosave.save({ picture: made });
   }
 
@@ -66,7 +66,7 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     <>
       <FaceRow face={<Avatar face={persona.name} image={persona.picture} size="lg" tone="you" />}>
         <FileButton accept="image/*" size="sm" icon={ImageUp} onFile={(file) => void picture(file)}>
-          사진 바꾸기
+          {CHANGE_IMAGE}
         </FileButton>
       </FaceRow>
       {facts.length > 0 && <Facts items={facts} />}
