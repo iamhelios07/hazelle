@@ -157,4 +157,8 @@ describe('storyHtml', () => {
     expect(storyHtml('<div class="box">\n*raw*\n</div>\n\n*act*', true)).toBe('<div class="box">\n*raw*\n</div>\n<p><em>act</em></p>\n');
     expect(storyHtml('<b>x</b> \\*y\\*', false)).toBe('<p>&lt;b&gt;x&lt;/b&gt; *y*</p>\n');
   });
+
+  it('marks a closed $$ pair outside code as a formula, as written, with no escape or mark read inside it', () => {
+    expect(storyHtml('값 $$\\{a\\}*"b"*$$ `$$c$$` $$d', false)).toBe('<p>값 <span data-tex>$$\\{a\\}*&quot;b&quot;*$$</span> <code>$$c$$</code> $$d</p>\n');
+  });
 });

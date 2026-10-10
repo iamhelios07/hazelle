@@ -171,6 +171,7 @@ export const COMMANDS: readonly CommandGroup[] = [
       { names: ['bkspc'], form: '{{bkspc}}', what: '앞의 마지막 단어를 삭제해요.', example: ['사과 배 {{bkspc}} 귤', '사과 귤'] },
       { names: ['erase'], form: '{{erase}}', what: '앞의 마지막 문장을 삭제해요.', example: ['안녕. 반가워 {{erase}} 잘 가', '안녕. 잘 가'] },
       { names: ['ruby', 'furigana'], form: '{{ruby::글::읽는 법}}', what: '글 위에 읽는 법을 작게 표시해요.' },
+      { names: ['tex', 'latex', 'katex'], form: '{{tex::수식}}', what: 'LaTeX 수식을 화면에 그려요. 모델에게는 $$로 감싸서 보내요.', example: ['{{tex::x^2}}', '$$x^2$$'] },
       { names: ['codeblock'], form: '{{codeblock::코드}}', what: '코드를 코드 블록으로 보여 줘요. 안의 <와 >도 쓴 그대로 보여요.' },
       { names: ['file'], form: '{{file::이름::base64}}', what: 'Risu에서 첨부한 텍스트 파일이에요. 모델에게는 파일 내용을 보내요.' },
     ],

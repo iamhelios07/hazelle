@@ -31,6 +31,9 @@ const ATTRIBUTES = new Set(['src', 'alt', 'href', 'title', 'colspan', 'rowspan']
 // What an SVG shape is drawn from; without them it draws nothing.
 const SVG = 'http://www.w3.org/2000/svg';
 const SVG_ATTRIBUTES = new Set(['viewBox', 'preserveAspectRatio', 'd', 'points', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height', 'transform', 'fill', 'stroke', 'stroke-width', 'opacity', 'text-anchor', 'offset', 'stop-color']);
+const MATHML = 'http://www.w3.org/1998/Math/MathML';
+// The ones KaTeX writes (math.ts); without them a bold letter is plain and a matrix loses its spacing.
+const MATHML_ATTRIBUTES = new Set(['mathvariant', 'stretchy', 'fence', 'accent', 'notation', 'displaystyle', 'scriptlevel', 'mathcolor', 'columnalign', 'columnspacing', 'rowspacing', 'width', 'lspace', 'minsize']);
 // A grid's computed tracks are the off-screen page's pixels, like a computed width, so its template is counted as lost.
 const TEMPLATES = ['grid-template-columns', 'grid-template-rows'];
 const SKIPPED = new Set(['script', 'style', 'template', 'slot', 'link', 'meta']);
@@ -60,7 +63,7 @@ export function staticHtml(root: Element, look: Look): Snapshot {
       const value = style.getPropertyValue(property);
       return value ? [`${property}:${value}`] : [];
     });
-    const kept = node.namespaceURI === SVG ? SVG_ATTRIBUTES : ATTRIBUTES;
+    const kept = node.namespaceURI === SVG ? SVG_ATTRIBUTES : node.namespaceURI === MATHML ? MATHML_ATTRIBUTES : ATTRIBUTES;
     const attributes = [...node.attributes].filter(({ name: attribute, value }) => kept.has(attribute) && (!(attribute === 'src' || attribute === 'href') || LOADS.test(value)));
     if (TEMPLATES.some((property) => !['', 'none'].includes(style.getPropertyValue(property)))) lost.add(node);
     out.push(`<${name}${attributes.map(({ name: attribute, value }) => ` ${attribute}="${escapeAttribute(value)}"`).join('')}${declarations.length ? ` style="${escapeAttribute(declarations.join(';'))}"` : ''}>`);

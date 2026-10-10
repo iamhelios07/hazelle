@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, type ReactNode } from '
 import { useRowState } from '../collections/row-memory';
 import { useVeil, type Veil } from '../foundation/veil';
 import { inlaid } from './inlay';
+import { useMath } from './math';
 import styles from './Story.module.css';
 import shadowCss from './Story.shadow.css?inline';
 
@@ -42,15 +43,18 @@ const STYLE_ATTRIBUTE = /(<[a-z][^>]*?\s)style(?=\s*=)/gi;
 const SET_ASIDE = 'data-style';
 // No form: the CSP does not limit where one posts. DOMPurify's own URL rule, with blob: added for the bots' pictures;
 // sanitize then keeps only the app's own sources and web links. No popover or command: either opens an element in
-// the top layer, which no containment holds, without a script.
+// the top layer, which no containment holds, without a script. KaTeX's MathML (math.ts) wraps a formula in semantics and
+// its TeX in annotation, which DOMPurify drops by default while keeping their text: the TeX would show beside it.
 const CONFIG = {
   RETURN_DOM_FRAGMENT: true as const,
+  ADD_TAGS: ['semantics', 'annotation'],
   FORBID_TAGS: ['form', 'style'],
   FORBID_ATTR: ['style', 'popover', 'popovertarget', 'popovertargetaction', 'command', 'commandfor'],
   ADD_ATTR: ['risu-btn', 'risu-trigger', 'risu-id', 'risu-mark'],
   ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 };
 const VOID = new Set(['BR', 'HR', 'IMG', 'INPUT', 'WBR']);
+const HTML = 'http://www.w3.org/1999/xhtml';
 // The look-ahead takes the spaces itself: \s* giving one back would let url( "blob:…" ) past it.
 const OUTSIDE_URL = /url\((?![\s'"]*(?:data|blob):)[^)]*\)/gi;
 const ANY_URL = /url\([^)]*\)/gi;
@@ -185,7 +189,8 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
       return child;
     };
     let at: ParentNode = fragment;
-    for (let child = last(at); child instanceof Element && !VOID.has(child.tagName); child = last(at)) at = child;
+    // Not into SVG or MathML, where an HTML slot draws nothing.
+    for (let child = last(at); child instanceof Element && child.namespaceURI === HTML && !VOID.has(child.tagName); child = last(at)) at = child;
     if (at === fragment) at = fragment.appendChild(document.createElement('p'));
     const slot = document.createElement('slot');
     slot.name = 'cursor';
@@ -205,15 +210,17 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
 
   const placed = inlay !== undefined;
   const mark = inlay?.mark ?? null;
+  const math = useMath(html);
   useLayoutEffect(() => {
-    const fragment = sanitize(mark ? inlaid(html, mark, mark) : html, cursor, veil);
+    const marked = mark ? inlaid(html, mark, mark) : html;
+    const fragment = sanitize(math ? math(marked) : marked, cursor, veil);
     for (const picture of fragment.querySelectorAll(`[${PICTURE}]`)) {
       if (whole || pictures?.has(pictureKey(picture))) picture.setAttribute(OPEN, '');
     }
     // After the cursor, which would otherwise go into the slot.
     if (placed) placeInlay(fragment, mark);
     root().replaceChildren(fragment);
-  }, [html, cursor, pictures, veil, reveals, whole, placed, mark]);
+  }, [html, cursor, pictures, veil, reveals, whole, placed, mark, math]);
 
   // After the text is drawn, which drops every range made over the text before. Without the API, nothing is lit.
   useEffect(() => {
@@ -225,7 +232,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
     return () => {
       for (const range of ranges) lit.delete(range);
     };
-  }, [html, cursor, pictures, veil, reveals, term, placed, mark]);
+  }, [html, cursor, pictures, veil, reveals, term, placed, mark, math]);
 
   useLayoutEffect(() => {
     if (!base) (base = new CSSStyleSheet()).replaceSync(shadowCss);
