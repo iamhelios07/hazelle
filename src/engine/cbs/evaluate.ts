@@ -48,6 +48,8 @@ export type CbsContext = {
   // The pictures of the chat's packs, and the faces {{source}} shows: the character's and the persona's pictures as data:
   // URLs, each null when there is none.
   assets: readonly BotAsset[];
+  // The chat's own pictures, brought from Risu's inlay store, each named by its tag's id exactly; never one of assets.
+  inlays: readonly { id: string; name: string; type: string }[];
   // The namespaces of the modules on in the chat (design §6.5).
   modules: readonly string[];
   faces: { char: string | null; user: string | null };

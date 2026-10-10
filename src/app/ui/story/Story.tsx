@@ -34,6 +34,8 @@ const OPEN = 'data-open';
 const PICTURES = Symbol('pictures');
 // Named in Story.shadow.css. Holds the source of the picture it stands in for.
 const VEILED = 'data-veiled';
+// Named in Story.shadow.css and in engine/assets.ts (inlayMissing), whose mark stands where a chat's inlay is missing.
+const INLAY_MISSING = 'data-inlay-missing';
 const pictureKey = (picture: Element) => `${picture.getAttribute(PICTURE)}:${picture.querySelector('img')!.getAttribute('src')}`;
 // Sent from a message when the reader opens or closes one of its pictures, so the chat keeps its view where it is.
 export const READER_RESIZED = 'readerresized';
@@ -178,6 +180,7 @@ function sanitize(html: string, cursor: boolean, veil: Veil | null): DocumentFra
       element.removeAttribute('poster');
     }
   }
+  for (const missing of fragment.querySelectorAll(`[${INLAY_MISSING}]`)) missing.textContent = '옮기지 못한 이미지';
   for (const [index, block] of [...fragment.children].entries()) {
     const only = block.childElementCount === 1 && block.firstElementChild!.tagName === 'IMG' && !block.textContent!.trim();
     if (only && block.matches('p, .risu-inlay-image')) block.setAttribute(PICTURE, String(index));

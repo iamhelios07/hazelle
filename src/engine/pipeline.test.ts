@@ -99,6 +99,7 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   axModel: null,
   clock: { now: Date.UTC(2026, 8, 28), timeZone: 'UTC' },
   assets: [],
+  inlays: [],
   modules: [],
   faces: { char: null, user: null },
   screen: null,

@@ -24,7 +24,7 @@ export function summaryStale(store: Pick<ObjectStore, 'get' | 'entryHead' | 'rev
 const readsCurrent = (store: Pick<ObjectStore, 'revision'>, reads: SummaryRead[]) => reads.every((read) => store.revision(read) === read.rev);
 const revised = (store: Pick<ObjectStore, 'revision'>, reads: StoreRead[]): SummaryRead[] => [...new Map(reads.map((read) => [JSON.stringify(read), { ...read, rev: store.revision(read) }])).values()];
 
-type Source = Pick<ObjectStore, 'get' | 'children' | 'capture' | 'revision' | 'foldedChat' | 'entryHead' | 'loadedHead' | 'shownMark'>;
+type Source = Pick<ObjectStore, 'get' | 'children' | 'scopeState' | 'capture' | 'revision' | 'foldedChat' | 'entryHead' | 'loadedHead' | 'shownMark'>;
 type Scope = { signal: AbortSignal; state: ScopeState; loading: Promise<ApiFailure | null> | null; error: ApiFailure | null };
 type SummaryWrite = { type: 'restore'; id: string; kind: 'summary'; parent: string; value: Summary };
 // cleared: 다시 시도 asked for the bot's regex again; the summary written next drops the stored verdict.

@@ -131,6 +131,7 @@ export class ObjectStore {
     this.projections = new ChatProjections({
       get: (kind, id) => this.get(kind, id),
       children: (kind, parent) => this.children(kind, parent),
+      scopeState: (chat) => this.scopeState(chat),
       capture: (read) => this.capture(read),
       revision: (read) => this.revision(read),
       foldedChat: (chat) => this.foldedChat(chat),

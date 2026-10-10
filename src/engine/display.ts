@@ -1,4 +1,5 @@
 import MarkdownIt, { type StateCore, type StateInline, type Token } from 'markdown-it';
+import { INLAY_MARKUP } from './assets';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { Box } from './regex/scripts';
@@ -104,7 +105,35 @@ function parser(html: boolean) {
   // Before text_join, so an escaped \* is still its own token and not read as a mark.
   md.core.ruler.before('text_join', 'story_lines', lines);
   md.core.ruler.after('story_lines', 'story_marks', marks);
+  if (!html) {
+    md.inline.ruler.before('html_inline', 'inlay', inlay);
+    md.core.ruler.after('story_marks', 'inlay_blocks', inlayBlocks);
+  }
   return md;
+}
+
+// Without the bot's HTML, the chat's inlays still show: their markup alone is kept (engine/assets INLAY_MARKUP).
+function inlay(state: StateInline, silent: boolean) {
+  INLAY_MARKUP.lastIndex = state.pos;
+  const found = INLAY_MARKUP.exec(state.src);
+  if (!found) return false;
+  if (!silent) Object.assign(state.push('html_inline', '', 0), { content: found[0], meta: { block: found[1] !== undefined } });
+  state.pos += found[0].length;
+  return true;
+}
+
+// A line that is only a wrapped inlay stands as its own block, as the bot's HTML parse leaves it, not inside a paragraph.
+function inlayBlocks(state: StateCore) {
+  state.tokens = state.tokens.flatMap((token, index, tokens) => {
+    const lone = (at: number) => {
+      const children = tokens[at]?.children;
+      return tokens[at - 1]?.type === 'paragraph_open' && children?.length === 1 && (children[0]!.meta as { block?: boolean } | null)?.block === true;
+    };
+    if (token.type === 'paragraph_open' && lone(index + 1)) return [];
+    if (token.type === 'paragraph_close' && lone(index - 1)) return [];
+    if (token.type === 'inline' && lone(index)) return [Object.assign(new state.Token('html_block', '', 0), { content: token.children![0]!.content, block: true })];
+    return [token];
+  });
 }
 const BOT = parser(true);
 const PLAIN = parser(false);

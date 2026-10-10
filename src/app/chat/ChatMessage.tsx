@@ -352,4 +352,5 @@ function sameRow(previous: Props, next: Props): boolean {
 export const speaker = (message: Shown, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>
   message.role === 'user' ? (me?.name ?? NO_PERSONA) : (character?.name ?? shown(message).receipt?.modelName ?? modelName ?? '모델');
 
-export const shownHtml = (text: string, { bot, url }: Pick<Props['decor'], 'bot' | 'url'>) => (bot ? resolveAssets(storyHtml(text, true), url) : storyHtml(text, false));
+// Without the bot's style, only the chat's own pictures show: its inlays, whose markup alone the plain display keeps.
+export const shownHtml = (text: string, { bot, url }: Pick<Props['decor'], 'bot' | 'url'>) => resolveAssets(storyHtml(text, bot), bot ? url : (kind, id) => (kind === 'inlay' ? url(kind, id) : undefined));

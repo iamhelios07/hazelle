@@ -6,9 +6,10 @@ import { authorNote, type ChatScope } from '../../engine/render';
 // the snapshot's scope. An editDisplay pass run on one is not fresh for another (ScriptDisplay).
 export type LuaStanding = Pick<Snapshot, 'globals' | 'character' | 'persona' | 'note'>;
 
-// The card without its scripts and triggers, which no tag reads and a run is handed apart.
+// The card without its scripts and triggers, which no tag reads and a run is handed apart. No inlays: Lua's CBS
+// runs as the prompt does, which reads none.
 function cbsScope({ card, persona, prompt, note, lore, messages, variables, greeting, model, axModel, clock, assets, modules, faces, screen, pick }: ChatScope): Snapshot['scope'] {
-  return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, axModel, clock, assets, modules, faces, screen, pick };
+  return { card: card && { ...card, regex: [], triggers: [] }, persona, prompt, note, lore, messages, variables, greeting, model, axModel, clock, assets, inlays: [], modules, faces, screen, pick };
 }
 
 export function luaSnapshot(scope: ChatScope, standing: LuaStanding, staged: string[], variables: [string, string][]): Snapshot {

@@ -1,5 +1,5 @@
 import { isRecord } from '../../connectors/values';
-import { assetUrl, findAsset } from '../assets';
+import { assetUrl, findAsset, inlayBlock, inlayMissing, inlayPicture } from '../assets';
 import { seeded } from '../random';
 import { escapeCbs } from './escape';
 import type { CbsContext } from './evaluate';
@@ -150,8 +150,16 @@ define('chardisplayasset', 0, (_, { context: { card } }) => (card ? '[]' : null)
 define('moduleenabled', 1, ([namespace], { context }) => (context.modules.includes(namespace!) ? '1' : '0'));
 define('moduleassetlist', 1, ([namespace], { context: { modules, assets } }) => (modules.includes(namespace!) ? serialize(assets.filter((asset) => asset.module === namespace).map(({ name }) => name)) : ''));
 
-// Items in Risu's own inlay store, which no backup holds: the prompt drops them, and the screen shows them as written.
-define('inlay inlayed inlayeddata', 1, (_, { context }) => (context.stage === 'display' ? null : ''));
+// Items of Risu's own inlay store, which the chat holds as its inlays by the tag's id exactly, never by findAsset's near
+// match: the prompt drops them. A Gemini signature is never drawn; an item the chat lacks shows the app's mark.
+const inlayTag = (render: (id: string) => string): Run => ([id], { context }) => {
+  if (context.stage !== 'display') return '';
+  const inlay = context.inlays.find(({ name }) => name === id);
+  if (!inlay) return inlayMissing;
+  return inlay.type === 'signature' ? '' : render(inlay.id);
+};
+define('inlay', 1, inlayTag(inlayPicture));
+define('inlayed inlayeddata', 1, inlayTag((id) => `${inlayBlock(id)}\n`));
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
 define('setvar', 2, ([name, value], { context, writes }) => {

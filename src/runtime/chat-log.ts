@@ -3,7 +3,7 @@ import type { RisuMessage } from '../engine/import/types';
 import { memoryThrough } from '../engine/memory';
 import { CAST_MAX, fold, shown, type Chat, type ChatItem, type Entry, type Message, type Receipt, type Translation, type Writes } from '../model/chat';
 import type { Illustration } from '../model/illustration';
-import { live } from '../model/library';
+import { live, type Asset } from '../model/library';
 import { memoryId, type Memory, type Source } from '../model/memory';
 import type { Badges } from '../model/tool';
 import type { ApiFailure, ApiResult } from './api';
@@ -70,7 +70,8 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const id = crypto.randomUUID();
     const memory = storedMemory(store, item.id)?.value;
     const illustrations = store.children('illustration', item.id).map(({ value }) => value);
-    const { writes, after, messages, versions } = copyWrites(id, item.messages.slice(0, upTo + 1), memory, illustrations);
+    const inlays = store.children('inlay', item.id).map(({ value }) => value);
+    const { writes, after, messages, versions } = copyWrites(id, item.messages.slice(0, upTo + 1), memory, illustrations, inlays);
     writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
     writes.push({ type: 'create', kind: 'chat', id, parent: null, value: { ...item.chat, title: null, origin: { id: item.id, name: item.title, after }, seed: item.chat.seed ?? item.id } });
     const created = await store.batch(writes);
@@ -78,25 +79,27 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
   });
 }
 
-// What a chat file's chat named that this account does not hold live, by kind; models counts roles. pictures: the
-// illustrations whose picture the server refused.
-export type Dropped = { prompt: number; persona: number; cast: number; models: number; pictures: number };
+// What a chat file's chat named that this account does not hold live, by kind; models counts roles. pictures, inlays:
+// the illustrations and the inlays whose picture the server refused.
+export type Dropped = { prompt: number; persona: number; cast: number; models: number; pictures: number; inlays: number };
 
 // A chat file's chat, copied under new ids as a branch is, to character. What it names that is not live here is
 // left out and counted, so the chat follows the default there; a persona left out gives the one a new chat takes.
-// Its pictures are saved first, each under the reference its bytes seal to here; one the server refuses leaves its
-// illustrations out, as a picture an import cannot read is.
+// Its pictures are saved first, each under the reference its bytes seal to here; one the server refuses leaves out
+// the illustrations and inlays that show it, as a picture an import cannot read is.
 export async function importChat({ store, files }: Pick<Session, 'store' | 'files'>, file: ChatFile, character: string | null): Promise<ApiResult<{ id: string; dropped: Dropped }>> {
   const id = crypto.randomUUID();
   const ids = [...file.pictures.keys()];
   const saved = await files.save(ids.map((each) => file.pictures.get(each)!));
   if (!saved.ok) return saved;
   const refs = new Map(ids.map((each, index) => [each, saved.data[index]]));
-  const illustrations = file.illustrations.flatMap(({ value }) => {
+  const resealed = <V extends { file: { id: string } }>(values: V[]) => values.flatMap((value) => {
     const ref = refs.get(value.file.id);
     return ref ? [{ ...value, file: ref }] : [];
   });
-  const { writes, messages } = copyWrites(id, fold(file.entries), file.memory?.value, illustrations);
+  const illustrations = resealed(file.illustrations.map(({ value }) => value));
+  const inlays = resealed(file.inlays.map(({ value }) => value));
+  const { writes, messages } = copyWrites(id, fold(file.entries), file.memory?.value, illustrations, inlays);
   const { prompt, persona, cast = [], models, origin, ...value } = without(without(file.chat.value, 'deleted'), 'purging');
   const held = (kind: 'prompt' | 'persona' | 'character' | 'chat', ref: string | undefined): ref is string => ref !== undefined && live(store.get(kind, ref)) !== null;
   const kept = cast.filter((each) => held('character', each));
@@ -117,6 +120,7 @@ export async function importChat({ store, files }: Pick<Session, 'store' | 'file
     cast: cast.length - kept.length,
     models: Object.keys(models).length - roles.length,
     pictures: file.illustrations.length - illustrations.length,
+    inlays: file.inlays.length - inlays.length,
   };
   writes.push({ type: 'create', kind: 'chat', id, parent: null, value: withCast(withPersona(store, chat), character, kept) });
   const failure = await saveNewChats(store, [id], writes);
@@ -149,7 +153,7 @@ export async function saveNewChats(
 }
 
 // messages, versions: each copy's id by the original's. after: the last copy's id.
-function copyWrites(id: string, source: Message[], memory: Memory | undefined, illustrations: Illustration[]): { writes: Write[]; messages: Map<string, string>; versions: Map<string, string>; after: string } {
+function copyWrites(id: string, source: Message[], memory: Memory | undefined, illustrations: Illustration[], inlays: Asset[]): { writes: Write[]; messages: Map<string, string>; versions: Map<string, string>; after: string } {
   let after = '';
   const writes: Write[] = [];
   const messages = new Map<string, string>();
@@ -169,6 +173,7 @@ function copyWrites(id: string, source: Message[], memory: Memory | undefined, i
     const [message, version] = [messages.get(illustration.message), versions.get(illustration.version)];
     if (message && version) writes.push({ type: 'create', kind: 'illustration', id: crypto.randomUUID(), parent: id, value: { ...illustration, message, version } });
   }
+  for (const inlay of inlays) writes.push({ type: 'create', kind: 'inlay', id: crypto.randomUUID(), parent: id, value: inlay });
   return { writes, messages, versions, after };
 }
 

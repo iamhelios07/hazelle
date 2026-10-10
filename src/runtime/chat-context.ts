@@ -22,7 +22,7 @@ import type { ObjectStore } from './store';
 import type { Shown } from './talk';
 import type { TranslateInput } from './translate';
 
-type Reader = { store: Pick<ObjectStore, 'get' | 'children'> };
+type Reader = { store: Pick<ObjectStore, 'get' | 'children' | 'scopeState'> };
 
 // Order (design §6.5): its character's own, then the modules on in every chat, then its prompt's, then the
 // character's, each once where it first appears. A module that is gone or deleted is off.
@@ -73,6 +73,8 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     axModel: 'kind' in aux ? null : aux.model.id,
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     assets: owners.flatMap(({ id: owner, module }) => store.children('asset', owner).map(({ id, value }) => ({ id, name: value.name, ...(module && { module: module.namespace }) }))),
+    // Held only while the chat is loaded; a chat not saved yet has none.
+    inlays: id !== null && store.scopeState(id) === 'loaded' ? store.children('inlay', id).map(({ id, value }) => ({ id, name: value.name, type: value.type })) : [],
     modules: packs.flatMap(({ module }) => module?.namespace ?? []),
     faces: {
       char: chat.character === null ? null : (store.children('avatar', chat.character)[0]?.value.thumb ?? null),

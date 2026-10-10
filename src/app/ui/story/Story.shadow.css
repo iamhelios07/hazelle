@@ -102,6 +102,16 @@ img {
   cursor: pointer;
 }
 
+/* Story.tsx's mark for a picture of the chat it does not hold. */
+[data-inlay-missing] {
+  display: inline-flex;
+  padding: var(--space-4) var(--space-8);
+  border: var(--border-thin) dashed var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font: var(--text-sm) / var(--leading-tight) var(--font-sans);
+}
+
 /* data-buttons is the host's (Story.tsx). A button nothing answers looks it, whatever the bot's CSS says. */
 :host([data-buttons='inert']) :is(button:not([data-veiled]), [risu-btn], [risu-trigger]) {
   opacity: var(--story-inert-opacity) !important;

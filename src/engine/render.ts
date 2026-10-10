@@ -36,6 +36,7 @@ export type ChatScope = {
   axModel: CbsContext['axModel'];
   clock: CbsContext['clock'];
   assets: CbsContext['assets'];
+  inlays: CbsContext['inlays'];
   modules: CbsContext['modules'];
   faces: CbsContext['faces'];
   // The window the chat is shown in, which only the display reads; null in a turn and in a chat's preview.
@@ -57,7 +58,7 @@ const marked = (prompt: ConversationPrompt, mark: 'main' | 'globalNote') => prom
 
 // toggles: the bot's Lua reads them from its globals as they stand mid-run.
 export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles: Pick<ChatScope['toggles'], 'get'> }, stage: Stage, language: string | null, triggerId: string): (source: CbsContext['source'], variables: Map<string, string>) => CbsContext {
-  const { card, persona, prompt, note, messages, greeting, toggles, model, axModel, clock, assets, modules, faces, screen, pick } = scope;
+  const { card, persona, prompt, note, messages, greeting, toggles, model, axModel, clock, assets, inlays, modules, faces, screen, pick } = scope;
   const fixed = {
     stage,
     card,
@@ -75,6 +76,7 @@ export function contexts(scope: Omit<ChatScope, 'toggles' | 'cast'> & { toggles:
     clock,
     language,
     assets,
+    inlays,
     modules,
     faces,
   };

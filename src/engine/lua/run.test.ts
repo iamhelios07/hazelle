@@ -32,6 +32,7 @@ const SNAPSHOT: Snapshot = {
     axModel: null,
     clock: { now: 0, timeZone: 'UTC' },
     assets: [],
+    inlays: [],
     modules: [],
     faces: { char: null, user: null },
     screen: null,

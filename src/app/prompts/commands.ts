@@ -264,7 +264,7 @@ export const COMMANDS: readonly CommandGroup[] = [
       { names: ['source'], form: '{{source::char}}', what: '캐릭터(char)나 페르소나(user)의 프로필 이미지 주소예요.' },
       { names: ['button'], form: '{{button::글::트리거}}', what: '봇의 버튼이에요. 누르면 그 이름의 트리거를 실행해요.' },
       { names: ['triggerid'], form: '{{triggerid}}', what: '버튼을 눌러 실행한 트리거에서, 그 버튼의 risu-id 값이에요.' },
-      { names: ['inlay', 'inlayed', 'inlayeddata'], form: '{{inlay::id}}', what: 'Risu 채팅에 붙어 있던 이미지 자리예요. 모델에게는 보내지 않아요.' },
+      { names: ['inlay', 'inlayed', 'inlayeddata'], form: '{{inlay::id}}', what: 'Risu 채팅에 붙어 있던 이미지를 보여 줘요. 모델에게는 보내지 않아요.' },
       { names: ['screenwidth'], form: '{{screenwidth}}', what: '화면 너비예요.' },
       { names: ['screenheight'], form: '{{screenheight}}', what: '화면 높이예요.' },
     ],

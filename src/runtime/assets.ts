@@ -10,7 +10,7 @@ type Cached = { url: string | null; bytes: number; owners: Set<string>; removed:
 // url is undefined until read, and for a picture that is gone or unreadable.
 export type AssetView = { url: PictureUrl; hold: () => () => void };
 
-const KINDS = new Set<string>(['asset', 'illustration'] satisfies PictureKind[]);
+const KINDS = new Set<string>(['asset', 'inlay', 'illustration'] satisfies PictureKind[]);
 
 // Mounted views pin their pictures. Only inactive URLs compete for the byte-bounded LRU; a large currently visible
 // picture must never disappear just because another picture was read.

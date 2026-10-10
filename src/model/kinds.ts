@@ -20,6 +20,8 @@ export type Values = {
   lore: Lore;
   avatar: Avatar;
   asset: Asset;
+  // A chat's own picture, brought from Risu's inlay store: an asset of the chat, never of its card.
+  inlay: Asset;
   chat: Chat;
   entry: Entry;
   summary: Summary;
@@ -63,6 +65,7 @@ export const KINDS = {
   memory: { parent: 'chat' },
   vectors: { parent: 'chat' },
   illustration: { parent: 'chat', file: true },
+  inlay: { parent: 'chat', file: true },
   connection: { parent: null },
   settings: { parent: null, id: SETTINGS_ID },
   prompt: { parent: null },
@@ -102,6 +105,7 @@ const ENTRIES = {
   call: shape({ version: str, receipt: isRecord, at: num }),
 } satisfies Record<Entry['type'], Check>;
 
+const picture = shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) });
 const prompt = shape({ name: str, blocks: listOf(shape({ id: str, kind: str })), toggles: listOf(shape({ key: str, label: str, kind: str })) });
 const conversation = shape({ task: (value) => value === undefined, authorNote: str, models: isRecord });
 const task = shape({ task: (value) => value === 'translate' || value === 'memory' || value === 'illustrate', model: (value) => value === undefined || isRecord(value) });
@@ -141,7 +145,8 @@ const SHAPES = {
     folder: orNull(str),
   }),
   avatar: shape({ type: str, size: num, thumb: str, file: shape({ id: str, key: str }) }),
-  asset: shape({ name: str, type: str, size: num, file: shape({ id: str, key: str }) }),
+  asset: picture,
+  inlay: picture,
   chat: shape({ title: orNull(str), character: orNull(str), models: isRecord }),
   entry: (value) => isRecord(value) && typeof value.type === 'string' && Object.hasOwn(ENTRIES, value.type) && ENTRIES[value.type as Entry['type']](value),
   summary: shape({ version: num, head: num, chatRev: num, dependencies: listOf(isRecord), rendered: shape({ now: num, timeZone: str }), character: orNull(str), title: str, preview: str, count: num, at: orNull(num), order: num, recent: listOf(isRecord) , stuck: (value) => value === undefined || shape({ dependencies: listOf(isRecord) })(value) }),
