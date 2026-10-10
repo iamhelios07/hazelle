@@ -54,7 +54,6 @@ async function uploaded(cookie: string, text: string) {
 const generation = async (id: string) => (await readManifest(join(generationsDir(t.dir), id)))!;
 const newest = async () => generation((await listGenerations(t.dir)).toSorted((a, b) => b.capturedAt - a.capturedAt)[0]!.id);
 
-// The service snapshot of a generation, opened from its gzip.
 function serviceOf(manifest: Manifest) {
   const path = join(t.dir, 'scratch.sqlite');
   rmSync(path, { force: true });

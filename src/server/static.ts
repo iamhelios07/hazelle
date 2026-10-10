@@ -28,9 +28,11 @@ export function clientFiles(clientDir: string) {
     await next();
     for (const [name, value] of Object.entries(HEADERS)) c.res.headers.set(name, value);
     // ok, not 200: a Range answer (206) of an asset is as immutable as the whole.
-    if (c.res.ok) c.res.headers.set('Cache-Control', c.req.path.startsWith('/assets/') ? IMMUTABLE : 'no-cache');
+    if (!c.res.ok) return;
+    const asset = c.req.path.startsWith('/assets/');
+    c.res.headers.set('Cache-Control', asset ? IMMUTABLE : 'no-cache');
     // A tool page's origin is opaque, so its stylesheet and fonts arrive as CORS fetches. Assets are public build files.
-    if (c.res.ok && c.req.path.startsWith('/assets/')) c.res.headers.set('Access-Control-Allow-Origin', '*');
+    if (asset) c.res.headers.set('Access-Control-Allow-Origin', '*');
   });
   client.get('*', serveStatic({ root: clientDir, precompressed: true }));
   // A path that is no file is a client route, whatever it looks like: model ids carry dots

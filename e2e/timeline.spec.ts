@@ -92,7 +92,7 @@ class FakeServer {
       const since = Number(url.searchParams.get('since'));
       const known = Number(url.searchParams.get('known'));
       const sent = url.searchParams.get('timeline');
-      // A request with no timeline is taken only as a bootstrap from nothing (plan §6).
+      // A request with no timeline is taken only as a bootstrap from nothing (tech-spec §5).
       if (sent === null ? since !== 0 || known !== 0 : sent !== this.timeline) return this.reset(`feed ${sent}`);
       if (Math.max(since, known) > this.rev) return this.reset('feed past the head');
       const parent = url.searchParams.get('parent');

@@ -12,8 +12,6 @@ import { MAX_FILE_BYTES } from './files';
 import { CSP } from './static';
 import { sessionCookie, signupBody } from './testing';
 
-// The emitted server over real sockets: start, health, session, the page, a second owner refused, a drain on SIGTERM,
-// uploads cut by one.
 let dir: string;
 let bundle: string;
 let client: string;

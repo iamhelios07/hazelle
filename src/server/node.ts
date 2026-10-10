@@ -26,8 +26,7 @@ import { streamRegistry } from './stream-registry';
 import { streamStore } from './db/streams-db';
 import app from './worker';
 
-// The process: one data directory, one owner, the services every request gets, the schedulers, and a shutdown that
-// drains before it closes the databases. Configuration is the environment (docs/research/docker-port-plan.md §11).
+// Configuration is the environment (docs/research/docker-port-plan.md §11).
 const dataDir = process.env.HAZELLE_DATA ?? '/data';
 // An unset or blank variable takes the default: compose passes "" for one the operator left out, and Number("") is 0,
 // which would read as a zero-second drain and a midnight snapshot. Anything else must be a whole number in its range,

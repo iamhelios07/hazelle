@@ -1,4 +1,5 @@
 import type { AccountState } from '../contracts/admin';
+import type { Db } from './db/service-db';
 // The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
 
 export type Life = { state: AccountState | 'gone'; timeline: string | null; operation: number | null };
@@ -15,11 +16,9 @@ type WrongPhase = { wrongPhase: true };
 
 export type SqlValue = string | number | null;
 
-import type { Db } from './db/service-db';
-
-// One account's database file. transaction(fn) rolls back when fn throws. wipe() deletes the file, kv included; the
-// snapshots outlive it. A snapshot is a point-in-time copy of the file, catalogued in the service database; an armed
-// restore installs one when the store next starts (db/account-db.ts).
+// transaction(fn) rolls back when fn throws. wipe() deletes the file, kv included; the snapshots outlive it. A
+// snapshot is a point-in-time copy of the file, catalogued in the service database; an armed restore installs one
+// when the store next starts (db/account-db.ts).
 export type StoreDb = {
   exec<T>(sql: string, ...binds: SqlValue[]): T[];
   transaction<T>(fn: () => T): T;
@@ -94,7 +93,7 @@ export class StoreRules {
       // objects never has to fit in the process's memory at once. The first row always fits. Rows past the
       // budget come back without their bodies, only to tell whether more is waiting.
       // Bound candidates before the window sum; an outer LIMIT still sums the rest of the account.
-      // The budget is bytes: LENGTH(body) counts characters and stops at a NUL, so a page could pass the RPC limit.
+      // The budget is bytes: LENGTH(body) counts characters and stops at a NUL, so a page could pass the budget.
       const excluded = JSON.stringify(query.excluded);
       const pageRows = query.metadata ? METADATA_PAGE_ROWS : PAGE_ROWS;
       const rows = this.db.exec<Row>(

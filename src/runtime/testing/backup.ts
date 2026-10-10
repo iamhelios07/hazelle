@@ -1,5 +1,5 @@
-// Node-only test adapter. Production imports backup.ts and always uses its worker and disk-backed encrypted stage;
-// tests inject this in-memory stage explicitly instead of installing a browser/worker-detection fallback.
+// Production imports backup.ts and always uses its worker and disk-backed encrypted stage; tests inject this in-memory
+// stage explicitly instead of installing a browser/worker-detection fallback.
 import { pinBackup } from '../backup';
 import { exportBackup as exportCore, readBackup as readCore, restoreBackup as restoreCore, type Options, type ReadArchive } from '../backup-core';
 import type { ExportFiles, ExportStore } from '../backup-job';
@@ -11,7 +11,7 @@ import { saveSummaries } from '../summary';
 
 export type { BackupOutput } from '../backup-zip';
 
-export class MemoryBackupRecords implements BackupRecords {
+class MemoryBackupRecords implements BackupRecords {
   private readonly depths = new Map<number, BackupRecord[]>();
   async write(records: BackupRecord[], signal: AbortSignal) {
     signal.throwIfAborted();

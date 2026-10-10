@@ -178,4 +178,4 @@ export const fileBlocks = new Hono<AppEnv>().put('/files/:id/blocked', async (c)
   return c.body(null, 204);
 });
 
-export const fileKey = (incarnation: string, id: string) => `files/${incarnation}/${id}`;
+const fileKey =(incarnation: string, id: string) => `files/${incarnation}/${id}`;

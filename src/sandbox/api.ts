@@ -51,6 +51,12 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
     const pending = () => event === undefined ? pageWrites : writes;
     const changed = () => { if (event === undefined) flushPage(); };
     const story = () => { if (locked) throw new Error('The story cannot be changed while handling the user\'s own change'); };
+    const overlaid = async <T extends Json>(layer: 'writes' | 'data', method: 'chat.state.get' | 'chat.data.get', key: string): Promise<T | undefined> => {
+      const current = pending()[layer];
+      if (current.has(key)) return current.get(key) as T | undefined;
+      if (event === undefined && pageSent?.[layer].has(key)) return pageSent[layer].get(key) as T | undefined;
+      return call<T | undefined>(method, [key], event);
+    };
     return {
       ...header,
       messages: async (from, to) => {
@@ -60,22 +66,12 @@ export function connectApi(port: Port, execute: (code: string, api: Hazelle.Api)
       },
       greeting: () => call<string | null>('chat.greeting', [], event),
       state: {
-        get: async <T extends Json>(key: string): Promise<T | undefined> => {
-          const current = pending().writes;
-          if (current.has(key)) return current.get(key) as T | undefined;
-          if (event === undefined && pageSent?.writes.has(key)) return pageSent.writes.get(key) as T | undefined;
-          return call<T | undefined>('chat.state.get', [key], event);
-        },
+        get: <T extends Json>(key: string) => overlaid<T>('writes', 'chat.state.get', key),
         set: (key, value) => { pending().writes.set(key, value); changed(); },
         delete: (key) => { pending().writes.set(key, undefined); changed(); },
       },
       data: {
-        get: async <T extends Json>(key: string): Promise<T | undefined> => {
-          const current = pending().data;
-          if (current.has(key)) return current.get(key) as T | undefined;
-          if (event === undefined && pageSent?.data.has(key)) return pageSent.data.get(key) as T | undefined;
-          return call<T | undefined>('chat.data.get', [key], event);
-        },
+        get: <T extends Json>(key: string) => overlaid<T>('data', 'chat.data.get', key),
         set: (key, value) => { pending().data.set(key, value); changed(); },
         delete: (key) => { pending().data.set(key, undefined); changed(); },
         keys: async () => {

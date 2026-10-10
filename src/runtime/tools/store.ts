@@ -16,13 +16,12 @@ export const TOOL_VALUE_BYTES = 512 * 1024;
 export const TOOL_DATA_BYTES = 4 * 1024 * 1024;
 export const TOOL_CHAT_BYTES = 8 * 1024 * 1024;
 export const TOOL_KEY_CHARS = 256;
-export const TOOL_WRITES_PER_MINUTE = 30;
+const TOOL_WRITES_PER_MINUTE = 30;
 export const TOOL_NOTICES_PER_MINUTE = 3;
 const WRITE_PAUSE_MS = 1000;
 const RATE_WINDOW_MS = 60_000;
-const jsonBytes = (value: Json) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
-
-const dataBytes = (key: string, value: Json) => new TextEncoder().encode(key).byteLength + jsonBytes(value);
+const encoder = new TextEncoder();
+const dataBytes = (key: string, value: Json) => encoder.encode(key).byteLength + encoder.encode(JSON.stringify(value)).byteLength;
 
 export class ToolRate {
   private readonly sent = new Map<string, number[]>();
@@ -37,7 +36,7 @@ export class ToolRate {
   }
 }
 
-export function toolSettings(manifest: ToolManifest, values: Settings): Settings {
+function toolSettings(manifest: ToolManifest, values: Settings): Settings {
   const defaults = Object.fromEntries(manifest.settings.flatMap((field) => field.default === undefined ? [] : [[field.key, field.default]]));
   // Values survive a version that removes or changes a field; reverting code must not discard the user's settings.
   return { ...defaults, ...values };
@@ -112,7 +111,6 @@ export async function deleteToolData(store: ObjectStore, module: string, key: st
   const id = await toolDataId(module, key);
   return store.get('tooldata', id) ? store.remove(id) : { ok: true, data: null };
 }
-;
 
 const chatRows = (store: ObjectStore, module: string, chat: string) => store.children('toolchat', chat).filter(({ value }) => value.module === module);
 export const toolChatData = (store: ObjectStore, module: string, chat: string, key: string): Json | undefined => chatRows(store, module, chat).find(({ value }) => value.key === key)?.value.value;
@@ -123,8 +121,9 @@ export const toolBadges = (store: ObjectStore, module: string, chat: string): Ba
 // chat key by key spends one write of its rate, not one per key.
 export async function saveToolChat(store: ObjectStore, module: string, chat: string, data: [string, Json | undefined][], badges: { message: string; version: string; text: string | null }[]): Promise<ApiResult<null>> {
   if (!live(store.get('module', module))) return { ok: false, error: 'gone' };
-  const stored = new Map(chatRows(store, module, chat).map((row) => [row.value.key, row.id]));
-  const rows = new Map(chatRows(store, module, chat).map((row) => [row.value.key, row.value.value]));
+  const existing = chatRows(store, module, chat);
+  const stored = new Map(existing.map((row) => [row.value.key, row.id]));
+  const rows = new Map(existing.map((row) => [row.value.key, row.value.value]));
   const changed = new Map<string | null, Json | undefined>(data);
   if (data.some(([key]) => key.length > TOOL_KEY_CHARS)) return { ok: false, error: 'key-too-long' };
   if (data.some(([key, value]) => value !== undefined && dataBytes(key, value) > TOOL_VALUE_BYTES)) return { ok: false, error: 'too-large' };

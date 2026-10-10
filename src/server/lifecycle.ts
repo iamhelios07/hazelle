@@ -28,10 +28,13 @@ export const store = (env: Services, incarnation: string) => env.stores.getByNam
 
 // The call that restarts the store ends in an exception by design, never an answer, so the store is asked again on a
 // fresh stub.
-async function reload(env: Services, incarnation: string): Promise<Life | Unavailable> {
-  await store(env, incarnation)
+const restart = (env: Services, incarnation: string) =>
+  store(env, incarnation)
     .restart(incarnation)
     .catch(() => {});
+
+async function reload(env: Services, incarnation: string): Promise<Life | Unavailable> {
+  await restart(env, incarnation);
   return store(env, incarnation).status(incarnation);
 }
 
@@ -251,9 +254,7 @@ async function step(env: Services, operation: Operation, armedTooOften: () => bo
       if ('unavailable' in armed) return 'store-unavailable';
       if ('returned' in armed) {
         await db.prepare("UPDATE restores SET returned = ? WHERE id = ? AND phase = 'armed' AND returned IS NULL").bind(armed.returned, id).run();
-        await store(env, incarnation)
-          .restart(incarnation)
-          .catch(() => {});
+        await restart(env, incarnation);
       }
       return undefined;
     }
@@ -321,7 +322,7 @@ function readOperation(db: Db, id: number) {
     .first<Operation>();
 }
 
-export function run({ id, phase, verified, error }: Pick<Operation, 'id' | 'phase' | 'verified' | 'error'>): Run {
+function run({ id, phase, verified, error }: Pick<Operation, 'id' | 'phase' | 'verified' | 'error'>): Run {
   return { id, phase, verified: Boolean(verified), error };
 }
 

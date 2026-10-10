@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// npm run dev: the server (npm run server: tsx watch, data in .data/) and Vite, whose /api proxy reaches it, as one
-// command. Ctrl-C stops both; when Vite ends, the server is stopped and this exits with Vite's code.
 import { spawn } from 'node:child_process';
 import console from 'node:console';
 import process from 'node:process';

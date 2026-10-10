@@ -62,9 +62,7 @@ async function place(source: string, target: string) {
   }
 }
 
-type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema' | 'snapshots'> & {
-  snapshots: Manifest['snapshots'];
-};
+type Named = Omit<Manifest, 'version' | 'id' | 'capturedAt' | 'service' | 'accountSchema'>;
 
 // What the service snapshot names, read from the snapshot itself so the manifest and the service agree.
 function readNamed(path: string, now: number): { named: Named; sources: Map<string, string[]> } {
@@ -156,7 +154,6 @@ export async function captureGeneration(
     service: { path: 'service.sqlite.gz', ...artifact },
     accountSchema: ACCOUNT_SCHEMA_VERSION,
     ...named,
-    snapshots: named.snapshots,
   };
   const temp = join(root, `.tmp-${MANIFEST}`);
   const handle = await open(temp, 'w');
