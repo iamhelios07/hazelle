@@ -86,8 +86,8 @@ type Laid = {
 
 function lay(scope: ChatScope, history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
   const { card } = scope;
-  const context = contexts(scope, 'prompt', language);
-  const casts = new Map(scope.cast.map((member) => [member.id, contexts({ ...scope, card: member.card }, 'prompt', language)]));
+  const context = contexts(scope, 'prompt', language, '');
+  const casts = new Map(scope.cast.map((member) => [member.id, contexts({ ...scope, card: member.card }, 'prompt', language, '')]));
   // Each text outside the chat's messages rolls its random tags anew for each request, apart from every other
   // text, and reads the variables as the chat's messages left them. The text last rendered at a place is kept, so
   // what is rendered there again is the same text and not a second roll.

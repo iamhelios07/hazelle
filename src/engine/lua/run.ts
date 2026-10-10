@@ -64,7 +64,7 @@ export class Lua {
   async run(owner: string, triggers: (Script | Blocks)[], snapshot: Snapshot, event: Event, host: Host): Promise<Outcome> {
     const workset = this.hold(owner, 'event', triggers.filter((trigger): trigger is Script => trigger.kind === 'lua'));
     try {
-      const run: Run & { host: Host } = { owner: null, quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false };
+      const run: Run & { host: Host } = { owner: null, quiet: false, snapshot, variables: new Map(snapshot.variables), globals: new Map(snapshot.globals), written: new Map(), messages: working(snapshot), host, stop: false, reload: false, missing: new Set(), ranAway: false, triggerId: event.kind === 'call' ? event.id : '' };
       const errors: ScriptError[] = [];
       let value = event.kind === 'edit' ? event.value : undefined;
       let handled = false;
@@ -163,7 +163,7 @@ export class Lua {
           const variables = new Map(session.variables);
           for (const [at, item] of items.entries()) {
             for (const [name, value] of item.variables) variables.set(name, value);
-            const run: Run = { owner: script.owner, quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false };
+            const run: Run = { owner: script.owner, quiet: true, snapshot, variables, globals, written: new Map(), messages, host: null, stop: false, reload: false, missing, ranAway: false, triggerId: '' };
             engine.run = run;
             try {
               const edited = await this.listeners(engine, 'editDisplay', texts[at], { index: item.index });

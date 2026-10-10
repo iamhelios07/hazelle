@@ -42,6 +42,8 @@ export type Run = {
   reload: boolean;
   missing: Set<string>;
   ranAway: boolean;
+  // The risu-id of the element whose press called this run (CbsContext triggerId); '' for any other run.
+  triggerId: string;
 };
 export type Acting = Run & { host: Host; owner: PackOwner };
 
@@ -60,18 +62,19 @@ export function write(run: Run, name: string, value: unknown): boolean {
 
 export const add = (run: Run, role: Working['role'], data: string) => void run.messages.push({ origin: null, role, data, time: Date.now(), first: '' });
 
-const CONTEXTS = new WeakMap<Snapshot, ReturnType<typeof contexts>>();
+const CONTEXTS = new WeakMap<Snapshot, { triggerId: string; context: ReturnType<typeof contexts> }>();
 
 // A script's text with its CBS evaluated over the chat as the run found it, with the run's variable writes so far over
 // the snapshot's. What the run did to the messages is not seen, as in Risu, and a setvar in the text writes nothing.
 // The prompt's stage: a tag only the display reads stays as written, for the display to read once the text is a
 // message's.
 export function cbs(run: Run, value: string): string {
-  let context = CONTEXTS.get(run.snapshot);
-  if (!context) {
-    context = contexts({ ...run.snapshot.scope, packs: [], toggles: { get: (key) => run.globals.get(`${TOGGLE_GLOBAL}${key}`) } }, 'prompt', null);
-    CONTEXTS.set(run.snapshot, context);
+  let cached = CONTEXTS.get(run.snapshot);
+  if (cached?.triggerId !== run.triggerId) {
+    const context = contexts({ ...run.snapshot.scope, packs: [], toggles: { get: (key) => run.globals.get(`${TOGGLE_GLOBAL}${key}`) } }, 'prompt', null, run.triggerId);
+    CONTEXTS.set(run.snapshot, (cached = { triggerId: run.triggerId, context }));
   }
+  const { context } = cached;
   run.ranAway = false;
   try {
     return unescapeCbs(evaluate(value, context({ seed: crypto.randomUUID() }, new Map([...run.variables, ...run.written]))));

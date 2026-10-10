@@ -263,7 +263,7 @@ describe('importCard', () => {
   it('counts what it cannot run, keeps the triggers that do something, and leaves the text as it was', () => {
     const imported = json(
       v3({
-        description: '{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}',
+        description: '{{emotion::x}} {{getvar::y}} {{ JB_Toggled }}',
         assets: [
           { type: 'icon', uri: 'ccdefault:', name: 'main', ext: 'png' },
           { type: 'emotion', uri: 'data:image/png;base64,AAAA', name: 'smile', ext: 'png' },
@@ -291,7 +291,7 @@ describe('importCard', () => {
         character_book: { entries: [{ keys: ['k'], content: '@@disable_ui_prompt x\n@@depth 1\nbody {{bgm::a}}', enabled: true, insertion_order: 1 }] },
       }),
     );
-    expect(imported.card.description).toBe('{{emotion::x}} {{getvar::y}} {{ Trigger_ID }}');
+    expect(imported.card.description).toBe('{{emotion::x}} {{getvar::y}} {{ JB_Toggled }}');
     expect(imported.avatar).toBeNull();
     expect(imported.card.triggers).toEqual([
       { kind: 'lua', id: 'trigger-0', name: 'hp', code: 'setChatVar("hp", "1")' },

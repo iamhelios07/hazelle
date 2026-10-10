@@ -161,10 +161,10 @@ describe('Lua runs', () => {
   it("calls a button's function only when the script defined it", async () => {
     const code = `function open(id) setChatVar(id, 'door', 'open') end
       function onButtonClick(id, data) setChatVar(id, 'pressed', data) end`;
-    expect((await run(code, { kind: 'call', name: 'open' })).writes).toEqual([['door', 'open']]);
+    expect((await run(code, { kind: 'call', name: 'open', id: '' })).writes).toEqual([['door', 'open']]);
     expect((await run(code, { kind: 'button', data: 'b1' })).writes).toEqual([['pressed', 'b1']]);
-    expect(await run(code, { kind: 'call', name: 'removeChat' })).toMatchObject({ handled: false, removed: [] });
-    expect((await run(code, { kind: 'call', name: 'nothing' })).handled).toBe(false);
+    expect(await run(code, { kind: 'call', name: 'removeChat', id: '' })).toMatchObject({ handled: false, removed: [] });
+    expect((await run(code, { kind: 'call', name: 'nothing', id: '' })).handled).toBe(false);
   });
 
   it('reports CBS its cbs() call ran away with as a runaway, and leaves one the script catches to it', async () => {
@@ -277,6 +277,14 @@ describe('block triggers', () => {
     const refused = blocks('start', [{ type: 'setvar', operator: '=', var: 'hp', value: '0' }], [{ type: 'var', var: 'hp', operator: 'null' }]);
     const triggers = [bonus, seen, refused, blocks('output', [{ type: 'setvar', operator: '=', var: 'late', value: '1' }])];
     expect(await lua.run(String(owner++), triggers, SNAPSHOT, { kind: 'start' }, host())).toMatchObject({ errors: [], writes: [['hp', '15'], ['seen', '15']] });
+  });
+
+  it("read the pressed element's risu-id as {{triggerid}} in the run the press calls, and in no other", async () => {
+    const pressed = blocks('manual', [{ type: 'setvar', operator: '=', var: 'door', value: '[{{triggerid}}]' }]);
+    const script: Script = { owner: OWNER, kind: 'lua', name: 'main', code: `function blocks(id) setChatVar(id, 'lua', cbs('[{{triggerid}}]')) end` };
+    const press = async (id: string) => (await lua.run(String(owner++), [pressed, script], SNAPSHOT, { kind: 'call', name: 'blocks', id }, host())).writes;
+    expect(await press('north')).toEqual([['door', '[north]'], ['lua', '[north]']]);
+    expect(await press('')).toEqual([['door', '[]'], ['lua', '[]']]);
   });
 
   it('take the branch of a v2 if that holds, reading operands as texts or as variable names', async () => {

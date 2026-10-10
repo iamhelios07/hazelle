@@ -47,6 +47,7 @@ const context = (over: Partial<CbsContext> = {}): CbsContext => {
     toggle: () => null,
     model: { id: 'model', maxContext: null, prefill: null },
     axModel: 'aux',
+    triggerId: '',
     screen: null,
     clock: { now: Date.UTC(2026, 8, 28, 5, 4, 3), timeZone: 'UTC' },
     language: null,
@@ -224,8 +225,49 @@ describe('evaluate', () => {
 
   it('leaves a tag as written when its count would size an endless loop or a huge allocation', () => {
     const huge = '9'.repeat(309);
-    const text = `{{roll::${huge}d6}} {{rollp::10001d6}} {{dice::2d${huge}}} {{cbr::1e9}} {{arrayassert::[]::1e9::x}}`;
+    const text = `{{roll::${huge}d6}} {{rollp::10001d6}} {{dice::2d${huge}}} {{cbr::1e9}} {{arrayassert::[]::1e9::x}} {{range::[0,1,0]}} {{range::[20000]}}`;
     expect(run(text)).toBe(text);
     expect(run('{{cbr::2}}{{arrayassert::[]::1::x}}')).toBe('\\n\\n["","x"]');
+  });
+
+  it('encodes and decodes with xor, crypt and u, each way round', () => {
+    expect(run('{{xor::한글 ok}}|{{xordecrypt::{{xor::한글 ok}}}}|{{xordecrypt::v g=}}|{{xor}}')).toBe('EmpjFUd/35CU|한글 ok|A|');
+    expect(run('{{crypt::{{crypt::비밀 😀}}}}|{{crypt::{{crypt::abc::3}}::-3}}|{{crypt::abc::1}}')).toBe('비밀 😀|abc|bcd');
+    expect(run('{{u::1F600}}{{ue::41}}|{{u::zz}}|{{u::110000}}')).toBe('😀A|\0|{{u::110000}}');
+  });
+
+  it('counts with range, up or down, and filters out empty and repeated items', () => {
+    expect(run('{{range::[3]}} {{range::[2,8,3]}} {{range::[3,0,-1]}} {{range::[3,1]}} {{range::[a]}}')).toBe('["0","1","2"] ["2","5"] ["3","2","1"] [] []');
+    expect(run('{{filter::["a","","a",1,"1"]}} {{filter::["a","","a"]::nonempty}} {{filter::["a","","a"]::unique}}')).toBe('["a","1"] ["a","a"] ["a",""]');
+  });
+
+  it('draws ruby and an escaped code block, and gives a file its decoded text in the prompt only', () => {
+    expect(run('{{ruby::漢字::かんじ}}|{{ruby::漢字}}')).toBe('<ruby>漢字<rp> (</rp><rt>かんじ</rt><rp>) </rp></ruby>|<ruby>漢字<rp> (</rp><rt></rt><rp>) </rp></ruby>');
+    expect(run(`{{codeblock::js::a < b && c > "d" 'e'}}`)).toBe('<pre><code>a &lt; b &amp;&amp; c &gt; &quot;d&quot; &#39;e&#39;</code></pre>');
+    expect(run('{{file::a.txt::7ZWc6riA}}')).toBe('한글');
+    expect(run('{{file::a.txt::7ZWc6riA}}', { stage: 'display' })).toBe('{{file::a.txt::7ZWc6riA}}');
+  });
+
+  it('removes the last word or sentence made so far on its own level, and nothing after it', () => {
+    expect(run('hello world {{bkspc}} user')).toBe('hello user');
+    expect(run("hello world. what's in {{erase}} what's up")).toBe("hello world. what's up");
+    expect(run('One. Two? Three! {{erase}}')).toBe('One. Two?');
+    expect(run('no stop {{erase}}')).toBe('');
+    expect(run('keep {{upper::one two {{bkspc}}}} {{#when::1}}a b{{bkspc}}{{/when}}')).toBe('keep ONE a');
+  });
+
+  it('lists no display assets, drops inlays from the prompt and leaves them on screen as written', () => {
+    expect(run('{{chardisplayasset}}|{{inlay::x}}{{inlayed::y}}{{inlayeddata::z}}')).toBe('[]|');
+    expect(run('{{inlay::x}}', { stage: 'display' })).toBe('{{inlay::x}}');
+  });
+
+  it("answers the metadata keys it knows, leaves Risu's own as written and names an unknown one as an error", () => {
+    expect(run('{{metadata::MaxContext}} {{metadata::modelname}} {{metadata::modelinternalid}} {{metadata::imateapot}}', { model: { id: 'm1', maxContext: 8000, prefill: null } })).toBe('8000 m1 m1 🫖');
+    expect(run('{{metadata::language}} {{iserror::{{metadata::nope}}}} {{metadata::nope}}')).toBe('{{metadata::language}} 1 Error: nope is not a valid metadata key.');
+  });
+
+  it("reads the pressed element's risu-id as {{triggerid}}, and empty outside a press", () => {
+    expect(run('[{{trigger_id}}]', { triggerId: 'door' })).toBe('[door]');
+    expect(run('[{{triggerid}}]')).toBe('[]');
   });
 });
