@@ -26,6 +26,7 @@
     "gpt-tokenizer": "4.0.0",
     "hash-wasm": "4.12.0",
     "hono": "4.13.9",
+    "katex": "0.18.9",
     "lucide-react": "1.48.0",
     "markdown-it": "15.0.2",
     "react": "19.3.0",

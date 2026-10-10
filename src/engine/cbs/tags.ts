@@ -61,11 +61,8 @@ const UNSUPPORTED = new Set([
   'jb',
   'jailbreak',
   'jbtoggled',
-  // Marked N: declare is as written in Risu too, and tex wants a renderer on screen.
+  // Marked N: declare is as written in Risu too.
   'declare',
-  'tex',
-  'latex',
-  'katex',
 ]);
 
 export const isUnsupportedTag = (name: string) => UNSUPPORTED.has(normalize(name));
@@ -442,6 +439,8 @@ define('ruby furigana', 1, ([text, reading = '']) => `<ruby>${text}<rp> (</rp><r
 const HTML_ENTITIES: Record<string, string> = { '&': '&amp;', '"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;' };
 // The last argument is the code. A language before it is dropped, since nothing highlights it; Risu leaves `&` as is.
 define('codeblock', 1, (args) => `<pre><code>${args.at(-1)!.replace(/[&"'<>]/g, (char) => HTML_ENTITIES[char]!)}</code></pre>`);
+// Only the first argument, as in Risu: a formula holding :: is cut there.
+define('tex latex katex', 1, ([formula]) => `$$${formula}$$`);
 // Risu's attached text file. On screen Risu draws a box with its name, which is not built: there it stays as written.
 define('file', 2, ([, data], { context }) => (context.stage === 'display' ? null : fromUtf8.decode(fromBase64(data!))));
 

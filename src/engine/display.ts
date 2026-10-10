@@ -1,4 +1,4 @@
-import MarkdownIt, { type StateCore, type Token } from 'markdown-it';
+import MarkdownIt, { type StateCore, type StateInline, type Token } from 'markdown-it';
 import { unescapeCbs } from './cbs/escape';
 import { evaluate, Runaway } from './cbs/evaluate';
 import type { Box } from './regex/scripts';
@@ -99,6 +99,8 @@ function stripStyles(text: string, blocks: string[]) {
 function parser(html: boolean) {
   const md = new MarkdownIt({ html, breaks: true, linkify: false, typographer: false });
   md.disable(['code', 'emphasis']);
+  md.inline.ruler.before('escape', 'story_formula', formula);
+  md.renderer.rules.formula = (tokens, index) => `<span data-tex>${md.utils.escapeHtml(tokens[index]!.content)}</span>`;
   // Before text_join, so an escaped \* is still its own token and not read as a mark.
   md.core.ruler.before('text_join', 'story_lines', lines);
   md.core.ruler.after('story_lines', 'story_marks', marks);
@@ -109,6 +111,18 @@ const PLAIN = parser(false);
 
 // bot: the bot's HTML is kept, for the sanitizer to take what it allows; without it, tags show as text.
 export const storyHtml = (text: string, bot: boolean) => (bot ? BOT : PLAIN).render(text);
+
+// $$…$$ is one token, so markdown's escapes and the marks leave a formula's \\, \{, * and " as written. The screen
+// draws it (src/app/ui/story/math.ts, which reads this span) and shows it as written until then or when it cannot. A
+// pair not yet closed is text, so a streaming reply draws a formula once it is whole.
+function formula(state: StateInline, silent: boolean) {
+  if (!state.src.startsWith('$$', state.pos)) return false;
+  const end = state.src.indexOf('$$', state.pos + 3);
+  if (end === -1) return false;
+  if (!silent) state.push('formula', '', 0).content = state.src.slice(state.pos, end + 2);
+  state.pos = end + 2;
+  return true;
+}
 
 // A tight list's hidden paragraphs keep their breaks.
 function lines(state: StateCore) {

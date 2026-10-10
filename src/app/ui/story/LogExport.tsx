@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { VeilContext } from '../foundation/veil';
 import { readingScope, type Reading } from '../layout/ChatFrame';
 import styles from './LogExport.module.css';
+import { useMath } from './math';
 import { pageLook, staticHtml, type Snapshot } from './snapshot';
 import { Story } from './Story';
 
@@ -13,7 +14,13 @@ type Props = { title: string; sub: string | null; css: string; reading: Reading;
 
 // A chat drawn once, out of sight, and handed back as static HTML (snapshot): no tools, no buttons, every picture
 // whole. Drawn at the reading width in the page, never display: none, so it lays out and its pictures decode.
-export function LogExport({ title, sub, css, reading, rows, onDrawn }: Props) {
+export function LogExport(props: Props) {
+  // Drawn once KaTeX has loaded, if any formula needs it: the snapshot is taken as the log is first drawn.
+  const math = useMath(props.rows.flatMap(({ stories }) => stories).join(''));
+  return math ? <Drawn {...props} /> : null;
+}
+
+function Drawn({ title, sub, css, reading, rows, onDrawn }: Props) {
   const article = useRef<HTMLElement>(null);
   const references = useRef<HTMLDivElement>(null);
   const drawn = useRef(onDrawn);

@@ -248,6 +248,11 @@ describe('evaluate', () => {
     expect(run('{{file::a.txt::7ZWc6riA}}', { stage: 'display' })).toBe('{{file::a.txt::7ZWc6riA}}');
   });
 
+  it('wraps the first argument of tex, latex and katex in $$ in every stage, and leaves one with none as written', () => {
+    expect(run('{{tex::x^2}}|{{latex::a::b}}|{{katex::\\sqrt x}}', { stage: 'display' })).toBe('$$x^2$$|$$a$$|$$\\sqrt x$$');
+    expect(run('{{tex::x^2}}|{{tex}}')).toBe('$$x^2$$|{{tex}}');
+  });
+
   it('removes the last word or sentence made so far on its own level, and nothing after it', () => {
     expect(run('hello world {{bkspc}} user')).toBe('hello user');
     expect(run("hello world. what's in {{erase}} what's up")).toBe("hello world. what's up");
