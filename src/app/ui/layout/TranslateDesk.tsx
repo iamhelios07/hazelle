@@ -5,9 +5,7 @@ type Foot = { note: string; actions: ReactNode };
 
 type Props = {
   tools: ReactNode;
-  // At the bar's end.
   aside: ReactNode;
-  // Under the bar, across the desk.
   below?: ReactNode;
   source: {
     label: string;
@@ -18,7 +16,6 @@ type Props = {
     onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
     foot: Foot;
   };
-  // placeholder: shown while text is empty. notice: above the text, such as why it failed.
   result: { label: string; text: string; placeholder: string; busy: boolean; notice?: ReactNode; foot: Foot };
 };
 

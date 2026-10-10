@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
-// A provider may send a reply in bursts, so a reply being written is revealed at a
-// pace of its own: what has arrived and is not shown yet drains over about DRAIN_MS, never slower than FLOOR
-// characters a second, and a burst spreads over the wait for the next one.
+// A provider may send a reply in bursts, so a reply being written is revealed at a pace of its own: what has arrived
+// and is not shown yet drains over about DRAIN_MS, never slower than FLOOR characters a second, and a burst spreads
+// over the wait for the next one.
 const DRAIN_MS = 1000;
 const FLOOR = 30;
 
@@ -12,9 +12,8 @@ export function revealStep(shown: number, total: number, ms: number): number {
   return Math.min(total, shown + Math.max((FLOOR * ms) / 1000, (backlog * ms) / DRAIN_MS));
 }
 
-// Revealing
-// starts from the text the version had when it went live, so 이어 쓰기 does not type out the text it continues,
-// and goes on after the reply ends until all of it is shown, so the last burst does not jump in.
+// Revealing starts from the text the version had when it went live, so 이어 쓰기 does not type out the text it
+// continues, and goes on after the reply ends until all of it is shown, so the last burst does not jump in.
 export function useReveal(version: string, text: string, live: boolean): { text: string; revealing: boolean } {
   const [state, setState] = useState<{ version: string; shown: number } | null>(null);
   const length = useRef(text.length);

@@ -2,7 +2,7 @@ export { ChatFrame, ChatTitle, readingDefault, useMarginRoom, type Reading } fro
 export { Disclosure } from './Disclosure';
 export { FaceRow } from './FaceRow';
 export { EditorFrame } from './EditorFrame';
-export { ListDetail, usePane } from './ListDetail';
+export { ListDetail } from './ListDetail';
 export { NavBar, type NavBarProps } from './NavBar';
 export { Row } from './Row';
 export { Screen } from './Screen';

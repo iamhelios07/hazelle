@@ -78,13 +78,14 @@ export function MoveFlow({ files: dropped, aside, onClose }: { files: File[]; as
 
   async function run(backup: RisuBackup, ticks: Ticks) {
     const pick = toPick(backup.catalog, ticks);
+    const kinds = stepsOf(pick);
     const source = reader.current!;
     const steps: Steps = {};
-    setPhase({ kind: 'running', kinds: stepsOf(pick), steps });
+    setPhase({ kind: 'running', kinds, steps });
     try {
       const moved = await moveFromRisu(store, files, backup, pick, (step) => {
         steps[step.kind] = step;
-        if (reader.current === source) setPhase({ kind: 'running', kinds: stepsOf(pick), steps: { ...steps } });
+        if (reader.current === source) setPhase({ kind: 'running', kinds, steps: { ...steps } });
       });
       if (reader.current !== source) return;
       if (moved.ok) {

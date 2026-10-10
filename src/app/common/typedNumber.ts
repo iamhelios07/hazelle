@@ -10,3 +10,10 @@ export function readTyped(draft: string, whole: boolean): Typed {
   if (whole && !Number.isSafeInteger(value)) return { ok: false, error: '정수를 입력해 주세요.' };
   return { ok: true, value };
 }
+
+// undefined: left empty. null: not a number.
+export function readOptional(draft: string, whole: boolean): number | null | undefined {
+  if (draft.trim() === '') return undefined;
+  const typed = readTyped(draft, whole);
+  return typed.ok ? typed.value : null;
+}

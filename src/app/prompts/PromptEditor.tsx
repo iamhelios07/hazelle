@@ -1,6 +1,5 @@
 import { Cpu, ImageIcon, SlidersHorizontal } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import type { ModelRef, Role } from '../../connectors/assignment';
 import type { Stored } from '../../model/kinds';
 import { slotsOf, sortOf, type Block, type PromptSort, type TextBlock, type Toggle, type WrappedSlot } from '../../model/prompt';
 import { setPromptModel, setTaskModel } from '../../runtime/assignment';
@@ -64,8 +63,7 @@ const REDO = { did: '다시 실행했어요', failed: '다시 실행하지 못�
 
 type Props = {
   stored: Stored<'prompt'>;
-  // The caller
-  // decides, since a side panel is narrow on any screen.
+  // The caller decides, since a side panel is narrow on any screen.
   layout: 'split' | 'drill';
   // The 토글 pane is open: a page keeps it in its address, a panel in its own state.
   pane: Pane;
@@ -216,14 +214,7 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
     if (!perform(renameKey(toggle, to))) return;
     toast.show('키를 바꿨어요.', count ? { detail: `조건 ${count}곳도 바꿨어요.` } : undefined);
   };
-  const pickModel = async (role: Role, ref: ModelRef | null) => {
-    const saved = await setPromptModel(store, stored.id, role, ref);
-    if (!saved.ok) toast.failed(saved, '모델을 바꾸지 못했어요.');
-  };
-  const pickTaskModel = async (ref: ModelRef | null) => {
-    const saved = await setTaskModel(store, stored.id, ref);
-    if (!saved.ok) toast.failed(saved, '모델을 바꾸지 못했어요.');
-  };
+  const modelSaved = (saving: ReturnType<typeof setTaskModel>) => void saving.then((saved) => saved.ok || toast.failed(saved, '모델을 바꾸지 못했어요.'));
 
   const isDefault = isDefaultPrompt(settings, stored);
   const copy = async () => {
@@ -338,9 +329,9 @@ export function PromptEditor({ stored, layout, pane, onPane, backLabel, onBack, 
   const page: ReactNode =
     open === MODEL ? (
       stored.value.task === undefined ? (
-        <ModelPane models={stored.value.models} defaults={settings.models} connections={connections} onPick={(role, ref) => void pickModel(role, ref)} />
+        <ModelPane models={stored.value.models} defaults={settings.models} connections={connections} onPick={(role, ref) => modelSaved(setPromptModel(store, stored.id, role, ref))} />
       ) : (
-        <TaskModelPane task={stored.value.task} own={stored.value.model} connections={connections} onPick={(ref) => void pickTaskModel(ref)} />
+        <TaskModelPane task={stored.value.task} own={stored.value.model} connections={connections} onPick={(ref) => modelSaved(setTaskModel(store, stored.id, ref))} />
       )
     ) : open === PICTURE ? (
       <PicturePane tags={draft.tags} picture={draft.picture} onTags={(tags) => update(() => ({ tags }))} onPicture={(picture) => update(() => ({ picture }))} />

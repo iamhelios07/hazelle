@@ -30,6 +30,7 @@ const PHASES: Record<Exclude<RestorePhase, 'done'>, Words> = {
 const DONE: Words = { tag: '완료', says: '복원을 마치고 계정을 다시 열었어요.' };
 const UNVERIFIED: Words = { tag: '확인 필요', says: '복원은 끝났지만 계정이 다시 열렸는지 확인하지 못했어요. 마무리 확인을 해 주세요.' };
 const wordsOf = ({ phase, verified }: RestoreRun): Words => (phase === 'done' ? (verified ? DONE : UNVERIFIED) : PHASES[phase]);
+const says = (run: RestoreRun) => `${wordsOf(run).says}${run.error === null ? '' : ` 오류: ${restoreError(run.error)}`}`;
 
 // The server's error codes this page knows; another shows as the server wrote it.
 const ERRORS: Record<string, string> = {
@@ -58,9 +59,8 @@ const ACTIONS: Record<RestoreAction, { label: string; sub: string }> = {
 };
 
 function described(restore: Restore): string {
-  const error = restore.error === null ? '' : ` 오류: ${restoreError(restore.error)}`;
   const undo = restore.canUndo && restore.undoExpiresAt !== null ? ` ${moment(restore.undoExpiresAt)}까지 복원 전으로 되돌릴 수 있어요.` : '';
-  return `${wordsOf(restore).says}${error}${undo}`;
+  return `${says(restore)}${undo}`;
 }
 
 // takenAt: when the snapshot the restore lands on was taken, shown before it is confirmed.
@@ -88,7 +88,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
       const ended = answer.data;
       if (ended.phase === 'done' && ended.verified) toast.show(`${username} 계정의 복원을 끝냈어요.`);
       else if (ended.phase === 'cancelled') toast.show(`${username} 계정의 복원을 취소했어요.`);
-      else toast.error(`${username} 계정의 복원이 '${wordsOf(ended).tag}'에서 멈췄어요.`, { detail: `${wordsOf(ended).says}${ended.error === null ? '' : ` 오류: ${restoreError(ended.error)}`}` });
+      else toast.error(`${username} 계정의 복원이 '${wordsOf(ended).tag}'에서 멈췄어요.`, { detail: says(ended) });
       restores.reload();
       onActed();
       return null;

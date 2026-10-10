@@ -60,7 +60,11 @@ const told = new WeakSet<Drawing>();
 // A version's pictures, oldest first.
 function picturesByVersion(illustrations: Stored<'illustration'>[]): ReadonlyMap<string, Stored<'illustration'>[]> {
   const versions = new Map<string, Stored<'illustration'>[]>();
-  for (const picture of [...illustrations].sort((a, b) => a.value.at - b.value.at)) versions.set(picture.value.version, [...(versions.get(picture.value.version) ?? []), picture]);
+  for (const picture of [...illustrations].sort((a, b) => a.value.at - b.value.at)) {
+    const pictures = versions.get(picture.value.version);
+    if (pictures) pictures.push(picture);
+    else versions.set(picture.value.version, [picture]);
+  }
   return versions;
 }
 
@@ -390,6 +394,10 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     toast.show(`토글 ${toggles.changed}개를 기본값으로 되돌렸어요.`);
   }
 
+  function runTool(module: string, run: (chat: string) => Promise<unknown>) {
+    if (id) void run(id).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
+  }
+
   function rename(name: string) {
     if (!id) return;
     void renameChat(store, id, name).then((saved) => saved.ok || toast.failed(saved));
@@ -485,12 +493,8 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
       flipToggles: () => setPanel((current) => (current?.kind === 'toggles' ? null : { kind: 'toggles' })),
       memory: (record: string | null) => setPanel({ kind: 'memory', record }),
       tool: (module: string) => setPanel((current) => current?.kind === 'tool' && current.module === module ? null : { kind: 'tool', module }),
-      toolMenu: (module: string, item: string) => {
-        if (id) void session.scripts.menu(id, module, item).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
-      },
-      toolAction: (module: string, item: string, message: string) => {
-        if (id) void session.scripts.action(id, module, item, message).catch((error: unknown) => session.scripts.report(id, error, { kind: 'module', id: module }));
-      },
+      toolMenu: (module: string, item: string) => runTool(module, (chat) => session.scripts.menu(chat, module, item)),
+      toolAction: (module: string, item: string, message: string) => runTool(module, (chat) => session.scripts.action(chat, module, item, message)),
       side: (open: Side) => setPanel(open),
       closePanel: () => setPanel(null),
       openDialog: (which: 'rename' | 'reading' | 'persona' | 'prompt' | 'export') => setDialog(which),

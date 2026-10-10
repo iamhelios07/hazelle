@@ -7,4 +7,4 @@ export { hasFinePointer, useSplit, useViewport, useWide } from './media';
 export { Tag } from './Tag';
 export { Text } from './Text';
 export { applyTheme, THEME, type Theme } from './theme';
-export { useVeil, VeilContext, type Veil } from './veil';
+export { VeilContext } from './veil';

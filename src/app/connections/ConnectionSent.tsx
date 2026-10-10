@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { connectionUsage, type ModelUsage, type UsageWindow } from '../../model/chat';
 import { ACTS } from '../common/acts';
+import { count } from '../common/typedNumber';
 import { tally } from '../common/usage';
 import { useSession } from '../session';
 import { Button, Callout, Empty, Facts, Section, Text } from '../ui';
@@ -8,11 +9,12 @@ import { Button, Callout, Empty, Facts, Section, Text } from '../ui';
 const WINDOWS: [UsageWindow, string][] = [['hour', '지난 1시간'], ['today', '오늘'], ['week', '이번 주']];
 
 const sent = (usage: ModelUsage) =>
-  usage.calls ? `응답 ${usage.calls.toLocaleString('ko-KR')}회 · 입력 ${tally(usage.input, usage.calls)} · 출력 ${tally(usage.output, usage.calls)}` : '없음';
+  usage.calls ? `응답 ${count(usage.calls)}회 · 입력 ${tally(usage.input, usage.calls)} · 출력 ${tally(usage.output, usage.calls)}` : '없음';
 
 export function ConnectionSent({ connection }: { connection: string }) {
   const { usage: usageIndex } = useSession();
-  const [attempt, retry] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  const retry = () => setAttempt((held) => held + 1);
   const [usage, setUsage] = useState<Record<UsageWindow, ModelUsage> | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -28,9 +30,9 @@ export function ConnectionSent({ connection }: { connection: string }) {
   }, [usageIndex, connection, attempt]);
 
   return (
-    <Section title="사용 내역" note="남아 있는 채팅 기준" action={<Button variant="secondary" onClick={() => retry((count) => count + 1)}>다시 집계</Button>}>
+    <Section title="사용 내역" note="남아 있는 채팅 기준" action={<Button variant="secondary" onClick={retry}>다시 집계</Button>}>
       {failed ? (
-        <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => retry((count) => count + 1) }}>
+        <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: retry }}>
           사용 내역을 불러오지 못했어요.
         </Callout>
       ) : usage === null ? (

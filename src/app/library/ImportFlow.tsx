@@ -66,6 +66,8 @@ const TOOL_FAILURE: Record<string, string> = {
   'tool-unknown': '알 수 없는 줄이에요.',
 };
 
+const unsaved = (file: string, failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
+
 function describeImportFailure({ kind, detail, line }: ImportFailure): string {
   const tool = detail && TOOL_FAILURE[detail];
   if (!tool) return FAILURE[kind];
@@ -135,13 +137,12 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       target !== undefined ? target : named === null ? (routed ?? (await choose(null, null))) : live(store.get('character', named.id)) ? named.id : await choose(named.name, routed);
     const shown = character === null ? null : store.get('character', character)!.value;
     const name = shown && aliased(shown.card.name, shown.alias);
-    const failed = (failure: ApiFailure): Result => ({ kind: 'failed', file, failure: `저장하지 못했어요. ${describeFailure(failure)}` });
     if ('chat' in read) {
       const saved = await importChat({ store, files }, read.chat, character);
-      return saved.ok ? chatOutcome(file, [saved.data.id], name, chatMissed(saved.data.dropped)) : failed(saved);
+      return saved.ok ? chatOutcome(file, [saved.data.id], name, chatMissed(saved.data.dropped)) : unsaved(file, saved);
     }
     const saved = await importRisuChats(store, character, read.risuChats);
-    return saved.ok ? chatOutcome(file, saved.data, name, moveMissed(read.missed)) : failed(saved);
+    return saved.ok ? chatOutcome(file, saved.data, name, moveMissed(read.missed)) : unsaved(file, saved);
   }
 
   async function save(file: File, place: ModulePlace | null, target: Target, progress: (step: ProgressStep) => void, ask: (name: string) => Promise<boolean>, choose: (name: string | null, fallback: string | null) => Promise<string | null>): Promise<Result> {
@@ -153,7 +154,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       if ('chat' in parsed || 'risuChats' in parsed) return await saveChats(file.name, parsed, target, place, choose);
       if ('tool' in parsed) {
         const saved = await importTool(store, files, parsed.tool);
-        if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
+        if (!saved.ok) return unsaved(file.name, saved);
         const previous = saved.data.previous;
         const placed = !previous && place && (await setModuleAt(store, place, saved.data.id, true));
         const outcome = toolOutcome(file.name, parsed.tool.manifest, saved.data, { at: place?.kind ?? null, failure: placed && !placed.ok ? describeFailure(placed) : null });
@@ -164,7 +165,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       }
       if ('module' in parsed) {
         const saved = await importModule(store, files, parsed.module, (step) => progress(stepOf(step)));
-        if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
+        if (!saved.ok) return unsaved(file.name, saved);
         const placed = place && (await setModuleAt(store, place, saved.data.id, true));
         const failure = placed && !placed.ok ? describeFailure(placed) : null;
         return moduleOutcome(file.name, parsed.module, saved.data.id, saved.data.skipped, { at: place?.kind ?? null, failure });
@@ -174,11 +175,11 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       if (match !== null && (await ask(name))) {
         progress(stepOf({ kind: 'picture' }));
         const filled = await fillPictures(store, files, match, parsed.card.assets);
-        if (!filled.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(filled)}` };
+        if (!filled.ok) return unsaved(file.name, filled);
         return { kind: 'filled', file: file.name, name, kept: filled.data.kept, missed: assetsMissed(parsed.card.report, filled.data.skipped) };
       }
       const saved = await importCharacter(store, files, parsed.card, parsed.card.avatar, (step) => progress(stepOf(step)));
-      if (!saved.ok) return { kind: 'failed', file: file.name, failure: `저장하지 못했어요. ${describeFailure(saved)}` };
+      if (!saved.ok) return unsaved(file.name, saved);
       return characterOutcome(file.name, parsed.card, saved.data);
     } catch (error) {
       if (!(error instanceof ImportReadError)) throw error;
@@ -224,6 +225,10 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const done = state?.results.flatMap((result) => result.kind === 'character' ? [result.id] : []) ?? [];
   const chats = state?.results.flatMap((result) => result.kind === 'chat' ? [result.id] : []) ?? [];
   const modules = state?.results.flatMap((result) => result.kind === 'module' ? [result.id] : []) ?? [];
+  const go = (to: Route) => {
+    setState(null);
+    navigate(to);
+  };
   const came = state?.results.some((result) => result.kind !== 'failed') ?? false;
   const title = state?.ask ? (state.ask.kind === 'fill' ? '이미지만 가져올까요?' : '어느 캐릭터에 넣을까요?') : state?.busy ? '가져오는 중' : came ? '가져왔어요' : '가져오지 못했어요';
   return (
@@ -277,10 +282,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
             {!state.busy && done.length === 1 && (
               <Button
                 icon={MessageSquarePlus}
-                onClick={() => {
-                  setState(null);
-                  navigate({ kind: 'new-chat', character: done[0]! });
-                }}
+                onClick={() => go({ kind: 'new-chat', character: done[0]! })}
               >
                 채팅 시작
               </Button>
@@ -289,10 +291,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
               <Button
                 variant={done.length === 1 ? 'secondary' : 'primary'}
                 icon={MessageSquare}
-                onClick={() => {
-                  setState(null);
-                  navigate({ kind: 'chat', id: chats[0]! });
-                }}
+                onClick={() => go({ kind: 'chat', id: chats[0]! })}
               >
                 열기
               </Button>
@@ -301,10 +300,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
               <Button
                 variant={done.length === 1 ? 'secondary' : 'primary'}
                 icon={Package}
-                onClick={() => {
-                  setState(null);
-                  navigate({ kind: 'module', id: modules[0]! });
-                }}
+                onClick={() => go({ kind: 'module', id: modules[0]! })}
               >
                 모듈 보기
               </Button>

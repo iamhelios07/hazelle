@@ -82,6 +82,7 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
   const unindexed = indexFailed.get(id);
   const embeds = !('kind' in embedModel(store));
   const rows = memoryRows(memory);
+  const retry = { label: ACTS.retry.label, onClick: () => session.memory.retry(id) };
   const more = (
     <MoreMenu of="장기 기억">
       <MenuItem label="원문에서 전부 다시 만들기" onClick={() => setRebuilding(true)} />
@@ -100,19 +101,19 @@ export function ChatMemory({ id, record, chat }: { id: string; record: string | 
         <Text variant="note">{`기억 정리 중 · ${writing.model} · 남은 호출 ${writing.left}개`}</Text>
       ) : (
         failure && (
-          <Callout tone="warn" action={{ label: '다시 시도', onClick: () => session.memory.retry(id) }}>
+          <Callout tone="warn" action={retry}>
             {`기억을 정리하지 못했어요. ${describeMemoryFailure(failure)}`}
           </Callout>
         )
       )}
       {!writing && unchaptered && (
-        <Callout tone="warn" action={{ label: '다시 시도', onClick: () => session.memory.retry(id) }}>
+        <Callout tone="warn" action={retry}>
           {`${CHAPTER}를 만들지 못했어요. ${describeMemoryFailure(unchaptered)}`}
         </Callout>
       )}
       {embedding !== undefined && <Text variant="note">{`검색 준비 중 · 기록 ${embedding}개`}</Text>}
       {embedding === undefined && unindexed && (
-        <Callout tone="warn" action={{ label: '다시 시도', onClick: () => session.memory.retry(id) }}>
+        <Callout tone="warn" action={retry}>
           {`검색할 기록을 준비하지 못했어요. ${describeMemoryFailure(unindexed)}`}
         </Callout>
       )}

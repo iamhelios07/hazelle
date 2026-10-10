@@ -28,7 +28,12 @@ export function badgesByVersion(rows: readonly { value: ToolChatData }[], tools:
   const records = rows.flatMap(({ value }) => (value.key === null && order.has(value.module) ? [value] : [])).sort((a, b) => order.get(a.module)! - order.get(b.module)!);
   const versions = new Map<string, string[]>();
   for (const { value } of records) {
-    for (const { version, text } of Object.values(value as Badges)) versions.set(version, [...(versions.get(version) ?? []), [...text].slice(0, BADGE_CHARS).join('')]);
+    for (const { version, text } of Object.values(value as Badges)) {
+      const badge = [...text].slice(0, BADGE_CHARS).join('');
+      const badges = versions.get(version);
+      if (badges) badges.push(badge);
+      else versions.set(version, [badge]);
+    }
   }
   return versions;
 }

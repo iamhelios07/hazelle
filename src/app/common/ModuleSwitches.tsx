@@ -8,7 +8,7 @@ type Owner = Exclude<ModulePlace, { kind: 'always' }>;
 
 const WORKS: Record<Owner['kind'], string> = { character: '켠 모듈은 이 캐릭터의 모든 채팅에 적용돼요.', prompt: '켠 모듈은 이 프롬프트를 쓰는 채팅에 적용돼요.' };
 
-// 캐릭터 편집's and a conversation prompt's 모듈 section. own: the owner's modules as stored.
+// own: the owner's modules as stored.
 export function ModuleSwitches({ owner, own }: { owner: Owner; own: string[] }) {
   const store = useStore();
   const toast = useToast();

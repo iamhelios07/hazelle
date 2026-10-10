@@ -12,7 +12,7 @@ type State = 'done' | 'active' | 'pending';
 
 const count = (value: number) => value.toLocaleString('ko-KR');
 const counted = (steps: ProgressStep[]) => steps.flatMap(({ done = 0, total }) => (total === undefined ? [] : [{ done: Math.min(done, total), total }]));
-const sum = (steps: ProgressStep[]) => ({ done: counted(steps).reduce((all, { done }) => all + done, 0), total: counted(steps).reduce((all, { total }) => all + total, 0) });
+const sum = (steps: ProgressStep[]) => counted(steps).reduce((all, { done, total }) => ({ done: all.done + done, total: all.total + total }), { done: 0, total: 0 });
 const over = ({ done, total, finished }: ProgressStep) => finished === true || (total !== undefined && (done ?? 0) >= total);
 
 // A stage is over by its own count, under way once begun, and the first not begun is under way as well once every
@@ -97,7 +97,6 @@ function Hero({ steps, title, note }: { steps: ProgressStep[]; title?: string; n
 
 type Props = { steps: ProgressStep[]; hero?: boolean; title?: string; note?: string };
 
-// Work under way, plain as rows or hero as the filling mark with stages; the kit README says which shows what.
 export function Progress({ steps, hero = false, title, note }: Props) {
   if (hero) return <Hero steps={steps} title={title} note={note} />;
   const whole = sum(steps);

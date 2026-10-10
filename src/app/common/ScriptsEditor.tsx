@@ -9,6 +9,7 @@ import { useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
 import { ACTS, addOf } from './acts';
+import { choices } from './reading';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
 import { useSearch } from './useSearch';
 import { COMMAND, scriptName, SCRIPTS, STAGES } from './words';
@@ -16,7 +17,7 @@ import { COMMAND, scriptName, SCRIPTS, STAGES } from './words';
 type Lua = Extract<Trigger, { kind: 'lua' }>;
 type Blocks = Extract<Trigger, { kind: 'blocks' }>;
 
-const STAGE_OPTIONS = (Object.keys(STAGES) as RegexScript['stage'][]).map((value) => ({ value, label: STAGES[value] }));
+const STAGE_OPTIONS = choices(STAGES);
 const CHECKS: Record<ScriptCheck, string> = { empty: '패턴 없음', invalid: '패턴 오류', unsupported: '지원하지 않음' };
 const ON: Record<string, string> = { start: '채팅 시작', input: STAGES.input, output: STAGES.output, manual: '버튼' };
 const OFF = '꺼짐';

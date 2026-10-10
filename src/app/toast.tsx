@@ -12,15 +12,13 @@ type Notice = { key: number; message: string; detail?: string; tone: 'plain' | '
 export type Toasts = {
   show: (message: string, extra?: Extra) => void;
   error: (message: string, extra?: Extra) => void;
-  // A full account is
-  // left to its standing notice (shell/Workspace), which says it once, and a write a restore dropped to the toast that
-  // counts them (shell/Workspace); a prefixed failure, a whole task such as a backup, is still said.
+  // A full account is left to its standing notice (shell/Workspace), which says it once, and a write a restore dropped
+  // to the toast that counts them (shell/Workspace); a prefixed failure, a whole task such as a backup, is still said.
   failed: (failure: ApiFailure, prefix?: string) => void;
   // Deletion takes effect at once, and the toast offers 되돌리기 instead of a confirm dialog; Ctrl+Z does it too.
   // Answers what takes the toast away.
   undoable: (message: string, undo: () => void, detail?: string) => () => void;
-  // Long ones are cut until pressed, and once
-  // opened stay until closed.
+  // Long ones are cut until pressed, and once opened stay until closed.
   said: (from: From, text: string, tone: Notice['tone']) => void;
 };
 

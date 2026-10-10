@@ -25,8 +25,8 @@ const SORTS: { sort: PromptSort; label: string; hint?: string; none: string }[] 
 ];
 type Order = 'name' | 'recent';
 
-const useWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '쓰는 채팅 없음');
-const used = (use: PromptUse) => (use.at === null ? useWords(use) : `${useWords(use)} · ${ago(use.at)} 씀`);
+const chatsWords = (use: PromptUse) => (use.chats ? `채팅 ${use.chats}개` : '쓰는 채팅 없음');
+const used = (use: PromptUse) => (use.at === null ? chatsWords(use) : `${chatsWords(use)} · ${ago(use.at)} 씀`);
 
 type Props = {
   onPick: (id: string) => void;

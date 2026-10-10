@@ -5,7 +5,6 @@ import styles from './Empty.module.css';
 
 type Props = {
   variant?: 'body' | 'section' | 'story' | 'pane' | 'side' | 'menu';
-  // The first step out of empty, such as 새 연결 on a list of one's own things.
   action?: ReactNode;
   children: ReactNode;
 };

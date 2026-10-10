@@ -26,14 +26,16 @@ function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn'
   return { label: '종료 사유', value: '정상 종료' };
 }
 
-const tokenFacts = (receipt: Receipt) => [
-  { label: '입력', value: tokens(receipt.usage?.inputTokens ?? null) },
-  { label: '출력', value: tokens(receipt.usage?.outputTokens ?? null) },
-];
-const costFact = (receipt: Receipt) => ({ label: '비용', value: cost(receipt.cost), tone: receipt.cost === null ? ('muted' as const) : undefined });
-const timeFacts = (receipt: Receipt) => [
+const outcomeFacts = (receipt: Receipt) => [
+  { label: '비용', value: cost(receipt.cost), tone: receipt.cost === null ? ('muted' as const) : undefined },
+  finish(receipt),
   { label: '첫 토큰까지', value: seconds(receipt.firstTextMs) },
   { label: '속도', value: speed(receipt.usage?.outputTokens ?? null, receipt.firstTextMs, receipt.totalMs) },
+];
+const callFacts = (receipt: Receipt) => [
+  { label: '입력', value: tokens(receipt.usage?.inputTokens ?? null) },
+  { label: '출력', value: tokens(receipt.usage?.outputTokens ?? null) },
+  ...outcomeFacts(receipt),
 ];
 
 export function ChatInfo({ chat: open }: { chat: OpenChat }) {
@@ -111,10 +113,7 @@ export function ChatInfo({ chat: open }: { chat: OpenChat }) {
                 {earlier.map((call, index) => (
                   <Stack key={index} gap="related">
                     <Text variant="note">{`${index === 0 ? '첫 응답' : `이어 쓰기 ${index}`} · ${call.modelName} · ${call.source}`}</Text>
-                    <Facts
-                      variant="tiles"
-                      items={[...tokenFacts(call), costFact(call), finish(call), ...timeFacts(call)]}
-                    />
+                    <Facts variant="tiles" items={callFacts(call)} />
                   </Stack>
                 ))}
               </Section>
@@ -139,10 +138,7 @@ function TranslationCall({ receipt }: { receipt: Receipt }) {
   return (
     <Section level={3} title="번역">
       <Text variant="note">{`${receipt.modelName} · ${receipt.source}`}</Text>
-      <Facts
-        variant="tiles"
-        items={[...tokenFacts(receipt), costFact(receipt), finish(receipt), ...timeFacts(receipt)]}
-      />
+      <Facts variant="tiles" items={callFacts(receipt)} />
     </Section>
   );
 }
@@ -190,7 +186,7 @@ function Call({ receipt }: { receipt: Receipt }) {
       ) : (
         <Empty variant="section">제공자가 사용량을 알려 주지 않았어요.</Empty>
       )}
-      <Facts variant="tiles" items={[...(usage ? [] : [{ label: '토큰', value: UNKNOWN, tone: 'muted' as const }]), costFact(receipt), finish(receipt), ...timeFacts(receipt)]} />
+      <Facts variant="tiles" items={[...(usage ? [] : [{ label: '토큰', value: UNKNOWN, tone: 'muted' as const }]), ...outcomeFacts(receipt)]} />
     </>
   );
 }

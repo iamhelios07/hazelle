@@ -1,4 +1,5 @@
 import type { Unused } from '../../engine/pipeline';
+import { finalOf } from './languages';
 
 const LABEL: Record<Unused['kind'], (count: number) => string> = {
   bias: (count) => `바이어스 ${count}개`,
@@ -7,8 +8,8 @@ const LABEL: Record<Unused['kind'], (count: number) => string> = {
 
 // 은 after a syllable with a final consonant (설정은), 는 otherwise (개는); a word ending outside Hangul takes 는.
 const topic = (word: string) => {
-  const code = word.charCodeAt(word.length - 1);
-  return code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0 ? '은' : '는';
+  const final = finalOf(word);
+  return final !== null && final !== 0 ? '은' : '는';
 };
 
 export function describeUnused(items: Unused[]): string | null {

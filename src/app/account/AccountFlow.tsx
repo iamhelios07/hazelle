@@ -44,8 +44,7 @@ async function loadState(notice: string | null = null, prefer: 'signup' | 'login
   return { kind: 'locked', signedIn: boot, notice };
 }
 
-// children renders what is
-// behind it, so account/ never imports the shell.
+// children renders what is behind it, so account/ never imports the shell.
 export function AccountFlow({ children }: { children: (unlocked: Unlocked) => ReactNode }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
 

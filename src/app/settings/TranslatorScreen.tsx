@@ -7,6 +7,7 @@ import { translateText, TRANSLATOR_CHAT } from '../../runtime/turn';
 import { ACTS } from '../common/acts';
 import { describeTranslateFailure } from '../common/failure';
 import { LanguageMenu } from '../common/IntoLanguage';
+import { count } from '../common/typedNumber';
 import { useCopy } from '../common/useCopy';
 import { usePersisted } from '../common/usePersisted';
 import { DEFAULT_MODELS, NOTE_UNSENT, noteLines, PAGES, STOP, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
@@ -27,7 +28,7 @@ type Run =
   | { kind: 'stopped'; text: string }
   | { kind: 'failed'; text: string; failure: TranslatorFailure };
 
-const count = (text: string) => (text ? `${text.length.toLocaleString('ko-KR')}자` : '');
+const characters = (text: string) => (text ? `${count(text.length)}자` : '');
 
 export function TranslatorScreen({ back }: { back: Back | null }) {
   const session = useSession();
@@ -75,7 +76,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
 
   const text = run.kind === 'idle' ? '' : run.text;
   const resultNote =
-    run.kind === 'running' ? '번역 중…' : run.kind === 'done' ? [count(run.text), run.cut && '길이 한도로 잘림'].filter(Boolean).join(' · ') : run.kind === 'stopped' ? `${count(run.text)} · 번역 중단됨` : '';
+    run.kind === 'running' ? '번역 중…' : run.kind === 'done' ? [characters(run.text), run.cut && '길이 한도로 잘림'].filter(Boolean).join(' · ') : run.kind === 'stopped' ? `${characters(run.text)} · 번역 중단됨` : '';
 
   return (
     <Screen width="wide" top={<NavBar title={PAGES.translator} {...backBar(back)} />}>
@@ -117,7 +118,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
           onChange: setSource,
           onKeyDown,
           foot: {
-            note: count(source),
+            note: characters(source),
             actions: (
               <>
                 <Button

@@ -23,8 +23,8 @@ type Props = {
   tools?: ReactNode;
   pinned: boolean;
   onTap: () => void;
-  // Marked for a moment from this timestamp, again with each look; 0 for none. The collection
-  // brings the first marked row into view, even when it has not been mounted.
+  // Marked for a moment from this timestamp, again with each look; 0 for none. The collection brings the first marked
+  // row into view, even when it has not been mounted.
   found?: number;
   // Marked while true, with no fade.
   marked?: boolean;

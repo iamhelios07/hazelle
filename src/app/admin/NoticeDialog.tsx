@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { MAX_NOTICE_LENGTH } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
 import { describeFailure } from '../common/failure';
+import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { Button, Callout, Dialog, TextField } from '../ui';
 
@@ -55,8 +56,8 @@ export function NoticeDialog({ title, note, label, optional = false, placeholder
         value={text}
         onChange={setText}
         placeholder={placeholder}
-        hint={`${length.toLocaleString('ko-KR')} / ${MAX_NOTICE_LENGTH.toLocaleString('ko-KR')}자`}
-        error={over ? `${MAX_NOTICE_LENGTH.toLocaleString('ko-KR')}자까지 보낼 수 있어요.` : undefined}
+        hint={`${count(length)} / ${count(MAX_NOTICE_LENGTH)}자`}
+        error={over ? `${count(MAX_NOTICE_LENGTH)}자까지 보낼 수 있어요.` : undefined}
       />
       {failure && (
         <Callout tone="warn" alert>

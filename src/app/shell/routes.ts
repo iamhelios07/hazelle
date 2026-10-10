@@ -2,8 +2,7 @@ import { CONNECTION_TYPES } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import type { Shelf } from '../../model/library';
 
-// These paths are what a reload, a bookmark and
-// the browser's back button land on, so an existing one never changes.
+// These paths are what a reload, a bookmark and the browser's back button land on, so an existing one never changes.
 export type Route =
   | { kind: 'home' }
   | { kind: 'gallery' }
@@ -18,8 +17,7 @@ export type Route =
   // '' when there was none.
   | { kind: 'connect-direct'; address: string }
   | { kind: 'connection'; id: string }
-  // pane opens the editor on its 토글 pane, which the
-  // chat's toggle panel links to.
+  // pane opens the editor on its 토글 pane, which the chat's toggle panel links to.
   | { kind: 'prompts' }
   | { kind: 'prompt'; id: string; pane: 'toggles' | null }
   | { kind: 'personas' }
@@ -53,6 +51,7 @@ const DIRECT = 'direct';
 export function parseRoute(at: string): Route {
   const query = at.indexOf('?');
   const path = query < 0 ? at : at.slice(0, query);
+  const params = new URLSearchParams(query < 0 ? '' : at.slice(query));
   const [top, id, sub, ...rest] = path.slice(1).split('/');
   // A model id's own slashes stay path separators: Cloudflare's asset handler redirects an escaped one (%2F) to a bare one.
   if (top === 'models' && id !== undefined && sub !== undefined) {
@@ -81,14 +80,14 @@ export function parseRoute(at: string): Route {
       return ID.test(id) && sub === undefined ? { kind: 'connection', id } : HOME;
     }
     if (sub === undefined) return { kind: 'add-connection' };
-    if (sub === DIRECT) return { kind: 'connect-direct', address: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('address') ?? '' };
+    if (sub === DIRECT) return { kind: 'connect-direct', address: params.get('address') ?? '' };
     const type = CONNECTION_TYPES.find((candidate) => candidate.id === sub);
     return type ? { kind: 'connect', type } : HOME;
   }
   if (top === 'prompts') {
     if (id === undefined) return { kind: 'prompts' };
     if (!ID.test(id) || sub !== undefined) return HOME;
-    return { kind: 'prompt', id, pane: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('pane') === 'toggles' ? 'toggles' : null };
+    return { kind: 'prompt', id, pane: params.get('pane') === 'toggles' ? 'toggles' : null };
   }
   if (top === 'personas' && sub === undefined) {
     if (id === undefined) return { kind: 'personas' };
@@ -106,7 +105,7 @@ export function parseRoute(at: string): Route {
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
-    if (top === 'account') return { kind: 'account', section: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('section') === 'notices' ? 'notices' : null };
+    if (top === 'account') return { kind: 'account', section: params.get('section') === 'notices' ? 'notices' : null };
   }
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
   if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };
@@ -212,8 +211,7 @@ export function listOf(route: Route): Kind<'connections' | 'add-connection' | 'p
 
 export type SettingsPage = 'models' | 'connections' | 'chat' | 'prompts' | 'personas' | 'modules' | 'display' | 'translator' | 'account' | 'admin';
 
-// 'list' for 설정's own list, or null outside 설정. While it is not null, the
-// settings layer stands in for the library.
+// 'list' for 설정's own list, or null outside 설정. While it is not null, the settings layer stands in for the library.
 export function settingsPage(route: Route): SettingsPage | 'list' | null {
   switch (route.kind) {
     case 'prompts':
@@ -266,8 +264,8 @@ export function enterShelf(shelf: Shelf<{ id: string }>, wide: boolean): Route {
   return wide && latest ? { kind: 'chat', id: latest.id } : { kind: 'shelf', character: shelf.id };
 }
 
-// On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is
-// the way back), so only phones use their answer.
+// On wide screens the library's pages show no 뒤로 at all (the sidebar beside them is the way back), so only phones
+// use their answer.
 export function up(route: Below, chatShelf?: string | null): Route {
   switch (route.kind) {
     case 'gallery':

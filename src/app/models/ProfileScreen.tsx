@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { modelSettings } from '../../connectors/registry';
-import { fit, SERVICE_TIERS, VERBOSITY, WHOLE, type Cache, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
+import { fit, SERVICE_TIERS, VERBOSITY, WHOLE, type Change, type ModelSettings, type Reasoning, type SettingsSchema } from '../../connectors/settings';
 import type { Stored } from '../../model/kinds';
 import {
   addProfile,
@@ -16,6 +16,7 @@ import {
   type ProfileUser,
 } from '../../runtime/profiles';
 import { ACTS, addOf } from '../common/acts';
+import { choices } from '../common/reading';
 import { typedText } from '../common/typed';
 import { useSearch } from '../common/useSearch';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
@@ -25,16 +26,12 @@ import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { Button, ChoiceGroup, Disclosure, Empty, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Screen, Section, SettingGroup, SettingRow, Stack, Switch, Tag } from '../ui';
-import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
-import { count, readTyped } from '../common/typedNumber';
+import { CACHE, changeLine, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
+import { count, readOptional, readTyped } from '../common/typedNumber';
 
 const whole = (field: Field | 'budget') => field === 'budget' || field === 'context' || WHOLE.has(field);
 // undefined: left empty, which unsets it. null: not a number the field takes.
-const readNumber = (text: string, field: Field | 'budget') => {
-  if (text.trim() === '') return undefined;
-  const typed = readTyped(text, whole(field));
-  return typed.ok ? typed.value : null;
-};
+const readNumber = (text: string, field: Field | 'budget') => readOptional(text, whole(field));
 const BUDGET_START = 8000;
 
 type Choice = 'unset' | 'off' | 'adaptive' | 'budget' | `level:${string}`;
@@ -92,8 +89,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
   function noteFor(setting: Change['setting']): string | undefined {
     const left = users.filter((user) => user.changes.some((change) => change.setting === setting && change.change === 'left-out')).map((user) => user.model.name);
     const capped = users.flatMap((user) => user.changes.flatMap((change) => (change.setting === setting && change.change === 'capped' ? [`${user.model.name} ${count(change.to)}`] : [])));
-    const parts = [...(left.length ? [`제외: ${left.join(', ')}`] : []), ...(capped.length ? [`조정: ${capped.join(', ')}`] : [])];
-    return parts.length ? parts.join(' · ') : undefined;
+    return changeLine(left, capped);
   }
 
   function numberRow(field: Field): ReactNode {
@@ -195,7 +191,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <ChoiceGroup
           layout="segmented"
           label="캐시"
-          options={[{ value: 'off' as const, label: '끔' }, ...(Object.keys(CACHE) as Cache[]).map((value) => ({ value, label: CACHE[value] }))]}
+          options={[{ value: 'off' as const, label: '끔' }, ...choices(CACHE)]}
           value={shown.cache ?? 'off'}
           onChange={(value) => set({ cache: value === 'off' ? undefined : value })}
         />

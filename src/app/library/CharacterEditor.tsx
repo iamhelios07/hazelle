@@ -21,7 +21,7 @@ import { ScriptsEditor } from '../common/ScriptsEditor';
 import type { CharacterPart } from '../common/characterPart';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
-import { readTyped } from '../common/typedNumber';
+import { readOptional } from '../common/typedNumber';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BOT_MODELS, BOT_MODELS_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
 import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore } from '../session';
@@ -36,9 +36,8 @@ type Height = 'peek' | 'most';
 const HEIGHT_ERROR = `${PICTURE_PERCENT.min}에서 ${PICTURE_PERCENT.max} 사이로 입력해 주세요.`;
 // undefined: left empty, which is the app's own height. null: not a height.
 const readHeight = (draft: string) => {
-  if (draft.trim() === '') return undefined;
-  const typed = readTyped(draft, true);
-  return typed.ok && typed.value >= PICTURE_PERCENT.min && typed.value <= PICTURE_PERCENT.max ? typed.value : null;
+  const value = readOptional(draft, true);
+  return typeof value === 'number' && (value < PICTURE_PERCENT.min || value > PICTURE_PERCENT.max) ? null : value;
 };
 const SWITCHES = { decor: setDecor, botModels: (store: ObjectStore, id: string, on: boolean) => setModels(store, { kind: 'character', id }, on), keepThoughts: setKeepThoughts };
 type Switched = keyof typeof SWITCHES;
@@ -163,6 +162,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
       <ChoiceGroup layout="segmented" label="보기" options={READINGS} value={reading} onChange={setReading} />
     </Row>
   );
+  const untranslated = (source: string) => (translation.running.has(source) ? '번역 중…' : '아직 번역하지 않았어요.');
   const translatorMissing = translated && !translation.translator.ok && <Callout tone="warn">{`번역할 수 없어요. ${describeTranslateFailure(translation.translator.failure)}`}</Callout>;
   // The stored card's text, as it was translated; a draft not saved yet is not.
   const translatedField = (label: string, source: string, lines: number) =>
@@ -173,12 +173,13 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
         lines={lines}
         readOnly
         value={translation.translationOf(source) ?? ''}
-        placeholder={translation.running.has(source) ? '번역 중…' : '아직 번역하지 않았어요.'}
+        placeholder={untranslated(source)}
         onChange={() => {}}
       />
     );
 
   const notUsed = describeUnused(unused(card));
+  const notesTranslated = translation.translationOf(card.creatorNotes);
   const split = layout === 'split';
   const lead = (
     <>
@@ -228,10 +229,10 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
             {translatorMissing}
             {!translated ? (
               <Story html={storyHtml(card.creatorNotes, true)} />
-            ) : translation.translationOf(card.creatorNotes) !== undefined ? (
-              <Story html={storyHtml(translation.translationOf(card.creatorNotes)!, true)} />
+            ) : notesTranslated !== undefined ? (
+              <Story html={storyHtml(notesTranslated, true)} />
             ) : (
-              <Text variant="note">{translation.running.has(card.creatorNotes) ? '번역 중…' : '아직 번역하지 않았어요.'}</Text>
+              <Text variant="note">{untranslated(card.creatorNotes)}</Text>
             )}
           </Section>
         )}

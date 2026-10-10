@@ -1,10 +1,26 @@
 import { ofSort, translationPrompt, illustrationPrompt } from '../../runtime/prompts';
 import { DELETED_PROMPT, follows } from '../common/words';
 import { useSession, useSettings, usePrompts } from '../session';
-import { ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
+import { ChipButton, Divider, Menu, MenuHeading, MenuItem, SettingRow, Switch, Tag, Text } from '../ui';
 import type { OpenChat } from './useChat';
 
 export const appliesTo = (card: OpenChat['card'], own: boolean) => (card && own ? `${card.name}의 채팅에만 적용돼요.` : '캐릭터별 설정이 없는 모든 채팅에 적용돼요.');
+
+export function PerCharacter({ card, own, onChange }: { card: OpenChat['card']; own: boolean; onChange: (own: boolean) => void }) {
+  return (
+    <>
+      {card && (
+        <SettingRow
+          place="panel"
+          label="캐릭터별 설정"
+          help={`켜면 ${card.name}의 채팅에만 이 설정을 적용해요.`}
+          control={<Switch label="캐릭터별 설정" checked={own} onChange={onChange} />}
+        />
+      )}
+      <Text variant="note">{appliesTo(card, own)}</Text>
+    </>
+  );
+}
 
 const TASKS = {
   translate: { noun: '번역', setting: 'translatePrompt', choose: translationPrompt },

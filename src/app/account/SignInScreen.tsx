@@ -55,7 +55,7 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
         </>
       }
     >
-      <Intro title={recovery ? `복구 키로 ${verb}` : account ? '잠금 해제' : '로그인'}>
+      <Intro title={recovery ? `복구 키로 ${verb}` : verb}>
         {recovery
           ? '복구 키 파일을 선택하거나 키를 입력해 주세요.'
           : account && `${account} 계정이 이 기기에서 잠겨 있어요.`}

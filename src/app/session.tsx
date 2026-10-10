@@ -23,8 +23,8 @@ import { Saves } from './common/saveQueue';
 // admin, localProviders: the server's word when the account was opened (GET /session, signup, login). facts: its word since.
 export type Account = { admin: boolean; localProviders: readonly string[]; facts: AccountFacts; onLock: () => void; onLogout: () => Promise<string | null> };
 
-// A save in flight and one queued behind it are two round
-// trips, which from Korea can take seconds each; a store write waiting out a dropped connection never ends on its own.
+// A save in flight and one queued behind it are two round trips, which from Korea can take seconds each; a store write
+// waiting out a dropped connection never ends on its own.
 const LEAVING_WAIT = 10_000;
 
 const SessionContext = createContext<{ session: Session; account: Account; saves: Saves } | null>(null);
@@ -65,8 +65,7 @@ export const useTalk = (): Talk => useSession().talk;
 export const useTranslator = (): Translator => useSession().translator;
 export const useIllustrator = (): Illustrator => useSession().illustrator;
 
-// The function is a new one when a picture has
-// loaded, so what shows pictures renders again.
+// The function is a new one when a picture has loaded, so what shows pictures renders again.
 export function useAssetUrl(): PictureUrl {
   const { assets } = useSession();
   // Page keys ChatScreen by chat id (including an unsaved chat), so leaving releases this view's story, CSS and
@@ -149,9 +148,8 @@ export function useBin() {
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
 const NO_CHILDREN: never[] = [];
-// The array is held until one of
-// them changes, since a fresh array on every read would make React re-render forever. Subscribing reads it anew, so
-// a change between the render and the subscription is not missed.
+// The array is held until one of them changes, since a fresh array on every read would make React re-render forever.
+// Subscribing reads it anew, so a change between the render and the subscription is not missed.
 // illustration: a chat's pictures, held while the chat is loaded, so a scope change reads them again; parent null is a
 // chat not saved yet, which has none.
 export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'toolchat'>(kind: K, parent: string | null): Stored<K>[] {
@@ -223,9 +221,8 @@ export function useTranslating(): Translating {
 }
 
 // null while it has none.
-export function useChatMemory(chat: string | null): Memory | null {
+export function useChatMemory(id: string | null): Memory | null {
   const { store } = useSession();
-  const id = chat;
   const subscribe = useCallback(
     (listener: () => void) => (id === null ? () => {} : store.subscribe((changes) => changes.some((change) => (change.kind === 'memory' || change.kind === 'scope') && change.parent === id) && listener())),
     [store, id],
@@ -248,7 +245,6 @@ export function useRemembering(): Remembering {
   const { memory } = useSession();
   return useSyncExternalStore(memory.subscribe, memory.snapshot);
 }
-
 
 export function useTool(module: string | null) {
   const owner = useStored('module', module);

@@ -2,7 +2,6 @@ import type { Cache, Change, ModelSettings, NumberSetting, ServiceTier, Verbosit
 import type { Stored } from '../../model/kinds';
 import { count } from '../common/typedNumber';
 
-
 export type Field = NumberSetting | 'context';
 export const NUMBER: Record<Field, { label: string; help?: string; unit?: string; unset?: string }> = {
   maxOutput: { label: '응답 최대 길이', unit: '토큰' },
@@ -50,12 +49,16 @@ export function valueWords(settings: ModelSettings): string[] {
 // A starred model whose wire format this version does not speak (Model protocol 'unsupported').
 export const NOT_CALLABLE = '이 버전에서는 이 모델을 호출할 수 없어요';
 
+export function changeLine(left: readonly string[], capped: readonly string[]): string | undefined {
+  const parts = [...(left.length ? [`제외: ${left.join(', ')}`] : []), ...(capped.length ? [`조정: ${capped.join(', ')}`] : [])];
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
 // undefined when it is sent the values as they are.
 export function changeWords(changes: Change[]): string | undefined {
   const left = changes.filter((change) => change.change === 'left-out').map((change) => settingLabel(change.setting));
   const capped = changes.flatMap((change) => (change.change === 'capped' ? [`${settingLabel(change.setting)} ${count(change.to)}`] : []));
-  const parts = [...(left.length ? [`제외: ${left.join(', ')}`] : []), ...(capped.length ? [`조정: ${capped.join(', ')}`] : [])];
-  return parts.length ? parts.join(' · ') : undefined;
+  return changeLine(left, capped);
 }
 
 export const defaultFirst = (profiles: readonly Stored<'profile'>[], defaultId: string | undefined) =>

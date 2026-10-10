@@ -94,7 +94,7 @@ function ChatModelScreen({ connection, model, back }: Props) {
   const current = choice.kind === 'profile' ? choice.profile : null;
   const schema = modelSettings(connection.value, model);
   const sorted = defaultFirst(profiles, settings.profile);
-
+  const recount = () => retryUsage((attempt) => attempt + 1);
 
   // The default is what a model without its own uses, so picking it clears the model's own.
   async function choose(id: string) {
@@ -167,9 +167,9 @@ function ChatModelScreen({ connection, model, back }: Props) {
         </Row>
       </Section>
 
-      <Section title="사용량" note="남아 있는 채팅 기준 · 마지막 집계" action={<Button variant="secondary" onClick={() => retryUsage((attempt) => attempt + 1)}>다시 집계</Button>}>
+      <Section title="사용량" note="남아 있는 채팅 기준 · 마지막 집계" action={<Button variant="secondary" onClick={recount}>다시 집계</Button>}>
         {usageFailed ? (
-          <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => retryUsage((attempt) => attempt + 1) }}>
+          <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: recount }}>
             사용량을 불러오지 못했어요.
           </Callout>
         ) : usage === null ? (
