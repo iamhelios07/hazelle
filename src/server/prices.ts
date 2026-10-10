@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { PRICE_LISTS, type PriceList, type PriceTier, type Rates } from '../connectors/price-list';
 import type { Db } from './db/service-db';
-import { fail, type AppEnv } from './http';
+import { fail, isRecord, type AppEnv } from './http';
 import type { Upstream } from './relay';
 import { requireSession } from './session';
 
@@ -15,7 +15,6 @@ const FETCH_MS = 60 * 1000;
 
 export type PriceRow = Rates & { list: string; model: string };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const rate = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
 
 // A model without an input or output price, or with a tier of another kind than context size, is left out and costs
@@ -38,7 +37,7 @@ function ratesOf(cost: unknown): Rates | null {
 }
 
 // null when the payload is not models.dev's provider map at all.
-export function priceRows(payload: unknown): PriceRow[] | null {
+function priceRows(payload: unknown): PriceRow[] | null {
   if (!isRecord(payload)) return null;
   const rows: PriceRow[] = [];
   for (const list of LISTS) {

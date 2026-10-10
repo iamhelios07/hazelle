@@ -25,12 +25,13 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
   migrate(raw, 'migrations');
   const db = serviceDb(raw);
   const clock = { now: () => Date.now() };
+  const registry = () => accountRegistry(dir, db, serviceReads(db), () => clock.now());
   const disk = { freePercent: 50 };
   const outbound: Upstream = (url, init) => upstream(url, init);
   const env: Services = {
     db,
     files: diskBucket(dir),
-    stores: accountRegistry(dir, db, serviceReads(db), () => clock.now()),
+    stores: registry(),
     streams: streamRegistry(streamStore(join(dir, 'streams.sqlite')), outbound),
     outbound,
     localProviders: new Set(),
@@ -90,7 +91,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
         env.db.prepare('UPDATE service SET signup_cap = 1, account_bytes_cap = NULL, account_file_bytes_cap = NULL'),
       ]);
       for (const sub of ['accounts', 'files', 'snapshots', 'backup']) rmSync(join(dir, sub), { recursive: true, force: true });
-      env.stores = accountRegistry(dir, db, serviceReads(db), () => clock.now());
+      env.stores = registry();
     },
     get: (path: string, cookie?: string) => send('GET', path, undefined, cookie),
     post: (path: string, body?: unknown, cookie?: string) => send('POST', path, body, cookie),
@@ -116,7 +117,7 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     // remembered. The service connection and the other services stay as they are.
     restartProcess: () => {
       env.stores.close();
-      env.stores = accountRegistry(dir, db, serviceReads(db), () => clock.now());
+      env.stores = registry();
     },
   };
 }

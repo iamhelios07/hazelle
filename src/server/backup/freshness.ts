@@ -29,7 +29,7 @@ export async function freshness(env: Services, dataDir: string, now: number, fre
     .map(({ capturedAt }) => capturedAt);
   const backupAgeHours = complete.length ? Math.floor(((now - Math.max(...complete)) / HOUR_MS) * 10) / 10 : null;
   const files = join(dataDir, 'files');
-  const diskFreePercent = Math.min(await free(dataDir), ...(existsSync(files) ? [await free(files)] : []));
+  const diskFreePercent = Math.min(...(await Promise.all([dataDir, ...(existsSync(files) ? [files] : [])].map(free))));
   // With no complete generation yet, the installation's own age is how long it has gone without one.
   const unbackedHours =
     backupAgeHours ?? (now - (await env.db.prepare('SELECT created_at FROM installation').first<number>('created_at'))!) / HOUR_MS;

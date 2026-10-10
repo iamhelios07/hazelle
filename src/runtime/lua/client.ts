@@ -1,9 +1,7 @@
 import type { LuaRunner } from '../script-binding';
-import type { ScriptUnit } from '../../engine/script-api';
+import type { Event, Host, ScriptUnit } from '../../engine/script-api';
 import type { DisplayBatch, DisplayItem, Script } from '../../engine/lua/run';
-import type { Event } from '../../engine/script-api';
 import type { LuaMessage, Snapshot } from '../../engine/lua/state';
-import type { Host } from '../../engine/script-api';
 import type { ChatBasis, ChatScope } from '../../engine/render';
 import type { ScriptOutcome } from './event';
 import { changedTail, sameHistory, type Tail } from '../history-delta';

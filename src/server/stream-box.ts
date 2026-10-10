@@ -62,6 +62,16 @@ function nonce(seq: number): Uint8Array<ArrayBuffer> {
   return iv;
 }
 
+function concat(parts: Uint8Array[], size: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return out;
+}
+
 function fromBase64(text: string): Uint8Array<ArrayBuffer> | null {
   try {
     return Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
@@ -162,12 +172,7 @@ export class StreamBox {
       if (gathering) clearTimeout(gathering);
       gathering = null;
       if (!size) return;
-      const body = new Uint8Array(size);
-      let at = 0;
-      for (const chunk of gathered) {
-        body.set(chunk, at);
-        at += chunk.byteLength;
-      }
+      const body = concat(gathered, size);
       gathered = [];
       size = 0;
       this.append(sealing, DATA, body);
@@ -253,12 +258,7 @@ export class StreamBox {
     this.persisting = null;
     if (this.dropped || !this.pending.length) return;
     const page = this.pending;
-    const bytes = new Uint8Array(this.pendingBytes);
-    let at = 0;
-    for (const { bytes: frame } of page) {
-      bytes.set(frame, at);
-      at += frame.byteLength;
-    }
+    const bytes = concat(page.map((each) => each.bytes), this.pendingBytes);
     const last = page[page.length - 1]!.seq;
     await this.storage.put(frameKey(last), bytes);
     this.persisted = last + 1;

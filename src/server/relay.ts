@@ -13,7 +13,7 @@ export type UpstreamInit = {
 // that failed on the way.
 export type Upstream = (url: URL, init: UpstreamInit) => Promise<Response>;
 
-export type RelayError = 'bad-envelope' | 'not-https' | 'not-public' | 'upstream-unreachable' | 'upstream-redirect';
+type RelayError ='bad-envelope' | 'not-https' | 'not-public' | 'upstream-unreachable' | 'upstream-redirect';
 
 type Envelope = { url: URL; method: string; headers: Record<string, string>; body: string | null };
 

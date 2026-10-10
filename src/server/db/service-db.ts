@@ -72,7 +72,7 @@ export function serviceDb(db: DatabaseSync): Db {
 }
 
 // The SQL with its string literals and comments blanked, so a ? or a keyword inside them is not read as syntax.
-export function bare(sql: string): string {
+function bare(sql: string): string {
   return sql.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"|--[^\n]*|\/\*[\s\S]*?\*\//g, (match) => ' '.repeat(match.length));
 }
 

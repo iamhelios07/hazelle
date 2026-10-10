@@ -53,7 +53,9 @@ export function hex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
 export async function readObject(c: Context): Promise<Record<string, unknown> | null> {
   const body: unknown = await c.req.json().catch(() => null);
-  return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  return isRecord(body) ? body : null;
 }

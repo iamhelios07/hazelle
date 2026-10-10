@@ -60,7 +60,7 @@ const random = () => randomBytes(6).toString('hex');
 
 // The signup's first step: the file exists, with its schema and head, before the account's row does. A crash in
 // between leaves a file with no row, which the hourly reconciliation removes after an hour.
-export function prepareAccountFile(dataDir: string, incarnation: string, timeline: string): void {
+function prepareAccountFile(dataDir: string, incarnation: string, timeline: string): void {
   const path = accountPath(dataDir, incarnation);
   makeDirs(join(dataDir, 'accounts'));
   if (existsSync(path)) throw new Error(`account file exists: ${incarnation}`);

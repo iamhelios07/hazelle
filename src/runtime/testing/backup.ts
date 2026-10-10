@@ -11,7 +11,7 @@ import { saveSummaries } from '../summary';
 
 export type { BackupOutput } from '../backup-zip';
 
-export class MemoryBackupRecords implements BackupRecords {
+class MemoryBackupRecords implements BackupRecords {
   private readonly depths = new Map<number, BackupRecord[]>();
   async write(records: BackupRecord[], signal: AbortSignal) {
     signal.throwIfAborted();

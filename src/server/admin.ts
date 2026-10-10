@@ -81,7 +81,10 @@ async function act(c: Context<AppEnv>, ...statements: Statement[]) {
   return done.at(-1)!.results.length ? c.body(null, 204) : fail(c, 404, 'not-found');
 }
 
-const noticeText = (value: unknown) => (typeof value === 'string' && value.trim() && value.trim().length <= MAX_NOTICE_LENGTH ? value.trim() : null);
+const noticeText = (value: unknown) => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text && text.length <= MAX_NOTICE_LENGTH ? text : null;
+};
 // The text of a notice sent with an act: null for none, blank among them; undefined for one too long to send.
 const optionalText = (value: unknown) => (value === undefined || (typeof value === 'string' && !value.trim()) ? null : (noticeText(value) ?? undefined));
 
@@ -280,7 +283,7 @@ admin.put('/accounts/:id/caps', async (c) => {
 admin.delete('/accounts/:id', async (c) => {
   const id = c.req.param('id');
   if (!ID.test(id)) return fail(c, 400, 'bad-input');
-  const incarnation = await c.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
+  const incarnation = await incarnationOf(c, id);
   if (incarnation === null) return fail(c, 404, 'not-found');
   const left = await leaveAccount(c.env, c.executionCtx, id, incarnation, true);
   if (left === 'busy') return fail(c, 409, 'account-busy');
@@ -303,6 +306,8 @@ admin.post('/accounts/:id/restores', async (c) => {
   return c.json(await runRestore(c.env, begun.begun));
 });
 
+const incarnationOf = (c: Context<AppEnv>, id: string) => c.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
+
 const REFUSAL_STATUS = { 'not-found': 404, 'account-busy': 409, 'bad-report': 400, 'bad-time': 400, 'cannot-undo': 400 } as const;
 
 // What a restore to the time would land on, asked before the operator confirms it. takenAt: when that snapshot was
@@ -311,7 +316,7 @@ admin.get('/accounts/:id/snapshot', async (c) => {
   const id = c.req.param('id');
   const at = Number(c.req.query('at'));
   if (!ID.test(id) || !count(at)) return fail(c, 400, 'bad-input');
-  const incarnation = await c.env.db.prepare('SELECT incarnation FROM accounts WHERE id = ?').bind(id).first<string>('incarnation');
+  const incarnation = await incarnationOf(c, id);
   if (incarnation === null) return fail(c, 404, 'not-found');
   try {
     const snapshot = await c.env.stores.snapshotAt(incarnation, at);

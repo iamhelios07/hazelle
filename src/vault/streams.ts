@@ -1,4 +1,4 @@
-import { toBase64 } from './aead';
+import { encodeText, toBase64 } from './aead';
 
 // The key a detached call is sealed for (tech-spec §6, Detached replies): the server gets the public half and seals
 // with a key of its own agreed with it; the private half travels only inside the call's sealed marker, so any
@@ -16,8 +16,7 @@ export async function streamOpener(id: string, key: JsonWebKey, hello: Uint8Arra
   const theirs = await crypto.subtle.importKey('raw', hello, P256, false, []);
   const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirs }, mine, 256);
   const hkdf = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
-  const encode = (text: string) => new TextEncoder().encode(text);
-  const opening = await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: encode(id), info: encode('risu-alpha stream') }, hkdf, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const opening = await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: encodeText(id), info: encodeText('risu-alpha stream') }, hkdf, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
   return async (type: number, seq: number, sealed: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer> | null> => {
     const iv = new Uint8Array(12);
     new DataView(iv.buffer).setUint32(8, seq);

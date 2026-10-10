@@ -1,4 +1,5 @@
 import type { AccountState } from '../contracts/admin';
+import type { Db } from './db/service-db';
 // The rules of one account's store over its database file (db/account-db.ts); nothing here touches a file directly.
 
 export type Life = { state: AccountState | 'gone'; timeline: string | null; operation: number | null };
@@ -14,8 +15,6 @@ export type FeedPage = { timeline: string; bytes: number; until: number | null; 
 type WrongPhase = { wrongPhase: true };
 
 export type SqlValue = string | number | null;
-
-import type { Db } from './db/service-db';
 
 // transaction(fn) rolls back when fn throws. wipe() deletes the file, kv included; the snapshots outlive it. A
 // snapshot is a point-in-time copy of the file, catalogued in the service database; an armed restore installs one
