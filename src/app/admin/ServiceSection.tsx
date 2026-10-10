@@ -40,7 +40,7 @@ export function ServiceSection({ service, onSaved, onNoticed }: { service: Servi
     <Section
       title="서비스"
       action={
-        <Button variant="secondary" size="sm" busy={busy} disabled={!valid || !changed} onClick={() => void save()}>
+        <Button variant="secondary" busy={busy} disabled={!valid || !changed} onClick={() => void save()}>
           저장
         </Button>
       }

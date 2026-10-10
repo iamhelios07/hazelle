@@ -1,14 +1,15 @@
-import { ArrowRight, ChevronDown, ChevronUp, Copy, Eraser, Languages, Square } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronUp, Eraser, Languages, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { translateSwitches } from '../../runtime/characters';
 import { translationPrompt } from '../../runtime/prompts';
 import { sendsNotes, translatorOf, type TranslatorFailure } from '../../runtime/translate';
 import { translateText, TRANSLATOR_CHAT } from '../../runtime/turn';
+import { ACTS } from '../common/acts';
 import { describeTranslateFailure } from '../common/failure';
 import { LanguageMenu } from '../common/IntoLanguage';
 import { useCopy } from '../common/useCopy';
 import { usePersisted } from '../common/usePersisted';
-import { DEFAULT_MODELS, NOTE_UNSENT, noteLines, PAGES, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
+import { DEFAULT_MODELS, NOTE_UNSENT, noteLines, PAGES, STOP, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
 import { useConnections, usePrompts, useSession, useSettings } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -133,7 +134,7 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
                 </Button>
                 {running ? (
                   <Button variant="secondary" size="sm" icon={Square} onClick={() => abort.current?.abort()}>
-                    멈추기
+                    {STOP}
                   </Button>
                 ) : (
                   <Button size="sm" icon={ArrowRight} disabled={!ready} onClick={() => void start()}>
@@ -153,8 +154,8 @@ export function TranslatorScreen({ back }: { back: Back | null }) {
           foot: {
             note: resultNote,
             actions: (
-              <Button variant="ghost" size="sm" icon={Copy} disabled={!text || running} onClick={() => copy(text)}>
-                복사
+              <Button variant="ghost" size="sm" icon={ACTS.copy.icon} disabled={!text || running} onClick={() => copy(text)}>
+                {ACTS.copy.label}
               </Button>
             ),
           },

@@ -58,7 +58,7 @@ export function CapsDialog({ account, onClose, onSaved }: { account: AdminAccoun
       onSubmit={() => valid && void save()}
       actionsLayout="full"
       actions={
-        <Button type="submit" size="md" busy={busy} disabled={!valid}>
+        <Button type="submit" busy={busy} disabled={!valid}>
           저장
         </Button>
       }

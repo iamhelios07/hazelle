@@ -3,12 +3,13 @@ import { imageOnly, setDefaultModel } from '../../runtime/assignment';
 import { modelProfile, profileUsers } from '../../runtime/profiles';
 import { TASK_NAMES } from '../common/prompt-words';
 import { findStarred, RolePicker } from '../common/RolePicker';
+import { useSearch } from '../common/useSearch';
 import { AUX_HELP, DEFAULT_MODELS, follows, MODEL_ROLES, NOT_STARRED, noStarred, PAGES } from '../common/words';
 import { useConnections, useProfiles, usePrompts, useSettings, useStore } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Callout, Empty, List, ListItem, NavBar, Screen, Section, SettingGroup } from '../ui';
+import { Callout, Empty, List, ListItem, NavBar, Row, Screen, Section, SettingGroup } from '../ui';
 import { defaultFirst, valueWords } from './settingWords';
 
 // The screens never say 묶음.
@@ -27,6 +28,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
       if (!result.ok) toast.failed(result, `${DEFAULT_MODELS}을 바꾸지 못했어요.`);
     });
   const models = connections.flatMap((connection) => connection.value.starred.map((model) => ({ connection, model, choice: modelProfile(store, model) })));
+  const search = useSearch(models, '즐겨찾기한 모델 검색', ({ connection, model }) => [model.name, model.id, connection.value.label]);
   const sorted = defaultFirst(profiles, settings.profile);
   const ownModels = prompts.flatMap((prompt) => (prompt.value.task && prompt.value.model ? [{ prompt, task: prompt.value.task, model: prompt.value.model }] : []));
 
@@ -62,7 +64,7 @@ export function ModelsScreen({ back }: { back: Back | null }) {
         {main && !findStarred(main, connections) && <Callout tone="warn">{`${MODEL_ROLES.main}로 정한 모델이 즐겨찾기에 없어요.`}</Callout>}
       </Section>
       {ownModels.length > 0 && (
-        <Section title="프롬프트에서 정한 모델" help="이 프롬프트의 작업에는 보조 모델 대신 이 모델을 사용해요.">
+        <Section title="프롬프트에서 정한 모델" help={`이 프롬프트의 작업에는 ${MODEL_ROLES.aux} 대신 이 모델을 사용해요.`}>
           <List label="프롬프트에서 정한 모델">
             {ownModels.map(({ prompt, task, model }) => (
               <ListItem
@@ -77,9 +79,12 @@ export function ModelsScreen({ back }: { back: Back | null }) {
         </Section>
       )}
       <Section title="즐겨찾기한 모델" help="새로 즐겨찾기한 모델은 기본 설정을 사용해요.">
-        {models.length > 0 ? (
+        {search.field && <Row kind="toolbar">{search.field}</Row>}
+        {search.none ? (
+          <Empty variant="section">{search.none}</Empty>
+        ) : models.length > 0 ? (
           <List label="즐겨찾기한 모델">
-            {models.map(({ connection, model, choice }) => (
+            {search.found.map(({ connection, model, choice }) => (
               <ListItem
                 key={`${connection.id}/${model.id}`}
                 title={model.name}
@@ -98,13 +103,14 @@ export function ModelsScreen({ back }: { back: Back | null }) {
         <List label="만들어 둔 설정">
           {sorted.map((profile) => {
             const words = valueWords(profile.value.settings);
+            const used = profileUsers(connections, settings.profile, profile.id).length;
             return (
               <ListItem
                 key={profile.id}
                 title={profile.value.name}
                 badge={profile.id === settings.profile ? '기본' : undefined}
                 description={words.length ? words.join(' · ') : '정한 값 없음'}
-                aside={`모델 ${profileUsers(connections, settings.profile, profile.id).length}개`}
+                aside={used ? `모델 ${used}개` : undefined}
                 current={route.kind === 'profile' && route.id === profile.id}
                 onClick={() => navigate({ kind: 'profile', id: profile.id })}
               />

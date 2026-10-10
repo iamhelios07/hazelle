@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { readServiceUsage, type ServiceUsage } from '../../runtime/admin';
+import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { Button, Callout, Section, Text } from '../ui';
@@ -34,13 +35,13 @@ export function UsageSection() {
     <Section
       title="전체 사용량"
       action={busy
-        ? <Button variant="secondary" size="sm" onClick={() => job.current?.abort()}>집계 멈추기</Button>
-        : <Button variant="secondary" size="sm" onClick={() => void refresh()}>집계</Button>}
+        ? <Button variant="secondary" onClick={() => job.current?.abort()}>집계 멈추기</Button>
+        : <Button variant="secondary" onClick={() => void refresh()}>집계</Button>}
     >
       {totals
         ? <Text variant="note">{totals.accounts.toLocaleString('ko-KR')}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · ${totals.unread.toLocaleString('ko-KR')}명은 읽지 못해 합계에서 빠짐` : ''}</Text>
         : <Text variant="note">{busy ? '집계 중…' : '집계 전'}</Text>}
-      {failure && <Callout tone="warn">{failure}</Callout>}
+      {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => void refresh() }}>{failure}</Callout>}
     </Section>
   );
 }

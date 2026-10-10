@@ -1,6 +1,7 @@
-import { FileText, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import type { Method } from '../../vault/keys';
+import { ACTS } from '../common/acts';
 import { useCredential } from '../common/useCredential';
 import { LegalNotice } from '../common/LegalNotice';
 import { useAttempt } from '../common/useAttempt';
@@ -64,8 +65,8 @@ export function SignInScreen({ account, notice, signup, onSubmit, onLogout }: Pr
       <Stack>
         {!account && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         {recovery && (
-          <FileButton accept=".txt,text/plain" icon={FileText} onFile={(file) => void file.text().then(attempt)}>
-            파일에서 불러오기
+          <FileButton accept=".txt,text/plain" icon={ACTS.import.icon} onFile={(file) => void file.text().then(attempt)}>
+            파일에서 {ACTS.import.label}
           </FileButton>
         )}
         <TextField {...credential.field} />

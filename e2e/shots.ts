@@ -37,7 +37,7 @@ export async function enterShots(page: Page) {
   if (await signin.isVisible()) return signin.click();
   await signup.fill(SHOTS.password);
   await page.getByRole('button', { name: '다음', exact: true }).click();
-  await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
+  await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
   await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');

@@ -1,4 +1,4 @@
-import { Star, Trash2 } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { modelSettings, resolveConnection } from '../../connectors/registry';
 import type { Model } from '../../connectors/types';
@@ -6,12 +6,14 @@ import type { Stored } from '../../model/kinds';
 import { catalogKey, type CatalogResult } from '../../runtime/catalog';
 import { refreshStarred, removeConnection, restoreConnection, setStarred } from '../../runtime/connections';
 import { modelProfile } from '../../runtime/profiles';
+import { ACTS } from '../common/acts';
 import { describeCatalogFailure } from '../common/failure';
+import { useSearch } from '../common/useSearch';
 import { useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, NavBar, Row, Screen, SearchField, Stack, Text } from '../ui';
+import { Button, Callout, ChoiceGroup, Empty, IconButton, List, ListItem, MenuItem, NavBar, Row, Screen, Stack } from '../ui';
 import { ConnectionAccounts } from './ConnectionAccounts';
 import { ConnectionMeters } from './ConnectionMeters';
 import { ConnectionSent } from './ConnectionSent';
@@ -37,7 +39,6 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   const { id, value: connection } = stored;
   const [catalog, setCatalog] = useState<CatalogResult | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
 
   const key = catalogKey(connection);
@@ -69,13 +70,8 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
     { value: 'starred' as const, label: '즐겨찾기' },
     ...(known ? (Object.entries(FILTERS) as [Filter, { label: string }][]).map(([value, { label }]) => ({ value, label })) : []),
   ];
-  const needle = query.trim().toLowerCase();
-  const shown = models.filter(
-    (model) =>
-      (filter === 'all' ||
-        (filter === 'starred' ? starredIds.has(model.id) : FILTERS[filter].test(model))) &&
-      (!needle || model.name.toLowerCase().includes(needle) || model.id.toLowerCase().includes(needle)),
-  );
+  const search = useSearch(models, '모델 검색', (model) => [model.name, model.id]);
+  const shown = search.found.filter((model) => filter === 'all' || (filter === 'starred' ? starredIds.has(model.id) : FILTERS[filter].test(model)));
   const starredShown = shown.filter((model) => starredIds.has(model.id));
   const restShown = shown.filter((model) => !starredIds.has(model.id));
 
@@ -118,43 +114,36 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
   function remove() {
     void removeConnection(store, id).then((result) => result.ok || toast.failed(result));
     navigate({ kind: 'connections' });
-    toast.undoable(`${connection.label} 연결을 삭제했어요.`, () => void restoreConnection(store, stored));
+    toast.undoable(`'${connection.label}' 연결을 삭제했어요.`, () => void restoreConnection(store, stored));
   }
 
   const signIn = resolveConnection(connection)?.type?.signIn;
   // Accounts join a pool by signing in, so a pool type always has a sign-in.
   const pool = connection.turns && signIn ? { connection: { ...connection, turns: connection.turns }, signIn } : null;
 
-  const subtitle = !catalog ? '모델 목록을 불러오는 중…' : catalog.ok ? `모델 ${catalog.models.length}개` : '모델 목록을 불러오지 못했어요';
+  const listed = !catalog ? '모델 목록을 불러오는 중…' : catalog.ok ? `모델 ${catalog.models.length}개` : '모델 목록을 불러오지 못했어요';
+  const subtitle = [connection.turns ? `계정 ${connection.accounts.length}개` : connection.accounts[0]!.name, listed, starred.length ? `즐겨찾기 ${starred.length}개` : ''].filter(Boolean).join(' · ');
 
   return (
     <Screen
+      width="form"
       top={
         <NavBar
           title={connection.label}
-          subtitle={connection.turns ? `계정 ${connection.accounts.length}개 · ${subtitle}` : connection.accounts[0]!.name ? `${connection.accounts[0]!.name} · ${subtitle}` : subtitle}
+          subtitle={subtitle}
           {...backBar(back)}
-          actions={<IconButton icon={Trash2} label="연결 삭제" onClick={remove} />}
+          menu={{ label: '연결 더 보기', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={remove} /> }}
         />
-      }
-      stickyActions
-      actions={
-        <Stack gap="related">
-          <Text variant="note">
-            즐겨찾기 {starred.length}개
-          </Text>
-          <Button onClick={() => navigate({ kind: 'connections' })}>완료</Button>
-        </Stack>
       }
     >
       <ConnectionSent connection={id} />
       {pool ? <ConnectionAccounts id={id} connection={pool.connection} signIn={pool.signIn} /> : <ConnectionMeters connection={connection} />}
-      <Stack gap="related">
-        <SearchField label="모델 검색" value={query} onChange={setQuery} />
+      <Row kind="toolbar">
+        {search.field}
         <ChoiceGroup label="모델 필터" options={filters} value={filter} onChange={setFilter} />
-      </Stack>
+      </Row>
       {catalog && !catalog.ok && (
-        <Callout tone="warn" action={{ label: '다시 불러오기', onClick: () => setAttempt((count) => count + 1) }}>
+        <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => setAttempt((count) => count + 1) }}>
           {describeCatalogFailure(catalog.failure)}
         </Callout>
       )}
@@ -164,7 +153,7 @@ export function ConnectionModelsScreen({ stored, back }: { stored: Stored<'conne
           {restShown.length > 0 && <List label="모델" keys={restShown.map((model) => model.id)}>{(index) => row(restShown[index]!)}</List>}
         </Stack>
       ) : (
-        catalog?.ok && <Empty>{needle || filter !== 'all' ? '맞는 모델이 없어요.' : '모델 목록이 비어 있어요.'}</Empty>
+        catalog?.ok && <Empty>{search.none ?? (filter !== 'all' ? '맞는 모델이 없어요.' : '모델이 없어요.')}</Empty>
       )}
     </Screen>
   );

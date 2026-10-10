@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { connectionUsage, type ModelUsage, type UsageWindow } from '../../model/chat';
+import { ACTS } from '../common/acts';
 import { tally } from '../common/usage';
 import { useSession } from '../session';
-import { Button, Empty, Facts, Section, Text } from '../ui';
+import { Button, Callout, Empty, Facts, Section, Text } from '../ui';
 
 const WINDOWS: [UsageWindow, string][] = [['hour', '지난 1시간'], ['today', '오늘'], ['week', '이번 주']];
 
@@ -27,9 +28,13 @@ export function ConnectionSent({ connection }: { connection: string }) {
   }, [usageIndex, connection, attempt]);
 
   return (
-    <Section title="사용 내역" note="남아 있는 채팅 기준" action={<Button variant="secondary" size="sm" onClick={() => retry((count) => count + 1)}>다시 집계</Button>}>
-      {usage === null ? (
-        <Text>{failed ? '사용 내역을 불러오지 못했어요.' : '사용 내역을 확인하는 중'}</Text>
+    <Section title="사용 내역" note="남아 있는 채팅 기준" action={<Button variant="secondary" onClick={() => retry((count) => count + 1)}>다시 집계</Button>}>
+      {failed ? (
+        <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => retry((count) => count + 1) }}>
+          사용 내역을 불러오지 못했어요.
+        </Callout>
+      ) : usage === null ? (
+        <Text variant="note">사용 내역을 확인하는 중…</Text>
       ) : WINDOWS.some(([window]) => usage[window].calls) ? (
         <Facts items={WINDOWS.map(([window, label]) => ({ label, value: sent(usage[window]) }))} />
       ) : (

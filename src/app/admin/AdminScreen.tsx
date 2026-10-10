@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { BackupWarning } from '../../contracts/admin';
 import { readService, type Report } from '../../runtime/admin';
+import { ACTS } from '../common/acts';
 import { PAGES } from '../common/words';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -35,7 +36,7 @@ export function AdminScreen({ back }: { back: Back | null }) {
   return (
     <Screen width="form" top={<NavBar title={PAGES.admin} {...backBar(back)} />}>
       {service.data?.warnings.map((warning) => <Callout key={warning} tone="warn" alert>{WARNINGS[warning]}</Callout>)}
-      {service.failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: service.reload }}>{service.failure}</Callout>}
+      {service.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: service.reload }}>{service.failure}</Callout>}
       {service.data && <ServiceSection service={service.data} onSaved={() => { service.reload(); acted(); }} onNoticed={acted} />}
       <UsageSection />
       <AccountsSection loaded={accounts} onActed={actedOnAccount} onRestores={(account) => setRestoring({ ...account, report: null })} />

@@ -1,8 +1,9 @@
-import { Download, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { exportBackup, readBackup, restoreBackup, type Backup, type BackupStep } from '../../runtime/backup';
+import { ACTS, importOf } from '../common/acts';
 import { downloadOutput } from '../common/download';
 import { describeFailure } from '../common/failure';
+import { STOP } from '../common/words';
 import { useToast } from '../toast';
 import { useSaves, useSession } from '../session';
 import { Button, Dialog, FileButton, Progress, Section, SettingGroup, SettingRow, type ProgressStep } from '../ui';
@@ -25,7 +26,7 @@ const STAGES: Record<Direction, { first: string; kinds: { kind: BackupStep['kind
   save: { first: '집계', kinds: [{ kind: 'objects', label: '내용' }, { kind: 'files', label: '이미지' }] },
   load: { first: '백업 읽기', kinds: [{ kind: 'files', label: '이미지' }, { kind: 'objects', label: '내용' }, { kind: 'summaries', label: '요약' }] },
 };
-const TITLE: Record<Direction, string> = { save: '백업 받는 중', load: '백업 불러오는 중' };
+const TITLE: Record<Direction, string> = { save: '백업 내보내는 중', load: '백업 가져오는 중' };
 const stages = (direction: Direction, steps: Steps): ProgressStep[] => [
   { label: STAGES[direction].first, finished: Object.keys(steps).length > 0 },
   ...STAGES[direction].kinds.map(({ kind, label }): ProgressStep => (steps[kind] ? { label, done: steps[kind].done, total: steps[kind].total } : { label })),
@@ -71,7 +72,7 @@ export function BackupSection() {
       }
       const { left, skipped } = made.data;
       const detail = [left ? `암호화 키로 열리지 않는 항목 ${left}개는 제외했어요.` : '', skipped ? `차단된 이미지 ${skipped}개는 제외했어요.` : ''].filter(Boolean).join(' ');
-      toast.show('백업을 받았어요.', detail ? { detail } : undefined);
+      toast.show('백업을 내보냈어요.', detail ? { detail } : undefined);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('백업을 저장하지 못했어요.');
     } finally {
@@ -90,11 +91,11 @@ export function BackupSection() {
       }
       backup = read.backup;
       const loaded = await restoreBackup(store, files, backup, options);
-      if (loaded.ok) return toast.show('백업을 불러왔어요.', loaded.data.skipped ? { detail: `차단됐거나 너무 큰 이미지 ${loaded.data.skipped}개는 제외했어요.` } : undefined);
-      if (loaded.error === 'not-new') return toast.error('백업은 새 계정에만 불러올 수 있어요.');
+      if (loaded.ok) return toast.show('백업을 가져왔어요.', loaded.data.skipped ? { detail: `차단됐거나 너무 큰 이미지 ${loaded.data.skipped}개는 제외했어요.` } : undefined);
+      if (loaded.error === 'not-new') return toast.error('백업은 새 계정에만 가져올 수 있어요.');
       if (loaded.error === 'not-backup' || loaded.error === 'backup-storage' || loaded.error === 'backup-crashed') return unread(loaded.error);
-      if (loaded.error === 'stopped') return toast.show('불러오기를 중지했어요.', { detail: '같은 파일로 이어서 불러올 수 있어요.' });
-      toast.error('불러오지 못했어요.', { detail: `${describeFailure(loaded)} 같은 파일로 이어서 불러올 수 있어요.` });
+      if (loaded.error === 'stopped') return toast.show('가져오기를 멈췄어요.', { detail: '같은 파일로 이어서 가져올 수 있어요.' });
+      toast.error('가져오지 못했어요.', { detail: `${describeFailure(loaded)} 같은 파일로 이어서 가져올 수 있어요.` });
     } finally {
       await backup?.close();
       end();
@@ -106,25 +107,25 @@ export function BackupSection() {
       <SettingGroup label="백업">
         <SettingRow
           label="전체 백업"
-          help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 API 키를 zip 파일로 받아요. 암호화되지 않은 파일이니 안전하게 보관해 주세요."
+          help="캐릭터, 채팅, 프롬프트, 페르소나, 연결과 API 키를 zip 파일로 내보내요. 암호화되지 않은 파일이니 안전하게 보관해 주세요."
           control={
-            <Button variant="secondary" size="sm" icon={Download} disabled={active !== null} onClick={() => void save()}>
-              받기
+            <Button variant="secondary" size="sm" icon={ACTS.export.icon} disabled={active !== null} onClick={() => void save()}>
+              {ACTS.export.label}
             </Button>
           }
         />
         <SettingRow
-          label="백업 불러오기"
-          help="새 계정에만 불러올 수 있어요."
+          label={importOf('백업')}
+          help="새 계정에만 가져올 수 있어요."
           control={
-            <FileButton accept=".zip" size="sm" icon={Upload} disabled={active !== null} onFile={(file) => void load(file)}>
-              불러오기
+            <FileButton accept=".zip" size="sm" icon={ACTS.import.icon} disabled={active !== null} onFile={(file) => void load(file)}>
+              {ACTS.import.label}
             </FileButton>
           }
         />
       </SettingGroup>
       {active && (
-        <Dialog title={TITLE[active.direction]} onClose={stop} actions={<Button variant="secondary" size="md" onClick={stop}>중지</Button>}>
+        <Dialog title={TITLE[active.direction]} onClose={stop} actions={<Button variant="secondary" onClick={stop}>{STOP}</Button>}>
           <Progress hero steps={stages(active.direction, active.steps)} />
         </Dialog>
       )}

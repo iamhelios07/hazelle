@@ -1,7 +1,8 @@
-import { ExternalLink, RotateCw } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import type { ConnectionType, SignIn } from '../../connectors/types';
 import { providerConnection } from '../../runtime/connections';
+import { ACTS } from '../common/acts';
 import { useSession } from '../session';
 import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
@@ -21,8 +22,8 @@ export function ConnectionSignInScreen({ type, signIn, back }: { type: Connectio
       <Screen
         top={top}
         actions={
-          <Button icon={RotateCw} onClick={() => setAttempt((count) => count + 1)}>
-            다시 시도
+          <Button icon={ACTS.retry.icon} onClick={() => setAttempt((count) => count + 1)}>
+            {ACTS.retry.label}
           </Button>
         }
       >
