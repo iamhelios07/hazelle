@@ -5,7 +5,6 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react(), sandbox(), compressedAssets()],
-  // The server (src/server/node.ts) answers /api; in development Vite proxies it to `npm run server`.
   server: { proxy: { '/api': 'http://localhost:8080' } },
   // Inlined assets become data: URLs, which the CSP refuses (the CSP constant the server sends); every asset ships as a file.
   // An explicit ?inline import (the starter prompt, runtime/prompts) is read in code as a string and never

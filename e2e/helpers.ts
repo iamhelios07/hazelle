@@ -24,10 +24,10 @@ export const CARD = {
   ),
 };
 
-// A bot's HTML at its worst: nothing in it may run, post, load from outside or cover the app (design §6.4).
 // A 1x1 PNG.
 const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
+// A bot's HTML at its worst: nothing in it may run, post, load from outside or cover the app (design §6.4).
 export const HOSTILE = {
   name: 'hostile.json',
   mimeType: 'application/json',

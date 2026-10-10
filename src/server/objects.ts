@@ -8,9 +8,8 @@ import { canWrite, requireSession } from './session';
 const KIND = /^[a-z][a-z-]{0,31}$/;
 // A timeline is 16 random bytes in hex (migrations/0009).
 export const TIMELINE = /^[0-9a-f]{32}$/;
-// The 4 MB HTTP budget, which worker.ts enforces on the whole body, timeline included, stays below Workers' 100 MB
-// request and 128 MB memory limits and the store's 32 MiB RPC limit. Each write is its own INSERT in the store's one
-// transaction, so a body only has to fit a row (2 MB).
+// bytes: worker.ts enforces it on the whole body, timeline included. The client batches by these, sent with every page.
+// The sizes date from the Cloudflare store (a 2 MB row, a 32 MiB RPC).
 export const BATCH_LIMITS = { items: 200, bytes: 4_000_000, body: 1_500_000 };
 
 export const objects = new Hono<AppEnv>();

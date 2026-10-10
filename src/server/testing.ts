@@ -79,8 +79,6 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
       raw.close();
       rmSync(dir, { recursive: true, force: true });
     },
-    // Every table empty, the installation unclaimed, the caps at the service defaults, every account file and picture
-    // gone, and a registry that remembers no incarnation.
     reset: async () => {
       await settle();
       await env.streams.expire(Number.MAX_SAFE_INTEGER);
@@ -101,7 +99,6 @@ export async function testApp(upstream: Upstream = () => Promise.reject(new Type
     raw: (path: string, init: RequestInit) => app.request(`/api/${path}`, init, env, ctx),
     settle,
     timeline,
-    // The hourly job, run now: what the scheduled sweep did on the old platform.
     reconcile: (now = Date.now()) => reconcile(dir, env.db, now),
     // The account's row changed in the service, then its store restarted, as every lifecycle change is made
     // (server/lifecycle).

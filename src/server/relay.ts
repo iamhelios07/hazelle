@@ -64,7 +64,7 @@ export function createRelay(upstream: Upstream): (request: Request) => Promise<R
   return async (request) => forward(upstream, await request.json().catch(() => null), request.signal);
 }
 
-// ReplyStream calls it with a signal of its own, so the call outlives the client's request.
+// stream-box.ts calls it with a signal of its own, so the call outlives the client's request.
 export async function forward(upstream: Upstream, body: unknown, signal: AbortSignal): Promise<Response> {
   const envelope = parseEnvelope(body);
   if (!envelope) return refuse(400, 'bad-envelope');

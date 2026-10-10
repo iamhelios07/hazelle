@@ -15,9 +15,9 @@
 # again to retry the start, or recover as below. Exit 5: another deploy holds the lock, nothing changed.
 # A session that ends without an outcome (connection lost, hour run out) stopped at an unknown step; the kernel drops
 # its lock when its last process ends (until then a rerun exits 5). Run this again: /etc/hazelle/env tells where it
-# stopped. The running digest still
-# selected: nothing switched, and what it may have done (a pulled image, a generation, /etc/hazelle/previous naming the
-# running digest and one of its generations) is harmless; the deploy runs from the start. The new digest selected:
+# stopped. The running digest still selected: nothing switched, and what it may have done (a pulled image, a
+# generation, /etc/hazelle/previous naming the running digest and one of its generations) is harmless; the deploy runs
+# from the start. The new digest selected:
 # /etc/hazelle/previous was written before the switch, and the run retries the start as after exit 4.
 #
 # Recovery, when the new image fails or misbehaves. An image refuses a database newer than it knows, so starting the

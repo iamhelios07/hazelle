@@ -3,8 +3,8 @@
 # install runs. Run from inside the worktree:
 #   scripts/worktree.sh [base]
 # base defaults to the branch the main checkout is on. Worktrees are cut from wherever the tool chooses (often master,
-# at an old commit), so the worktree is reset to base; it refuses once the worktree has commits, changes or untracked files of its own (a hard reset overwrites an untracked
-# file at a path the base tracks, with no copy to recover).
+# at an old commit), so the worktree is reset to base; it refuses once the worktree has commits, changes or untracked
+# files of its own (a hard reset overwrites an untracked file at a path the base tracks, with no copy to recover).
 set -euo pipefail
 main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
 base=${1:-$(git -C "$main" symbolic-ref --short HEAD)}

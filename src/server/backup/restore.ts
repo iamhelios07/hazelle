@@ -39,7 +39,6 @@ async function copyInto(source: string, target: string) {
   fsyncPath(target);
 }
 
-// Throws on the first artifact that is missing or does not hash to what the manifest says.
 async function verify(generation: string, manifest: Manifest) {
   const check = async (path: string, expected: string) => {
     const actual = await digest(path).then(({ sha256 }) => sha256, () => 'missing');

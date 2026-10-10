@@ -7,7 +7,6 @@ import { streamRegistry } from './stream-registry';
 import { streamStore, type StreamStore } from './db/streams-db';
 
 const CHUNK = 64 * 1024;
-// A request whose client never leaves.
 const staying = new AbortController().signal;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -38,7 +37,6 @@ async function body() {
   return { id: crypto.randomUUID(), key, request: { url: 'https://api.example.com/v1/chat', method: 'POST', headers: {}, body: '{}' } };
 }
 
-// The frame types a body carries, in order.
 async function types(response: Response) {
   const bytes = new Uint8Array(await response.arrayBuffer());
   const seen: number[] = [];

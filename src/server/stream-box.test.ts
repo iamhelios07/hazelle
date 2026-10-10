@@ -4,7 +4,6 @@ import { StreamBox } from './stream-box';
 import { streamStore } from './db/streams-db';
 
 const CHUNK = 64 * 1024;
-// A request whose client never leaves.
 const staying = new AbortController().signal;
 const PAGE_BYTES = 256 * 1024;
 const storage = () => streamStore(':memory:').storage('s');

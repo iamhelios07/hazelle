@@ -158,8 +158,7 @@ admin.get('/accounts', async (c) => {
   return c.json({ accounts: results.map((row, index) => shownAccount(row, usages[index]!)), next: afterAccounts(results) });
 });
 
-// Whole-service usage is an explicit, separately refreshed traversal. Each request calls only this page's stores,
-// and returns sums rather than retaining/transporting every account row. Ordinary actions never start this scan.
+// Each request calls only this page's stores and answers sums. Ordinary actions never start this scan.
 admin.get('/usage', async (c) => {
   const page = accountPage(c, 'id AS accountId, created_at AS createdAt, state, incarnation');
   if (!page) return fail(c, 400, 'bad-input');
@@ -359,7 +358,6 @@ admin.post('/restores/:id/cancel', async (c) => {
   return ran ? c.json(ran) : fail(c, 404, 'not-found');
 });
 
-// With the caps, how fresh the backup is and how full the disk (backup/freshness.ts).
 admin.get('/service', async (c) => {
   const row = await c.env.db.prepare(
     `SELECT signup_cap AS signupCap, account_bytes_cap AS accountBytesCap, account_file_bytes_cap AS accountFileBytesCap,

@@ -78,8 +78,7 @@ export function prepareAccountFile(dataDir: string, incarnation: string, timelin
   fsyncPath(join(dataDir, 'accounts'));
 }
 
-// Opens a file this process may read and write, refusing one from a newer build. Future schema upgrades run here, in
-// one transaction, before the first read.
+// Future schema upgrades run here, in one transaction, before the first read.
 function openAccountFile(path: string): DatabaseSync {
   if (!existsSync(path)) throw new StoreUnavailable('missing');
   const db = openDatabase(path);
@@ -277,7 +276,6 @@ export function accountRegistry(dataDir: string, service: Db, reads: StoreReads,
     held.session = null;
   };
 
-  // The 257th open handle closes the least recently used session with nothing running or queued.
   const bound = () => {
     const open = [...entries.values()].filter((held) => held.session);
     if (open.length < MAX_HANDLES) return;
