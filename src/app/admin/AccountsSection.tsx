@@ -1,20 +1,20 @@
-import { Ban, HardDrive, History, MoreHorizontal, RotateCcw, Send, Trash2 } from 'lucide-react';
+import { Ban, HardDrive, History, LockOpen, Send } from 'lucide-react';
 import { useState } from 'react';
 import type { AccountState } from '../../contracts/admin';
 import type { ApiResult } from '../../runtime/api';
 import { liftSuspension, removeAccount, sendNotice, suspend, type AdminAccount, type OwnCap } from '../../runtime/admin';
+import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
-import { NOTICES } from '../common/words';
+import { NOTICES, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
-import { Button, Callout, ConfirmDialog, IconButton, List, ListItem, Menu, MenuItem, Section } from '../ui';
+import { Button, Callout, ConfirmDialog, List, ListItem, MenuItem, MoreMenu, Section } from '../ui';
 import { CapsDialog } from './CapsDialog';
 import { NoticeDialog } from './NoticeDialog';
 import type { useAccounts } from './useAccounts';
 
-const UNKNOWN = '알 수 없음';
 const STATES: Record<AccountState, string | null> = { active: null, restoring: '복원 중', leaving: '탈퇴 중' };
 
 const size = (bytes: number | null) => (bytes === null ? UNKNOWN : sizeText(bytes));
@@ -49,13 +49,13 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
       title="계정"
       note={`${loaded.page}쪽${data ? ` · ${data.accounts.length.toLocaleString('ko-KR')}명` : ''}`}
       action={<>
-        <Button variant="ghost" size="sm" busy={loaded.busy} onClick={reload}>새로고침</Button>
-        <Button variant="ghost" size="sm" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>
-        <Button variant="ghost" size="sm" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
+        <Button variant="ghost" busy={loaded.busy} onClick={reload}>새로고침</Button>
+        <Button variant="ghost" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>
+        <Button variant="ghost" disabled={loaded.busy || !loaded.next} onClick={loaded.next ?? undefined}>다음</Button>
       </>}
       help="텍스트는 계정이 저장한 내용의 크기, 디스크는 그 내용이 서버에서 차지하는 크기예요."
     >
-      {failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: reload }}>{failure}</Callout>}
+      {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: reload }}>{failure}</Callout>}
       {data && (
         <List label="계정">
           {data.accounts.map((account) => {
@@ -68,9 +68,9 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
                 tags={[...(others ? [] : ['운영자']), ...(state ? [state] : []), ...(account.suspended ? ['정지됨'] : [])]}
                 description={`${monthDay(account.createdAt)} 가입 · ${held('텍스트', account.bytes, account.bytesCap)} · 디스크 ${size(account.disk)} · ${held('이미지', account.fileBytes, account.fileBytesCap)}`}
                 trailing={
-                  <Menu place="below-end" label={`${account.username} 관리`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${account.username} 관리`} size="sm" {...opener} />}>
+                  <MoreMenu label={`${account.username} 관리`}>
                     {account.state === 'leaving' ? (
-                      <MenuItem icon={Trash2} label="탈퇴 마무리" sub="중단된 탈퇴를 완료해요" tone="warn" onClick={() => setRemoving(account)} />
+                      <MenuItem icon={ACTS.remove.icon} label="탈퇴 마무리" sub="중단된 탈퇴를 완료해요" tone="warn" onClick={() => setRemoving(account)} />
                     ) : (
                       <>
                         <MenuItem icon={HardDrive} label="저장 한도" onClick={() => setCapping(account)} />
@@ -78,14 +78,14 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
                         {others && <MenuItem icon={Send} label={NOTICES.send} onClick={() => setWriting({ account, suspend: false })} />}
                         {others &&
                           (account.suspended ? (
-                            <MenuItem icon={RotateCcw} label="정지 해제" onClick={() => void act(account.accountId, liftSuspension(account.accountId), `${account.username} 계정의 정지를 해제하지 못했어요.`)} />
+                            <MenuItem icon={LockOpen} label="정지 해제" onClick={() => void act(account.accountId, liftSuspension(account.accountId), `${account.username} 계정의 정지를 해제하지 못했어요.`)} />
                           ) : (
                             <MenuItem icon={Ban} label="정지" sub="읽기, 백업, 알림, 탈퇴만 가능해요" onClick={() => setWriting({ account, suspend: true })} />
                           ))}
-                        {others && account.state === 'active' && <MenuItem icon={Trash2} label="계정 삭제" tone="warn" onClick={() => setRemoving(account)} />}
+                        {others && account.state === 'active' && <MenuItem icon={ACTS.remove.icon} label="계정 삭제" tone="warn" onClick={() => setRemoving(account)} />}
                       </>
                     )}
-                  </Menu>
+                  </MoreMenu>
                 }
               />
             );
@@ -132,11 +132,11 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
         ))}
       {removing &&
         (removing.state === 'leaving' ? (
-          <ConfirmDialog title={`${removing.username} 계정의 탈퇴를 마무리할까요?`} confirm="마무리" icon={Trash2} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>
+          <ConfirmDialog title={`${removing.username} 계정의 탈퇴를 마무리할까요?`} confirm="마무리" icon={ACTS.remove.icon} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>
             남은 데이터를 삭제하고 계정을 없애요. 되돌릴 수 없어요.
           </ConfirmDialog>
         ) : (
-          <ConfirmDialog title={`${removing.username} 계정을 삭제할까요?`} confirm="삭제" icon={Trash2} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>
+          <ConfirmDialog title={`${removing.username} 계정을 삭제할까요?`} confirm={ACTS.remove.label} icon={ACTS.remove.icon} busy={busy} onConfirm={() => void remove(removing)} onClose={() => setRemoving(null)}>
             그 계정과 저장한 모든 데이터를 삭제해요. 되돌릴 수 없어요.
           </ConfirmDialog>
         ))}

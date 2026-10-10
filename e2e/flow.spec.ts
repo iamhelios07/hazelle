@@ -27,7 +27,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
     await page.getByLabel('비밀번호 확인', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: '다음', exact: true }).click();
-    await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
+    await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
     await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
     await page.getByRole('button', { name: '시작하기', exact: true }).click();
     await expect(page.getByRole('heading', { name: '아직 비어 있어요', exact: true })).toBeVisible();
@@ -40,7 +40,6 @@ test('a new account imports a card, chats through the fake provider and finds th
     await page.getByRole('button', { name: 'OpenAI 호환', exact: true }).click();
     await page.getByRole('button', { name: '모델 선택', exact: true }).click();
     await page.getByRole('button', { name: `${FAKE_MODEL} 즐겨찾기` }).click();
-    await page.getByRole('button', { name: '완료', exact: true }).click();
     await page.getByRole('button', { name: '모델', exact: true }).click();
     const main = page.getByRole('button', { name: /^대화 모델 · / });
     await main.click();
@@ -129,16 +128,16 @@ test('a new account imports a card, chats through the fake provider and finds th
     // A native save dialog does not emit Playwright's download event; this flow exercises the disk-backed OPFS path.
     await page.evaluate(() => Object.defineProperty(globalThis, 'showSaveFilePicker', { value: undefined, configurable: true }));
     const saved = page.waitForEvent('download');
-    await page.getByRole('button', { name: '받기', exact: true }).click();
+    await page.getByRole('button', { name: '내보내기', exact: true }).click();
     const file = await (await saved).path();
     const objects = strFromU8(unzipSync(readFileSync(file))['objects.jsonl']!);
     expect(objects).toContain(DESCRIPTION);
     expect(objects).toContain('[[bow]]');
 
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: '불러오기', exact: true }).click();
+    await page.getByRole('button', { name: '가져오기', exact: true }).click();
     await (await chooser).setFiles(file);
-    await expect(page.getByText('백업을 불러왔어요.', { exact: true })).toBeVisible();
+    await expect(page.getByText('백업을 가져왔어요.', { exact: true })).toBeVisible();
     expect(violations).toEqual([]);
   });
 

@@ -15,14 +15,15 @@ import {
   withSettings,
   type ProfileUser,
 } from '../../runtime/profiles';
+import { ACTS, addOf } from '../common/acts';
 import { typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BIN_KEEPS, UNSET } from '../common/words';
+import { BIN_KEEPS, RESET, UNSET } from '../common/words';
 import { useConnections, useProfiles, useSettings, useStore } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, ChoiceGroup, Disclosure, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Row, Screen, Section, SettingGroup, SettingRow, Stack, Text } from '../ui';
+import { Button, ChoiceGroup, Disclosure, Empty, List, ListItem, Menu, MenuHeading, MenuItem, NavBar, NumberInput, PhraseField, Screen, Section, SettingGroup, SettingRow, Stack, Switch, Tag } from '../ui';
 import { CACHE, changeWords, DETAIL, LEVELS, levelName, MAIN, NOT_CALLABLE, NUMBER, SERVICE_TIER_LABEL, SERVICE_TIER_WORDS, VERBOSITY_LABEL, VERBOSITY_WORDS, type Field } from './settingWords';
 import { count, readTyped } from '../common/typedNumber';
 
@@ -239,18 +240,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
       label="스트리밍"
       help="프록시가 응답을 중간에 끊으면 꺼 주세요"
       changed={shown.streaming !== undefined}
-      control={
-        <ChoiceGroup
-          layout="segmented"
-          label="스트리밍"
-          options={[
-            { value: 'on', label: '켬' },
-            { value: 'off', label: '끔' },
-          ]}
-          value={shown.streaming === false ? 'off' : 'on'}
-          onChange={(value) => set({ streaming: value === 'off' ? false : undefined })}
-        />
-      }
+      control={<Switch label="스트리밍" checked={shown.streaming !== false} onChange={(on) => set({ streaming: on ? undefined : false })} />}
     />
   );
 
@@ -277,7 +267,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     const cleared: ModelSettings = {};
     for (const key of Object.keys(shown) as (keyof ModelSettings)[]) cleared[key] = undefined;
     setDrafts({});
-    if (await save(cleared)) toast.undoable(`${stored.value.name} 설정을 초기화했어요.`, () => void setProfileSettings(store, id, previous));
+    if (await save(cleared)) toast.undoable(`'${stored.value.name}' 설정을 기본값으로 되돌렸어요.`, () => void setProfileSettings(store, id, previous));
   }
 
   async function remove() {
@@ -289,7 +279,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
     }
     navigate({ kind: 'models' });
     const note = users.length ? `이 설정을 쓰던 모델 ${users.length}개는 다른 설정을 선택해야 사용할 수 있어요. ${BIN_KEEPS}` : BIN_KEEPS;
-    toast.undoable(`${removed.data.value.name} 설정을 삭제했어요.`, () => void restoreProfile(store, id), note);
+    toast.undoable(`'${removed.data.value.name}' 설정을 삭제했어요.`, () => void restoreProfile(store, id), note);
   }
 
   const detailSet =
@@ -302,24 +292,29 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
         <NavBar
           title={name}
           rename={{ label: '설정 이름', placeholder: stored.value.name, onChange: rename }}
+          subtitle={isDefault && <Tag tone="accent">기본</Tag>}
           {...backBar(back)}
           status={status ? SAVE_STATUS[status] : undefined}
+          menu={{
+            label: '설정 더 보기',
+            items: (
+              <>
+                <MenuItem icon={ACTS.duplicate.icon} label={ACTS.duplicate.label} onClick={() => void copy()} />
+                {!isDefault && (
+                  <MenuItem
+                    label="기본으로 정하기"
+                    sub="설정을 선택하지 않은 모델이 이 설정을 사용해요"
+                    onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}
+                  />
+                )}
+                <MenuItem label={RESET} disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()} />
+                {!isDefault && <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} />}
+              </>
+            ),
+          }}
         />
       }
     >
-      <Stack gap="related">
-        {isDefault ? (
-          <Text variant="highlight">
-            설정을 선택하지 않은 모델이 사용하는 기본 설정이에요.
-          </Text>
-        ) : (
-          <Row kind="actions">
-            <Button variant="link" size="xs" onClick={() => void setDefaultProfile(store, id).then((done) => done.ok || toast.failed(done, '저장하지 못했어요.'))}>
-              기본 설정으로 지정
-            </Button>
-          </Row>
-        )}
-      </Stack>
 
       <Section
         title="이 설정을 쓰는 모델"
@@ -329,10 +324,10 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
             <Menu
               place="below-end"
               size="lg"
-              label="모델 추가"
+              label={addOf('모델')}
               trigger={(opener) => (
-                <Button variant="secondary" size="sm" {...opener}>
-                  모델 추가
+                <Button variant="secondary" icon={ACTS.create.icon} {...opener}>
+                  {addOf('모델')}
                 </Button>
               )}
             >
@@ -357,9 +352,7 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
             ))}
           </List>
         ) : (
-          <Text variant="note">
-            이 설정을 쓰는 모델이 없어요.
-          </Text>
+          <Empty variant="section">이 설정을 쓰는 모델이 없어요.</Empty>
         )}
       </Section>
 
@@ -381,20 +374,6 @@ export function ProfileScreen({ stored, back }: { stored: Stored<'profile'>; bac
           {streamingRow}
         </SettingGroup>
       </Disclosure>
-
-      <Row kind="actions">
-        <Button variant="secondary" size="sm" onClick={() => void copy()}>
-          사본 만들기
-        </Button>
-        <Button variant="secondary" size="sm" disabled={Object.keys(shown).length === 0} onClick={() => void clearAll()}>
-          초기화
-        </Button>
-        {!isDefault && (
-          <Button variant="danger" size="sm" onClick={() => void remove()}>
-            이 설정 삭제
-          </Button>
-        )}
-      </Row>
     </Screen>
   );
 }

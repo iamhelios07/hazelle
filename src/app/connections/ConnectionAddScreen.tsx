@@ -1,13 +1,14 @@
-import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { resolveConnection, searchTypes } from '../../connectors/registry';
 import type { ConnectionType } from '../../connectors/types';
 import { providerConnection } from '../../runtime/connections';
+import { newOf } from '../common/acts';
+import { noResults } from '../common/search';
 import { useAttempt } from '../common/useAttempt';
 import { useConnections, useSession } from '../session';
 import { backBar, navigate, useRoute } from '../shell/router';
 import type { Back } from '../shell/routes';
-import { Button, Callout, Empty, Icon, List, ListItem, NavBar, Screen, SearchField, Section, Stack } from '../ui';
+import { Button, Callout, Empty, List, ListItem, NavBar, Screen, SearchField, Section, Stack, Text } from '../ui';
 import { connect } from './connect';
 
 const GROUPS: Record<ConnectionType['group'], string> = {
@@ -34,7 +35,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
   ];
 
   return (
-    <Screen top={<NavBar title="연결 추가" {...backBar(back)} />}>
+    <Screen top={<NavBar title={newOf('연결')} {...backBar(back)} />}>
       <SearchField label="이름 검색, 또는 키·주소 붙여 넣기" value={query} onChange={setQuery} />
       {search.kind === 'key' && (
         <Stack gap="related">
@@ -44,8 +45,8 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
           </Button>
         </Stack>
       )}
-      {search.kind === 'address' && <Empty>목록에 없는 주소는 아래 직접 연결로 연결해요.</Empty>}
-      {search.kind === 'none' && <Empty>검색 결과가 없어요.</Empty>}
+      {search.kind === 'address' && <Text variant="note">목록에 없는 주소는 아래 직접 연결로 연결해요.</Text>}
+      {search.kind === 'none' && <Empty>{noResults(query.trim())}</Empty>}
       {failure && (
         <Callout tone="warn" alert>
           {failure}
@@ -54,7 +55,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
       {sections.map(([title, types]) =>
         types.length ? (
           <Section key={title} title={title}>
-            <List label={title}>
+            <List label={title} places>
               {types.map((type) => {
                 const count = connected(type);
                 return (
@@ -62,8 +63,7 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
                     key={type.id}
                     title={type.label}
                     description={type.description}
-                    tags={[type.signIn ? `${type.signIn.site} 로그인` : 'API 키', ...(count ? [`연결됨 ${count}`] : [])]}
-                    trailing={<Icon icon={ChevronRight} />}
+                    tags={[type.signIn ? `${type.signIn.site} 로그인` : 'API 키', ...(count ? [`연결 ${count}개`] : [])]}
                     current={route.kind === 'connect' && route.type === type}
                     onClick={() => navigate({ kind: 'connect', type })}
                   />
@@ -74,11 +74,10 @@ export function ConnectionAddScreen({ back }: { back: Back }) {
         ) : null,
       )}
       <Section title="목록에 없는 제공자">
-        <List label="직접 연결">
+        <List label="직접 연결" places>
           <ListItem
             title="직접 연결"
             description="OpenAI 호환, OpenAI Responses, Anthropic 호환 주소와 키로 연결해요. 잔액과 비용은 알 수 없어요."
-            trailing={<Icon icon={ChevronRight} />}
             current={route.kind === 'connect-direct'}
             onClick={() => navigate({ kind: 'connect-direct', address: search.kind === 'address' ? search.baseUrl : '' })}
           />

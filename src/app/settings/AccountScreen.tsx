@@ -4,7 +4,7 @@ import { backBar } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
 import { LegalNotice } from '../common/LegalNotice';
-import { PAGES } from '../common/words';
+import { PAGES, UNKNOWN } from '../common/words';
 import { Avatar, Button, FaceRow, NavBar, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
 import { BackupSection } from './BackupSection';
 import { LeaveSection } from './LeaveSection';
@@ -12,7 +12,7 @@ import { NoticesSection } from './NoticesSection';
 import { ReportSection } from './ReportSection';
 
 // bytes is null while the server could not read it.
-const used = (name: string, bytes: number | null, cap: number | null) => `${name} ${bytes === null ? '알 수 없음' : sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
+const used = (name: string, bytes: number | null, cap: number | null) => `${name} ${bytes === null ? UNKNOWN : sizeText(bytes)}${cap === null ? '' : ` / ${sizeText(cap)}`}`;
 
 // section: the one the page was opened at (shell/routes).
 export function AccountScreen({ section, back }: { section: 'notices' | null; back: Back | null }) {

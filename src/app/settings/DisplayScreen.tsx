@@ -11,10 +11,8 @@ export function DisplayScreen({ back }: { back: Back | null }) {
   const current = presetOf(presets, reading, display);
   return (
     <Screen width="form" top={<NavBar title={PAGES.display} {...backBar(back)} />}>
-      <SettingGroup label="테마">
+      <SettingGroup label={PAGES.display}>
         <SettingRow label="테마" control={<ChoiceGroup layout="segmented" label="테마" options={choices(THEME)} value={display.theme} onChange={(theme) => changeDisplay({ theme })} />} />
-      </SettingGroup>
-      <SettingGroup label="이미지">
         <SettingRow
           label="이미지 가리기"
           help="채팅 속 이미지는 눌러서 하나씩 볼 수 있어요."

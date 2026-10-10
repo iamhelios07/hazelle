@@ -152,7 +152,7 @@ async function signUp(page: Page) {
   await page.getByLabel('비밀번호', { exact: true }).fill(PASSWORD);
   await page.getByLabel('비밀번호 확인', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: '다음', exact: true }).click();
-  await page.getByRole('button', { name: '복구 키 파일 내려받기', exact: true }).click();
+  await page.getByRole('button', { name: '복구 키 파일 내보내기', exact: true }).click();
   await page.getByLabel('안전한 곳에 저장했어요', { exact: true }).check();
   await page.getByRole('button', { name: '시작하기', exact: true }).click();
   await expect(empty(page)).toBeVisible();
@@ -315,7 +315,7 @@ test('a restore between the two scans of a backup export fails the export and wr
   server.hold(page, (url) => url.pathname === '/api/objects' && url.searchParams.has('metadata') && !url.searchParams.has('parent'));
   await page.keyboard.press('Control+,');
   await page.getByRole('button', { name: '계정', exact: true }).click();
-  await page.getByRole('button', { name: '받기', exact: true }).click();
+  await page.getByRole('button', { name: '내보내기', exact: true }).click();
   await expect.poll(() => server.held(page)).toBe(1);
   server.restore(server.snapshot(), 't1');
   server.release(page);

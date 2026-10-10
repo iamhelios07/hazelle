@@ -1,13 +1,14 @@
-import { History, MoreHorizontal, Play, Undo2, X } from 'lucide-react';
+import { History, Play, Undo2, X } from 'lucide-react';
 import { useState } from 'react';
 import type { RestoreAction, RestorePhase } from '../../contracts/admin';
 import { beginRestore, continueRestore, readRestores, readSnapshotTime, type Report, type Restore, type RestoreRun } from '../../runtime/admin';
 import type { ApiResult } from '../../runtime/api';
+import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { ago } from '../common/time';
 import { useAttempt } from '../common/useAttempt';
 import { useToast } from '../toast';
-import { Button, Callout, ConfirmDialog, Dialog, Empty, IconButton, List, ListItem, Menu, MenuItem, Section, Stack, Text, TextField } from '../ui';
+import { Button, Callout, ConfirmDialog, Dialog, Empty, List, ListItem, MenuItem, MoreMenu, Section, Stack, Text, TextField } from '../ui';
 import { moment, TIME_FORMAT, typedTime } from './time';
 import { useLoaded } from '../common/useLoaded';
 
@@ -18,7 +19,7 @@ type Words = { tag: string; says: string };
 const UNCHANGED = '계정 데이터는 바뀌지 않았어요.';
 const PHASES: Record<Exclude<RestorePhase, 'done'>, Words> = {
   begun: { tag: '시작함', says: `복원을 시작했어요. ${UNCHANGED}` },
-  fenced: { tag: '저장 차단', says: `그 계정의 저장과 불러오기를 차단했어요. ${UNCHANGED}` },
+  fenced: { tag: '저장 차단', says: `그 계정의 저장과 읽기를 차단했어요. ${UNCHANGED}` },
   checkpointed: { tag: '스냅샷 저장', says: `복원 직전 상태를 스냅샷으로 저장했어요. ${UNCHANGED}` },
   targeted: { tag: '시점 지정', says: `복원할 시점을 지정했어요. ${UNCHANGED} 여기까지는 취소할 수 있어요.` },
   armed: { tag: '복원 적용 중', says: '복원을 적용했어요. 이제 취소할 수 없어요.' },
@@ -148,7 +149,7 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
           </Stack>
         )}
         <Section level={3} title="복원 기록" help={report ? undefined : '복원은 그 계정이 보낸 알림에서 시작해요.'}>
-          {restores.failure && <Callout tone="warn" action={{ label: '다시 불러오기', onClick: restores.reload }}>{restores.failure}</Callout>}
+          {restores.failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: restores.reload }}>{restores.failure}</Callout>}
           {restores.data && restores.data.length === 0 && <Empty variant="section">복원한 적이 없어요.</Empty>}
           {restores.data && restores.data.length > 0 && (
             <List label="복원 기록">
@@ -163,12 +164,12 @@ export function RestoresDialog({ restoring, onClose, onActed }: { restoring: Res
                     aside={ago(restore.updatedAt)}
                     trailing={
                       (restore.actions.length > 0 || undoable) && (
-                        <Menu place="below-end" label="복원 관리" trigger={(opener) => <IconButton icon={MoreHorizontal} label="복원 관리" size="sm" {...opener} />}>
+                        <MoreMenu label="복원 관리">
                           {restore.actions.map((action) => (
                             <MenuItem key={action} icon={action === 'cancel' ? X : Play} label={ACTIONS[action].label} sub={ACTIONS[action].sub} onClick={() => act(restore, action)} />
                           ))}
                           {undoable && <MenuItem icon={Undo2} label="복원 전으로 되돌리기" sub="복원 이후 저장한 것은 사라져요" tone="warn" onClick={() => setAsking({ kind: 'undo', restore })} />}
-                        </Menu>
+                        </MoreMenu>
                       )
                     }
                   />

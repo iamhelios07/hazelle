@@ -1,5 +1,6 @@
-import { ChevronLeft, Download } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
+import { ACTS, exportOf } from '../common/acts';
 import { useAttempt } from '../common/useAttempt';
 import { Button, Callout, Checkbox, CodeCard, IconButton, Intro, Link, Screen, Steps, Text } from '../ui';
 import { download } from '../common/download';
@@ -69,10 +70,10 @@ export function RecoveryKeyScreen({ username, recoveryKey, onBack, onStart }: Pr
       <Callout tone="warn">비밀번호와 복구 키를 둘 다 잃으면 누구도 데이터를 복원할 수 없어요.</Callout>
       <CodeCard label="복구 키" code={recoveryKey} />
       {downloaded ? (
-        <Callout tone="success">내려받음 · {FILENAME}</Callout>
+        <Callout tone="success">내보냈어요 · {FILENAME}</Callout>
       ) : (
-        <Button variant="outline" icon={Download} onClick={save}>
-          복구 키 파일 내려받기
+        <Button variant="secondary" icon={ACTS.export.icon} onClick={save}>
+          {exportOf('복구 키 파일')}
         </Button>
       )}
       <Checkbox label="안전한 곳에 저장했어요" checked={saved} onChange={setSaved} />

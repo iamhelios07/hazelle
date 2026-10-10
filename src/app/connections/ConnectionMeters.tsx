@@ -3,6 +3,7 @@ import { resolveConnection } from '../../connectors/registry';
 import type { Account, Connection, Meter, MeterReset, MeterUnit } from '../../connectors/types';
 import type { MetersResult } from '../../runtime/meters';
 import { pace, verdict } from '../../model/pace';
+import { ACTS } from '../common/acts';
 import { describeMetersFailure } from '../common/failure';
 import { creditAmount, usd } from '../common/money';
 import { monthDay } from '../common/time';
@@ -34,7 +35,7 @@ export function MeterGauge({ meter, turn = null, waiting = false, labeled = true
   if (meter.limit === null) return <Gauge label={label} amount={amount(meter.unit, meter.amount)} of="남음" />;
   const left = { amount: amount(meter.unit, meter.amount), of: meter.unit === 'percent' ? '남음' : `/ ${figure(meter.unit, meter.limit)} 남음`, share: (meter.limit - meter.amount) / meter.limit };
   if (meter.amount <= 0) {
-    const back = meter.resets === null ? undefined : typeof meter.resets === 'string' ? RESETS[meter.resets] : `${monthDay(meter.resets.at)} 초기화`;
+    const back = meter.resets === null ? undefined : reset(meter.resets);
     return <Gauge label={label} {...left} tone="warn" status="소진" note={back} />;
   }
   if (waiting) return <Gauge label={label} {...left} status="차례 전" />;
@@ -76,11 +77,11 @@ export function ConnectionMeters({ connection }: { connection: Connection }) {
 
 function Figures({ connection, account }: { connection: Connection; account: Account }) {
   const { result, retry: again } = useMeters(connection, account);
-  const retry = { label: '사용량 다시 불러오기', onClick: again };
+  const retry = { label: ACTS.retry.label, onClick: again };
   if (!result) return <Text variant="note">불러오는 중…</Text>;
   const [failure] = result.failures;
   if (!result.meters.length) {
-    return failure ? <Callout tone="warn" action={retry}>{describeMetersFailure(failure)}</Callout> : <Empty variant="section">사용량 정보 없음</Empty>;
+    return failure ? <Callout tone="warn" action={retry}>{describeMetersFailure(failure)}</Callout> : <Empty variant="section">사용량 정보가 없어요.</Empty>;
   }
   return (
     <>

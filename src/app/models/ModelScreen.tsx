@@ -6,6 +6,7 @@ import type { Stored } from '../../model/kinds';
 import { modelUsage, type ModelUsage } from '../../model/chat';
 import { imageOnly } from '../../runtime/assignment';
 import { addProfile, modelProfile, setModelProfile } from '../../runtime/profiles';
+import { ACTS } from '../common/acts';
 import { money } from '../common/money';
 import { UNKNOWN } from '../common/words';
 import { tally } from '../common/usage';
@@ -14,7 +15,7 @@ import { useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
+import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Text } from '../ui';
 import { changeWords, defaultFirst, NOT_CALLABLE, valueWords } from './settingWords';
 import { count } from '../common/typedNumber';
 
@@ -27,7 +28,7 @@ const tokens = (value: number | null) => (value === null ? UNKNOWN : `${count(va
 function spent({ costs, costUnknown }: ModelUsage): string {
   if (!costs.length) return UNKNOWN;
   const sums = costs.map(({ unit, amount, estimated }) => `${estimated ? '약 ' : ''}${money(unit, amount)}`).join(' + ');
-  return costUnknown ? `${sums} · 알 수 없음 ${costUnknown}회` : sums;
+  return costUnknown ? `${sums} · ${UNKNOWN} ${costUnknown}회` : sums;
 }
 
 type Props = { connection: Stored<'connection'>; model: Starred; back: Back };
@@ -44,7 +45,7 @@ function ImageModelScreen({ connection, model, back }: Props) {
       <SettingGroup label="이미지 설정">
         <SettingRow
           label="이미지 설정"
-          sub="태그, 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
+          help="태그, 샘플러, 스텝 같은 값은 삽화 프롬프트에서 정해요."
           control={
             <Button variant="secondary" size="sm" onClick={() => navigate(prompt ? { kind: 'prompt', id: prompt, pane: null } : { kind: 'prompts' })}>
               삽화 프롬프트 열기
@@ -166,8 +167,14 @@ function ChatModelScreen({ connection, model, back }: Props) {
         </Row>
       </Section>
 
-      <Section title="사용량" note="남아 있는 채팅 기준 · 마지막 집계" action={<Button variant="secondary" size="sm" onClick={() => retryUsage((attempt) => attempt + 1)}>다시 집계</Button>}>
-        {usage === null ? <Text>{usageFailed ? '사용량을 불러오지 못했어요.' : '사용량을 확인하는 중'}</Text> : usage.last !== null ? (
+      <Section title="사용량" note="남아 있는 채팅 기준 · 마지막 집계" action={<Button variant="secondary" onClick={() => retryUsage((attempt) => attempt + 1)}>다시 집계</Button>}>
+        {usageFailed ? (
+          <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => retryUsage((attempt) => attempt + 1) }}>
+            사용량을 불러오지 못했어요.
+          </Callout>
+        ) : usage === null ? (
+          <Text variant="note">사용량을 확인하는 중…</Text>
+        ) : usage.last !== null ? (
           <Facts
             variant="tiles"
             items={[
