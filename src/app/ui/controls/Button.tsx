@@ -10,7 +10,7 @@ type Size = 'xs' | 'sm' | 'md' | 'lg';
 export const ButtonSlot = createContext<Size | null>(null);
 
 type Props = {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'link' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'link' | 'danger';
   size?: Size;
   type?: 'button' | 'submit';
   icon?: LucideIcon;

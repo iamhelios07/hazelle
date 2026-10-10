@@ -1,5 +1,5 @@
 import { ofSort, translationPrompt, illustrationPrompt } from '../../runtime/prompts';
-import { follows } from '../common/words';
+import { DELETED_PROMPT, follows } from '../common/words';
 import { useSession, useSettings, usePrompts } from '../session';
 import { ChipButton, Divider, Menu, MenuHeading, MenuItem, Tag } from '../ui';
 import type { OpenChat } from './useChat';
@@ -23,7 +23,7 @@ export function TaskPromptMenu({ task, chosen, heading, onPick, chat }: { task: 
   const choice = choose(store, chosen);
   const fallback = prompts.find(({ id }) => id === settings[setting]);
   const missing = `기본 ${noun} 프롬프트 없음`;
-  const label = choice.kind === 'prompt' ? choice.prompt.value.name : choice.own ? '삭제된 프롬프트' : missing;
+  const label = choice.kind === 'prompt' ? choice.prompt.value.name : choice.own ? DELETED_PROMPT : missing;
   return (
     <Menu
       place="above-end"

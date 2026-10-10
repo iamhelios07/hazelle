@@ -1,5 +1,5 @@
 import { toolMenu } from './toolMenu';
-import { MoreHorizontal, SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import { ACTS } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { CAST, EXPORT, NO_CHARACTER } from '../common/words';
@@ -7,7 +7,7 @@ import { useDisplay } from '../display';
 import { useRemembering } from '../session';
 import { navigate } from '../shell/router';
 import { runShortcut } from '../shortcuts';
-import { ChatTitle, Divider, IconButton, Menu, MenuItem, ToolButton, useMenuOpener, useWide } from '../ui';
+import { ChatTitle, Divider, MenuItem, MoreMenu, ToolButton, useMenuOpener, useWide } from '../ui';
 import { ChatCastMenu } from './ChatCastMenu';
 import { ChatExport } from './ChatExport';
 import { ChatModelMenu } from './ChatModelMenu';
@@ -51,7 +51,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
         expanded={panel?.kind === 'toggles'}
         onClick={actions.flipToggles}
       />
-      <Menu place="below-end" label="채팅 메뉴" trigger={(opener) => <IconButton icon={MoreHorizontal} label="채팅 메뉴" size="sm" dot={failed} {...opener} />}>
+      <MoreMenu label="채팅 메뉴" dot={failed}>
         {!wide && <MenuItem label="새 채팅" onClick={() => navigate({ kind: 'new-chat', character: shelf?.id ?? null })} />}
         <MenuItem label={CAST} sub={cast.length ? `${cast.length}명` : undefined} onClick={openCast.onClick} />
         {item && <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => actions.openDialog('rename')} />}
@@ -72,7 +72,7 @@ export function ChatHeaderActions({ chat }: { chat: OpenChat }) {
             <MenuItem icon={ACTS.remove.icon} label="이 채팅 삭제" tone="warn" onClick={actions.drop} />
           </>
         )}
-      </Menu>
+      </MoreMenu>
     </>
   );
 }

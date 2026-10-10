@@ -1,11 +1,11 @@
-import { MoreHorizontal, SquarePen } from 'lucide-react';
+import { SquarePen } from 'lucide-react';
 import type { ChatSummary } from '../../../model/chat';
 import type { CharacterShelf } from '../../../model/library';
 import { ACTS } from '../../common/acts';
 import { aliased } from '../../common/alias';
 import { navigate } from '../../shell/router';
 import { enterShelf } from '../../shell/routes';
-import { FaceCard, IconButton, Menu, MenuItem, useMenuHandle, useMenuOpener, useWide } from '../../ui';
+import { FaceCard, MenuItem, MoreMenu, useMenuHandle, useMenuOpener, useWide } from '../../ui';
 import { binCardNote, cardNote } from '../shelf';
 import { binnedCharacter, type CharacterActions } from '../useCharacterActions';
 
@@ -27,7 +27,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
   const card = useMenuOpener(handle);
   const shows = picked === null && busy === null;
   const menu = (
-    <Menu handle={handle} place="below-end" label={`${name} 메뉴`} trigger={(opener) => <IconButton icon={MoreHorizontal} label={`${name} 메뉴`} size="sm" {...opener} />}>
+    <MoreMenu handle={handle} label={`${name} 메뉴`}>
       {binned ? (
         <>
           <MenuItem icon={ACTS.restore.icon} label={ACTS.restore.label} onClick={() => actions.restore(binnedCharacter(shelf))} />
@@ -40,7 +40,7 @@ export function CharacterCard({ shelf, binned, busy, picked, onPick, actions, on
           <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => actions.remove(shelf)} />
         </>
       )}
-    </Menu>
+    </MoreMenu>
   );
   const press = picked !== null ? { onClick: onPick } : binned ? (shows ? card : { onClick: () => {} }) : { onClick: () => navigate(enterShelf(shelf, wide)) };
   return (

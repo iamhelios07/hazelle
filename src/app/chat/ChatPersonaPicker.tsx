@@ -1,11 +1,11 @@
 import { UserRound } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { aliased, aliasNotes, byName } from '../common/alias';
-import { matches, noResults } from '../common/search';
+import { useEffect, useRef } from 'react';
+import { aliased, personaFaces, personaTexts } from '../common/alias';
+import { useSearch } from '../common/useSearch';
 import { usePersonas } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { Avatar, Button, CardGrid, Checkbox, ChipButton, Dialog, Empty, FaceCard, hasFinePointer, Hint, Row, SearchField } from '../ui';
+import { Avatar, Button, CardGrid, Checkbox, ChipButton, Dialog, Empty, FaceCard, hasFinePointer, Hint, Row } from '../ui';
 import type { OpenChat } from './useChat';
 
 const MISSING = { chat: '페르소나 삭제됨', character: '고정한 페르소나 삭제됨', current: '현재 페르소나 삭제됨' };
@@ -33,37 +33,20 @@ export function ChatPersonaPicker({ chat }: { chat: OpenChat }) {
 // keyboard would cover half the faces.
 export function PersonaDialog({ chat }: { chat: OpenChat }) {
   const { persona, shelf, actions } = chat;
-  const personas = usePersonas().toSorted((a, b) => byName(a.value, b.value));
   const toast = useToast();
-  const [query, setQuery] = useState('');
-  const search = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const search = useSearch(personaFaces(usePersonas()), '페르소나 검색', personaTexts, { ref: field, onEnter: ({ persona }) => choose(persona.id) });
   useEffect(() => {
-    if (hasFinePointer()) search.current?.focus();
+    if (hasFinePointer()) field.current?.focus();
   }, []);
   const using = persona.kind === 'persona' ? persona.persona.id : null;
   const pinned = shelf?.character.persona;
-  const notes = aliasNotes(personas.map(({ value }) => value));
-  const found = personas.flatMap((each, index) => (matches(query, each.value.name, each.value.alias ?? '') ? [{ persona: each, ...notes[index]! }] : []));
 
   function choose(id: string) {
     actions.closeDialog();
     void actions.choosePersona(id).then((saved) => saved.ok || toast.failed(saved));
   }
 
-  const toolbar = (
-    <SearchField
-      ref={search}
-      size="sm"
-      label="페르소나 검색"
-      value={query}
-      onChange={setQuery}
-      onKeyDown={(event) => {
-        if (event.key !== 'Enter' || !found[0]) return;
-        event.preventDefault();
-        choose(found[0].persona.id);
-      }}
-    />
-  );
   const footer = (
     <>
       {shelf && (
@@ -83,11 +66,11 @@ export function PersonaDialog({ chat }: { chat: OpenChat }) {
     </>
   );
   return (
-    <Dialog title="이 채팅의 페르소나" size="wide" onClose={actions.closeDialog} toolbar={toolbar} footer={footer}>
-      {query.trim() && found.length === 0 && <Empty>{noResults(query.trim())}</Empty>}
-      <CardGrid label="페르소나" variant="face" current={using ?? undefined} keys={found.map(({ persona: { id } }) => id)}>
+    <Dialog title="이 채팅의 페르소나" size="wide" onClose={actions.closeDialog} toolbar={search.field || undefined} footer={footer}>
+      {search.none && <Empty>{search.none}</Empty>}
+      <CardGrid label="페르소나" variant="face" current={using ?? undefined} keys={search.found.map(({ persona: { id } }) => id)}>
         {(index) => {
-          const { persona: { id, value }, note, faint } = found[index]!;
+          const { persona: { id, value }, note, faint } = search.found[index]!;
           return <FaceCard image={value.picture} name={value.name} note={note} faint={faint} selected={null} current={id === using} tag={id === pinned ? '고정' : undefined} onClick={() => choose(id)} />;
         }}
       </CardGrid>

@@ -3,13 +3,13 @@ import { useMemo } from 'react';
 import type { ChatSummary } from '../../../model/chat';
 import { characterTexts, type FolderTree, type Shelf } from '../../../model/library';
 import { ACTS, importOf } from '../../common/acts';
-import { matches, noResults, SEARCH_FROM } from '../../common/search';
+import { useSearch } from '../../common/useSearch';
 import { ago } from '../../common/time';
 import { Welcome } from '../../library/HomeScreen';
 import { useImport } from '../../library/ImportFlow';
 import { NO_CHATS, ShelfFace, shelfName } from '../../library/shelf';
 import { useLibrary } from '../../session';
-import { Button, Empty, FolderRow, IconButton, ItemRow, Row, SearchField, Sidebar, TreeRow, Viewport } from '../../ui';
+import { Button, Empty, FolderRow, IconButton, ItemRow, Row, Sidebar, TreeRow, Viewport } from '../../ui';
 import { navigate } from '../router';
 import { SidebarFooter } from './SidebarFooter';
 
@@ -28,7 +28,8 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
   const { characters, none, folders, byFolder, loose } = useLibrary();
   const { pick, move } = useImport();
   const empty = characters.length === 0 && none.chats.length === 0;
-  const words = query.trim();
+  const search = useSearch(characters, '캐릭터 검색', ({ character }) => characterTexts(character), { query: [query, onQuery] });
+  const { words } = search;
   const opened = useMemo(() => new Set(openFolders), [openFolders]);
 
   const row = (shelf: Shelf<ChatSummary>) => {
@@ -56,10 +57,10 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
       folder.children.forEach((child) => visit(child, depth + 1));
       byFolder.get(folder.id)!.direct.forEach((shelf) => add(shelf, depth + 1));
     };
-    if (words) characters.filter(({ character }) => matches(words, ...characterTexts(character))).forEach((shelf) => add(shelf, 0));
+    if (words) search.found.forEach((shelf) => add(shelf, 0));
     else { folders.forEach((folder) => visit(folder, 0)); loose.forEach((shelf) => add(shelf, 0)); add(none, 0); }
     return result;
-  }, [words, characters, folders, loose, none, opened, byFolder]);
+  }, [words, search.found, folders, loose, none, opened, byFolder]);
 
   return (
     <Sidebar
@@ -74,13 +75,13 @@ export function CharacterTree({ page, current, typing, onEnter, query, onQuery, 
             <IconButton icon={LayoutGrid} label="캐릭터 둘러보기" size="sm" onClick={() => navigate({ kind: 'gallery' })} />
             <IconButton icon={MessageSquarePlus} label="새 채팅" size="sm" onClick={() => navigate({ kind: 'new-chat', character: null })} />
           </Row>}
-          {(characters.length >= SEARCH_FROM || words !== '') && <SearchField size="sm" label="캐릭터 검색" value={query} onChange={onQuery} />}
+          {search.field}
         </>
       }
       footer={page && <SidebarFooter />}
     >
       {empty && (page ? <Welcome /> : <Empty variant="side">캐릭터가 없어요.</Empty>)}
-      {!empty && words && items.length === 0 && <Empty variant="side">{noResults(words)}</Empty>}
+      {!empty && search.none && <Empty variant="side">{search.none}</Empty>}
       {!empty && <Viewport keys={items.map(({ key }) => key)}>{(index) => {
         const item = items[index]!;
         return <TreeRow depth={item.depth}>{'shelf' in item ? row(item.shelf) :

@@ -48,16 +48,6 @@
   background: var(--color-surface-hover);
 }
 
-.outline {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
-.outline:hover:not(:disabled) {
-  border-color: var(--color-accent-hover);
-  color: var(--color-accent-hover);
-}
-
 .ghost {
   color: var(--color-text-muted);
 }

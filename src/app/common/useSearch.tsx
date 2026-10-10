@@ -3,12 +3,15 @@ import { SearchField } from '../ui';
 import { matches, noResults, SEARCH_FROM } from './search';
 
 // A picker's search: Enter in its field picks the first found, and ref lets the picker focus the field as it opens.
-type Picker<T> = { ref: Ref<HTMLInputElement>; onEnter: (first: T) => void };
+// query: words held by a parent that outlives the list, such as the sidebar's across entering a shelf.
+type Options<T> = { ref?: Ref<HTMLInputElement>; onEnter?: (first: T) => void; query?: readonly [string, (query: string) => void] };
 
 // One list's search: the field shows from SEARCH_FROM items and stays while words are typed, so a list shrinking
 // under a search keeps the field that filters it.
-export function useSearch<T>(items: readonly T[], label: string, texts: (item: T) => string[], picker?: Picker<T>) {
-  const [query, setQuery] = useState('');
+export function useSearch<T>(items: readonly T[], label: string, texts: (item: T) => string[], options: Options<T> = {}) {
+  const own = useState('');
+  const [query, setQuery] = options.query ?? own;
+  const { ref, onEnter } = options;
   const words = query.trim();
   const found = words ? items.filter((item) => matches(words, ...texts(item))) : items;
   const first = found[0];
@@ -21,13 +24,13 @@ export function useSearch<T>(items: readonly T[], label: string, texts: (item: T
         label={label}
         value={query}
         onChange={setQuery}
-        ref={picker?.ref}
+        ref={ref}
         onKeyDown={
-          picker &&
+          onEnter &&
           ((event) => {
             if (event.key !== 'Enter' || first === undefined) return;
             event.preventDefault();
-            picker.onEnter(first);
+            onEnter(first);
           })
         }
       />
