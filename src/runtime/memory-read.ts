@@ -1,5 +1,6 @@
 import type { MemoryFill } from '../engine/pipeline';
 import { shown, type Chat, type Message } from '../model/chat';
+import type { Stored } from '../model/kinds';
 import { emptyMemory, memoryId, type Memory, type MemorySettings, type Source } from '../model/memory';
 import { SETTINGS_ID } from '../model/settings';
 import type { ToolUnit } from '../model/tool';
@@ -15,7 +16,9 @@ export const defaultMemory = (store: Pick<ObjectStore, 'get'>): MemorySettings =
 
 export const memorySetup = (store: Pick<ObjectStore, 'get'>, chat: Chat): MemorySetup => (chat.memory ? { ...chat.memory, own: true } : { ...defaultMemory(store), own: false });
 
-export const chatMemory = (store: Pick<ObjectStore, 'children'>, chat: string): Memory => store.children('memory', chat).find((entry) => entry.id === memoryId(chat))?.value ?? emptyMemory();
+export const storedMemory = (store: Pick<ObjectStore, 'children'>, chat: string): Stored<'memory'> | undefined => store.children('memory', chat).find((entry) => entry.id === memoryId(chat));
+
+export const chatMemory = (store: Pick<ObjectStore, 'children'>, chat: string): Memory => storedMemory(store, chat)?.value ?? emptyMemory();
 
 export const sourcesOf = (messages: Message[]): Source[] => messages.map((message) => ({ message: message.id, version: shown(message).id }));
 

@@ -52,7 +52,12 @@ const NAMED: { [K in Kind]?: (value: Values[K]) => string } = {
   profile: (value) => value.name,
   prompt: (value) => value.name,
 };
-const sameItems = <T>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
+const memo = <K, V>(map: Map<K, V>, key: K, make: () => V): V => {
+  let value = map.get(key);
+  if (value === undefined) map.set(key, (value = make()));
+  return value;
+};
+const sameItems =<T>(left: T[], right: T[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 const sameSummary = (a: ChatSummary, b: ChatSummary) => a.chat === b.chat && a.count === b.count && a.title === b.title && a.preview === b.preview && a.at === b.at && a.order === b.order;
 // An equal one is kept, so the lists holding it stay the same.
 function place(map: Map<string, ChatSummary>, id: string, next: ChatSummary | null): boolean {
@@ -92,21 +97,11 @@ export class ReadModels {
   }
 
   chat(id: string): Snapshot<ChatModel | null> {
-    let snapshot = this.byChat.get(id);
-    if (!snapshot) {
-      snapshot = new Snapshot(this.store.projections.get(id)?.model ?? null);
-      this.byChat.set(id, snapshot);
-    }
-    return snapshot;
+    return memo(this.byChat, id, () => new Snapshot(this.store.projections.get(id)?.model ?? null));
   }
 
   summary(id: string): Snapshot<ChatSummary | null> {
-    let snapshot = this.bySummary.get(id);
-    if (!snapshot) {
-      snapshot = new Snapshot(this.summaries.get(id) ?? null);
-      this.bySummary.set(id, snapshot);
-    }
-    return snapshot;
+    return memo(this.bySummary, id, () => new Snapshot(this.summaries.get(id) ?? null));
   }
 
   private listed<K extends Kind>(kind: K): Stored<K>[] {
@@ -116,31 +111,15 @@ export class ReadModels {
   }
 
   kind<K extends Kind>(kind: K): Snapshot<Stored<K>[]> {
-    let snapshot = this.byKind.get(kind);
-    if (!snapshot) {
-      snapshot = new Snapshot(this.listed(kind));
-      this.byKind.set(kind, snapshot);
-    }
-    return snapshot as Snapshot<Stored<K>[]>;
+    return memo(this.byKind, kind, () => new Snapshot<Stored<Kind>[]>(this.listed(kind))) as Snapshot<Stored<K>[]>;
   }
 
   object<K extends Kind>(kind: K, id: string): Snapshot<Stored<K> | null> {
-    const key = `${kind}:${id}`;
-    let object = this.byObject.get(key);
-    if (!object) {
-      object = { kind, state: new Snapshot(this.store.get(kind, id)) };
-      this.byObject.set(key, object);
-    }
-    return object.state as Snapshot<Stored<K> | null>;
+    return memo(this.byObject, `${kind}:${id}`, () => ({ kind, state: new Snapshot<Stored<Kind> | null>(this.store.get(kind, id)) })).state as Snapshot<Stored<K> | null>;
   }
 
   character(id: string): Snapshot<CharacterShelf<ChatSummary> | null> {
-    let snapshot = this.byCharacter.get(id);
-    if (!snapshot) {
-      snapshot = new Snapshot(liveShelf(this.library.snapshot().byCharacter.get(id)));
-      this.byCharacter.set(id, snapshot);
-    }
-    return snapshot;
+    return memo(this.byCharacter, id, () => new Snapshot(liveShelf(this.library.snapshot().byCharacter.get(id))));
   }
 
   screen(id: string, talk: Pick<Talk, 'snapshot' | 'subscribe'>, drawings: Drawings, opening: Opening): ChatScreenRead {

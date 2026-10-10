@@ -15,14 +15,14 @@ import { taskModel, type Route, type RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
 import { pinned, scopeOf } from './chat-context';
 import { evaluationFailure } from './evaluation';
-import { generate, type ReplyError } from './generate';
+import { gather, generate, type ReplyError } from './generate';
 import { modelProfile } from './profiles';
 import { illustrationPrompt } from './prompts';
 import { relayBytes, relayJson } from './relay';
 import type { Session } from './session';
 import type { ObjectStore } from './store';
 import { callOf, endCall, pageCall } from './streams';
-import { receiptOf } from './talk';
+import { receiptOf, unsettled } from './talk';
 
 // 삽화 (design §6.6): one picture per message per run, from one scene call to the chat's 보조 model (or the 삽화
 // prompt's own) and one image call. The only writer of `illustration` objects but a backup's restore and a chat's copies.
@@ -197,15 +197,13 @@ export class Illustrator {
       return failure.error === 'stopped' ? { kind: 'stopped' as const } : { kind: 'unsaved' as const, failure };
     });
     if ('kind' in assembled) return assembled;
-    let text = '';
+    const text = gather();
     const call = await pageCall(null);
-    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings: profile.profile.value.settings, messages: assembled.messages, call, signal, onText: (phase, chunk) => { if (phase === 'text') text += chunk; } }).finally(() => endCall(store, call.id));
+    const answer = await generate({ credentials, connection: route.connection.value, model: route.model, settings: profile.profile.value.settings, messages: assembled.messages, call, signal, onText: text.add }).finally(() => endCall(store, call.id));
     if (answer.cut === 'stopped') return { kind: 'stopped' };
-    const made = receiptOf(callOf(route), answer);
-    // Not settled later, as a memory record's is not.
-    const receipt = made.cost === 'pending' ? { ...made, cost: null } : made;
+    const receipt = unsettled(receiptOf(callOf(route), answer));
     if (answer.state !== 'done') return { kind: 'failed', receipt };
-    const parsed = parseScene(text, paragraphs.length);
+    const parsed = parseScene(text.value(), paragraphs.length);
     return parsed.ok ? { scene: parsed.scene, receipt } : { kind: 'invalid', receipt, reason: parsed.reason };
   }
 

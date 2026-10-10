@@ -5,6 +5,7 @@ import { isRecord } from '../connectors/values';
 import type { HttpRequest } from '../connectors/types';
 import { streamOpener } from '../vault/streams';
 import { fetchApi } from './api';
+import { pause } from './pause';
 
 // Whose refusal it was decides what the user is told: the provider's answer, the relay's
 // own refusal (X-Relay: error), the app's (no X-Relay header, such as an expired session), or no
@@ -144,16 +145,7 @@ export const dropStream = (id: string) => void fetchApi(`streams/${id}`, { metho
 // holds no such call; no-session: the session is gone. Throws once signal stops the read.
 async function reach(id: string, from: number, tries: number, signal: AbortSignal): Promise<ReadableStream<Uint8Array> | RelayFailure> {
   for (; ; tries++) {
-    signal.throwIfAborted();
-    if (tries) await new Promise<void>((resolve) => {
-      const done = () => {
-        clearTimeout(wait);
-        signal.removeEventListener('abort', done);
-        resolve();
-      };
-      const wait = setTimeout(done, Math.min(1000 * 2 ** (tries - 1), 30_000));
-      signal.addEventListener('abort', done);
-    });
+    if (tries) await pause(Math.min(1000 * 2 ** (tries - 1), 30_000), signal);
     signal.throwIfAborted();
     const response = await fetchApi(`streams/${id}?from=${from}`, { signal }).catch(() => null);
     if (response?.headers.get('x-stream') === 'frames' && response.body) return response.body;

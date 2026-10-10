@@ -9,7 +9,7 @@ export const OPEN_BYTES = 4 * 1024 * 1024;
 export const SEAL_ITEMS = 8;
 // Opening an account is CPU in the workers (base64, decrypt, inflate, parse) while the main thread waits, so the pool
 // takes the cores the main thread can spare, bounded: more workers than that only share the same cores.
-export const codecWorkers = () => Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
+const codecWorkers = () => Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
 
 export class CodecAborted extends Error {}
 export class CodecUnavailable extends Error {}

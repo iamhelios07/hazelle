@@ -62,6 +62,7 @@ async function waited(work: Promise<unknown>, stop: AbortSignal): Promise<boolea
 }
 
 const MAX_ATTEMPTS = 3;
+const encoder = new TextEncoder();
 // Pauses between tries of a write that could not reach the server; the last repeats until it does.
 const RECONNECT_PAUSES = [1000, 2000, 4000, 8000, 15000];
 // A call waits these out as it waits for a dropped connection; a 503 says when to try again (retryAfter, in seconds).
@@ -495,8 +496,7 @@ export class ObjectStore {
     if (this.scopes.get(chat) === scope && epoch === this.epoch && !this.closing.signal.aborted) {
       scope.state = 'failed';
       scope.error = failure;
-      this.changes.push({ kind: 'scope', id: chat, parent: chat });
-      this.changed();
+      this.scopeChanged(chat);
     }
     return failure;
   }
@@ -540,8 +540,7 @@ export class ObjectStore {
     const epoch = this.epoch;
     const signal = AbortSignal.any([scope.abort.signal, this.closing.signal, this.ended.signal]);
     scope.state = 'loading';
-    this.changes.push({ kind: 'scope', id: chat, parent: chat });
-    this.changed();
+    this.scopeChanged(chat);
     await this.caching;
     const saved = await this.cachedChat(chat);
     if (signal.aborted || this.scopes.get(chat) !== scope) return this.halted(epoch);
@@ -555,8 +554,7 @@ export class ObjectStore {
         if (row.body && this.live.get(row.id)?.value === undefined) {
           scope.state = 'failed';
           scope.error = { ok: false, error: 'unreadable' };
-          this.changes.push({ kind: 'scope', id: chat, parent: chat });
-          this.changed();
+          this.scopeChanged(chat);
           return scope.error;
         }
       }
@@ -564,8 +562,7 @@ export class ObjectStore {
       if (saved.state.complete && !saved.changes.some((row) => row.omitted)) {
         scope.state = 'loaded';
         await this.projections.evaluate(chat);
-        this.changes.push({ kind: 'scope', id: chat, parent: chat });
-        this.changed();
+        this.scopeChanged(chat);
         // Ready is cache-only; catch-up and summary writes must not hold the chat screen behind the network.
         void this.refreshChat(chat).then((failure) => { if (!failure && scope.users && summarize) this.projections.summarizeChat(chat); });
         return null;
@@ -647,12 +644,10 @@ export class ObjectStore {
         try { await this.projections.evaluate(chat); }
         catch (error) { failure = this.codecFailure(error, epoch); }
       }
-      this.changes.push({ kind: 'scope', id: chat, parent: chat });
-      this.changed();
+      this.scopeChanged(chat);
       return failure;
     });
-    this.changes.push({ kind: 'scope', id: chat, parent: chat });
-    this.changed();
+    this.scopeChanged(chat);
     return scope.loading;
   }
 
@@ -669,8 +664,7 @@ export class ObjectStore {
     scope.head = 0;
     scope.error = null;
     if (this.scopes.get(chat) === scope) this.scopes.delete(chat);
-    this.changes.push({ kind: 'scope', id: chat, parent: chat });
-    this.changed();
+    this.scopeChanged(chat);
   }
 
   // An explicit account/parent walk; it never fills the held chat scopes. Backup and ownership walks run on their
@@ -1010,7 +1004,7 @@ export class ObjectStore {
       const result = await this.retry(async (): Promise<ApiResult<(Held | null)[]>> => {
         const resolved: Resolved[] = [];
         const writes: { id: string; kind: string; parent: string | null; baseRev: number | null; body: string | null }[] = [];
-        let bytes = new TextEncoder().encode(JSON.stringify({ timeline, writes: [] })).length;
+        let bytes = encoder.encode(JSON.stringify({ timeline, writes: [] })).length;
         // Resolve and seal afresh INSIDE every retry. Keep only a small value window, not the server's entire
         // item page. Future failures stay in their slots until the byte-limited prefix reaches them.
         filling: for (let from = start; from < end; from += SEAL_ITEMS) {
@@ -1038,7 +1032,7 @@ export class ObjectStore {
               const body = value === undefined ? null : codecValue(sealed[slots.get(index)!]!);
               if (value !== undefined && body === null) return { ok: false, error: 'too-large' };
               const write = { id, kind, parent, baseRev, body };
-              const size = new TextEncoder().encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
+              const size = encoder.encode(JSON.stringify(write)).length + (writes.length ? 1 : 0);
               if (bytes + size > limits.bytes) {
                 if (!resolved.length) return { ok: false, error: 'too-large' };
                 break filling;
@@ -1347,6 +1341,11 @@ export class ObjectStore {
       this.revisions.set(key, Math.max(this.revisions.get(key) ?? 0, rev));
     }
     if (kind === 'entry' && parent) this.heads.set(parent, Math.max(this.heads.get(parent) ?? 0, rev));
+  }
+
+  private scopeChanged(chat: string) {
+    this.changes.push({ kind: 'scope', id: chat, parent: chat });
+    this.changed();
   }
 
   private changed() {

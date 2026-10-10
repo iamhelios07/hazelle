@@ -1,10 +1,10 @@
 import type { Listed, Pack, RegexScript, Trigger } from '../engine/import/types';
 import { without } from '../model/fields';
+import type { PackOwner } from '../model/library';
 import type { ApiResult } from './api';
 import { evaluationFailure } from './evaluation';
 import type { ObjectStore } from './store';
 
-import type { PackOwner } from '../model/library';
 export type ScriptList = 'regex' | 'triggers';
 type Scripts = Pick<Pack, ScriptList>;
 
@@ -109,7 +109,6 @@ export const restoreScript = (store: ObjectStore, owner: PackOwner, { list, scri
 // it hangs. A newer sample of the same script takes the place of one still waiting.
 export const sampleScript = (store: ObjectStore, owner: PackOwner, script: RegexScript, text: string, signal: AbortSignal): Promise<ApiResult<string>> =>
   store.evaluation.sample(`sample:${owner.id}:${script.id}`, script, text, signal).then((data) => ({ ok: true, data }), evaluationFailure);
-
 
 export const setTakesMemory = (store: ObjectStore, module: string, takesMemory: boolean): Promise<ApiResult<unknown>> =>
   store.update('module', module, (current) => current.deleted === undefined ? { ...current, takesMemory } : null);

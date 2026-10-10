@@ -1,9 +1,9 @@
 import { live } from '../model/library';
 import type { Stored } from '../model/kinds';
-import { memoryId } from '../model/memory';
 import type { Stream } from '../model/stream';
 import { streamKey } from '../vault/streams';
 import type { Route } from './assignment';
+import { chatMemory } from './memory-read';
 import { dropStream, type StreamCall } from './relay';
 import type { ObjectStore } from './store';
 
@@ -78,7 +78,7 @@ export class Streams {
   // A memory summary's result is not an entry: its first record, or its chapter, takes the result's id.
   private saved({ parent, value: { result, for: purpose } }: Stored<'stream'>): boolean {
     if (purpose.kind !== 'memory') return this.store.children('entry', parent!).some((entry) => entry.id === result);
-    const memory = this.store.children('memory', parent!).find((each) => each.id === memoryId(parent!))?.value;
-    return memory !== undefined && [...memory.records, ...memory.chapters].some(({ id }) => id === result);
+    const { records, chapters } = chatMemory(this.store, parent!);
+    return [...records, ...chapters].some(({ id }) => id === result);
   }
 }

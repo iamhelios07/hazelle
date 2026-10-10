@@ -6,23 +6,21 @@ import { saveToolChat, toolsOf, ToolRate, TOOL_NOTICES_PER_MINUTE } from './tool
 import { ChangeSignal } from '../change-signal';
 import { Runaway } from '../engine/cbs/evaluate';
 import type { Role } from '../connectors/assignment';
-import type { ChatMessage } from '../connectors/types';
+import type { ChatMessage, EmbedPurpose } from '../connectors/types';
 import { isRecord } from '../connectors/values';
-import type { EmbedResult, Event, ToolEvent, Outcome, ScriptUnit, ModelResult, ModelRefusal } from '../engine/script-api';
-import type { EmbedPurpose } from '../connectors/types';
-import type { Host, ModelMessage, Question } from '../engine/script-api';
+import type { EmbedResult, Event, Host, ModelMessage, ModelRefusal, ModelResult, Outcome, Question, ScriptUnit, ToolEvent } from '../engine/script-api';
 import type { ChatScope } from '../engine/render';
-import { shown, type Receipt, type Writes } from '../model/chat';
+import { shown, type Writes } from '../model/chat';
 import type { ApiFailure } from './api';
 import { chatModel, embedModel } from './assignment';
-import { embedTexts } from './embed';
+import { countTexts, embedTexts } from './embed';
 import { setModels, setTakesMemory } from './pack';
 import { memoryOwner } from './memory-read';
-import { appendCall, appendScripted, appendUserMessage, type Written } from './chat-log';
+import { appendScripted, appendUserMessage, keepCall, type Written } from './chat-log';
 import type { Costs } from './cost';
 import type { Credentials } from './credential';
 import { evaluationFailure, EvaluationStuck } from './evaluation';
-import { generate } from './generate';
+import { gather, generate } from './generate';
 import type { ScriptOutcome } from './lua/event';
 import { LuaStuck } from './lua/client';
 import { modelProfile } from './profiles';
@@ -85,6 +83,11 @@ type Units = { lua: ScriptUnit[]; event: Event } | { tool: ToolUnit; event: Tool
 const ownerOf = (units: Units): PackOwner | null => 'tool' in units ? { kind: 'module', id: units.tool.module } : null;
 
 type Anchor = { version: string; stays?: true };
+
+const onLast = (scope: ChatScope): Anchor | null => {
+  const last = scope.messages.at(-1)?.id;
+  return last ? { version: last, stays: true } : null;
+};
 
 // A tool's last prompt answer in this session: its slot text, and its memory with the id it stands through.
 type Answered = { tool: string; memory: { text: string; through: string | null } | null };
@@ -344,8 +347,7 @@ export class Scripts {
     if (!unit?.tool.manifest.menu.some((each) => each.id === item)) return Promise.resolve();
     return this.lane(chat, unit, async () => {
       const scope = this.scope(chat);
-      const last = scope.messages.at(-1)?.id;
-      await this.dispatch(chat, { tool: unit, event: { kind: 'menu', item } }, scope, last ? { version: last, stays: true } : null, this.closing.signal);
+      await this.dispatch(chat, { tool: unit, event: { kind: 'menu', item } }, scope, onLast(scope), this.closing.signal);
     });
   }
 
@@ -383,8 +385,7 @@ export class Scripts {
     for (const unit of toolsOf(this.session.store, stored.value)) {
       void this.lane(chat, unit, async () => {
         const scope = this.scope(chat);
-        const last = scope.messages.at(-1)?.id;
-        await this.dispatch(chat, { tool: unit, event }, scope, last ? { version: last, stays: true } : null, this.closing.signal);
+        await this.dispatch(chat, { tool: unit, event }, scope, onLast(scope), this.closing.signal);
       });
     }
   }
@@ -401,7 +402,7 @@ export class Scripts {
   pageContext(chat: string, module: string, signal?: AbortSignal): { scope: ChatScope; host: Host } | null {
     const stored = live(this.session.store.get('chat', chat));
     if (this.closing.signal.aborted || !stored || !toolsOf(this.session.store, stored.value).some((unit) => unit.module === module)) return null;
-    const scope = scopeOf(this.session, chat, stored.value, this.session.store.foldedChat(chat).messages);
+    const scope = this.scope(chat);
     return { scope, host: this.host(chat, scope, signal) };
   }
 
@@ -409,8 +410,7 @@ export class Scripts {
     return this.queued(chat, async () => {
       const context = this.pageContext(chat, module);
       if (!context) return;
-      const last = context.scope.messages.at(-1)?.id;
-      await this.event(chat, context.scope, outcome, last ? { version: last, stays: true } : null, { kind: 'module', id: module });
+      await this.event(chat, context.scope, outcome, onLast(context.scope), { kind: 'module', id: module });
     });
   }
 
@@ -450,17 +450,17 @@ export class Scripts {
   // answered it.
   async press(chat: string, button: { trigger: string } | { data: string }): Promise<boolean> {
     const event: Event = 'trigger' in button ? { kind: 'call', name: button.trigger } : { kind: 'button', data: button.data };
-    return (await this.now(chat, event, (last) => (last === null ? null : { version: last, stays: true }))) ?? false;
+    return (await this.now(chat, event, onLast)) ?? false;
   }
 
   // null: the chat has no triggers.
-  private now(chat: string, event: Event, anchor: (last: string | null) => Anchor | null): Promise<boolean | null> {
+  private now(chat: string, event: Event, anchor: (scope: ChatScope) => Anchor | null): Promise<boolean | null> {
     const stored = this.session.store.get('chat', chat);
     const scripts = stored ? triggersOf(packsOf(this.session.store, stored.value)) : [];
     if (!stored || scripts.length === 0) return Promise.resolve(null);
     return this.queued(chat, async () => {
       const scope = scopeOf(this.session, chat, stored.value, this.session.read.chat(chat).snapshot()?.messages ?? []);
-      const { outcome } = await this.dispatch(chat, { lua: scripts, event }, scope, anchor(scope.messages.at(-1)?.id ?? null));
+      const { outcome } = await this.dispatch(chat, { lua: scripts, event }, scope, anchor(scope));
       return outcome.handled;
     });
   }
@@ -551,11 +551,7 @@ export class Scripts {
       ask: (question, from, callSignal) => this.ask(chat, question, from, either(callSignal)),
       model: (role, messages, from, callSignal) => this.model(chat, role, messages, from, deadline, either(callSignal)),
       embed: (texts, as, from, callSignal) => this.embed(chat, texts, as, from, deadline, either(callSignal)),
-      tokens: async (text) => {
-        const counted = await this.session.store.evaluation.count([text]);
-        if ('kind' in counted) throw new Error('tokenizer');
-        return counted[0]!;
-      },
+      tokens: async (text) => (await countTexts(this.session.store)([text]))[0]!,
       lore: async (reserve) => {
         const context = scope.model?.maxContext ?? null;
         const lore = await this.session.store.evaluation.lore({ asker: 'lore', chat }, scope, crypto.randomUUID(), reserve === null || context === null ? Infinity : context - reserve);
@@ -623,7 +619,7 @@ export class Scripts {
       this.tell(chat, `no-model:${role}`, { kind: 'no-model', role }, from);
       return refused('no-model', 'no model is set');
     }
-    let text = '';
+    const text = gather();
     const call = await pageCall(chat);
     // No marker keeps this call, so no pick-up ever ends it: however it went, it is ended here.
     const answer = await generate({
@@ -634,14 +630,14 @@ export class Scripts {
       messages,
       call,
       signal: signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal,
-      onText: (phase, chunk) => void (phase === 'text' && (text += chunk)),
+      onText: text.add,
     }).finally(() => endCall(store, call.id));
     if (answer.error?.kind === 'app' && answer.error.code === 'too-many-bot-calls') {
       this.tell(chat, 'flood', { kind: 'flood' }, from);
       return refused('flood', 'too many model calls in a minute');
     }
-    await this.keep(chat, receiptOf(callOf(route), answer));
-    return answer.state === 'failed' ? refused('failed', answer.error?.kind ?? 'failed') : { success: true, result: text };
+    await keepCall(this.session, chat, receiptOf(callOf(route), answer));
+    return answer.state === 'failed' ? refused('failed', answer.error?.kind ?? 'failed') : { success: true, result: text.value() };
   }
 
   // With the account's 임베딩 모델, under the spender's one answer for model calls.
@@ -655,23 +651,10 @@ export class Scripts {
       this.tell(chat, 'no-model:embed', { kind: 'no-model', role: 'embed' }, from);
       return { ok: false, reason: 'no-model' };
     }
-    const count = async (each: string[]) => {
-      const counted = await store.evaluation.count(each);
-      if ('kind' in counted) throw new Error('tokenizer');
-      return counted;
-    };
-    const { answer, receipt } = await embedTexts({ credentials, count }, route, texts, as, chat, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
-    if (receipt) await this.keep(chat, receipt);
+    const { answer, receipt } = await embedTexts({ credentials, count: countTexts(store) }, route, texts, as, chat, signal ? AbortSignal.any([this.closing.signal, signal]) : this.closing.signal);
+    if (receipt) await keepCall(this.session, chat, receipt);
     if (!answer.ok && answer.reason === 'flood') this.tell(chat, 'flood', { kind: 'flood' }, from);
     return answer;
-  }
-
-  // On the last message shown, so usage and cost count the call.
-  private async keep(chat: string, receipt: Receipt) {
-    const last = this.session.read.chat(chat).snapshot()?.messages.at(-1);
-    if (!last) return;
-    const saved = await appendCall(this.session.store, chat, shown(last).id, receipt);
-    if (saved.ok) this.session.costs.settle(chat, receipt);
   }
 
   // One run at a time per chat, each reading the chat as the one before left it: a write returns before its chat's

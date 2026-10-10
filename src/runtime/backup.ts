@@ -98,7 +98,7 @@ class BackupWorker {
     if ('output' in host) {
       if (name === 'prepare') return pinBackup(host.store, signal);
       if (name === 'pin') return host.store.pin(signal);
-      if (name === 'readFile') return host.files.read(args as FileRef, { signal: this.options.signal });
+      if (name === 'readFile') return host.files.read(args as FileRef, { signal });
       if (name === 'missingFiles') return host.files.missing(args as string[]);
       if (name === 'output') {
         const output = args as OutputCall;

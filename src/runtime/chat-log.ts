@@ -11,6 +11,7 @@ import type { ApiFailure, ApiResult } from './api';
 import { routeOf } from './assignment';
 import type { ChatFile } from './chat-file';
 import type { Session } from './session';
+import { storedMemory } from './memory-read';
 import { markDeleted } from './removal';
 import type { Greetings } from './greetings';
 import { withPersona } from './personas';
@@ -68,7 +69,7 @@ export async function branchChat(store: ObjectStore, item: ChatItem, message: st
     const upTo = item.messages.findIndex((candidate) => candidate.id === message);
     if (upTo === -1) return { ok: false, error: 'gone' };
     const id = crypto.randomUUID();
-    const memory = store.children('memory', item.id).find((entry) => entry.id === memoryId(item.id))?.value;
+    const memory = storedMemory(store, item.id)?.value;
     const illustrations = store.children('illustration', item.id).map(({ value }) => value);
     const { writes, after, messages, versions } = copyWrites(id, item.messages.slice(0, upTo + 1), memory, illustrations);
     writes.push(...(await branchToolData(store, item.id, id, messages, versions)));
@@ -296,7 +297,13 @@ export function appendScripted(store: ObjectStore, chat: string, { edits, remove
   return store.batch(entries.map((value) => ({ type: 'create', kind: 'entry', id: crypto.randomUUID(), parent: chat, value })));
 }
 
-export const appendCall = (store: ObjectStore, chat: string, version: string, receipt: Receipt) => append(store, chat, { type: 'call', version, receipt, at: Date.now() });
+// A call no reply holds (a script's, retrieval's): on the last message shown, so usage and cost count it.
+export async function keepCall({ store, read, costs }: Pick<Session, 'store' | 'read' | 'costs'>, chat: string, receipt: Receipt) {
+  const last = read.chat(chat).snapshot()?.messages.at(-1);
+  if (!last) return;
+  const saved = await append(store, chat, { type: 'call', version: shown(last).id, receipt, at: Date.now() });
+  if (saved.ok) costs.settle(chat, receipt);
+}
 
 export const appendCost = (store: ObjectStore, chat: string, replyId: string, cost: Cost | null) => append(store, chat, { type: 'cost', replyId, cost, at: Date.now() });
 

@@ -175,9 +175,10 @@ export class Talk {
     return null;
   }
 
-  private seat(turn: Turn): Held {
+  private seat(chat: string, said: Turn['said'], reply: Turn['reply']): Held {
+    const turn = { chat, said, reply, text: reply.continues?.text ?? '', reasoning: reply.continues?.reasoning ?? '' };
     const held: Held = { turn, abort: new AbortController(), calling: null };
-    this.turns.set(turn.chat, held);
+    this.turns.set(chat, held);
     this.writingChats = new Set(this.turns.keys());
     this.changes.notify();
     return held;
@@ -203,7 +204,7 @@ export class Talk {
   async run<F extends { kind: string }>({ chat, said, reply: asked }: Omit<Turn, 'text' | 'reasoning'>, prepare: (signal: AbortSignal) => Promise<Ask | F>): Promise<TalkFailure | F | null> {
     if (this.turns.has(chat)) return null;
     const lease = this.store.retainChat(chat);
-    const held = this.seat({ chat, said, reply: asked, text: asked.continues?.text ?? '', reasoning: asked.continues?.reasoning ?? '' });
+    const held = this.seat(chat, said, asked);
     try {
       // A turn is one workflow: begun on one timeline, none of its writes lands on the next (store pinned).
       const ran = await this.store.pinned(() => this.turnOn(held, said, asked, lease, prepare));
@@ -253,7 +254,7 @@ export class Talk {
     if (this.closed || purpose.kind !== 'reply' || this.turns.has(chat)) return;
     const lease = this.store.retainChat(chat);
     const reply = { id: stream.value.result, message: purpose.message, replaces: purpose.replaces, continues: purpose.continues, ...(purpose.before && { before: purpose.before }) };
-    const held = this.seat({ chat, said: null, reply, text: reply.continues?.text ?? '', reasoning: reply.continues?.reasoning ?? '' });
+    const held = this.seat(chat, null, reply);
     this.reading.add(stream.id);
     held.calling = stream.id;
     try {
@@ -304,6 +305,9 @@ export function receiptOf(call: Stream['call'], answer: Reply): Receipt {
     cache: answer.cache?.cache ?? null,
   };
 }
+
+// A task's call (a memory record's, a 삽화 scene's) is never settled later, so its receipt keeps no pending cost.
+export const unsettled = (receipt: Receipt): Receipt => (receipt.cost === 'pending' ? { ...receipt, cost: null } : receipt);
 
 // Field by field, never the error itself: whatever a network error gains must not reach saved chats.
 export function receiptError(error: NonNullable<Reply['error']>): ReceiptError {
