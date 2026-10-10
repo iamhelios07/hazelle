@@ -1,12 +1,12 @@
 import { setModels } from '../../runtime/pack';
 import type { ObjectStore } from '../../runtime/store';
-import { BookOpen, Braces, Eye, IdCard, Languages, MessageSquareQuote, Package, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Braces, Eye, IdCard, ImageUp, Languages, MessageSquareQuote, Package, ScrollText, Square, UserRound, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { storyHtml } from '../../engine/display';
 import { unused } from '../../engine/pipeline';
 import type { ChatSummary } from '../../model/chat';
 import { PICTURE_PERCENT, type CharacterShelf, type Pictures } from '../../model/library';
-import { editCharacter, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
+import { editCharacter, setAvatar, setDecor, setKeepThoughts, setPictures, setTranslatorNote, type CharacterText } from '../../runtime/characters';
 import { scriptsOf } from '../../runtime/scripts';
 import { packsOf } from '../../runtime/chat-context';
 import { ACTS } from '../common/acts';
@@ -23,12 +23,12 @@ import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { readTyped } from '../common/typedNumber';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
-import { BOT_MODELS, BOT_MODELS_HELP, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
-import { useCharacter, useChildren, useModules, useSettings, useStore } from '../session';
+import { BOT_MODELS, BOT_MODELS_HELP, CHANGE_IMAGE, inSettings, NOTE_PLACEHOLDER, PAGES, SCRIPTS, STOP, TRANSLATOR_NOTE } from '../common/words';
+import { useCharacter, useChildren, useFiles, useModules, useSettings, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { characterPage, HOME } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChoiceGroup, Disclosure, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
+import { Button, Callout, ChoiceGroup, Disclosure, FaceRow, FileButton, List, ListItem, MenuItem, NavGroup, NavRow, NumberInput, Portrait, Row, Section, SettingGroup, SettingRow, Story, Switch, Tag, Text, TextField, useWide } from '../ui';
 import { useCardTranslation } from './useCardTranslation';
 import { useCharacterActions } from './useCharacterActions';
 
@@ -83,6 +83,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const { id, character, face } = shelf;
   const { card, origin } = character;
   const store = useStore();
+  const files = useFiles();
   const toast = useToast();
   const wide = useWide();
   const original = useCharacter(origin?.id ?? null);
@@ -95,6 +96,7 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const pictureSave = useAutosave<Pictures>(`character-pictures:${id}`, (patch) => setPictures(store, id, patch));
   const noteSave = useAutosave<{ note: string }>(`character-note:${id}`, ({ note = '' }) => setTranslatorNote(store, id, note));
   const [typedName, setTypedName] = useState<string>();
+  const [changingFace, setChangingFace] = useState(false);
   const [typedHeights, setTypedHeights] = useState<Partial<Record<Height, string>>>({});
   const held: CharacterText = { ...character.card, alias: character.alias ?? '', ...unsaved };
   const text = { ...held, name: typedText(typedName, filled, held.name, String) };
@@ -108,6 +110,13 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const decor = character.decor !== false;
   const botModels = character.botModels === true;
   const keepThoughts = character.keepThoughts === true;
+
+  async function changeFace(file: File) {
+    setChangingFace(true);
+    const changed = await setAvatar(store, files, id, new Uint8Array(await file.arrayBuffer()));
+    setChangingFace(false);
+    if (!changed.ok) toast.failed(changed, '이미지를 바꾸지 못했어요.');
+  }
 
   function flip(field: Switched, on: boolean) {
     void SWITCHES[field](store, id, on).then((saved) => saved.ok || toast.failed(saved, '저장하지 못했어요.'));
@@ -198,7 +207,11 @@ export function CharacterEditor({ shelf, layout, part, onPart, frame }: Props) {
   const pages: Record<CharacterPart, ReactNode> = {
     profile: (
       <>
-        <Portrait image={face} name={card.name} />
+        <FaceRow face={<Portrait image={face} name={card.name} />}>
+          <FileButton accept="image/*" size="sm" icon={ImageUp} busy={changingFace} onFile={(file) => void changeFace(file)}>
+            {CHANGE_IMAGE}
+          </FileButton>
+        </FaceRow>
         {split && lead}
         <Section title={PARTS.profile.label}>
           <TextField label="이름" value={text.name} onChange={(value) => change('name', value)} error={text.name.trim() ? undefined : '이름을 입력해 주세요.'} />

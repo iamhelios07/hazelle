@@ -43,6 +43,10 @@ export const BIN_KEEPS = `${KEEP_DAYS}일 안에 '${BIN}'에서 복원할 수 �
 
 export const COMMAND = '명령어';
 
+// A face's picture, a character's or a persona's, in its editor.
+export const CHANGE_IMAGE = '이미지 바꾸기';
+export const UNREADABLE_IMAGE = '이 이미지는 열 수 없어요.';
+
 export const TRANSLATOR_NOTE = '번역가의 노트';
 export const NOTE_PLACEHOLDER = 'Master -> 주인님\n존댓말은 그대로 둬 주세요';
 export const noteLines = (note: string | undefined) => (note ?? '').split('\n').filter((line) => line.trim()).length;

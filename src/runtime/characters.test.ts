@@ -6,7 +6,7 @@ import { SETTINGS_ID } from '../model/settings';
 import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api, holdAccount } from './api';
-import { addCharacter, copyCharacter, dropCharacterTranslate, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
+import { addCharacter, copyCharacter, dropCharacterTranslate, illustrateSwitches, importCharacter, setIllustrate, setOwnIllustrate, resetToggles, setAvatar, setDeleted, setOwnTranslate, setPictures, setTextTranslation, setToggle, setTranslate, translateSwitches } from './characters';
 import { markDeleted, purgeExpired, purgeNow } from './removal';
 import { appendUserMessage, removeChat, restoreChat, startChat } from './chat-log';
 import { Files } from './files';
@@ -102,6 +102,45 @@ describe('importCharacter', () => {
     expect(await importCharacter(store, refused, card, picture(), () => {})).toMatchObject({ ok: true, data: { faceless: true } });
     expect(store.list('avatar')).toEqual([]);
     expect(store.list('character')).toHaveLength(3);
+  });
+});
+
+describe('setAvatar', () => {
+  it('rewrites a copy’s avatar in place while the original keeps the file they shared, and gives one to a character without', async () => {
+    const { store, files } = await server.account();
+    const card = { card: testCard('루나'), lore: [], loreFolders: [], assets: [] };
+    const first = picture();
+    const imported = await importCharacter(store, files, card, first, () => {});
+    const original = imported.ok ? imported.data.id : '';
+    const copied = await copyCharacter(store, original, '루나 2', () => {});
+    const copy = copied.ok ? copied.data : '';
+    const [held] = store.children('avatar', copy);
+    const next = png();
+    vi.mocked(thumbnail).mockResolvedValueOnce('data:next');
+    expect(await setAvatar(store, files, copy, next)).toMatchObject({ ok: true, data: { id: held!.id, value: { type: 'image/png', size: next.length, thumb: 'data:next' } } });
+    const [changed, ...more] = store.children('avatar', copy);
+    expect(more).toEqual([]);
+    expect(await files.read(changed!.value.file)).toEqual({ ok: true, data: next });
+    const kept = store.children('avatar', original)[0]!.value;
+    expect(kept).toEqual(held!.value);
+    expect(await files.read(kept.file)).toEqual({ ok: true, data: first.bytes });
+
+    const faceless = await importCharacter(store, files, card, null, () => {});
+    const id = faceless.ok ? faceless.data.id : '';
+    expect(await setAvatar(store, files, id, randomBytes(64))).toEqual({ ok: false, error: 'picture-unreadable' });
+    const given = await setAvatar(store, files, id, next);
+    expect(given.ok && given.data.parent).toBe(id);
+    expect(store.children('avatar', id).map(({ value }) => value.file)).toEqual([changed!.value.file]);
+  });
+
+  it('answers a refused upload as picture-refused and leaves the avatar as it was', async () => {
+    const { store, files } = await server.account();
+    const imported = await importCharacter(store, files, { card: testCard('루나'), lore: [], loreFolders: [], assets: [] }, picture(), () => {});
+    const id = imported.ok ? imported.data.id : '';
+    const before = store.children('avatar', id);
+    const refused = new Files(async <T,>(...args: Parameters<typeof api>) => args[0] === 'PUT' ? { ok: false as const, error: 'files-full' } : api<T>(...args), store);
+    expect(await setAvatar(store, refused, id, png())).toEqual({ ok: false, error: 'picture-refused' });
+    expect(store.children('avatar', id)).toEqual(before);
   });
 });
 
