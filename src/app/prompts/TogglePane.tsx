@@ -1,9 +1,9 @@
-import { Ellipsis, Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { Toggle } from '../../model/prompt';
+import { ACTS, newOf } from '../common/acts';
 import { NameDialog } from '../common/NameDialog';
 import { ToggleChoice } from '../common/ToggleChoice';
-import { Button, ChoiceGroup, Dialog, Empty, IconButton, Menu, MenuItem, Row, Section, SettingGroup, SettingRow, Switch, TextField } from '../ui';
+import { Button, ChoiceGroup, Dialog, Empty, MenuItem, MoreMenu, Row, Section, SettingGroup, SettingRow, Switch, TextField } from '../ui';
 import { keyProblem } from './edits';
 
 type Props = {
@@ -30,8 +30,8 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
       note={`${toggles.length}개`}
       help="채팅에서 켜고 끄면 조건에 따라 보내는 내용이 바뀌어요."
       action={
-        <Button variant="ghost" size="sm" icon={Plus} onClick={() => onAdding(true)}>
-          새 토글
+        <Button variant="secondary" icon={ACTS.create.icon} onClick={() => onAdding(true)}>
+          {newOf('토글')}
         </Button>
       }
     >
@@ -51,11 +51,11 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
                   ) : (
                     <ToggleChoice label={`${toggle.label} 기본값`} options={toggle.options} value={toggle.default} onChange={(value) => onEdit(toggle, { ...toggle, default: value }, 'default')} />
                   )}
-                  <Menu label={toggle.label} place="below-end" trigger={(opener) => <IconButton icon={Ellipsis} size="sm" label={`'${toggle.label}' 더 보기`} title="더 보기" {...opener} />}>
-                    <MenuItem label="이름 바꾸기" onClick={() => setRenaming({ key: toggle.key, field: 'label' })} />
+                  <MoreMenu label={`'${toggle.label}' 더 보기`}>
+                    <MenuItem icon={ACTS.rename.icon} label={ACTS.rename.label} onClick={() => setRenaming({ key: toggle.key, field: 'label' })} />
                     <MenuItem label="키 바꾸기" sub="조건에 쓴 키도 바뀌어요" onClick={() => setRenaming({ key: toggle.key, field: 'key' })} />
-                    <MenuItem label="삭제" tone="warn" onClick={() => onRemove(toggle.key)} />
-                  </Menu>
+                    <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => onRemove(toggle.key)} />
+                  </MoreMenu>
                 </Row>
               }
             />
@@ -64,7 +64,7 @@ export function TogglePane({ toggles, uses, onAdd, onEdit, onRekey, onRemove, ad
       )}
       {target && renaming.field === 'label' && (
         <NameDialog
-          title="이름 바꾸기"
+          title={ACTS.rename.label}
           value={target.label}
           onClose={() => setRenaming(null)}
           onSave={(label) => {
@@ -113,7 +113,7 @@ function KeyDialog({ toggle, toggles, uses, onClose, onSave }: { toggle: Toggle;
       }}
       actionsLayout="full"
       actions={
-        <Button type="submit" size="md">
+        <Button type="submit">
           바꾸기
         </Button>
       }
@@ -154,12 +154,12 @@ function NewToggleDialog({ toggles, onClose, onSave }: { toggles: readonly Toggl
 
   return (
     <Dialog
-      title="새 토글"
+      title={newOf('토글')}
       onClose={onClose}
       onSubmit={submit}
       actionsLayout="full"
       actions={
-        <Button type="submit" size="md">
+        <Button type="submit">
           만들기
         </Button>
       }
@@ -171,12 +171,12 @@ function NewToggleDialog({ toggles, onClose, onSave }: { toggles: readonly Toggl
         value={key}
         onChange={setKey}
         placeholder="예: sims"
-        hint="조건에서 이 토글을 가리키는 이름이에요."
+        help="조건에서 이 토글을 가리키는 이름이에요."
         error={error.key}
       />
       <ChoiceGroup<Toggle['kind']>
         label="종류"
-        layout="buttons"
+        layout="segmented"
         options={[
           { value: 'check', label: KIND_WORDS.check },
           { value: 'choice', label: KIND_WORDS.choice },
@@ -184,7 +184,7 @@ function NewToggleDialog({ toggles, onClose, onSave }: { toggles: readonly Toggl
         value={kind}
         onChange={setKind}
       />
-      {kind === 'choice' && <TextField label="선택지" hint="쉼표로 구분해요." value={options} onChange={setOptions} placeholder="예: 간결, 보통, 풍부" error={error.options} />}
+      {kind === 'choice' && <TextField label="선택지" help="쉼표로 구분해요." value={options} onChange={setOptions} placeholder="예: 간결, 보통, 풍부" error={error.options} />}
     </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronUp, Plus, type LucideIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronUp, type LucideIcon } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Pack, RegexScript, Trigger } from '../../engine/import/types';
 import { checkScript, type ScriptCheck } from '../../engine/regex/scripts';
@@ -7,9 +7,10 @@ import { addLua, addRegex, editRegex, editTrigger, moveScript, neighbour, remove
 import type { PackOwner } from '../../model/library';
 import { useStore } from '../session';
 import { useToast } from '../toast';
-import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, SearchField, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
-import { matches, noResults, SEARCH_FROM } from './search';
+import { Button, ChoiceGroup, Disclosure, Empty, IconButton, List, ListItem, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
+import { ACTS, addOf } from './acts';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
+import { useSearch } from './useSearch';
 import { COMMAND, scriptName, SCRIPTS, STAGES } from './words';
 
 type Lua = Extract<Trigger, { kind: 'lua' }>;
@@ -26,7 +27,6 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
   const store = useStore();
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
-  const [words, setWords] = useState('');
   // Lua code typed and not applied yet, by script; it goes when the editor does.
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(() => new Map());
 
@@ -51,11 +51,16 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
   const item = (list: ScriptList, id: string, page: boolean) => {
     const place = pack[list].findIndex((script) => script.id === id);
     const shared = { owner, pack, place, page, open: page || open === id, onOpen: (on: boolean) => setOpen(on ? id : null) };
-    if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={words.trim() !== ''} />;
+    if (list === 'regex') return <RegexItem key={id} {...shared} script={pack.regex[place]!} status={status.includes(id)} searched={search.words !== ''} />;
     const trigger = pack.triggers[place]!;
     return trigger.kind === 'lua' ? <LuaItem key={id} {...shared} trigger={trigger} draft={drafts.get(id) ?? null} onDraft={(code) => draft(id, code)} onApplied={(code) => applied(id, code)} /> : <BlocksItem key={id} {...shared} trigger={trigger} />;
   };
 
+  const search = useSearch(
+    [...pack.regex.map((script) => ({ list: 'regex' as const, id: script.id, texts: [script.name, script.find] })), ...pack.triggers.map((trigger) => ({ list: 'triggers' as const, id: trigger.id, texts: [trigger.name, trigger.kind === 'lua' ? trigger.code : ''] }))],
+    `${SCRIPTS.part} 검색`,
+    ({ texts }) => texts,
+  );
   const opened = drill && open !== null ? (['regex', 'triggers'] as const).find((list) => pack[list].some((script) => script.id === open)) : undefined;
   if (opened && open)
     return (
@@ -69,13 +74,6 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
       </Stack>
     );
 
-  const searching = words.trim() !== '';
-  const found = searching
-    ? [
-        ...pack.regex.filter((script) => matches(words, script.name, script.find)).map(({ id }) => item('regex', id, false)),
-        ...pack.triggers.filter((trigger) => matches(words, trigger.name, trigger.kind === 'lua' ? trigger.code : '')).map(({ id }) => item('triggers', id, false)),
-      ]
-    : [];
   const lists = (
     <>
       <Section title={SCRIPTS.regex} note={`${pack.regex.length}개`}>
@@ -92,8 +90,8 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
             );
           })}
           <Row kind="actions">
-            <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add('regex')}>
-              {`${SCRIPTS.regex} 추가`}
+            <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add('regex')}>
+              {addOf(SCRIPTS.regex)}
             </Button>
           </Row>
         </Stack>
@@ -106,8 +104,8 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
             <Empty variant="section">{`${SCRIPTS.triggers}가 없어요.`}</Empty>
           )}
           <Row kind="actions">
-            <Button variant="secondary" size="sm" icon={Plus} onClick={() => void add('triggers')}>
-              Lua 추가
+            <Button variant="secondary" size="sm" icon={ACTS.create.icon} onClick={() => void add('triggers')}>
+              {addOf('Lua')}
             </Button>
           </Row>
         </Stack>
@@ -117,15 +115,15 @@ export function ScriptsEditor({ owner, pack, drill, status = [] }: { owner: Pack
   // The search box keeps its place whether it shows what it found or the lists, so typing in it never moves it.
   return (
     <>
-      {(searching || pack.regex.length + pack.triggers.length >= SEARCH_FROM) && <SearchField size="sm" label={`${SCRIPTS.part} 검색`} value={words} onChange={setWords} />}
-      {!searching ? (
+      {search.field}
+      {!search.words ? (
         lists
-      ) : found.length > 0 ? (
+      ) : search.none === null ? (
         <List box label={`찾은 ${SCRIPTS.part}`}>
-          {found}
+          {search.found.map(({ list, id }) => item(list, id, false))}
         </List>
       ) : (
-        <Empty variant="section">{noResults(words)}</Empty>
+        <Empty variant="section">{search.none}</Empty>
       )}
     </>
   );
@@ -177,7 +175,7 @@ function useScriptActions({ owner, pack, onOpen }: ItemProps, list: ScriptList, 
           <Text variant="note">{status ? SAVE_STATUS[status] : ''}</Text>
         </Row>
         <Button variant="danger" size="sm" onClick={() => void drop()}>
-          삭제
+          {`이 ${SCRIPTS[list]} 삭제`}
         </Button>
       </Row>
     </>
@@ -198,7 +196,7 @@ function RegexItem(props: ItemProps & { script: RegexScript; status: boolean; se
   return (
     <Item {...props} title={name} tag={tag} aside={searched ? STAGES[shown.stage] : undefined}>
       <TextField label="이름" value={shown.name} onChange={(value) => save.change({ name: value })} />
-      <ChoiceGroup label="단계" showLabel options={STAGE_OPTIONS} value={shown.stage} onChange={(stage) => save.change({ stage })} />
+      <ChoiceGroup label="단계" showLabel layout="segmented" options={STAGE_OPTIONS} value={shown.stage} onChange={(stage) => save.change({ stage })} />
       <TextField label="패턴" kind="key" lines={2} value={shown.find} onChange={(find) => save.change({ find })} error={check === 'invalid' ? '패턴이 올바르지 않아요.' : undefined} />
       <TextField
         label="바꿀 내용"

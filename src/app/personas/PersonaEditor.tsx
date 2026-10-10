@@ -5,13 +5,14 @@ import type { Persona } from '../../model/persona';
 import { editPersona, removePersona, restorePersona } from '../../runtime/personas';
 import { thumbnail } from '../../runtime/picture';
 import { useLibrary, useSettings, useStore } from '../session';
+import { ACTS } from '../common/acts';
 import { aliased } from '../common/alias';
 import type { Frame } from '../common/frame';
 import { filled, typedText } from '../common/typed';
 import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
 import { BIN_KEEPS } from '../common/words';
 import { useToast } from '../toast';
-import { Avatar, Button, FaceRow, Facts, FileButton, Row, TextField } from '../ui';
+import { Avatar, FaceRow, Facts, FileButton, MenuItem, TextField } from '../ui';
 
 type Props = {
   stored: Stored<'persona'>;
@@ -48,11 +49,12 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
     const removed = await autosave.remove(() => removePersona(store, id));
     if (!removed) return;
     if (!removed.ok) {
-      if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요.', { detail: '채팅에서 다른 페르소나를 선택한 뒤 삭제해 주세요.' });
+      // 삭제 is hidden on the current persona; 'current' still comes back when another device chose it meanwhile.
+      if (removed.error === 'current') return toast.error('현재 페르소나는 삭제할 수 없어요.');
       return toast.failed(removed, '삭제하지 못했어요.');
     }
     onRemoved();
-    toast.undoable(`${removed.data.value.name} 페르소나를 삭제했어요.`, () => void restorePersona(store, id), BIN_KEEPS);
+    toast.undoable(`'${removed.data.value.name}' 페르소나를 삭제했어요.`, () => void restorePersona(store, id), BIN_KEEPS);
   }
 
   const pinnedBy = library.characters.filter(({ character }) => character.persona === id).map(({ character }) => character.card.name);
@@ -71,12 +73,8 @@ export function PersonaEditor({ stored, backLabel, onBack, onRemoved, frame }: P
       <TextField label="이름" value={persona.name} onChange={(value) => change('name', value)} help="채팅 속 {{user}}가 이 이름으로 바뀌어요." error={persona.name.trim() ? undefined : '이름을 입력해 주세요.'} />
       <TextField label="별명" value={persona.alias ?? ''} onChange={(value) => change('alias', value)} placeholder="예: 부자 스티브" help="나만 보는 이름이에요." />
       <TextField label="설명" lines={8} value={persona.description} onChange={(value) => change('description', value)} />
-      <Row kind="actions">
-        <Button variant="danger" size="sm" onClick={() => void remove()}>
-          이 페르소나 삭제
-        </Button>
-      </Row>
     </>
   );
-  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined }, body });
+  const menu = settings.persona === id ? undefined : { label: '페르소나 더 보기', items: <MenuItem icon={ACTS.remove.icon} label={ACTS.remove.label} tone="warn" onClick={() => void remove()} /> };
+  return frame({ head: { title: aliased(persona.name, persona.alias), backLabel, onBack, status: autosave.status ? SAVE_STATUS[autosave.status] : undefined, menu }, body });
 }

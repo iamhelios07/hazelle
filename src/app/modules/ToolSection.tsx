@@ -3,7 +3,7 @@ import type { Stored } from '../../model/kinds';
 import { setModels, setTakesMemory } from '../../runtime/pack';
 import { scriptsOf } from '../../runtime/scripts';
 import { ToolSetting } from '../common/ToolSetting';
-import { SAVE_STATUS, useAutosave } from '../common/useAutosave';
+import { useAutosave } from '../common/useAutosave';
 import { MEMORY_CLAIM_HELP, MODULE_MODELS, MODULE_MODELS_HELP, TOOL, toolVersion } from '../common/words';
 import { useSession, useTool } from '../session';
 import { navigate } from '../shell/router';
@@ -19,7 +19,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
   return (
     <Section
       title={TOOL}
-      action={manifest.page && <Button variant="secondary" size="sm" icon={ExternalLink} onClick={() => navigate({ kind: 'tool-page', module: module.id })}>열기</Button>}
+      action={manifest.page && <Button variant="secondary" icon={ExternalLink} onClick={() => navigate({ kind: 'tool-page', module: module.id })}>열기</Button>}
     >
       <Stack gap="group">
         <Facts items={[{ label: '버전', value: toolVersion(manifest.version) }, { label: '제작자', value: manifest.author }]} />
@@ -36,7 +36,7 @@ export function ToolSection({ module }: { module: Stored<'module'> }) {
 function ModelConsent({ module }: { module: Stored<'module'> }) {
   const { store } = useSession();
   const save = useAutosave<{ on: boolean }>(`module-models:${module.id}`, ({ on }) => setModels(store, { kind: 'module', id: module.id }, on!));
-  return <SettingRow label={MODULE_MODELS} help={MODULE_MODELS_HELP} note={save.status ? SAVE_STATUS[save.status] : undefined} control={<Switch label={MODULE_MODELS} checked={save.unsaved.on ?? module.value.botModels === true} onChange={(on) => void save.save({ on })} />} />;
+  return <SettingRow label={MODULE_MODELS} help={MODULE_MODELS_HELP} control={<Switch label={MODULE_MODELS} checked={save.unsaved.on ?? module.value.botModels === true} onChange={(on) => void save.save({ on })} />} />;
 }
 
 const MEMORY_CLAIM_LABEL = '장기 기억 맡기기';
@@ -44,5 +44,5 @@ const MEMORY_CLAIM_LABEL = '장기 기억 맡기기';
 function MemoryClaim({ module }: { module: Stored<'module'> }) {
   const { store } = useSession();
   const save = useAutosave<{ on: boolean }>(`module-memory:${module.id}`, ({ on }) => setTakesMemory(store, module.id, on!));
-  return <SettingRow label={MEMORY_CLAIM_LABEL} help={MEMORY_CLAIM_HELP} note={save.status ? SAVE_STATUS[save.status] : undefined} control={<Switch label={MEMORY_CLAIM_LABEL} checked={save.unsaved.on ?? module.value.takesMemory === true} onChange={(on) => void save.save({ on })} />} />;
+  return <SettingRow label={MEMORY_CLAIM_LABEL} help={MEMORY_CLAIM_HELP} control={<Switch label={MEMORY_CLAIM_LABEL} checked={save.unsaved.on ?? module.value.takesMemory === true} onChange={(on) => void save.save({ on })} />} />;
 }

@@ -5,11 +5,15 @@ import type { Settings, ToolField } from '../../tool-api/manifest';
 import { useSession } from '../session';
 import { ChoiceGroup, NumberInput, SettingRow, Switch, TextField } from '../ui';
 import { typedText } from './typed';
+import { readTyped } from './typedNumber';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
 import { TOOL_FIELD_CHANGED } from './words';
 
 // A tool's //@setting field, on its module's page and, marked composer, in the chat's composer.
-const readNumber = (value: string) => value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+const readNumber = (text: string) => {
+  const typed = readTyped(text, false);
+  return typed.ok ? typed.value : null;
+};
 // place: panel in the composer's popover.
 type SettingProps = { module: string; field: ToolField; value: Settings[string] | undefined; place?: 'group' | 'panel' };
 

@@ -12,7 +12,7 @@ export function NameDialog({ title, value, hint, onSave, onClose }: Props) {
       onSubmit={() => onSave(name)}
       actionsLayout="full"
       actions={
-        <Button type="submit" size="md">
+        <Button type="submit">
           저장
         </Button>
       }

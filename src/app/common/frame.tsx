@@ -7,7 +7,7 @@ export type Frame = (parts: { head: NavBarProps; body: ReactNode; side?: ReactNo
 
 export const framePage: Frame = ({ head, body, side, open }) =>
   side === undefined ? (
-    <Screen top={<NavBar {...head} />}>{body}</Screen>
+    <Screen width="form" top={<NavBar {...head} />}>{body}</Screen>
   ) : (
     <EditorFrame top={<NavBar {...head} />} side={side} page={open}>
       {body}
