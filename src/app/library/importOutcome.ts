@@ -30,11 +30,11 @@ export function characterOutcome(file: string, imported: Imported, { id, skipped
   return { kind: 'character', file, id, title: card.name, holds, placed: null, missed: cardMissed(report, skipped, faceless), unused: describeUnused(unused(card)) };
 }
 
-export function moduleOutcome(file: string, module: ImportedModule, id: string, skipped: number, { at, failure }: Placement): ImportOutcome {
+export function moduleOutcome(file: string, module: ImportedModule, id: string, skipped: number, placement: Placement): ImportOutcome {
   return {
     kind: 'module', file, id, title: `모듈 · ${module.name}`,
     holds: packHolds(module.pack, module.lore.length, module.assets.length - skipped),
-    placed: modulePlacement({ at, failure }),
+    placed: modulePlacement(placement),
     missed: moduleMissed(module.unsupported, skipped), unused: null,
   };
 }

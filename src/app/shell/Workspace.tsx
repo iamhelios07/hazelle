@@ -4,6 +4,7 @@ import type { PullProgress } from '../../runtime/store';
 import type { Unlocked } from '../account/AccountFlow';
 import { UnreachableScreen } from '../account/UnreachableScreen';
 import { describeFailure } from '../common/failure';
+import { count } from '../common/typedNumber';
 import { DisplayProvider } from '../display';
 import { BIN, inSettings, NOTICES } from '../common/words';
 import { ImportProvider } from '../library/ImportFlow';
@@ -37,13 +38,13 @@ function Restored({ store }: { store: Session['store'] }) {
 }
 
 // Said once when the session opens with notices the person has not seen. The ref: StrictMode runs a mount's effect twice.
-function Unread({ count }: { count: number }) {
+function Unread({ unread }: { unread: number }) {
   const toast = useToast();
   const said = useRef(false);
   useEffect(() => {
-    if (!count || said.current) return;
+    if (!unread || said.current) return;
     said.current = true;
-    toast.show(`${NOTICES.from}이 ${count.toLocaleString('ko-KR')}개 있어요`, { action: { label: '보기', onClick: () => navigate({ kind: 'account', section: 'notices' }) } });
+    toast.show(`${NOTICES.from}이 ${count(unread)}개 있어요`, { action: { label: '보기', onClick: () => navigate({ kind: 'account', section: 'notices' }) } });
   }, []);
   return null;
 }
@@ -89,7 +90,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
     return () => clearTimeout(timer);
   }, [session]);
 
-  if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((count) => count + 1)} />;
+  if (failure) return <UnreachableScreen message={failure} onRetry={() => setAttempt((held) => held + 1)} />;
   if (!session) return (
     <Screen top={<Brand />} align="center">
       <Progress hero title="불러오는 중" note={FIRST_LOAD} steps={[{ label: '계정 확인', finished: true }, { label: '잠금 해제', finished: true }, { label: '내용 받기', done: progress.objects, total: progress.total }, { label: '화면 준비' }]} />
@@ -102,7 +103,7 @@ export function Workspace({ accountId, vaultKey, username, unreadNotices, ...acc
       <DisplayProvider>
         <ToastProvider standing={notice !== RESTORING && waiting ? RECONNECTING : notice}>
           <Restored store={session.store} />
-          <Unread count={unreadNotices} />
+          <Unread unread={unreadNotices} />
           <BotNotes />
           <ImportProvider>
             <Layout />

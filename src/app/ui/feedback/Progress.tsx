@@ -12,7 +12,7 @@ type State = 'done' | 'active' | 'pending';
 
 const count = (value: number) => value.toLocaleString('ko-KR');
 const counted = (steps: ProgressStep[]) => steps.flatMap(({ done = 0, total }) => (total === undefined ? [] : [{ done: Math.min(done, total), total }]));
-const sum = (steps: ProgressStep[]) => ({ done: counted(steps).reduce((all, { done }) => all + done, 0), total: counted(steps).reduce((all, { total }) => all + total, 0) });
+const sum = (steps: ProgressStep[]) => counted(steps).reduce((all, { done, total }) => ({ done: all.done + done, total: all.total + total }), { done: 0, total: 0 });
 const over = ({ done, total, finished }: ProgressStep) => finished === true || (total !== undefined && (done ?? 0) >= total);
 
 // A stage is over by its own count, under way once begun, and the first not begun is under way as well once every

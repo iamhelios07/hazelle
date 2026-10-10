@@ -1,10 +1,9 @@
 import { FolderPlus } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { Stored } from '../../model/kinds';
-import type { Lore, LoreFolder } from '../../model/library';
+import type { Lore, LoreFolder, PackOwner } from '../../model/library';
 import { loreGroups } from '../../model/lore';
 import { addLore, addLoreFolder, editLore, loreFolderRemoval, removeLore, removeLoreFolder, renameLoreFolder, restoreLore, restoreLoreFolder } from '../../runtime/lore';
-import type { PackOwner } from '../../model/library';
 import { useChildren, useStore } from '../session';
 import { useToast } from '../toast';
 import { Button, ChipButton, ChoiceGroup, Empty, List, ListItem, Menu, MenuItem, MoreMenu, NumberInput, PhraseField, Row, Section, SettingGroup, SettingRow, Stack, Switch, Tag, Text, TextField } from '../ui';
@@ -12,7 +11,7 @@ import { ACTS, addOf } from './acts';
 import { NameDialog } from './NameDialog';
 import { SLOT_NAMES } from './prompt-words';
 import { typedText } from './typed';
-import { readTyped } from './typedNumber';
+import { readOptional } from './typedNumber';
 import { SAVE_STATUS, useAutosave } from './useAutosave';
 import { useSearch } from './useSearch';
 import { loreName } from './words';
@@ -27,12 +26,7 @@ const NUMBER_ERROR = '숫자를 입력해 주세요.';
 const NO_FOLDER = '폴더 없음';
 const KEYS_SHOWN = 3;
 
-// undefined: left empty. null: not a number.
-const readNumber = (draft: string) => {
-  if (draft.trim() === '') return undefined;
-  const typed = readTyped(draft, false);
-  return typed.ok ? typed.value : null;
-};
+const readNumber = (draft: string) => readOptional(draft, false);
 
 function when({ enabled, constant, keys }: Lore) {
   const named = keys.filter((key) => key.trim());

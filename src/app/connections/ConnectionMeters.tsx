@@ -7,6 +7,7 @@ import { ACTS } from '../common/acts';
 import { describeMetersFailure } from '../common/failure';
 import { creditAmount, usd } from '../common/money';
 import { monthDay } from '../common/time';
+import { count } from '../common/typedNumber';
 import { useSession } from '../session';
 import { Callout, Empty, Gauge, Link, Section, Stack, Text } from '../ui';
 
@@ -14,7 +15,7 @@ const RESETS: Record<Exclude<MeterReset, { at: number }>, string> = { daily: '�
 const reset = (resets: MeterReset) => (typeof resets === 'string' ? RESETS[resets] : `${monthDay(resets.at)} 초기화`);
 
 // At a glance: whole numbers from ten up, so 812.4 reads 812.
-const plain = (value: number) => (value >= 10 ? Math.round(value).toLocaleString('ko-KR') : creditAmount(value));
+const plain = (value: number) => (value >= 10 ? count(Math.round(value)) : creditAmount(value));
 const UNITS: Record<Exclude<MeterUnit, 'usd'>, string> = { credit: ' 크레딧', requests: '회', tokens: ' 토큰', concurrency: '', percent: '%' };
 const figure = (unit: MeterUnit, value: number) => (unit === 'usd' ? usd(value) : `${plain(value)}${UNITS[unit]}`);
 const amount = (unit: MeterUnit, value: number) => (unit === 'usd' || unit === 'percent' ? figure(unit, value) : plain(value));
@@ -61,7 +62,7 @@ export function useMeters(connection: Connection, account: Account): { result: M
     };
     // The stored object is replaced on every sync; only a change to its address or key asks again.
   }, [key, attempt]);
-  return { result, retry: () => setAttempt((count) => count + 1) };
+  return { result, retry: () => setAttempt((held) => held + 1) };
 }
 
 export function ConnectionMeters({ connection }: { connection: Connection }) {

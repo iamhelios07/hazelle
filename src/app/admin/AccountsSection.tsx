@@ -7,6 +7,7 @@ import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
 import { monthDay } from '../common/time';
+import { count } from '../common/typedNumber';
 import { NOTICES, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
 import { useToast } from '../toast';
@@ -47,7 +48,7 @@ export function AccountsSection({ loaded, onActed, onRestores }: { loaded: Retur
   return (
     <Section
       title="계정"
-      note={`${loaded.page}쪽${data ? ` · ${data.accounts.length.toLocaleString('ko-KR')}명` : ''}`}
+      note={`${loaded.page}쪽${data ? ` · ${count(data.accounts.length)}명` : ''}`}
       action={<>
         <Button variant="ghost" busy={loaded.busy} onClick={reload}>새로고침</Button>
         <Button variant="ghost" disabled={loaded.busy || !loaded.previous} onClick={loaded.previous ?? undefined}>이전</Button>

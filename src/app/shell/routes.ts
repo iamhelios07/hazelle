@@ -51,6 +51,7 @@ const DIRECT = 'direct';
 export function parseRoute(at: string): Route {
   const query = at.indexOf('?');
   const path = query < 0 ? at : at.slice(0, query);
+  const params = new URLSearchParams(query < 0 ? '' : at.slice(query));
   const [top, id, sub, ...rest] = path.slice(1).split('/');
   // A model id's own slashes stay path separators: Cloudflare's asset handler redirects an escaped one (%2F) to a bare one.
   if (top === 'models' && id !== undefined && sub !== undefined) {
@@ -79,14 +80,14 @@ export function parseRoute(at: string): Route {
       return ID.test(id) && sub === undefined ? { kind: 'connection', id } : HOME;
     }
     if (sub === undefined) return { kind: 'add-connection' };
-    if (sub === DIRECT) return { kind: 'connect-direct', address: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('address') ?? '' };
+    if (sub === DIRECT) return { kind: 'connect-direct', address: params.get('address') ?? '' };
     const type = CONNECTION_TYPES.find((candidate) => candidate.id === sub);
     return type ? { kind: 'connect', type } : HOME;
   }
   if (top === 'prompts') {
     if (id === undefined) return { kind: 'prompts' };
     if (!ID.test(id) || sub !== undefined) return HOME;
-    return { kind: 'prompt', id, pane: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('pane') === 'toggles' ? 'toggles' : null };
+    return { kind: 'prompt', id, pane: params.get('pane') === 'toggles' ? 'toggles' : null };
   }
   if (top === 'personas' && sub === undefined) {
     if (id === undefined) return { kind: 'personas' };
@@ -104,7 +105,7 @@ export function parseRoute(at: string): Route {
   }
   if (id === undefined) {
     if (top === 'settings') return { kind: 'settings' };
-    if (top === 'account') return { kind: 'account', section: new URLSearchParams(query < 0 ? '' : at.slice(query)).get('section') === 'notices' ? 'notices' : null };
+    if (top === 'account') return { kind: 'account', section: params.get('section') === 'notices' ? 'notices' : null };
   }
   if (top === 'settings' && id === 'chat' && sub === undefined) return { kind: 'chat-settings' };
   if (top === 'settings' && id === 'display' && sub === undefined) return { kind: 'display' };

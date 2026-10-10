@@ -1,11 +1,12 @@
 import type { Cost } from '../../connectors/types';
 import { money } from './money';
 import { monthDay } from './time';
+import { count } from './typedNumber';
 import { UNKNOWN } from './words';
 
 // A fact the provider did not report reads as unknown, never as zero.
 export const seconds = (ms: number | null) => (ms === null ? UNKNOWN : `${(ms / 1000).toFixed(1)}초`);
-export const tokens = (count: number | null) => (count === null ? UNKNOWN : count.toLocaleString('ko-KR'));
+export const tokens = (value: number | null) => (value === null ? UNKNOWN : count(value));
 
 // A cost the app worked out from a price is an estimate, and says so, with the date of a models.dev price.
 export function cost(value: Cost | 'pending' | null): string {

@@ -31,7 +31,7 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
   const rowActions = useMemo(() => Object.fromEntries(Object.keys(actions).map((key) => [key, (...args: unknown[]) =>
     Reflect.apply(latestActions.current[key as keyof typeof actions], undefined, args),
   ])) as typeof actions, []);
-  const originModel = useChatSummary(item?.chat.origin?.id ?? null);
+  const originChat = useChatSummary(item?.chat.origin?.id ?? null);
   const origin = item?.chat.origin;
   const { character, me, modelName } = speakers(chat);
   const term = search ? foldTerm(search.term) : '';
@@ -65,8 +65,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
           hosted={hosted(index)}
           offered={offered(index)}
           translating={translating}
-          awaited={awaited === shown(message).id}
-          flipped={flipped.has(shown(message).id)}
+          awaited={awaited === version}
+          flipped={flipped.has(version)}
           isLast={index === messages.length - 1}
           beforeLastReply={message.role === 'user' && index === messages.length - 2 && last?.role === 'assistant'}
           character={character}
@@ -86,8 +86,8 @@ export function ChatLog({ chat }: { chat: OpenChat }) {
         {/* Deleting the message the split comes after takes its divider with it, until 되돌리기. */}
         {origin?.after === message.id && <Divider
           icon={GitBranch}
-          label={originModel !== null ? `'${origin.name}'에서 분기됨` : `삭제된 채팅 '${origin.name}'에서 분기됨`}
-          action={originModel !== null ? { label: '원래 채팅 보기', onClick: () => navigate({ kind: 'chat', id: origin.id }) } : undefined}
+          label={originChat !== null ? `'${origin.name}'에서 분기됨` : `삭제된 채팅 '${origin.name}'에서 분기됨`}
+          action={originChat !== null ? { label: '원래 채팅 보기', onClick: () => navigate({ kind: 'chat', id: origin.id }) } : undefined}
         />}
       </Fragment>;
     }}</Viewport>}

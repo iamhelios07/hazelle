@@ -57,6 +57,10 @@ export function spanOf(sources: readonly Source[], positions: ReadonlyMap<string
 
 export function factGroups(state: readonly Fact[]): { about: string; facts: Fact[] }[] {
   const groups = new Map<string, Fact[]>();
-  for (const fact of state) groups.set(fact.about, [...(groups.get(fact.about) ?? []), fact]);
+  for (const fact of state) {
+    const facts = groups.get(fact.about);
+    if (facts) facts.push(fact);
+    else groups.set(fact.about, [fact]);
+  }
   return [...groups].map(([about, facts]) => ({ about, facts }));
 }

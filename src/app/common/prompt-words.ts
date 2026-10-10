@@ -1,6 +1,5 @@
-import { TOOL } from './words';
 import type { PromptSort, Role, SlotKind } from '../../model/prompt';
-import { TRANSLATOR_NOTE } from './words';
+import { TOOL, TRANSLATOR_NOTE } from './words';
 
 export const SLOT_NAMES: Record<SlotKind, string> = {
   description: '캐릭터 설명',

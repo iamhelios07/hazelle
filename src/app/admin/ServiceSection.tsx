@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { sendNotice, setService, type Service } from '../../runtime/admin';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
+import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { NOTICES } from '../common/words';
 import { useToast } from '../toast';
@@ -49,7 +50,7 @@ export function ServiceSection({ service, onSaved, onNoticed }: { service: Servi
         <SettingRow
           label="가입 정원"
           help="계정 수가 정원보다 적을 때만 가입할 수 있어요."
-          sub={`지금 ${service.accounts.toLocaleString('ko-KR')}명`}
+          sub={`지금 ${count(service.accounts)}명`}
           error={signupCap === undefined ? '0 이상의 정수를 입력해 주세요.' : undefined}
           control={<NumberInput label="가입 정원" unit="명" value={seats ?? String(service.signupCap)} invalid={signupCap === undefined} onChange={setSeats} />}
         />

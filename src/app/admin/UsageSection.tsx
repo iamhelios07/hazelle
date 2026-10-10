@@ -3,6 +3,7 @@ import { readServiceUsage, type ServiceUsage } from '../../runtime/admin';
 import { ACTS } from '../common/acts';
 import { describeFailure } from '../common/failure';
 import { sizeText } from '../common/size';
+import { count } from '../common/typedNumber';
 import { Button, Callout, Section, Text } from '../ui';
 import { moment } from './time';
 
@@ -39,7 +40,7 @@ export function UsageSection() {
         : <Button variant="secondary" onClick={() => void refresh()}>집계</Button>}
     >
       {totals
-        ? <Text variant="note">{totals.accounts.toLocaleString('ko-KR')}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · ${totals.unread.toLocaleString('ko-KR')}명은 읽지 못해 합계에서 빠짐` : ''}</Text>
+        ? <Text variant="note">{count(totals.accounts)}명 확인 · 텍스트 {sizeText(totals.bytes)} · 디스크 {sizeText(totals.disk)} · {moment(totals.readAt)}부터 읽음{busy ? ' · 집계 중' : complete ? '' : ' · 중간 집계'}{totals.unread > 0 ? ` · ${count(totals.unread)}명은 읽지 못해 합계에서 빠짐` : ''}</Text>
         : <Text variant="note">{busy ? '집계 중…' : '집계 전'}</Text>}
       {failure && <Callout tone="warn" action={{ label: ACTS.retry.label, onClick: () => void refresh() }}>{failure}</Callout>}
     </Section>

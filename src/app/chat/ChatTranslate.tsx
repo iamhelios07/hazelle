@@ -5,7 +5,7 @@ import { IntoLanguage } from '../common/IntoLanguage';
 import { inSettings, NOTE_UNSENT, noteLines, TRANSLATION_MODEL_HELP, TRANSLATOR_NOTE } from '../common/words';
 import { useSettings } from '../session';
 import { Button, Divider, Menu, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
-import { appliesTo, TaskPromptMenu } from './ChatTaskPrompt';
+import { appliesTo, PerCharacter, TaskPromptMenu } from './ChatTaskPrompt';
 import type { OpenChat } from './useChat';
 
 export function ChatTranslate({ chat }: { chat: OpenChat }) {
@@ -56,17 +56,7 @@ export function ChatTranslate({ chat }: { chat: OpenChat }) {
             </Text>
           }
         />
-        {card && (
-          <SettingRow
-            place="panel"
-            label="캐릭터별 설정"
-            help={`켜면 ${card.name}의 채팅에만 이 설정을 적용해요.`}
-            control={<Switch label="캐릭터별 설정" checked={translate.own} onChange={actions.setOwnTranslate} />}
-          />
-        )}
-        <Text variant="note">
-          {appliesTo(card, translate.own)}
-        </Text>
+        <PerCharacter card={card} own={translate.own} onChange={actions.setOwnTranslate} />
       </Stack>
     </Menu>
   );

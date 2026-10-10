@@ -56,8 +56,9 @@ export function GalleryScreen({ back }: { back: Back | null }) {
   const binEntries: BinEntry[] = binned
     ? [
         ...deletedChats.map((item) => {
-          const { character } = shelfOf(item);
-          return { section: '채팅', key: item.id, texts: [item.title, ...(character ? characterTexts(character) : [])], render: () => <BinnedRow key={item.id} item={binnedChat(item)} face={<ShelfFace shelf={shelfOf(item)} />} description={shelfName(shelfOf(item))} mark={item.chat} busy={busy(item.id)} actions={characterActions} onPurge={() => setPurging(binnedChat(item))} /> };
+          const shelf = shelfOf(item);
+          const binnedItem = binnedChat(item);
+          return { section: '채팅', key: item.id, texts: [item.title, ...(shelf.character ? characterTexts(shelf.character) : [])], render: () => <BinnedRow key={item.id} item={binnedItem} face={<ShelfFace shelf={shelf} />} description={shelfName(shelf)} mark={item.chat} busy={busy(item.id)} actions={characterActions} onPurge={() => setPurging(binnedItem)} /> };
         }),
         ...rows(PAGES.modules, bin.modules, binnedModule, ({ value }) => value.description.trim() || undefined),
         ...rows(PAGES.prompts, bin.prompts, binnedPrompt, ({ value }) => value.task && `${TASK_NAMES[value.task]} ${PAGES.prompts}`),

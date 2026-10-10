@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { MAX_REPORT_LENGTH } from '../../contracts/admin';
 import { sendReport } from '../../runtime/account';
 import { describeFailure } from '../common/failure';
+import { count } from '../common/typedNumber';
 import { useAttempt } from '../common/useAttempt';
 import { useToast } from '../toast';
 import { Button, Callout, Row, Section, Stack, TextField } from '../ui';
@@ -32,8 +33,8 @@ export function ReportSection() {
           value={text}
           onChange={setText}
           placeholder="예: 이미지 하나가 열리지 않아요."
-          hint={`${length.toLocaleString('ko-KR')} / ${MAX_REPORT_LENGTH.toLocaleString('ko-KR')}자`}
-          error={over ? `${MAX_REPORT_LENGTH.toLocaleString('ko-KR')}자까지 보낼 수 있어요.` : undefined}
+          hint={`${count(length)} / ${count(MAX_REPORT_LENGTH)}자`}
+          error={over ? `${count(MAX_REPORT_LENGTH)}자까지 보낼 수 있어요.` : undefined}
         />
         <Row kind="actions">
           <Button variant="secondary" size="sm" icon={Send} busy={busy} disabled={length === 0 || over} onClick={() => void send()}>

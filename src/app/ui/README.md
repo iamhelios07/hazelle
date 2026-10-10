@@ -85,7 +85,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 | layout | `Disclosure` | `Disclosure.module.css` | A line that opens what is folded under it, such as the settings a model does not take or a lorebook entry; what is folded is made only while open, and it can start open |
 | layout | `EditorFrame` | `EditorFrame.module.css` | A long thing edited one part at a time: header, outline column, the open part |
 | layout | `FaceRow` | `FaceRow.module.css` | A face beside the lines that go with it, centred on it as one block, such as the account's name |
-| layout | `ListDetail` (`usePane`) | `ListDetail.module.css` | A list beside the item picked from it |
+| layout | `ListDetail` (`usePane`, inside the kit only) | `ListDetail.module.css` | A list beside the item picked from it |
 | layout | `NavBar` (`NavBarProps`) | `NavBar.module.css` | A screen's top row: back (an ×, a named link, or none), title (or a title that renames), a line under it, save state, actions, a ⋯ menu; its props are the head an editor or list hands the frame it is shown in, a page or a side panel |
 | layout | `Row` | `Row.module.css` | Items side by side, wrapping, spaced by kind: a toolbar, actions, tags, or a status before its buttons |
 | layout | `Screen` | `Screen.module.css` | The page frame, as a page or as a pane; narrow, form or wide. Its title, section titles and the words in its boxes share one left line: `SettingGroup` and `List` hang out by `--box-hang` |
@@ -169,6 +169,6 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
 - Vitest: `foundation/media.test.ts` fails on a media query that `MEDIA` does not list.
 - ESLint: no `className` or `style` props and no CSS imports outside this folder and `main.tsx`,
   and no hex color strings anywhere in `src/app`. Nothing here imports anything outside this folder
-  (the `ui` area in `eslint/boundaries.js`).
+  but `src/change-signal` (the `ui` area in `eslint/boundaries.js`).
 - `typed-css-modules` generates a type for each `.module.css`, so a misspelled class name fails
   the type check. The generated `*.module.d.css.ts` files are not committed.

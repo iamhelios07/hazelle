@@ -221,9 +221,8 @@ export function useTranslating(): Translating {
 }
 
 // null while it has none.
-export function useChatMemory(chat: string | null): Memory | null {
+export function useChatMemory(id: string | null): Memory | null {
   const { store } = useSession();
-  const id = chat;
   const subscribe = useCallback(
     (listener: () => void) => (id === null ? () => {} : store.subscribe((changes) => changes.some((change) => (change.kind === 'memory' || change.kind === 'scope') && change.parent === id) && listener())),
     [store, id],
@@ -246,7 +245,6 @@ export function useRemembering(): Remembering {
   const { memory } = useSession();
   return useSyncExternalStore(memory.subscribe, memory.snapshot);
 }
-
 
 export function useTool(module: string | null) {
   const owner = useStored('module', module);

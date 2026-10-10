@@ -11,11 +11,7 @@ export function Welcome() {
   const { pick, move } = useImport();
   return (
     <Stack gap="section">
-      {chats.length ? (
-        <Intro title="어디서 이어 갈까요?" />
-      ) : (
-        <Intro title="아직 비어 있어요" />
-      )}
+      <Intro title={chats.length ? '어디서 이어 갈까요?' : '아직 비어 있어요'} />
       <Stack>
         {connections.length > 0 && (
           <ActionCard tone="accent" icon={MessageSquarePlus} title="새 채팅" description="캐릭터 없이 모델과 이야기해요" onClick={() => navigate({ kind: 'new-chat', character: null })} />

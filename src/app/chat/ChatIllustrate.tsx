@@ -5,8 +5,8 @@ import { newOf } from '../common/acts';
 import { follows, NOT_STARRED } from '../common/words';
 import { useConnections } from '../session';
 import { navigate } from '../shell/router';
-import { Button, ChipButton, Menu, MenuHeading, MenuItem, SettingRow, Stack, Switch, Text, ToolButton } from '../ui';
-import { appliesTo, TaskPromptMenu } from './ChatTaskPrompt';
+import { Button, ChipButton, Menu, MenuHeading, MenuItem, SettingRow, Stack, Switch, ToolButton } from '../ui';
+import { appliesTo, PerCharacter, TaskPromptMenu } from './ChatTaskPrompt';
 import type { OpenChat } from './useChat';
 
 export function ChatIllustrate({ chat }: { chat: OpenChat }) {
@@ -52,15 +52,7 @@ export function ChatIllustrate({ chat }: { chat: OpenChat }) {
           label="삽화 프롬프트"
           control={<TaskPromptMenu task="illustrate" chosen={illustrate.prompt} heading={appliesTo(card, illustrate.own)} onPick={(prompt) => actions.setIllustrate({ prompt })} chat={chat} />}
         />
-        {card && (
-          <SettingRow
-            place="panel"
-            label="캐릭터별 설정"
-            help={`켜면 ${card.name}의 채팅에만 이 설정을 적용해요.`}
-            control={<Switch label="캐릭터별 설정" checked={illustrate.own} onChange={actions.setOwnIllustrate} />}
-          />
-        )}
-        <Text variant="note">{appliesTo(card, illustrate.own)}</Text>
+        <PerCharacter card={card} own={illustrate.own} onChange={actions.setOwnIllustrate} />
       </Stack>
     </Menu>
   );

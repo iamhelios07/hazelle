@@ -2,6 +2,7 @@ import { ArrowDownToLine, BookOpen, History, ScrollText, IdCard, Languages, Mess
 import { autoCachePoints } from '../../engine/pipeline';
 import type { Block, ChatRange, Role, SlotKind, TextBlock } from '../../model/prompt';
 import { MESSAGE_ROLES, SLOT_NAMES, textName } from '../common/prompt-words';
+import { count } from '../common/typedNumber';
 import { inSettings } from '../common/words';
 import type { OutlineKind } from '../ui';
 import { toggleUses } from './rekey';
@@ -91,7 +92,7 @@ export const blockKind = (block: Block): OutlineKind => (block.kind === 'text' ?
 export const blockIcon = (block: Block): LucideIcon => (block.kind === 'text' ? TEXT_ICONS[block.role] : SLOT[block.slot].icon);
 
 export function blockMeta(block: Block): string {
-  if (block.kind === 'text') return block.text ? `${block.text.length.toLocaleString('ko-KR')}자` : '비어 있음';
+  if (block.kind === 'text') return block.text ? `${count(block.text.length)}자` : '비어 있음';
   if (block.slot === 'chat') return describeRange(block.range).meta;
   if (block.slot === 'recent') return `${block.count}개${block.translations === false ? ' · 원문만' : ''} · ${MESSAGE_ROLES[block.role]}`;
   return 'role' in block ? MESSAGE_ROLES[block.role] : '';
