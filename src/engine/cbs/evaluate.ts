@@ -6,7 +6,7 @@ import type { Stage } from '../render';
 import { escapeCbs } from './escape';
 import type { PreviousMessages } from './history';
 import { parse, type Block, type Node, type Tag } from './parse';
-import { bool, handlerFor, items, normalize, readToggle, readVar, Return, truthy, type Env } from './tags';
+import { bool, handlerFor, items, normalize, readToggle, readVar, Return, truthy, type Env, type Erase } from './tags';
 
 export type CbsContext = {
   stage: Stage;
@@ -36,6 +36,9 @@ export type CbsContext = {
   model: { id: string; maxContext: number | null; prefill: boolean | null } | null;
   // The 보조 모델's id, as {{axmodel}} reads it; null when the chat resolves none.
   axModel: string | null;
+  // The risu-id of the bot's element whose press runs the trigger this text is evaluated in; '' outside such a run, and
+  // when the element has none. Risu reads `null`.
+  triggerId: string;
   // The window's size, as Risu reads window.innerWidth: null in the prompt, and when the display does not know it.
   screen: { width: number; height: number } | null;
   // now in ms since the epoch; timeZone an IANA name, since the engine reads no zone of the device it runs on.
@@ -102,9 +105,9 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
   for (const node of nodes) {
     const piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame) : evaluateBlock(node, frame);
     if (typeof node !== 'string') spent.tags++;
-    spent.chars += piece.length;
+    if (typeof piece === 'string') spent.chars += piece.length;
     if (spent.tags > MOST_TAGS || spent.chars > MOST_CHARS) throw new Runaway();
-    out += piece;
+    out = typeof piece === 'string' ? out + piece : piece(out);
   }
   return out;
 }
@@ -129,7 +132,7 @@ export function blockHead(content: string): { name: string; rest: string } | nul
 
 // The inner tags are evaluated first and the tag's name and arguments read from their output, which is how
 // {{spread}} hands a tag its arguments.
-function evaluateTag(tag: Tag, frame: Frame): string {
+function evaluateTag(tag: Tag, frame: Frame): string | Erase {
   const content = evaluateNodes(tag.parts, frame);
   if (content.startsWith('//')) return frame.run.context.stage === 'display' ? asWritten(content) : '';
   const [name, ...args] = content.startsWith('? ') ? ['calc', content.slice(2)] : content.trim() === ':' ? [':'] : splitArgs(content);

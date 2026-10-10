@@ -153,8 +153,8 @@ describe("a turn with the bot's Lua", () => {
   it("answers a button with the script's function and keeps its writes after the last message", () =>
     server.withSession(async (session) => {
       const { chat, messages } = await chatWith(session, `function open(id) setChatVar(id, 'door', 'open') alertNormal(id, 'opened') end`);
-      expect(await session.scripts.press(chat, { trigger: 'open' })).toBe(true);
-      expect(await session.scripts.press(chat, { trigger: 'missing' })).toBe(false);
+      expect(await session.scripts.press(chat, { trigger: 'open', id: '' })).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' })).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'said', tone: 'normal', text: 'opened' }]);
     }));
@@ -163,7 +163,7 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const { chat, messages, shownTexts } = await chatWith(session, `function edit(id) setChat(id, 0, getChat(id, 0).data .. '!') end`);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: '{{setvar::hp::7}}health {{getvar::hp}}' });
-      expect(await session.scripts.press(chat, { trigger: 'edit' })).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'edit', id: '' })).toBe(true);
       expect(shown(messages()[1]!)).toMatchObject({ text: 'health 7!', staged: true, before: [['hp', '7']] });
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'still {{getvar::hp}}' });
       expect((await shownTexts()).slice(-2)).toEqual(['health 7!', 'still 7']);
@@ -173,7 +173,7 @@ describe("a turn with the bot's Lua", () => {
     server.withSession(async (session) => {
       const doubling = "'{{settempvar::x::abcdefghijklmnop}}' .. string.rep('{{settempvar::x::{{gettempvar::x}}{{gettempvar::x}}}}', 22)";
       const { chat } = await chatWith(session, `function grow(id) cbs(${doubling}) end`);
-      expect(await session.scripts.press(chat, { trigger: 'grow' })).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'grow', id: '' })).toBe(true);
       expect(session.scripts.snapshot().notes).toMatchObject([{ chat, kind: 'runaway' }]);
     }));
 
@@ -191,8 +191,8 @@ describe("a turn with the bot's Lua", () => {
           { kind: 'add', role: 'char', value: { kind: 'text', text: 'The door is {{getvar::door}} at {{lastmessageid}}.' } },
         ] },
       ]);
-      expect(await session.scripts.press(chat, { trigger: 'open' })).toBe(true);
-      expect(await session.scripts.press(chat, { trigger: 'missing' })).toBe(false);
+      expect(await session.scripts.press(chat, { trigger: 'open', id: '' })).toBe(true);
+      expect(await session.scripts.press(chat, { trigger: 'missing', id: '' })).toBe(false);
       expect(messages()[0]!.after).toEqual([['door', 'open']]);
       expect(messages()[1]).toMatchObject({ role: 'assistant' });
       expect(shown(messages()[1]!)).toMatchObject({ text: 'The door is open at -1.', staged: true });
@@ -219,7 +219,7 @@ describe("the bot scripts' machine", () => {
     const opened = await openSession(accountId, vaultKey, 'jin', new AbortController().signal, undefined, undefined, { lua });
     if (!opened.ok) throw new Error(opened.error);
     const { chat } = await chatWith(opened.data, `function open(id) end`);
-    const pressed = opened.data.scripts.press(chat, { trigger: 'open' });
+    const pressed = opened.data.scripts.press(chat, { trigger: 'open', id: '' });
     await vi.waitFor(() => expect(lua).toHaveBeenCalledOnce());
     opened.data.close();
     const close = vi.fn();
@@ -266,7 +266,7 @@ describe("the display with the bot's Lua", () => {
       await vi.waitFor(() => expect(screen.snapshot().display.texts).toEqual(['', '', '']));
       release();
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:null>']);
-      await session.scripts.press(chat, { trigger: 'hit' });
+      await session.scripts.press(chat, { trigger: 'hit', id: '' });
       await expect.poll(() => screen.snapshot().display.texts).toEqual(['어서 와. <-1:null>', '안녕 <0:null>', '왔구나 <1:9>']);
       lua.display.mockRestore();
       leave();
@@ -305,7 +305,7 @@ describe("the display with the bot's Lua", () => {
       const leave = screen.subscribe(() => {});
       screen.setInputs(opening, { width: 1200, height: 800 });
       await vi.waitFor(() => expect(passed).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [-1, 0]]));
-      await session.scripts.press(chat, { trigger: 'again' });
+      await session.scripts.press(chat, { trigger: 'again', id: '' });
       await new Promise((resolve) => setTimeout(resolve, 200));
       release();
       await vi.waitFor(() => expect(passed.slice(2).flat()).toContain(-1));
@@ -637,7 +637,7 @@ describe('tool events through Scripts', () => {
       await server.hold(session.store, chat);
       await startChat(session.store, chat, { title: null, character: null, models: {} }, null);
       await appendUserMessage(session.store, chat, { id: crypto.randomUUID(), text: 'hello' });
-      const pressed = session.scripts.press(chat, { trigger: 'askModel' });
+      const pressed = session.scripts.press(chat, { trigger: 'askModel', id: '' });
       if (!index) {
         await expect.poll(() => session.scripts.snapshot().questions).toMatchObject([{ from: { kind: 'module', id: added.data.id }, question: { kind: 'model' } }]);
         session.scripts.answer(session.scripts.snapshot().questions[0]!.id, 'yes');

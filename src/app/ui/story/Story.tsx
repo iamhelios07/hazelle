@@ -7,7 +7,8 @@ import styles from './Story.module.css';
 import shadowCss from './Story.shadow.css?inline';
 
 // One of the bot's buttons, as its HTML names it: risu-trigger names a function of its script, risu-btn carries data to it.
-export type BotButton = { trigger: string } | { data: string };
+// id: the trigger's element's risu-id, which {{triggerid}} reads; '' when it has none.
+export type BotButton = { trigger: string; id: string } | { data: string };
 
 type Props = {
   html: string;
@@ -46,7 +47,7 @@ const CONFIG = {
   RETURN_DOM_FRAGMENT: true as const,
   FORBID_TAGS: ['form', 'style'],
   FORBID_ATTR: ['style', 'popover', 'popovertarget', 'popovertargetaction', 'command', 'commandfor'],
-  ADD_ATTR: ['risu-btn', 'risu-trigger', 'risu-mark'],
+  ADD_ATTR: ['risu-btn', 'risu-trigger', 'risu-id', 'risu-mark'],
   ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 };
 const VOID = new Set(['BR', 'HR', 'IMG', 'INPUT', 'WBR']);
@@ -259,7 +260,7 @@ export function Story({ html, css = '', cursor = false, tone = 'plain', buttons 
       event.preventDefault();
       // An element with both is its trigger, as in Risu.
       const trigger = named?.getAttribute('risu-trigger') ?? null;
-      onPress?.(trigger !== null ? { trigger } : named ? { data: named.getAttribute('risu-btn')! } : null);
+      onPress?.(trigger !== null ? { trigger, id: named!.getAttribute('risu-id') ?? '' } : named ? { data: named.getAttribute('risu-btn')! } : null);
     };
     // transitionend, not transitionstart: it lands in the frame of the new size, before that frame's resize observers.
     const resized = (event: Event) => {

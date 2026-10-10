@@ -448,8 +448,8 @@ export class Scripts {
 
   // A press on a bot's button, whose writes stay with the last message whichever version it shows. false: no script
   // answered it.
-  async press(chat: string, button: { trigger: string } | { data: string }): Promise<boolean> {
-    const event: Event = 'trigger' in button ? { kind: 'call', name: button.trigger } : { kind: 'button', data: button.data };
+  async press(chat: string, button: { trigger: string; id: string } | { data: string }): Promise<boolean> {
+    const event: Event = 'trigger' in button ? { kind: 'call', name: button.trigger, id: button.id } : { kind: 'button', data: button.data };
     return (await this.now(chat, event, onLast)) ?? false;
   }
 

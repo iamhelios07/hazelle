@@ -41,7 +41,7 @@ export class DisplayPass {
     for (const { background } of scope.packs) {
       if (!background) continue;
       try {
-        stripStyles(unescapeCbs(evaluate(background, contexts(scope, 'display', null)({ seed: 'background' }, rendered.variables))), this.background);
+        stripStyles(unescapeCbs(evaluate(background, contexts(scope, 'display', null, '')({ seed: 'background' }, rendered.variables))), this.background);
       } catch (error) {
         if (!(error instanceof Runaway)) throw error;
         this.backgroundStop ??= error;

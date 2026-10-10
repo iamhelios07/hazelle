@@ -28,8 +28,12 @@ export class Return {
   }
 }
 
+// What {{bkspc}} and {{erase}} give: a change to the text made before them on their own level, which the evaluator
+// applies (evaluateNodes), since no handler sees that text.
+export type Erase = (before: string) => string;
+
 // null: the tag stays as written, as it does with fewer than min arguments.
-type Run = (args: string[], env: Env) => string | null;
+type Run = (args: string[], env: Env) => string | Erase | null;
 const HANDLERS = new Map<string, { min: number; run: Run }>();
 
 // names: the tag and its aliases, written normalized, since a name read from text is normalized first.
@@ -45,49 +49,24 @@ export const tagNames = () => [...HANDLERS.keys()];
 const UNSUPPORTED = new Set([
   // Marked X in risu-compat-spec §d, with their aliases in src/ts/cbs.ts at ca1345fc. The internal-only `__`
   // is left out, since normalizing empties its name.
-  'triggerid',
   'emotionlist',
-  'chardisplayasset',
-  'file',
   'risu',
-  'bkspc',
-  'erase',
-  'xor',
-  'xorencrypt',
-  'xorencode',
-  'xore',
-  'xordecrypt',
-  'xordecode',
-  'xord',
-  'crypt',
-  'crypto',
-  'caesar',
-  'encrypt',
-  'decrypt',
   'video',
   'audio',
   'bgm',
   'bg',
   'emotion',
   'videoimg',
-  'inlay',
-  'inlayed',
-  'inlayeddata',
   'assetprompt',
   // risu-alpha prompts have no jailbreak.
   'jb',
   'jailbreak',
   'jbtoggled',
-  // Marked N, and the spec gives them no semantics.
-  'metadata',
+  // Marked N: declare is as written in Risu too, and tex wants a renderer on screen.
   'declare',
-  'range',
-  'filter',
-  'u',
-  'ue',
   'tex',
-  'ruby',
-  'codeblock',
+  'latex',
+  'katex',
 ]);
 
 export const isUnsupportedTag = (name: string) => UNSUPPORTED.has(normalize(name));
@@ -170,8 +149,13 @@ define('source', 1, ([name], { context: { stage, faces } }) => {
   return (face === 'char' ? faces.char : face === 'user' ? faces.user : null) ?? '';
 });
 define('assetlist', 0, (_, { context: { card, assets } }) => (card ? serialize(assets.filter((asset) => asset.module === undefined).map(({ name }) => name)) : ''));
+// The asset prompt it lists from is counted at import and not brought (convert.ts), so it lists nothing.
+define('chardisplayasset', 0, (_, { context: { card } }) => (card ? '[]' : null));
 define('moduleenabled', 1, ([namespace], { context }) => (context.modules.includes(namespace!) ? '1' : '0'));
 define('moduleassetlist', 1, ([namespace], { context: { modules, assets } }) => (modules.includes(namespace!) ? serialize(assets.filter((asset) => asset.module === namespace).map(({ name }) => name)) : ''));
+
+// Items in Risu's own inlay store, which no backup holds: the prompt drops them, and the screen shows them as written.
+define('inlay inlayed inlayeddata', 1, (_, { context }) => (context.stage === 'display' ? null : ''));
 
 define('getvar', 1, ([name], { context }) => readVar(context, name!));
 define('setvar', 2, ([name, value], { context, writes }) => {
@@ -346,6 +330,34 @@ define('unicodeencode', 1, ([text, index = '0']) => {
   return code === undefined ? null : String(code);
 });
 define('unicodedecode', 1, ([code]) => String.fromCodePoint(Number(code)));
+// ue decodes too, as Risu's own description of it says. Text that is not hex, or none, is U+0000; Risu keeps a code's
+// low 16 bits.
+define('u unicodedecodefromhex ue unicodeencodefromhex', 0, ([hex = '']) => String.fromCodePoint(parseInt(hex, 16) || 0));
+
+const utf8 = new TextEncoder();
+const fromUtf8 = new TextDecoder();
+function toBase64(bytes: Uint8Array): string {
+  let text = '';
+  for (const byte of bytes) text += String.fromCharCode(byte);
+  return btoa(text);
+}
+// Leniently, as Risu: what is outside the alphabet is skipped, and a lone last character dropped.
+function fromBase64(text: string): Uint8Array {
+  const clean = text.replace(/[^A-Za-z0-9+/]/g, '');
+  return Uint8Array.from(atob(clean.length % 4 === 1 ? clean.slice(0, -1) : clean), (char) => char.charCodeAt(0));
+}
+const flip = (byte: number) => byte ^ 0xff;
+define('xor xorencrypt xorencode xore', 0, ([text = '']) => toBase64(utf8.encode(text).map(flip)));
+define('xordecrypt xordecode xord', 1, ([text]) => fromUtf8.decode(fromBase64(text!).map(flip)));
+// The default shift, 32768, is its own inverse. Each UTF-16 unit shifts alone, as in Risu, so text outside the BMP comes
+// back whole only after the round trip.
+define('crypt crypto caesar encrypt decrypt', 1, ([text, shift]) => {
+  const by = shift?.trim() ? Math.trunc(Number(shift)) : NaN;
+  const step = Number.isFinite(by) ? by : 0x8000;
+  let out = '';
+  for (let at = 0; at < text!.length; at++) out += String.fromCharCode(text!.charCodeAt(at) + step);
+  return out;
+});
 
 define('makearray array a', 0, (args) => serialize(args));
 define('makedict dict object o d', 0, (args) =>
@@ -382,6 +394,22 @@ define('arraysplice', 3, ([array, start, count, ...insert]) => {
   return serialize(current);
 });
 
+// [end], [start, end] or [start, end, step], each number as text, as Risu gives them. A negative step counts down, where
+// Risu's gives none or hangs; a step of 0 toward end runs past MOST.
+define('range', 1, ([bounds]) => {
+  const numbers = items(bounds!).map(Number);
+  const [start = NaN, end = NaN, step = 1] = numbers.length === 1 ? [0, numbers[0]] : numbers;
+  const count = Math.ceil((end - start) / step);
+  if (count > MOST) return null;
+  return serialize(count > 0 ? Array.from({ length: count }, (_, n) => String(start + n * step)) : []);
+});
+// Items compare as their text, as every array tag reads them, so 1 and "1" are one item; Risu's keeps both.
+define('filter', 1, ([array, mode]) => {
+  const all = items(array!);
+  const kept = mode === 'unique' ? all : all.filter((item) => item !== '');
+  return serialize(mode === 'nonempty' ? kept : [...new Set(kept)]);
+});
+
 define('br newline', 0, () => '\n');
 define('blank none', 0, () => '');
 // A backslash and an n, not a line break; with a count, that many.
@@ -394,11 +422,45 @@ for (const char of '()<>:;') define(char, 0, () => escapeCbs(char));
 define('comment', 1, ([text], { context }) => (context.stage === 'display' ? text! : ''));
 // The lorebook track scans the entry's raw text, so the key still chains entries.
 define('hiddenkey', 1, () => '');
+// The text up to its last character among stops, scanning back from the end only, since the text may be long.
+function upToLast(text: string, stops: string): string {
+  let at = text.length;
+  while (at > 0 && !stops.includes(text[at - 1]!)) at--;
+  return text.slice(0, at);
+}
+define('bkspc', 0, () => (before) => upToLast(before.trimEnd(), ' \t\n').trimEnd());
+// Text that already ends a sentence loses that sentence; Risu's removes nothing.
+define('erase', 0, () => (before) => {
+  const text = before.trimEnd();
+  let end = text.length;
+  while (end > 0 && '.!?'.includes(text[end - 1]!)) end--;
+  return upToLast(text.slice(0, end), '.!?\n').trimEnd();
+});
+// A missing reading is empty; Risu's shows `undefined`.
+define('ruby furigana', 1, ([text, reading = '']) => `<ruby>${text}<rp> (</rp><rt>${reading}</rt><rp>) </rp></ruby>`);
+const HTML_ENTITIES: Record<string, string> = { '&': '&amp;', '"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;' };
+// The last argument is the code. A language before it is dropped, since nothing highlights it; Risu leaves `&` as is.
+define('codeblock', 1, (args) => `<pre><code>${args.at(-1)!.replace(/[&"'<>]/g, (char) => HTML_ENTITIES[char]!)}</code></pre>`);
+// Risu's attached text file. On screen Risu draws a box with its name, which is not built: there it stays as written.
+define('file', 2, ([, data], { context }) => (context.stage === 'display' ? null : fromUtf8.decode(fromBase64(data!))));
 
 define('language', 0, (_, { context: { language } }) => language);
 define('model', 0, (_, { context: { model } }) => model && model.id);
 define('axmodel', 0, (_, { context: { axModel } }) => axModel);
-define('maxcontext', 0, (_, { context: { model } }) => (model && model.maxContext !== null ? String(model.maxContext) : null));
+const maxContext = (model: CbsContext['model']) => (model && model.maxContext !== null ? String(model.maxContext) : null);
+define('maxcontext', 0, (_, { context: { model } }) => maxContext(model));
 define('prefillsupported prefill', 0, (_, { context: { model } }) => (model && model.prefill !== null ? bool(model.prefill) : null));
 define('screenwidth', 0, (_, { context }) => (context.screen ? String(context.screen.width) : null));
 define('screenheight', 0, (_, { context }) => (context.screen ? String(context.screen.height) : null));
+// Risu's keys about its own app, which no answer here fits, so they stay as written: its platform, version, UI language
+// (not {{language}}'s translation target) and model enums.
+const RISU_METADATA = new Set(['mobile', 'local', 'node', 'risutype', 'version', 'majorversion', 'majorver', 'major', 'language', 'locale', 'lang', 'browserlanguage', 'browserlocale', 'browserlang', 'modelshortname', 'modelformat', 'modelprovider', 'modeltokenizer']);
+// The key is lowercased only, as in Risu.
+define('metadata', 1, ([key], { context: { model } }) => {
+  const name = key!.toLowerCase();
+  if (name === 'maxcontext') return maxContext(model);
+  if (name === 'modelname' || name === 'modelinternalid') return model && model.id;
+  if (name === 'imateapot') return '🫖';
+  return RISU_METADATA.has(name) ? null : `Error: ${name} is not a valid metadata key.`;
+});
+define('triggerid', 0, (_, { context }) => context.triggerId);

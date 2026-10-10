@@ -38,8 +38,8 @@ export type Event =
   | { kind: 'input' | 'start' | 'output' }
   | { kind: 'button'; data: string }
   // A press on risu-trigger: each Lua script's own global function of that name, and each block trigger of that name
-  // whatever its type, as Risu runs both.
-  | { kind: 'call'; name: string }
+  // whatever its type, as Risu runs both. id: the pressed element's risu-id, '' when it has none.
+  | { kind: 'call'; name: string; id: string }
   | { kind: 'edit'; stage: EditStage; value: unknown; meta: Record<string, unknown> };
 
 // runaway: the CBS the script evaluated ran away (cbs/evaluate Runaway), which the app words as its other runaway
